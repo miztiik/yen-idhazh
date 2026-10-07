@@ -45,7 +45,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'processor-lost', 'prompt-reuse',
 		'publication',
 		'run-axis', 'run-yield',
-		'settings-moved', 'statement', 'raw-listed-through',
+		'settings-moved', 'span-sentences', 'span-words', 'statement', 'raw-listed-through',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
 		'tokens', 'verdict-split', 'vocabulary',
 		'weights'

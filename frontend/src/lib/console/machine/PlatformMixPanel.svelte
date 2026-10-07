@@ -32,6 +32,7 @@
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
 	import type { LostDay, RecordingNotes } from '$lib/console/recording';
+	import { nameSpan } from '$lib/console/span-words';
 	import type { PanelState } from '$lib/console/waiting';
 	import { ledgerReach, slice, type LedgerFault, type Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
@@ -175,12 +176,26 @@
 	 * names nothing, so the key leaves it out. */
 	const landed = $derived(ramp.steps.filter((step) => step.low !== null && step.high !== null));
 	const keyed = $derived(landed.length > 0);
-	const spanText = $derived(windowDays === 1 ? 'the last day' : `the last ${windowDays} days`);
-	/** One sentence, whose last clause names the span in the digits every
-	 * Hardware subtitle uses, so the page reads alike from panel to panel. */
+	/** One sentence, whose last clause names the span in the words every
+	 * Hardware subtitle uses, so the page reads alike from panel to panel. One day
+	 * is not "each day", so at one day the clause names the day itself. */
 	const note = $derived(
 		'The platform picks the machine for every job, so a slow week can be the machine and not the ' +
-			`code - each day split by the kind that ran its jobs, over the last ${windowDays} days.`
+			(windowDays === 1
+				? `code - ${nameSpan(windowDays)} split by the kind that ran its jobs.`
+				: `code - each day split by the kind that ran its jobs, over ${nameSpan(windowDays)}.`)
+	);
+	/** What the two plots are, to a screen reader. "A day" needs a second day, so at
+	 * one day each label is for that day. */
+	const barsLabel = $derived(
+		windowDays === 1
+			? `Jobs in ${nameSpan(windowDays)}, stacked by the kind of machine that ran them, slowest at the bottom.`
+			: `Jobs a day over ${nameSpan(windowDays)}, stacked by the kind of machine that ran them, slowest at the bottom.`
+	);
+	const dotsLabel = $derived(
+		windowDays === 1
+			? `One square a job, one column for ${nameSpan(windowDays)}, coloured by the speed of the machine that ran it.`
+			: `One square a job, a column a day over ${nameSpan(windowDays)}, coloured by the speed of the machine that ran it.`
 	);
 	const hint =
 		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
@@ -222,7 +237,7 @@
 		{:else if view.nothing === 'record-lost'}
 			<p class="empty" data-machine-panel-empty="fleet-lost">
 				{machineRecord.recordDestroyed}
-				There is nothing left in {windowDays === 1 ? 'this day' : `these ${windowDays} days`} to count.
+				There is nothing left in {nameSpan(windowDays)} to count.
 			</p>
 		{:else if view.nothing === 'none'}
 			<p class="empty" data-machine-panel-empty="fleet-none">
@@ -277,7 +292,7 @@
 							geometry={bars}
 							empty={emptyState('quiet', 'No job was placed in this span.')}
 							name="machine-fleet"
-							label="Jobs a day over {spanText}, stacked by the kind of machine that ran them, slowest at the bottom."
+							label={barsLabel}
 							width={box.width}
 							height={box.height}
 							{readout}
@@ -293,7 +308,7 @@
 							geometry={squares}
 							{readout}
 							name="machine-fleet"
-							label="One square a job, a column a day over {spanText}, coloured by the speed of the machine that ran it."
+							label={dotsLabel}
 							readoutMaxShare={chart.readout_max_share}
 							{hint}
 							picked={open < 0 ? null : open}
