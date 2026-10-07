@@ -202,11 +202,6 @@ export async function load() {
 	// fleet and every panel below take their rows from these two reads, so no two
 	// panels on this route can answer over different days.
 	const machine = await machineRecord(readSpan);
-	// The days the machine record's own index records lost. No row of them
-	// survives, so the server's counters and the machine record both ran on them
-	// and neither has a figure: each note below dates its instrument's start by
-	// them, and the record notes name them.
-	const machineLost = machine.read.state === 'read' ? machine.read.lostDays : [];
 	// The header as well as the rows: how many requests an article makes is a
 	// fact the ledger's own column names carry, and the reuse panel reads it off
 	// them rather than off a constant anybody would have to remember to change.
@@ -278,6 +273,13 @@ export async function load() {
 	const dates = [
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
 	].filter((date) => date !== '');
+	// What each instrument answered for over the whole read, so a recording note
+	// can tell where an instrument began from the days before a span as well as
+	// those inside it. The server's counters, the machine record and the item
+	// ledger each answer for different days of one run.
+	const counterDays = [...new Set(counters.runs.map((run) => run.date))].sort();
+	const machineDays = [...new Set(fingerprints.map((row) => row.date))].sort();
+	const healthDays = [...new Set(health.map((row) => row.date ?? ''))].filter((date) => date !== '').sort();
 
 	// The two shares a stolen-processor tile is drawn against, out of
 	// `console.*` rather than typed into the module (Guardrail #6). Both are
@@ -302,14 +304,12 @@ export async function load() {
 	/** One span, and every figure that reads a span. */
 	function answer(days: number): MachineWindow {
 		const span = windowOfDays(day, days, console_.today_anchor);
+		const open: OfferedWindow = { days, start: span.start, end: span.end };
 		const inSpan = <T extends { date: string }>(rows: readonly T[]): T[] =>
 			rows.filter((row) => row.date >= span.start && row.date <= span.end);
 
 		const runs = inSpan(counters.runs);
 		const ranOn = [...new Set(runs.map((run) => run.date))].sort();
-		const lostInSpan = inSpan(lostDays);
-		const machineLostInSpan = machineLost.filter((date) => date >= span.start && date <= span.end);
-		const spanDays = [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort();
 		const healthRows = health.filter(
 			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
 		);
@@ -352,7 +352,7 @@ export async function load() {
 				enabled: observability.host_fingerprint,
 				recorded: ranOn,
 				read: machine.read,
-				open: { days, start: span.start, end: span.end },
+				open,
 				offered
 			}),
 			// What the recording itself was doing. Every panel below reads the model
@@ -360,26 +360,32 @@ export async function load() {
 			// recording rather than a machine that did nothing - and the two states
 			// look identical on a chart unless the page says which one it is. The
 			// item ledger is the other instrument: a day it covers and the counters
-			// do not is the state most committed days are in.
+			// do not is the state most committed days are in. Each note is handed
+			// the whole read and the reads of the records its instrument draws on, so
+			// it names only what this span shows and dates a start only where the
+			// read reaches back to each record's first day. A run is formed from
+			// either record, so the counters draw on both.
 			recording: recordingNotes({
 				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
-				recorded: ranOn,
-				window: spanDays,
-				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
-					.filter((date) => date !== '')
-					.sort(),
-				daysWithNoRecord: machineLostInSpan
+				recorded: counterDays,
+				window: dates,
+				reads: [machine.read, healthTable.read],
+				from: readSpan.start,
+				open,
+				coveredElsewhere: healthDays
 			}),
 			// The machine record is the other instrument on this route, and it has
 			// its own three states. It carries no sampling knob, so it owes no
 			// sampling caveat and passes no rate.
 			machineRecord: recordingNotes({
 				enabled: observability.host_fingerprint,
-				recorded: [...new Set(inSpan(fingerprints).map((row) => row.date))].sort(),
-				window: spanDays,
-				lost: lostInSpan,
-				daysWithNoRecord: machineLostInSpan,
+				recorded: machineDays,
+				window: dates,
+				reads: [machine.read],
+				from: readSpan.start,
+				open,
+				lost: lostDays,
 				figures: 'machine record'
 			}),
 			reuse: promptReuse(healthRows, healthTable.columns),

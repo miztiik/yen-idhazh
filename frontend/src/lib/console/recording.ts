@@ -13,9 +13,10 @@
  * line that goes where the figure would have been, so an operator learns the
  * measurement exists and learns why it has no answer today.
  *
- * The strings are fixed - Susan chose the first of them on 2026-08-30, and
- * Reader and Jony chose the words of the "Measurement is off" line on
- * 2026-10-07 - and only the dates, counts and names inside them are computed.
+ * The strings are fixed - Susan chose the first of them on 2026-08-30, Reader
+ * and Jony chose the words of the "Measurement is off" line on 2026-10-07, and
+ * Reader those of the "Recording started" line the same day - and only the
+ * dates, counts and names inside them are computed.
  * **A date that is not true is worse than no date**, so every one of them is
  * derived from the ledger that is missing rather than typed here.
  *
@@ -120,10 +121,13 @@ export function scoresWithoutCounters(): string {
  *
  * A gap at the left of a chart reads as quiet days. It is not: it is days the
  * instrument did not exist for, and the difference decides whether an operator
- * goes looking for a broken pipeline.
+ * goes looking for a broken pipeline. `daysBefore` counts only the days of the
+ * window that had a run, so the sentence says that rather than claiming every
+ * day before the start.
  *
- * `figures` names what the days before it have none of, because two instruments
- * answer this route and "no server figures" is true of only one of them.
+ * `figures` names what those days have none of, because each instrument on a
+ * route answers a different question: "server figures" is true of the server's
+ * own counters and of nothing else.
  */
 export function recordingStarted(
 	firstRecorded: string | null,
@@ -131,8 +135,8 @@ export function recordingStarted(
 	figures: string = 'server figures'
 ): string | null {
 	if (firstRecorded === null || daysBefore <= 0) return null;
-	const days = daysBefore === 1 ? 'The 1 day before it has' : `The ${daysBefore} days before it have`;
-	return `Recording started on ${shortDate(firstRecorded)}. ${days} no ${figures}, and the gap in the chart is a gap in the recording, not a quiet day.`;
+	const days = daysBefore === 1 ? '1 day' : `${daysBefore} days`;
+	return `Recording started on ${shortDate(firstRecorded)}. Earlier in this window, ${days} had a run but no ${figures}.`;
 }
 
 /** A day that published articles and whose instrument kept no row of it. */
@@ -186,24 +190,42 @@ export interface RecordingFacts {
 	/** Its sample rate, 1.0 where it measures everything. Omitted by an
 	 * instrument that has no sampling knob, which owes no caveat either way. */
 	rate?: number;
-	/** The days this instrument recorded, ascending. */
+	/** The days this instrument recorded, ascending, from `from` on. */
 	recorded: readonly string[];
-	/** The days the window covers, ascending. Anything before the first recorded
-	 * day is a gap in the recording rather than a quiet day. */
+	/** The days the route has a run on, from `from` on. Those inside `open` and
+	 * before the first day this instrument ran had a run and none of its figures. */
 	window: readonly string[];
+	/** How the reads of the records this instrument draws on went. Their indexes
+	 * say where each record begins and which of its days in the read were lost,
+	 * and a lost day is a day the instrument ran. */
+	reads: readonly RecordRead[];
+	/** The first day the facts here cover: the first day the route read, or the
+	 * open window's first day where only that window's days are handed. */
+	from: string;
+	/** The window the notes are for. */
+	open: OfferedWindow;
 	/** Days another instrument answered for that this one did not. */
 	coveredElsewhere?: readonly string[];
 	/** Days that published articles and that this instrument kept no row of. */
 	lost?: readonly LostDay[];
-	/** Days the instrument's own record has no record for, because its packing
-	 * recorded them lost. Unlike `lost`, nothing else is joined to know it: the
-	 * record's index says so. The route's record notes name them. */
-	daysWithNoRecord?: readonly string[];
 	/** What the days before the first recorded one have none of. */
 	figures?: string;
 }
 
+/** What the recording was doing over the open window, from what the route read.
+ *
+ * Every line names only what the open window shows, as `measurementOff` does.
+ * **A start is dated only where it is known.** The instrument's first day is
+ * the first day it ran in the facts, and that is its true first day only when
+ * the facts reach back to the oldest named day of every record it draws on: a
+ * record whose indexes name a day before `from` may hold a day the instrument
+ * ran before anything the facts hold, so no line is better than a false one.
+ * The line then prints only in a window that shows that day. The day a record
+ * began comes from its indexes, so no day before the read is opened to learn it.
+ */
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
+	const { reads, open } = facts;
+	const shown = (day: string): boolean => day >= open.start && day <= open.end;
 	const recorded = [...facts.recorded].sort();
 	const lost = (facts.lost ?? []).filter((day) => !recorded.includes(day.date));
 	// The instrument started on the first day it is known to have run: a day it
@@ -211,15 +233,18 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	// Dated from the recorded days alone, a loss before them would date the
 	// instrument's start to the day after the loss and count the loss as a day
 	// before it, which is the lie these states exist to stop.
-	const ran = [...recorded, ...lost.map((day) => day.date), ...(facts.daysWithNoRecord ?? [])].sort();
-	const first = ran[0] ?? null;
-	const before = first === null ? 0 : facts.window.filter((date) => date < first).length;
-	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => !recorded.includes(date));
+	const noRecord = reads.flatMap((read) => (read.state === 'read' ? read.lostDays : []));
+	const ran = [...recorded, ...lost.map((day) => day.date), ...noRecord].sort();
+	const whole = reads.length > 0 && reads.every((read) => read.state === 'read' && read.first >= facts.from);
+	const known = whole ? (ran[0] ?? null) : null;
+	const first = known !== null && shown(known) ? known : null;
+	const before = first === null ? 0 : facts.window.filter((date) => shown(date) && date < first).length;
+	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => shown(date) && !recorded.includes(date));
 	return {
 		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
 		startedMidWindow: recordingStarted(first, before, facts.figures),
 		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters(),
-		recordDestroyed: recordDestroyed(lost)
+		recordDestroyed: recordDestroyed(lost.filter((day) => shown(day.date)))
 	};
 }
 
@@ -232,7 +257,10 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
  * that did not load; `at` is the first day that failed, or null when the list
  * itself did not load, and `fault` names the missing file behind it as the door
  * does, or is null for another cause. `read` carries the newest packed day,
- * `through`, after which no panel built on the record has rows to draw;
+ * `through`, after which no panel built on the record has rows to draw; `first`,
+ * the oldest day the record's indexes name, a month counting from its 1st and a
+ * year from its 1 January, so a note can tell a record that began inside a
+ * window from one that began before it without reading a day before the window;
  * `lastRows`, the newest period the record's index says holds rows, or null when
  * none does, so a window that starts after it can say where the rows stop
  * without reading a day before the window; `lostDays`, the days in the read the
@@ -240,7 +268,14 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
  * of the read's periods set aside unread.
  */
 export type RecordRead =
-	| { state: 'read'; through: string; lastRows: HeldPeriod | null; lostDays: string[]; setAside: SetAsideFiles }
+	| {
+			state: 'read';
+			through: string;
+			first: string;
+			lastRows: HeldPeriod | null;
+			lostDays: string[];
+			setAside: SetAsideFiles;
+	  }
 	| { state: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreadable'; at: string | null; fault: Exclude<LedgerFault, 'not-packed'> | null };
 

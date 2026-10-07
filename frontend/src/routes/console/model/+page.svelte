@@ -351,6 +351,9 @@
 	/** The "Measurement is off" line for the open window, null while the scorer is
 	 * on. The server worded it for each preset, so it names only a day this window shows. */
 	const switchedOff = $derived(data.measurementOff[windowKey] ?? null);
+	/** What the scorer was doing over the open window. The server worked it out for
+	 * each preset, so a day a line names is one this window shows. */
+	const recording = $derived(data.recording[windowKey] ?? null);
 
 	/** Which sources the checker doubted, over the open window.
 	 *
@@ -532,6 +535,34 @@
 	     one reason. -->
 	<RecordNotes {notes} />
 
+	<!-- What the recording was doing, before anything says what it recorded, and
+	     whether or not the sections below have anything to draw: a scorer that is
+	     switched off is a reason they may not. None of these is an error and none
+	     is styled as one: each states a fact about the scorer, at body size, in the
+	     route it governs. -->
+	<div data-recording-lines>
+		{#if switchedOff}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
+				{switchedOff}
+			</p>
+		{/if}
+		{#if recording?.sampled}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
+				{recording.sampled}
+			</p>
+		{/if}
+		{#if recording?.startedMidWindow}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
+				{recording.startedMidWindow}
+			</p>
+		{/if}
+		{#if recording?.countersOnly}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="counters-only">
+				{recording.countersOnly}
+			</p>
+		{/if}
+	</div>
+
 	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
 		<h2 class="console-h2">What the model did</h2>
 		{#if !emptyExplained}
@@ -550,30 +581,6 @@
 					>measurements write-up</a
 				>.
 			</p>
-
-			<!-- What the recording was doing, in the panel it governs rather than as
-			     a banner: three panels can be in three different states on one day.
-			     None of these is an error and none is styled as one. -->
-			{#if switchedOff}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-					{switchedOff}
-				</p>
-			{/if}
-			{#if data.recording.sampled}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
-					{data.recording.sampled}
-				</p>
-			{/if}
-			{#if data.recording.countersOnly}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="counters-only">
-					{data.recording.countersOnly}
-				</p>
-			{/if}
-			{#if data.recording.startedMidWindow}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
-					{data.recording.startedMidWindow}
-				</p>
-			{/if}
 
 			<!-- Always rendered, empty window included. The chart owns its own empty
 			     state, so a window with nothing in it says so instead of taking the
