@@ -32,11 +32,15 @@ def write_roots(plans: Sequence[RootPlan], *, raw_only: bool = False) -> list[tu
                 plan.inputs.config_dir
             ).config.first_ledger_year
             for name in plan.planned:
+                policy = plan.policies[name]
+                if policy is None:
+                    continue
                 packed, written, deleted = pack(
                     plan.state_dir,
                     name,
                     plan.identity,
-                    policy=plan.policies[name],
+                    repo_root=plan.inputs.config_dir.parent,
+                    policy=policy,
                     today=plan.inputs.today,
                     months=plan.inputs.months,
                     first_ledger_year=first_ledger_year,

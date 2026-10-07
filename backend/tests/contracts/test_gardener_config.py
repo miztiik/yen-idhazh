@@ -29,6 +29,7 @@ from idhazh.contracts.knobs.gardener import (
     FoldPolicy,
     GardenerConfig,
     HistoryPolicy,
+    MonthsWindow,
     RetentionPolicy,
     Window,
 )
@@ -108,6 +109,10 @@ YEARLY_RETENTION_DECISION: Final = (
     "@kumarsnaveen_microsoft approved live packing and 36-calendar-month yearly expiry "
     "for all fourteen ledgers on 2026-10-07, accepting loss of older history"
 )
+TRIAL_PACKING_DECISION: Final = (
+    "@kumarsnaveen_microsoft approved live packing of declared trial roots on 2026-10-04; "
+    "monthly deletion remains report-only and yearly expiry stays disabled"
+)
 LIVE_BY_DECISION: Final = {
     **{
         (f"compact-{name}", switch): YEARLY_RETENTION_DECISION
@@ -120,6 +125,10 @@ LIVE_BY_DECISION: Final = {
             "feed-retirements", "gardener", "host-fingerprint", "item-health",
             "summary-quality-evals", "visual-prunes",
         )
+    },
+    **{
+        (f"compact-trial-{name}", "dry_run"): TRIAL_PACKING_DECISION
+        for name in ("candidate-models", "host-fingerprint", "item-health")
     },
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
@@ -229,7 +238,10 @@ def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
     """All fourteen declarations activate real packing and finite yearly deletion."""
     tasks = config.load_gardener().tasks
     assert {
-        name for name, policy in tasks.items() if isinstance(policy, CompactionPolicy)
+        name
+        for name, policy in tasks.items()
+        if isinstance(policy, CompactionPolicy) and name.startswith("compact-")
+        and not name.startswith("compact-trial-")
     } == {f"compact-{name}" for name in RETENTION_LEDGERS}
     for ledger_name in RETENTION_LEDGERS:
         name = f"compact-{ledger_name}"
@@ -241,6 +253,51 @@ def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
             policy.yearly_keep_months, policy.yearly_prune_enable,
         ) == (False, 1, 45, 93, 36, True), name
         assert policy.monthly_window.unit == "forever", name
+
+
+def test_trial_compactions_keep_only_their_declared_roots_and_the_trial_window() -> None:
+    """Trial packing has its own 90-day floor and does not enable expiry."""
+    tasks = config.load_gardener().tasks
+    expected = {
+        "compact-trial-item-health": (
+            "item-health",
+            [
+                "state/pipeline-tests/production-settings",
+                "state/pipeline-tests/no-visual-plan",
+                "state/pipeline-tests/parallel-summarization",
+            ],
+        ),
+        "compact-trial-host-fingerprint": ("host-fingerprint", ["state/pipeline-tests"]),
+        "compact-trial-candidate-models": ("candidate-models", ["state/pipeline-tests"]),
+    }
+    for name, (ledger_name, roots) in expected.items():
+        policy = tasks[name]
+        assert isinstance(policy, CompactionPolicy), name
+        assert policy.ledger.value == ledger_name
+        assert policy.state_roots == roots
+        assert (
+            policy.compact_after_days,
+            policy.daily_keep_days,
+            policy.monthly_window,
+            policy.month_deletes_dry_run,
+            policy.dry_run,
+            policy.monthly_keep_days,
+            policy.yearly_keep_months,
+            policy.yearly_prune_enable,
+        ) == (1, 31, MonthsWindow(unit="months", value=3), True, False, None, None, False)
+        assert policy.prune_refusal
+
+
+def test_a_trial_compaction_must_reach_the_trial_window(tmp_path: Path) -> None:
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    path = config_dir / "gardener" / "compact-trial-item-health.json"
+    declared = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps(declared | {"monthly_window": {"unit": "months", "value": 1}}))
+
+    message = refused(config_dir)
+
+    assert "compact-trial-item-health.json" in message
+    assert "must reach that window" in message
 
 
 @pytest.mark.parametrize(
@@ -306,7 +363,7 @@ def test_a_fold_that_names_no_wait_closes_a_day_after_the_shared_one() -> None:
 #: optional lookback, whose default is two months.
 SHARED_OPTIONAL_KEYS: Final = frozenset({"reads", "appends_to"})
 COMPACTION_OPTIONAL_KEYS: Final = SHARED_OPTIONAL_KEYS | {
-    "lookback", "yearly_keep_months", "yearly_prune_enable"
+    "lookback", "state_roots", "yearly_keep_months", "yearly_prune_enable"
 }
 
 #: Every key a compaction declaration has to write.
@@ -492,6 +549,9 @@ def test_trials_owns_only_configured_pipeline_test_roots() -> None:
 
     assert policy.owns == [
         f"state/{test_case.trial_state_dirname}" for test_case in tests.test_cases
+    ] + [
+        f"state/pipeline-tests/{test_case.id}/traces"
+        for test_case in tests.test_cases
     ]
     assert "state" not in policy.owns
 

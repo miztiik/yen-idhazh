@@ -16,7 +16,7 @@ from utilities.ledger_migration.csv_files import csv_days
 from utilities.ledger_migration.fold import folded
 from utilities.ledger_migration.identity import writer_identity
 from utilities.ledger_migration.inputs import MigrationInputs, require_root
-from utilities.ledger_migration.packing import declared
+from utilities.ledger_migration.packing import policies_for_roots
 from utilities.ledger_migration.path_labels import describe_error, label_path
 from utilities.ledger_migration.readback import check_output, door_rows, migration_rows
 from utilities.ledger_migration.refusals import NotProvenError
@@ -61,7 +61,7 @@ class RootPlan:
     state_dir: Path
     planned: Planned
     reports: dict[LedgerName, Moved]
-    policies: dict[LedgerName, CompactionPolicy]
+    policies: dict[LedgerName, CompactionPolicy | None]
     identity: WriterIdentity
     inputs: MigrationInputs
 
@@ -125,7 +125,7 @@ def plan_roots(inputs: MigrationInputs) -> list[RootPlan]:
         require_root(root)
     identity = writer_identity(inputs.run_id, inputs.git_sha)
     month_directories(Path(), inputs.months)
-    policies = declared(inputs.which, inputs.config_dir)
+    policies = policies_for_roots(inputs.which, inputs.state_dirs, inputs.config_dir)
     plans: list[RootPlan] = []
     for root in inputs.state_dirs:
         planned = {
@@ -138,7 +138,7 @@ def plan_roots(inputs: MigrationInputs) -> list[RootPlan]:
                 report.csv_files += len(held.files)
                 report.csv_bytes += sum(path.stat().st_size for path in held.files)
                 report.rows += len(held.rows)
-        plans.append(RootPlan(root, planned, reports, policies, identity, inputs))
+        plans.append(RootPlan(root, planned, reports, policies[root], identity, inputs))
     return plans
 
 

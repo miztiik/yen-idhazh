@@ -169,12 +169,11 @@ def door_refusals(tasks: Mapping[str, TaskPolicy]) -> dict[str, str]:
     declares is refused too: nothing then says whether its days may go, and a
     delete is the one answer that cannot be taken back.
     """
-    declared = {
-        policy.ledger: policy for policy in tasks.values() if isinstance(policy, CompactionPolicy)
-    }
     refused: dict[str, str] = {}
     for word, name in DOOR_LEDGERS.items():
-        policy = declared.get(name)
+        policy = tasks.get(f"compact-{name.value}")
+        if not isinstance(policy, CompactionPolicy) or policy.ledger is not name:
+            policy = None
         if policy is None:
             refused[word] = (
                 "no compaction under config/gardener/ declares it, so nothing says whether "

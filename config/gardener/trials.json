@@ -6,7 +6,10 @@
   "owns": [
     "state/pipeline-tests-production-settings",
     "state/pipeline-tests-no-visual-plan",
-    "state/pipeline-tests-parallel-summarization"
+    "state/pipeline-tests-parallel-summarization",
+    "state/pipeline-tests/production-settings/traces",
+    "state/pipeline-tests/no-visual-plan/traces",
+    "state/pipeline-tests/parallel-summarization/traces"
   ],
   "window": {
     "unit": "days",

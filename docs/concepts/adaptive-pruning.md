@@ -182,7 +182,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
-| `state/<run.trial_state_dirname>/raw/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed through the ledger door as one raw file. It lands under the trial root because only a qualification writes it, nothing packs a trial root, and the gardener's `trials` task already bounds that root |
+| `state/<run.trial_state_dirname>/raw/candidate-models/` and its matching compact folder | Pack, then keep for the trial window | 31 daily days plus three months | one verdict a dispatch, filed through the ledger door. `compact-trial-candidate-models` packs only its declared trial roots; monthly deletion is report-only and yearly expiry is disabled |
 
 ### `corpus/` - the rolling training window
 

@@ -148,6 +148,7 @@ declarations: no finite expiry and pruning disabled.
 | 9 | `prune_refusal` | Whether `idhazh telemetry prune` may take a range of days out of the ledger. `null` lets it; a sentence refuses the ledger, and the command prints that sentence as the reason. This protects manual deletion, not the configured yearly expiry ([how the prune reads it](../../how-to/prune-a-collection.md)) |
 | 10 | `yearly_keep_months` | Calendar months after the UTC year-end instant before an indexed year expires. At least 1; `null` keeps years forever. A finite value requires `monthly_keep_days`. Older declarations default to `null` |
 | 11 | `yearly_prune_enable` | `true` deletes due indexed years; `false` keeps them. Requires finite `yearly_keep_months` when enabled. Older declarations default to `false`. The whole task's `dry_run` still prevents every change |
+| 12 | `state_roots` | Unique, safe repository-relative roots, default `["state"]`. A trial declaration names only trial roots; its ownership is exactly its ledger's raw and compact folders under each root |
 
 **Two switches, because packing loses no row and the monthly window does.** A
 pass packs a raw day into a day file, a month of day files into a month file
@@ -157,6 +158,14 @@ has just written into the coarser one. The monthly window deletes rows. So
 whether the window's deletions are among the changes: a ledger can pack live
 while its window only reports, and a person turns the window live after reading
 what it would take. With `dry_run` `true` a pass changes nothing either way.
+
+The trial compactions are `compact-trial-item-health`,
+`compact-trial-host-fingerprint` and `compact-trial-candidate-models`. They pack
+live only under the roots they name. Each keeps 31 daily days and a three-month
+window, reports monthly deletion without deleting, and leaves yearly expiry
+disabled. This reaches the gardener's 90-day `trials` window. The production
+`compact-<ledger>` remains the only declaration used for production retention
+and prune refusals.
 
 ## The collection declarations that ship
 
@@ -249,7 +258,9 @@ names the file an operator edits and the rule it broke.
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | `fold.settles_months` beside a `window` of days | A settled month's file names no day, so a window of days would take it whole once the month's first day aged out, and with it the rows of every later day the window still keeps |
-| A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
+| A compaction not called `compact-<ledger>` or `compact-trial-<ledger>` for its ledger | Separate names keep trial retention from governing production |
+| A trial compaction whose roots are not trial roots, or whose ownership differs from the ledger's raw and compact folders under those roots | The declaration cannot pack or delete another ledger's paths |
+| Duplicate or unsafe `state_roots` | A root is explicit and relative, not a traversal or a second spelling of one input |
 | A compaction that leaves out any key in [the table above](#the-keys-of-a-compaction) | Nothing fills a setting in from code, so a missing one is named rather than guessed |
 | A key that a declaration's kind does not have, such as a misspelt or renamed key | Nothing would read it. The loader names it, so a person sees which line to change |
 | A collection task not called `<collection>.json`, or whose `window` is not whole days | One task a collection, found by name; a pass counts a member's age in days |

@@ -501,8 +501,8 @@ jobs:
       # candidate-models folder at all. The trial root is in every checkout.
       #
       # What it commits is the raw file the gates filed through the ledger door
-      # under the trial root, unpacked: nothing packs a trial root, and packing
-      # would change no answer a reader gets.
+      # under the trial root. Its separate compaction runs on a later gardener
+      # wake, and only for roots named by that trial declaration.
       - name: Commit the candidate-models ledger
         env:
           COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"

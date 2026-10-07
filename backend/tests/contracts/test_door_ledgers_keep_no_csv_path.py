@@ -118,19 +118,33 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
     built = {
         _under_state(*ledger.entry(member).prefix) for member in LedgerName if member not in door
     } | {_under_state(tier.value, *ledger.entry(member).prefix) for member in door for tier in Tier}
+    tasks = config.load_gardener().tasks
+    declared_trial_folders = {
+        f"{root}/{tier}/{'/'.join(ledger.door_folders(policy.ledger))}"
+        for name, policy in tasks.items()
+        if name.startswith("compact-trial-") and isinstance(policy, CompactionPolicy)
+        for root in policy.state_roots
+        for tier in ("raw", "compact")
+    }
 
     stray = sorted(
         f"config/gardener/{name}.json owns {folder}"
-        for name, policy in config.load_gardener().tasks.items()
+        for name, policy in tasks.items()
         for folder in policy.owns or ()
         if folder.split("/")[0] == ledger.STATE_DIRNAME
         and folder not in built
+        and folder not in declared_trial_folders
         and (name, folder)
         not in {
             ("trials", "state/pipeline-tests-production-settings"),
             ("trials", "state/pipeline-tests-no-visual-plan"),
             ("trials", "state/pipeline-tests-parallel-summarization"),
         }
+        and not (
+            name == "trials"
+            and folder.startswith("state/pipeline-tests/")
+            and folder.endswith("/traces")
+        )
     )
 
     assert stray == [], (

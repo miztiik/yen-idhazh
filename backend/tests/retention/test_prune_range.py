@@ -643,12 +643,9 @@ def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
 
 
 def compaction_of(tasks: Mapping[str, TaskPolicy], which: LedgerName) -> CompactionPolicy:
-    """The one compaction declaration of a ledger."""
-    (found,) = [
-        policy
-        for policy in tasks.values()
-        if isinstance(policy, CompactionPolicy) and policy.ledger is which
-    ]
+    """The production compaction declaration that governs a ledger."""
+    found = tasks.get(f"compact-{which.value}")
+    assert isinstance(found, CompactionPolicy)
     return found
 
 

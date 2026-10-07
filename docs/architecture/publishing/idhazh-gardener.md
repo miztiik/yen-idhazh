@@ -717,6 +717,13 @@ artifact missed that way at most 60 days after the 30-day line.
 How a ledger's daily, monthly and yearly files are packed and dropped, by one
 compaction task a ledger, is [ledger-compaction.md](ledger-compaction.md).
 
+`CompactionPolicy.state_roots` defaults to `state`. A trial declaration names
+only the trial roots it owns, with exactly that ledger's raw and compact folders
+under each root. The runner calls the existing one-root pass in declaration
+order, stops at the first root that needs another wake, and writes one record
+row for the task. Production compactions keep their existing single-root path
+and remain the authority for production retention and prune refusals.
+
 ## The closed-day fold
 
 **A CSV day tree files one file per writer, and a closed day folds into one.**
