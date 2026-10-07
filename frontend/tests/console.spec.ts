@@ -5,13 +5,14 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 import { grouped, telemetryCsv, type StageTimingDay, type ThroughputDay } from '../src/lib/charts/series';
-import { monthsInWindow, panWindow } from '../src/lib/charts/viewport';
+import { daysInWindow, monthsInWindow, panWindow } from '../src/lib/charts/viewport';
 import { shortDate } from '../src/lib/format';
 import { throughputWithin } from '../src/lib/server/model-work';
 import { publishedCharts, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { reliability, resultLabel, type FeedRecord } from '../src/lib/feed-health';
 import { days } from './support/consecutive-days';
 import { publishedSite } from './support/published-site';
+import { openServed } from './support/served-telemetry';
 import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
 
@@ -1374,38 +1375,24 @@ test('keyboard alone pans the viewport and steps its window through the presets'
 });
 
 test('panning to a month with no rows leaves a visible gap', async ({ page }) => {
-	// The months the page opens on are answered with one row on every day. A month
-	// asked for after that is answered with its header and no row.
-	const opened: string[] = [];
-	let panning = false;
-	await page.route('**/telemetry/*.csv', (route) => {
-		const month = /\/telemetry\/(\d{4}-\d{2})\.csv$/.exec(new URL(route.request().url()).pathname)?.[1];
-		if (month === undefined) return route.fulfill({ status: 404 });
-		if (!panning) opened.push(month);
-		return route.fulfill({
-			status: 200,
-			contentType: 'text/csv',
-			body: panning ? telemetryCsv([]) : everyDayOf(month)
-		});
-	});
-	await page.goto('/console/');
-
+	// One row on every day of the window the page opens on, and none before it.
+	const { window } = await openServed(page, (opened) =>
+		daysInWindow(opened).map((date) => telemetryRow({ date, run_id: `${date}-1`, item_id: 'served' }))
+	);
 	const viewport = page.locator('[data-viewport-control]');
 	await expect(viewport).toContainText(new RegExp(`(^|\\D)${DEFAULT_WINDOW_DAYS}\\s+rows in view`));
 	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
-	panning = true;
-	const firstServed = `${[...opened].sort()[0]}-01`;
 
 	// Back, one pan at a time, until the window ends before the first day served.
 	await viewport.focus();
 	for (let press = 0; press < 60; press += 1) {
 		const end = (await viewport.getAttribute('data-window-end')) ?? '';
-		if (end < firstServed) break;
+		if (end < window.start) break;
 		await page.keyboard.press('ArrowLeft');
 		await expect(viewport).not.toHaveAttribute('data-window-end', end);
 	}
 	const end = (await viewport.getAttribute('data-window-end')) ?? '';
-	expect(end < firstServed, `the window still ends on ${end}, on or after ${firstServed}`).toBe(true);
+	expect(end < window.start, `the window still ends on ${end}, on or after ${window.start}`).toBe(true);
 
 	// The failure surface says the window holds nothing rather than drawing a
 	// column of zeroes, which would read as a run that went badly.
