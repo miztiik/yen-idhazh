@@ -19,7 +19,9 @@
 	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import {
 		FLEET_COLUMNS,
+		FLEET_HINT,
 		fleetDots,
+		fleetHintOne,
 		fleetJobs,
 		fleetReadout,
 		fleetSentence,
@@ -199,8 +201,8 @@
 			? `One square a job, one column for ${nameSpan(windowDays)}, coloured by the speed of the machine that ran it.`
 			: `One square a job, a column a day over ${nameSpan(windowDays)}, coloured by the speed of the machine that ran it.`
 	);
-	const hint =
-		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
+	const hint = FLEET_HINT;
+	const hintOne = $derived(fleetHintOne(windowDays));
 
 	/** The day whose jobs are listed under the plot, by date, so a new span
 	 * cannot leave the list on a column that now means another day. */
@@ -300,6 +302,7 @@
 							{readout}
 							readoutMaxShare={chart.readout_max_share}
 							{hint}
+							{hintOne}
 							lede
 							{hatch}
 							picked={open < 0 ? null : open}
@@ -313,6 +316,7 @@
 							label={dotsLabel}
 							readoutMaxShare={chart.readout_max_share}
 							{hint}
+							{hintOne}
 							picked={open < 0 ? null : open}
 							onPick={pick}
 						/>
