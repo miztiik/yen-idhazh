@@ -668,3 +668,23 @@ export function recordNotesByWindow(
 ): Record<string, RecordNote[]> {
 	return Object.fromEntries(offered.map((open) => [String(open.days), recordNotes(reads, newestDay, open, offered)]));
 }
+
+/** What a chart that marks the days the pipeline changed is handed about the score record. */
+export interface MissingMarkerFacts {
+	/** How the read of the score record went. */
+	read: RecordRead;
+	/** Every day the route has a run on. */
+	ran: readonly string[];
+	/** The days a run manifest identifies, whose marker needs no score row. */
+	identified: readonly string[];
+	/** The window the line is for. */
+	open: OfferedWindow;
+}
+
+/** The line for a chart whose change markers a score read that did not read cost it.
+ *
+ * None yet: the route has always dropped the read's state and printed nothing.
+ */
+export function describeMissingMarkers(_facts: MissingMarkerFacts): string | null {
+	return null;
+}
