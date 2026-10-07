@@ -121,11 +121,15 @@ GLiNER preference is not a claim of demonstrated superiority. Evaluate both prod
 
 ### Three clocks
 
-- **`t_event`:** Supported occurrence point or interval, with precision, evidence, and resolved/unknown/ambiguous status.
-- **`t_pub`:** Supported publication timestamp and provenance, normalized to UTC. It describes coverage freshness.
-- **Coverage observation time:** The recorded observation of new reporting. It controls activity and ordinary active-search eligibility.
+These clocks answer different questions. Occurrence time says when the event happened. Publication time says when an article appeared. Coverage observation time says when distinct new reporting entered the system.
 
-Identifier creation, processing time, and these clocks are not interchangeable. A representation refresh, verified copy, compaction, or new Story Edge does not become a new-reporting observation.
+| Clock | Plain meaning | What it drives |
+| --- | --- | --- |
+| `t_event` | When supported evidence says the occurrence happened. It can be a point or interval, or remain unknown or ambiguous. | Evidence for deciding whether reports describe the same occurrence. Time alone does not prove a match. |
+| `t_pub` | When the article was published, with supporting provenance, normalized to UTC. | Freshness ranking for readers. |
+| Coverage observation time | When a report was first observed as genuinely new reporting. If its contribution is confirmed later, retain the original observation time rather than the later decision time. | Activity decay and eligibility for ordinary active search within the configurable 15-day window. |
+
+Identifier creation and processing time are separate from all three clocks. A representation refresh, verified copy, compaction, or new Story Edge does not become a new-reporting observation.
 
 The temporal instruction is:
 
