@@ -12,9 +12,9 @@ what it only reads, how far back it keeps, and whether it may delete at all.
 promise `RetentionConfig` makes and for the same reason: a fresh clone that
 starts deleting on its first run is a clone nobody can try out.
 
-**A compaction names every setting it runs with.** No setting of a pass has a
-default in code, so the declaration a person reads holds every number the pass
-uses, and the loader refuses one that leaves a setting out, naming it.
+**A compaction names every packing setting it runs with.** The loader refuses
+one that leaves a packing setting out, naming it. Older declarations without
+the yearly expiry fields retain all years and do not enable deletion.
 
 **A declaration names its module by what it is, and never by a path.** Which
 Python runs a task is decided by `idhazh.gardener.registry` from the task's
@@ -446,9 +446,9 @@ class CompactionPolicy(_Declared):
     Its periods are its retention, so the two keys every other task uses to
     bound what it deletes are fixed here: `window` is `forever` and
     `max_deletes_per_run` is null. A declaration that sets `monthly_keep_days`
-    also packs each finished year's month files into one yearly file, kept for
-    ever. It has two switches, because packing loses no row and its monthly
-    window does: `dry_run` for the whole pass, and `month_deletes_dry_run` for
+    also packs each finished year's month files into one yearly file.
+    Packing loses no row, but monthly and yearly expiry do.
+    `dry_run` controls the whole pass, and `month_deletes_dry_run` controls
     what the window deletes, so a ledger can pack live while its window only
     reports.
     """
@@ -516,7 +516,22 @@ class CompactionPolicy(_Declared):
             "month files are packed into one yearly file and deleted. Null packs no year. "
             "Set, it needs monthly_window forever and at least daily_keep_days + 32: a "
             "year is packed only once its next January is absorbed, so no smaller value "
-            "changes anything. Year files are kept for ever."
+            "changes anything. yearly_keep_months controls expiry after the UTC year end."
+        ),
+    )
+    yearly_keep_months: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Calendar months after the UTC year-end instant before a yearly file expires. "
+            "Null keeps years forever. Finite retention requires monthly_keep_days."
+        ),
+    )
+    yearly_prune_enable: bool = Field(
+        default=False,
+        description=(
+            "True deletes indexed years past yearly_keep_months; false keeps them. "
+            "dry_run still prevents every change."
         ),
     )
     max_periods_per_run: int = Field(
@@ -565,6 +580,10 @@ class CompactionPolicy(_Declared):
         year file would miss that month's rows. And a wait shorter than the one the
         next January already imposes would be a number that changes nothing.
         """
+        if self.yearly_keep_months is not None and self.monthly_keep_days is None:
+            raise ValueError("yearly_keep_months requires monthly_keep_days")
+        if self.yearly_prune_enable and self.yearly_keep_months is None:
+            raise ValueError("yearly_prune_enable requires yearly_keep_months")
         if self.monthly_keep_days is None:
             return self
         if not isinstance(self.monthly_window, ForeverWindow):

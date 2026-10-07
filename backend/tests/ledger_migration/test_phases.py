@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from conftest import SEED_COMMIT
+from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
@@ -70,6 +71,7 @@ def test_separate_phases_are_read_only_until_write_and_keep_csv_until_retire(
             run_id=RUN,
             git_sha=SEED_COMMIT,
             today=TODAY,
+            config_dir=PRE_YEARLY_CONFIG,
             months=MONTHS,
         )
     )
@@ -111,6 +113,7 @@ def test_verify_and_retire_refuse_output_without_deleting_any_root(
                 run_id=RUN,
                 git_sha=SEED_COMMIT,
                 today=TODAY,
+                config_dir=PRE_YEARLY_CONFIG,
                 months=MONTHS,
             )
         )
@@ -141,6 +144,7 @@ def test_retire_replans_after_a_successful_proof_before_deleting_any_root(tmp_pa
                 run_id=RUN,
                 git_sha=SEED_COMMIT,
                 today=TODAY,
+                config_dir=PRE_YEARLY_CONFIG,
                 months=MONTHS,
             )
         )
@@ -186,6 +190,7 @@ def test_repeated_import_keeps_earlier_migration_rows_missing_from_new_csv(tmp_p
         run_id=RUN,
         git_sha=repeat_sha,
         today=TODAY,
+        config_dir=PRE_YEARLY_CONFIG,
         months=MONTHS,
     )
     phases.write_roots(planning.plan_roots(repeat))

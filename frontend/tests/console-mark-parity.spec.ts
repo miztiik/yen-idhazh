@@ -23,10 +23,13 @@
  * cannot pass without the split it is named for.
  *
  * Five of the six draw on the canary. The swap panel draws only where the
- * ledger recorded a model change, and the canary is a single-model day, so its
- * case skips there rather than fails - the same guard the sibling swap tests
- * use. `console-model-panels.spec.ts` covers the swap panel with a built swap;
- * this oracle picks it up automatically on any tree whose ledger carries one.
+ * ledger recorded a model change, and the canary runs one model start to
+ * finish, so its case draws `SwapDots.svelte` on swaps built from rows the test
+ * writes - the swap `console-model-panels.spec.ts` draws, from
+ * `support/model-swap.ts` - and checks the extent and the marks against the
+ * values those rows make. A server render draws once, so that case holds the
+ * split across two renders at the two widths, not across a live resize; the
+ * live resize stays with the other five.
  *
  * Both routes ship every preset's aggregate inline, so a window change costs no
  * fetch here (`console/+page.svelte`), which is why the case can read the new
@@ -34,6 +37,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { buildSwap, pair, renderSwap, swapFixture, timedPair } from './support/model-swap';
 
 /** Two widths far enough apart that the frame is bound to change and the gutter
  * charts cross from beside to stacked - which moves the layout and must not
@@ -47,7 +51,6 @@ const OTHER_WINDOW = 7;
 
 interface Chart {
 	name: string;
-	route: string;
 	/** The element carrying the data-only extent this row publishes, and the
 	 * root the marks are read from. */
 	root: string;
@@ -57,14 +60,14 @@ interface Chart {
 	/** The drawn marks, and the data attributes a resize must leave alone. */
 	itemSel: string;
 	attrs: string[];
-	/** A chart the canary cannot always draw. The swap panel appears only where
-	 * the ledger recorded a model change, and the canary is a single-model day,
-	 * so on it the swap plot is absent. Such a case skips rather than fails - the
-	 * same guard `console-model-panels.spec.ts` already applies to the panel. */
-	optional?: boolean;
 }
 
-const CHARTS: Chart[] = [
+/** A chart the canary draws, and the route it draws on. */
+interface CanaryChart extends Chart {
+	route: string;
+}
+
+const CHARTS: CanaryChart[] = [
 	{
 		name: 'stage timings',
 		route: '/console/',
@@ -102,24 +105,6 @@ const CHARTS: Chart[] = [
 		attrs: ['data-run-length', 'data-run-low', 'data-run-median', 'data-run-high', 'data-run-items']
 	},
 	{
-		name: 'swap dots',
-		route: '/console/model/',
-		root: '[data-model-swap-plot]',
-		domainAttr: 'data-swap-domain',
-		frame: '[data-model-swap-plot] svg',
-		itemSel: '[data-swap-row]',
-		attrs: [
-			'data-swap-row',
-			'data-swap-pct',
-			'data-swap-before',
-			'data-swap-after',
-			'data-movement',
-			'data-polarity',
-			'data-movement-verdict'
-		],
-		optional: true
-	},
-	{
 		name: 'time histogram',
 		route: '/console/model/',
 		// Two histograms draw on this route; the first is enough to hold the split.
@@ -130,6 +115,26 @@ const CHARTS: Chart[] = [
 		attrs: ['data-hist-bin', 'data-hist-bin-n']
 	}
 ];
+
+/** The swap panel, read the way the other five are. It draws only where the
+ * ledger recorded a model change, and the canary runs one model start to
+ * finish, so its case draws it on swaps the test builds rather than on a route. */
+const SWAP: Chart = {
+	name: 'swap dots',
+	root: '[data-model-swap-plot]',
+	domainAttr: 'data-swap-domain',
+	frame: '[data-model-swap-plot] svg',
+	itemSel: '[data-swap-row]',
+	attrs: [
+		'data-swap-row',
+		'data-swap-pct',
+		'data-swap-before',
+		'data-swap-after',
+		'data-movement',
+		'data-polarity',
+		'data-movement-verdict'
+	]
+};
 
 /** Move the window preset the way the control does, and wait for the page to
  * agree it moved. */
@@ -190,13 +195,6 @@ for (const chart of CHARTS) {
 	test(`${chart.name}: the drawn marks survive a window change and a resize`, async ({ page }) => {
 		await page.setViewportSize(WIDE);
 		await page.goto(chart.route);
-		// The swap panel is the one chart the canary cannot guarantee: it draws only
-		// where the ledger holds a model change, and the canary is a single-model
-		// day. Where its root is absent, skip rather than fail - the same guard the
-		// sibling swap tests use. The other five always draw on the canary.
-		if (chart.optional && (await page.locator(chart.root).count()) === 0) {
-			test.skip(true, `${chart.name} needs a model change the canary ledger does not carry`);
-		}
 		await expect(page.locator(chart.root).first(), `${chart.name} never drew`).toBeVisible();
 
 		// The extent the split publishes. Absent on the tree before this row, so
@@ -243,3 +241,75 @@ for (const chart of CHARTS) {
 		);
 	});
 }
+
+test(`${SWAP.name}: the drawn marks survive a window change and a resize`, async ({
+	page
+}, testInfo) => {
+	// The swap `console-model-panels.spec.ts` draws. Nine of its ten measures are
+	// drawn: time and length halve to 50 percent, the five rows that counted all
+	// ten of the older model's summaries fall to 0, and the two token rates stay
+	// at 100. The copying row starts from nothing on both sides, so it is named
+	// rather than drawn. A mark reads
+	// `label|percent|before|after|move|polarity|verdict`.
+	const built = swapFixture();
+	const builtMarks = [
+		'"Maybe" told as fact|0|100|0|-1.0000|lower-is-better|good',
+		'Marked "not sure"|0|100|0|-1.0000|lower-is-better|good',
+		'Numbers not in the article|0|100|0|-1.0000|lower-is-better|good',
+		'Outside the length we asked for|0|100|0|-1.0000|lower-is-better|good',
+		'Reading the article|100|1000|1000|0.0000|no-agreed-direction|neutral',
+		'Summaries the checker doubted|0|100|0|-1.0000|lower-is-better|good',
+		'Summary length|50|200|100|-0.5000|no-agreed-direction|neutral',
+		'Time to write one|50|4|2|-0.5000|lower-is-better|good',
+		'Writing the summary|100|100|100|0.0000|no-agreed-direction|neutral'
+	];
+
+	await renderSwap(page, testInfo, WIDE.width, built);
+	const wide = await settled(page, SWAP);
+	expect(wide.domain, `${SWAP.name} must publish its data-only extent`).toBe('0,100');
+	expect(wide.marks, `${SWAP.name} drew values its rows do not hold`).toEqual(builtMarks);
+	expect(wide.frame, `${SWAP.name} drew to another width than it was given`).toBe(WIDE.width);
+
+	// A resize moves the frame and must move nothing the data decided. A server
+	// render draws once, so the narrow width is a second render of the same swap.
+	await renderSwap(page, testInfo, NARROW.width, built);
+	const narrow = await settled(page, SWAP);
+	expect(narrow.domain, `${SWAP.name} recomputed its extent on a resize`).toBe('0,100');
+	expect(narrow.marks, `${SWAP.name} moved a drawn value on a resize`).toEqual(builtMarks);
+	expect(narrow.frame, `${SWAP.name} drew to another width than it was given`).toBe(NARROW.width);
+
+	// A window change moves the data. The model route does not window its swap -
+	// each side is however much ran on each model - so a swap built from other
+	// rows stands for it. The newer model wrote a fifth longer and took half as
+	// long again. The checker doubted no summary on either side, and neither
+	// model copied or wrote outside the length asked for, so the six rows that
+	// measure those start from nothing and are named rather than drawn.
+	const other = buildSwap(
+		[...pair(10, '2026-08-20', 'old'), ...pair(10, '2026-08-21', 'new', { summary_words: '120' })],
+		[...timedPair(10, '2026-08-20', 2000), ...timedPair(10, '2026-08-21', 3000)]
+	);
+	const otherMarks = [
+		'Reading the article|100|1000|1000|0.0000|no-agreed-direction|neutral',
+		'Summary length|120|100|120|0.2000|no-agreed-direction|neutral',
+		'Time to write one|150|2|3|0.5000|lower-is-better|bad',
+		'Writing the summary|100|100|100|0.0000|no-agreed-direction|neutral'
+	];
+
+	await renderSwap(page, testInfo, NARROW.width, other);
+	const opened = await settled(page, SWAP);
+	expect(opened.domain, `${SWAP.name} published another extent than its new rows make`).toBe(
+		'100,150'
+	);
+	expect(opened.marks, `${SWAP.name} drew values its new rows do not hold`).toEqual(otherMarks);
+	expect(opened.frame, `${SWAP.name} drew to another width than it was given`).toBe(NARROW.width);
+
+	await renderSwap(page, testInfo, WIDE.width, other);
+	const reopened = await settled(page, SWAP);
+	expect(reopened.domain, `${SWAP.name} recomputed its extent on a resize at its new rows`).toBe(
+		'100,150'
+	);
+	expect(reopened.marks, `${SWAP.name} moved a drawn value on a resize at its new rows`).toEqual(
+		otherMarks
+	);
+	expect(reopened.frame, `${SWAP.name} drew to another width than it was given`).toBe(WIDE.width);
+});
