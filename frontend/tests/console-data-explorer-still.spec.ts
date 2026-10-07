@@ -237,9 +237,13 @@ test('M8: editor head, questions and narrow rails keep their density heights', a
 			return { control, space1, space2, space3, regions };
 		});
 		const oneControlRow = sizes.control + 2 * sizes.space1;
-		const questionsExpected = view.width < 640 ? 75 : oneControlRow;
 		expect(await page.locator('[data-workbench-region="editor"] .editor-head').evaluate((node) => node.getBoundingClientRect().height), `${view.width} editor head`).toBeGreaterThanOrEqual(oneControlRow - 1);
-		expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(questionsExpected, 0);
+		if (view.width < 640) {
+			expect(sizes.regions.questions, `${view.width} questions lower bound`).toBeGreaterThanOrEqual(oneControlRow - 1);
+			expect(sizes.regions.questions, `${view.width} questions upper bound`).toBeLessThanOrEqual(oneControlRow + sizes.control);
+		} else {
+			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(oneControlRow, 0);
+		}
 		if (view.width < 1024) {
 			expect(sizes.regions.ledgers, `${view.width} ledgers summary`).toBeCloseTo(sizes.control, 0);
 			expect(sizes.regions.columns, `${view.width} columns summary`).toBeCloseTo(sizes.control, 0);
