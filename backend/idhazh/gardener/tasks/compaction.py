@@ -5,6 +5,8 @@ served by this module through its kind, so a ledger joins the compaction with
 one declaration and no Python. A pass runs five steps in one process, and the
 shard lands all of them in one commit:
 
+0. expired indexed years are dropped by exact path in every format, at most
+   `max_periods_per_run`, with progress preserved in the yearly index;
 1. the oldest months past the monthly window's keep line are dropped, at most
    `max_periods_per_run` of them, each with every file at its paths and then
    its index entry;
@@ -109,6 +111,7 @@ def run(context: TaskContext) -> Pass:
         _compaction_periods,
         _daily_period,
         _monthly_period,
+        _yearly_expiry,
         _yearly_period,
     )
     from idhazh.gardener.tasks._compact_tree import CompactTree, stop_over_budget
@@ -165,6 +168,9 @@ def run(context: TaskContext) -> Pass:
             resume_from=held.resume_from,
             fault=held.fault,
         )
+    expiry_stops = _yearly_expiry.drop(
+        tree, policy, now=now, operator_range=operator_range
+    )
     looked_back = _compaction_periods.first_run_months(
         tree, policy, now=now, operator_range=operator_range
     )
@@ -177,6 +183,7 @@ def run(context: TaskContext) -> Pass:
     # A window that only reports keeps what it would drop, so packing reads it as forever.
     reports = policy.month_deletes_dry_run
     stops = (
+        *expiry_stops,
         *(_monthly_period.spare if reports else _monthly_period.drop)(tree, chosen.drops),
         *(_daily_period.spare if reports else _daily_period.drop)(
             tree, raw_drop_months, first_kept=first_kept
