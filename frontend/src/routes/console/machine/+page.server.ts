@@ -363,14 +363,15 @@ export async function load() {
 			// do not is named, and its speed figures are the summariser's. Each note
 			// is handed the whole read and the reads of the records its instrument
 			// draws on, so it names only what this span shows and dates a start only
-			// where the read reaches back to each record's first day. A run is formed
-			// from either record, so the counters draw on both.
+			// where the read reaches back to each record's first day. The server's two
+			// counter cells live in the machine record alone, so only that record can
+			// hold or lose a day of them, and only its first day bounds their start.
 			recording: recordingNotes({
 				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
 				recorded: counterDays,
 				window: dates,
-				reads: [machine.read, healthTable.read],
+				reads: [machine.read],
 				from: readSpan.start,
 				open,
 				coveredElsewhere: healthDays,

@@ -350,9 +350,9 @@ test.describe('what the recording was doing, in fixed words', () => {
 	});
 
 	test('an instrument drawn from two records dates its start only where both reach back to their first days', () => {
-		// The server's counters are formed from the machine record and the article record. Here
-		// the machine record began on 1 Sep 2026, inside the read from 25 Aug, and the counters'
-		// first day in the read is 30 Aug.
+		// The shared rule, for an instrument whose rows come from two records. Here one record
+		// began on 1 Sep 2026, inside the read from 25 Aug, and the instrument's first day in the
+		// read is 30 Aug.
 		const facts = {
 			enabled: true,
 			recorded: daysBetween('2026-08-30', '2026-09-10'),
@@ -360,15 +360,16 @@ test.describe('what the recording was doing, in fixed words', () => {
 			from: '2026-08-25',
 			open: over('2026-08-25', '2026-09-10')
 		};
-		const machine = begun('2026-09-01', '2026-09-10');
-		expect(recordingNotes({ ...facts, reads: [machine, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe(
+		const later = begun('2026-09-01', '2026-09-10');
+		expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe(
 			'Recording started on 30 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
 		);
-		// The article record began on 1 Aug, before the read, so it may hold counters from before it.
-		expect(recordingNotes({ ...facts, reads: [machine, begun('2026-08-01', '2026-09-10')] }).startedMidWindow).toBeNull();
+		// The other record began on 1 Aug, before the read, so it may hold a day the instrument ran
+		// before anything the read holds.
+		expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-01', '2026-09-10')] }).startedMidWindow).toBeNull();
 		// A day either record lost is a day the instrument ran.
 		expect(
-			recordingNotes({ ...facts, reads: [machine, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow
+			recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow
 		).toBe('Recording started on 28 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
 	});
 

@@ -113,7 +113,7 @@ one.** It is worked out once for each window the control offers, from the whole
 read. The instrument's first day is the first day it ran in what the route read -
 a day it recorded, or a day whose record was lost - and that is its true first
 day only when the read reaches back to the oldest named day of every record it
-draws on (the server's counters draw on the machine and the article records). A
+draws on (the server's counters live in the machine record alone). A
 record whose indexes name a day before the read may hold a day the instrument
 ran before anything the read holds, so the instrument gets no started line, and
 no day before the read is opened to learn it. The line prints in each window
