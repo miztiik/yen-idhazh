@@ -252,14 +252,16 @@ test('M14: the chart draws at the region content width and keeps its height on r
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
 	await runExplorer(page);
+	await page.locator('[data-workbench-region="chart"] svg[data-chart-type]').waitFor({ state: 'visible', timeout: 60_000 });
 	const reading = async () => page.evaluate(() => {
-		const region = document.querySelector('[data-workbench-region="chart"] .chart-body') as HTMLElement;
+		const plot = document.querySelector('[data-workbench-region="chart"] svg[data-chart-type]') as SVGElement | null;
+		const region = (document.querySelector('[data-workbench-region="chart"] .chart-body') ?? plot?.parentElement) as HTMLElement | null;
+		if (region === null || plot === null) throw new Error('chart body was not drawn');
 		const style = getComputedStyle(region);
 		const contentWidth = Math.floor(region.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
-		const plot = region.querySelector('svg[data-chart-type]') as SVGElement | null;
-		const plotBox = plot?.getBoundingClientRect();
+		const plotBox = plot.getBoundingClientRect();
 		const regionBox = region.getBoundingClientRect();
-		return { contentWidth, plotWidth: Math.floor(plotBox?.width ?? 0), regionHeight: regionBox.height };
+		return { contentWidth, plotWidth: Math.floor(plotBox.width), regionHeight: regionBox.height };
 	});
 	const wide = await reading();
 	expect(wide.plotWidth).toBe(wide.contentWidth);
