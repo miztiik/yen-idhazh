@@ -1,10 +1,10 @@
 # Address length on GitHub Pages
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 How long a Data explorer page address can be before GitHub Pages refuses it, and how long an ASCII question can be while still fitting a shared link.
 
-GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. With all 25 current ledgers and a custom date span, the address test's 6,939-character question uses an 8,191-byte request target; one more character uses 8,193 bytes. Compression depends on the question text, so this measured cap is for the test's fixed input, not a promise for every question. The address writer still drops the question when the complete link exceeds 8,192 bytes.
+GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. With all 24 current ledgers and a custom date span, the address test's 6,954-character question uses an 8,192-byte request target; one more character uses 8,193 bytes. Compression depends on the question text, so this measured cap is for the test's fixed input, not a promise for every question. The address writer still drops the question when the complete link exceeds 8,192 bytes.
 
 ## Conditions
 
@@ -66,25 +66,25 @@ The Data explorer page link must leave room for the path, every ledger name and 
 | --- | ---: |
 | Base path, `/yen-idhazh/console/data-explorer/` | 34 |
 | `?ledgers=` | 9 |
-| All 25 ledger names, with a raw comma between each | 338 |
-| The 24 encoded commas, two extra bytes each over a raw comma | 48 |
+| All 24 ledger names, with a raw comma between each | 347 |
+| The 23 encoded commas, two extra bytes each over a raw comma | 46 |
 | `&from=YYYY-MM-DD` | 16 |
 | `&end=YYYY-MM-DD` | 15 |
 | `&q=` | 3 |
-| Fixed total before the encoded question | 487 |
-| Encoded test question at 6,939 characters | 7,704 |
-| Whole request target at 6,939 characters | 8,191 |
+| Fixed total before the encoded question | 470 |
+| Encoded test question at 6,954 characters | 7,722 |
+| Whole request target at 6,954 characters | 8,192 |
 
-The question uses the deterministic printable ASCII sequence in `frontend/tests/console-data-explorer-address.spec.ts`, seed `0x1234abcd`, then `CompressionStream('deflate-raw')` and base64url encoding. The browser produced:
+The question uses the deterministic printable ASCII sequence in `frontend/tests/console-data-explorer-address.spec.ts`, seed `0x1234abcd`, then `CompressionStream('deflate-raw')` and base64url encoding. Node 24.12.0 on Windows reproduced this local byte reading on 2026-10-07; it does not re-measure the host's HTTP limit:
 
 ```text
-6,939 characters -> 5,778 compressed bytes -> 7,704 base64url characters
-487 + 7,704 = 8,191 bytes
-6,940 characters -> 5,779 compressed bytes -> 7,706 base64url characters
-487 + 7,706 = 8,193 bytes
+6,954 characters -> 5,791 compressed bytes -> 7,722 base64url characters
+470 + 7,722 = 8,192 bytes
+6,955 characters -> 5,792 compressed bytes -> 7,723 base64url characters
+470 + 7,723 = 8,193 bytes
 ```
 
-The configured cap is 6,939 characters. The address test checks that the question fits at this cap and is left out one character later. The cap is tied to that fixed test input; the byte limit remains the final guard for other question text.
+The configured cap is 6,954 characters. The address test checks that the question fits at this cap and is left out one character later. The cap is tied to that fixed test input; the byte limit remains the final guard for other question text.
 
 ## What would make this stale
 

@@ -61,15 +61,15 @@ section 2).
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import Final
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason, stop_for
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.gardener_events import StepChoice
+from idhazh.contracts.gardener_events import CompactionStep, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import GITHUB_LARGE_FILE_BYTES
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
@@ -79,7 +79,8 @@ from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 from idhazh.gardener.tasks._monthly_period import days_of
 from idhazh.ledger import StoredRow
 
-logger = logging.getLogger(__name__)
+#: The step a year this module refuses is named under. Its yearly mark stays.
+_STEP: Final = CompactionStep.PACK_YEARS
 
 
 def months_of(year: str) -> list[str]:
@@ -98,29 +99,6 @@ def _counted(tree: CompactTree, year: str) -> list[str]:
         return months
     first = min(tree.monthly)
     return [month for month in months if month >= first]
-
-
-def _refused(
-    tree: CompactTree,
-    year: str,
-    why: str,
-    ledger_fault: ledger.LedgerFault | None = None,
-    *,
-    fault: GardenerFault = GardenerFault.RAISED,
-) -> tuple[Stop, ...]:
-    """A year that cannot be packed, said once by name. The yearly mark stays where it is.
-
-    `fault` is the record's word for it: `raised`, a defect, unless the caller
-    names a cause outside the code, which defers the pass instead.
-    """
-    logger.error(
-        "a year is not packed ledger=%s year=%s fault=%s reason=%s",
-        tree.ledger.value,
-        year,
-        ledger_fault or "none",
-        why,
-    )
-    return (Stop(stop_for(fault), year, fault),)
 
 
 def _drop_months(tree: CompactTree, year: str) -> None:
@@ -179,7 +157,7 @@ def _build[C: Contract](
     *,
     model: type[C],
     identity: WriterIdentity,
-) -> tuple[ledger.PeriodFile | None, dict[str, str]]:
+) -> tuple[ledger.PeriodFile | None, list[str]]:
     """The year's file from its months' files, one month at a time, and each one it could not read.
 
     A month file that cannot be read is passed over, and the build is made
@@ -187,14 +165,15 @@ def _build[C: Contract](
     None when no month file is left to build from. Raises `ValueError` for a
     year file over GitHub's large-file line, before anything is written.
     """
-    unreadable: dict[str, str] = {}
+    unreadable: list[str] = []
 
     def groups(months: Sequence[str]) -> Iterator[list[StoredRow[C]]]:
         for month in months:
             try:
                 rows = tree.load(held[month], model=model)
-            except ValueError as refusal:
-                unreadable[month] = str(refusal)
+            except ValueError:
+                if month not in unreadable:
+                    unreadable.append(month)
                 continue
             yield rows
 
@@ -232,7 +211,7 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
     try:
         own = ledger_marks.adopt(tree.listing, tree.state_dir, tree.ledger, Period.YEARLY, year)
     except ValueError as refusal:
-        return _refused(tree, year, str(refusal))
+        return (tree.refuse(_STEP, year, failure=refusal),)
     if own is not None:
         _keep_own(tree, year, own)
         return ()
@@ -248,18 +227,13 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
             if found is not None:
                 recovered[month] = found
     except ValueError as refusal:
-        return _refused(tree, year, str(refusal))
+        return (tree.refuse(_STEP, year, failure=refusal),)
     nowhere = [month for month in months if month not in tree.monthly and month not in recovered]
     left = _left_of(tree, nowhere)
     if left:
-        where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.MONTHLY)
-        return _refused(
-            tree,
-            year,
-            f"{where.name} does not name {', '.join(left)}, and its days are still there, "
-            "so it never closed",
-            ledger.LedgerFault.DAY_MISSING,
-        )
+        # The monthly index does not name those months and their days are still
+        # there, so they never closed: a person decides, and nothing moves.
+        return (tree.refuse(_STEP, year, ledger_fault=ledger.LedgerFault.DAY_MISSING),)
     files = {
         month: named_trees.compact_file(
             tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
@@ -275,9 +249,9 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
             tree, year, held, model=ledger.door_contract(tree.ledger), identity=identity
         )
     except ValueError as refusal:
-        return _refused(tree, year, str(refusal))
+        return (tree.refuse(_STEP, year, failure=refusal),)
     for month in sorted(unreadable):
-        tree.set_aside(held[month], month, unreadable[month])
+        tree.set_aside(held[month])
         tree.note_recovery(RecoveryNote.SET_ASIDE, month)
     for month in sorted(recovered):
         if month not in unreadable:
@@ -341,13 +315,9 @@ def absorb(tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity) -
     first that does not.
     """
     if choice.stopped_because is StopReason.DEFERRED and choice.resume_from is not None:
-        return _refused(
-            tree,
-            choice.resume_from,
-            "the operator range leaves it out, and it is packed before any year the range "
-            "names. Widen the range to include it",
-            fault=GardenerFault.RANGE_STARTS_LATE,
-        )
+        # The range leaves the year out, and it is packed before any year the
+        # range names: the person widens the range to include it.
+        return (tree.refuse(_STEP, choice.resume_from, fault=GardenerFault.RANGE_STARTS_LATE),)
     if choice.first is None or choice.last is None:
         return ()
     years = [f"{number:04d}" for number in range(int(choice.first), int(choice.last) + 1)]

@@ -1,3 +1,0 @@
-version,date,run_id,judge_id,shard,shards,outcome,started_at,seconds_spent,model_calls,tokens_in,tokens_out,model_seconds,host_model
-2026-09-21T12:00,2026-09-28,2026-09-29-36508788281,content-similarity-judge,-2,4,nothing_to_do,2026-09-29T01:38:59Z,0.03959898000000095,,,,,
-2026-09-21T12:00,2026-09-28,2026-09-30-36653766989,content-similarity-judge,-2,4,nothing_to_do,2026-09-30T01:10:51Z,0.01664811500000951,,,,,

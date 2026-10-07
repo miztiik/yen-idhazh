@@ -132,11 +132,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/content-similarity-judge/merge-line-holdout-scores/2026/09/18.csv",
         "state/content-similarity-judge/merge-line-holdout-scores",
     ),
-    "LLM_COUNCIL_SHARD_OUTCOMES": (
-        "state/llm-council/shard-outcomes/2026/09/18.csv",
-        "state/llm-council/shard-outcomes/2026/09/18.csv",
-        "state/llm-council/shard-outcomes",
-    ),
     # The three below were never in the old ledger module. Each row is what its
     # owning module built before the registry took its address: the trace day
     # directory and the trace root from `telemetry.traces` and `retention`, the
@@ -178,7 +173,6 @@ CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
         "feed-health",
         "host-fingerprint",
         "item-health",
-        "llm-council",
         "published",
         "score-index",
         "scores",
@@ -316,20 +310,19 @@ def test_a_ledger_listed_in_two_families_stops_the_build_naming_both() -> None:
 def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None:
     """A family is the folder its ledgers sit in, so a ledger filed elsewhere is refused.
 
-    The council's one ledger moved into the judge's list: its prefix still says
-    `state/llm-council/`, so it would sit in one folder under another's status.
+    A ledger moved into another family's list would sit under the wrong status.
     """
     judge = a_family("content-similarity-judge")
-    council = a_family("llm-council")["ledgers"][0]
-    moved = {**judge, "ledgers": [*judge["ledgers"], dict(council)]}
+    traces = a_family("traces")["ledgers"][0]
+    moved = {**judge, "ledgers": [*judge["ledgers"], dict(traces)]}
 
     with pytest.raises(ValidationError) as refusal:
         LedgersConfig.model_validate(
-            a_registry([moved, *without("content-similarity-judge", "llm-council")])
+            a_registry([moved, *without("content-similarity-judge", "traces")])
         )
 
     assert (
-        "shard-outcomes sits at state/llm-council/ and is listed in family content-similarity-judge"
+        "traces sits at state/traces/ and is listed in family content-similarity-judge"
     ) in str(refusal.value)
 
 

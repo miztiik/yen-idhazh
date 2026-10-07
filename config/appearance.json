@@ -199,7 +199,7 @@
     ],
     "explorer_max_fetch_bytes": 67108864,
     "explorer_max_rows": 1000,
-    "explorer_query_max_chars": 6939,
+    "explorer_query_max_chars": 6954,
     "explorer_link_max_bytes": 8192,
     "explorer_reach_days": 365,
     "explorer_row_page": 50,

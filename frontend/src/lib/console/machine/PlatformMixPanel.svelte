@@ -123,9 +123,11 @@
 		}
 		return () => { current = false; };
 	});
+	// Every ledger a panel reads is published, so `missing` is a record with no
+	// compact folder: one that is not packed yet, never one left unpublished.
 	const empty = $derived(
 		panelState === 'loading' ? emptyState('loading')
-			: panelState === 'missing' ? emptyState('missing', 'The machine record has not been published yet.')
+			: panelState === 'missing' ? emptyState('missing', 'The machine record is not packed yet.')
 				: panelState === 'unreachable' ? emptyState('unreachable', 'The machine record could not be read. Reload this page to try again.')
 					: emptyState('quiet', 'No jobs were recorded in this window.')
 	);

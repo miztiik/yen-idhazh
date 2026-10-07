@@ -44,10 +44,18 @@ the shard exit 1**; a deferred one leaves the exit code as it was.
 **Every task is handed the folders it walks, judged against the commit.** A
 folder the commit holds is walked whether the checkout holds it or not, because
 a task learns its members from the commit's names and fetches only what it
-reads. A declared folder the commit does not hold yet is left out and logged:
-nothing has written one, and the task's first write makes it. A complement task
-is answered only from the commit, so a caller that could not read it is refused
-before any task runs.
+reads. A declared folder the commit does not hold yet is left out, and the
+task's `TaskPlanned` event names it: nothing has written one, and the task's
+first write makes it. A complement task is answered only from the commit, so a
+caller that could not read it is refused before any task runs.
+
+**Each task is said twice in the log, before it runs and when it ends.**
+`TaskPlanned` names its run and every knob of its declaration;
+`TaskFinished`, logged the moment the task returns, says how it ended in one
+word, what it took and wrote, and what happens next (`report.finished`). A
+later refusal of the whole shard cannot hide how a task ended. The exception
+that stopped a task is kept beside its row, so its event names the type and
+where it was raised, and never its text.
 
 **Every task is handed the listing of the files under its folders.** One
 listing a shard, of every folder its tasks own or read, handed in by whoever
@@ -97,6 +105,7 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, WriterIdentity
+from idhazh.contracts.gardener_events import TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
     RetentionPolicy,
@@ -105,7 +114,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import closed_day_fold, error_cause, registry, report, shards
+from idhazh.gardener import closed_day_fold, error_cause, event_log, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.error_cause import ErrorCause
@@ -114,8 +123,6 @@ from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.site_weight import BYTES_PER_MB
-
-logger = logging.getLogger(__name__)
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -128,6 +135,15 @@ _HEAVIEST_NAMED: Final = 3
 
 #: The one program that runs a history task, named in the refusal to run one here.
 HISTORY_PROGRAM: Final = "backend/utilities/corpus_history.py"
+
+#: The keys of a declaration a task's planned event leaves out: what it is, the
+#: folders it may touch and the ledgers it may file into, and its prose. Every
+#: other key is a knob.
+_NOT_KNOBS: Final = frozenset({"kind", "owns", "reads", "appends_to", "prune_refusal"})
+
+#: The level a task's finished event is logged at: a defect is an error, a
+#: cause outside the code a warning, and every other ending is information.
+_LEVELS: Final = {TaskOutcome.FAILED: logging.ERROR, TaskOutcome.DEFERRED: logging.WARNING}
 
 
 class ShardRefusedError(Exception):
@@ -251,39 +267,38 @@ class _Ran:
     failed: bool
     #: What the task's fold did. None when it has no fold, or the fold did not run.
     folded: closed_day_fold.Folded | None = None
+    #: The exception that stopped the task or its fold, which its event names
+    #: by type and place. None when nothing raised.
+    failure: BaseException | None = None
 
 
-def _run_one(name: str, held: registry.TaskModule, context: TaskContext, folders: Folders) -> _Ran:
-    """One task, timed, with any error read for what it means and turned into its row."""
+def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran:
+    """One task, timed, with any error read for what it means and turned into its row.
+
+    The error itself is kept beside the row, so the task's event can name its
+    type and where it was raised; its text goes nowhere.
+    """
     started = time.monotonic()
     folded: closed_day_fold.Folded | None = None
-    for folder in folders.absent:
-        logger.info(
-            "%s names %s, which the commit does not hold yet, so it lists nothing there",
-            name,
-            folder,
-        )
+    failure: BaseException | None = None
     try:
         outcome = held.run(context)
     except PruneInterruptedError as stop:
-        logger.error("%s stopped part way: %s", name, stop)
-        outcome = stop.so_far
-    except Exception as failure:
-        fault = error_cause.fault_of(error_cause.classify(failure))
-        logger.exception("%s stopped before it reached a member, fault=%s", name, fault)
-        outcome = _nothing_reached(name, context.policy, fault)
+        outcome, failure = stop.so_far, stop.__cause__
+    except Exception as caught:
+        fault = error_cause.fault_of(error_cause.classify(caught))
+        outcome, failure = _nothing_reached(name, context.policy, fault), caught
     policy = context.policy
     stopped = outcome.stopped_because in (StopReason.FAILED, StopReason.DEFERRED)
     if not stopped and isinstance(policy, RetentionPolicy) and policy.fold is not None:
         try:
             folded = closed_day_fold.run(context, policy.fold, skip=outcome.taken)
         except closed_day_fold.FoldInterruptedError as stop:
-            logger.error("%s's fold stopped part way: %s", name, stop)
-            folded = stop.so_far
-        except Exception as failure:
-            fault = error_cause.fault_of(error_cause.classify(failure))
-            logger.exception("%s's fold stopped before it settled a day, fault=%s", name, fault)
+            folded, failure = stop.so_far, stop.__cause__
+        except Exception as caught:
+            fault = error_cause.fault_of(error_cause.classify(caught))
             folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, fault=fault)
+            failure = caught
     elapsed = int((time.monotonic() - started) * 1000)
     return _Ran(
         name=name,
@@ -292,7 +307,43 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext, folders
         duration_ms=elapsed,
         failed=report.ended(outcome, folded)[0] is StopReason.FAILED,
         folded=folded,
+        failure=failure,
     )
+
+
+def _planned(
+    name: str, context: TaskContext, folders: Folders, operator_range: tuple[str, str] | None
+) -> TaskPlanned:
+    """What a task is about to run with: its run, its knobs, and folders the commit lacks.
+
+    `operator_range` is the range a person named for this run, never the
+    scheduled window a retention task is handed in its place.
+    """
+    policy = context.policy
+    return TaskPlanned(
+        task=name,
+        kind=TaskKind(policy.kind),
+        shard=context.shard,
+        run_id=context.run_id,
+        attempt=context.attempt,
+        today=context.today.isoformat(),
+        operator_range=operator_range,
+        declared=policy.model_dump(mode="json", exclude=set(_NOT_KNOBS)),
+        absent=list(folders.absent),
+    )
+
+
+def _said_finished(ran: _Ran) -> None:
+    """Log how one task ended, at the level its outcome asks for."""
+    finished = report.finished(
+        ran.outcome,
+        task=ran.name,
+        duration_ms=ran.duration_ms,
+        folded=ran.folded,
+        settled=_fold_changes(ran)[0],
+        failure=ran.failure,
+    )
+    event_log.emit(finished, level=_LEVELS.get(finished.outcome, logging.INFO))
 
 
 def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -580,7 +631,9 @@ def run(
                 first_ledger_year=settings.config.first_ledger_year,
                 period_range=period_ranges[name],
             )
-            done = _run_one(name, bound[name], context, resolved[name])
+            event_log.emit(_planned(name, context, resolved[name], period_range))
+            done = _run_one(name, bound[name], context)
+            _said_finished(done)
             _refuse_a_path_outside(done, settings.tasks)
             _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
@@ -605,12 +658,6 @@ def run(
         say(f"shard {shard}: {refusal}")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
-    for each in ran:
-        for line in report.lines(each.outcome):
-            say(line)
-        if each.folded is not None:
-            for line in report.fold_lines(each.name, each.folded):
-                say(line)
     if too_heavy is not None:
         say(too_heavy)
     recorded = record.relative_to(repo_root).as_posix()

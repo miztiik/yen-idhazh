@@ -129,8 +129,8 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 **Every step chooses its own periods.** Before any step runs, the pass chooses
 the months step 1 may drop, the years step 3 may pack, the months step 4 may
 close and the days step 5 may pack, from the ledger's own indexes and marks and
-the wake's UTC day, and logs the choice once as one `periods chosen` line, the
-JSON of `PeriodsChosen` (`backend/idhazh/contracts/gardener_events.py`). Step 2
+the wake's UTC day, and logs the choice once, as one `periods-chosen` event
+(`PeriodsChosen` in `backend/idhazh/contracts/gardener_events.py`). Step 2
 takes the raw days of the months step 1 chose, and of those a first day run
 looks back over ([A month past the window](#a-month-past-the-window)). The
 listing a wake hands the pass names only the ledger's three indexes, so a step
@@ -162,9 +162,10 @@ download at most `max_downloaded_mb` for all its tasks
 has named its periods, it reads their files' sizes off the listing, takes the
 longest run, oldest first, whose download fits what is left, and stops at the
 first period that does not fit: `ceiling`, for a later wake with room, or
-`failed` by name, with the fault `raised`, naming the period, its bytes and
-`max_downloaded_mb`, when that period alone is larger than the whole budget,
-because no wake could ever take it. `error_cause.classify` decides both by one
+`failed` by name, with the fault `raised`, when that period alone is larger
+than the whole budget, because no wake could ever take it. Either way one
+`download-over-budget` event names the period, its bytes, the room left and
+`max_downloaded_mb`. `error_cause.classify` decides both by one
 rule, more than the whole budget is a defect, and the runner's check after the
 tasks asks it too. Adopting a file no entry names counts against the budget
 too, and so do the marks and the files an absent index is rebuilt from: a pass
@@ -295,8 +296,9 @@ pass recovers it instead of stopping:
 A month whose days give no row is an `empty` entry with no file. Only a day is
 ever `lost`; a month or a year lists its lost days. Each recovery is one note on
 the pass's record row, its word and the period it is about
-([idhazh-gardener.md](idhazh-gardener.md#the-record)), and one log line, and the
-words are declared in `backend/idhazh/contracts/gardener_fault.py`.
+([idhazh-gardener.md](idhazh-gardener.md#the-record)), and the same note in its
+task's `task-finished` event; the words are declared in
+`backend/idhazh/contracts/gardener_fault.py`.
 
 **A month's own file is looked for first, and never written over.** A month
 file at its path that no monthly entry names is the month's record when its
@@ -374,9 +376,17 @@ If another writer changes an output path, the stale pass lands nothing; run
 the named pass again on current main. A distinct raw file that arrives after
 the pass read its inputs survives and needs a subsequent packing pass.
 
+Guarded publication preserves the checkout's existing history depth when it
+fetches main. Forcing a new depth-one boundary would hide the ancestors a
+local privacy hook must check before a push. An initially shallow workflow
+checkout stays shallow and fetches only commits added after its existing
+boundary, not the full history. The two real Git fixtures in
+`backend/tests/gardener/test_publish.py` check both cases.
+
 **A re-open that cannot finish keeps every file, and the pass stops at the
-month.** A `packed` entry whose month file is not there, logged as
-`fault=file-missing`, and a month file that cannot be read are both refused:
+month.** A `packed` entry whose month file is not there, named `file-missing`
+in its `period-refused` event, and a month file that cannot be read are both
+refused:
 rebuilt from the late files alone, the month would hold only the days that ran
 again. A person restores the file from git history, so the pass ends `deferred`
 with the fault `packed-file-unreadable` rather than turning the job red;
@@ -555,8 +565,9 @@ month's file and raw folder, and the shard lists them from its commit then
 
 **A month goes whole and by its names, and nothing of it is opened.** The step
 deletes every file at the month's paths, in either format and whatever its entry
-says, and then the entry. A `packed` entry with no file left is logged as
-`fault=file-missing`; an `empty` entry has no file to miss. Then each raw day
+says, and then the entry. A `packed` entry with no file left is named
+`file-missing` in one `ledger-fault-met` event; an `empty` entry has no file to
+miss. Then each raw day
 past the line goes with every file the listing holds in its folder: the raw days
 in the months the step drops, and those in the months a first day run looked
 back over and did not take, because it starts no earlier than the line
@@ -666,8 +677,9 @@ live. Looking further back would grow the read with time (CLAUDE.md Guardrail
 `backend/tests/contracts/test_frontend_index_shapes.py` holds the two to one list.
 The query door carries the name on its answer
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)),
-and the gardener's logs and the backend's own ledger reader print it as
-`fault=<name>`, so one search finds a fault on both sides.
+and the gardener's events carry it under `ledger_fault` while the backend's own
+ledger reader prints it as `fault=<name>`, so a search for the bare word finds a
+fault on both sides.
 
 | # | Name | What is missing | What the gardener does |
 | --- | --- | --- | --- |
@@ -721,6 +733,18 @@ the job red, or `deferred` with `range-starts-late`, `no-month-to-reopen` or
 note the pass made instead of stopping, one a period, in the order it met them.
 
 ## Design rationale
+
+**Council CSV retirement while current writers continue.** CSV retirement needs
+a fresh source-cell proof through the normal reader, not only successful
+packing. An owner may explicitly accept the risk of an obsolete writer
+returning; this does not authorize cancelling runs or disabling workflows.
+On 2026-10-07, owner @kumarsnaveen_microsoft ruled that the legacy council run
+would not be rerun ("it wont be run just do your job deliver") and waived the
+rerun-window wait for council CSV retirement. Old branch and open-PR writers
+are information, not blockers under that ruling. The council converter and CSV
+family are removed; historical schema stamps and native writer identities
+remain readable. The command sequence is
+[the migration runbook](../../how-to/move-a-ledger-to-parquet.md#retire-csv-after-the-old-writer-is-retired).
 
 **2026-09-28: a compaction pass drops, then absorbs months, then takes days.**
 The first design took the days and then the months. A shard refuses a path it

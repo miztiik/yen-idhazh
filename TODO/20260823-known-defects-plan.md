@@ -76,7 +76,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
-| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - owner ruled to drop the column; Plan 61 Row 2 removed it |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - the council record rationale ([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant)) keeps machine details out of each row |
 | 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed ledger is exposed** |
 | 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
 | 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
@@ -112,7 +112,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
-| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - two command lines need their own fix; plan 60 carries the gardener's** |
+| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 
@@ -190,12 +190,16 @@ two hours on the machine where row L7 saw it.** A GitHub runner's local time is
 UTC, so a workflow's log is right, and the fault shows only on a machine set to
 another zone, such as a developer's.
 
-**The next move is a worker's.** Plan 60's row "Every gardener log line is one
-JSON event" rewrites the gardener's log lines, and its `settings_or_none`
-installs the handler once, so the gardener command line's stamp is that row's
-to set. The other two need a fix of their own: the records they log carry a
-UTC time and say so, with a test that reads one. Level 1 - the time printed on
-each log line, and a wrong version shows on the first line.
+**The gardener's part is fixed by plan 60's row "Every gardener log line is one
+JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
+install one handler through `settings_or_none`, and each line it writes carries
+`at`, the record's own instant in UTC as ISO-8601 with `Z`.
+`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
+in the test process and in a fresh one. The other two command lines,
+`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
+local time and need a fix of their own: the records they log carry a UTC time
+and say so, with a test that reads one. Level 1 - the time printed on each log
+line, and a wrong version shows on the first line.
 
 Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
 
@@ -954,8 +958,10 @@ rejected recording the machine per shard, on the grounds that the digest
 pipeline already characterises the same runner pool and the probe wants 1.9 GiB
 on a job whose two processes already hold up to 9.02 GiB in 16 GB.
 
-The owner ruled on 2026-10-04 to drop the column. Plan 61 Row 2 removes it from
-the replacement contract and refuses a filled legacy cell during migration.
+The council record rationale
+([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant))
+keeps machine details out of each row. The replacement contract refuses a
+filled legacy cell during migration.
 
 Found 2026-09-21, while the council's own record was being built.
 

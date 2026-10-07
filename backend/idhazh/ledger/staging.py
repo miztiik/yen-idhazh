@@ -191,11 +191,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol=None,
         job_labels=frozenset(),
     ),
-    LedgerName.LLM_COUNCIL_SHARD_OUTCOMES: LedgerStaging(
-        writer="no writer: the council now files its records in the ledger door",
-        symbol=None,
-        job_labels=frozenset(),
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
         writer=(
             "the council's shipping capability, which renders a tenant's row rather "

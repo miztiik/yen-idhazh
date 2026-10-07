@@ -8,7 +8,6 @@ from types import MappingProxyType
 from typing import Final, NamedTuple
 
 from idhazh import ledger
-from idhazh.contracts.council_run_record import OLD_HEADINGS
 from idhazh.contracts.eval_row import RENAMED_CELLS
 from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
@@ -33,11 +32,6 @@ def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
 def _day_file(name: LedgerName) -> LedgerEntry:
     """One shared CSV file a day, under the ledger's own name."""
     return LedgerEntry(name=name, grain=Grain.DAY_FILE, prefix=(name.value,), suffix=".csv")
-
-
-def _shared_day_file(name: LedgerName, *, prefix: tuple[str, ...]) -> LedgerEntry:
-    """One shared CSV file a day, under an earlier family path."""
-    return LedgerEntry(name=name, grain=Grain.DAY_FILE, prefix=prefix, suffix=".csv")
 
 
 CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
@@ -70,15 +64,6 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         # Nothing deletes a published record: forgetting one republishes it.
         LedgerName.PUBLISHED: CsvLedger(
             _day_file(LedgerName.PUBLISHED), ForeverWindow(unit="forever")
-        ),
-        # One old family folder and one old ledger folder, read before row 3 moves it.
-        LedgerName.COUNCIL_RUN_RECORDS: CsvLedger(
-            _shared_day_file(
-                LedgerName.COUNCIL_RUN_RECORDS,
-                prefix=("llm-council", "shard-outcomes"),
-            ),
-            ForeverWindow(unit="forever"),
-            OLD_HEADINGS,
         ),
     }
 )
