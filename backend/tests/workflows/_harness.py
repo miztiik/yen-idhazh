@@ -661,6 +661,13 @@ SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_
 #: checkout of two folders, before anything of this project is installed.
 GARDENER_PLAN_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 
+#: The gardener's shard program: it runs one shard's tasks and lands its record.
+GARDENER_SHARD_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_publish.py"
+
+#: What every gardener program prints when an exception ends it. Two of those
+#: programs run before any install, so it is held to the standard library too.
+CRASH_TRACE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "crash_trace.py"
+
 #: The Pages workflow's one program: whether to publish and which commit, run on
 #: a bare checkout before anything is installed.
 PUBLISH_DECISION_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "publish_decision.py"
