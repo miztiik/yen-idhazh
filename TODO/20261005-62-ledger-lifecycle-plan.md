@@ -15,7 +15,7 @@ Table A - operating contract
 | # | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Ledgers start, pause, resume and stop. Since #1309 a ledger's index starts on its first raw day, but the readers treat a day before a ledger began as a day that is missing: the data explorer asks the archive for it and then reports a fault. The tests hid this until #1309, because the canary began every ledger on the 1st of a month and the browser answer key read other inputs than the page. Now ten browser tests fail on `main` (run 37361239642, 2026-10-05). This plan makes every reader and every test treat each stage of a ledger's life as normal |
-| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10).<br>- The "Measurement is off" line names no day outside the window, and says that nothing has been recorded at all only for a record that never held a row (L11).<br>- The data explorer's span sentences count the days read, give every date its year, and name each ledger with its own first day (L12).<br>- The console specs that still work their answer out from the canary, or write out its figures, serve the data they check (L13)<br>- The console specs that work their answer out from the canary's own files, or skip on what it holds, serve the data they check (L14)<br>- The note under the item-cost section says the held part of a prompt hardly changes only when its own two figures show it (L15)<br>- On Hardware and Summaries, the "Recording started" line names a start only where it is known and on screen, Summaries works out its recording lines for each window, and its "Measurement is off" line prints whenever measurement is off (L16)<br>- Every windowed console surface says "1 day" at the 1-day preset (L17)<br>- The console home opens each published day's payload once, and the articles card takes its count from that read (L18)<br>- The swap chart's case in the console's mark-parity test checks a swap the test builds, instead of skipping because the canary holds no model change (L19)<br>- The dwell rule on the retiring strip starts at the oldest day under the mark in the run, so a day that decided nothing inside the run leaves no such day out (L20)<br>- Before a run, the data explorer's action line counts the days the run will read, not the days of the window (L21)<br>- On Summaries and Hardware, the lines for a day that only one record answered say only what is true of the days the window shows (L22)<br>- The pipelines route's page names the Hardware panel as it is drawn now and says the share is printed, and the prompt-cache subtitle says nothing its own figures contradict (L23)<br>- The bundle gate reports the index key of a published ledger that is not packed yet as not weighed, and names the ledger, while every other payload key that names nothing still fails (L24)<br>- Hardware's platform-mix panel no longer says that a published machine record that is not packed yet has not been published (L25).<br>- Every console sentence reads right at the one-day window, including the ones that print no day count today (L26).<br>- Judgement's windowed surfaces name their span at every preset (L27) |
+| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10).<br>- The "Measurement is off" line names no day outside the window, and says that nothing has been recorded at all only for a record that never held a row (L11).<br>- The data explorer's span sentences count the days read, give every date its year, and name each ledger with its own first day (L12).<br>- The console specs that still work their answer out from the canary, or write out its figures, serve the data they check (L13)<br>- The console specs that work their answer out from the canary's own files, or skip on what it holds, serve the data they check (L14)<br>- The note under the item-cost section says the held part of a prompt hardly changes only when its own two figures show it (L15)<br>- On Hardware and Summaries, the "Recording started" line names a start only where it is known and on screen, Summaries works out its recording lines for each window, and its "Measurement is off" line prints whenever measurement is off (L16)<br>- Every windowed console surface says "1 day" at the 1-day preset (L17)<br>- The console home opens each published day's payload once, and the articles card takes its count from that read (L18)<br>- The swap chart's case in the console's mark-parity test checks a swap the test builds, instead of skipping because the canary holds no model change (L19)<br>- The dwell rule on the retiring strip starts at the oldest day under the mark in the run, so a day that decided nothing inside the run leaves no such day out (L20)<br>- Before a run, the data explorer's action line counts the days the run will read, not the days of the window (L21)<br>- On Summaries and Hardware, the lines for a day that only one record answered say only what is true of the days the window shows (L22)<br>- The pipelines route's page names the Hardware panel as it is drawn now and says the share is printed, and the prompt-cache subtitle says nothing its own figures contradict (L23)<br>- The bundle gate reports the index key of a published ledger that is not packed yet as not weighed, and names the ledger, while every other payload key that names nothing still fails (L24)<br>- Hardware's platform-mix panel no longer says that a published machine record that is not packed yet has not been published (L25).<br>- Every console sentence reads right at the one-day window, including the ones that print no day count today (L26).<br>- Judgement's windowed surfaces name their span at every preset (L27)<br>- On Hardware, a run made of article rows alone is no longer counted or dated as one that committed the server's own counters, a failed read of the score record is named instead of dropping the change markers with no note, and the server's counters no longer take the scorer's sampling rate (L28).<br>- Hardware's refused-runs box says what reads a refused run, once a measurement shows whether its words are true (L29).<br>- With no fitted day in the window, the merge line's dashed rule and its label name the line a build used (L30).<br>- When the window holds no row of the record, Judgement's record panel says so instead of drawing three bars at zero (L31).<br>- Judgement's agreement strip prints no share for a day that read too few pairs for one (L32).<br>- Every sentence for a published record or ledger that the door answers `missing` says it is not packed yet, never that it is not published (L33). |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | Change the readers and the tests, never the data: no persisted shape changes, a day before a ledger began is outside the ledger and never a fault, every window ends on a day that no ledger can move, and every test serves the data it checks. Fowler, 2026-10-05, on the owner's rulings of the same day |
@@ -72,15 +72,21 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | #1367 | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | DONE | probable-umbrella | #1374 | Plan 62 row l17 |
 | L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | - | Plan 62 row l18 |
-| L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | - | Plan 62 row l19 |
+| L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | #1391 | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
-| L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | - | Plan 62 row l22 |
-| L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | DONE | fuzzy-winner | - | Plan 62 row l23 |
+| L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | #1385 | Plan 62 row l22 |
+| L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | DONE | fuzzy-winner | #1381 | Plan 62 row l23 |
 | L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | #1376 | Plan 62 row l24 |
-| L25 | Hardware's platform-mix panel says the machine record is not packed yet | L7, L17 | G | DONE | fantastic-giggle | - | Plan 62 row l25 |
+| L25 | Hardware's platform-mix panel says the machine record is not packed yet | L7, L17 | G | DONE | fantastic-giggle | #1384 | Plan 62 row l25 |
 | L26 | Every console sentence reads right at the one-day window | L17, L23 | G | PENDING | - | - | - |
-| L27 | Judgement's windowed surfaces name their span | L17 | G | DONE | vigilant-sniffle | - | Plan 62 row l27 |
+| L27 | Judgement's windowed surfaces name their span | L17 | G | DONE | vigilant-sniffle | #1388 | Plan 62 row l27 |
+| L28 | Hardware's notes say only what its records hold | L22 | H | PENDING | - | - | - |
+| L29 | Hardware's refused-runs box says what reads a refused run | L22 | I | PENDING | - | - | - |
+| L30 | The merge line's no-fit rule names the line a build used | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | H | PENDING | - | - | - |
+| L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | PENDING | - | - | - |
+| L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | PENDING | - | - | - |
+| L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -1281,3 +1287,187 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Leave the three surfaces silent on their span | On the canary all three print no day count at 1 and at 7 days; found during execution (row L17 report) | Nothing to build, and no window oracle for the Judgement route | Plan owner, 2026-10-07 |
+
+### Row #L28 - Hardware's notes say only what its records hold
+
+- **Scope:** On Hardware, a run made of article rows alone is no longer counted or dated as one that committed the server's own counters, a failed read of the score record is named instead of dropping the change markers with no note, and the server's counters no longer take the scorer's sampling rate, so no one-sided line prints while a sampled line does. Level 2.
+- **The three faults** (row L22's follow-ups, 2026-10-07):
+  1. A run made of article rows alone counts as one the server's counters wrote. `machineCounters` forms a run from either record, and `mergeHost([])` gives a run with no machine-record row empty cells. So in the 30- and 90-day windows the intro counts the runs of 30 Aug to 16 Sep 2026 as runs that "committed counters the model server wrote itself", and the started line dates the server's counters from 30 Aug, though the machine record holds rows only from 17 Sep (Fowler).
+  2. Hardware ignores how its read of the score record went. Its change markers take the rows of `evalRows(readSpan)` and drop the read's state, so when that read fails, the markers disappear with no note (Fowler).
+  3. Hardware hands the scorer's `observability.sample_rate` to the server's counters, which nothing samples: only `observability.host_fingerprint` turns them off. Below 1.0 the page would print "Measured on 1 run in 4" over figures nothing sampled. And while a sampled line prints, no one-sided line may print, because below a rate of 1.0 most days have no score row on purpose (row L22, decision 10). This must land before anyone sets `observability.sample_rate` below 1.0 (Jony and Reader).
+- **Files touched** (found by a search on `main` at 6861bbd21 for `machineCounters`, `sample_rate`, `evalRows(readSpan)` and the intro's words; search again at dispatch):
+  - `frontend/src/lib/server/machine-counters.ts` (`machineCounters` and `mergeHost`; fault 1)
+  - `frontend/src/routes/console/machine/+page.server.ts` (`counterDays` from those runs, fault 1; `recordingNotes` handed `rate: observability.sample_rate`, fault 3; `modelChanges` from the rows of `evalRows(readSpan)`, fault 2)
+  - `frontend/src/routes/console/machine/+page.svelte` (the intro, "{n} runs in {span} committed counters the model server wrote itself."; fault 1)
+  - `frontend/src/lib/console/recording.ts` (`recordingNotes` writes the started line, the sampled line and the one-sided lines; faults 1 and 3)
+  - `frontend/tests/console-chrome.spec.ts` (pins the sampled line, "Measured on 1 run in 4. ...", and row L22's one-sided lines)
+  - `frontend/tests/ledger-rows.spec.ts` (row L16's Oracle for the started line)
+  - `docs/concepts/console-design.md` (the states with fixed wording and who chose each one's words, and its `## Design rationale` entry on Hardware's one-sided line)
+  - Left as they are: `frontend/src/routes/console/model/+page.server.ts`, which hands the scorer's rate to the scorer's own lines, which that rate does sample; `frontend/src/lib/server/model-work.ts`, whose `pipelineChanges` draws markers from the rows it is handed
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-chrome.spec.ts --spec ledger-rows.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of Hardware and Summaries at each window preset, and of Hardware with the score record absent. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
+- **Oracle:** in `console-chrome.spec.ts` and `ledger-rows.spec.ts`, on facts the test builds (Table D, D3): article rows alone, on days before the machine record's first row, are never counted as runs that committed the server's counters, and no started line dates those counters before the machine record's first day; a score read that did not read is named on the page, never silent; and at a sampling rate below 1.0, Hardware prints no sampled line about the server's counters, and neither route prints a one-sided line while its sampled line prints. On `main` each case prints what its fault says, which is what lets this check fail. It cannot settle the words, which Reader and Jony choose (decision 2); the test pins the words they choose.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The three faults are one row, because they answer one question, what Hardware's notes may claim from the records it holds, as row L22's three faults did | The owner, 2026-10-07 |
+| 2 | Reader and Jony choose any words this row changes (CLAUDE.md section 14) | To be ruled at dispatch (Reader and Jony) |
+| 3 | Fowler rules the reads: what the intro, the started line and row L22's line take to mean that the server's counters ran, and how the route names a score read that did not read | To be ruled at dispatch (Fowler) |
+| 4 | It lands before anyone sets `observability.sample_rate` below 1.0, the condition on which Reader accepted row L22's split | Reader, 2026-10-07 (row L22, decision 10) |
+| 5 | L28 waits for L22 (#1385), which put both one-sided lines in `recordingNotes` and hands it the article record's days as `coveredElsewhere` | The owner, 2026-10-07 |
+| 6 | Level 2: what three lines on Hardware take to mean the server's counters ran, and a rule that `recordingNotes` applies on two routes | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | Faults 1 and 2 leave a false line or a silent gap on Hardware today, and fault 3 waits for the first change to `observability.sample_rate` | Nothing to build, and two false lines in the 30- and 90-day windows | Row L22's report; the owner, 2026-10-07 |
+| 2 | A row for each fault | Each row would decide again what Hardware may claim from its records, and three rulings on one question can disagree | Three smaller reviews | The owner, 2026-10-07 |
+
+### Row #L29 - Hardware's refused-runs box says what reads a refused run
+
+- **Scope:** Hardware's refused-runs box says only what is true of what reads a refused run. The row measures first, and changes the box's words only if the measurement shows them false. Level 1.
+- **The fault** (row L22's fourth follow-up, reasoned from the code and not measured, 2026-10-07): the box says a refused run is "left out of every windowed figure on this page" and that "nothing here reads the run at all", but the route hands the figures built on the article record their rows by date alone. `healthRows` in `frontend/src/routes/console/machine/+page.server.ts` keeps every article row in the window, and `readAgainstWritten` in `frontend/src/lib/charts/machine.ts` keeps every row with token counts, whatever its run. In the canary build the days row L22's line names on Hardware are exactly the refused runs' days, so if the box is false, two lines on one screen disagree.
+- **Files touched** (found by a search on `main` at 6861bbd21 for the box's words, `healthRows` and `readAgainstWritten`; search again at dispatch):
+  - `frontend/src/routes/console/machine/+page.svelte` (the box: "{n} runs are left out of every windowed figure on this page." and "... so nothing here reads the run at all."; changed only if the measurement shows them false)
+  - `frontend/tests/console-machine.spec.ts` (the measurement, beside its `readAgainstWritten` cases)
+  - Left as they are, unless the measurement shows otherwise: `frontend/src/routes/console/machine/+page.server.ts`, which hands the box `counters.refused` and hands `healthRows` to `readAgainstWritten`, `contextCost`, `articleCost`, `processorLostOverDays`, `diskReads` and `promptReuse`; `frontend/src/lib/charts/machine.ts`; `frontend/src/lib/server/machine-counters.ts`, which refuses a run
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-machine.spec.ts`; if the box changes, `npm --prefix frontend run check` and the browser smoke of Hardware on the canary build, whose refused runs show the box. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-machine.spec.ts`, on rows the test builds (Table D, D3): a run that `machineCounters` refuses, whose article rows carry token counts, is handed to each figure the route builds from `healthRows`, and the box's words are checked against which of them count it. By the code, `readAgainstWritten` counts it while the box says nothing reads it, which is what lets this check fail if the reasoning holds. It cannot settle the words, which Reader chooses (decision 2).
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Measure first. If no figure the route builds from the article record counts a refused run, the box is true: the row closes with the measurement and changes nothing | The owner, 2026-10-07 |
+| 2 | Reader chooses any words this row changes (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 3 | L29 waits for L22 (#1385), whose worker found the fault and whose line names the refused runs' days on the canary | The owner, 2026-10-07 |
+| 4 | Level 1: the words of one box on one route; a wrong version is obvious and local | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The finding is reasoned and not measured, and if it holds, the box and row L22's line disagree on one screen | Nothing to build, and a box that may say something false | Row L22's report; the owner, 2026-10-07 |
+| 2 | Change the words without measuring | The box may be true, and new words would then make it false | One sentence changed blind | The owner, 2026-10-07 |
+
+### Row #L30 - The merge line's no-fit rule names the line a build used
+
+- **Scope:** With no fitted day in the window, Judgement's merge line panel draws its dashed rule at the line a build used and labels it so, instead of at the committed floor. Level 1.
+- **The fault** (row L27's first follow-up, 2026-10-07): with no fitted day in the window, `MergeLinePlot.svelte` draws the dashed rule at `configuredLine`, the committed floor, `floor_min` in `config/idhazh.json`, and labels it the line the newest day was built with. A build uses the newest line a fit applied in the `applied_lookback_days` days before it, skipping a held day, and the committed floor only when there is none (`applied_line()` in `backend/idhazh/similarity/applied.py`). So at the 1-day window, after a line was fitted in those days, the rule and its sentence name the wrong line. While `adaptive_dedup_threshold.enabled` is false, every build uses the committed floor, so today the rule shows nothing wrong.
+- **Files touched** (found by a search on `main` at 6861bbd21 for `configuredLine`, `ruleDay`, `committedFloor` and `applied_line`; search again at dispatch):
+  - `frontend/src/routes/console/judgement/MergeLinePlot.svelte` (the dashed rule at `configuredLine`, its label "The line {ruleDay} was built with", and the sentence "No line was fitted in {span}. The rule is the line {ruleDay} was built ...")
+  - `frontend/src/routes/console/judgement/+page.svelte` (hands `MergeLinePlot` `configuredLine={data.configuredLine}`)
+  - `frontend/src/routes/console/judgement/+page.server.ts` (`configuredLine` is `committedFloor()`; `lines` carry each fitted day's `applied` and `heldReason` over the widest preset; `similarity` is `similarityConfig()`, which reads the committed `adaptive_dedup_threshold` block, `enabled` and `applied_lookback_days` with it)
+  - `frontend/tests/console-window.spec.ts` (row L27's built `merge-line` cases; held by L26 while it runs)
+  - Left as they are: `backend/idhazh/similarity/applied.py`, whose `applied_line()` is the rule a build follows; `config/idhazh.json`
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-window.spec.ts`, on days the test builds (Table D, D3): with the flag on, a 1-day window with no fitted day, 3 days after a day that fitted a line it did not hold, draws the rule at that day's applied line; with no fitted line in the lookback, at the committed floor; and with the flag off, at the committed floor whatever the record holds. On `main` the first case draws the rule at the committed floor, which is what lets this check fail. It cannot settle what a build did on a given day; the rule follows `applied_line()`'s rule, not a build's own record.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The fault is row L27's first follow-up | Row L27's report; the owner, 2026-10-07 |
+| 2 | The rule takes the line `applied_line()` gives a build on the window's last day: with the flag on, the newest line a fit applied in the `applied_lookback_days` days before it, skipping a held day; otherwise the committed floor | Plan author, 2026-10-07, from row L27's report |
+| 3 | The label and the sentence keep row L27's words (row L27, decision 1), which this row makes true; a sentence that must change goes to Reader (CLAUDE.md section 14) | Plan author, 2026-10-07 |
+| 4 | L30 waits for L27 (#1388), which wrote the label and the sentence and built the `merge-line` cases in `console-window.spec.ts`, and for L26, which holds that spec | The owner, 2026-10-07 |
+| 5 | Level 1: one rule on one panel, and it shows nothing wrong while the merge flag is off, because every build then uses the committed floor. Row L27's report proposed Level 2 | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | Once the flag is on, a window with no fitted day names the committed floor as the line a build used, while the build used a fitted one | Nothing to build, and a wrong line named on Judgement from the day the flag is switched on | Row L27's report; the owner, 2026-10-07 |
+| 2 | Draw the rule at the line the route hands `VerdictSplit` and `HoldoutMargin`, `data.lines.at(-1)?.applied` | It is the newest fitted row over the widest preset, which can be older than the `applied_lookback_days` a build reads, so it can name a line no build used | One expression, and three panels that name one line | Plan author, 2026-10-07 |
+
+### Row #L31 - The record's bars say when a window holds no row
+
+- **Scope:** When the open window holds no row of the record, Judgement's record panel says so, instead of drawing its three bars at zero, the picture its header comment keeps for a record that emptied. Level 2.
+- **The fault** (row L27's second follow-up, 2026-10-07): the three bars read the newest row inside the window, `newest` in `RecordGates.svelte`, through `gateNeeds` in `frontend/src/lib/console/merge-line.ts`. So a window with no row draws all three at zero, while the running record still holds what earlier rows counted. The panel's header comment says that bars falling back to zero are the one picture of a record that emptied, because a weight moved and the fit archived it.
+- **Files touched** (found by a search on `main` at 6861bbd21 for `gateNeeds` and `newest` in the record panel; search again at dispatch):
+  - `frontend/src/routes/console/judgement/RecordGates.svelte` (`newest`, the newest row inside the window; the header comment on falling bars)
+  - `frontend/src/lib/console/merge-line.ts` (`gateNeeds` gives three zeros for no row)
+  - `frontend/tests/merge-line.spec.ts` ("a record with nothing in it still draws three bars at zero" holds `gateNeeds(null, ...)` at zero)
+  - `frontend/tests/console-window.spec.ts` (row L27's built `record-gates` cases; held by L26 while it runs)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts --spec merge-line.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-window.spec.ts`, on days the test builds (Table D, D3): a 1-day window on a day with no row, after earlier rows counted readings, days and pairs, does not draw three bars at zero and says what Reader rules; a record that never held a row still draws three bars at zero; and a window whose newest row counts zero, a record that emptied, still draws zero. On `main` the first draws three bars at zero, which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 2).
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The fault is row L27's second follow-up | Row L27's report; the owner, 2026-10-07 |
+| 2 | Reader chooses the words, and Jony rules what the bars draw for a window that holds no row, where two answers would lead to different code (CLAUDE.md section 14) | To be ruled at dispatch (Reader and Jony) |
+| 3 | Three bars at zero stay the picture of a record that never held a row, as `merge-line.spec.ts` holds: a panel that waits for data before it draws teaches an operator that the measurement does not exist | Plan author, 2026-10-07, from the test's own reason |
+| 4 | L31 waits for L27 (#1388), which wrote the record panel's sentences and built the `record-gates` cases in `console-window.spec.ts`, and for L26, which holds that spec | The owner, 2026-10-07 |
+| 5 | Level 2: what the bars draw for no row is held by a test of its own, and the panel's header comment reads bars at zero as a record that emptied. Row L27's report proposed it | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | A window with no row draws the picture the header comment keeps for a record that emptied | Nothing to build, and a false picture on Judgement at every window that holds no row | Row L27's report; the owner, 2026-10-07 |
+
+### Row #L32 - Judgement's agreement strip prints no share below five pairs
+
+- **Scope:** On Judgement's agreement panel, the strip prints no share for a day that read fewer pairs than `console.min_attempts_for_rate` (5), the floor under which the sentence below it already prints no share. Level 1.
+- **The fault** (row L27's third follow-up, Reader's, 2026-10-07): in the state "too few to report a share", the strip above the sentence prints a share of fewer than 5 pairs, such as "25% of 4 pairs". The strip's two series in `JudgeAgreement.svelte` print each day that read a pair as "{share} of {n} pairs", while `rateWithDenominator` in `frontend/src/lib/console/merge-line.ts`, which the sentence uses, gives no share under the floor, because a share over four pairs is not a measurement.
+- **Files touched** (found by a search on `main` at 6861bbd21 for "too few to report a share", `rateWithDenominator` and the strip's `format`; search again at dispatch):
+  - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (the strip's two `format` functions; `attemptsFloor`, which is `console.min_attempts_for_rate`)
+  - `frontend/tests/console-window.spec.ts` (row L27's built `judge-agreement` cases; held by L26 while it runs)
+  - Left as it is: `frontend/src/lib/console/merge-line.ts`, whose `rateWithDenominator` holds the floor's rule
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-window.spec.ts`, on days the test builds (Table D, D3): a day that read 4 pairs prints no share in the strip, in Reader's words, and a day that read 5 prints its share; the sentence under the strip does not change. On `main` the 4-pair day prints "25% of 4 pairs", which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 2).
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The fault is Reader's own follow-up in row L27 | Reader, 2026-10-07 (row L27's report) |
+| 2 | Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 3 | The strip's floor is `console.min_attempts_for_rate`, the one the sentence under it uses, so the two never disagree about when a share is a measurement | Plan author, 2026-10-07 |
+| 4 | L32 waits for L27 (#1388), which wrote the sentence and built the `judge-agreement` cases in `console-window.spec.ts`, and for L26, which holds that spec | The owner, 2026-10-07 |
+| 5 | Level 1: the words of one strip on one panel; a wrong version is obvious and local | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The strip prints a share that the sentence under it calls too few to report | Nothing to build, and two readings of one day on one panel that disagree | Row L27's report; the owner, 2026-10-07 |
+| 2 | A floor of the strip's own | Two floors for one rule drift apart, and the strip and the sentence would disagree again | A second knob in `config/` | Plan author, 2026-10-07 |
+
+### Row #L33 - Every sentence for a record the door answers missing says it is not packed yet
+
+- **Scope:** Every sentence the console prints for a published record or ledger that the door answers `missing` says it is not packed yet, never that it is not published or not on this site; a ledger outside `ledger.published` keeps the words that say it is not on this site. Level 1.
+- **The fault** (row L25's ruling, 2026-10-07): since L7 (#1370), a published ledger with no compact folder answers `missing`, so for a published record `missing` means not packed yet (Table F, F1). Row L25 fixed the platform-mix panel's line. A search of `frontend/src/` on `main` at 6861bbd21 finds three more:
+  1. `faultLine` in `frontend/src/lib/data/slice-reader.ts` (line 153), the browser-console line for `not-packed`: "it is not there: this record is not packed, or not published. Turn on whichever is off, or wait for the next upkeep run." A slice or a reach is read for a panel, which reads only published ledgers, or at build time, which reads every committed ledger, so "not published" is never why.
+  2. `statusSentence` in `frontend/src/lib/console/explorer/status.ts` (line 67), the data explorer's action line for `missing`: "Did not run. {ledger} is not on this site yet." The page prints it for every `missing` answer (`+page.svelte` line 166), while the answer under it says "{ledger} has no days on this site yet." for a published ledger (`explorerMissingSentence` in `frontend/src/lib/console/waiting.ts`).
+  3. The data explorer's chart panel for a `missing` answer (`frontend/src/routes/console/data-explorer/+page.svelte` line 647): "Part of the data is not on this site, so nothing to draw."
+- **Files touched** (found by a search on `main` at 6861bbd21 under `frontend/src/` for "not published", "unpublished" and "not on this site", and for the tests and pages that pin those sentences; search again at dispatch):
+  - `frontend/src/lib/data/slice-reader.ts` (sentence 1)
+  - `frontend/src/lib/console/explorer/status.ts` (sentence 2)
+  - `frontend/src/routes/console/data-explorer/+page.svelte` (hands `statusSentence` the `missing` ledger, and holds sentence 3)
+  - `frontend/tests/console-data-explorer-still.spec.ts` (pins sentence 2 for a ledger named `published`)
+  - `frontend/tests/ledger-door.spec.ts` (the door's `missing` and `not-packed` cases; no test reads sentence 1 today)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (lines 49 and 199 say a panel's `missing` is a ledger that "is not published, or it is published and not packed yet")
+  - Left as they are: `frontend/src/lib/console/waiting.ts`, whose `explorerMissingSentence` already says "has no days on this site yet" for a published ledger and "is not on this site yet" only for one that is not; `frontend/src/lib/console/explorer/LedgerList.svelte`, which says "not on this site" only for a ledger outside `ledger.published`; `frontend/src/lib/console/explorer/days-read.ts`, which speaks of days the site copy trimmed; `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, row L25's line; `frontend/src/lib/console/recording.ts`, whose route note says the record has not been packed yet
+  - Row L21 lists `status.ts`, the explorer page and `console-data-explorer-still.spec.ts` too, so the two rows run one at a time (Table A, A6)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-data-explorer-still.spec.ts --spec ledger-door.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the data explorer and of the Hardware route with a published ledger's index requests answered 404, reading the page and its browser console. CI: the pull request runs what `ciAnswer` selects; every group runs on the merge push.
+- **Oracle:** in `ledger-door.spec.ts` and `console-data-explorer-still.spec.ts`, on answers the test builds (Table D, D3): the `not-packed` console line says the record is not packed yet and never "not published"; the explorer's action line for a published ledger that the door answers `missing` never says it is not on this site, and for a ledger outside `ledger.published` still does. On `main` the first says "not packed, or not published" and the second says "is not on this site yet" for both, which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 2).
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | For a published record, `missing` means not packed yet, never not published, since L7 (#1370) | Row L25, decisions 1 and 3; the owner, 2026-10-07 |
+| 2 | Reader chooses the words (CLAUDE.md section 14), as row L25's "The machine record is not packed yet." did, in the route note's own words and never "published", and rules whether sentence 3 reads as not published | To be ruled at dispatch (Reader) |
+| 3 | L33 waits for L25 (#1384), which settled what `missing` means and fixed the platform-mix panel's line | The owner, 2026-10-07 |
+| 4 | Level 1: the words of three lines; a wrong version is obvious and local | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The console line tells an operator that a published record may not be published, and the explorer's action line says a published ledger is not on this site above an answer that says it has no days here yet | Nothing to build, and two lines that point a person at the wrong fix | Row L25's report; the owner, 2026-10-07 |

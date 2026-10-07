@@ -8,7 +8,8 @@ by path names the marks through it, so the pass never asks for a mark its
 listing left out. `read_marks` reads them.
 
 **How far each period is packed is worked out from the indexes, in one place**
-(`work_out_marks`). The yearly mark is the newest year the yearly index names.
+(`work_out_marks`). The yearly mark is the newer of its newest indexed year
+and its expired_through value.
 The monthly mark is the newer of the newest month the monthly index names and
 the December of the yearly mark. The daily mark is the newer of the newest day
 the daily index names and the last day of the monthly mark. Every period a
@@ -76,6 +77,7 @@ class LedgerMarks:
     entries: Mapping[Period, Mapping[str, CompactEntry]]
     #: The periods whose index the listing holds.
     indexed: frozenset[Period]
+    expired_through: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,15 +97,20 @@ def name_marks(state_dir: Path, ledger_name: LedgerName) -> MarkPaths:
     )
 
 
-def work_out_marks(covers: Mapping[Period, Collection[str]]) -> dict[Period, str | None]:
+def work_out_marks(
+    covers: Mapping[Period, Collection[str]], *, expired_through: str | None = None
+) -> dict[Period, str | None]:
     """How far each period is packed, from what each index names: the newest day, month and year.
 
-    The yearly mark is the newest year named; the monthly mark the newer of the
+    The yearly mark is the newest year named or expired; the monthly mark the newer of the
     newest month named and the December of the yearly mark; the daily mark the
     newer of the newest day named and the last day of the monthly mark. None
     where nothing of that period, or a coarser one, is named.
     """
-    yearly = max(covers[Period.YEARLY], default=None)
+    yearly = max(
+        [*covers[Period.YEARLY], *([] if expired_through is None else [expired_through])],
+        default=None,
+    )
     monthly = max(
         [*covers[Period.MONTHLY], *([] if yearly is None else [f"{yearly}-12"])], default=None
     )
@@ -138,13 +145,18 @@ def read_marks(state_dir: Path, ledger_name: LedgerName, listing: FileListing) -
     listing.fetch_within_budget({index.parent for index in named.indexes.values()})
     entries: dict[Period, dict[str, CompactEntry]] = {}
     indexed: set[Period] = set()
+    expired_through = None
     for period in Period:
         index = named.indexes[period]
         held = _read_index(index, ledger_name, period) if listing.holds(index) else None
         if held is not None:
             indexed.add(period)
+            if period is Period.YEARLY:
+                expired_through = held.expired_through
         entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
-    return LedgerMarks(entries=entries, indexed=frozenset(indexed))
+    return LedgerMarks(
+        entries=entries, indexed=frozenset(indexed), expired_through=expired_through
+    )
 
 
 def adopt(

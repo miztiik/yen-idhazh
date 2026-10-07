@@ -131,3 +131,30 @@ def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> 
     assert root / "2026" / "08" in paths
     assert root / "2026" / "09" / "29" in paths
     assert root / "2026" / "09" / "21" not in paths
+
+
+def test_a_c1_case_traces_folder_lists_each_named_day_folder(tmp_path: Path) -> None:
+    """A nested traces root uses the generic dated tree branch, not the old trial prefix."""
+    policy = RetentionPolicy.model_validate(
+        {
+            "kind": "retention",
+            "lifecycle_status": "active",
+            "dry_run": True,
+            "max_deletes_per_run": None,
+            "owns": ["state/pipeline-tests/case-2026-09-20/traces"],
+            "window": {"unit": "days", "value": 90},
+        }
+    )
+
+    paths = paths_for_task(
+        tmp_path,
+        "trials",
+        policy,
+        ("2026-09-20", "2026-09-22"),
+        today=date(2026, 9, 27),
+    )
+
+    root = tmp_path / "state" / "pipeline-tests" / "case-2026-09-20" / "traces"
+    assert root / "2026" / "09" / "20" in paths
+    assert root / "2026" / "09" / "21" in paths
+    assert root / "2026" / "09" / "22" in paths

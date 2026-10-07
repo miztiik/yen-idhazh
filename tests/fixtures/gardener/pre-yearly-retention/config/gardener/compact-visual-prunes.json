@@ -1,0 +1,25 @@
+{
+  "compact_after_days": 1,
+  "daily_keep_days": 45,
+  "dry_run": true,
+  "kind": "compaction",
+  "ledger": "visual-prunes",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "max_periods_per_run": 8,
+  "max_raw_files_per_period": 2000,
+  "monthly_keep_days": null,
+  "monthly_window": {
+    "unit": "months",
+    "value": 13
+  },
+  "month_deletes_dry_run": false,
+  "owns": [
+    "state/raw/visual-prunes",
+    "state/compact/visual-prunes"
+  ],
+  "prune_refusal": null,
+  "window": {
+    "unit": "forever"
+  }
+}

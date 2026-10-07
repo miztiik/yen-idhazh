@@ -19,9 +19,11 @@ from idhazh.gardener.ledger_marks import work_out_marks
 def marks_on_disk(state_dir: Path, which: LedgerName) -> dict[Period, str | None]:
     """Each period's mark, from the indexes of `which` under `state_dir`."""
     covers: dict[Period, list[str]] = {}
+    expired_through = None
     for period in Period:
         path = ledger.compact_index_path(state_dir, which, period)
-        covers[period] = (
-            [entry.covers for entry in CompactIndex.read(path).entries] if path.is_file() else []
-        )
-    return work_out_marks(covers)
+        held = CompactIndex.read(path) if path.is_file() else None
+        covers[period] = [entry.covers for entry in held.entries] if held else []
+        if held and period is Period.YEARLY:
+            expired_through = held.expired_through
+    return work_out_marks(covers, expired_through=expired_through)

@@ -18,8 +18,10 @@
  *   `monthly.json` or no `yearly.json`: `first`, `through` and `lastRows` are
  *   then what the indexes that are there name.
  * - `quiet`: no index names a day yet.
- * - `missing`: there is no `daily.json`, so the ledger is not published. Its
- *   fault is `not-packed`.
+ * - `missing`: there is no `daily.json`. A panel reads only published ledgers,
+ *   and a build-time read finds every ledger the state tree holds, so this is a
+ *   ledger with no compact folder: one that is not packed yet, never one left
+ *   unpublished. Its fault is `not-packed`.
  * - `unreachable`: `daily.json` is one this build will not act on, or could not
  *   be read, and the console says why. It carries no day, because the reach asks
  *   for none, and no fault, because it reads no file an index names.

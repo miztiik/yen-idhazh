@@ -320,7 +320,7 @@ def test_the_eval_ledger_is_refused_through_the_router_with_its_declaration_s_re
     assert exit_code.value.code == 2
     refusal = capsys.readouterr().err
     assert f"{LedgerName.SUMMARY_QUALITY_EVALS} is refused" in refusal
-    assert "kept for ever" in refusal
+    assert "only configured yearly expiry" in refusal
     assert _files_under(state_root) == before
 
 
