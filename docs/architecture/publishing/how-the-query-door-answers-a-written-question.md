@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -58,9 +58,13 @@ The archive is the committed repository, which holds every packed file a ledger 
 
 **Days before a ledger began are cut from the selected window.** When the selected window begins before the first day any tier it read names, that ledger's earlier days are cut, so its answer starts on that first day, and the answer names it: `Days before {day} are not on this site.` Nothing failed. Only that start moves, and only later: the page still opens on the reader's UTC day, the presets still end on it, no end moves, and nothing reads a ledger's first day to choose, widen or end a window. A day after that first day that no index names is still a hole, `day-missing`. With `ledger.archive_base_url` empty, the site is the only tier.
 
+**When the archive cannot give those days, the ledger is read from the site's days alone, and the answer says so.** That covers a host that does not answer, an index or a file the archive does not hold, an index this build cannot read, and a file of the wrong size. Each ledger's archive files are held first, one ledger at a time, before any site file is fetched. A ledger the archive fails for is planned again from the site's first day, so its site files are fetched once; the files of it that did arrive are dropped. Every other ledger keeps its archive days. A day the archive's indexes skip after the ledger began is still `day-missing`: the archive answered, and the hole is in the ledger.
+
+`ok` and `quiet` carry `unanswered`: one entry for each ledger the archive failed for, in the order chosen, with `before`, its first day on this site, where its answer starts. That start is never in `siteFrom`. The page prints those entries in the warning colour, after the span line and before the gap lines: one sentence for each ledger, `Days of the {ledger} record before {day} are not in this answer, because this page could not read them from the repository.`, then `Press Refresh, then Run, to try again.` The browser console gets one line that names the index or file and why, and ends `so the question reads this ledger from this site alone`.
+
 The archive uses its own page keeper and its own three compact indexes. It chooses files with the same `filesFor()` rule as the site, but it fetches every archive data file whole. It never hands the archive address to DuckDB. The engine sees only buffers under engine-minted names.
 
-`FetchCost` sums both keepers. A file the site already holds and a file the archive already holds both count as already held.
+`FetchCost` sums both keepers. A file the site already holds and a file the archive already holds both count as already held. An archive file dropped because another file of its ledger failed is not counted.
 
 ## Reach and cost
 
@@ -105,6 +109,8 @@ The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` 
 **Days before a ledger began are cut from a window, not refused.** The owner ruled on 2026-10-05: when a Data explorer question begins before a ledger's first day, the explorer cuts that ledger's earlier days from the selected window and says `Days before {day} are not on this site.`, as it already did with no archive set. The rejected choice kept refusing such a question and changed only the test data. Ledgers start, pause, resume and stop, so a day before a ledger's first is outside the ledger, not a missing file. The cut moves only the start of that ledger's answer, and only later: the page still opens on the current day, a preset still ends on it, and a ledger that began years ago never moves a window into the past.
 
 **The archive is asked only when the site copy's own rule says it may have dropped days.** That costs one shared function and one build constant. In return, a ledger the copy did not trim, which is every ledger for its first window, answers from the site with no request to a third-party host. Asking the archive whenever a window begins before the site's first day would send three cross-origin requests a ledger, every time, for days no tier holds. A `trimmed_before` field written by the site copy would be exact, but it changes a persisted shape (`CLAUDE.md` section 6, Level 5). Dropping the archive would lose every day older than the site window, while `console.explorer_reach_days` offers a year. The rule's one cost: a ledger whose oldest entry holds the first day the copy keeps reads as trimmed, and costs one needless archive read.
+
+**An archive that cannot be read degrades the answer and does not fail it** (`CLAUDE.md` section 1a). Two choices were rejected. Failing the question in the site's words blamed the site for the archive's fault (`No file on this site holds ...`, or `... has no days on this site yet.` when the archive had no index), and threw away the site's days, which were readable. Failing it in the archive's words told the truth and answered nothing. Reader and Jony chose the words on 2026-10-07. They chose `repository`, because the console never says `archive`, and on the reader site Archive is the list of past digests. They did not choose `GitHub`, because the address is a config value. `Could not read` stays true for all four faults, where `did not answer` does not. One sentence for each ledger never names a ledger the archive answered for. The retry is there because the design system gives every failed fetch one ([design-system.md](../../concepts/design-system.md)).
 
 ## See also
 
