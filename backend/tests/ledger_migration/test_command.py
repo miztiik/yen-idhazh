@@ -17,6 +17,7 @@ from idhazh.contracts.ledgers import LedgerEntry
 from idhazh.ledger import paths
 from utilities import migrate_to_parquet as command
 from utilities.ledger_migration import (
+    csv_files,
     path_labels,
     phases,
 )
@@ -35,7 +36,6 @@ from ._fixtures import (
     ByKey,
     clock_row,
     config_beside,
-    csv_files,
     entry_back_on_csv,
     feed_row,
     file_hashes,
