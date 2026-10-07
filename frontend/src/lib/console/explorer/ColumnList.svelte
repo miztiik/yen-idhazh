@@ -3,13 +3,12 @@
 	import type { Column } from '$lib/data/ledger';
 	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
 	import { groupColumns } from '$lib/console/explorer/column-groups';
-	import { ICONS } from '$lib/icons/generated';
 	let { columns, label }: { columns: readonly Column[]; label: string } = $props();
 	const groups = $derived(groupColumns(columns));
 </script>
 
 <div class="column-list" data-explorer-columns>
-	<h3><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">{@html ICONS['column-list']}</svg> {label}</h3>
+	<h3><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg> {label}</h3>
 	{#if columns.length === 0}
 		<p>No columns are known yet.</p>
 	{:else}

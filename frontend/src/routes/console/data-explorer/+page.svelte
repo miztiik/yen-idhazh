@@ -1001,7 +1001,7 @@
 			min-block-size: 0;
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-			grid-template-rows: 1fr 1fr;
+			grid-template-rows: minmax(max-content, 1fr) minmax(0, 1fr);
 		}
 
 		.workbench > :global([data-console-panel-id='data-explorer-ask']) {

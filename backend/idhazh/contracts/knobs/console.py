@@ -596,7 +596,7 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_readout_lines: tuple[int, int, int, int] = Field(
-        default=(7, 3, 3, 3),
+        default=(7, 3, 4, 3),
         description=(
             "Lines reserved by the Data explorer status bar, for the four frame "
             "breakpoint bands from narrowest to widest."
