@@ -224,15 +224,16 @@ refused push. The person's ruling of 2026-09-29 added the two keys.
 
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a
-fold's as well as the task's own, and every compaction's
-`month_deletes_dry_run`, which is live only while its task's own `dry_run` is
-`false` too. It names the live ones as its exceptions, each with the decision
-beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
-`month_deletes_dry_run` of `compact-item-health` and
-`compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores`,
-`compact-candidate-models`, `compact-seen`, `compact-published` and
-`compact-feed-health`, and both switches of `compact-summary-quality-evals`,
-whose forever window drops no rows. A task
+fold's as well as the task's own; every compaction's `month_deletes_dry_run`,
+which is live only while its task's own `dry_run` is `false` too; and every
+`yearly_prune_enable`, which is live only when it is `true` and its task's own
+`dry_run` is `false`. It names the live ones as its exceptions, each with the
+decision beside it: `corpus-squash`'s `dry_run`; the `dry_run` and the
+`yearly_prune_enable` of all fourteen compactions, `compact-gardener` among
+them, under the owner's approval of 2026-10-07; and the `month_deletes_dry_run`
+of `compact-feed-retirements`, `compact-gardener`, `compact-host-fingerprint`,
+`compact-item-health`, `compact-summary-quality-evals` and
+`compact-visual-prunes`, whose forever monthly windows drop no month. A task
 earns its first deletion from a person reading its records, so turning one live
 is an edit to that list, never a side effect of the change that added the task.
 

@@ -561,6 +561,10 @@ jobs:
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
+      - name: Check published ledger columns
+        working-directory: frontend
+        run: python -m idhazh published-columns --site-tree build
+
       # Read rebuild-owned paths from their shared declaration.
       # Use a step output: a job-wide refresh value would affect unrelated commits.
       - id: derived

@@ -55,7 +55,10 @@ caller that could not read it is refused before any task runs.
 word, what it took and wrote, and what happens next (`report.finished`). A
 later refusal of the whole shard cannot hide how a task ended. The exception
 that stopped a task is kept beside its row, so its event names the type and
-where it was raised, and never its text.
+where it was raised, and never its text. Each `TaskFinished` also goes back on
+the `Outcome`, with what the tasks downloaded and whether that passed the
+budget, so the publisher's summary of the shard reads the same events the log
+holds.
 
 **Every task is handed the listing of the files under its folders.** One
 listing a shard, of every folder its tasks own or read, handed in by whoever
@@ -105,9 +108,10 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, WriterIdentity
-from idhazh.contracts.gardener_events import TaskOutcome, TaskPlanned
+from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
+    CollectionTaskPolicy,
     CompactionPolicy,
     RetentionPolicy,
     TaskKind,
@@ -405,8 +409,9 @@ def _planned(
     )
 
 
-def _said_finished(ran: _Ran) -> None:
-    """Log how one task ended, at the level its outcome asks for."""
+def _said_finished(ran: _Ran) -> TaskFinished:
+    """Log how one task ended, at the level its outcome asks for, and hand the event back."""
+    policy = ran.context.policy
     finished = report.finished(
         ran.outcome,
         task=ran.name,
@@ -414,8 +419,10 @@ def _said_finished(ran: _Ran) -> None:
         folded=ran.folded,
         settled=_fold_changes(ran)[0],
         failure=ran.failure,
+        collection=policy.collection if isinstance(policy, CollectionTaskPolicy) else None,
     )
     event_log.emit(finished, level=_LEVELS.get(finished.outcome, logging.INFO))
+    return finished
 
 
 def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -547,7 +554,7 @@ def _record(
             fmt=Format(record.suffix.removeprefix(".")),
         )
     except ValueError as error:
-        raise ShardRefusedError(f"{record.name} is not a record's name: {error}") from error
+        raise ShardRefusedError(f"{record.name} is not a record's name") from error
     if record != expected:
         raise ShardRefusedError(
             f"the record went to {record.name}, outside the gardener's own raw ledger"
@@ -656,7 +663,9 @@ def run(
         git_sha=git_sha,
     )
     ran: list[_Ran] = []
+    finished: list[TaskFinished] = []
     too_heavy: str | None = None
+    downloaded_bytes: int | None = None
     try:
         # Every task's folders before the first task runs, so a task the commit
         # cannot answer for stops the shard with nothing yet done.
@@ -705,7 +714,7 @@ def run(
             )
             event_log.emit(_planned(name, context, resolved[name], period_range))
             done = _run_one(name, bound[name], context)
-            _said_finished(done)
+            finished.append(_said_finished(done))
             _refuse_a_path_outside(done, settings.tasks)
             _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
@@ -713,6 +722,7 @@ def run(
             listing = listing.settled(written=written, deleted=taken)
         downloaded = listing.downloaded()
         if downloaded is not None:
+            downloaded_bytes = sum(downloaded.values())
             too_heavy = over_the_ceiling(
                 downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
             )
@@ -724,11 +734,17 @@ def run(
             identity=identity,
             ended=ended,
             cone_bytes=weighed,
-            downloaded_bytes=None if downloaded is None else sum(downloaded.values()),
+            downloaded_bytes=downloaded_bytes,
         )
     except ShardRefusedError as refusal:
         say(f"shard {shard}: {refusal}")
-        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+        return Outcome(
+            exit_code=EXIT_INTEGRITY,
+            record=None,
+            landing=None,
+            finished_tasks=tuple(finished),
+            downloaded_bytes=downloaded_bytes,
+        )
 
     if too_heavy is not None:
         say(too_heavy)
@@ -745,7 +761,14 @@ def run(
     )
     failed = any(each.failed for each in ran) or too_heavy is not None
     tasks_code = EXIT_TASK_FAILED if failed else EXIT_OK
-    return Outcome(exit_code=tasks_code, record=record, landing=landing)
+    return Outcome(
+        exit_code=tasks_code,
+        record=record,
+        landing=landing,
+        finished_tasks=tuple(finished),
+        downloaded_bytes=downloaded_bytes,
+        over_budget=too_heavy is not None,
+    )
 
 
 def tasks_of_shard(settings: GardenerSettings, index: int) -> tuple[str, ...]:

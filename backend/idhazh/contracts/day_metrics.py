@@ -46,6 +46,7 @@ from idhazh.contracts.base import (
     Model,
     Sha256,
     Slug,
+    records_json,
     without_retired_keys,
 )
 from idhazh.contracts.eval_row import RENAMED_CELLS as EVAL_RENAMED_CELLS
@@ -535,6 +536,12 @@ class DayMetrics(Contract):
             "verdict: neither end of it is better than the other."
         ),
     )
+
+    def to_json(self) -> str:
+        return records_json(
+            self.model_dump(mode="json"),
+            record_lists=frozenset({"sources", "instruments", "stage_timing"}),
+        )
 
     @model_validator(mode="before")
     @classmethod

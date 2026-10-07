@@ -1,11 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { chartsReady } from './support/charts-ready';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { publishedSkyline, publishingHorizon, siteCost } from '../src/lib/charts/glance';
 import type { GlanceDay } from '../src/lib/charts/glance';
-import { publishedItems, type RunSummary } from '../src/lib/server/payload';
-import { publishedSite } from './support/published-site';
+import type { RunSummary } from '../src/lib/server/payload';
 
 /**
  * Two skylines, each one bar a day over the window the control set.
@@ -22,10 +21,9 @@ import { publishedSite } from './support/published-site';
  * of "they are on one window".
  *
  * What the card counts is held two ways, and neither reads what the site was
- * built from: the reader that counts a day's articles is run over day payloads
- * a test writes, and on the page the card's count for a day is the count the
- * daily chart table prints for it, which a second reader takes off the same
- * payload.
+ * built from: the reader that counts a day's articles, `publishedCharts`, is
+ * run over day payloads a test writes in `console.spec.ts`, and on the page the
+ * card's count for a day is the count the daily chart table prints for it.
  *
  * The page intro used to end with two counts of rows on record. Both only ever
  * grow, so neither could ever indicate a state, and nothing on the page acted
@@ -204,10 +202,10 @@ test('THE ORACLE: the articles card counts what the chart table says each day pu
 	await page.goto('/console/');
 	await hydrated(page);
 
-	// The card and the daily chart table count the same day payloads through two
-	// readers - `publishedItems` and `publishedCharts` - so for every day the table
-	// prints, the card's bar is the table's article count. What each reader takes
-	// off a day payload is held to payloads written by the test below.
+	// The card and the daily chart table draw one list, which the route builds
+	// from one read of each day payload, so for every day the table prints, the
+	// card's bar is the table's article count. What that read takes off a day
+	// payload is held to payloads a test writes in `console.spec.ts`.
 	const plot = page.locator('[data-kpi="Articles published"] svg[data-published-days]');
 	const bars = new Map(
 		await plot
@@ -251,44 +249,6 @@ test('THE ORACLE: the articles card counts what the chart table says each day pu
 	expect(busiest, 'no day in the window published an article').toBeGreaterThan(0);
 	const tallest = heights[counts.indexOf(busiest)];
 	expect(tallest, 'the busiest day is not drawn full height').toBeCloseTo(34, 1);
-});
-
-test('the articles a day published are read off its own payload, over the days the cover reaches', () => {
-	// Three published days: 4 articles on 13 Jun 2030, none on the 14th and 2 on the
-	// 15th. A cover of two days reaches back from the newest published day to the
-	// 14th, so the 13th is never opened.
-	const days: [string, number][] = [
-		['2030-06-13', 4],
-		['2030-06-14', 0],
-		['2030-06-15', 2]
-	];
-	const { digest } = publishedSite(test.info().outputPath('site'), {
-		published: days.map(([date]) => date)
-	});
-	for (const [date, count] of days) {
-		const [year, month, day] = date.split('-');
-		writeFileSync(
-			join(digest, year, month, day, 'digest.json'),
-			JSON.stringify({
-				date,
-				items: Array.from({ length: count }, (_, at) => ({ item_id: `${date}-${at + 1}`, visual: null }))
-			})
-		);
-	}
-
-	expect(publishedItems(digest, 3)).toEqual(
-		new Map([
-			['2030-06-15', 2],
-			['2030-06-14', 0],
-			['2030-06-13', 4]
-		])
-	);
-	expect(publishedItems(digest, 2)).toEqual(
-		new Map([
-			['2030-06-15', 2],
-			['2030-06-14', 0]
-		])
-	);
 });
 
 test('published days are bars, and every bar is one day wide', async ({ page }) => {

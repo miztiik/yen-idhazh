@@ -21,9 +21,10 @@ and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**All fourteen ledgers use the same retention chain:** days become months
-45 whole days after the month ends; months become years 93 whole days after
-the year ends; indexed years expire 36 calendar months after their UTC end.
+**All fourteen ledgers pack live and use the same retention chain:** days
+become months 45 whole days after the month ends; months become years 93 whole
+days after the year ends; indexed years expire 36 calendar months after their
+UTC end.
 `yearly_prune_enable` can disable expiry for one ledger. Each ledger packs
 each finished year into one year file, as every ledger whose declaration sets
 `monthly_keep_days` does ([A year](#a-year)). The files it
@@ -55,7 +56,7 @@ flowchart TB
     DHOLD["the day waits for a later wake:<br/>a run may still be writing, or the cap or the budget is used"]
     TAKE["5. re-open each closed month a re-run wrote into,<br/>then plan day files, or an empty entry,<br/>after each packed day a re-run wrote into:<br/>indexes and deletes wait for the end of the pass"]
     DRY{"dry_run?"}
-    REPORT["report every path, land the record only<br/>the three report-only compactions"]
+    REPORT["report every path, land the record only<br/>no committed compaction is a dry run"]
     LAND["land every write and delete<br/>in the shard's one commit"]
   end
 

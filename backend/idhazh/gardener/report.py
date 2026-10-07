@@ -43,6 +43,7 @@ from typing import Final
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
 from idhazh.contracts.gardener_events import FoldSettled, TaskFinished, TaskOutcome
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
+from idhazh.contracts.knobs.gardener import PrunableCollection
 from idhazh.gardener import event_log
 from idhazh.gardener.closed_day_fold import Folded
 from idhazh.gardener.context import TaskContext
@@ -73,7 +74,9 @@ NOTED: Final[Mapping[RecoveryNote, str]] = {
     RecoveryNote.REOPENED_MONTH: "re-opened to settle raw files that landed after it closed",
     RecoveryNote.INDEX_REBUILT: "its own packed file adopted, because no index named it",
     RecoveryNote.SET_ASIDE: "a file it could not read moved to the set-aside folder",
-    RecoveryNote.CARRIED_OVER: "its newest raw files left for the next wake",
+    RecoveryNote.CARRIED_OVER: (
+        "too many raw files for one pass, so the newest wait for the next wake"
+    ),
     RecoveryNote.NOT_DELETABLE: "GitHub would not delete it, so the pass went on",
 }
 
@@ -147,13 +150,15 @@ def finished(
     folded: Folded | None,
     settled: tuple[str, ...],
     failure: BaseException | None,
+    collection: PrunableCollection | None = None,
 ) -> TaskFinished:
     """The pass as the event that says how its task ended.
 
     `settled` is every file the fold settled, or would settle, relative to the
     repository. `failure` is the exception that stopped the task, if one did:
     the event names its type and its place in this package's code, never its
-    text.
+    text. `collection` is the GitHub collection a collection task takes from,
+    which says that `taken` holds its member ids rather than files.
     """
     stopped, fault = ended(outcome, folded)
     word = classify(outcome, folded)
@@ -164,6 +169,7 @@ def finished(
         dry_run=outcome.dry_run,
         seen=outcome.seen,
         selected=outcome.selected,
+        collection=collection,
         taken=list(outcome.taken),
         written=list(outcome.written),
         bytes_freed=outcome.bytes_freed,

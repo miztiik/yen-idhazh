@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-07
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -262,6 +262,14 @@ column - four series or one - and the rules are not negotiable per chart:
 - **It opens on a resting column and is never blank.** The prerendered document
  carries that column's numbers in words, so a reader with no script still gets
  one column read out to him, and the panel never changes size as it fills.
+- **A strip of one column names no resting column and no keys.** At the 1-day
+ window, and wherever one column is all a chart drew, the heading is the column
+ alone, `15 Jun 2030` and never `15 Jun 2030, the newest day`, and the hint line
+ says nothing of Left, Right or Escape, because each needs a second column. Where
+ one column still offers an action, the line says only that: `Click or Enter
+ lists this one day's jobs.` Otherwise the line keeps its room, blank and hidden
+ from screen readers, so no panel changes height with the window. Reader chose
+ the words and Jony the room, on 2026-10-07.
 
 An engine-drawn chart takes the same strip through
 [../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte). The action goes on

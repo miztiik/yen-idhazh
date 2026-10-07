@@ -360,6 +360,9 @@ def test_a_task_that_reaches_outside_what_it_owns_stops_the_shard_before_anythin
 
     assert outcome.exit_code == EXIT_INTEGRITY
     assert outcome.record is None, "a record was written for a shard that broke ownership"
+    assert [held.task for held in outcome.finished_tasks] == ["wanderer"], (
+        "a shard refused after its task ran forgot how that task ended"
+    )
     assert any(f"touched state/neighbour/{AGED}" in line for line in said)
     assert commits_on(origin) == before
     assert git(checkout, "status", "--porcelain", "--", "state") == ""
