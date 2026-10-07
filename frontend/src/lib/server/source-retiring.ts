@@ -43,6 +43,15 @@ export interface Countdown {
 	 * in a block below the ranked rows: hiding it would hide the shape. */
 	unjudged: boolean;
 	squares: YieldSquare[];
+	/** The line under the row, in words. A ranked row says what it published of
+	 * what it was offered over the complete days, and while it is under the mark,
+	 * for how long and the day it retires on; a row under its evidence floors says
+	 * how much it decided of what it was offered. */
+	readout: string;
+	/** The strip's first column, counted from 1, that the dwell rule underlines
+	 * through the newest one, or null while no run of days under the mark is
+	 * running. */
+	dwellFrom: number | null;
 }
 
 /** The reliability strip, as `/console/voices/` reads it. */
@@ -107,6 +116,34 @@ function squareFor(day: DayYield, alarmPoint: number): YieldSquare {
 	};
 }
 
+/** `day` for one, `days` for any other count. */
+function dayWord(count: number): string {
+	return count === 1 ? 'day' : 'days';
+}
+
+/** What a ranked row says under its strip: what it published of what it was
+ * offered over the complete days, and while it is under the mark, for how long
+ * and the day it retires on if it stays there. */
+function countdownReadout(
+	row: { publications: number; opportunities: number; daysUnder: number; retiresOn: string | null; retired: boolean },
+	completeDates: number,
+	dwellDays: number
+): string {
+	const said = [
+		`${row.publications} published of ${row.opportunities} offered, over ${completeDates} complete ${dayWord(completeDates)}.`
+	];
+	if (row.daysUnder > 0) {
+		said.push(`Under the mark for ${row.daysUnder} ${dayWord(row.daysUnder)} running - ${row.daysUnder} of ${dwellDays}.`);
+		if (row.retiresOn && !row.retired) said.push(`Retires on ${row.retiresOn} if it stays there.`);
+	}
+	return said.join(' ');
+}
+
+/** What a row under its evidence floors says instead: how much it decided of what it was offered. */
+function decidedReadout(decisions: number, opportunities: number): string {
+	return `Decided ${decisions} of the ${opportunities} ${opportunities === 1 ? 'address' : 'addresses'} it was offered.`;
+}
+
 /** Every source's countdown, ranked nearest to retiring first.
  *
  * **Nothing here re-derives the dwell.** The run counted the unbroken run of
@@ -134,6 +171,7 @@ export function retiring(view: SourceHealthView | null, rows: number): Retiring 
 			const share = shareOf(row.publications, decisions);
 			const daysUnder = row.days_under_the_mark ?? 0;
 			const retiresOn = row.retires_on ?? null;
+			const unjudged = !deepEnough || decisions < minDecisions;
 			return {
 				sourceId: row.source_id,
 				title: row.title,
@@ -146,8 +184,16 @@ export function retiring(view: SourceHealthView | null, rows: number): Retiring 
 				retiresOn,
 				daysLeft: retiresOn === null ? null : Math.max(dwellDays - daysUnder, 0),
 				retired: row.retired,
-				unjudged: !deepEnough || decisions < minDecisions,
-				squares: (row.recent_days ?? []).map((day) => squareFor(day, alarmPoint))
+				unjudged,
+				squares: (row.recent_days ?? []).map((day) => squareFor(day, alarmPoint)),
+				readout: unjudged
+					? decidedReadout(decisions, row.opportunities)
+					: countdownReadout(
+							{ publications: row.publications, opportunities: row.opportunities, daysUnder, retiresOn, retired: row.retired },
+							view.complete_dates,
+							dwellDays
+						),
+				dwellFrom: daysUnder > 0 ? dates.length - daysUnder + 1 : null
 			};
 		});
 
