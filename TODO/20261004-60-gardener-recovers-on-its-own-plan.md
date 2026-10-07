@@ -1480,7 +1480,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #35 - The yearly expiry logs an event of its own
 
 - **Scope:** The yearly expiry says what it chose as an event declared in `backend/idhazh/contracts/gardener_events.py`, as row 21 made every other gardener line, instead of a line of text that the handler wraps as `logged-text` (Table E, E15). Level 1.
-- **The line** (row 23's Found during execution, 2026-10-07): `backend/idhazh/gardener/tasks/_yearly_expiry.py`, which #1382 added after row 21, logs `yearly expiry ledger=<ledger> years=[...]` at `info` on every pass of a ledger that sets `yearly_prune_enable` and `yearly_keep_months`, also when no year is due. Since #1382 every compaction sets both, so every compaction pass logs it, and Table E has no event for it. It carries a ledger's name and UTC years, and no fetched text. A pass whose operator range would skip an earlier indexed year logs the module's other line instead, at `error`, and that line is text too.
+- **The line** (row 23's Found during execution, 2026-10-07): `backend/idhazh/gardener/tasks/_yearly_expiry.py`, which #1382 added after row 21, logs `yearly expiry ledger=<ledger> years=[...]` at `info` on every pass of a ledger that sets `yearly_prune_enable` and `yearly_keep_months`, also when no year is due. Since #1382 every compaction sets both, apart from the `compact-trial-*` declarations that #1405 added later, so every other compaction pass logs it, and Table E has no event for it. It carries a ledger's name and UTC years, and no fetched text. A pass whose operator range would skip an earlier indexed year logs the module's other line instead, at `error`, and that line is text too.
 - **Files touched** (from a search on `origin/main` at 7ba988fc2 for `_yearly_expiry`, the two lines' words and the helpers that read events; search again at dispatch, after decision 2):
   - `backend/idhazh/gardener/tasks/_yearly_expiry.py` (the `info` line on every pass, and the `error` line for a range that skips an earlier indexed year)
   - `backend/idhazh/contracts/gardener_events.py` (the new model; `CompactionStep` names no expiry step, and `PeriodsTaken` holds no expired year)
@@ -1500,7 +1500,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | As today | Every compaction pass writes a line that no test reads by its fields, against row 21's rule that every gardener line is one event | Nothing to build; one line of text on every compaction pass | Plan owner, 2026-10-07 (row 23 report) |
+| 1 | As today | Each compaction pass that sets the expiry writes a line that no test reads by its fields, against row 21's rule that every gardener line is one event | Nothing to build; one line of text on each such pass | Plan owner, 2026-10-07 (row 23 report) |
 
 ### Row #36 - The plan job's config refusals keep their sentence
 
