@@ -252,6 +252,7 @@ test('M14: the chart draws at the region content width and keeps its height on r
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
 	await runExplorer(page);
+	await page.locator('[data-workbench-region="chart"]').evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
 	await page.locator('[data-workbench-region="chart"] svg[data-chart-type]').waitFor({ state: 'visible', timeout: 60_000 });
 	const reading = async () => page.evaluate(() => {
 		const plot = document.querySelector('[data-workbench-region="chart"] svg[data-chart-type]') as SVGElement | null;
