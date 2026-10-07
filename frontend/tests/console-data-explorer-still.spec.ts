@@ -250,7 +250,7 @@ test('M7: the editor frame starts in the top third on desktop and tablet', async
 test('M14: the chart draws at the region content width and keeps its height on resize', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await openExplorer(page, PINNED);
-	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 	await runExplorer(page);
 	await page.locator('[data-workbench-region="chart"]').evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
 	await page.locator('[data-workbench-region="chart"] svg[data-chart-type]').waitFor({ state: 'visible', timeout: 60_000 });

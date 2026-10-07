@@ -293,7 +293,7 @@ async function settledExplorer(page: Page, id: string, width: number, theme: The
 	await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
 	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
 	await openExplorer(page, PINNED);
-	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 	await runExplorer(page);
 	return readPanel(await settled(page, id));
 }
