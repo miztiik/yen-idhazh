@@ -7,6 +7,7 @@ import { render } from 'svelte/server';
 
 import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
 import {
+	measurementOff,
 	recordingNotes,
 	recordNotes,
 	type OfferedWindow,
@@ -19,7 +20,7 @@ import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
 import { windowDay } from '../src/lib/server/window-day';
-import { buildLedger, daysBefore, everyDay } from './support/ledger-lifecycle';
+import { buildLedger, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
 import { publishedSite } from './support/published-site';
 import { serverCompiler } from './support/server-render';
 
@@ -290,6 +291,22 @@ function notesFor(reads: readonly RouteRecord[], newestDay: string | null, count
 	const day = newestDay ?? '2026-09-29';
 	return recordNotes(reads, newestDay, openOn(day, count), offeredOn(day));
 }
+
+/** The newest day the built sites publish. */
+const PUBLISHED = '2030-06-15';
+
+/** A site published on 14 and 15 Jun 2030, and a machine record built with `days` counted
+ *  back from the newest published day, in the test's own output folder. */
+async function builtSite(days: readonly BuiltDay[]): Promise<{ digest: string; state: string }> {
+	const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-14', PUBLISHED] });
+	const state = test.info().outputPath('state');
+	await buildLedger(state, { ledger: 'host-fingerprint', pinned: PUBLISHED, days });
+	return { digest, state };
+}
+
+/** A machine record whose rows stop 40 days before the newest published day: one row a day
+ *  from 1 to 6 May 2030, then packed with empty days from 7 May to 14 Jun, the day before it. */
+const STOPPED = [...everyDay(45, 40), ...quietDays(39, 1)];
 
 test.describe('what a route says about the records it read', () => {
 	const read = (
@@ -600,19 +617,11 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 });
 
 test.describe('THE ORACLE: a console window ends on the site\'s newest published day, and reads only its own days', () => {
-	const PUBLISHED = '2030-06-15';
-
 	test('a record whose rows stop 40 days before the newest published day reads nothing before the window, and the note names its last day', async () => {
 		// Published on 14 and 15 Jun 2030. The machine record holds one row a day up to
 		// 6 May, 40 days before the newest published day, and is packed with empty days
 		// from 7 May to 14 Jun, the day before it.
-		const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-14', PUBLISHED] });
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'host-fingerprint',
-			pinned: PUBLISHED,
-			days: [...everyDay(45, 40), ...Array.from({ length: 39 }, (_, at) => ({ ago: 39 - at, state: 'empty' as const }))]
-		});
+		const { digest, state } = await builtSite(STOPPED);
 		expect(daysBefore(PUBLISHED, 40)).toBe('2030-05-06');
 
 		const day = windowDay(digest);
@@ -650,5 +659,47 @@ test.describe('THE ORACLE: a console window ends on the site\'s newest published
 		const day = windowDay(path.join(empty, 'digest'));
 		const after = new Date().toISOString().slice(0, 10);
 		expect([before, after]).toContain(day);
+	});
+});
+
+test.describe('THE ORACLE: the "Measurement is off" line names only a day on screen', () => {
+	/** The line a route prints over each window it offers, when the record's switch is off. A
+	 *  route reads its widest window once, and the days it recorded are the days its rows hold. */
+	async function linesOver(digest: string, state: string): Promise<[number, string | null][]> {
+		const day = windowDay(digest);
+		const offered = offeredOn(day);
+		const machine = await machineRecord(openOn(day, 90), state);
+		const recorded = [...new Set(machine.rows.map((row) => row.date))];
+		return offered.map((open) => [
+			open.days,
+			measurementOff({ enabled: false, recorded, read: machine.read, open, offered })
+		]);
+	}
+
+	test('a record whose rows stop 40 days before the newest published day names no day outside each window, and never says nothing was recorded at all', async () => {
+		const { digest, state } = await builtSite(STOPPED);
+		// Only the 90-day window, from 18 Mar to 15 Jun 2030, holds 6 May. The 1-day window
+		// holds no packed day: the record is packed as far as 14 Jun.
+		expect(await linesOver(digest, state)).toEqual([
+			[1, 'Measurement is off. Turn it on in config/idhazh.json.'],
+			[7, 'Measurement is off. Nothing was recorded in these 7 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'],
+			[14, 'Measurement is off. Nothing was recorded in these 14 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'],
+			[30, 'Measurement is off. Nothing was recorded in these 30 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'],
+			[90, 'Measurement is off. Nothing has been recorded since 6 May 2030. Turn it on in config/idhazh.json.']
+		]);
+	});
+
+	test('a record that never held a row says nothing has been recorded at all, in every window', async () => {
+		// Packed with no row from 1 to 6 May 2030, as the packing once packed a quiet day, then
+		// empty from 7 May to 14 Jun: no entry of its index holds a row.
+		const { digest, state } = await builtSite([...everyDay(45, 40, 0), ...quietDays(39, 1)]);
+		const at = 'Measurement is off. Nothing has been recorded at all. Turn it on in config/idhazh.json.';
+		expect(await linesOver(digest, state)).toEqual([
+			[1, at],
+			[7, at],
+			[14, at],
+			[30, at],
+			[90, at]
+		]);
 	});
 });

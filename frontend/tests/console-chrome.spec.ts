@@ -13,8 +13,11 @@ import {
 	recordingNotes,
 	recordingStarted,
 	sampledAt,
-	scoresWithoutCounters
+	scoresWithoutCounters,
+	type OfferedWindow,
+	type RecordRead
 } from '../src/lib/console/recording';
+import type { HeldPeriod } from '../src/lib/data/slice';
 
 /** `chart.readout_max_share`, read off the committed config inside the test
  * that uses it, so a malformed file fails one test rather than the module. */
@@ -115,21 +118,108 @@ test.describe('a readout column sits where the engine drew it', () => {
 	});
 });
 
-test.describe('what the recording was doing, in the owner words', () => {
-	test('measurement off names the day it stopped and never the knob', () => {
-		const said = measurementOff('2026-08-29');
-		expect(said).toBe(
-			'Measurement is off. Nothing has been recorded since 29 Aug 2026, so the figures below stop on that day. Turn it back on in config/idhazh.json.'
-		);
+test.describe('what the recording was doing, in fixed words', () => {
+	/** The windows the control offers, each ending on 15 Jun 2030, the newest published day. */
+	const OFFERED: OfferedWindow[] = [
+		{ days: 1, start: '2030-06-15', end: '2030-06-15' },
+		{ days: 7, start: '2030-06-09', end: '2030-06-15' },
+		{ days: 14, start: '2030-06-02', end: '2030-06-15' },
+		{ days: 30, start: '2030-05-17', end: '2030-06-15' },
+		{ days: 90, start: '2030-03-18', end: '2030-06-15' }
+	];
+
+	/** A record read whole, packed as far as `through`, whose newest rows are in `lastRows`. */
+	const packed = (through: string, lastRows: HeldPeriod | null): RecordRead => ({
+		state: 'read',
+		through,
+		lastRows,
+		lostDays: [],
+		setAside: {}
+	});
+
+	/** The line a switched-off instrument prints over the `days`-day window. */
+	const offOver = (days: number, read: RecordRead, recorded: string[] = []) =>
+		measurementOff({
+			enabled: false,
+			recorded,
+			read,
+			open: OFFERED.find((window) => window.days === days)!,
+			offered: OFFERED
+		});
+
+	test('a measurement that is on prints no line', () => {
+		expect(
+			measurementOff({
+				enabled: true,
+				recorded: [],
+				read: packed('2030-06-14', null),
+				open: OFFERED[2]!,
+				offered: OFFERED
+			})
+		).toBeNull();
+	});
+
+	test('measurement off names the newest day it recorded in the window, and never the knob', () => {
+		const said = offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }), [
+			'2030-05-06',
+			'2030-06-10',
+			'2030-06-12'
+		]);
+		expect(said).toBe('Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.');
 		// A term from a subsystem is not a term for a user (CLAUDE.md section 0b).
 		expect(said).not.toContain('host_fingerprint');
 		expect(said).not.toContain('evaluation_enabled');
 	});
 
-	test('measurement off with nothing on record says so rather than dating it', () => {
-		expect(measurementOff(null)).toBe(
-			'Measurement is off. Nothing has been recorded at all. Turn it back on in config/idhazh.json.'
+	test('a window that holds no recorded day names none, and names the window that reaches back to the last one', () => {
+		const stopped = packed('2030-06-14', { period: 'daily', covers: '2030-05-06' });
+		// 6 May 2030 is the last day this record recorded, and it is in the 90-day window
+		// alone, so every narrower window names that window and not the day.
+		expect(offOver(7, stopped, ['2030-05-06'])).toBe(
+			'Measurement is off. Nothing was recorded in these 7 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
 		);
+		expect(offOver(30, stopped, ['2030-05-06'])).toBe(
+			'Measurement is off. Nothing was recorded in these 30 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
+		);
+		// Packed as far as the window's one day, which held no row: the window names its day.
+		expect(offOver(1, packed('2030-06-15', { period: 'daily', covers: '2030-05-06' }))).toBe(
+			'Measurement is off. Nothing was recorded on 15 Jun 2030. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
+		);
+	});
+
+	test('a window reaches back to a closed month only when it holds the whole month', () => {
+		// The 90-day window starts on 18 Mar 2030: it holds the whole of April and part of March.
+		expect(offOver(14, packed('2030-06-14', { period: 'monthly', covers: '2030-04' }))).toBe(
+			'Measurement is off. Nothing was recorded in these 14 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
+		);
+		expect(offOver(14, packed('2030-06-14', { period: 'monthly', covers: '2030-03' }))).toBe(
+			'Measurement is off. Nothing was recorded in these 14 days. Turn it on in config/idhazh.json. No window here reaches back to the last recorded day.'
+		);
+		// The widest window can never point to a wider one.
+		expect(offOver(90, packed('2030-06-14', { period: 'yearly', covers: '2029' }))).toBe(
+			'Measurement is off. Nothing was recorded in these 90 days. Turn it on in config/idhazh.json. No window here reaches back to the last recorded day.'
+		);
+	});
+
+	test('measurement off with nothing on record says so in every window, rather than dating it', () => {
+		const never = packed('2030-06-14', null);
+		for (const window of OFFERED) {
+			// The 1-day window holds no packed day, and the record has still never held a row.
+			expect(offOver(window.days, never), `the ${window.days}-day window`).toBe(
+				'Measurement is off. Nothing has been recorded at all. Turn it on in config/idhazh.json.'
+			);
+		}
+	});
+
+	test('measurement off claims nothing about what was recorded where the page has not read it', () => {
+		const said = 'Measurement is off. Turn it on in config/idhazh.json.';
+		// Not packed yet, and a read that failed: the note above the line says which.
+		expect(offOver(14, { state: 'not-packed' })).toBe(said);
+		expect(offOver(14, { state: 'unreadable', at: '2030-06-10', fault: 'file-missing' })).toBe(said);
+		// Packed as far as 14 Jun 2030, so the 1-day window of 15 Jun holds no packed day.
+		expect(offOver(1, packed('2030-06-14', { period: 'daily', covers: '2030-05-06' }))).toBe(said);
+		// The record holds rows on 12 Jun 2030 that the instrument's figures do not use.
+		expect(offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }))).toBe(said);
 	});
 
 	test('a clean fraction reads as one run in four', () => {
@@ -176,7 +266,6 @@ test.describe('what the recording was doing, in the owner words', () => {
 			recorded: ['2026-08-27', '2026-08-28'],
 			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28']
 		});
-		expect(notes.off).toBeNull();
 		expect(notes.sampled).toBeNull();
 		expect(notes.startedMidWindow).toContain('Recording started on 27 Aug 2026');
 		expect(notes.startedMidWindow).toContain('The 2 days before it have');
@@ -186,10 +275,12 @@ test.describe('what the recording was doing, in the owner words', () => {
 		const notes = recordingNotes({
 			enabled: false,
 			rate: 0.25,
-			recorded: ['2026-08-29'],
-			window: ['2026-08-29']
+			recorded: ['2030-06-12'],
+			window: ['2030-06-12']
 		});
-		expect(notes.off).toContain('Measurement is off.');
+		expect(offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }), ['2030-06-12'])).toBe(
+			'Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.'
+		);
 		// Two sentences about the same absence is one too many: a measurement that
 		// is off was not sampled, it was not taken.
 		expect(notes.sampled).toBeNull();
@@ -478,7 +569,7 @@ test('the shape switch is one control per panel and reaches the chart', async ({
 	await expect(chart).toHaveAttribute('aria-label', /one column a day/);
 });
 
-test('a route in a state says which state, in the owner words', async ({ page }) => {
+test('a route in a state says which state, in fixed words', async ({ page }) => {
 	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
 
 	// The states are the panel rather than a replacement for it, so the heading

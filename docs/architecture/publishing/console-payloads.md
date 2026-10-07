@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -515,7 +515,10 @@ year they are from, as its index names it, and that the page cannot tell a
 quiet stretch from a fault. It names the narrowest window the control offers
 that reaches back to them, and only when one does, because an instruction that
 does not work costs a click. A record whose route already prints its
-"Measurement is off" line gets no second explanation. A record packed as far as
+"Measurement is off" line gets no second explanation: that line is worded for
+the open window too, so it says the window holds nothing recorded and names the
+window that reaches back to the last recorded day, without naming a day the
+window does not show. A record packed as far as
 the day before the newest published day, which is normal running, gets the
 quietest line, last: that day is not shown yet, and that is normal. Each route
 writes its notes once for each window the control offers, and the page picks the

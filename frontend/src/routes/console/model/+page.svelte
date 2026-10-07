@@ -348,6 +348,9 @@
 	const span = $derived(data.windows[windowKey] ?? null);
 	const writeTimes = $derived(data.writeTimes[windowKey] ?? null);
 	const scoreCost = $derived(data.scoreCost[windowKey] ?? null);
+	/** The "Measurement is off" line for the open window, null while the scorer is
+	 * on. The server worded it for each preset, so it names only a day this window shows. */
+	const switchedOff = $derived(data.measurementOff[windowKey] ?? null);
 
 	/** Which sources the checker doubted, over the open window.
 	 *
@@ -551,9 +554,9 @@
 			<!-- What the recording was doing, in the panel it governs rather than as
 			     a banner: three panels can be in three different states on one day.
 			     None of these is an error and none is styled as one. -->
-			{#if data.recording.off}
+			{#if switchedOff}
 				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-					{data.recording.off}
+					{switchedOff}
 				</p>
 			{/if}
 			{#if data.recording.sampled}
