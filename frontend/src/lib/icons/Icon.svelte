@@ -9,7 +9,8 @@
 	 * A component names an icon and never holds a `<path>`; `icons.spec.ts`
 	 * asserts that in both directions.
 	 */
-	import { ICONS, type IconId } from './generated';
+	import { ICONS } from './generated';
+	import type { IconId } from './generated';
 
 	let {
 		id,

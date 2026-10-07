@@ -1015,6 +1015,8 @@
 		.editor-stack {
 			display: flex;
 			flex-direction: column;
+			min-block-size: 0;
+			overflow: hidden;
 		}
 
 		.editor-stack > .state,

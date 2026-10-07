@@ -30,7 +30,7 @@
 </div>
 
 <style>
-	.column-list { block-size: 100%; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); overflow: hidden; }
+	.column-list { contain: size; block-size: 100%; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); overflow: hidden; }
 	h3 { margin: 0; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; }
 	p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
 	/* Positioned, so the hidden screen-reader spans in its rows scroll with the list instead of escaping it and stretching the page. */
