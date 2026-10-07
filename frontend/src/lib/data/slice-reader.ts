@@ -202,8 +202,8 @@ export function explainRefusal(period: Period, refused: IndexRefusal): string {
 		: `${period}.json cannot be read: ${refused.detail}`;
 }
 
-/** Why a file a slice needs arrived but could not be used, as the console says it. */
-function explainShortfall(
+/** Why a file a slice or a written question needs arrived but could not be used, as the console says it. */
+export function explainShortfall(
 	wanted: WantedFile,
 	shortfall: Exclude<FileShortfall, { reason: 'absent' }>
 ): string {
