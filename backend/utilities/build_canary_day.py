@@ -106,6 +106,7 @@ from idhazh.telemetry.publish import (
     machine,
     run_days,
     run_timeline,
+    series,
     source_health,
 )
 
@@ -1751,6 +1752,40 @@ def file_unpacked_fixture_day(state: Path) -> int:
     return 1
 
 
+def search_index_root(digest_root: Path) -> Path:
+    """Where the month search index goes: beside the digest root, as the pipeline puts it."""
+    return digest_root.parent / "assist" / "index"
+
+
+def clear_output(digest_root: Path, state_root: Path) -> None:
+    """Delete every folder a canary build writes, so the build starts from an empty tree.
+
+    That makes the canary a function of this file, never of what an earlier
+    build left. Each folder is named, never found by a walk (Guardrail #12): the
+    days and their drawings, the month search index, the console payloads that
+    `--console-payloads-only` writes later in the same build, and the state
+    tree. A file this builder never writes is left where it is.
+
+    What a file from an earlier build did. The ledgers under `state/` are
+    append-only, so a second local run stacked another copy of every row on the
+    first: `canary-gone` is written once, one permanent failure well under the
+    quarantine count, and by the fifth run the console marked it rested. A day
+    written under another `DATE` stayed the newest day in the digest tree, and
+    `build-canary.mjs` dates its fixture rows from that day. The packing pass
+    runs from `DATE`, so it packed no day of item-health or host-fingerprint,
+    and the site build refused both. CI saw neither, because its `backend/var/`
+    is empty every time.
+    """
+    for folder in (
+        digest_root,
+        search_index_root(digest_root),
+        *(series.series_root(digest_root, name) for name in series.PUBLISHED_ROOTS),
+        state_root,
+    ):
+        if folder.exists():
+            shutil.rmtree(folder)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("backend/var/canary/digest"))
@@ -1798,16 +1833,7 @@ def main() -> int:
         written = console_payloads(state_root=args.state, digest_root=args.out)
         print(f"wrote {written} console payload file(s) the browser suite fetches")
         return 0
-    # The ledgers under `--state` are append-only, so a second local run stacks
-    # another copy of every row on the first. `canary-gone` is written once on
-    # purpose - one permanent failure, well under the quarantine count - and by
-    # the fifth run it has five and the console marks it rested. The browser
-    # suite then fails against a fixture nobody edited, on a developer machine,
-    # while CI stays green because its `backend/var/` is empty every time.
-    # Clearing here makes the canary day a function of this file rather than of
-    # how many times somebody has run it.
-    if args.state.exists():
-        shutil.rmtree(args.state)
+    clear_output(args.out, args.state)
 
     evaluation = config.load().app.evaluation
     visuals = config.load().app.visuals
@@ -1845,7 +1871,7 @@ def main() -> int:
     # (docs/architecture/publishing/layout.md). The archive browses this tree in
     # the browser suite, so without the rebuild it would show days and no
     # stories - and the suite would pass on a page a reader cannot use.
-    index_root = args.out.parent / "assist" / "index"
+    index_root = search_index_root(args.out)
     months = sorted({month_of(date) for date in [*quiet, DATE]})
     indexed = [
         rebuild_search_index(digest_root=args.out, index_root=index_root, month=month)
