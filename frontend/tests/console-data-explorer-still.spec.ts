@@ -121,6 +121,21 @@ function closeInlineBox(left: Box, right: Box) {
 	expect(right.width).toBeCloseTo(left.width, 0);
 }
 
+async function tileBoxes(page: Page, selector: string, attribute: string): Promise<Record<string, Box>> {
+	return page.locator(selector).evaluateAll((nodes, key) => Object.fromEntries(nodes.map((node) => {
+		const element = node as HTMLElement;
+		const rect = element.getBoundingClientRect();
+		return [element.getAttribute(key as string) ?? '', { x: rect.x, y: rect.y, width: rect.width, height: rect.height }];
+	})), attribute);
+}
+
+function expectTileBoxesStable(before: Record<string, Box>, after: Record<string, Box>, label: string) {
+	expect(Object.keys(after).sort(), `${label} tile set`).toEqual(Object.keys(before).sort());
+	for (const [name, box] of Object.entries(before)) {
+		closeBox(box, after[name]);
+	}
+}
+
 function expectStable(before: Snapshot, after: Snapshot) {
 	expect(after.shift, `layout shift sources: ${JSON.stringify(after.sources, null, 2)}`).toBe(0);
 	expect(after.scrollY).toBe(before.scrollY);
@@ -361,6 +376,31 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 	await page.getByLabel('Name').fill('Long question');
 	await measure(() => page.getByRole('button', { name: /^Keep$/ }).click());
 	await measure(() => page.locator('#explorer-sql').fill(Array.from({ length: 40 }, (_, index) => `SELECT ${index}`).join('\n')));
+});
+
+test('Susan 2026-10-07: checked choice tiles keep their bold-word width in every caller', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, PINNED);
+
+	const assertPressesDoNotMoveTiles = async (selector: string, attribute: string, name: string) => {
+		const count = await page.locator(selector).count();
+		expect(count, `${name} has no tiles to press`).toBeGreaterThan(0);
+		for (let index = 0; index < count; index += 1) {
+			const before = await tileBoxes(page, selector, attribute);
+			await page.locator(selector).nth(index).click();
+			const after = await tileBoxes(page, selector, attribute);
+			expectTileBoxesStable(before, after, `${name} ${index}`);
+		}
+	};
+
+	await assertPressesDoNotMoveTiles('[data-window-preset]', 'data-window-preset', 'day');
+
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	await assertPressesDoNotMoveTiles('[data-shape-choice]', 'data-shape-choice', 'Draw it as');
 });
 
 test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page, context }) => {

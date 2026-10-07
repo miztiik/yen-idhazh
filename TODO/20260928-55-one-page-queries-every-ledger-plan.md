@@ -1082,7 +1082,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 - **M checks:** M7, M14, M18 and M19, and M8's D2 and D3. Measured on row 9 at 1440 x 900: the editor frame's top is at 315 px, 15 px past M7's 300. Above it stand the site header (88 px), the strip (33 px), the toolbar (53 px), the question row (97 px, its chips on two lines) and the editor head (44 px). Folding the chips onto one line with K6 brings the question row to D3's one row, about 52 px, which puts the frame's top near 270 px. **K6 is done by row 12.** Table D's D6 below 1024 px, where each rail is a 2.75rem summary, also lands here: row 9 keeps the rails as fixed scroll boxes at every width. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
 - **Made obsolete by #1336:** K6; the sentence that the rails are fixed scroll boxes at every width; and M7 at 1440 x 900, now met with the editor frame's top at 275 px.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
-- **Owner rulings, 2026-10-06:**
+- **Owner rulings, 2026-10-06 and Susan ruling, 2026-10-07:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
@@ -1094,6 +1094,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | R5 | **Sortable headers use a triangle mark, not an instruction sentence.** `aria-sort` remains the spoken state | owner, 2026-10-06 |
   | R6 | **The table footer carries the run span, row count, cap and not-on-site sentence in small text.** `Show more` stays beside it | owner, 2026-10-06 |
   | R7 | **The run status says only the result and fresh read.** Answered and quiet states say `Read {f} files, {size}`; held-byte text and attributes are gone | owner, 2026-10-06 |
+  | S1 | **Choice tiles reserve the bold width whether checked or not.** The checked tile keeps its weight-600 word, and pressing day tiles or `Draw it as` tiles does not move any sibling tile | Susan, 2026-10-07 |
 
 ### Row #11 - The column rail stops overlapping, and types and the chosen ledger show in colour
 
