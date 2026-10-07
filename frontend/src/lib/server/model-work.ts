@@ -439,6 +439,16 @@ export function pipelineChanges(
 	return changes;
 }
 
+/** The days a run manifest names what ran, so a change marker on them needs no score row.
+ *
+ * Read by the rule `pipelineChanges` reads a manifest by, so a page that asks which
+ * days the score record alone could mark and the markers themselves cannot
+ * disagree about what a manifest identifies.
+ */
+export function listManifestDays(runs: readonly RecordedRunDay[]): string[] {
+	return [...identitiesByDate([], runs).keys()].sort();
+}
+
 /** The model id each date's score rows name, for the days that name one.
  *
  * The candle needs it to know when two days ran on different models and must

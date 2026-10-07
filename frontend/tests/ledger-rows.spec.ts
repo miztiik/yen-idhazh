@@ -7,6 +7,7 @@ import { render } from 'svelte/server';
 
 import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
 import {
+	describeMissingMarkers,
 	measurementOff,
 	recordingNotes,
 	recordNotes,
@@ -17,9 +18,13 @@ import {
 } from '../src/lib/console/recording';
 import { checkedRequest } from '../src/lib/data/slice-shapes';
 import { daysBetween } from '../src/lib/data/slice';
+import type { ObservabilityConfig } from '../src/lib/server/config';
 import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-fingerprint';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
-import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
+import { datedFirst, evalRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
+import { machineCounters } from '../src/lib/server/machine-counters';
+import { listManifestDays } from '../src/lib/server/model-work';
+import { describeServerCounters } from '../src/lib/server/server-counter-notes';
 import { windowDay } from '../src/lib/server/window-day';
 import { buildLedger, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
 import { publishedSite } from './support/published-site';
@@ -715,7 +720,7 @@ test.describe('THE ORACLE: the "Measurement is off" line names only a day on scr
 	});
 });
 
-test.describe('THE ORACLE: a "Recording started" line names a start the open window shows, and only a true one', () => {
+test.describe('THE ORACLE: a started line names a start the open window shows, and only a true one', () => {
 	/** The started line each window offers, for a machine record built with `days` and read over
 	 *  the widest window, as the routes read it. The instrument recorded the days the record holds
 	 *  rows on, from `recordedFrom`, and every day had a run. A route hands each window the whole
@@ -760,7 +765,7 @@ test.describe('THE ORACLE: a "Recording started" line names a start the open win
 				[7, null],
 				[14, null],
 				[30, null],
-				[90, 'Recording started on 16 Apr 2030. Earlier in this window, 29 days had a run but no server figures.']
+				[90, 'Server figures started on 16 Apr 2030. Earlier in this window, 29 days had a run but no server figures.']
 			]);
 		});
 	}
@@ -769,10 +774,10 @@ test.describe('THE ORACLE: a "Recording started" line names a start the open win
 		// One row a day from 10 to 14 Jun 2030. The 1-day window, 15 Jun, does not show the 10th.
 		expect(await startedOver(everyDay(5, 1), 'read')).toEqual([
 			[1, null],
-			[7, 'Recording started on 10 Jun 2030. Earlier in this window, 1 day had a run but no server figures.'],
-			[14, 'Recording started on 10 Jun 2030. Earlier in this window, 8 days had a run but no server figures.'],
-			[30, 'Recording started on 10 Jun 2030. Earlier in this window, 24 days had a run but no server figures.'],
-			[90, 'Recording started on 10 Jun 2030. Earlier in this window, 84 days had a run but no server figures.']
+			[7, 'Server figures started on 10 Jun 2030. Earlier in this window, 1 day had a run but no server figures.'],
+			[14, 'Server figures started on 10 Jun 2030. Earlier in this window, 8 days had a run but no server figures.'],
+			[30, 'Server figures started on 10 Jun 2030. Earlier in this window, 24 days had a run but no server figures.'],
+			[90, 'Server figures started on 10 Jun 2030. Earlier in this window, 84 days had a run but no server figures.']
 		]);
 	});
 
@@ -783,8 +788,132 @@ test.describe('THE ORACLE: a "Recording started" line names a start the open win
 			[1, null],
 			[7, null],
 			[14, null],
-			[30, 'Recording started on 26 May 2030. Earlier in this window, 9 days had a run but no server figures.'],
-			[90, 'Recording started on 26 May 2030. Earlier in this window, 69 days had a run but no server figures.']
+			[30, 'Server figures started on 26 May 2030. Earlier in this window, 9 days had a run but no server figures.'],
+			[90, 'Server figures started on 26 May 2030. Earlier in this window, 69 days had a run but no server figures.']
 		]);
+	});
+});
+
+/** The observability block as the Hardware route holds it: everything on, every run scored. */
+const OBSERVABILITY: ObservabilityConfig = {
+	cost_currency: 'USD',
+	cost_input_per_million: 0.2,
+	cost_output_per_million: 0.6,
+	evaluation_enabled: true,
+	host_fingerprint: true,
+	host_fingerprint_bandwidth_cache_multiple: 2,
+	sample_rate: 1
+};
+
+test.describe("THE ORACLE: Hardware dates the server's figures from the machine record's first row that carries them", () => {
+	test('article rows alone, before the machine record holds a row, are never counted or dated as runs with server figures', async () => {
+		// Published on 14 and 15 Jun 2030. The machine record's indexes begin on 16 May, and it holds
+		// no row until 10 Jun, when one run's work job filed the server's two cells; quiet after. The
+		// article record holds rows from 31 May, and from 3 Jun one run a day took them on shard 0.
+		const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-14', PUBLISHED] });
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PUBLISHED,
+			days: [...quietDays(30, 6), { ago: 5, rows: 2 }, ...quietDays(4, 1)],
+			columns: {
+				run_id: '2030-06-10-1',
+				job: 'work',
+				shard: 0,
+				fingerprint: 'f00d',
+				server_prompt_tokens: 900,
+				server_prompt_seconds: 9
+			}
+		});
+		const day = windowDay(digest);
+		const read = openOn(day, 90);
+		const machine = await machineRecord(read, state);
+		expect(machine.read).toMatchObject({ state: 'read', first: '2030-05-16', through: '2030-06-14' });
+		const articleDays = daysBetween('2030-05-31', '2030-06-14');
+		const articles = daysBetween('2030-06-03', '2030-06-14').map((date) => ({
+			date,
+			run_id: `${date}-1`,
+			machine_job: 'work',
+			machine_shard: '0'
+		}));
+		const runs = machineCounters(machine.rows, articles, new Map(), { contextWindow: null, jobTimeoutSeconds: null }).runs;
+		const offered = offeredOn(day);
+		const said = offered.map((open) => {
+			const notes = describeServerCounters({
+				runs,
+				ran: articleDays,
+				articleDays,
+				machineRead: machine.read,
+				from: read.start,
+				open,
+				offered,
+				observability: OBSERVABILITY
+			});
+			return [open.days, notes.intro, notes.recording.startedMidWindow];
+		});
+		const one = 'Server figures started on 10 Jun 2030. Earlier in this window,';
+		expect(said).toEqual([
+			[1, 'This one day has no run on record. 2030-06-15.', null],
+			[
+				7,
+				'6 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.',
+				`${one} 1 day had a run but no server figures.`
+			],
+			[
+				14,
+				'12 runs in these 14 days, 1 of them with figures from the model server itself. 2030-06-02 to 2030-06-15.',
+				`${one} 8 days had a run but no server figures.`
+			],
+			[
+				30,
+				'12 runs in these 30 days, 1 of them with figures from the model server itself. 2030-05-17 to 2030-06-15.',
+				`${one} 10 days had a run but no server figures.`
+			],
+			[
+				90,
+				'12 runs in these 90 days, 1 of them with figures from the model server itself. 2030-03-18 to 2030-06-15.',
+				`${one} 10 days had a run but no server figures.`
+			]
+		]);
+	});
+});
+
+test.describe('THE ORACLE: a score read that did not read is named on the charts it cost a marker, never silent', () => {
+	/** Runs on 2 to 14 Jun 2030, and run manifests name what ran from 6 Jun, so a marker on 2 to 5
+	 *  Jun could only come from the score record. */
+	const RAN = daysBetween('2030-06-02', '2030-06-14');
+	const IDENTIFIED = listManifestDays(
+		daysBetween('2030-06-06', '2030-06-14').map((date) => ({ date, records: [{ inputs: { model: 'test-model' } }] }))
+	);
+	const OPEN = openOn(PINNED, 14);
+	const others = ' This chart shows every change on the other days.';
+
+	test('a score record with no packed file says it is not packed yet', async () => {
+		const state = test.info().outputPath('state');
+		mkdirSync(state, { recursive: true });
+		const scores = await evalRows(openOn(PINNED, 90), state);
+		expect(scores.read).toEqual({ state: 'not-packed' });
+		expect(describeMissingMarkers({ read: scores.read, ran: RAN, identified: IDENTIFIED, open: OPEN })).toBe(
+			`This chart cannot show whether the setup changed on 2 Jun to 5 Jun 2030, because the score record has not been packed yet. That is a step not yet run.${others}`
+		);
+	});
+
+	test('a packed file the score record lists and the disk lacks is named as that fault', async () => {
+		const state = test.info().outputPath('state');
+		await buildLedger(state, { ledger: 'summary-quality-evals', pinned: PINNED, days: everyDay(14, 1) });
+		rmSync(path.join(state, 'compact', 'summary-quality-evals', 'daily', '2030', '06', '03.parquet'));
+		const scores = await evalRows(openOn(PINNED, 90), state);
+		expect(scores.read).toEqual({ state: 'unreadable', at: '2030-06-03', fault: 'file-missing' });
+		expect(describeMissingMarkers({ read: scores.read, ran: RAN, identified: IDENTIFIED, open: OPEN })).toBe(
+			`This chart cannot show whether the setup changed on 2 Jun to 5 Jun 2030, because the score record lists a packed file for 3 Jun 2030 that is not there. This is a fault to fix.${others}`
+		);
+	});
+
+	test('a score record that read costs no marker, so no line prints', async () => {
+		const state = test.info().outputPath('state');
+		await buildLedger(state, { ledger: 'summary-quality-evals', pinned: PINNED, days: everyDay(14, 1) });
+		const scores = await evalRows(openOn(PINNED, 90), state);
+		expect(scores.read.state).toBe('read');
+		expect(describeMissingMarkers({ read: scores.read, ran: RAN, identified: IDENTIFIED, open: OPEN })).toBeNull();
 	});
 });

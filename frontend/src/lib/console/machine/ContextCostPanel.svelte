@@ -45,6 +45,7 @@
 		contextWindow,
 		cost,
 		modelChanges,
+		missingMarkers,
 		moved,
 		chart,
 		windowDays,
@@ -57,6 +58,9 @@
 		/** The span's own figures, worked out on the server from the same rows. */
 		cost: ContextSpan;
 		modelChanges: readonly string[];
+		/** The line for the days this span's markers could only come from the score
+		 * record, when that record did not read; null when no marker was lost. */
+		missingMarkers: string | null;
 		/** What the run record says moved, by date. A date in `modelChanges` with no
 		 * entry here moved something the record cannot name. */
 		moved: readonly SettingsMoved[];
@@ -368,13 +372,19 @@
 				</p>
 			{/if}
 
-			{#if contextRules.length === 0 && contextRuns.length > 1}
-				<p class="reads">
-					<span data-model-rule-empty="machine-context">{noModelRuleNote(days)}</span>
-				</p>
-			{:else if contextRules.length > 0}
+			<!-- The dashed-rule sentence, then what a score read that did not read cost
+			     the rules. While that line prints, the chart never says nothing changed:
+			     it cannot see the days the line names. -->
+			{#if contextRules.length > 0}
 				<p class="reads">
 					<span data-model-rule-note="machine-context">{MODEL_RULE_NOTE}</span>
+				</p>
+			{/if}
+			{#if missingMarkers !== null}
+				<p class="reads" data-markers-missing="machine-context">{missingMarkers}</p>
+			{:else if contextRules.length === 0 && contextRuns.length > 1}
+				<p class="reads">
+					<span data-model-rule-empty="machine-context">{noModelRuleNote(days)}</span>
 				</p>
 			{/if}
 

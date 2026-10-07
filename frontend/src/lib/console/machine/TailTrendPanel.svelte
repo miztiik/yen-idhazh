@@ -47,6 +47,7 @@
 		start,
 		end,
 		modelChanges,
+		missingMarkers,
 		moved,
 		chart,
 		windowDays,
@@ -58,6 +59,9 @@
 		start: string;
 		end: string;
 		modelChanges: readonly string[];
+		/** The line for the days this span's markers could only come from the score
+		 * record, when that record did not read; null when no marker was lost. */
+		missingMarkers: string | null;
 		/** What the run record says moved, by date. A date in `modelChanges` with no
 		 * entry here moved something the record cannot name. */
 		moved: readonly SettingsMoved[];
@@ -354,13 +358,19 @@
 				/>
 			</div>
 
-			{#if tailRules.length === 0 && tailRuns.length > 1}
-				<p class="reads">
-					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
-				</p>
-			{:else if tailRules.length > 0}
+			<!-- The dashed-rule sentence, then what a score read that did not read cost
+			     the rules. While that line prints, the chart never says nothing changed:
+			     it cannot see the days the line names. -->
+			{#if tailRules.length > 0}
 				<p class="reads">
 					<span data-model-rule-note="machine-latency">{MODEL_RULE_NOTE}</span>
+				</p>
+			{/if}
+			{#if missingMarkers !== null}
+				<p class="reads" data-markers-missing="machine-latency">{missingMarkers}</p>
+			{:else if tailRules.length === 0 && tailRuns.length > 1}
+				<p class="reads">
+					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
 				</p>
 			{/if}
 

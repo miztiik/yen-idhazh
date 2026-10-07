@@ -15,9 +15,10 @@
  *
  * The strings are fixed - Susan chose the first of them on 2026-08-30, Reader
  * and Jony chose the words of the "Measurement is off" line and of the two lines
- * for days only the article record answered for on 2026-10-07, and Reader those
- * of the "Recording started" line the same day - and only the dates, counts and
- * names inside them are computed.
+ * for days only the article record answered for on 2026-10-07, Reader those of
+ * the started line the same day, and Reader and Jony later that day the words
+ * that open the started line and the line for a chart that cannot show a setup
+ * change - and only the dates, counts and names inside them are computed.
  * **A date that is not true is worse than no date**, so every one of them is
  * derived from the ledger that is missing rather than typed here.
  *
@@ -127,6 +128,18 @@ function coveredElsewhereSentence(missing: MissingFigures, days: readonly string
 	return `No server figures were written down for ${named}. The speed figures ${where} come from the summariser, not the server.`;
 }
 
+/** What one instrument's figures are called: the server's own counters on
+ * Hardware, the summary checker's on Summaries, and the machine record. */
+export type InstrumentFigures = 'server figures' | 'quality figures' | 'machine record';
+
+/** The words a started line opens with, naming what started, so two started
+ * lines on one page with two dates never read as one fact with two answers. */
+const STARTED_SUBJECT: Readonly<Record<InstrumentFigures, string>> = {
+	'server figures': 'Server figures',
+	'quality figures': 'Quality figures',
+	'machine record': 'The machine record'
+};
+
 /** Recording that began after the window opened.
  *
  * A gap at the left of a chart reads as quiet days. It is not: it is days the
@@ -135,18 +148,18 @@ function coveredElsewhereSentence(missing: MissingFigures, days: readonly string
  * window that had a run, so the sentence says that rather than claiming every
  * day before the start.
  *
- * `figures` names what those days have none of, because each instrument on a
- * route answers a different question: "server figures" is true of the server's
- * own counters and of nothing else.
+ * `figures` names what started and what those days have none of, because each
+ * instrument on a route answers a different question: "server figures" is true
+ * of the server's own counters and of nothing else.
  */
 export function recordingStarted(
 	firstRecorded: string | null,
 	daysBefore: number,
-	figures: string = 'server figures'
+	figures: InstrumentFigures = 'server figures'
 ): string | null {
 	if (firstRecorded === null || daysBefore <= 0) return null;
 	const days = daysBefore === 1 ? '1 day' : `${daysBefore} days`;
-	return `Recording started on ${shortDate(firstRecorded)}. Earlier in this window, ${days} had a run but no ${figures}.`;
+	return `${STARTED_SUBJECT[figures]} started on ${shortDate(firstRecorded)}. Earlier in this window, ${days} had a run but no ${figures}.`;
 }
 
 /** A day that published articles and whose instrument kept no row of it. */
@@ -220,8 +233,8 @@ interface InstrumentFacts {
 	open: OfferedWindow;
 	/** Days that published articles and that this instrument kept no row of. */
 	lost?: readonly LostDay[];
-	/** What the days before the first recorded one have none of. */
-	figures?: string;
+	/** What started, and what the days before the first recorded one have none of. */
+	figures?: InstrumentFigures;
 }
 
 /** The days the article record answered for, and which figures the days this
@@ -243,6 +256,10 @@ export type RecordingFacts = InstrumentFacts & CoveredElsewhereFacts;
  * ran before anything the facts hold, so no line is better than a false one.
  * The line then prints only in a window that shows that day. The day a record
  * began comes from its indexes, so no day before the read is opened to learn it.
+ *
+ * **While the sampled line prints, no day is named as one only the article
+ * record answered for.** Below a rate of 1.0 most days have no row of a sampled
+ * instrument on purpose, so naming them would call the sample a gap.
  */
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const { reads, open } = facts;
@@ -261,11 +278,12 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const first = known !== null && shown(known) ? known : null;
 	const before = first === null ? 0 : facts.window.filter((date) => shown(date) && date < first).length;
 	const elsewhere = coveredElsewhereDays(facts, new Set(ran), first);
+	const sampled = facts.enabled ? sampledAt(facts.rate ?? 1) : null;
 	return {
-		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
+		sampled,
 		startedMidWindow: recordingStarted(first, before, facts.figures),
 		coveredElsewhere:
-			facts.missing === undefined || elsewhere.length === 0
+			sampled !== null || facts.missing === undefined || elsewhere.length === 0
 				? null
 				: coveredElsewhereSentence(facts.missing, elsewhere, open),
 		recordDestroyed: recordDestroyed(lost.filter((day) => shown(day.date)))
@@ -667,4 +685,73 @@ export function recordNotesByWindow(
 	offered: readonly OfferedWindow[]
 ): Record<string, RecordNote[]> {
 	return Object.fromEntries(offered.map((open) => [String(open.days), recordNotes(reads, newestDay, open, offered)]));
+}
+
+/** What a chart that marks the days the pipeline changed is handed about the score record. */
+export interface MissingMarkerFacts {
+	/** How the read of the score record went. */
+	read: RecordRead;
+	/** Every day the route has a run on. */
+	ran: readonly string[];
+	/** The days a run manifest identifies, whose marker needs no score row. The
+	 * first of them is the day the manifests began naming what ran, after which
+	 * the score rows carry no digest. */
+	identified: readonly string[];
+	/** The window the line is for. */
+	open: OfferedWindow;
+}
+
+/** Why the score record could not answer, as the line names it: the record
+ * notes' own words for each state, so each fault keeps its own fix, and what
+ * kind of problem it is. */
+function missingMarkerCause(read: Exclude<RecordRead, { state: 'read' }>): [cause: string, kind: string] {
+	const fault = 'This is a fault to fix.';
+	if (read.state === 'not-packed') return ['the score record has not been packed yet', 'That is a step not yet run.'];
+	if (read.at === null) return ["the score record's list of packed days did not load", fault];
+	const day = shortDate(read.at);
+	if (read.fault === 'file-missing') return [`the score record lists a packed file for ${day} that is not there`, fault];
+	if (read.fault === 'day-missing') return [`the score record is missing ${day}, a day between packed days`, fault];
+	return [`the score record's day for ${day} did not load`, fault];
+}
+
+/** The line for a chart whose change markers a score read that did not read cost it.
+ *
+ * A day's marker comes from a run manifest where one names what ran, and
+ * otherwise from the score rows, which carried the pipeline's digest until the
+ * manifests began naming what ran and carry none after. So a score read that
+ * did not read costs a marker only on a day the open window shows that had a
+ * run, that no manifest identifies, and that comes before the first day a
+ * manifest identifies; where no manifest identifies a day, every such day
+ * counts. A later day with a run and no manifest - a day that published nothing
+ * - has no marker with the read or without it, so the line never blames the
+ * read for it. The line names exactly those days; where there are none, or the
+ * read went, it is null. A chart without a rule then says this instead of
+ * saying nothing changed, which would claim days the page cannot see. Where
+ * every day on screen is one of them, the line uses the window's own words and
+ * leaves out the other days, because there are none. Reader chose the words and
+ * Jony the place, on both charts that draw the markers, on 2026-10-07.
+ *
+ * One case it cannot see: a day before the changeover run again later gets a
+ * manifest, which reads as the changeover itself, so the days after it drop
+ * from the line. Only the score rows could tell the two apart, and they are
+ * what did not read.
+ */
+export function describeMissingMarkers(facts: MissingMarkerFacts): string | null {
+	const { read, open } = facts;
+	if (read.state === 'read') return null;
+	const identified = new Set(facts.identified);
+	const changeover = [...identified].sort()[0];
+	const days = [...new Set(facts.ran)].filter(
+		(day) =>
+			day >= open.start &&
+			day <= open.end &&
+			!identified.has(day) &&
+			(changeover === undefined || day < changeover)
+	);
+	if (days.length === 0) return null;
+	const every = days.length === open.days;
+	const [cause, kind] = missingMarkerCause(read);
+	const named = every ? nameSpan(open.days) : namedDays(days);
+	const others = every ? '' : ' This chart shows every change on the other days.';
+	return `This chart cannot show whether the setup changed on ${named}, because ${cause}. ${kind}${others}`;
 }
