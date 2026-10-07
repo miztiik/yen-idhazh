@@ -67,10 +67,10 @@ from pathlib import Path
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import StepChoice
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import GITHUB_LARGE_FILE_BYTES
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees
@@ -101,9 +101,18 @@ def _counted(tree: CompactTree, year: str) -> list[str]:
 
 
 def _refused(
-    tree: CompactTree, year: str, why: str, ledger_fault: ledger.LedgerFault | None = None
+    tree: CompactTree,
+    year: str,
+    why: str,
+    ledger_fault: ledger.LedgerFault | None = None,
+    *,
+    fault: GardenerFault = GardenerFault.RAISED,
 ) -> tuple[Stop, ...]:
-    """A year that cannot be packed, said once by name. The yearly mark stays where it is."""
+    """A year that cannot be packed, said once by name. The yearly mark stays where it is.
+
+    `fault` is the record's word for it: `raised`, a defect, unless the caller
+    names a cause outside the code, which defers the pass instead.
+    """
     logger.error(
         "a year is not packed ledger=%s year=%s fault=%s reason=%s",
         tree.ledger.value,
@@ -111,7 +120,7 @@ def _refused(
         ledger_fault or "none",
         why,
     )
-    return (Stop(StopReason.FAILED, year),)
+    return (Stop(stop_for(fault), year, fault),)
 
 
 def _drop_months(tree: CompactTree, year: str) -> None:
@@ -326,17 +335,18 @@ def _fetched(tree: CompactTree, year: str) -> PeriodFetch:
 def absorb(tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity) -> tuple[Stop, ...]:
     """Pack the years chosen for this wake, oldest first, stopping at the first one refused.
 
-    A choice an operator range refused stops here, at the year the range left
-    out, with nothing taken. The step packs only the years whose files fit what
-    is left of the shard's download budget, and stops at the first that does
-    not.
+    A choice an operator range refused stops here, deferred at the year the
+    range left out, with nothing taken. The step packs only the years whose
+    files fit what is left of the shard's download budget, and stops at the
+    first that does not.
     """
-    if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
+    if choice.stopped_because is StopReason.DEFERRED and choice.resume_from is not None:
         return _refused(
             tree,
             choice.resume_from,
             "the operator range leaves it out, and it is packed before any year the range "
             "names. Widen the range to include it",
+            fault=GardenerFault.RANGE_STARTS_LATE,
         )
     if choice.first is None or choice.last is None:
         return ()

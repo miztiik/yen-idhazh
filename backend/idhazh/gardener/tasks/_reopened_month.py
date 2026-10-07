@@ -20,7 +20,10 @@ month has no file, so its rows are the late rows alone.
 **A re-open that cannot be finished keeps every file.** A `packed` entry whose
 month file is not there is refused as `file-missing`: rebuilt from the late
 files alone, the month would hold only the days that ran again, and its entry
-would call that smaller month complete.
+would call that smaller month complete. A month file that cannot be read is
+refused the same way. Either way a person restores the file from git history,
+and the pass ends `deferred` with the fault `packed-file-unreadable`; anything
+else that refuses the re-open is a defect, `raised`.
 
 **A late raw file that cannot be read is moved aside**, as the day step moves
 one, and the month's entry counts it in `set_aside`; a late day whose files
@@ -38,9 +41,9 @@ import logging
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.ledger_index import CompactEntry
 from idhazh.gardener import named_trees
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
@@ -49,9 +52,18 @@ logger = logging.getLogger(__name__)
 
 
 def _kept(
-    tree: CompactTree, month: str, why: str, ledger_fault: ledger.LedgerFault | None = None
+    tree: CompactTree,
+    month: str,
+    why: str,
+    ledger_fault: ledger.LedgerFault | None = None,
+    *,
+    fault: GardenerFault = GardenerFault.RAISED,
 ) -> tuple[Stop, ...]:
-    """A closed month that is not re-opened, said once by name. Its late raw files are kept."""
+    """A closed month that is not re-opened, said once by name. Its late raw files are kept.
+
+    `fault` is the record's word for it: `raised`, a defect, unless the caller
+    names a cause outside the code, which defers the pass instead.
+    """
     logger.error(
         "a closed month is not re-opened, and the raw files that landed in it are kept "
         "ledger=%s month=%s fault=%s reason=%s",
@@ -60,7 +72,7 @@ def _kept(
         ledger_fault or "none",
         why,
     )
-    return (Stop(StopReason.FAILED, month),)
+    return (Stop(stop_for(fault), month, fault),)
 
 
 def reopen[C: Contract](
@@ -92,6 +104,7 @@ def reopen[C: Contract](
             "the monthly index names it and no monthly file holds it. Restore the file from "
             "git history, and the next wake re-opens the month",
             ledger.LedgerFault.FILE_MISSING,
+            fault=GardenerFault.PACKED_FILE_UNREADABLE,
         )
     tree.fetch(
         [
@@ -103,10 +116,17 @@ def reopen[C: Contract](
     )
     try:
         raws = {day: tree.read_raw_day(day, most=most, model=model) for day in late}
-        answered = {day: raw for day, raw in raws.items() if raw.taken}
-        days: dict[str, list[ledger.StoredRow[C]]] = {}
-        for row in [] if own is None or not answered else tree.load(own, model=model):
-            days.setdefault(row.identity.covers, []).append(row)
+    except ValueError as refusal:
+        return _kept(tree, month, str(refusal))
+    answered = {day: raw for day, raw in raws.items() if raw.taken}
+    try:
+        held = [] if own is None or not answered else tree.load(own, model=model)
+    except ValueError as refusal:
+        return _kept(tree, month, str(refusal), fault=GardenerFault.PACKED_FILE_UNREADABLE)
+    days: dict[str, list[ledger.StoredRow[C]]] = {}
+    for row in held:
+        days.setdefault(row.identity.covers, []).append(row)
+    try:
         for day, raw in answered.items():
             days[day] = ledger.settle_rows(
                 [days.get(day, []), *(rows for _path, rows in raw.taken)], key

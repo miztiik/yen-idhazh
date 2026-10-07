@@ -139,9 +139,10 @@ def pack(
                         parts[index + 3].removesuffix(".parquet"),
                     )
                     packed.add(date.fromisoformat("-".join(day_parts)).isoformat())
-        if outcome.stopped_because is StopReason.FAILED:
+        if outcome.fault is not None:
             raise NotProvenError(
-                f"{context}: the compaction refused at {outcome.resume_from}; CSV files are kept"
+                f"{context}: the compaction refused at {outcome.resume_from} "
+                f"({outcome.fault.value}); CSV files are kept"
             )
         if outcome.written or outcome.taken:
             continue
