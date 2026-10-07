@@ -25,7 +25,7 @@ import { dayMonth, shortDate } from '../format';
 import { grouped } from '../charts/series';
 import type { StackSeries } from '../charts/stacked';
 import type { ChartToken } from '../charts/theme';
-import { nameSpan } from './span-words';
+import { countDays, nameSpan } from './span-words';
 
 /** One reason, as the page draws and names it. */
 export interface DoubtReason {
@@ -226,6 +226,14 @@ function oneIn(pct: number): string | null {
 	if (pct <= 0 || pct > 50) return null;
 	const n = Math.round(100 / pct);
 	return `one in every ${SMALL[n] ?? String(n)}`;
+}
+
+/** The chart in words, for a reader who cannot see it. A column a day needs a
+ * second day, so a window of one day describes its one column. */
+export function reasonsLabel(windowDays: number): string {
+	return windowDays === 1
+		? `Why summaries were doubted in ${nameSpan(windowDays)}. The column's height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count and the total is not shown.`
+		: `Why summaries were doubted, per day, over ${countDays(windowDays)}. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown.`;
 }
 
 /** The reason given most often, said as a sentence.

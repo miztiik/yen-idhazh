@@ -78,6 +78,8 @@
 	const costThinnest = $derived(
 		costShapes.thinnestShare === null ? null : (costShapes.thinnestShare * 100).toFixed(1)
 	);
+	/** One column drawn has no tallest or busiest column beside it. */
+	const oneColumn = $derived(costShapes.days.length === 1);
 </script>
 
 <div data-windowed="machine-cost" data-window-days={windowDays}>
@@ -154,6 +156,7 @@
 						readoutName="counterfactual-cost"
 						readoutMaxShare={chart.readout_max_share}
 						{grid}
+						{windowDays}
 						restingNote=", the newest day"
 						hint="Point at a day to read it. Left and Right step through them, Escape returns to the newest."
 					/>
@@ -163,11 +166,16 @@
 				     took rather than asserting the bands were safe to draw. -->
 				<p class="reads" data-cost-measured>
 					{#if costThinnest === null}
-						Nothing split in this window, so the columns carry no bands.
+						{days === 1
+							? `Nothing split in ${nameSpan(days)}, so the column carries no bands.`
+							: 'Nothing split in this window, so the columns carry no bands.'}
 					{:else if costShapes.splitTooThin}
 						Reading and writing are one column here. The smaller half measures {costThinnest}
-						percent of the tallest day, which draws under a pixel, and a band a browser paints
-						nothing for teaches a reader the half is zero.
+						percent of {oneColumn ? 'the column' : 'the tallest day'}, which draws under a pixel, and
+						a band a browser paints nothing for teaches a reader the half is zero.
+					{:else if oneColumn}
+						The smaller half measures {costThinnest} percent of the column, so both halves draw as
+						bands rather than as a printed figure.
 					{:else}
 						The smaller half of the busiest day measures {costThinnest} percent of the tallest
 						column, so both halves draw as bands rather than as a printed figure.

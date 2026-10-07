@@ -150,11 +150,17 @@
 	/** One polyline a percentile, built once a span-and-width. Five were rebuilt
 	 * on every render before, once for each `{#each PERCENTILES}` pass. */
 	const tailLines = $derived(PERCENTILES.map((_, at) => tailLine(at)));
-	const tailSpan = $derived(
-		tailRuns.length === 0
-			? ''
-			: `${shortDate(tailRuns[0].date)} to ${shortDate(tailRuns[tailRuns.length - 1].date)}`
-	);
+	/** The runs' dates and the window's days, as the label names them. Where
+	 * every run is on one date, that date already says one day, so it stands
+	 * alone, never as a date to itself. */
+	const tailSpan = $derived.by(() => {
+		const first = tailRuns.at(0)?.date;
+		const last = tailRuns.at(-1)?.date;
+		if (first === undefined || last === undefined) return '';
+		return first === last
+			? shortDate(first)
+			: `${shortDate(first)} to ${shortDate(last)}, over ${countDays(days)}`;
+	});
 
 	/** How far the newest run's slow end sits from its own middle.
 	 *
@@ -208,7 +214,7 @@
 						viewBox={`0 0 ${tailW} ${tailH}`}
 						role="img"
 						tabindex="0"
-						aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}, over {countDays(days)}. All five plots share one scale."
+						aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}. All five plots share one scale."
 						data-latency-runs={tailRuns.length}
 						use:pointerReadout={{
 							marks: tailMarks,
