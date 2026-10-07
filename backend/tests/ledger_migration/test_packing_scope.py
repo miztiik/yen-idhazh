@@ -363,13 +363,15 @@ def test_scoped_packing_cannot_skip_an_unabsorbed_year(tmp_path: Path) -> None:
     assert old_file is not None
     before = old_file.read_bytes()
     months = tuple(f"2026-{number:02d}" for number in range(1, 13))
-    policy = packing.declared([EVALS], config_beside(state))[EVALS]
+    config_dir = config_beside(state)
+    policy = packing.declared([EVALS], config_dir)[EVALS]
 
     with pytest.raises(refusals.NotProvenError, match="compaction refused"):
         packing.pack(
             state,
             EVALS,
             writer_identity(RUN, SEED_COMMIT),
+            repo_root=config_dir.parent,
             policy=policy,
             today=date(2028, 4, 4),
             months=months,

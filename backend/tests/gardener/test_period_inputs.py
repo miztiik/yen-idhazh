@@ -61,7 +61,7 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
     compactions = {
         name: policy
         for name, policy in config.load_gardener().tasks.items()
-        if isinstance(policy, CompactionPolicy)
+        if isinstance(policy, CompactionPolicy) and not name.startswith("compact-trial-")
     }
 
     assert compactions, "config/idhazh_gardener.json names no compaction"
@@ -76,6 +76,21 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
                 f"{compact}/index/monthly.json",
                 f"{compact}/index/yearly.json",
             ], (name, period_range)
+
+
+def test_a_trial_compaction_lists_only_its_declared_root_indexes(tmp_path: Path) -> None:
+    policy = config.load_gardener().tasks["compact-trial-item-health"]
+    assert isinstance(policy, CompactionPolicy)
+
+    paths = paths_for_task(tmp_path, "compact-trial-item-health", policy, None, today=date(2026, 9, 27))
+
+    expected = {
+        tmp_path / root / "compact" / "item-health" / "index" / f"{period}.json"
+        for root in policy.state_roots
+        for period in ("daily", "monthly", "yearly")
+    }
+    assert set(paths) == expected
+    assert tmp_path / "state" / "compact" / "item-health" / "index" / "daily.json" not in paths
 
 
 def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_nothing_else(
