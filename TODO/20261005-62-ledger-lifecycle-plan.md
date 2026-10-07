@@ -57,7 +57,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | L1 | Days before a ledger began are cut from the selected window | - | A | DONE #1327, carried under plan 60 (row L1, decision 5) | fantastic-fortnight | #1327 | L1 explorer starts at first day |
 | L2 | Explorer browser tests serve the data they check | L1, plan 60 row #32 | B | DONE | ideal-barnacle | #1351 | Plan 62 row l2 |
-| L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
+| L3 | Lifecycle states at the producers | L1 | B | DONE | super-waffle | - | Plan 62 row l3 |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | #1353 | Plan 62 row l5 |
 | L7 | A published ledger that has not started | L1 | B | DONE | expert-pancake | #1370 | Plan 62 row l7 |
@@ -376,6 +376,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `docs/architecture/contracts/ledger-lifecycle.md` (new)
   - `docs/architecture/contracts/ledger-registry.md`
   - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/publishing/ledger-compaction.md` (found during execution (owner fold from row L7's report): row 1 of its fault table, and the paragraph on a ledger with no compact folder, said a first pass writes all three indexes; a first pass writes them only when it packs a day, and a pass with no raw day writes nothing)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/tasks/test_compaction_lifecycle.py backend/tests/gardener/tasks/test_compaction.py`; ruff; mypy; `npm --prefix frontend run test:changed -- --spec ledger-copy.spec.ts`; `doc_load.py` on the three pages. CI: what `ciAnswer` selects, then every group on the merge push.
 - **Oracle:** G2's "begins mid-month" test passes on the branch. With #1309's start rule reverted in a scratch copy, so that a first run fills from the 1st of its month, the same test fails. It cannot settle a real paused or retired ledger, because no family and no task is paused or retired today.
 

@@ -555,7 +555,8 @@ twelve more month files each year, the same rows one packed year file holds.
 **A ledger with no compact folder is not searched.** Before any task runs, the
 runner reads which of a task's declared folders the commit holds. When it does
 not hold `state/compact/<ledger>`, no file was ever packed there, so the pass
-reads nothing for an absent index, and its first live pass writes all three.
+reads nothing for an absent index, and the first live pass that packs a day
+writes all three.
 
 **An operator range never narrows where the rebuild looks**, because a rebuilt
 index is written whole and no later pass looks again once it exists. Each
@@ -585,7 +586,7 @@ and the gardener's logs and the backend's own ledger reader print it as
 
 | # | Name | What is missing | What the gardener does |
 | --- | --- | --- | --- |
-| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | Rebuilds it from the day files of its periods, before any step runs ([above](#the-three-indexes-and-a-file-that-is-missing)); a first pass, which finds none, writes all three indexes |
+| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | Rebuilds it from the day files of its periods, before any step runs ([above](#the-three-indexes-and-a-file-that-is-missing)). A first pass, which finds none, writes the three indexes only when it packs a day, so a pass with no raw day writes nothing, not even empty indexes (`test_a_ledger_whose_writer_never_filed_a_row_gets_no_compact_folder_at_any_wake` in `backend/tests/gardener/tasks/test_compaction_lifecycle.py`) |
 | 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Rebuilds it from the files of its periods before any step runs, and writes it with the others, empty when no file was there |
 | 3 | `file-missing` | A file an index names | When a month or year closes, lists the missing file's days lost and closes the period ([A file that cannot be read](#a-file-that-cannot-be-read)). Refuses the day it would take again, or the month a late file would re-open, and keeps every file it would have read: the pass ends `deferred` with the fault `packed-file-unreadable`, and a person restores the file from git history. An `empty` or `lost` entry names no file, so nothing is missing |
 | 4 | `day-missing` | A day between the first and the newest packed day that no index names | A month adopts the day's own file or lists the day lost ([A month](#a-month)). A year adopts a month's own file, or lists the month's days lost when nothing of it is left, and refuses the month while its days are still there ([A year](#a-year)) |
