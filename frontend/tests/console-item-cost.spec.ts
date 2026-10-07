@@ -440,6 +440,33 @@ test.describe('THE ORACLE: the subtitle over the share says what its own two fig
 			'Over this one day, every one of the 2 items reused part of an earlier prompt - none had to start from scratch.'
 		);
 	});
+
+	test('a window where every item read its prompt whole says all of them did, with nothing saved', () => {
+		const cost = itemCost(
+			[held('2026-10-06', 'a-01', 0), held('2026-10-06', 'a-02', 0)],
+			ONE_DAY
+		);
+		expect([cost.counted, cost.readWhole]).toEqual([2, 2]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, all 2 items had to read their prompts whole, with nothing saved from before.'
+		);
+	});
+
+	test('a window with one item that reused part of an earlier prompt names the one item, not "1 items"', () => {
+		const cost = itemCost([held('2026-10-06', 'a-01', 100)], ONE_DAY);
+		expect([cost.counted, cost.readWhole]).toEqual([1, 0]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, the one item reused part of an earlier prompt - it did not start from scratch.'
+		);
+	});
+
+	test('a window with one item that read its prompt whole names the one item, not "1 items"', () => {
+		const cost = itemCost([held('2026-10-06', 'a-01', 0)], ONE_DAY);
+		expect([cost.counted, cost.readWhole]).toEqual([1, 1]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, the one item had to read its prompt whole, with nothing saved from before.'
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------

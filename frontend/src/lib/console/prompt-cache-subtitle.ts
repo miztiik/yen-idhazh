@@ -14,13 +14,21 @@ import type { ItemCost } from './item-cost';
 import { nameSpan } from './span-words';
 
 /** The subtitle for one window. Assumes `counted` is above zero - the page
- * prints a different sentence in full when no item recorded a token count. */
+ * prints a different sentence in full when no item recorded a token count.
+ * A one-item window takes its own sentences (Reader, 2026-10-07): a bare
+ * count next to "items" is wrong English when there is only one, the same
+ * fault row L17 removed from every windowed day count. */
 export function describePromptCacheSubtitle({
 	days,
 	counted,
 	readWhole
 }: Pick<ItemCost, 'days' | 'counted' | 'readWhole'>): string {
 	const span = nameSpan(days);
+	if (counted === 1) {
+		return readWhole === 0
+			? `Over ${span}, the one item reused part of an earlier prompt - it did not start from scratch.`
+			: `Over ${span}, the one item had to read its prompt whole, with nothing saved from before.`;
+	}
 	if (readWhole === 0) {
 		return `Over ${span}, every one of the ${grouped(counted)} items reused part of an earlier prompt - none had to start from scratch.`;
 	}
