@@ -1709,7 +1709,9 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
                 job=ServerJob.RUN_TASKS,
                 shard=SCORE_SHARD,
                 git_sha=FIXTURE_SHA,
-                owned_folders=tuple(policy.owns),
+                owned_folders=tuple(
+                    folder for folder in policy.owns if (state.parent / folder).is_dir()
+                ),
                 # The declaration names `state/...` folders, and the canary's
                 # `state/` sits in its own tree rather than at the repository
                 # root, so the listing is read from the folder that holds it.

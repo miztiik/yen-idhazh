@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from conftest import SEED_COMMIT
+from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
@@ -69,6 +70,7 @@ def test_migration_inputs_are_frozen_and_do_not_share_mutable_selections(tmp_pat
         run_id=RUN,
         git_sha=SEED_COMMIT,
         today=TODAY,
+        config_dir=PRE_YEARLY_CONFIG,
         months=months,
     )
     roots.clear()

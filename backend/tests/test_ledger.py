@@ -366,20 +366,10 @@ def _six_months(state: Path) -> None:
         _published(state, on, [_address(number) for number in numbers])
 
 
-def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
+def test_the_committed_cover_keeps_every_address_within_two_years(
     tmp_path: Path,
 ) -> None:
-    """Oracle, first case: shipping `-1` leaves the guarantee where it was.
-
-    The cover is machinery and this row ships it open, so the assertion that
-    matters is the one saying nothing moved: every address the tree holds, at
-    the earliest date any day file gives it - which is what an unwindowed read
-    of this ledger has always returned.
-
-    The width is read from the committed config rather than spelled here, so
-    narrowing it in `config/idhazh.json` reds this test instead of quietly
-    changing what a reader is shown.
-    """
+    """The approved two-year window retains every address in this six-month fixture."""
     state = tmp_path / "state"
     _six_months(state)
     expected = {
@@ -392,9 +382,7 @@ def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
     }
     committed = config.load(CONFIG_DIR).app.collect.published_window_days
 
-    assert committed == UNBOUNDED_WINDOW, (
-        "the committed cover is open, and the equality below is what that buys"
-    )
+    assert committed == 730
     assert ledger.load_published(state, today=_ANCHOR, within_days=committed) == expected
     assert _whole_ledger(state) == expected, "and the anchor is not read on that path"
 
@@ -1577,9 +1565,7 @@ def test_a_re_run_replaces_its_first_try_whichever_carried_articles(tmp_path: Pa
     The preference below never sees the first try's row.
     """
     seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
-    seed_feed_health(
-        tmp_path, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2
-    )
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2)
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 0)]
 
 

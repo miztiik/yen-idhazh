@@ -19,10 +19,12 @@ ledger is one declaration and no Python. The declarations that ship are in
 **Every ledger the console reads packs live.** The console reads packed files
 and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
-31 days after it ends; `summary-quality-evals` and `feed-health` wait 45 days.
+45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**`summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so it may pack
-the eval rows and never drops a month** ([below](#design-rationale)). It packs
+**All fourteen ledgers use the same retention chain:** days become months
+45 whole days after the month ends; months become years 93 whole days after
+the year ends; indexed years expire 36 calendar months after their UTC end.
+`yearly_prune_enable` can disable expiry for one ledger. Each ledger packs
 each finished year into one year file, as every ledger whose declaration sets
 `monthly_keep_days` does ([A year](#a-year)). The files it
 writes are laid out in
@@ -117,6 +119,7 @@ tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
 
 | Step | What it does |
 | --- | --- |
+| 0 | Drops at most `max_periods_per_run` expired indexed years, oldest first, and records `expired_through` in the yearly index |
 | 1 | Drops the oldest months past the keep line, at most `max_periods_per_run` of them: every file at each month's paths, then its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
 | 2 | Drops, by their listed paths and unread, the raw days past the keep line in the months step 1 drops and in those a first day run looked back over. While the window only reports, names them and keeps them |
 | 3 | Packs every year chosen for this wake into its year file, or into an entry with no file, where the declaration sets `monthly_keep_days` |
@@ -136,8 +139,8 @@ reads only the periods it names itself
 
 **A mark is worked out from the indexes, and recorded nowhere else.** Every
 period a step has looked at leaves an entry, an `empty` one included, so the
-indexes say how far each step got. The yearly mark is the newest year the
-yearly index names. The monthly mark is the newer of the newest month the
+indexes say how far each step got. The yearly mark is the newer of the newest year the
+yearly index names and its `expired_through` value. The monthly mark is the newer of the newest month the
 monthly index names and the December of the yearly mark. The daily mark is the
 newer of the newest day the daily index names and the last day of the monthly
 mark. One function works them out, `work_out_marks` in
@@ -415,8 +418,8 @@ declarations set it is in
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
 Every other ledger keeps its month files exactly as `monthly_window` says. A
 ledger that packs years keeps `monthly_window` forever, because a window would
-delete a month file before its year took it, and its year files are kept for
-ever. **Each ledger's own declaration sets its wait, a ledger the site publishes
+delete a month file before its year took it. `yearly_keep_months` sets how long
+year files survive after their UTC year-end instant. **Each ledger's own declaration sets its wait, a ledger the site publishes
 included**: the browser reads a year file by byte range, at an address no
 earlier read used
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-a-year-file-is-read-by-byte-range)),
@@ -482,6 +485,74 @@ filters on a date can skip the row groups of the other months. A year file over
 50 MiB, the size at which GitHub warns about a pushed file, is refused by name
 and its month files are kept: GitHub refuses a push that holds a file over
 100 MiB, and one that did would stall every later wake.
+
+## Yearly expiry
+
+The expiry step reads the yearly index, not the history tree. It selects due
+entries oldest first, at most `max_periods_per_run`, and lists each year's exact
+file path in every supported format. It deletes by those names without reading
+rows. An empty entry expires too. The yearly index stays on disk even when no
+entries remain.
+
+Expiry counts calendar months from 00:00 UTC on the January after the year.
+With `yearly_keep_months: 36`, 2026 expires on 2030-01-01 at 00:00 UTC, not
+on the last day of 2029 and not 36 months after packing ran.
+`yearly_prune_enable: false` retains years. `dry_run: true` reports the same
+paths and changes nothing, regardless of the expiry switch.
+
+`expired_through` records the newest year deleted. It is nullable and belongs
+only to the yearly index. Writers omit it when no year has expired; absent
+fields and explicit null both read as null. Entries at or before
+it are invalid. The packing marks include this value, so deleting the last
+year cannot reset progress. Recovery of a monthly or daily index starts after
+this mark and cannot adopt, or pack again, an expired year.
+
+The 45-day daily window can hold 76 entries before a whole month closes.
+The published ceilings stay at 2200 bytes: the bundle gate's Node gzip
+implementation confirms that they cover twice each generated index's size.
+Omitting an absent expiry mark avoids charging daily and monthly indexes for
+metadata they never use. Windows Python's different gzip implementation can
+report a larger size; that known tool difference is not a reason to raise the
+production ceiling ([gate notes](../../reference/agent-notes/gates-and-builds.md)).
+
+An established compact tree with yearly pruning enabled must have
+`index/yearly.json`. If it is missing, the pass refuses it by name. Restore
+the index from git before retrying: surviving files cannot reconstruct which
+years were deliberately deleted. With yearly pruning enabled, a new ledger
+with no compact tree initializes all three indexes, even when it has no rows.
+A live pass that writes these indexes ends `done`, not `empty`: initialization
+is completed work. Idle-outcome tests disable yearly pruning so they test
+the idle reason without also initializing expiry metadata.
+A corrupt index stops the pass, never reads as empty.
+Indexes and deletions land together in the shard's one commit.
+
+For a legacy tree that never used yearly expiry, first verify its complete
+files and indexes against an authoritative pre-expiry git revision. Explicitly
+disable `yearly_prune_enable`, run compaction to rebuild the missing index,
+validate the rebuilt entries, and only then enable pruning. Old sibling index
+versions alone are not proof: expiry may have updated only the yearly index.
+Do not use this onboarding path after expiry ran; restore that yearly index
+instead. The canary builder reports only folders that actually exist, so new
+fixture ledgers initialize normally without bypassing the established-tree
+refusal.
+
+CSV migration uses the same existing-folder check as the runner and the
+canary builder. It does not relax retention checks: a current finite policy
+cannot perform a lossless migration from a forever CSV reader. Historical
+migration tests use the recorded pre-expiry config, not the current policy,
+with retired ledger families removed from the fixture registry. Its old
+retention declarations stay unchanged. A separate test proves that the current
+policy refuses that reader.
+
+An operator range may expire only whole years and cannot skip an older indexed
+year. Otherwise its progress mark could hide retained entries.
+
+Finite retention must cover every reader's window. For a day-count window the loader uses a
+conservative lower bound of 28 days per retained calendar month: 36 months
+guarantee at least 1008 days. The published-address reader asks for 730 days,
+or two years, and the 90-day and 366-day readers fit. A forever reader is
+refused while yearly pruning is enabled. A calendar-month window is compared
+in calendar months, so a 36-month source covers a 36-month series.
 
 ## A month past the window
 
@@ -556,7 +627,8 @@ that writes a day. A ledger whose declaration packs no year still has an empty
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
 
 **An index that is not there is rebuilt from the files of its periods before
-any step runs.** Read as empty, it would be written again naming only what this
+any step runs, except a yearly index under enabled finite pruning.** That index
+must be restored as described in [Yearly expiry](#yearly-expiry). Read as empty, it would be written again naming only what this
 pass packs, and every period packed before would drop out of sight. So the pass
 rebuilds each absent index, coarsest first, from the files of a bounded list of
 periods, and adopts each file it finds as a step adopts its own file: a
@@ -569,7 +641,7 @@ one's periods start where the coarser rebuild left them.
 | # | Absent index | Where the pass looks |
 | --- | --- | --- |
 | 1 | `yearly.json` | Each year from `first_ledger_year` in `config/idhazh_gardener.json` to the newest year old enough to pack; nowhere when the declaration packs no year |
-| 2 | `monthly.json` | Each month old enough to close, from the keep line when the monthly window's deletes are live; from the January after the newest yearly entry, or January of `first_ledger_year`, when the window keeps every month or its deletes only report, or the whole task is a dry run |
+| 2 | `monthly.json` | Each month old enough to close, from the keep line when the monthly window's deletes are live; from January after the yearly mark, including `expired_through`, or January of `first_ledger_year` when no mark exists, when the window keeps every month or its deletes only report, or the whole task is a dry run |
 | 3 | `daily.json` | Each due day from the month after the monthly mark; with no monthly mark, from the month a first pass looks back to, or the first month of an operator range when that is earlier |
 
 **The pass names one folder a year, not each period's file.** For each index
@@ -807,7 +879,7 @@ that stopped before its indexes leaves exactly that, and the next pass must
 finish it.
 
 **A finished year's month files may be packed into one year file.** A ledger
-may pack each finished year into one file, kept for ever, rather than delete its
+may pack each finished year into one file, subject to its yearly expiry policy, rather than delete its
 month files once they pass `monthly_window`. The packing is written once and
 turned on in each ledger's own declaration. The switch is one field,
 `monthly_keep_days`, whose null packs nothing, so no ledger's behaviour changes
@@ -978,6 +1050,22 @@ and nothing would drop it once the task went live. Fowler, 2026-10-07.
 | 3 | Look only inside the window | Hides months nobody approved deleting, and no later pass drops them | Nothing to build |
 | 4 | Adopt one year folder a wake | Every wake pays a check for a rare fault, and each older year stays hidden until its own wake | A check every wake, and the most code |
 
+**Owner decision: @kumarsnaveen_microsoft, 2026-10-07.** All fourteen ledgers
+pack live with 45-day monthly packing, 93-day yearly packing and 36 calendar
+months of retention after UTC year-end. The owner accepts the loss of older
+published-address deduplication and evaluation history. A retained yearly index
+with `expired_through` preserves progress without keeping an entry for every
+deleted year. The manual prune refusal still protects recent history; scheduled
+expiry follows the reviewed yearly policy.
+
+`telemetry-aggregate` stays report-only. No item-health summaries have been
+generated yet, because its source months must first age past 14 months.
+Its aggregate window describes generated output, not a reader of all summary
+history, so it sets no input-retention floor on `item-health-summary`.
+The full-grain series still sets the input floor on `item-health`.
+No live data files are removed by this configuration change; the first
+possible yearly expiry is 2030-01-01 at 00:00 UTC for 2026.
+
 **2026-10-07: a refusal a person settles defers the pass, and only a defect
 fails it.** Before, every refused period ended the pass `failed` and turned the
 job red, whatever the cause. Now a range that starts after a ready period
@@ -993,15 +1081,6 @@ unreadable file aside, because the entry would then call the period whole while
 it held only the rows that ran again. A hole in a day's history packed from its
 raw files is noted `repacked-from-raw` only when nothing was adopted for it, so
 the note never depends on which step adopted a file first (Fowler, 2026-10-07).
-
-**The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
-eval row is kept for ever and nothing summarises a month: the
-rows are the evidence behind every quality claim, and a chart that wants a
-monthly figure computes it from them when it draws. So the `monthly_window` of
-`config/gardener/compact-summary-quality-evals.json` is `forever`, and a live pass may make one
-file a day and one a month without taking a row. Its `monthly_keep_days` packs a
-finished year's month files into one year file, kept for ever, so the month files
-stop adding up and no row goes.
 
 ## See also
 

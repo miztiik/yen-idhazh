@@ -81,15 +81,12 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   npx svelte-kit sync
   ```
 
-- **`test_page_ceilings` fails locally on an index ceiling while CI passes; the
-  local zlib made the index larger, not the change.** On 2026-10-04 the Windows
-  Python 3.14.2 here used zlib-ng 2.2.4 and compressed the candidate-models
-  index to 1,112 bytes, 12 bytes over its 1,100-byte ceiling; the same test
-  passed on the `ubuntu-latest` runner (CI run 37226217109). The tell is a
-  `ZLIB_VERSION` ending in `.zlib-ng`. Take this test's answer from CI:
-  ```powershell
-  python -c "import zlib; print(zlib.ZLIB_VERSION, getattr(zlib, 'ZLIBNG_VERSION', None))"
-  ```
+- **An older index-ceiling check fails locally while CI passes; it used a
+  different compressor from the deployment gate.** Windows Python can use
+  zlib-ng rather than the gate's Node zlib. The current `test_page_ceilings`
+  helper uses Node gzip, matching `bundle-gate.mjs`, without raising ceilings
+  or reducing the required margin. A check on an older commit may still differ;
+  compare its generated index with the deployment gate's compressor first.
 
 - **A logic spec that writes Parquet prints `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, which reads as a crash; its tests passed.**
   On 2026-10-05, on Windows with Node 24.12.0 and DuckDB-Wasm 1.33.1-dev57.0,
@@ -131,6 +128,13 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 ## Two heavy gates on one box
 
+- **The unlocked gate control reports a missing interval, not a failed child.**
+  On Windows with Python 3.14.2 on 2026-10-07,
+  `test_ci_runs_the_gate_unlocked_and_the_same_workers_then_overlap` failed in
+  the full suite and in an isolated retry. All children exited successfully,
+  but their shared append file lacked an interval. A recorder race is a
+  suspect, not a proven production lock failure. Do not weaken the assertion;
+  compare separate per-worker records before changing the lock implementation.
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
 - Reproduce a timing failure in isolation before changing code. Do not raise a timeout or weaken an assertion merely to obtain a pass.
 - **A `--repeat-each` run reads as hung between repeats, then as failed with every test passed; it is Playwright waiting for each repeat's new worker to exit, then killing it.**
