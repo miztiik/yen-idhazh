@@ -94,7 +94,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
@@ -108,6 +108,7 @@ from idhazh.contracts.file_envelope import Format, WriterIdentity
 from idhazh.contracts.gardener_events import TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
     RetentionPolicy,
     TaskKind,
     TaskLifecycleStatus,
@@ -282,7 +283,12 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
     folded: closed_day_fold.Folded | None = None
     failure: BaseException | None = None
     try:
-        outcome = held.run(context)
+        outcome = (
+            _run_compaction_roots(held, context)
+            if isinstance(context.policy, CompactionPolicy)
+            and context.policy.state_roots != ["state"]
+            else held.run(context)
+        )
     except PruneInterruptedError as stop:
         outcome, failure = stop.so_far, stop.__cause__
     except Exception as caught:
@@ -308,6 +314,72 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
         failed=report.ended(outcome, folded)[0] is StopReason.FAILED,
         folded=folded,
         failure=failure,
+    )
+
+
+def _run_compaction_roots(held: registry.TaskModule, context: TaskContext) -> Pass:
+    """Run one pass per declared root, stopping when the first root needs another wake."""
+    from idhazh.contracts.gardener_events import PeriodsTaken
+
+    policy = context.policy
+    if not isinstance(policy, CompactionPolicy):
+        raise ValueError("a compaction root pass needs a compaction declaration")
+    outcomes: list[Pass] = []
+    for state_root in policy.state_roots:
+        root = context.repo_root.joinpath(*PurePosixPath(state_root).parts)
+        owns = tuple(
+            folder for folder in policy.owns if folder.startswith(f"{state_root}/")
+        )
+        if not owns:
+            raise ValueError(f"{state_root} has no owned folders for {policy.ledger.value}")
+        root_context = replace(
+            context,
+            state_dir=root,
+            owned_folders=tuple(folder for folder in context.owned_folders if folder in owns),
+            listing=context.listing.within(owns),
+        )
+        outcome = held.run(root_context)
+        outcomes.append(outcome)
+        if outcome.more_to_do:
+            break
+
+    first, last = outcomes[0], outcomes[-1]
+    period_data = first.periods.model_dump() if first.periods is not None else None
+    if period_data is not None:
+        for outcome in outcomes[1:]:
+            if outcome.periods is None:
+                continue
+            next_data = outcome.periods.model_dump()
+            for field in ("daily_mark", "monthly_mark", "yearly_mark"):
+                values = [value for value in (period_data[field], next_data[field]) if value]
+                period_data[field] = max(values, default=None)
+            for field, values in next_data.items():
+                if isinstance(values, list):
+                    period_data[field] = list(dict.fromkeys([*period_data[field], *values]))
+        periods = PeriodsTaken.model_validate(period_data)
+    else:
+        periods = None
+    return replace(
+        last,
+        since=first.since,
+        until=first.until,
+        seen=sum(outcome.seen for outcome in outcomes),
+        selected=sum(outcome.selected for outcome in outcomes),
+        taken=tuple(dict.fromkeys(path for outcome in outcomes for path in outcome.taken)),
+        written=tuple(dict.fromkeys(path for outcome in outcomes for path in outcome.written)),
+        bytes_freed=sum(outcome.bytes_freed for outcome in outcomes),
+        appended=tuple(dict.fromkeys(path for outcome in outcomes for path in outcome.appended)),
+        handled_through=next(
+            (outcome.handled_through for outcome in reversed(outcomes) if outcome.handled_through),
+            None,
+        ),
+        recovered=tuple(note for outcome in outcomes for note in outcome.recovered),
+        pages_read=(
+            None
+            if any(outcome.pages_read is None for outcome in outcomes)
+            else sum(outcome.pages_read or 0 for outcome in outcomes)
+        ),
+        periods=periods,
     )
 
 
