@@ -252,6 +252,7 @@
 				contextWindow={data.contextWindow}
 				cost={view.context}
 				modelChanges={data.modelChanges}
+				missingMarkers={view.missingMarkers}
 				moved={data.settingsMoved}
 				chart={data.chart}
 				{windowDays}

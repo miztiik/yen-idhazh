@@ -7,6 +7,7 @@ import { bandShares } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { stacked } from '../src/lib/charts/stacked';
 import {
+	describeMissingMarkers,
 	measurementOff,
 	recordDestroyed,
 	recordingNotes,
@@ -17,6 +18,10 @@ import {
 	type RecordRead
 } from '../src/lib/console/recording';
 import { daysBetween, type HeldPeriod } from '../src/lib/data/slice';
+import type { ObservabilityConfig } from '../src/lib/server/config';
+import { machineCounters } from '../src/lib/server/machine-counters';
+import { listManifestDays } from '../src/lib/server/model-work';
+import { describeServerCounters } from '../src/lib/server/server-counter-notes';
 
 /** `chart.readout_max_share`, read off the committed config inside the test
  * that uses it, so a malformed file fails one test rather than the module. */
@@ -277,17 +282,21 @@ test.describe('what the recording was doing, in fixed words', () => {
 
 	test('a start inside the window counts the days before it that had a run, in Reader\'s words', () => {
 		expect(recordingStarted('2026-08-27', 5)).toBe(
-			'Recording started on 27 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+			'Server figures started on 27 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
 		);
-		// Each instrument names what it lacks: the summary checker's figures are quality figures.
+		// Each instrument names what started and what it lacks: the summary checker's figures are
+		// quality figures, and the machine record is one record, so its line opens on "The".
 		expect(recordingStarted('2026-08-27', 5, 'quality figures')).toBe(
-			'Recording started on 27 Aug 2026. Earlier in this window, 5 days had a run but no quality figures.'
+			'Quality figures started on 27 Aug 2026. Earlier in this window, 5 days had a run but no quality figures.'
+		);
+		expect(recordingStarted('2026-08-27', 5, 'machine record')).toBe(
+			'The machine record started on 27 Aug 2026. Earlier in this window, 5 days had a run but no machine record.'
 		);
 	});
 
 	test('one day reads as one day, and no gap reads as nothing at all', () => {
 		expect(recordingStarted('2026-08-27', 1)).toBe(
-			'Recording started on 27 Aug 2026. Earlier in this window, 1 day had a run but no server figures.'
+			'Server figures started on 27 Aug 2026. Earlier in this window, 1 day had a run but no server figures.'
 		);
 		expect(recordingStarted('2026-08-27', 0)).toBeNull();
 		expect(recordingStarted(null, 4)).toBeNull();
@@ -305,7 +314,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 		});
 		expect(notes.sampled).toBeNull();
 		expect(notes.startedMidWindow).toBe(
-			'Recording started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
+			'Server figures started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
 		);
 	});
 
@@ -323,7 +332,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 		expect(recordingNotes({ ...facts, reads: [begun('2026-08-01', '2026-08-28')] }).startedMidWindow).toBeNull();
 		// Begun on the first day handed: the record's whole history is in hand.
 		expect(recordingNotes({ ...facts, reads: [begun('2026-08-25', '2026-08-28')] }).startedMidWindow).toBe(
-			'Recording started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
+			'Server figures started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
 		);
 	});
 
@@ -339,7 +348,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			from: '2026-07-25'
 		};
 		expect(recordingNotes({ ...facts, open: over('2026-08-05', '2026-08-20') }).startedMidWindow).toBe(
-			'Recording started on 10 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+			'Server figures started on 10 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
 		);
 		// A window that does not show the 10th says nothing of it.
 		expect(recordingNotes({ ...facts, open: over('2026-08-12', '2026-08-20') }).startedMidWindow).toBeNull();
@@ -362,7 +371,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 		};
 		const later = begun('2026-09-01', '2026-09-10');
 		expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe(
-			'Recording started on 30 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+			'Server figures started on 30 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
 		);
 		// The other record began on 1 Aug, before the read, so it may hold a day the instrument ran
 		// before anything the read holds.
@@ -370,7 +379,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 		// A day either record lost is a day the instrument ran.
 		expect(
 			recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow
-		).toBe('Recording started on 28 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
+		).toBe('Server figures started on 28 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
 	});
 
 	test('a window\'s lines name only what it shows, though the route hands it every day it read', () => {
@@ -388,7 +397,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			});
 		expect(lines(over('2026-08-22', '2026-08-28')).startedMidWindow).toBeNull();
 		expect(lines(over('2026-07-31', '2026-08-28')).startedMidWindow).toBe(
-			'Recording started on 3 Aug 2026. Earlier in this window, 3 days had a run but no server figures.'
+			'Server figures started on 3 Aug 2026. Earlier in this window, 3 days had a run but no server figures.'
 		);
 	});
 
@@ -469,7 +478,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 		// The record ran on the day it lost, so that day dates its start; the day
 		// after the loss would be the lie the loss sentence exists to stop.
 		expect(notes.startedMidWindow).toBe(
-			'Recording started on 16 Sep 2026. Earlier in this window, 2 days had a run but no machine record.'
+			'The machine record started on 16 Sep 2026. Earlier in this window, 2 days had a run but no machine record.'
 		);
 		expect(notes.recordDestroyed).not.toBeNull();
 	});
@@ -488,7 +497,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			figures: 'machine record'
 		});
 		expect(notes.startedMidWindow).toBe(
-			'Recording started on 19 Aug 2026. Earlier in this window, 1 day had a run but no machine record.'
+			'The machine record started on 19 Aug 2026. Earlier in this window, 1 day had a run but no machine record.'
 		);
 		const lostFirst = recordingNotes({
 			enabled: true,
@@ -636,7 +645,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 				})
 			);
 			expect(lines).toEqual([
-				'Recording started on 26 Sep 2026. Earlier in this window, 3 days had a run but no quality figures.',
+				'Quality figures started on 26 Sep 2026. Earlier in this window, 3 days had a run but no quality figures.',
 				'There are no quality figures for 2 Oct 2026. The machine ran and we timed it, but nothing scored the summaries.'
 			]);
 		});
@@ -684,6 +693,241 @@ test.describe('what the recording was doing, in fixed words', () => {
 			).toEqual([
 				'There are no quality figures for 24 Sep to 26 Sep 2026. The machine ran and we timed it, but nothing scored the summaries.'
 			]);
+		});
+	});
+
+	test.describe("THE ORACLE: Hardware's lines say only what its records hold", () => {
+		/** The observability block as the route holds it: everything on, every run scored. */
+		const OBSERVABILITY: ObservabilityConfig = {
+			cost_currency: 'USD',
+			cost_input_per_million: 0.2,
+			cost_output_per_million: 0.6,
+			evaluation_enabled: true,
+			host_fingerprint: true,
+			host_fingerprint_bandwidth_cache_multiple: 2,
+			sample_rate: 1
+		};
+		/** Shard 0 of run `run` on `date`, as the machine record files it from the work job: the probe
+		 *  and the clocks, and the two cells the server itself wrote where `server` is true. */
+		const machineRow = (date: string, server: boolean, run = 1): Record<string, string> => ({
+			date,
+			run_id: `${date}-${run}`,
+			job: 'work',
+			shard: '0',
+			fingerprint: 'f00d',
+			cpu_model: 'Test CPU',
+			job_seconds: '600',
+			model_load_ms: '2000',
+			server_prompt_tokens: server ? '900' : '',
+			server_prompt_seconds: server ? '9' : ''
+		});
+		/** An article that shard 0 of run `run` on `date` summarised, as the article record files it. */
+		const articleRow = (date: string, run = 1): Record<string, string> => ({
+			date,
+			run_id: `${date}-${run}`,
+			machine_job: 'work',
+			machine_shard: '0'
+		});
+		/** The runs `machineCounters` forms from the two records' rows. */
+		const runsOf = (machine: Record<string, string>[], articles: Record<string, string>[]) =>
+			machineCounters(machine, articles, new Map(), { contextWindow: null, jobTimeoutSeconds: null }).runs;
+		/** Every line the notes print, whichever field holds it. */
+		const printed = (notes: RecordingNotes): string[] =>
+			Object.values(notes).filter((line): line is string => line !== null);
+		/** The window of `days` days the control offers. */
+		const offered = (days: number): OfferedWindow => OFFERED.find((window) => window.days === days)!;
+
+		/** The article record holds rows from 20 May 2030, and article rows formed a run every day from
+		 *  25 May to 14 Jun. The machine record began on 1 Jun: on 5 Jun its row held the probe and the
+		 *  clocks and no server cell, from 6 Jun its rows carried the server's two cells, and on 12 Jun
+		 *  it filed no row, so that day's run is article rows alone. */
+		const ARTICLE_DAYS = daysBetween('2030-05-20', '2030-06-14');
+		const HISTORY = runsOf(
+			[
+				machineRow('2030-06-05', false),
+				...daysBetween('2030-06-06', '2030-06-14')
+					.filter((day) => day !== '2030-06-12')
+					.map((day) => machineRow(day, true))
+			],
+			daysBetween('2030-05-25', '2030-06-14').map((day) => articleRow(day))
+		);
+		/** What Hardware says about the server's counters over `open`, handed what the route hands. */
+		const hardware = (
+			open: OfferedWindow,
+			runs = HISTORY,
+			observability = OBSERVABILITY,
+			machineRead: RecordRead = begun('2030-06-01', '2030-06-14')
+		) =>
+			describeServerCounters({
+				runs,
+				ran: ARTICLE_DAYS,
+				articleDays: ARTICLE_DAYS,
+				machineRead,
+				from: offered(90).start,
+				open,
+				offered: OFFERED,
+				observability
+			});
+
+		test("the intro counts every run in the window, and how many of them carry the server's own figures", () => {
+			expect(OFFERED.map((open) => [open.days, hardware(open).intro])).toEqual([
+				[1, 'This one day has no run on record. 2030-06-15.'],
+				[7, '6 runs in these 7 days, 5 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'],
+				[14, '13 runs in these 14 days, 8 of them with figures from the model server itself. 2030-06-02 to 2030-06-15.'],
+				[30, '21 runs in these 30 days, 8 of them with figures from the model server itself. 2030-05-17 to 2030-06-15.'],
+				[90, '21 runs in these 90 days, 8 of them with figures from the model server itself. 2030-03-18 to 2030-06-15.']
+			]);
+		});
+
+		test("the intro's share reads right at every count, in Reader's words", () => {
+			/** The intro over the `days`-day window for runs on 15 Jun 2030, one a flag: true where the
+			 *  run carried the server's figures. */
+			const intro = (servers: boolean[], days: number) =>
+				hardware(
+					offered(days),
+					runsOf(
+						servers.map((server, index) => machineRow('2030-06-15', server, index + 1)),
+						servers.map((_, index) => articleRow('2030-06-15', index + 1))
+					)
+				).intro;
+			const week = '2030-06-09 to 2030-06-15.';
+			expect(intro([true, true], 7)).toBe(`2 runs in these 7 days, each with figures from the model server itself. ${week}`);
+			expect(intro([true, false, false], 7)).toBe(`3 runs in these 7 days, 1 of them with figures from the model server itself. ${week}`);
+			expect(intro([false, false], 7)).toBe(`2 runs in these 7 days, none with figures from the model server itself. ${week}`);
+			expect(intro([true], 7)).toBe(`1 run in these 7 days, with figures from the model server itself. ${week}`);
+			expect(intro([false], 7)).toBe(`1 run in these 7 days, with no figures from the model server itself. ${week}`);
+			expect(intro([], 7)).toBe(`No run in these 7 days is on record. ${week}`);
+			expect(intro([true, true], 1)).toBe('This one day had 2 runs, each with figures from the model server itself. 2030-06-15.');
+			expect(intro([true, false, false], 1)).toBe('This one day had 3 runs, 1 of them with figures from the model server itself. 2030-06-15.');
+			expect(intro([false, false], 1)).toBe('This one day had 2 runs, none with figures from the model server itself. 2030-06-15.');
+			expect(intro([true], 1)).toBe('This one day had 1 run, with figures from the model server itself. 2030-06-15.');
+			expect(intro([false], 1)).toBe('This one day had 1 run, with no figures from the model server itself. 2030-06-15.');
+			expect(intro([], 1)).toBe('This one day has no run on record. 2030-06-15.');
+		});
+
+		test("the server's figures are dated from the first run that carried them, never from article rows alone", () => {
+			expect(OFFERED.map((open) => [open.days, hardware(open).recording.startedMidWindow])).toEqual([
+				[1, null],
+				[7, null],
+				[14, 'Server figures started on 6 Jun 2030. Earlier in this window, 4 days had a run but no server figures.'],
+				[30, 'Server figures started on 6 Jun 2030. Earlier in this window, 17 days had a run but no server figures.'],
+				[90, 'Server figures started on 6 Jun 2030. Earlier in this window, 17 days had a run but no server figures.']
+			]);
+		});
+
+		test('a day of article rows alone, after the server figures started, is named as a day without them', () => {
+			const line =
+				'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.';
+			expect(printed(hardware(offered(7)).recording)).toEqual([line]);
+			expect(printed(hardware(offered(14)).recording)).toEqual([
+				'Server figures started on 6 Jun 2030. Earlier in this window, 4 days had a run but no server figures.',
+				line
+			]);
+		});
+
+		test("with measurement off, nothing is said to be recorded after the newest run that carried the server's figures", () => {
+			// Switched off after 11 Jun 2030: the machine record filed nothing more, and article rows
+			// kept forming runs to 14 Jun.
+			const runs = runsOf(
+				daysBetween('2030-06-06', '2030-06-11').map((day) => machineRow(day, true)),
+				daysBetween('2030-06-06', '2030-06-14').map((day) => articleRow(day))
+			);
+			const stopped: RecordRead = {
+				state: 'read',
+				through: '2030-06-14',
+				first: '2030-06-01',
+				lastRows: { period: 'daily', covers: '2030-06-11' },
+				lostDays: [],
+				setAside: {}
+			};
+			const notes = hardware(offered(7), runs, { ...OBSERVABILITY, host_fingerprint: false }, stopped);
+			expect(notes.measurementOff).toBe(
+				'Measurement is off. Nothing has been recorded since 11 Jun 2030. Turn it on in config/idhazh.json.'
+			);
+			// The off line speaks for the days after it, so no other line names them.
+			expect(printed(notes.recording)).toEqual([]);
+		});
+
+		test("the scorer's sampling rate is never the server's: at 0.25 Hardware prints no sampled line", () => {
+			expect(printed(hardware(offered(7), HISTORY, { ...OBSERVABILITY, sample_rate: 0.25 }).recording)).toEqual([
+				'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+			]);
+		});
+
+		test('while the sampled line prints, Summaries names no day as one only the article record answered for', () => {
+			// The scorer missed 12 Jun 2030; the article record timed a run on every day of the window.
+			const summaries = (rate: number) =>
+				recordingNotes({
+					enabled: true,
+					rate,
+					recorded: daysBetween('2030-06-09', '2030-06-15').filter((day) => day !== '2030-06-12'),
+					window: daysBetween('2030-06-09', '2030-06-15'),
+					reads: [begun('2030-01-01', '2030-06-15')],
+					from: offered(7).start,
+					open: offered(7),
+					figures: 'quality figures',
+					coveredElsewhere: daysBetween('2030-06-09', '2030-06-15'),
+					missing: 'scores'
+				});
+			expect(printed(summaries(0.25))).toEqual([
+				'Measured on 1 run in 4. These figures count the runs we measured and are not scaled up to stand for the rest.'
+			]);
+			// Every run scored: the day nothing scored is named.
+			expect(printed(summaries(1))).toEqual([
+				'There are no quality figures for 12 Jun 2030. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+		});
+
+		test.describe('a score read that did not read is named on the charts it cost a marker, never silent', () => {
+			/** Runs on 2 to 14 Jun 2030, and run manifests name what ran from 6 Jun. */
+			const RAN = daysBetween('2030-06-02', '2030-06-14');
+			const IDENTIFIED = listManifestDays(
+				daysBetween('2030-06-06', '2030-06-14').map((date) => ({ date, records: [{ inputs: { model: 'test-model' } }] }))
+			);
+			const lost = (read: RecordRead, open = offered(14), ran = RAN, identified = IDENTIFIED) =>
+				describeMissingMarkers({ read, ran, identified, open });
+			const others = ' This chart shows every change on the other days.';
+
+			test('each state names its own cause, and the days whose marker only the score record could give', () => {
+				const on = 'This chart cannot show whether the setup changed on 2 Jun to 5 Jun 2030, because';
+				expect(lost({ state: 'not-packed' })).toBe(
+					`${on} the score record has not been packed yet. That is a step not yet run.${others}`
+				);
+				expect(lost({ state: 'unreadable', at: null, fault: null })).toBe(
+					`${on} the score record's list of packed days did not load. This is a fault to fix.${others}`
+				);
+				expect(lost({ state: 'unreadable', at: '2030-05-30', fault: null })).toBe(
+					`${on} the score record's day for 30 May 2030 did not load. This is a fault to fix.${others}`
+				);
+				expect(lost({ state: 'unreadable', at: '2030-06-03', fault: 'file-missing' })).toBe(
+					`${on} the score record lists a packed file for 3 Jun 2030 that is not there. This is a fault to fix.${others}`
+				);
+				expect(lost({ state: 'unreadable', at: '2030-06-03', fault: 'day-missing' })).toBe(
+					`${on} the score record is missing 3 Jun 2030, a day between packed days. This is a fault to fix.${others}`
+				);
+			});
+
+			test('one day, and every day on screen, read as such', () => {
+				// The manifests name every day with a run but 4 Jun.
+				expect(lost({ state: 'not-packed' }, offered(14), RAN, RAN.filter((day) => day !== '2030-06-04'))).toBe(
+					`This chart cannot show whether the setup changed on 4 Jun 2030, because the score record has not been packed yet. That is a step not yet run.${others}`
+				);
+				// A run on every day of the window and no manifest: there are no other days.
+				expect(lost({ state: 'not-packed' }, offered(7), daysBetween('2030-06-09', '2030-06-15'), [])).toBe(
+					'This chart cannot show whether the setup changed on these 7 days, because the score record has not been packed yet. That is a step not yet run.'
+				);
+				expect(lost({ state: 'not-packed' }, offered(1), ['2030-06-15'], [])).toBe(
+					'This chart cannot show whether the setup changed on this one day, because the score record has not been packed yet. That is a step not yet run.'
+				);
+			});
+
+			test('no line where no marker was lost', () => {
+				expect(lost(begun('2030-01-01', '2030-06-14'))).toBeNull();
+				// Every day of the window with a run is one a manifest names.
+				expect(lost({ state: 'not-packed' }, offered(7))).toBeNull();
+				// A day before the window is not this window's to name.
+				expect(lost({ state: 'not-packed' }, offered(7), daysBetween('2030-06-02', '2030-06-05'), [])).toBeNull();
+			});
 		});
 	});
 });
