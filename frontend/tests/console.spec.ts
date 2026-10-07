@@ -756,15 +756,17 @@ test('a record with more failing feeds than the list draws is counted whole', ()
 	expect(measured.ineligible).toEqual(['refused', 'rested']);
 });
 
-/** Five days of the stage-timing chart, written here and handed to the chart itself.
+/** Four timed days in a window of fifteen, written here and handed to the stage-timing chart.
  *
- * Newest first, as the route hands them over. 2030-06-13 timed nothing at all,
- * so it has no entry; on 2030-06-14 fetch timed nothing and extract was measured
- * at zero; on 2030-06-15 summarize timed 2 of the day's 3 items. The smallest
- * reading is 20 ms and the largest 900 ms, so the axis runs from the 10 ms
- * decade to the 1 s one, and no reading sits on a decade line.
+ * Newest first, as the route hands them over. Nothing timed 1 to 10 June or
+ * 13 June, so those days have no entry, and with fewer than half the days
+ * timed the chart tints them and says so in one sentence. On 14 June fetch
+ * timed nothing and extract was measured at zero; on 15 June summarize timed 2
+ * of the day's 3 items. The smallest reading is 20 ms and the largest 900 ms,
+ * so the axis runs from the 10 ms decade to the 1 s one, and no reading sits on
+ * a decade line.
  */
-const TIMING_SPAN = { start: '2030-06-11', end: '2030-06-15' };
+const TIMING_SPAN = { start: '2030-06-01', end: '2030-06-15' };
 
 function timedStage(ms: number | null, count: number, total: number) {
 	return { ms, timed: count, total };
@@ -886,9 +888,18 @@ test('a stage with no number draws a gap, never a plunge to the axis floor', asy
 	}));
 	expect(geometry.floor - geometry.lowest, 'a filled point sits on the axis floor').toBeGreaterThan(4);
 
-	// The day nothing timed is tinted, and the one sentence for the chart names the days timed.
-	await expect(plot.locator('[data-coverage-empty="2030-06-13"]')).toHaveCount(1);
-	await expect(page.locator('[data-timing-coverage]')).toContainText('We timed 4 of these 5 days');
+	// The days nothing timed are tinted, each unbroken run once, and the one
+	// sentence for the chart names the days timed.
+	await expect(plot.locator('[data-coverage-empty="2030-06-01"]')).toHaveAttribute(
+		'data-coverage-empty-to',
+		'2030-06-10'
+	);
+	await expect(plot.locator('[data-coverage-empty="2030-06-13"]')).toHaveAttribute(
+		'data-coverage-empty-to',
+		'2030-06-13'
+	);
+	await expect(plot.locator('[data-coverage-empty]')).toHaveCount(2);
+	await expect(page.locator('[data-timing-coverage]')).toContainText('We timed 4 of these 15 days');
 });
 
 test('a timing nobody took, a timing of zero and a partly timed day read apart', async ({
@@ -922,12 +933,13 @@ test('a timing nobody took, a timing of zero and a partly timed day read apart',
 	// 9, summarize 8 and extract all 9. The denominator is the days' own item
 	// count, never the sum of the stages' totals.
 	const note = page.locator('[data-timing-coverage]');
+	await expect(note).toHaveAttribute('data-coverage-days', '15');
 	await expect(note).toHaveAttribute('data-coverage-measured', '4');
 	await expect(note).toHaveAttribute('data-coverage-items', '9');
 	await expect(note).toHaveAttribute('data-coverage-timed-low', '7');
 	await expect(note).toHaveAttribute('data-coverage-timed-high', '9');
 	await expect(note).toHaveText(
-		'We timed 4 of these 5 days, and 7 to 9 of the 9 items on them. The tinted span is days nothing recorded, not quiet days.'
+		'We timed 4 of these 15 days, and 7 to 9 of the 9 items on them. The tinted span is days nothing recorded, not quiet days.'
 	);
 
 	// One note for the chart, and the count no longer scales with the series.
