@@ -47,7 +47,12 @@ import {
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { contextCost } from '../src/lib/console/machine/context-cost';
+import { articleCost } from '../src/lib/console/machine/article-cost';
+import { processorLostOverDays } from '../src/lib/console/machine/processor-lost';
+import { diskReads } from '../src/lib/console/machine/disk-reads';
+import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
+import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig, runConfig } from '../src/lib/server/config';
 
 /** `config/idhazh.json` read straight off disk, so a test's expectation comes
@@ -890,6 +895,208 @@ test.describe('what a run reads against what it writes', () => {
 		expect(money(0, 'EUR', 2)).toBe('0.00 EUR');
 		// A real cost never prints as zero. The work was not free.
 		expect(money(0.0027, 'USD', 2)).toBe('<0.01 USD');
+	});
+});
+
+test.describe('a run the counters refuse, handed to every figure built from article rows', () => {
+	// The route hands six figures every article row of the open window, chosen by
+	// date alone, and `machineCounters` refuses a run where one shard filed two
+	// machine records that disagree. So these cases build one refused run and one
+	// accepted run on one day, hand each figure the article rows of both runs and
+	// then of the accepted run alone, and record what the refused run moves. The
+	// thresholds are today's committed ones; no count below depends on them.
+	const REFUSED = '2026-09-04-1';
+	const ACCEPTED = '2026-09-04-2';
+	const hosts = [
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, serverPromptTokens: 8000, serverPromptSeconds: 200 }),
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, serverPromptTokens: 2000, serverPromptSeconds: 200 }),
+		// Shard 1 again, naming other figures: two servers answered for one shard.
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, serverPromptTokens: 1, serverPromptSeconds: 1 }),
+		hostRow({ date: '2026-09-04', runId: ACCEPTED, shard: 0, serverPromptTokens: 3000, serverPromptSeconds: 100 })
+	];
+	/** One article on shard 0, carrying every cell the six figures read. */
+	const article = (runId: string, index: number, cells: Partial<Record<string, string | number>>) =>
+		healthRow({
+			run_id: runId,
+			item_id: `${runId}-${index}`,
+			machine_shard: 0,
+			item_index: index,
+			n_ctx_configured: 8192,
+			...cells
+		});
+	const refusedRows = [
+		article(REFUSED, 0, {
+			input_tokens: 4000,
+			output_tokens: 300,
+			prefill_ms: 8000,
+			decode_ms: 30_000,
+			summary_input_tokens: 4000,
+			summary_output_tokens: 300,
+			summary_finish_reason: 'length',
+			cpu_busy_pct: 50,
+			item_total_ms: 40_000,
+			llama_rss_bytes: 6_000_000_000,
+			cpu_steal_pct: 12,
+			llama_major_faults: 148_000,
+			os_mem_cached_bytes: 9_000_000_000,
+			weights_pinned: 'False',
+			summary_cache_pct: 5,
+			summary_prefill_tokens_per_s: 12
+		}),
+		article(REFUSED, 1, {
+			input_tokens: 6000,
+			output_tokens: 300,
+			prefill_ms: 12_000,
+			decode_ms: 30_000,
+			summary_input_tokens: 6000,
+			summary_output_tokens: 300,
+			summary_finish_reason: 'length',
+			cpu_busy_pct: 75,
+			item_total_ms: 40_000,
+			llama_rss_bytes: 6_400_000_000,
+			cpu_steal_pct: 3,
+			llama_major_faults: 4100,
+			os_mem_cached_bytes: 6_000_000_000,
+			weights_pinned: 'False',
+			summary_cache_pct: 0,
+			summary_prefill_tokens_per_s: 10
+		})
+	];
+	const acceptedRows = [
+		article(ACCEPTED, 0, {
+			input_tokens: 1000,
+			output_tokens: 200,
+			prefill_ms: 2000,
+			decode_ms: 20_000,
+			summary_input_tokens: 1000,
+			summary_output_tokens: 200,
+			summary_finish_reason: 'stop',
+			cpu_busy_pct: 25,
+			item_total_ms: 40_000,
+			llama_rss_bytes: 5_000_000_000,
+			cpu_steal_pct: 0.25,
+			llama_major_faults: 148_000,
+			os_mem_cached_bytes: 10_000_000_000,
+			weights_pinned: 'True',
+			summary_cache_pct: 80,
+			summary_prefill_tokens_per_s: 40
+		}),
+		article(ACCEPTED, 1, {
+			input_tokens: 2000,
+			output_tokens: 200,
+			prefill_ms: 3000,
+			decode_ms: 20_000,
+			summary_input_tokens: 2000,
+			summary_output_tokens: 200,
+			summary_finish_reason: 'stop',
+			cpu_busy_pct: 25,
+			item_total_ms: 60_000,
+			llama_rss_bytes: 5_100_000_000,
+			cpu_steal_pct: 0.5,
+			llama_major_faults: 0,
+			os_mem_cached_bytes: 10_000_000_000,
+			weights_pinned: 'True',
+			summary_cache_pct: 90,
+			summary_prefill_tokens_per_s: 45
+		})
+	];
+	const bothRuns = [...refusedRows, ...acceptedRows];
+
+	test('the counters refuse one run and keep the other', () => {
+		const { runs, refused } = machineCounters(
+			hosts,
+			bothRuns,
+			plan([REFUSED, 2], [ACCEPTED, 1]),
+			LIMITS
+		);
+		expect(refused.map((run) => run.runId)).toEqual([REFUSED]);
+		expect(refused[0].why).toContain('shard 1');
+		expect(runs.map((run) => run.runId)).toEqual([ACCEPTED]);
+	});
+
+	test('what a run reads against what it writes counts it', () => {
+		expect(readAgainstWritten(acceptedRows).runs.map((run) => run.runId)).toEqual([ACCEPTED]);
+		const view = readAgainstWritten(bothRuns);
+		expect(view.runs.map((run) => run.runId)).toEqual([REFUSED, ACCEPTED]);
+		expect(view.runs[0]).toEqual({
+			runId: REFUSED,
+			date: '2026-09-04',
+			input: 10_000,
+			output: 600,
+			prefillMs: 20_000,
+			decodeMs: 60_000,
+			items: 2,
+			timed: 2
+		});
+	});
+
+	test('the reading limit counts it', () => {
+		const options = { percentile: 99, cutOffReason: 'length' };
+		const accepted = contextCost(acceptedRows, options).span;
+		expect([accepted.rowsRead, accepted.items, accepted.largest]).toEqual([2, 2, 2200]);
+		expect([accepted.unusedPct, accepted.cutOff, accepted.calls]).toEqual([73, 0, 2]);
+		const both = contextCost(bothRuns, options).span;
+		expect([both.rowsRead, both.items, both.largest]).toEqual([4, 4, 6300]);
+		// The headline moves: the refused run's article is the one that used most
+		// of the limit, and both of its calls ran out of room.
+		expect([both.unusedPct, both.cutOff, both.calls]).toEqual([23, 2, 4]);
+	});
+
+	test('the cost of one article counts it', () => {
+		// The route joins the machine record's processor counts with no run left
+		// out, so the refused run's shard names its processors too.
+		const processors = [REFUSED, ACCEPTED].map((runId) => ({
+			date: '2026-09-04',
+			run_id: runId,
+			shard: 0,
+			threads: 4
+		}));
+		const accepted = articleCost(acceptedRows, processors);
+		expect(accepted.rowsRead).toBe(2);
+		expect([accepted.processorSeconds.from, accepted.processorSeconds.high]).toEqual([2, 60]);
+		expect([accepted.modelSeconds.from, accepted.modelSeconds.high]).toEqual([2, 23]);
+		expect([accepted.addedBytes.from, accepted.addedBytes.high]).toEqual([1, 100_000_000]);
+		const both = articleCost(bothRuns, processors);
+		expect(both.rowsRead).toBe(4);
+		expect([both.processorSeconds.from, both.processorSeconds.high]).toEqual([4, 120]);
+		expect([both.modelSeconds.from, both.modelSeconds.high]).toEqual([4, 42]);
+		expect([both.addedBytes.from, both.addedBytes.high]).toEqual([2, 400_000_000]);
+	});
+
+	test('the processor lost to other tenants counts it', () => {
+		const thresholds = { marked: 1, named: 10 };
+		const accepted = processorLostOverDays(acceptedRows, thresholds);
+		expect([accepted.from, accepted.outOf, accepted.days[0].worstPct]).toEqual([2, 2, 0.5]);
+		expect(accepted.named).toBeNull();
+		const both = processorLostOverDays(bothRuns, thresholds);
+		expect([both.from, both.outOf, both.days[0].worstPct]).toEqual([4, 4, 12]);
+		// The day is named for a share only the refused run's article lost.
+		expect(both.named?.key).toBe('2026-09-04');
+	});
+
+	test('the waits for the disk count it', () => {
+		const marks = { marked: 1, named: 1 };
+		const accepted = diskReads(acceptedRows, marks);
+		expect([accepted.days[0].reads, accepted.days[0].counted, accepted.days[0].excluded]).toEqual([
+			0, 1, 1
+		]);
+		expect(accepted.pinning).toEqual({ held: 1, loose: 0, silent: 0 });
+		expect(accepted.worst).toBeNull();
+		const both = diskReads(bothRuns, marks);
+		expect([both.days[0].reads, both.days[0].counted, both.days[0].excluded]).toEqual([
+			4100, 2, 2
+		]);
+		expect(both.pinning).toEqual({ held: 1, loose: 1, silent: 0 });
+		expect(both.worst?.date).toBe('2026-09-04');
+	});
+
+	test('the prompt reuse counts it', () => {
+		const columns = Object.keys(bothRuns[0]);
+		const accepted = promptReuse(acceptedRows, columns);
+		expect([accepted.rowsRead, accepted.items, accepted.floor?.pct]).toEqual([2, 2, 80]);
+		const both = promptReuse(bothRuns, columns);
+		expect([both.rowsRead, both.items, both.floor?.pct]).toEqual([4, 4, 0]);
+		expect(both.requests[0].read).toEqual({ low: 10, median: 26, high: 45, from: 4 });
 	});
 });
 
