@@ -71,6 +71,7 @@ from idhazh.fingerprint import (
     runtime_build,
 )
 from idhazh.gardener import cli as gardener_cli
+from idhazh.ledger import published_columns
 from idhazh.publication_checks import PublicationCheckError
 from idhazh.publication_checks import runner as publication_runner
 from idhazh.stages import (
@@ -156,6 +157,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "derived-paths",
     "site-weight",
+    "published-columns",
     "check-publication",
     "score-merge-line-holdout",
     "council-prepare",
@@ -468,8 +470,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help=(
             "The built bundle `site-weight` measures - the directory the Pages deploy "
-            "uploads. Required, and deliberately without a default: a default is how "
-            "this came to measure the committed payloads instead of the site."
+            "uploads, and the tree `published-columns` checks. Required, and "
+            "deliberately without a default: a default is how this came to measure "
+            "the committed payloads instead of the site."
         ),
     )
     parser.add_argument(
@@ -574,6 +577,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings.app.retention,
             items_per_day=settings.app.run.safety_ceiling_per_run,
         )
+
+    if args.stage == "published-columns":
+        # Beside site-weight for the same reason: the answer is a fact about the
+        # built tree, not about the open web.
+        if args.site_tree is None:
+            parser.error("published-columns needs --site-tree: the built bundle to check")
+        return published_columns.check(args.site_tree, settings.app.ledger.published)
 
     if args.stage == "check-publication":
         # Above the fetcher for the same reason site-weight is: reading committed

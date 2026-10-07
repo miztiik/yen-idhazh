@@ -296,6 +296,14 @@ Every windowed sentence takes its day words from one helper,
  sentence is written whole for one day, in the same tense: `No day in these 7
  days published a summary` is `This one day did not publish a summary`, and
  `one tile a day, over these 7 days` is `one tile for this one day`.
+- **The rule holds for a sentence that prints no day count.** A chart's label at
+ one day says what it draws for that day - `one point for this one day`,
+ `Stories folded into another in this one day` - a legend names one date, and a
+ line that waits for a second day is not printed. The strip under a chart heads
+ its one column alone and names no keys
+ ([console-design/the-rules-every-console-chart-obeys.md](console-design/the-rules-every-console-chart-obeys.md#a-chart-with-a-shared-column-prints-every-series-together-in-a-fixed-strip)).
+ Words that say `this one day` name the window, so they print only at the 1-day
+ window. Reader ruled the words on 2026-10-07.
 
 A sentence that counts something other than the window's days - runs, a rule's
 own span, the days a record read - keeps its own count.

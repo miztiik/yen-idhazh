@@ -18,3 +18,8 @@ test('a bare count is "1 day" at one day and "7 days" at seven, as the days cont
 	expect(countDays(1)).toBe('1 day');
 	expect(countDays(7)).toBe('7 days');
 });
+
+test('a count of some of the days says which, and still says "1 day" at one', () => {
+	expect(countDays(1, 'measured')).toBe('1 measured day');
+	expect(countDays(9, 'measured')).toBe('9 measured days');
+});

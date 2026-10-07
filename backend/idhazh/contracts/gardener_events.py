@@ -25,6 +25,7 @@ from idhazh.contracts.base import (
     Model,
     MonthStamp,
     PeriodStamp,
+    RelPath,
     RunId,
     Slug,
     YearStamp,
@@ -32,9 +33,10 @@ from idhazh.contracts.base import (
 from idhazh.contracts.collection_prune import MemberId, Recovery, StopReason
 from idhazh.contracts.file_envelope import Period, Tier, covers_fits
 from idhazh.contracts.gardener_fault import GardenerFault
-from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.contracts.knobs.gardener import PrunableCollection, TaskKind
 from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.shard_landing import ShardLanding
 
 #: An exception's type name, such as `ValueError`: code, never what it said.
 ERROR_TYPE_PATTERN: Final = r"^[A-Za-z_][A-Za-z0-9_]*$"
@@ -497,6 +499,13 @@ class TaskFinished(Model):
     dry_run: bool = Field(description="Whether the task only reported what it would take.")
     seen: int = Field(ge=0, description="Members or files the pass read or weighed.")
     selected: int = Field(ge=0, description="Members or files the window held.")
+    collection: PrunableCollection | None = Field(
+        default=None,
+        description=(
+            "The GitHub collection a collection task takes members of, which says what "
+            "`taken` holds: that collection's member ids. None when `taken` holds files."
+        ),
+    )
     taken: list[str] = Field(
         description=(
             "What the pass deleted, or would delete on a dry run: member ids, or files "
@@ -538,6 +547,119 @@ class TaskFinished(Model):
     periods: PeriodsTaken | None = Field(
         default=None, description="What a compaction did, period by period. None for other tasks."
     )
+
+
+class ShardStop(StrEnum):
+    """Why one shard stopped before its commit came to rest on main, in one word."""
+
+    #: The files under the shard's folders could not be listed from its commit,
+    #: so no task ran and nothing landed. The next wake tries again.
+    LISTING_FAILED = "listing-failed"
+    #: An ownership or integrity check refused the shard, before its tasks ran or
+    #: after. Nothing landed, and a person fixes the cause.
+    CHECK_REFUSED = "check-refused"
+    #: An exception escaped the publisher, so it cannot say what ran or landed.
+    CRASHED = "crashed"
+
+
+class ShardPublished(Model):
+    """How one shard ended: the publisher's last word on it, whether or not anything landed.
+
+    Said once a shard, after its push loop or where the shard stopped short of
+    one. `landing` names how the shard's commit came to rest on main, and
+    `stopped_because` why it never came to rest; exactly one of the two is set.
+    """
+
+    shard: int = Field(ge=0, description="Which shard of the wake this is.")
+    run_id: RunId = Field(description="The run this is.")
+    attempt: int = Field(ge=1, description="Which attempt of that run.")
+    tasks: list[Slug] = Field(description="The tasks the shard was to run, in the order they run.")
+    failed_tasks: list[Slug] = Field(
+        description="The tasks whose row says `failed`: a code defect stopped each one."
+    )
+    landing: ShardLanding | None = Field(
+        default=None,
+        description="How the shard's commit came to rest on main. None when it stopped first.",
+    )
+    stopped_because: ShardStop | None = Field(
+        default=None,
+        description="Why the shard stopped before its commit came to rest. None when it did.",
+    )
+    push_try: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "The try the commit came to rest on, counted from 1: each try fetches main "
+            "again. Set exactly when `landing` is."
+        ),
+    )
+    push_tries: int = Field(
+        ge=1, description="The most tries the publisher takes: `attempts` in its config."
+    )
+    record: RelPath | None = Field(
+        default=None,
+        description="The record the shard wrote, relative to the repository. None before one.",
+    )
+    stale_paths: list[RelPath] = Field(
+        default_factory=list,
+        description=(
+            "The shard's paths main changed after the commit the shard ran on, sorted. "
+            "They are why nothing landed, so they are listed exactly when `landing` is "
+            "`stale`."
+        ),
+    )
+    downloaded_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description="What the shard's tasks downloaded to read. None when nothing measured it.",
+    )
+    over_budget: bool = Field(
+        default=False,
+        description=(
+            "Whether that passed `max_downloaded_mb`. A step that chooses its periods by "
+            "the budget never passes it, so a shard over it is a code defect."
+        ),
+    )
+    max_downloaded_mb: int = Field(
+        ge=1, description="The shard's download budget, in MB of 1024 x 1024 bytes."
+    )
+    exit_code: int = Field(ge=0, description="The code the shard exits with.")
+    means: str = Field(min_length=1, description="What that exit code means, for a person.")
+    error: ErrorType | None = Field(
+        default=None,
+        description=(
+            "The type of the exception that stopped the shard before it could land: the "
+            "listing that failed, or one that escaped the publisher. Never its text."
+        ),
+    )
+    where: CodePlace | None = Field(
+        default=None, description="Where in this package's code that exception was raised."
+    )
+
+    @model_validator(mode="after")
+    def _a_shard_either_came_to_rest_or_says_why_it_did_not(self) -> Self:
+        """One of the two words, the try beside a landing, and the paths beside a stale one."""
+        if (self.landing is None) == (self.stopped_because is None):
+            raise ValueError("a shard came to rest on main or says why it did not, never both")
+        if self.landing is not None and self.record is None:
+            raise ValueError("a commit that came to rest on main carries the shard's record")
+        if (self.landing is None) != (self.push_try is None):
+            raise ValueError("a landing names the try it came to rest on, and only a landing")
+        if self.push_try is not None and self.push_try > self.push_tries:
+            raise ValueError(f"try {self.push_try} is past the {self.push_tries} tries allowed")
+        if bool(self.stale_paths) != (self.landing is ShardLanding.STALE):
+            raise ValueError("the paths main changed are listed exactly when the shard is stale")
+        thrown = self.stopped_because in (ShardStop.LISTING_FAILED, ShardStop.CRASHED)
+        if (self.error is not None) != thrown:
+            raise ValueError(
+                "an exception's type is named exactly when a listing failed or a crash stopped "
+                "the shard"
+            )
+        if self.where is not None and self.error is None:
+            raise ValueError("a place in the code is named only beside the exception's type")
+        if self.over_budget and self.downloaded_bytes is None:
+            raise ValueError("a shard over its budget says what it downloaded")
+        return self
 
 
 class LoggedText(Model):

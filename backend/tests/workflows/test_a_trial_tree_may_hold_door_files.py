@@ -2,8 +2,8 @@
 
 A test case run files its item-health, scores and host-fingerprint rows through
 the ledger door, so the tree the commit job checks holds
-`<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>` files beside the day
-trees and traces. The check in `backend/utilities/pipeline_test_ledgers.py` is
+`<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>` files beside traces.
+The check in `backend/utilities/pipeline_test_ledgers.py` is
 the control for everything downstream of fetched text (Guardrail #11), so every
 tree here is built by the door itself under a trial root the committed config
 declares, and then one file at a time is put where no door writer puts it.
@@ -163,13 +163,26 @@ def test_a_trace_still_passes_beside_the_door_files(tmp_path: Path) -> None:
     tree, root, roots = _a_trial_tree(tmp_path)
     assert _file_census(root)
     assert _file_machine(root)
-    trace = traces.committed_trace_path(
-        root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0
-    )
+    trace = traces.committed_trace_path(root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0)
     trace.parent.mkdir(parents=True, exist_ok=True)
     trace.write_bytes(b'{"kind":"span","name":"item","duration_ms":1}\n')
 
     assert pipeline_test_ledgers.refusals(tree, roots=roots) == []
+
+
+def test_a_legacy_day_tree_file_is_not_accepted(tmp_path: Path) -> None:
+    """The check accepts traces and door raw files, not retired day-tree shards."""
+    tree, root, roots = _a_trial_tree(tmp_path)
+    legacy = root / "feed-health" / "2026" / "09" / "22" / "fixture.csv"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text("version,date\n2026-09-22,2026-09-22\n", encoding="ascii")
+
+    refused = pipeline_test_ledgers.refusals(tree, roots=roots)
+
+    assert refused == [
+        f"{legacy.relative_to(tree).as_posix()} names feed-health, "
+        "which a test case run does not write"
+    ]
 
 
 def test_a_door_file_under_a_root_no_test_case_declares_is_refused(tmp_path: Path) -> None:

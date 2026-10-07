@@ -23,7 +23,9 @@ export function openWithSpan(days: number): string {
 	return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
-/** A bare count of days, the words the days control speaks: `7 days`, `1 day`. */
-export function countDays(days: number): string {
-	return plural(days, 'day', 'days');
+/** A bare count of days, the words the days control speaks: `7 days`, `1 day`.
+ * `kind` says which days, where the count is not of every day: `1 measured day`. */
+export function countDays(days: number, kind = ''): string {
+	const day = kind === '' ? 'day' : `${kind} day`;
+	return plural(days, day, `${day}s`);
 }
