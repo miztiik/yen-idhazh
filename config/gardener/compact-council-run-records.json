@@ -20,5 +20,7 @@
   "prune_refusal": null,
   "window": {
     "unit": "forever"
-  }
+  },
+  "yearly_keep_months": 36,
+  "yearly_prune_enable": true
 }

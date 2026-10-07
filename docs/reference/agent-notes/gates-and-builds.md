@@ -10,6 +10,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
+- A fresh worktree has no `.venv` and no `frontend/node_modules`, and setting both up is the slowest step: on 2026-10-07, on the shared Windows machine, `npm ci` took 513 s and `pip install -e ".[dev]"` took 1,583 s after one package-feed timeout and a retry (plan 62's row L19), and 114 s and 991 s in another worktree the same day. Start both before the first check needs them, and wait rather than calling either hung.
 - **`pytest -m contract -q` ends on a `FAILED` line with no count after it, which reads as a run that stopped; it finished, and the extra `-q` hid the count.**
   `addopts` in `pyproject.toml` already carries `-q`, so one more is `-qq`, and
   pytest 9.1.1 then drops the `N passed, M failed` line (2026-10-06). The tell
@@ -81,15 +82,12 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   npx svelte-kit sync
   ```
 
-- **`test_page_ceilings` fails locally on an index ceiling while CI passes; the
-  local zlib made the index larger, not the change.** On 2026-10-04 the Windows
-  Python 3.14.2 here used zlib-ng 2.2.4 and compressed the candidate-models
-  index to 1,112 bytes, 12 bytes over its 1,100-byte ceiling; the same test
-  passed on the `ubuntu-latest` runner (CI run 37226217109). The tell is a
-  `ZLIB_VERSION` ending in `.zlib-ng`. Take this test's answer from CI:
-  ```powershell
-  python -c "import zlib; print(zlib.ZLIB_VERSION, getattr(zlib, 'ZLIBNG_VERSION', None))"
-  ```
+- **An older index-ceiling check fails locally while CI passes; it used a
+  different compressor from the deployment gate.** Windows Python can use
+  zlib-ng rather than the gate's Node zlib. The current `test_page_ceilings`
+  helper uses Node gzip, matching `bundle-gate.mjs`, without raising ceilings
+  or reducing the required margin. A check on an older commit may still differ;
+  compare its generated index with the deployment gate's compressor first.
 
 - **A logic spec that writes Parquet prints `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, which reads as a crash; its tests passed.**
   On 2026-10-05, on Windows with Node 24.12.0 and DuckDB-Wasm 1.33.1-dev57.0,
@@ -131,19 +129,59 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 ## Two heavy gates on one box
 
+- **The unlocked gate control reports a missing interval, not a failed child.**
+  On Windows with Python 3.14.2 on 2026-10-07,
+  `test_ci_runs_the_gate_unlocked_and_the_same_workers_then_overlap` failed in
+  the full suite and in an isolated retry. All children exited successfully,
+  but their shared append file lacked an interval. A recorder race is a
+  suspect, not a proven production lock failure. Do not weaken the assertion;
+  compare separate per-worker records before changing the lock implementation.
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
 - Reproduce a timing failure in isolation before changing code. Do not raise a timeout or weaken an assertion merely to obtain a pass.
-- **A `--repeat-each` run reads as hung between repeats, then as failed with every test passed; it is Playwright waiting for each repeat's new worker to exit, then killing it.**
+- **A Playwright run sits still after its last result, or between `--repeat-each` repeats, then ends exit 1 with every test passed; it is Playwright waiting for a worker to exit, then killing it.**
   The wait is `PWTEST_CHILD_PROCESS_TIMEOUT`, 5 minutes by default. On
   2026-10-06, on Windows with Node 24.12.0 and Playwright 1.62.1, workers of
   one `ledger-ranges.spec.ts` test outlived it 1 time in 2; with it at 20
-  seconds, 16 times in 30 and then 4 in 30. Only the worker and its esbuild
+  seconds, 16 times in 30 and then 4 in 30. It is not only a `--repeat-each`
+  effect: on 2026-10-07 a single run of one spec, from a config with no
+  `webServer`, stalled the full 5 minutes (plan 62's row L19), and 11 console
+  specs run directly with `--no-deps` ended 179 passed and 0 failed, exit 1,
+  when their last worker was killed (row L27). Only the worker and its esbuild
   service process stay alive; the cause is unknown, and CI shows no stall.
-  The tell is `force-killed it` between results, and at the end
-  `errors were not a part of any test`. Shorten the wait, and run a spec that
-  never contacts the preview server from a config with no `webServer`:
+  The tell is `force-killed it` between or after the results, and at the end
+  `errors were not a part of any test`, with no test failed and none that did
+  not run. Every test passed, and the exit code reports the kill. Read the
+  counts; shorten the wait only as the next note says.
+
+- **A run with `PWTEST_CHILD_PROCESS_TIMEOUT` set ends with a few tests passed and the rest "did not run"; the setting killed a project that another project depends on.**
+  A shorter wait helps where no project depends on another: at 20 seconds,
+  row L19's single run waited 20 seconds instead of 5 minutes. It breaks a run
+  where one does: in `frontend/playwright.config.ts` the `reader` and
+  `console` projects depend on `offline`. At 20 seconds Playwright killed the
+  `offline` worker as it exited, counted the kill as that project's error, and
+  ran no test of the project that depends on it: row L27's run through
+  `test:changed` ended "9 passed, 179 did not run" (2026-10-07). To tell which
+  case you are in before the run, read the config it uses: a project with
+  `dependencies` means leave the wait at its default. After the run, the tell
+  is `did not run` with nothing failed. For a spec that never contacts the
+  preview server, use a config with no `webServer` and one project,
+  `playwright.logic.config.ts`, and shorten the wait there:
   ```powershell
   $env:PWTEST_CHILD_PROCESS_TIMEOUT = '20000'
+  node node_modules/@playwright/test/cli.js test --config playwright.logic.config.ts tests/<spec>.spec.ts
+  Remove-Item Env:PWTEST_CHILD_PROCESS_TIMEOUT
+  ```
+
+- **Some cases of a parallel run fail with `EPERM` on a path under `.svelte-kit/types`; the tests are fine, several workers wrote that folder at once.**
+  A spec that renders a component through `serverCompiler` in
+  `frontend/tests/support/server-render.ts` compiles Svelte in its own
+  worker. On 2026-10-07, on Windows, plan 62's row L27 ran such specs on three
+  workers at once: 6 cases failed with `EPERM` in `.svelte-kit/types`, and on
+  one worker the same 6 gave their real results. The tell is `EPERM` naming a
+  path under `.svelte-kit/types`. Keep one worker, the default while
+  `PLAYWRIGHT_WORKERS` is unset, or run the failed cases again on one:
+  ```powershell
+  node node_modules/@playwright/test/cli.js test --config <config> tests/<spec>.spec.ts --workers=1
   ```
 
 ## The canary build

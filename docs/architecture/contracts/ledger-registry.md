@@ -69,7 +69,7 @@ A ledger that goes through the ledger door files under two roots rather than one
 
 A judge ledger is one the council or the similarity judge's code writes: the council's own record of each step of its night, and four of the `content-similarity-judge` ledgers above - `scored-pairs`, `fitted-thresholds`, `metrics` and `merge-line-holdout-scores`. Each follows the rule below when it moves to the door, so a reader who joins two of them meets one vocabulary.
 
-The council's own record has its door row contract: `CouncilRunRecord` in `backend/idhazh/contracts/council_run_record.py`. It names a step and a part where the old CSV row filed one `shard` number, and its `from_csv_row` reads every old row. `council.session._collect` files each judged date through `ledger.persist` in the `save_council_results` job. The migrator still names the old two-folder CSV path until the committed rows move.
+The council's own record has its door row contract: `CouncilRunRecord` in `backend/idhazh/contracts/council_run_record.py`. It names a step and a part. Its CSV reader accepts only this current shape for shipping rows between jobs; migrated Parquet rows keep their historical schema stamps. `council.session._collect` files each judged date through `ledger.persist` in the `save_council_results` job. No CSV family or migration entry remains for this ledger.
 
 | Rule | What it requires |
 | --- | --- |

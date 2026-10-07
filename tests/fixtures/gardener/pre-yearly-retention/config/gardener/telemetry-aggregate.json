@@ -1,0 +1,35 @@
+{
+  "dry_run": true,
+  "kind": "retention",
+  "lifecycle_status": "active",
+  "lookback": 2,
+  "max_deletes_per_run": null,
+  "appends_to": [
+    "item-health-summary"
+  ],
+  "owns": [
+    "frontend/public/telemetry"
+  ],
+  "reads": [
+    "state/compact/item-health",
+    "state/raw/item-health",
+    "state/raw/item-health-summary"
+  ],
+  "series": {
+    "aggregate": {
+      "unit": "forever"
+    },
+    "full-grain": {
+      "unit": "months",
+      "value": 14
+    },
+    "public-copy": {
+      "unit": "months",
+      "value": 14
+    }
+  },
+  "window": {
+    "unit": "months",
+    "value": 14
+  }
+}

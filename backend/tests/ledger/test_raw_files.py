@@ -12,6 +12,7 @@ reads the committed `state/` (CLAUDE.md section 13).
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from pathlib import Path
@@ -140,6 +141,32 @@ def test_a_json_lines_file_is_read_like_a_parquet_one(tmp_path: Path) -> None:
 
     assert written.suffix == ".json"
     assert ledger.load_visual_prunes(tmp_path) == [a_pass()]
+
+
+def _row_rewritten(path: Path, **cells: object) -> Path:
+    """A JSON-lines file with its one row's named cells changed, as a bit flip would leave it."""
+    lines = path.read_text(encoding="ascii").splitlines()
+    head, row = lines[0], json.loads(lines[1]) | cells
+    path.write_text("\n".join([head, json.dumps(row, sort_keys=True)]) + "\n", "ascii")
+    return path
+
+
+def test_a_refused_rows_own_value_never_reaches_the_skip_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`_skip`'s risky caller, `load_current_rows`, never lets a row's own cell into its warning.
+
+    `reason` here is `load_stored`'s `ValueError`, which names only closed facts
+    since persist.py's fix (Guardrail #11; Fowler, 2026-10-07; plan 60 row 33).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    written = filed(tmp_path, a_pass(), fmt=Format.JSON)
+    _row_rewritten(written, payload_bytes_before=canary)
+
+    with caplog.at_level("WARNING"):
+        assert ledger.load_current_rows(tmp_path, WHICH, model=VisualPruneRow, key=("date",)) == []
+    assert canary not in caplog.text
+    assert "payload_bytes_before: int_parsing" in caplog.text
 
 
 def test_a_file_filed_under_another_day_is_skipped_and_named(

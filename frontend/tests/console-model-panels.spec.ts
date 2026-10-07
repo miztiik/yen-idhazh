@@ -1,8 +1,6 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { render } from 'svelte/server';
 import {
 	AXIS_LABEL_GAP_PX,
 	AXIS_LABEL_PX,
@@ -17,7 +15,7 @@ import {
 	writeTimes,
 	type DayWindow
 } from '../src/lib/server/model-work';
-import { serverCompiler } from './support/server-render';
+import { BANDS, pair, renderSwap, swapFixture } from './support/model-swap';
 import { ONE_DAYS, spanSaid } from './support/span-said';
 
 /**
@@ -40,14 +38,6 @@ const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
 /** The two type sizes `SwapDots` draws its row labels at. */
 const NAME_PX = 11;
 const VALUE_PX = 10;
-
-/** The three bands the committed config carries at the ends of its range, so a
- * fixture article picks an ask the way a real one does. */
-const BANDS = [
-	{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
-	{ min_source_words: 60, target_words_min: 50, target_words_max: 90 },
-	{ min_source_words: 700, target_words_min: 70, target_words_max: 150 }
-];
 
 function timed(date: string, ms: number): Record<string, string> {
 	return { date, summarize_ms: String(ms) };
@@ -540,63 +530,6 @@ test.describe('how long the summaries came out', () => {
 });
 
 test.describe('did the model change move anything', () => {
-	function row(date: string, model: string, extra: Record<string, string> = {}) {
-		return { date, model_id: model, summary_words: '100', source_words_before_cap: '800', ...extra };
-	}
-
-	function pair(count: number, date: string, model: string, extra: Record<string, string> = {}) {
-		return Array.from({ length: count }, () => row(date, model, extra));
-	}
-
-	function timedPair(count: number, date: string, ms: number) {
-		return Array.from({ length: count }, (_, index) => ({
-			date,
-			run_id: `${date}-${index}`,
-			summarize_ms: String(ms),
-			prefill_ms: '1000',
-			decode_ms: '1000',
-			input_tokens: '1000',
-			output_tokens: '100',
-			cached_tokens: '0'
-		}));
-	}
-
-	function swapFixture() {
-		const swap = modelSwap(
-			[
-				...pair(10, '2026-08-20', 'old', {
-					summary_words: '200',
-					band: 'low',
-					unsupported_numbers: '1',
-					hedge_dropped: 'True'
-				}),
-				...pair(10, '2026-08-21', 'new', { summary_words: '100' })
-			],
-			[...timedPair(10, '2026-08-20', 4000), ...timedPair(10, '2026-08-21', 2000)],
-			BANDS,
-			5
-		);
-		expect(swap, 'the written rows did not create a model-change panel').not.toBeNull();
-		expect(swap?.enough, 'the written rows made a thin model-change panel').toBe(true);
-		return swap as NonNullable<ReturnType<typeof modelSwap>>;
-	}
-
-	async function renderSwap(page: Page, testInfo: TestInfo, width: number) {
-		const compiled = serverCompiler(testInfo.outputPath(`swap-dots-${width}`));
-		const readout = await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
-		const module = await compiled('src/lib/components/SwapDots.svelte', 'SwapDots', [
-			['./ChartReadout.svelte', pathToFileURL(readout).href]
-		]);
-		const component = (await import(pathToFileURL(module).href)).default;
-		const markup = render(component, {
-			props: { swap: swapFixture(), width, readoutMaxShare: 1 }
-		}).body;
-		await page.setContent(
-			`<style>${[...compiled.css.values()].join('\n')}</style><main style="width: ${width}px">${markup}</main>`
-		);
-		return page.locator('[data-model-swap-plot]');
-	}
-
 	test('each measure is the after over the before, and both values are kept', () => {
 		const swap = modelSwap(
 			[
@@ -799,7 +732,7 @@ test.describe('did the model change move anything', () => {
 		// 600px box with a fixed 196px label gutter. The frame now follows the
 		// container and the gutter is measured against it.
 		await page.setViewportSize({ width: 1440, height: 1000 });
-		const plot = await renderSwap(page, testInfo, 1200);
+		const plot = await renderSwap(page, testInfo, 1200, swapFixture());
 
 		const svg = plot.locator('svg');
 		const drawn = Number(await svg.getAttribute('data-swap-frame'));
@@ -843,7 +776,7 @@ test.describe('did the model change move anything', () => {
 		page
 	}, testInfo) => {
 		await page.setViewportSize({ width: 390, height: 844 });
-		const plot = await renderSwap(page, testInfo, 324);
+		const plot = await renderSwap(page, testInfo, 324, swapFixture());
 
 		const svg = plot.locator('svg');
 		// `Outside the length we asked for` cannot fit beside a 324px plot, and

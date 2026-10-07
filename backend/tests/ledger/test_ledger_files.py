@@ -14,6 +14,7 @@ nothing reads the committed `state/` (CLAUDE.md section 13).
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, timedelta
 from pathlib import Path
@@ -25,7 +26,7 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
+from idhazh.contracts.file_envelope import Format, Period, RowIdentity, WriterIdentity
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
@@ -66,7 +67,7 @@ def a_pass(on: str, *, run: str = "1", before: int = 1000) -> VisualPruneRow:
     )
 
 
-def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1) -> Path:
+def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None) -> Path:
     """One raw file, through the door, under the identity its own run carries."""
     (written,) = ledger.persist(
         state,
@@ -81,6 +82,7 @@ def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1) -> Path:
             producer="gardener.tasks.visual_prune",
             git_sha="a" * 40,
         ),
+        fmt=fmt,
     )
     return written
 
@@ -109,7 +111,9 @@ def kept(row: VisualPruneRow) -> ledger.StoredRow[VisualPruneRow]:
     )
 
 
-def compacted(state: Path, period: Period, covers: str, rows: list[VisualPruneRow]) -> Path:
+def compacted(
+    state: Path, period: Period, covers: str, rows: list[VisualPruneRow], *, fmt: Format | None = None
+) -> Path:
     """One compact file, written through the door the way the compaction writes it."""
     return ledger.persist_period(
         state,
@@ -120,6 +124,7 @@ def compacted(state: Path, period: Period, covers: str, rows: list[VisualPruneRo
         covers=covers,
         identity=COMPACTION,
         built_from=len(rows),
+        fmt=fmt,
     )
 
 
@@ -447,6 +452,46 @@ def test_a_read_asking_for_another_ledgers_rows_is_refused_naming_both() -> None
     with pytest.raises(ValueError, match="rows are VisualPruneRow") as refused:
         ledger.load_ledger_rows(Path("state"), WHICH, model=FeedRetirementRow)
     assert "FeedRetirementRow" in str(refused.value)
+
+
+def _row_rewritten(path: Path, **cells: object) -> Path:
+    """A JSON-lines file with its one row's named cells changed, as a bit flip would leave it."""
+    lines = path.read_text(encoding="ascii").splitlines()
+    head, row = lines[0], json.loads(lines[1]) | cells
+    path.write_text("\n".join([head, json.dumps(row, sort_keys=True)]) + "\n", "ascii")
+    return path
+
+
+def test_a_refused_rows_own_value_never_reaches_either_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A row this build refuses never quotes its own cells, read as a raw file or a compact one.
+
+    `ledger_files.py` carries two warnings of the same shape, `path=... reason=
+    ...`; both read `reason` from `load_stored`'s `ValueError`, which names only
+    closed facts since persist.py's fix (Guardrail #11; Fowler, 2026-10-07; plan
+    60 row 33). A raw day with no compaction yet, and a day a compact index
+    names, are both read here, so both warnings are exercised.
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+
+    raw = filed(tmp_path, a_pass("2026-09-06"), fmt=Format.JSON)
+    _row_rewritten(raw, payload_bytes_before=canary)
+
+    with caplog.at_level(logging.WARNING):
+        assert ledger.load_visual_prunes(tmp_path) == []
+    assert canary not in caplog.text
+    assert "payload_bytes_before: int_parsing" in caplog.text
+    caplog.clear()
+
+    compact = compacted(tmp_path, Period.DAILY, "2026-08-01", [a_pass("2026-08-01")], fmt=Format.JSON)
+    _row_rewritten(compact, payload_bytes_before=canary)
+    indexed(tmp_path, Period.DAILY, ["2026-08-01"])
+
+    with caplog.at_level(logging.WARNING):
+        assert ledger.load_days(tmp_path, WHICH, ["2026-08-01"], model=VisualPruneRow) == []
+    assert canary not in caplog.text
+    assert "payload_bytes_before: int_parsing" in caplog.text
 
 
 def test_every_ledger_the_registry_files_under_the_two_roots_has_a_key_and_a_reader() -> None:

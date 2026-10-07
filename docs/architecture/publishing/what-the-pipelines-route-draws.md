@@ -269,10 +269,11 @@ counts it was built from, and the track carried no fact they do not.
 
 **The level and the direction are one subject at the two questions.** This panel
 would carry the level - how much of the window's prompt the model already held -
-and `How much text the model has to read again each time` on Hardware carries the
-direction, one column a day. With no level drawn, the Hardware panel is the whole
-answer rather than half of one, so the gap a later reader sees here is a subject
-already covered and not a figure to rebuild.
+and `How much text the model reads again, and how fast it reads` on Hardware
+carries the direction, as spans over the window's items with no day axis. With
+no level drawn, the Hardware panel is the whole answer rather than half of one,
+so the gap a later reader sees here is a subject already covered and not a
+figure to rebuild.
 
 **A falling share here does not mean the cache got worse, and the panel says
 so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is nearly a
@@ -306,8 +307,8 @@ ending 2026-10-06, only the 1-, 7- and 14-day ones miss the step.
 
 Measured over the committed projection the per-item share has a middle of
 **0.518**, a 5th percentile of **0.000** and a 95th of **0.820** - and **667 of
-6,104** items reused nothing at all. The share is drawn, and it is named in words
-beside it.
+6,104** items reused nothing at all. The share is printed, and it is named in
+words beside it.
 
 **These four figures are about the FIRST model call, not about the item.** An
 item read by two calls always reuses something, because the second call replays

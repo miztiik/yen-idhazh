@@ -226,10 +226,10 @@ def _under_another_door_ledger(root: Path, filed: Path) -> Path:
 
 
 def _under_a_day_file_ledger(root: Path, filed: Path) -> Path:
-    """A copy under `raw/shard-outcomes/`, a ledger that files one CSV file a day."""
+    """A copy under `raw/metrics/`, a ledger that files one CSV file a day."""
     return _copied(
         filed,
-        ledger.raw_path(root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DAY, uuid.UUID(filed.stem)),
+        ledger.raw_path(root, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DAY, uuid.UUID(filed.stem)),
     )
 
 

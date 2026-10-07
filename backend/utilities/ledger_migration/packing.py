@@ -100,11 +100,11 @@ def pack(
     """
     repo_root = state_dir.parent
     context = f"{label_path(state_dir)}: {which.value}"
-    folders = tuple(policy.owns or ())
     written: list[str] = []
     deleted: list[str] = []
     packed: set[str] = set()
     while True:
+        folders = tuple(folder for folder in policy.owns if (repo_root / folder).is_dir())
         try:
             outcome = compaction.run(
                 TaskContext(
@@ -119,7 +119,7 @@ def pack(
                     git_sha=identity.git_sha,
                     owned_folders=folders,
                     listing=FileListing.from_disk(
-                        repo_root, folders, paths=packing_paths(state_dir, which, months)
+                        repo_root, policy.owns, paths=packing_paths(state_dir, which, months)
                     ),
                     first_ledger_year=first_ledger_year,
                     period_range=(min(months), max(months)),
