@@ -302,6 +302,7 @@
 				start={view.start}
 				end={view.end}
 				modelChanges={data.modelChanges}
+				missingMarkers={view.missingMarkers}
 				moved={data.settingsMoved}
 				chart={data.chart}
 				{windowDays}
