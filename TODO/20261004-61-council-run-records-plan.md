@@ -1,10 +1,10 @@
 # Plan 61 - The council's own record moves to the ledger door
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-07
 
 **Level**: 5 (CLAUDE.md section 6): the plan replaces a persisted row contract and moves a committed ledger. The owner approved the shapes and the names on 2026-10-04 and set rows 1, 2 and 3 at Levels 2, 3 and 4; row 4 is Level 2.
 
-**Status**: written 2026-10-04 from Fowler's design of the same day, which the owner approved as option A1, and checked against `main` at 9165a9f75. The three conflicts found while writing it (Table C, C1 to C3) are ruled, each as option (a); none changes an approved name or shape. The owner authorized execution on 2026-10-04: row 1 now; rows 2 to 4 only after Plan 60's row "Which months may close" (`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`) merges, because row 2 adds a compaction that fails, as seven did on 2026-10-04, until that fix lands. Row 2's Depends-on names that row by number so the plan reader holds it; re-check its title at dispatch.
+**Status**: rows 1 and 2 have shipped. On 2026-10-07 the owner approved replacing the repository-wide quiet window with Fowler's online migration design. Rows 5 and 6 fix migration ownership and historical packing first. Row 3 copies and proves the old records while workflows continue; row 4 deletes sources and compatibility only after old writers are retired. This approval does not cancel runs, disable workflows, delete run history or prohibit old reruns.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
@@ -15,11 +15,11 @@ Table A - operating contract
 | # | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | The council writes one row for each piece of its own work into a CSV ledger, `state/llm-council/shard-outcomes/`, and numbers each piece with `shard`: -1 for picking the work, -2 for counting the results, and 0 upward for each part of the split. The ledger door, which every moved ledger goes through, uses `shard` for the shard of the job that wrote a row, refuses a value below 0, and lets a row's own field of that name replace its column. So this ledger cannot move to the door as it is. The owner approved on 2026-10-04 a new ledger whose rows name their step and their part, saved by the council's save job through the door |
-| A2 | Hard scope - in | - The row contract `CouncilRunRecord` and the step enum `EvaluationStep` (Table E), with a reader for every committed old row (Table F).<br>- The rule every judge ledger follows, written into the registry page (Table H).<br>- The ledger `council-run-records`, declared and written through the door by the save job (Table G), with its compaction, staging row, prune target, migrator entry and the two frontend names.<br>- The CSV path deleted: its writer, its de-duplication pass, its union lines, its `UNION_SAFE` entry, its CSV prune target, the old contract, the old `LedgerName` member and key, `SELECTION_UNIT` and `SETTLEMENT_UNIT`.<br>- Every committed council CSV row moved onto the door with no cell lost, and the old family removed.<br>- The old-row reader and the migrator entry deleted once nothing needs them |
+| A2 | Hard scope - in | - The row contract `CouncilRunRecord` and the step enum `EvaluationStep` (Table E), with a reader for every committed old row (Table F).<br>- The rule every judge ledger follows, written into the registry page (Table H).<br>- The ledger `council-run-records`, declared and written through the door by the save job (Table G), with its compaction, staging row, prune target, migrator entry and the two frontend names.<br>- Migration writes only records it owns; a raw-only write mode leaves CSV and compact files unchanged.<br>- Explicit historical compaction ranges reach imported records behind the normal look-back window.<br>- Every committed council CSV record copied and proved without stopping workflows.<br>- Source files, the old family and compatibility removed together only under the retirement gate in section 2.5 |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
-| A5 | Chosen strategy | Reader before writer, then data, then cleanup: the contract that reads every old row ships first, the writer second, the committed rows move third, and the reader of the old shape goes last. The owner ruled on 2026-10-04, on Fowler's design of the same day (option A1) |
-| A6 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. The four rows are one chain, so one is in flight at a time. Row 3 is carried by the plan's owner and never delegated: it is a data commit made while no workflow runs ([move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md#move-the-committed-files)). Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
+| A5 | Chosen strategy | Keep both storage paths, copy and prove the records, then remove the old path. Fowler, approved by the owner on 2026-10-07 |
+| A6 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 5 and 6 share the compaction documentation and run in order; then rows 3 and 4 follow. Row 3 is carried by the plan's owner, never delegated; unrelated workflows and agents continue. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
 
 ### Hard scope - out
 
@@ -41,21 +41,24 @@ Table C - when to stop and ask
 
 | # | Trigger | What happens, and the options |
 | --- | --- | --- |
-| C1 | **Ruled 2026-10-04: (a), a construction choice by Fowler.** The design keeps the `llm-council` family registered until row 3, so `state/llm-council/` stays claimed, and deletes `LedgerName.LLM_COUNCIL_SHARD_OUTCOMES` in row 2. The registry cannot hold both: a family lists at least one ledger (`LedgerFamily.ledgers`, `min_length=1`), every ledger it lists is a `LedgerName` member, and `shard-outcomes` is that family's only ledger. An unclaimed folder under `state/` is handed to the gardener's `trials` task as a trial tree | (a) **Chosen.** Keep the member, its registry entry and its staging row (writer: none; `symbol` None) until row 3, which deletes them with the family. Cost: `backend/idhazh/contracts/ledger_name.py`, `backend/idhazh/ledger/staging.py`, `frontend/src/lib/data/slice-shapes.ts`, `config/appearance.json` and the member's lines in `backend/tests/contracts/test_ledger_registry.py`, `backend/tests/workflows/test_a_trial_tree_may_hold_door_files.py` and `backend/tests/council/test_metrics_sink.py` move to row 3, and the explorer bound is computed twice. (b) Delete the member and the family together in row 2. Cost: `state/llm-council/` is unclaimed until row 3. `trials` only reports today (`dry_run` true), and its 90-day window does not reach the oldest council file before mid-December 2026, so the cost is a report line unless either changes first. (c) Let a `retired` family list no ledger. Cost: a registry contract change in `backend/idhazh/contracts/ledgers.py`, its tests and `ledger-registry.md`, Level 3 |
+| C1 | The old family must remain claimed while obsolete writers can return; a family needs its ledger member and registry/staging entries | Keep the family, member and entries through row 3. Row 4 removes them with the proved CSV sources under section 2.5. Owner ruling, 2026-10-07, replaces the earlier row-3 deletion timing |
 | C2 | **Ruled 2026-10-04: (a), because the owner named the save job `save_council_results` (Table D, D8).** `ServerJob` says every value is a job's own id in its workflow file (its docstring, and `docs/reference/host-metrics.md`). The save step runs in `llm-council.yml`'s job `collect`, and the approved value is `save_council_results` | (a) **Chosen.** Rename that job id from `collect` to `save_council_results` in row 2. Cost: the job key, the `collect` references in `backend/tests/workflows/test_llm_council_workflow.py`, and one sentence of `llm-council.md`. (b) Keep `collect`, and write the exception into the `ServerJob` docstring and `docs/reference/host-metrics.md`. Cost: a reader needs a lookup to go from a row's job to the steps that wrote it |
 | C3 | **Ruled 2026-10-04: (a), a construction choice by Fowler, so the page states only true facts.** Table H says `run_id` on a judge row is the council run (H1) and that the save job files the rows (H4). `merge-line-holdout-scores` is filed by a person's own `score-merge-line-holdout --run-id` run, never by a council run | (a) **Chosen.** Write the rule as approved, with one sentence that this ledger's `run_id` is the run of the person who files it, which is also the door's column, and that H4 does not reach it. (b) Write the rule word for word. Cost: the page states one false fact, which Plan 59's move of that ledger meets |
 | C4 | A persisted shape that section 2 does not declare, or a change to a name in Table D | Stop and surface ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)). The names are the owner's |
 | C5 | A committed council row that Table F cannot read: a `shard` below -2, a filled `host_model`, or a row whose `date` is not its file's day | Row 3 stops. No row is dropped, edited or mapped by hand |
 | C6 | Two personas still disagree after one debate | Stop and surface |
+| C7 | Row 4 cannot prove that old-code writers have finished and cannot return, or a failed save has unaccounted records | Keep CSV, the family and compatibility. Do not cancel runs, disable workflows, delete history or discard captured output without a separate owner decision |
 
 ## 1. Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The council's run record has its own contract, and it reads every old row | - | A | DONE #1294 | cautious-adventure | #1294 | Plan 61 row 1: council run record contra |
-| 2 | The council saves its run records through the ledger door | 1, plan 60 row #12 | B | DONE | plan-row-status | - | Council ledger writer |
-| 3 | The committed council rows move onto the door, and the old family goes | 2 | C | PENDING | - | - | - |
-| 4 | The old-row reader and the migrator's council entry are deleted | 3 | D | PENDING | - | - | - |
+| 2 | The council saves its run records through the ledger door | 1; Plan 60 "Which months may close", shipped in #1303 | B | DONE | plan-row-status | #1323 | Council ledger writer |
+| 3 | The committed council records are copied and proved while workflows continue | 2, 5, 6 | E | DONE | probable-giggle | - | owner |
+| 4 | The old-row reader and the migrator's council entry are deleted | 3; section 2.5 retirement gate | F | PENDING | - | - | - |
+| 5 | Migration preserves writer ownership and can write raw files without packing | 2 | C | DONE | - | - | - |
+| 6 | Explicit historical packing reaches imported records outside the rerun window | 5 | D | DONE | supreme-pancake | - | owner |
 
 ## 2. Shared declarations
 
@@ -304,60 +307,66 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 6 | Seed `state/raw/council-run-records/` with a `.gitkeep` so the existence check passes | The door's folders hold only files the door names | A file every reader of that folder has to skip | Fowler, 2026-10-04 |
 | 7 | Name a once-a-date step's shipped file by its value as it is | The name is slug-checked, and a slug has no `_` | A second, looser name check for one caller | Fowler, 2026-10-04 |
 
-### Row #3 - The committed council rows move onto the door, and the old family goes
+### Row #3 - The committed council records are copied and proved while workflows continue
 
-- **Scope:** the plan's owner moves every committed council CSV row onto `council-run-records` with the migrator, deletes the old `.gitkeep`, and removes the `llm-council` family; `--check` then finds no council CSV file, and a dry compaction pass has nothing to pack. Level 4.
+- **Scope:** copy every selected council CSV record through raw-only migration, pack through the gardener's guarded publication path, and prove source-cell parity while keeping CSV and its registered family. Level 4.
 - **Files touched** (from the migrator's `--plan` output and a whole-tree search at 9165a9f75 for `llm-council` as a folder and a family):
-  - every `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` that `--plan` lists (deleted by `--retire`)
-  - `state/llm-council/shard-outcomes/.gitkeep` (deleted)
   - `state/raw/council-run-records/` (new raw files, one for each migrated day)
-  - `state/compact/council-run-records/` (new packed periods and their indexes)
-  - `config/ledgers.json` (the `llm-council` family goes)
-  - `backend/tests/contracts/test_ledger_registry.py` (`CLAIMED_AT_THE_BASE` loses `llm-council`, and `test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it` takes its example from `content-similarity-judge`)
-  - `docs/reference/repository-layout.md` (the sentence that names `state/llm-council/`)
-  - `backend/idhazh/contracts/ledger_name.py`, `backend/idhazh/ledger/staging.py`, `frontend/src/lib/data/slice-shapes.ts`, `config/appearance.json`, `backend/tests/workflows/test_a_trial_tree_may_hold_door_files.py` and `backend/tests/council/test_metrics_sink.py` (the old `shard-outcomes` member and its entries, kept until here by Table C, C1)
-- **Acceptance gates:** local, by the owner, in this order, following [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md#move-the-committed-files): no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml`, `measure.yml` or `llm-council.yml` is queued or running, checked again just before the merge; `python backend/utilities/migrate_to_parquet.py --state-dir state --month 2026-09 --month 2026-10 --ledger council-run-records --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA>` with `--plan`, then `--write`, `--verify` and `--retire`, each exiting 0; the same inputs with `--check` print `0 CSV file(s) left` and exit 0; a dry compaction pass for `council-run-records` has no period left to pack; pytest on `backend/tests/contracts/test_ledger_registry.py`; `doc_load.py` on `repository-layout.md`. CI: the full suite on the data commit. Named observation, not a gate: after the merge, in the next quiet window, the same inputs with `--check`, plus one `--month` for each month a council night has filed in since; a CSV file found then is moved by a follow-up commit under this row and the same run id.
-- **Oracle:** `--verify` (`backend/utilities/ledger_migration/proof.py`) proves that every CSV source key reads back through the door cell for cell, its step, part and width included, and that the door holds no key the CSV did not supply. It fails if a row is lost, invented, or read back with another step or part. It cannot settle a row that a council run which checked out code from before row 2 commits after `--retire`; the named observation finds that row.
+  - `state/compact/council-run-records/` (only the gardener's guarded follow-up commits)
+  - `TODO/20261004-61-council-run-records-plan.md` (this row's status and evidence)
+- **Acceptance gates:** use the input declaration below. Run the migrator with `--plan`, then `--write --raw-only`; both exit 0. The data PR contains new raw files and this row's plan update, no CSV deletions or compact changes. After it merges, run the named council compaction with explicit `--from` and `--to` months through `backend/utilities/gardener_publish.py`, using its existing task/run/config arguments. Repeat capped or stale passes on current main. Run migration `--verify` against fresh committed state; every selected CSV key and filled cell must read back. Record the source commit and proof commit in the PR evidence. A relevant change to source months, row contract, registry, migration or compaction inputs requires another import/packing/proof pass; unrelated changes do not. CI: full suites on the actual candidates. No global idle check, `--retire`, CSV-absence check or global zero-backlog gate.
+- **Oracle:** independent CSV source-cell proof through the normal ledger reader, plus the row 5 attempt-replacement test. It cannot prove records an obsolete run has not yet saved; late sources stay covered by this row until row 4 retires them.
+- **Completion evidence (2026-10-07 UTC):** source/code `c4c242a99b8c0ffc7b44e75085a4571559f5d7eb`; additive copy merged at `9cb9b704c5ccafc9f4697be8021f764613ba7d38`. Run identity `2026-10-07-1`, production root `state`, ledger `council-run-records`, months `2026-09` and `2026-10`. The fresh recount found 16 CSV days, 9,414 bytes and 56 reader records. Raw-only writing imported 50 migration-owned records; six native records already held on October 5 retained their original rows and writer identities.
+- **Packing and proof:** the guarded publisher's forced depth-one fetch hid ancestry from the local privacy hook. The separate structural correction merged at `abf57d20a4c5d23729ac99c6633ef76a2497caac`, without changing the hook or cutoff. Explicit historical passes landed at `e9ae324125c8b61b71ba4a0fef7b3b37ac00612b` and `09486008783a9210c561375f9b5ea2fc2ff216b5`; the second exhausted the selected inputs. On the latter committed state, `--verify` exited 0 with source-cell parity proven and `--plan` reported every selected day's rows already held. October 6's six native raw records remained byte-identical and readable. CSV, `.gitkeep` and legacy-family references remain unchanged.
+- **Retirement still pending:** legacy run `37402604801`, created `2026-10-06T02:07:30Z`, remains eligible for rerun until `2026-11-05T02:07:30Z`. Its collection succeeded even though selection failed. Row 4 also requires the old-ref and captured-output evidence in Table J; this copy and proof authorize no retirement or workflow restriction.
 
 **Decisions**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The months are those under `state/llm-council/shard-outcomes/` on the checked-out commit (`git ls-tree -r --name-only HEAD -- state/llm-council/shard-outcomes`): 2026-09 and 2026-10 at 9165a9f75 | Fowler, 2026-10-04 |
-| 2 | `--state-dir state` only: no trial root holds `llm-council/` (`git ls-tree` over the four `state/pipeline-tests` roots at 9165a9f75) | Fowler, 2026-10-04 |
-| 3 | The family goes in the same commit as the CSV, after `--retire`, so `state/llm-council/` stays claimed until the last file under it is gone | The owner, 2026-10-04 |
-| 4 | The run id is the UTC date of the migration commit followed by `-1`, and the SHA is the full id of the code commit being run, as the how-to says | Fowler, 2026-10-04 |
-| 5 | Carried by the plan's owner, never by a worker: a data commit made while every writer is stopped | The owner, 2026-10-04 |
-| 6 | A council run that started before row 2 merged may still add one CSV row. This row, or a follow-up commit under the same run id, moves it | The owner, 2026-10-04 |
+| 1 | Inputs: `--state-dir state --ledger council-run-records --month 2026-09 --month 2026-10 --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA>`. Add another explicitly named month only when a late source names it. Keep the same migration run identity on repeats; record the actual executing code SHA each time | Fowler; owner approval, 2026-10-07 |
+| 2 | CSV, `.gitkeep`, the family and old member references stay through row 3. Their deletion belongs to row 4 | Owner, 2026-10-07 |
+| 3 | Different native raw filenames may arrive while packing. Guarded gardener publication rejects changed output paths; a raw arrival missed by an earlier pass remains and is packed by a later explicit pass | Fowler, 2026-10-07 |
+| 4 | A failed council run is not evidence that its results were saved. Inspect its failed stage and recover any completed output before its artifacts expire; report unavailable output instead of claiming parity | Fowler, 2026-10-07 |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Move the data in row 2's pull request | The how-to merges the code first and the data last | One revert could not undo the code without the data | Fowler, 2026-10-04 |
-| 2 | Delete the CSV without moving it | Every cell is kept | The council's record of every night since its first, 2026-09-20 | The owner, 2026-10-04 |
-| 3 | Leave the CSV in place, unread | The old reader, the migrator entry and the old family would stay with no writer | Three pieces of code kept for rows nothing reads | Fowler, 2026-10-04 |
+| 1 | Wait for every pipeline to stop | Unrelated writes do not protect these records, and continual work prevents delivery | Indefinite delay | Owner, 2026-10-07 |
+| 2 | Pack and delete in the migration PR | Adds a competing compact writer and removes recovery before legacy writers are retired | A guarded publication/regeneration implementation for all migration inputs and outputs | Fowler, 2026-10-07 |
 
 ### Row #4 - The old-row reader and the migrator's council entry are deleted
 
-- **Scope:** once `--check` finds no council CSV file after the next council run, Table F's mapping leaves `from_csv_row` and the council's `CsvLedger` entry leaves the migrator, with their tests and the how-to's list of supported layouts. Level 2.
+- **Scope:** after the retirement gate below, import any late sources, prove and retire CSV using the still-present converter, then delete the old family and compatibility together. Level 4 for source retirement; no persisted row shape changes.
 - **Files touched** (from a whole-tree search for Table F's old names, `shard` and `shards`, in the contract and its test, and for `CSV_LEDGERS` entries keyed `LedgerName.COUNCIL_RUN_RECORDS`; search again at dispatch):
   - `backend/idhazh/contracts/council_run_record.py`
   - `backend/utilities/ledger_migration/csv_layouts.py`
   - `backend/tests/contracts/test_council_run_record.py` (the bijection becomes a refusal of `shard`)
   - `backend/tests/ledger_migration/test_csv_layouts.py` (the two-folder case declares a table entry of its own)
   - `docs/how-to/move-a-ledger-to-parquet.md` (the list of supported layouts)
-- **Acceptance gates:** local: first the precondition, a named observation: the first scheduled `llm-council.yml` run after row 3 merged has committed, and `migrate_to_parquet.py` with row 3's inputs and `--check`, plus one `--month` for each month that run filed in, prints `0 CSV file(s) left`. Then pytest on `backend/tests/contracts/test_council_run_record.py`, `backend/tests/ledger_migration/test_csv_layouts.py` and `backend/tests/ledger/test_persist.py`; `doc_load.py` on the how-to. CI: the full suite.
-- **Oracle:** this is a deletion, so live data reads the same. The property it could break is reading the migrated rows: `a-migrated-count-that-had-nothing-to-do.json`, stamped `2026-09-21T12:00` as every migrated row is, still comes back equal through `ledger.persist` and `ledger.load` in both formats (`test_every_contract_comes_back_equal_in_both_formats`), and a CSV row carrying `shard` is now refused by name. It cannot settle a CSV row committed after the check; none can be, because no writer has filed one since row 2.
+  - `state/llm-council/shard-outcomes/` (only named, proved CSV sources and `.gitkeep`)
+  - `config/ledgers.json`
+  - `backend/idhazh/contracts/ledger_name.py`
+  - `backend/idhazh/ledger/staging.py`
+  - `frontend/src/lib/data/slice-shapes.ts`
+  - `config/appearance.json`
+  - `backend/tests/contracts/test_ledger_registry.py`
+  - `backend/tests/contracts/test_frontend_vocabularies.py`
+  - `backend/tests/workflows/test_a_trial_tree_may_hold_door_files.py`
+  - `backend/tests/council/test_metrics_sink.py`
+  - `docs/reference/repository-layout.md`
+  - `TODO/20261004-61-council-run-records-plan.md`
+- **Acceptance gates:** first satisfy section 2.5. With the converter still present, repeat row 3 for changed source inputs, run `--verify`, then `--retire`, then `--check` with its explicit ledger/root/month arguments; all exit 0 and check reports no CSV. Only then remove the converter and family. Before merge, inspect those same old paths on the current merge candidate; do not use a default ledger list which now omits the removed entry. Relevant source changes invalidate retirement evidence. Local: selector-listed checks plus council contract, migration layout, persist, registry and frontend vocabulary tests; `doc_load.py` on changed Markdown. CI: full suite on the cleanup candidate.
+- **Oracle:** fresh source-cell parity before retirement, zero CSV on explicitly named paths after retirement, and the migrated old-stamp fixture round-trip through raw and compact formats. These checks cannot forbid a later dispatch of obsolete code; section 2.5 must settle that before deletion.
 
 **Decisions**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | No new `version`: the row's shape does not change, and the precondition shows that no committed file carries the old headings | Fowler, 2026-10-04 |
-| 2 | The migrator keeps accepting a prefix of more than one folder: Plan 59's judge ledgers sit two folders deep | Fowler, 2026-10-04 |
-| 3 | The changelog keeps its two old entries, because migrated rows carry `2026-09-21T12:00` | Fowler, 2026-10-04 |
-| 4 | Level 2: it deletes a reader that something could still need until the precondition holds | Fowler, 2026-10-04 |
+| 1 | Keep the old schema stamp and history readable; removing a CSV conversion path does not change the persisted Parquet row | Fowler, 2026-10-04 |
+| 2 | Keep the general nested-layout reader; only the council entry is removed | Fowler, 2026-10-04 |
+| 3 | One successful scheduled run proves the new writer works, not that obsolete writers cannot return | Fowler, 2026-10-07 |
 
 **Rejected alternatives**
 
@@ -366,3 +375,80 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 1 | Keep the old-row reader | A second shape the contract accepts, with no file left to read | A stray `shard` cell would silently become a step, for ever | The owner, 2026-10-04 |
 | 2 | Delete it in row 3 | A council run that checked out code from before row 2 can commit one CSV row after row 3, and moving that row needs the reader | A CSV row nothing could move | The owner, 2026-10-04 |
 | 3 | Remove the two-folder layout with the entry | Plan 59 needs it for every judge ledger it moves | The same change written again in Plan 59 | Fowler, 2026-10-04 |
+
+### 2.5 Retirement gate for row 4
+
+Table J - finite evidence, not an idle repository
+
+| # | Required evidence | Failure action |
+| --- | --- | --- |
+| J1 | Writer cutover is #1323, commit `a348e004e0109b493e58d7961cacee78c2b14782`. Read council runs in bounded UTC date windows and name those whose checkout lacks the cutover; include their attempts and queued jobs | Keep compatibility until every admitted obsolete attempt finishes and its completed output is saved or recovered |
+| J2 | Default: each obsolete run is past GitHub's 30-day rerun eligibility, measured from that run's creation instant, and no surviving attempt can write. A shorter route needs separate owner approval to retire those reruns | Do not cancel runs or delete run history to manufacture this evidence |
+| J3 | Dispatchable old branches/tags and pending writer changes cannot reintroduce the obsolete CSV writer. Record the evidence and the owner's operating decision for any obsolete ref still executable | Waiting 30 days alone is not sufficient. Surface the old-ref decision; no agent may silently disable workflow execution |
+| J4 | For each failed legacy save, completed output has been accounted for before artifact expiry. A failure in selection is distinguished from a failure after evaluation | Recover captured records; unavailable output is an explicit blocker, never a zero-row success |
+| J5 | Fresh import, named packing, source-cell proof and retirement complete on current state; the cleanup merge candidate contains no CSV on the named source paths | Re-import and prove relevant changes; retain family and converter until all checks pass |
+
+### Row #5 - Migration preserves writer ownership and can write raw files without packing
+
+- **Scope:** separate reader expectations from migration-owned rows, and add a production raw-only write option without changing existing default packing behavior. Level 3.
+- **Files touched:**
+  - `backend/utilities/ledger_migration/planning.py`
+  - `backend/utilities/ledger_migration/phases.py`
+  - `backend/utilities/ledger_migration/inputs.py`
+  - `backend/utilities/ledger_migration/readback.py`
+  - `backend/utilities/ledger_migration/report_lines.py`
+  - `backend/utilities/migrate_to_parquet.py`
+  - `backend/tests/ledger_migration/test_planning.py`
+  - `backend/tests/ledger_migration/test_phases.py`
+  - `backend/tests/ledger_migration/test_command.py`
+  - `backend/tests/ledger_migration/test_proof.py`
+  - `backend/tests/ledger_migration/test_full_chain.py`
+  - `docs/how-to/move-a-ledger-to-parquet.md`
+  - `docs/architecture/publishing/ledger-compaction.md`
+  - `TODO/20261004-61-council-run-records-plan.md`
+- **Acceptance gates:** run the shared selector's listing, then its selected local checks and the named migration tests. Use real generated state and contracts, no network or mocks. Exercise native attempt 1, migration of another CSV key on the same day, then native attempt 2 before packing. Native attempt 2 must win. Inspect raw envelopes: migration must not own the native key. Repeat migration with changed CSV, retaining earlier migration-owned records absent from the later source. Production-root CLI tests assert CSV and compact bytes are unchanged by raw-only writing. Default/full-chain behavior remains covered. CI: full suite.
+- **Oracle:** writer-ownership and attempt-replacement test through real persist/load, followed by independent source-cell proof. It cannot prove an unpacked historical import visible when a compact index already owns its day; row 6 and row 3 settle that.
+
+Table K - decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| K1 | `--raw-only` is valid only with explicit `--write`; other combinations exit 2 before any write. Success reports raw writing complete, CSV kept, packing/proof outstanding; no success-shaped parity claim | Fowler design; owner approval, 2026-10-07 |
+| K2 | Retain the migration work identity across repeats. Separate its source-derived snapshot from native records and from the expected reader result. Read only named day/period files with the existing envelope and ledger helpers; if compact output no longer exposes required identity, refuse explicitly rather than guess ownership | Fowler design; owner approval, 2026-10-07 |
+| K3 | Existing `planning._plan` folds all target rows into `models`, and `write_roots` persists those models under migration identity. Correct that ownership defect without changing the ledger's general key or attempt rules | Verified at e32768441, 2026-10-07 |
+| K4 | Update the canonical migration runbook with separate online-copy and final-retirement procedures. Apply its split test before editing; this plan adds no new page because all rows answer delivery of one council migration | Owner approval, 2026-10-07 |
+
+Table L - rejected alternatives
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| L1 | Disguise production as a trial root or use copied config to suppress packing | Bypasses the actual production predicate instead of providing a supported operation | Misleading proof and unsupported operational setup | Fowler, 2026-10-07 |
+| L2 | Copy native records into migration identity | Can preserve an older attempt under another identity and defeat replacement | Incorrect results despite apparently complete row counts | Fowler, 2026-10-07 |
+
+### Row #6 - Explicit historical packing reaches imported records outside the rerun window
+
+- **Scope:** make an explicit operator month range include its historical raw arrivals, without widening the ordinary scheduled rerun window. Level 2.
+- **Files touched:**
+  - `backend/idhazh/gardener/tasks/_compaction_periods.py`
+  - `backend/tests/gardener/tasks/test_compaction_periods.py`
+  - `backend/tests/gardener/tasks/test_compaction.py`
+  - `backend/tests/gardener/test_publish.py`
+  - `docs/architecture/publishing/ledger-compaction.md`
+  - `TODO/20261004-61-council-run-records-plan.md`
+- **Acceptance gates:** inspect selector listing and run selected checks plus named compaction/publish tests. Generate an indexed historical day with a later raw arrival outside the normal rerun window. Explicit selected months must include it and preserve source values after packing; ordinary schedule remains bounded as before. Use real local bare Git fixtures to test both orders: overlapping compact changes reject stale gardener publication, and a distinct raw arrival survives a stale successful pass and becomes readable after the next named pass. CI: full suite.
+- **Oracle:** historical raw-arrival parity through the normal reader after an explicitly bounded pass, including both Git arrival orders. It cannot retire old writers or guarantee a future pass has already run.
+
+Table M - decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| M1 | `_rerun_span` currently intersects explicit ranges with the normal 30-day window. Explicit bounds replace that look-back bound while still respecting the daily mark, selected periods, policy limits and named inputs | Verified at e32768441; owner approval, 2026-10-07 |
+| M2 | Reuse the gardener's existing guarded publication and explicit period arguments. A stale result lands nothing; repeat on current main. Do not text-merge compact indexes or choose one binary conflict side | Fowler, 2026-10-07 |
+| M3 | Scheduled packing limits, retention and deletion permissions stay unchanged | Owner approval, 2026-10-07 |
+
+Table N - rejected alternatives
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| N1 | Widen every scheduled look-back | Charges every later wake for a one-time historical import | More repeated input reads without changing the scheduled question | Fowler, 2026-10-07 |
+| N2 | Add a repository-wide lock or freeze | Existing guarded publication protects overlapping compact writes | Cross-workflow coordination and blocked unrelated delivery | Fowler, 2026-10-07 |

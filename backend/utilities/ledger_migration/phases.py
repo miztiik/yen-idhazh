@@ -14,8 +14,8 @@ from utilities.ledger_migration.planning import Moved, RootPlan, collect_reports
 from utilities.ledger_migration.proof import prove
 
 
-def write_roots(plans: Sequence[RootPlan]) -> list[tuple[Path, Moved]]:
-    """File and pack a complete plan, never deleting its CSV sources."""
+def write_roots(plans: Sequence[RootPlan], *, raw_only: bool = False) -> list[tuple[Path, Moved]]:
+    """File a plan, optionally leaving production compaction for a later pass."""
     for plan in plans:
         for name, days in plan.planned.items():
             for day, held in days.items():
@@ -24,24 +24,27 @@ def write_roots(plans: Sequence[RootPlan]) -> list[tuple[Path, Moved]]:
                         plan.state_dir, held.models, ledger=name, covers=day, identity=plan.identity
                     )
                     plan.reports[name].filed += 1
-    for plan in plans:
-        if not packs_here(plan.state_dir, plan.inputs.config_dir):
-            continue
-        first_ledger_year = config.load_gardener(plan.inputs.config_dir).config.first_ledger_year
-        for name in plan.planned:
-            packed, written, deleted = pack(
-                plan.state_dir,
-                name,
-                plan.identity,
-                policy=plan.policies[name],
-                today=plan.inputs.today,
-                months=plan.inputs.months,
-                first_ledger_year=first_ledger_year,
-            )
-            report = plan.reports[name]
-            report.packed = packed
-            report.compaction_written = written
-            report.compaction_deleted = deleted
+    if not raw_only:
+        for plan in plans:
+            if not packs_here(plan.state_dir, plan.inputs.config_dir):
+                continue
+            first_ledger_year = config.load_gardener(
+                plan.inputs.config_dir
+            ).config.first_ledger_year
+            for name in plan.planned:
+                packed, written, deleted = pack(
+                    plan.state_dir,
+                    name,
+                    plan.identity,
+                    policy=plan.policies[name],
+                    today=plan.inputs.today,
+                    months=plan.inputs.months,
+                    first_ledger_year=first_ledger_year,
+                )
+                report = plan.reports[name]
+                report.packed = packed
+                report.compaction_written = written
+                report.compaction_deleted = deleted
     return collect_reports(plans)
 
 

@@ -116,6 +116,19 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   $env:IDHAZH_PYTHON = (Get-Command python).Source
   ```
 
+- **A copied `bundle-gate.mjs` fails with a `SyntaxError` on an `import`; the
+  script is fine, it has no `package.json` beside it.**
+  `frontend/package.json` sets `"type": "module"`, which is what tells Node to
+  read `frontend/asset-base.js` as an ES module. Copy `bundle-gate.mjs` alone
+  into a bare folder and Node falls back to CommonJS, where `import` is a
+  syntax error. Plan 62's row L24 met it on 2026-10-07. The tell is the error
+  naming the `import` line itself, not a missing module. Copy the commit's
+  `frontend/package.json` beside the script, or run it from a full checkout
+  of `frontend/`:
+  ```powershell
+  Copy-Item frontend\package.json <bare-folder>\package.json
+  ```
+
 ## Two heavy gates on one box
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
