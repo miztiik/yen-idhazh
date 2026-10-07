@@ -100,7 +100,7 @@
 
 <Panel
 	title="What the record still needs"
-	note="Three counts have to be reached before the line may move at all. The squares are one a day: what the record did with that day."
+	note={`Three counts have to be reached before the line may move at all. ${windowDays === 1 ? `The square is what the record did with ${nameSpan(windowDays)}.` : 'The squares are one a day: what the record did with that day.'}`}
 >
 	<div
 		data-windowed="record-gates"
@@ -135,7 +135,9 @@
 				data-counted-squares={squares.length}
 				tabindex="0"
 				role="group"
-				aria-label="What the record did with each day. Left and Right read a day, Escape returns to the newest."
+				aria-label={windowDays === 1
+					? `What the record did with ${nameSpan(windowDays)}.`
+					: 'What the record did with each day. Left and Right read a day, Escape returns to the newest.'}
 				use:markReadout={{
 					count: squares.length,
 					walk: 'row',

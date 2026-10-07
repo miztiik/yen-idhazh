@@ -26,6 +26,7 @@
 		readoutMaxShare,
 		restingNote = ', the newest day',
 		hint,
+		hintOne = '',
 		picked = null,
 		onPick
 	}: {
@@ -38,6 +39,8 @@
 		readoutMaxShare: number;
 		restingNote?: string;
 		hint: string;
+		/** What the strip's hint line says at one column; see `ChartReadout`. */
+		hintOne?: string;
 		/** The day held open, outlined on the plot. */
 		picked?: number | null;
 		/** Told of a day a click or Enter picked. */
@@ -147,7 +150,7 @@
 			/>
 		{/if}
 	</svg>
-	<ChartReadout {readout} at={shown} {name} maxShare={readoutMaxShare} {restingNote} {hint} />
+	<ChartReadout {readout} at={shown} {name} maxShare={readoutMaxShare} {restingNote} {hint} {hintOne} />
 </div>
 
 <style>

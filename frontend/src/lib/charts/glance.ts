@@ -13,7 +13,7 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
-import { nameSpan, openWithSpan } from '../console/span-words';
+import { countDays, nameSpan, openWithSpan } from '../console/span-words';
 import { dayMonth, shortDate } from '../format';
 import { readoutOf, type Readout } from './readout';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
@@ -21,7 +21,7 @@ import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
 import { paint, type ChartToken } from './theme';
-import { TIME_BANDS, type StageFailureSeries, type TimeSplitDay } from './series';
+import { grouped, TIME_BANDS, type StageFailureSeries, type TimeSplitDay } from './series';
 
 export interface GlanceDay {
 	date: string;
@@ -139,7 +139,9 @@ function verdictOf(
 				`${trim(thresholds.minutesTarget)} that retires chart drawing`;
 	const reach =
 		coverage === null
-			? 'no day published anything to put a visual on'
+			? days === 1
+				? 'did not publish anything to put a visual on'
+				: 'no day published anything to put a visual on'
 			: `puts a visual on ${coverageText(coverage)} of what it published, ` +
 				`${coverage < thresholds.coveragePct ? 'below' : 'above'} the ` +
 				`${trim(thresholds.coveragePct)}% floor`;
@@ -415,6 +417,30 @@ export function publishingHorizon(
 	if (perDay === null || perDay <= 0) return null;
 	const articles = (capBytes - bytesUsed) / cost.median;
 	return { articles, articlesPerDay: perDay, years: articles / perDay / DAYS_A_YEAR };
+}
+
+/** What the per-article cost chart is, for a reader who cannot see it. One day
+ * is no spread, so a window of one day draws no band and names no median. */
+export function siteCostLabel(windowDays: number): string {
+	return windowDays === 1
+		? `Payload bytes per article in ${nameSpan(windowDays)}`
+		: `Payload bytes per article on each published day, over ${countDays(windowDays)}, against the median and one standard deviation either side of it`;
+}
+
+/** What the per-article cost measures, the sentences in the panel's note that
+ * name its days. Each published day needs a second day, so a window of one day
+ * names that day once. */
+export function siteCostMeasure(windowDays: number): string {
+	return windowDays === 1
+		? `Bytes the committed payload tree gained in ${nameSpan(windowDays)}, over the articles the day published.`
+		: `Bytes the committed payload tree gained on each published day, over the articles that day published. Over ${countDays(windowDays)}.`;
+}
+
+/** The daily rate a horizon is projected at, in words. A median of one day is
+ * that day's own count, so a window of one day says whose count it is. */
+export function horizonRate(articlesPerDay: number, windowDays: number): string {
+	const rate = `${grouped(Math.round(articlesPerDay))} articles a published day`;
+	return windowDays === 1 ? `${rate}, ${nameSpan(windowDays)}'s count` : `a median of ${rate}`;
 }
 
 /** What is failing, and is the mix changing?
@@ -750,6 +776,22 @@ export function publishedSkyline(
 			height: busiest === 0 ? 0 : counts[index] / busiest
 		}))
 	};
+}
+
+/** A skyline in words, for a reader who cannot see its bars. `noun` names the
+ * count, such as `Articles published`. One day has no busiest day and nothing
+ * to add up, so a window of one day says that day's count alone. */
+export function skylineLabel(noun: string, strip: Skyline, days: number): string {
+	return days === 1
+		? `${noun} in ${nameSpan(days)}, ${grouped(strip.total)}`
+		: `${noun} each day over ${countDays(days)}, ${grouped(strip.total)} over the window, ` +
+				`${grouped(strip.busiest)} on the busiest day`;
+}
+
+/** One of the rule's trend lines in words. `measured` counts the days that had
+ * a reading, not the window, and a line of one such day is not day by day. */
+export function ruleTrendLabel(measure: string, measured: number): string {
+	return `${measure}${measured === 1 ? '' : ', day by day'}, over ${countDays(measured, 'measured')}`;
 }
 
 /** How many bytes the tree gained across the window.

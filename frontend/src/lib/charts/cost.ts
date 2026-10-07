@@ -275,12 +275,16 @@ export function costColumns(shapes: CostShapes, shape: CostShape, currency: stri
  *
  * The word stays in the sentence. A shape described without it is a shape that
  * reads as a bill, and a reader using a screen reader gets the description
- * rather than the axis.
+ * rather than the axis. A column a day and a total added day by day both need a
+ * second day, so a window of one day describes its one column, or its total.
  */
 export function costLabel(shape: CostShape, days: number): string {
+	const one = days === 1;
 	const drawn =
 		shape === 'running'
-			? 'added up day by day'
-			: 'one column a day, reading at the bottom and writing on top';
+			? one
+				? 'in total'
+				: 'added up day by day'
+			: `${one ? 'one column' : 'one column a day'}, reading at the bottom and writing on top`;
 	return `The counterfactual cost of ${nameSpan(days)}, ${drawn}. What the work would have cost at a hosted provider's rate, never an amount owed.`;
 }

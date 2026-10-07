@@ -32,7 +32,7 @@ import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
 import type { StackRule, StackSeries } from '../charts/stacked';
 import { dayMonth, shortDate } from '../format';
-import { nameSpan, openWithSpan } from './span-words';
+import { countDays, nameSpan, openWithSpan } from './span-words';
 
 /** One surface on the console that answers for at least one ledger column.
  *
@@ -610,6 +610,29 @@ export function matchHeadline(days: readonly EvalDay[], windowDays: number): str
 			? `${openWithSpan(windowDays)} put`
 			: `Over ${nameSpan(windowDays)} the middle day put`;
 	return `${lead} half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched)} summaries checked.`;
+}
+
+/** Which day the faithfulness plot's points are, as its intro says it. A
+ * window of one day draws one point a line, so the two are that day. */
+export function matchPoints(windowDays: number): string {
+	return windowDays === 1
+		? `Both points are ${nameSpan(windowDays)}.`
+		: `One point is one day over ${nameSpan(windowDays)}.`;
+}
+
+/** The faithfulness plot in words, for a reader who cannot see it. `rulesAt`
+ * are the scores of the rules the plot drew. A line needs a second day, so a
+ * window of one day names its two points instead. */
+export function matchLabel(windowDays: number, rulesAt: readonly number[]): string {
+	const drawn =
+		windowDays === 1
+			? `Summary faithfulness in ${nameSpan(windowDays)}, as a percentage. One point is the day's middle summary and the other is the summary a quarter of the way up from the bottom.`
+			: `Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.`;
+	const rules =
+		rulesAt.length === 0
+			? ''
+			: ` A line crosses the plot at ${rulesAt.join(' and ')} percent, the scores a published story is banded on.`;
+	return `${drawn}${rules}`;
 }
 
 /** What the second faithfulness column says, in words.

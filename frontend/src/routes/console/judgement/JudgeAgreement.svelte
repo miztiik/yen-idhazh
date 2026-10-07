@@ -175,7 +175,9 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label="How often the judge disagreed with its own second reading, a day"
+				aria-label={windowDays === 1
+					? `How often the judge disagreed with its own second reading, in ${nameSpan(windowDays)}`
+					: 'How often the judge disagreed with its own second reading, a day'}
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,

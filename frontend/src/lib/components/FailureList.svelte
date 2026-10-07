@@ -36,6 +36,7 @@
 	} from '$lib/charts/series';
 	import { sparklineMarks, sparklineReadout } from '$lib/charts/sparkline';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
+	import { countDays } from '$lib/console/span-words';
 	import ChartReadout from './ChartReadout.svelte';
 	import RankedList from './RankedList.svelte';
 	import Sparkline from './Sparkline.svelte';
@@ -90,9 +91,15 @@
 		shown = max;
 	});
 
-	function occurrence(ago: number): string {
-		if (ago <= 0) return 'last on the newest day in view';
-		return `last ${ago} ${ago === 1 ? 'day' : 'days'} earlier`;
+	/** A window of one day, where every row was last seen on that day, so a row
+	 * says nothing about when. */
+	const oneDay = $derived(window.start === window.end);
+
+	/** When a row's failures were last seen, joined to the row by a dash, or
+	 * nothing at one day. */
+	function lastSeen(ago: number): string {
+		if (oneDay) return '';
+		return ` - ${ago <= 0 ? 'last on the newest day in view' : `last ${countDays(ago)} earlier`}`;
 	}
 
 	function failureWord(count: number): string {
@@ -114,9 +121,7 @@
 				label: cause.code,
 				status: cause.stage,
 				value: `${grouped(cause.count)} ${failureWord(cause.count)}`,
-				context:
-					`sources hit: ${cause.sources} of ${ledger.sourcesSeen}` +
-					` - ${occurrence(cause.lastAgo)}`
+				context: `sources hit: ${cause.sources} of ${ledger.sourcesSeen}${lastSeen(cause.lastAgo)}`
 			}
 		}))
 	);
@@ -224,9 +229,7 @@
 				// apart. No tint and no verdict - per-source yield is not measurable
 				// until the ledger is thirty days deep.
 				value: `${grouped(source.lost)} of ${grouped(source.articles)} ${articleWord(source.articles)}`,
-				context:
-					`${source.cause ?? `${source.causes} causes`}` +
-					` - ${occurrence(source.lastAgo)}`
+				context: `${source.cause ?? `${source.causes} causes`}${lastSeen(source.lastAgo)}`
 			}
 		}))
 	);

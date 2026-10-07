@@ -32,6 +32,7 @@
 	 */
 	import type { EChartsOption } from 'echarts';
 	import { onMount } from 'svelte';
+	import { openWithSpan } from '$lib/console/span-words';
 	import { bandShares, type PlotGrid } from './frame';
 	import { pointerReadout, readoutMarks, type Readout } from './readout';
 	import ChartReadout from '../components/ChartReadout.svelte';
@@ -44,7 +45,8 @@
 	const NO_SCRIPT_WORDS = 'This chart needs JavaScript.';
 	/** Where a chart with a readout strip keeps its numbers while its box is
 	 * empty. Every such chart that only a browser draws has a column per day, and
-	 * the strip rests on the newest one. */
+	 * the strip rests on the newest one. A window of one day has no newest, so
+	 * there the line names the window, as Reader chose on 2026-10-07. */
 	const STRIP_NUMBERS = "The newest day's numbers are below.";
 
 	let {
@@ -61,6 +63,7 @@
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
 		grid = { left: 48, right: 12 },
 		numbersNote,
+		windowDays = null,
 		fetched = false
 	}: {
 		/** Prerendered by `$lib/server/chart-render`, or empty where the chart is
@@ -93,6 +96,9 @@
 		 * with no strip names the text that carries its numbers, so a reader
 		 * facing an empty box still has somewhere to go. */
 		numbersNote?: string;
+		/** The days of the window a windowed chart follows, so the empty box can
+		 * name a window of one day. Null for a chart that follows none. */
+		windowDays?: number | null;
 		/** True where the rows behind this chart arrive by fetch rather than in
 		 * the document. It changes what the chart owes a reader with no script:
 		 * a chart over inlined data owes its resting column in the prerendered
@@ -112,7 +118,14 @@
 	const drawn = $derived(svg !== '' || chartState === 'live');
 	/** How many columns the strip reads, and zero where the chart has none. */
 	const count = $derived(readout?.columns.length ?? 0);
-	const note = $derived(numbersNote ?? (count > 0 ? STRIP_NUMBERS : ''));
+	const note = $derived(
+		numbersNote ??
+			(count === 0
+				? ''
+				: windowDays === 1
+					? `${openWithSpan(windowDays)}'s numbers are below.`
+					: STRIP_NUMBERS)
+	);
 	/** The option the live chart is holding, so an unchanged one is not handed
 	 * over again the first time the effect runs. */
 	let handed: EChartsOption | null = null;

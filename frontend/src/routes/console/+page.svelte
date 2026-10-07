@@ -69,22 +69,28 @@
 	import Chart from '$lib/charts/Chart.svelte';
 	import { pointerReadout, readoutMarks, readoutOf, type Readout } from '$lib/charts/readout';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
-	import { extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
+	import { extractionLabel, extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
 	import {
 		chartRule,
 		coverageText,
 		failureMix,
 		failureMixColumns,
+		horizonRate,
 		minutesText,
 		publishedSkyline,
 		publishingHorizon,
+		ruleTrendLabel,
 		siteCost,
+		siteCostLabel,
+		siteCostMeasure,
 		sizeGain,
+		skylineLabel,
 		timeSplitChart,
 		timeSplitColumns,
 		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
+	import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '$lib/console/daily-figures';
 	import type { StackShape } from '$lib/charts/stacked';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
@@ -720,9 +726,7 @@
 				viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
 				role="img"
 				tabindex="0"
-				aria-label="{noun} each day over {countDays(windowDays)}, {grouped(strip.total)} over the window, {grouped(
-					strip.busiest
-				)} on the busiest day"
+				aria-label={skylineLabel(noun, strip, windowDays)}
 				data-published-measure={measure}
 				data-published-days={strip.bars.length}
 				data-published-total={strip.total}
@@ -783,10 +787,18 @@
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
 	<!-- One line at a phone's width: the section's first chart sits right under
-	     it, and the keys are the ones every other strip on the console names. -->
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-glance-hint>
-		Point at a card's bars to read a day.
-	</p>
+	     it, and the keys are the ones every other strip on the console names. At
+	     one day each card's one bar is already read below it, so the line keeps
+	     its room blank and unread, as a strip's hint does. -->
+	{#if windowDays === 1}
+		<p class="invisible mt-1 text-[0.8125rem] text-text-tertiary" aria-hidden="true" data-glance-hint-held>
+			{'\u00a0'}
+		</p>
+	{:else}
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-glance-hint>
+			Point at a card's bars to read a day.
+		</p>
+	{/if}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<!-- Articles first. Visuals published is a fraction of it, and a fraction
 		     reads as one only when the denominator is beside it. -->
@@ -828,7 +840,7 @@
 	>
 		<Panel
 			title="What one more article costs"
-			note="How long we can keep publishing. The 1 GB Pages cap is fixed, so what one more article costs is what sets the date we reach it. Bytes the committed payload tree gained on each published day, over the articles that day published. Over {countDays(windowDays)}. {sizeDelta}"
+			note="How long we can keep publishing. The 1 GB Pages cap is fixed, so what one more article costs is what sets the date we reach it. {siteCostMeasure(windowDays)} {sizeDelta}"
 		>
 			{#if perArticle.empty}
 				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
@@ -862,8 +874,9 @@
 					<p class="mt-1 text-[0.8125rem] text-text-secondary" data-cost-horizon>
 						At {bytes(perArticle.median ?? 0)} an article, the 1 GB cap has room for about {roughly(
 							horizon.articles
-						)} more. At a median of {grouped(Math.round(horizon.articlesPerDay))} articles a published
-						day, that is about {horizon.years.toFixed(1)} years. The cap is measured on the built site,
+						)} more. At {horizonRate(horizon.articlesPerDay, windowDays)}, that is about {horizon.years.toFixed(
+							1
+						)} years. The cap is measured on the built site,
 						which is larger than the payload tree this rate came from, so that is the most room we have
 						and not the least.
 					</p>
@@ -873,11 +886,12 @@
 					option={perArticle.option}
 					width={data.console.chart_width}
 					height={220}
-					label="Payload bytes per article on each published day, over {countDays(windowDays)}, against the median and one standard deviation either side of it"
+					label={siteCostLabel(windowDays)}
 					readout={costColumns}
 					readoutName="cost-per-article"
 					readoutMaxShare={data.chart.readout_max_share}
 					grid={COST_GRID}
+					{windowDays}
 					restingNote=", the newest published day"
 					hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
 				/>
@@ -1364,7 +1378,7 @@
 								}}
 								width={220}
 								height={30}
-								label="Minutes per visual, day by day, over {rule.minutesDays} measured days"
+								label={ruleTrendLabel('Minutes per visual', rule.minutesDays)}
 							/>
 							{@render ruleMove(rule.minutesTrend.movement, rule.minutesMarks.sense, 'minutes')}
 						</div>
@@ -1388,7 +1402,10 @@
 								}}
 								width={220}
 								height={30}
-								label="Share of published articles carrying a visual, day by day, over {rule.coverageDays} measured days"
+								label={ruleTrendLabel(
+									'Share of published articles carrying a visual',
+									rule.coverageDays
+								)}
 							/>
 							{@render ruleMove(rule.coverageTrend.movement, rule.coverageMarks.sense, 'coverage')}
 						</div>
@@ -1415,7 +1432,7 @@
 						height={FLOW_HEIGHT}
 						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 						noReadout="a flow between stages, so there is no column two branches share, and every stage and every branch prints its count and share beside its node; agreed with Susan"
-						numbersNote={`Open "Show these figures day by day" below for each stage's count on every day.`}
+						numbersNote={dailyFiguresPointer(windowDays)}
 					/>
 				</div>
 				<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
@@ -1471,10 +1488,10 @@
 				data-daily-rows={chartsInWindow.length}
 			>
 				<summary class="console-summary" data-charts-toggle
-					>Show these figures day by day, over {nameSpan(windowDays)}</summary
+					>{dailyFiguresSummary(windowDays)}</summary
 				>
 				<p class="mt-3 text-[0.8125rem] text-text-tertiary">
-					One row per day in the open window, newest first. Reached is every item the visual planner
+					{dailyFiguresRows(windowDays)} Reached is every item the visual planner
 					looked at, asked the model is the part it sent a request for, visuals drafted is what the
 					model returned, and visuals published is what survived the checks after it. A dash means no
 					minutes are on record, so there is no rate to divide. Zero reached means nothing committed
@@ -1628,11 +1645,12 @@
 							option={yieldTrend.option}
 							width={data.console.chart_width}
 							height={220}
-							label="Articles the reading found enough figures of one kind in, against published articles carrying a chart, one point a day over {countDays(windowDays)}"
+							label={extractionLabel(windowDays)}
 							readout={yieldColumns}
 							readoutName="extraction-yield"
 							readoutMaxShare={data.chart.readout_max_share}
 							grid={YIELD_GRID}
+							{windowDays}
 							restingNote=", the newest measured day"
 							hint="Point at a day to read both counts. Left and Right step through them, Escape returns to the newest."
 						/>

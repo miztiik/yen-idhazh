@@ -4,16 +4,36 @@
  * this file builds, at one day and at seven, against whole sentences written out
  * here. The words are Reader's: the days on screen are "this one day" or "these 7
  * days", a count over the window is "1 of 1 day" or "2 of 7 days", and at one day
- * a sentence that would need a second day names the day itself. No sentence here
- * may say "1 days".
+ * a sentence that would need a second day names the day itself. That holds for a
+ * sentence that prints no day count as well: at one day it orders no days, ranges
+ * over none, waits for none and says no "each day". No sentence here may say
+ * "1 days".
  */
 
 import { expect, test } from '@playwright/test';
 import { costLabel } from '../src/lib/charts/cost';
+import { extractionLabel } from '../src/lib/charts/extraction-trend';
+import { FLEET_HINT, fleetHintOne } from '../src/lib/charts/fleet';
 import { coverage, coverageSentence, noModelRuleNote } from '../src/lib/charts/frame';
-import { chartRule, type GlanceDay } from '../src/lib/charts/glance';
-import { neverSeenNote, reasonDays, reasonHeadline, unexplainedNote } from '../src/lib/console/doubt-reasons';
-import { matchHeadline, type EvalDay } from '../src/lib/console/eval-instruments';
+import {
+	chartRule,
+	horizonRate,
+	publishedSkyline,
+	ruleTrendLabel,
+	siteCostLabel,
+	siteCostMeasure,
+	skylineLabel,
+	type GlanceDay
+} from '../src/lib/charts/glance';
+import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
+import {
+	neverSeenNote,
+	reasonDays,
+	reasonHeadline,
+	reasonsLabel,
+	unexplainedNote
+} from '../src/lib/console/doubt-reasons';
+import { matchHeadline, matchLabel, matchPoints, type EvalDay } from '../src/lib/console/eval-instruments';
 import {
 	clampNote,
 	heldNote,
@@ -79,8 +99,19 @@ test('a sparse chart counts its measured days over the days it drew', () => {
 });
 
 test('the counterfactual cost chart names the days it prices', () => {
-	expect(costLabel('daily', 1)).toContain('The counterfactual cost of this one day, ');
-	expect(costLabel('daily', 7)).toContain('The counterfactual cost of these 7 days, ');
+	// A column a day and a total added day by day both need a second day, so one
+	// day is one column, or its total.
+	const owed = "What the work would have cost at a hosted provider's rate, never an amount owed.";
+	expect(costLabel('daily', 1)).toBe(
+		`The counterfactual cost of this one day, one column, reading at the bottom and writing on top. ${owed}`
+	);
+	expect(costLabel('daily', 7)).toBe(
+		`The counterfactual cost of these 7 days, one column a day, reading at the bottom and writing on top. ${owed}`
+	);
+	expect(costLabel('running', 1)).toBe(`The counterfactual cost of this one day, in total. ${owed}`);
+	expect(costLabel('running', 7)).toBe(
+		`The counterfactual cost of these 7 days, added up day by day. ${owed}`
+	);
 });
 
 test('the chart-drawing verdict names the one day, since one day has no median day', () => {
@@ -91,6 +122,112 @@ test('the chart-drawing verdict names the one day, since one day has no median d
 	);
 	expect(chartRule([day], thresholds, 7).verdict).toBe(
 		'The median day spends 4.2 minutes per visual, inside the 6 that retires chart drawing, and puts a visual on 40% of what it published, below the 50% floor.'
+	);
+
+	// Nothing published: one day did not, and no day of seven did.
+	const quiet: GlanceDay = { date: '2026-10-06', published: 0, items: 0, minutesPerChart: null };
+	expect(chartRule([quiet], thresholds, 1).verdict).toBe(
+		'This one day has no minutes on record, and did not publish anything to put a visual on.'
+	);
+	expect(chartRule([quiet], thresholds, 7).verdict).toBe(
+		'The median day has no minutes on record over these 7 days, and no day published anything to put a visual on.'
+	);
+});
+
+/** One day of the chart-drawing record: articles published, visuals on some. */
+function glanceDay(date: string, items: number, published = 0): GlanceDay {
+	return { date, published, items, minutesPerChart: null };
+}
+
+test('a card skyline gives one day its count, and seven days their total and busiest day', () => {
+	const oneDay = { start: '2026-10-06', end: '2026-10-06' };
+	const days = [glanceDay('2026-10-06', 300, 4)];
+	expect(skylineLabel('Articles published', publishedSkyline(days, oneDay, 'items'), 1)).toBe(
+		'Articles published in this one day, 300'
+	);
+	expect(skylineLabel('Visuals published', publishedSkyline(days, oneDay, 'published'), 1)).toBe(
+		'Visuals published in this one day, 4'
+	);
+
+	const sevenDays = { start: '2026-09-30', end: '2026-10-06' };
+	const week = [glanceDay('2026-10-01', 1200), glanceDay('2026-10-06', 300)];
+	expect(skylineLabel('Articles published', publishedSkyline(week, sevenDays, 'items'), 7)).toBe(
+		'Articles published each day over 7 days, 1,500 over the window, 1,200 on the busiest day'
+	);
+});
+
+test('a trend of the chart-drawing rule counts its measured days, and one is not day by day', () => {
+	expect(ruleTrendLabel('Minutes per visual', 1)).toBe('Minutes per visual, over 1 measured day');
+	expect(ruleTrendLabel('Share of published articles carrying a visual', 1)).toBe(
+		'Share of published articles carrying a visual, over 1 measured day'
+	);
+	expect(ruleTrendLabel('Minutes per visual', 9)).toBe(
+		'Minutes per visual, day by day, over 9 measured days'
+	);
+});
+
+test('the extraction trend has one point for one day, and one a day over seven', () => {
+	const lead =
+		'Articles the reading found enough figures of one kind in, against published articles carrying a chart';
+	expect(extractionLabel(1)).toBe(`${lead}, one point for this one day`);
+	expect(extractionLabel(7)).toBe(`${lead}, one point a day over 7 days`);
+});
+
+test('a table of daily figures opens on one day, and on seven day by day, newest first', () => {
+	expect(dailyFiguresSummary(1)).toBe('Show these figures for this one day');
+	expect(dailyFiguresSummary(7)).toBe('Show these figures day by day, over these 7 days');
+	expect(dailyFiguresRows(1)).toBe('One row for this one day.');
+	expect(dailyFiguresRows(7)).toBe('One row per day in the open window, newest first.');
+	expect(dailyFiguresPointer(1)).toBe(
+		`Open "Show these figures for this one day" below for each stage's count.`
+	);
+	expect(dailyFiguresPointer(7)).toBe(
+		`Open "Show these figures day by day" below for each stage's count on every day.`
+	);
+});
+
+test('the doubt-reasons chart describes its one column at one day', () => {
+	expect(reasonsLabel(1)).toBe(
+		"Why summaries were doubted in this one day. The column's height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count and the total is not shown."
+	);
+	expect(reasonsLabel(7)).toBe(
+		'Why summaries were doubted, per day, over 7 days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown.'
+	);
+});
+
+test('the faithfulness plot names its two points at one day, and its lines over seven', () => {
+	const lower = 'the other is the summary a quarter of the way up from the bottom.';
+	expect(matchLabel(1, [])).toBe(
+		`Summary faithfulness in this one day, as a percentage. One point is the day's middle summary and ${lower}`
+	);
+	expect(matchLabel(7, [70, 82])).toBe(
+		`Summary faithfulness per day over 7 days, as a percentage. One line is each day's middle summary and ${lower} A line crosses the plot at 70 and 82 percent, the scores a published story is banded on.`
+	);
+	expect(matchPoints(1)).toBe('Both points are this one day.');
+	expect(matchPoints(7)).toBe('One point is one day over these 7 days.');
+});
+
+test('the per-article cost names one day, and over seven each published day and its spread', () => {
+	expect(siteCostLabel(1)).toBe('Payload bytes per article in this one day');
+	expect(siteCostLabel(7)).toBe(
+		'Payload bytes per article on each published day, over 7 days, against the median and one standard deviation either side of it'
+	);
+	expect(siteCostMeasure(1)).toBe(
+		'Bytes the committed payload tree gained in this one day, over the articles the day published.'
+	);
+	expect(siteCostMeasure(7)).toBe(
+		'Bytes the committed payload tree gained on each published day, over the articles that day published. Over 7 days.'
+	);
+	// The rate stays a rate at one day; it is that day's own count.
+	expect(horizonRate(300, 1)).toBe("300 articles a published day, this one day's count");
+	expect(horizonRate(334.4, 7)).toBe('a median of 334 articles a published day');
+});
+
+test("the machines' strip says what one column still offers: the day's jobs", () => {
+	expect(fleetHintOne(1)).toBe("Click or Enter lists this one day's jobs.");
+	expect(fleetHintOne(7)).toBe("Click or Enter lists the day's jobs.");
+	expect(FLEET_HINT).toBe(
+		"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs."
 	);
 });
 

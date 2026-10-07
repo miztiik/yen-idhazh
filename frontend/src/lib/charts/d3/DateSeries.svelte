@@ -38,6 +38,7 @@
 		readoutMaxShare = 1,
 		restingNote = ', the newest day',
 		hint = 'Point at a day to read it. Left and Right step through them, Escape returns to the newest.',
+		hintOne = '',
 		lede = false,
 		hatch = null,
 		picked = null,
@@ -56,6 +57,8 @@
 		readoutMaxShare?: number;
 		restingNote?: string;
 		hint?: string;
+		/** What the strip's hint line says at one column; see `ChartReadout`. */
+		hintOne?: string;
 		/** True where the marks are the one thing in the panel meant to land first. */
 		lede?: boolean;
 		/** The stripes a hatched series is drawn in. */
@@ -219,6 +222,7 @@
 				maxShare={readoutMaxShare}
 				{restingNote}
 				{hint}
+				{hintOne}
 			/>
 		{/if}
 	</div>

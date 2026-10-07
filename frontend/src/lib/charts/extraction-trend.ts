@@ -10,6 +10,7 @@
  */
 
 import type { EChartsOption } from 'echarts';
+import { countDays, nameSpan } from '../console/span-words';
 import { dayMonth, shortDate } from '../format';
 import { readoutOf, type Readout } from './readout';
 import { paint } from './theme';
@@ -46,6 +47,15 @@ const SERIES = [
 	{ name: 'Enough figures to draw', token: '--chart-1' as const, of: (day: ExtractionDay) => day.chartable },
 	{ name: 'Published carrying a chart', token: '--chart-3' as const, of: (day: ExtractionDay) => day.charted }
 ];
+
+/** The trend in words, for a reader who cannot see it. One point a day needs a
+ * second day, so a window of one day has one point for that day. */
+export function extractionLabel(days: number): string {
+	return (
+		'Articles the reading found enough figures of one kind in, against published articles carrying a chart, ' +
+		(days === 1 ? `one point for ${nameSpan(days)}` : `one point a day over ${countDays(days)}`)
+	);
+}
 
 /** The trend, over the days handed in.
  *

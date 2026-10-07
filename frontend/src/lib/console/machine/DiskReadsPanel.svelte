@@ -140,8 +140,17 @@
 		fired: { fill: 'var(--fill-low)', words: 'the model waited on the disk' }
 	};
 
-	/** The day a pointer, a key or a tap has picked, or null for the resting one. */
+	/** The day the pointer, a key or a tap has picked, or null for the resting one. */
 	let picked = $state<number | null>(null);
+
+	/** The days the strips draw, as the lower legend names them: one date where
+	 * they are one day, never that date to itself. */
+	const drawnDays = $derived.by(() => {
+		const first = reads.days.at(0)?.date;
+		const last = reads.days.at(-1)?.date;
+		if (first === undefined || last === undefined) return '';
+		return first === last ? `, ${first}` : `, ${first} to ${last}`;
+	});
 
 	/** Both tracks at one day. It rests on the worst day the finding names, and on
 	 * the newest day where nothing fired. */
@@ -216,7 +225,9 @@
 			class="strip"
 			tabindex="0"
 			role="group"
-			aria-label="Waits for the disk and disk copies, one day a column. Left and Right read a day, Escape returns to rest."
+			aria-label={days === 1
+				? `Waits for the disk and disk copies, for ${nameSpan(days)}.`
+				: 'Waits for the disk and disk copies, one day a column. Left and Right read a day, Escape returns to rest.'}
 			use:markReadout={{
 				count: reads.days.length,
 				walk: 'row',
@@ -224,7 +235,13 @@
 				selected: picked
 			}}
 		>
-			<ol class="track" data-disk-read-track aria-label="Waits for the disk, one tile a day">
+			<ol
+				class="track"
+				data-disk-read-track
+				aria-label={days === 1
+					? `Waits for the disk, one tile for ${nameSpan(days)}`
+					: 'Waits for the disk, one tile a day'}
+			>
 				{#each reads.days as day, index (day.date)}
 					<li
 						class="tile {day.state}"
@@ -245,7 +262,9 @@
 			<ol
 				class="track"
 				data-disk-copies-track
-				aria-label="How far the machine's disk copies fell, the same days"
+				aria-label={days === 1
+					? "How far the machine's disk copies fell, the same day"
+					: "How far the machine's disk copies fell, the same days"}
 			>
 				{#each reads.days as day, index (day.date)}
 					<li
@@ -263,8 +282,7 @@
 				{/each}
 			</ol>
 			<p class="legend">
-				How far the memory holding disk copies fell{#if reads.days.length > 0}, {reads.days[0]
-						.date} to {reads.days[reads.days.length - 1].date}{/if}
+				How far the memory holding disk copies fell{drawnDays}
 			</p>
 		</div>
 

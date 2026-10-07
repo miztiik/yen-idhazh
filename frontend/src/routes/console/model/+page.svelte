@@ -23,11 +23,13 @@
 		reasonColumns,
 		reasonHeadline,
 		reasonSeries,
+		reasonsLabel,
 		reasonTotals,
 		reasonsWithin,
 		unexplainedNote,
 		REASONS
 	} from '$lib/console/doubt-reasons';
+	import { dailyFiguresSummary } from '$lib/console/daily-figures';
 	import {
 		evalColumnLabels,
 		evalWithin,
@@ -36,7 +38,9 @@
 		matchDays,
 		matchFloor,
 		matchHeadline,
+		matchLabel,
 		matchNotes,
+		matchPoints,
 		matchRules,
 		matchSeries,
 		recordedReadings,
@@ -484,10 +488,10 @@
 	 * because it has to name the rules the plot actually drew, and a rule under
 	 * the axis floor is not one of them. */
 	const matchChartLabel = $derived(
-		`Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.` +
-			(matchRulesDrawn.length === 0
-				? ''
-				: ` A line crosses the plot at ${matchRulesDrawn.map((rule) => `${rule.at}`).join(' and ')} percent, the scores a published story is banded on.`)
+		matchLabel(
+			windowDays,
+			matchRulesDrawn.map((rule) => rule.at)
+		)
 	);
 	const matchStrip = $derived(matchColumns(matchWindow));
 	const matchHead = $derived(matchHeadline(evalWindow, windowDays));
@@ -593,6 +597,7 @@
 				reference={data.throughputReference}
 				tickDensity={data.chart.tick_density}
 				readoutMaxShare={data.chart.readout_max_share}
+				{windowDays}
 			/>
 
 			{#if newestModelDay !== null}
@@ -668,9 +673,7 @@
 					data-windowed="daily-figures"
 					data-window-days={windowDays}
 				>
-					<summary class="console-summary"
-						>Show these figures day by day, over {nameSpan(windowDays)}</summary
-					>
+					<summary class="console-summary">{dailyFiguresSummary(windowDays)}</summary>
 					<div class="console-table mt-3" data-model="table">
 						<table class="w-full text-[0.8125rem]">
 							<thead class="text-text-tertiary">
@@ -777,10 +780,11 @@
 					option={reasonPlot.option}
 					width={data.console.chart_width}
 					height={data.console.chart_height}
-					label="Why summaries were doubted, per day, over {countDays(windowDays)}. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
+					label={reasonsLabel(windowDays)}
 					readout={reasonStrip}
 					readoutName="doubt-reasons"
 					readoutMaxShare={data.chart.readout_max_share}
+					{windowDays}
 					restingNote=", the newest day"
 					hint="Point at a day to read every reason at once. Left and Right step through the days, Escape returns to the newest."
 				/>
@@ -850,9 +854,7 @@
 				Faithfulness is how much of a summary its own article supports. The checker reads each
 				summary back against the article it came from and scores it out of a hundred, and
 				<strong class="font-semibold text-text-secondary">higher is better</strong>.
-				{windowDays === 1
-					? `The single point is ${nameSpan(windowDays)}.`
-					: `One point is one day over ${nameSpan(windowDays)}.`}
+				{matchPoints(windowDays)}
 				<strong class="font-semibold text-text-secondary" data-model-match-rule
 					>A published story is banded on two of these scores</strong
 				>: {data.matchThresholds.high}% and up is published as matching its source, and under {data
@@ -886,6 +888,7 @@
 					readout={matchStrip}
 					readoutName="faithfulness"
 					readoutMaxShare={data.chart.readout_max_share}
+					{windowDays}
 					restingNote=", the newest day"
 					hint="Point at a day to read both figures and how many summaries they are over. Left and Right step through the days, Escape returns to the newest."
 				/>
