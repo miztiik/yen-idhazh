@@ -126,6 +126,63 @@ def test_running_it_twice_leaves_the_tree_running_it_once_left(
     assert any(line == "shard 0: already-on-main, try 1" for line in said)
 
 
+def test_fetch_preserves_a_deep_checkouts_ancestry_for_its_push_hook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    root = git(checkout, "rev-parse", "HEAD").strip()
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / "README.md", "another commit\n")
+    git(mover, "add", "README.md")
+    git(mover, "commit", "--quiet", "-m", "advance main")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    hook = write(
+        checkout / ".git" / "hooks" / "pre-push",
+        "#!/bin/sh\n"
+        "while read -r local_ref local_sha remote_ref remote_sha; do\n"
+        f'  git merge-base --is-ancestor {root} "$local_sha" || exit 1\n'
+        "done\n",
+    )
+    hook.chmod(0o755)
+
+    fetched = gardener_publish.Checkout(checkout).fetch()
+
+    git(checkout, "merge-base", "--is-ancestor", root, fetched)
+    assert git(checkout, "rev-parse", "--is-shallow-repository").strip() == "false"
+    assert landed(a_shard(), checkout)[0] == EXIT_OK
+    git(origin, "merge-base", "--is-ancestor", root, "main")
+
+
+def test_fetch_keeps_a_depth_one_clone_shallow_and_downloads_only_new_commits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, mover = an_origin(tmp_path, SEEDED)
+    for number in range(2):
+        write(mover / "README.md", f"prior commit {number}\n")
+        git(mover, "add", "README.md")
+        git(mover, "commit", "--quiet", "-m", f"prior commit {number}")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    shallow = tmp_path / "shallow"
+    git(tmp_path, "clone", "--quiet", "--depth=1", origin.as_uri(), str(shallow))
+    assert git(shallow, "rev-list", "--count", "origin/main").strip() == "1"
+    for number in range(2):
+        write(mover / "README.md", f"new commit {number}\n")
+        git(mover, "add", "README.md")
+        git(mover, "commit", "--quiet", "-m", f"new commit {number}")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+
+    fetched = gardener_publish.Checkout(shallow).fetch()
+
+    assert fetched == git(origin, "rev-parse", "main").strip()
+    assert git(shallow, "rev-parse", "--is-shallow-repository").strip() == "true"
+    assert git(shallow, "rev-list", "--count", "origin/main").strip() == "3"
+    assert git(origin, "rev-list", "--count", "main").strip() == "5"
+    gardener_publish.Checkout(shallow).fetch()
+    assert git(shallow, "rev-list", "--count", "origin/main").strip() == "3"
+
+
 def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
