@@ -12,7 +12,7 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from utilities.pipeline_test_state_verifier import verify
 
@@ -48,28 +48,8 @@ def _identity() -> WriterIdentity:
     )
 
 
-def _watermark(root: Path, period: Period) -> Path:
-    """One compact watermark the verifier must parse."""
-    through = {Period.DAILY: DAY, Period.MONTHLY: MONTH, Period.YEARLY: DAY[:4]}[period]
-    path = ledger.watermark_path(root, WHICH, period)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        Watermark(
-            version=Watermark.schema_version(),
-            ledger=WHICH,
-            period=period,
-            through=through,
-            advanced_at="2026-10-05T00:00:00Z",
-            run_id=RUN_ID,
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
-    return path
-
-
-def _tree(tmp_path: Path) -> tuple[Path, Path, Path, dict[Period, Path]]:
-    """A C1 case root with door-written raw and compact files, indexes and watermarks."""
+def _tree(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A C1 case root with door-written raw and compact files and a compact index."""
     root = _root(tmp_path)
     (raw,) = ledger.persist(root, [_row()], ledger=WHICH, covers=DAY, identity=_identity())
     compact = ledger.persist_period(
@@ -94,8 +74,7 @@ def _tree(tmp_path: Path) -> tuple[Path, Path, Path, dict[Period, Path]]:
         encoding="ascii",
         newline="\n",
     )
-    marks = {period: _watermark(root, period) for period in Period}
-    return root, raw, index, marks
+    return root, raw, index
 
 
 def _verify(tmp_path: Path) -> None:
@@ -109,7 +88,7 @@ def test_verifier_accepts_a_generated_c1_case_root(tmp_path: Path) -> None:
 
 
 def test_verifier_refuses_one_corrupt_raw_envelope(tmp_path: Path) -> None:
-    _root_path, raw, _index, _marks = _tree(tmp_path)
+    _root_path, raw, _index = _tree(tmp_path)
     raw.write_bytes(b"not a ledger file\n")
 
     with pytest.raises(ValueError, match=ROOT):
@@ -117,17 +96,8 @@ def test_verifier_refuses_one_corrupt_raw_envelope(tmp_path: Path) -> None:
 
 
 def test_verifier_refuses_one_corrupt_compact_index(tmp_path: Path) -> None:
-    _root_path, _raw, index, _marks = _tree(tmp_path)
+    _root_path, _raw, index = _tree(tmp_path)
     index.write_text('{"version":"2026-09-01","entries":"broken"}', encoding="ascii")
 
     with pytest.raises(ValueError, match=r"daily\.json"):
-        _verify(tmp_path)
-
-
-@pytest.mark.parametrize("period", list(Period))
-def test_verifier_refuses_one_corrupt_watermark(tmp_path: Path, period: Period) -> None:
-    _root_path, _raw, _index, marks = _tree(tmp_path)
-    marks[period].write_text('{"version":"2026-09-27","through":"broken"}', encoding="ascii")
-
-    with pytest.raises(ValueError, match=r"watermark\.json"):
         _verify(tmp_path)

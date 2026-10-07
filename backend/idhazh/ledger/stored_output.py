@@ -6,7 +6,7 @@ from pathlib import Path
 
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.file_envelope import Format, Period, Tier
-from idhazh.contracts.ledger_index import CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths
 from idhazh.ledger.persist import load_stored, read_envelope
@@ -35,14 +35,6 @@ def check_compact_period(state_dir: Path, which: LedgerName, period: Period, cov
     An entry with no file, an `empty` period or a `lost` day, is present while no
     file holds it, and a file where it stands is refused.
     """
-    watermark_path = paths.watermark_path(state_dir, which, period)
-    if watermark_path.exists():
-        try:
-            watermark = Watermark.read(watermark_path)
-        except (ValueError, StalePayloadError) as refusal:
-            raise ValueError(f"{watermark_path.name}: {refusal}") from refusal
-        if (watermark.ledger, watermark.period) != (which, period):
-            raise ValueError(f"{watermark_path.name}: watermark names another ledger or period")
     index_path = paths.compact_index_path(state_dir, which, period)
     entry = None
     if index_path.exists():
