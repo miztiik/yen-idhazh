@@ -60,7 +60,7 @@ Table D - PR phases
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Reusable migration operations ship | - | A | DONE #1265 | - | #1265 | phased-migration-tool |
 | D2 | 2 | Readers understand nested trial roots | 1 | B | DONE | pt-row-2 | - | Fowler |
-| D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | IN PR | trial-root-compaction | #1405 | Fowler |
+| D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | DONE #1405 | trial-root-compaction | #1405 | Fowler |
 | D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | PENDING | - | - | - |
 | D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | PENDING | - | - | - |
 
