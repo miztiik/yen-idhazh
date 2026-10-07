@@ -32,6 +32,8 @@ import {
 } from './support/panel-gates';
 import { serverCompiler } from './support/server-render';
 
+const PINNED = '2026-08-20';
+
 /**
  * THE ORACLE for the sufficiency gates a selector can decide: each one clears
  * a good panel and fails a bad one, and the panels the console has opted in
@@ -290,7 +292,7 @@ async function settled(page: Page, id: string) {
 async function settledExplorer(page: Page, id: string, width: number, theme: Theme): Promise<PanelReading> {
 	await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
 	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
 	await runExplorer(page);
 	return readPanel(await settled(page, id));
@@ -301,7 +303,7 @@ async function explorerNothing(page: Page, id: string, state: Nothing, theme: Th
 	await page.setViewportSize({ width: NOTHING_WIDTH, height: CONSOLE_WINDOW_HEIGHT });
 	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
 	if (state === 'unreachable') await page.route('**/state/**/*.parquet*', (route) => route.abort());
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	if (state === 'loading') {
 		await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
 		let release!: () => void;
