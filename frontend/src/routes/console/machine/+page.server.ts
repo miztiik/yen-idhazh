@@ -373,7 +373,8 @@ export async function load() {
 				reads: [machine.read, healthTable.read],
 				from: readSpan.start,
 				open,
-				coveredElsewhere: healthDays
+				coveredElsewhere: healthDays,
+				missing: 'server-counters'
 			}),
 			// The machine record is the other instrument on this route, and it has
 			// its own three states. It carries no sampling knob, so it owes no

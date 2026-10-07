@@ -165,9 +165,9 @@
 			{view.recording.startedMidWindow}
 		</p>
 	{/if}
-	{#if view.recording.scoresOnly}
-		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="scores-only">
-			{view.recording.scoresOnly}
+	{#if view.recording.coveredElsewhere}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="covered-elsewhere">
+			{view.recording.coveredElsewhere}
 		</p>
 	{/if}
 	<!-- The machine record is the other instrument on this route, so it gets its

@@ -6,12 +6,7 @@ import {
 	summarizeConfig,
 	uiConfig
 } from '$lib/server/config';
-import {
-	countersWithoutScores,
-	measurementOff,
-	recordingNotes,
-	recordNotesByWindow
-} from '$lib/console/recording';
+import { measurementOff, recordingNotes, recordNotesByWindow } from '$lib/console/recording';
 import {
 	evalColumnLabels,
 	evalDays,
@@ -267,29 +262,23 @@ export async function load() {
 		// same fact as a day the model wrote nothing, and a zero cannot tell them
 		// apart. Each span is handed the whole read and the score record's read, so
 		// a start is dated only where the read reaches back to the record's first day.
+		// The article record is the other instrument: a day the machine ran and was
+		// timed that nothing scored is named rather than drawn as a quiet day.
 		recording: Object.fromEntries(
 			[...windows].map(([days, window]) => [
 				days,
-				{
-					...recordingNotes({
-						enabled: observability.evaluation_enabled,
-						rate: observability.sample_rate,
-						recorded: scoredDays,
-						window: answeredDays,
-						reads: [scores.read],
-						from: readSpan.start,
-						open: window,
-						figures: 'quality figures'
-					}),
-					// The other direction: the machine ran and we timed it, and nothing
-					// scored what it wrote. Null where every timed day in the span was
-					// also scored.
-					countersOnly: timedDays.some(
-						(date) => date >= window.start && date <= window.end && !scoredDays.includes(date)
-					)
-						? countersWithoutScores()
-						: null
-				}
+				recordingNotes({
+					enabled: observability.evaluation_enabled,
+					rate: observability.sample_rate,
+					recorded: scoredDays,
+					window: answeredDays,
+					reads: [scores.read],
+					from: readSpan.start,
+					open: window,
+					figures: 'quality figures',
+					coveredElsewhere: timedDays,
+					missing: 'scores'
+				})
 			])
 		),
 		// Whether the scorer is switched off, once for each span the control offers:

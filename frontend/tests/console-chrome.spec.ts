@@ -7,13 +7,11 @@ import { bandShares } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { stacked } from '../src/lib/charts/stacked';
 import {
-	countersWithoutScores,
 	measurementOff,
 	recordDestroyed,
 	recordingNotes,
 	recordingStarted,
 	sampledAt,
-	scoresWithoutCounters,
 	type OfferedWindow,
 	type RecordRead
 } from '../src/lib/console/recording';
@@ -259,10 +257,19 @@ test.describe('what the recording was doing, in fixed words', () => {
 	});
 
 	test('the two one-sided days each name which instrument answered', () => {
-		expect(countersWithoutScores()).toBe(
+		const facts = {
+			enabled: true,
+			recorded: ['2026-08-29'],
+			window: ['2026-08-28', '2026-08-29'],
+			reads: [begun('2026-08-01', '2026-08-29')],
+			from: '2026-08-28',
+			open: over('2026-08-28', '2026-08-29'),
+			coveredElsewhere: ['2026-08-28', '2026-08-29']
+		};
+		expect(recordingNotes({ ...facts, missing: 'scores' }).coveredElsewhere).toBe(
 			'The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.'
 		);
-		expect(scoresWithoutCounters()).toBe(
+		expect(recordingNotes({ ...facts, missing: 'server-counters' }).coveredElsewhere).toBe(
 			"The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server."
 		);
 	});
@@ -409,13 +416,14 @@ test.describe('what the recording was doing, in fixed words', () => {
 			window: ['2026-08-28', '2026-08-29'],
 			reads: [begun('2026-08-01', '2026-08-29')],
 			from: '2026-08-28',
-			coveredElsewhere: ['2026-08-28', '2026-08-29']
+			coveredElsewhere: ['2026-08-28', '2026-08-29'],
+			missing: 'server-counters' as const
 		};
-		expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).scoresOnly).toBe(
-			scoresWithoutCounters()
+		expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).coveredElsewhere).toBe(
+			"The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server."
 		);
 		// A day another instrument covered outside the window is not this window's to name.
-		expect(recordingNotes({ ...facts, open: over('2026-08-29', '2026-08-29') }).scoresOnly).toBeNull();
+		expect(recordingNotes({ ...facts, open: over('2026-08-29', '2026-08-29') }).coveredElsewhere).toBeNull();
 	});
 
 	test('a day that published and kept no row is a loss, not a quiet day', () => {

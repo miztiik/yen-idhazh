@@ -102,20 +102,21 @@ export function sampledAt(rate: number): string | null {
 	return `${measured}. These figures count the runs we measured and are not scaled up to stand for the rest.`;
 }
 
-/** The day the machine was timed and nothing scored what it wrote. */
-export function countersWithoutScores(): string {
-	return 'The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.';
-}
+/** Which figures the days only the article record answered for are missing: the
+ * scorer's on Summaries, the server's own counters on Hardware. */
+export type MissingFigures = 'scores' | 'server-counters';
 
-/** The day the summaries were scored and the server wrote no counters.
+/** The line for the days only the article record answered for.
  *
- * The state most committed days are in, and the reason the sentence names where
- * the speed figures come from instead: the summariser's own clock and the
- * server's own clock are two instruments, and a page that let a reader think it
- * had the second one would be quoting the wrong denominator.
+ * On Hardware it names where the speed figures come from instead: the
+ * summariser's own clock and the server's own clock are two instruments, and a
+ * page that let a reader think it had the second one would be quoting the wrong
+ * denominator.
  */
-export function scoresWithoutCounters(): string {
-	return "The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server.";
+function coveredElsewhereSentence(missing: MissingFigures): string {
+	return missing === 'scores'
+		? 'The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.'
+		: "The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server.";
 }
 
 /** Recording that began after the window opened.
@@ -181,11 +182,14 @@ export function recordDestroyed(lost: readonly LostDay[]): string | null {
 export interface RecordingNotes {
 	sampled: string | null;
 	startedMidWindow: string | null;
-	scoresOnly: string | null;
+	/** The days the article record answered for and this instrument did not. */
+	coveredElsewhere: string | null;
 	recordDestroyed: string | null;
 }
 
-export interface RecordingFacts {
+/** What one instrument's notes are worked out from, apart from the days only
+ * another record answered for. */
+interface InstrumentFacts {
 	/** The toggle in `config/idhazh.json` that governs this instrument. */
 	enabled: boolean;
 	/** Its sample rate, 1.0 where it measures everything. Omitted by an
@@ -205,13 +209,20 @@ export interface RecordingFacts {
 	from: string;
 	/** The window the notes are for. */
 	open: OfferedWindow;
-	/** Days another instrument answered for that this one did not. */
-	coveredElsewhere?: readonly string[];
 	/** Days that published articles and that this instrument kept no row of. */
 	lost?: readonly LostDay[];
 	/** What the days before the first recorded one have none of. */
 	figures?: string;
 }
+
+/** The days the article record answered for, and which figures the days this
+ * instrument did not answer for are missing. Both or neither: the line has no
+ * default words. */
+type CoveredElsewhereFacts =
+	| { coveredElsewhere: readonly string[]; missing: MissingFigures }
+	| { coveredElsewhere?: never; missing?: never };
+
+export type RecordingFacts = InstrumentFacts & CoveredElsewhereFacts;
 
 /** What the recording was doing over the open window, from what the route read.
  *
@@ -244,7 +255,8 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	return {
 		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
 		startedMidWindow: recordingStarted(first, before, facts.figures),
-		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters(),
+		coveredElsewhere:
+			facts.missing === undefined || elsewhere.length === 0 ? null : coveredElsewhereSentence(facts.missing),
 		recordDestroyed: recordDestroyed(lost.filter((day) => shown(day.date)))
 	};
 }
