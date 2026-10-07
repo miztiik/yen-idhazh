@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -283,16 +283,26 @@ would fall on a week of long articles and read as a cache regression, which is
 the one wrong thing an operator could act on. That sentence is the reason a
 figure is missing, which is the kind of sentence this console keeps.
 
-**The held part stepped once, on 2026-09-13, and a window that spans that day
-disproves the note.** Read again on 2026-10-07 by this section's own rule, over
-the 16,449 items of the 90 days ending 2026-10-06: the middle item held **922**
-tokens on every day up to 2026-09-12, the day after was mixed, and from
-2026-09-14 the middle item held about **1,800 to 1,940** tokens, with the largest
-at **2,219**. On either side of the step the held part still hardly changes, so a
-window of 30 days or fewer ending on 2026-10-06 bears the note out. The 90-day
-window spans the step: its middle item held 922 tokens and its largest 2,219, so
-its note says the held part hardly changes beside two figures that say it moved.
-The note stays false on such a window until it checks its own two figures.
+**The note checks that reason on its own two figures, for the window on screen.**
+It prints the middle item's count of tokens already in memory and the most any
+item had, and picks its words from them. Where the most is twice the middle or
+more, it says the amount changed a lot, and that a lower percentage can then
+mean less in memory as well as a longer article. Where the most is under twice
+the middle, it states the two figures and what a longer article does, and claims
+nothing about change. Where no item had anything in memory, the share is 0
+percent at any article length, so it prints no note. The rule and the words are
+in [held-part-note.ts](../../../frontend/src/lib/console/held-part-note.ts).
+
+**The passing words claim nothing about change, because a window can pass while
+it spans a step.** The held part stepped once, on 2026-09-13. Read on 2026-10-07
+by this section's own rule, over the 16,449 items of the 90 days ending
+2026-10-06: the middle item held **922** tokens on every day up to 2026-09-12,
+the day after was mixed, and from 2026-09-14 the middle item held about **1,800
+to 1,940** tokens, with the largest at **2,219**. The 90-day window, at 922 and
+2,219, says the amount changed a lot. The 30-day window ending 2026-10-06 starts
+on 2026-09-07, so its first six days held 922, yet its two figures are **1,849**
+and **2,219** - the most is under twice the middle, and it passes. Of the windows
+ending 2026-10-06, only the 1-, 7- and 14-day ones miss the step.
 
 Measured over the committed projection the per-item share has a middle of
 **0.518**, a 5th percentile of **0.000** and a 95th of **0.820** - and **667 of

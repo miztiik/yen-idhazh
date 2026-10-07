@@ -68,7 +68,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L12 | The data explorer's span sentences say what each ledger read | L10 | D | DONE | miniature-journey | - | Plan 62 row l12 |
 | L13 | The remaining console specs check data they build | L9 | D | DONE | curly-umbrella | - | Plan 62 row l13 |
 | L14 | Console specs that work their answer out from the canary's own files check data they build | L9 | D | DONE | glowing-waddle | - | Plan 62 row l14 |
-| L15 | The held-part note says what its own two figures show | L13 | E | PENDING | - | - | - |
+| L15 | The held-part note says what its own two figures show | L13 | E | DONE | fuzzy-goggles | - | Plan 62 row l15 |
 | L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | - | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | PENDING | - | - | - |
 
@@ -808,6 +808,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (each path checked on `main` at 1414492d5):
   - `frontend/src/routes/console/+page.svelte` (prints the note, `data-item-cost-share-note`, with the middle and the largest held counts)
   - `frontend/src/lib/console/item-cost.ts` (`reusedMedian` and `reusedWidest`, the two figures the note reads)
+  - `frontend/src/lib/console/held-part-note.ts` (new, found during execution: the rule and the note's words in one pure function, so a test pins the words on rows it builds and the page prints what it returns)
   - `frontend/tests/console-item-cost.spec.ts` (the Oracle; "the share is printed and never drawn as a trend, and the page says why" pins today's sentence)
   - `docs/architecture/publishing/what-the-pipelines-route-draws.md` (the prompt-cache section, which holds the reading this row starts from)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-item-cost.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the console's home route. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.

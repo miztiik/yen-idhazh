@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { windowOfDays } from '../src/lib/charts/viewport';
+import { describeHeldPart } from '../src/lib/console/held-part-note';
 import { itemCost } from '../src/lib/console/item-cost';
 import { telemetryRows } from '../src/lib/server/payload';
 import { windowDay } from '../src/lib/server/window-day';
@@ -16,11 +17,13 @@ import { publishedSite } from './support/published-site';
  * zero, a window where the two clocks answer for different numbers of items,
  * and a rate that must be pooled rather than averaged.
  *
- * The oracle is the second half: a site the test builds, read the way the
- * console's server reads it, with each window's answer written out. A spec that
- * re-derived each figure from the canary's own rows moved whenever the canary
- * did; one that compared a bar against the number printed under it would pass
- * on any reducer at all, because both come from one call.
+ * The oracles are the second half. One is a site the test builds, read the way
+ * the console's server reads it, with each window's answer written out. A spec
+ * that re-derived each figure from the canary's own rows moved whenever the
+ * canary did; one that compared a bar against the number printed under it would
+ * pass on any reducer at all, because both come from one call. The other is the
+ * note under the share, on rows the test builds, with the words each pair of
+ * figures calls for written out in full.
  *
  * The last part is the built console: the window the control set, every counted
  * item in a bar, and the share note, none of them checked against a figure the
@@ -298,6 +301,113 @@ test("THE ORACLE: each window counts its own days, and they end on the site's ne
 });
 
 // ---------------------------------------------------------------------------
+// The note under the share
+// ---------------------------------------------------------------------------
+
+/** One projection row for `item`: a 4,000-token prompt with `tokens` of it
+ * already in memory. */
+function held(date: string, item: string, tokens: number): Record<string, string> {
+	return {
+		date,
+		run_id: `${date}-1`,
+		item_id: item,
+		input_tokens: '4000',
+		cached_tokens: String(tokens)
+	};
+}
+
+/** Windows that end on 6 Oct 2026, as the readings behind the note did. */
+const NINETY_DAYS = { start: '2026-07-09', end: '2026-10-06', days: 90 };
+const THIRTY_DAYS = { start: '2026-09-07', end: '2026-10-06', days: 30 };
+const ONE_DAY = { start: '2026-10-06', end: '2026-10-06', days: 1 };
+
+test.describe('THE ORACLE: the note under the share says what its own two figures show', () => {
+	test('a window whose middle item had 922 tokens in memory and whose largest had 2,219 says the amount changed a lot', () => {
+		// The step the note missed: 922 tokens on every day up to 12 Sep 2026, and
+		// about 1,900 from 14 Sep, so the largest is more than twice the middle.
+		const cost = itemCost(
+			[
+				held('2026-07-10', 'a-01', 922),
+				held('2026-08-10', 'a-02', 922),
+				held('2026-09-12', 'a-03', 922),
+				held('2026-09-14', 'a-04', 1905),
+				held('2026-10-06', 'a-05', 2219)
+			],
+			NINETY_DAYS
+		);
+		expect([cost.reusedMedian, cost.reusedWidest]).toEqual([922, 2219]);
+		expect(describeHeldPart(cost)).toBe(
+			'In these 90 days, the amount already in memory changed a lot. The middle item had 922 tokens in memory, and the most any item had was 2,219 tokens. So here a lower percentage can mean less in memory, not only a longer article. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
+
+	test('a window whose largest is under twice its middle states the two figures and claims nothing about change', () => {
+		// These 30 days start before the step, so their first day held 922, and
+		// they still pass on their two figures. That is why the passing words say
+		// nothing about how much the amount in memory changed.
+		const cost = itemCost(
+			[
+				held('2026-09-07', 'a-01', 922),
+				held('2026-09-20', 'a-02', 1849),
+				held('2026-10-06', 'a-03', 2219)
+			],
+			THIRTY_DAYS
+		);
+		expect([cost.reusedMedian, cost.reusedWidest]).toEqual([1849, 2219]);
+		expect(describeHeldPart(cost)).toBe(
+			'In these 30 days, the middle item had 1,849 tokens already in memory, and the most any item had was 2,219 tokens. A longer article makes the percentage lower, even if the amount in memory does not change. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
+
+	test('twice the middle has changed a lot, and one token under it has not', () => {
+		const note = (largest: number) =>
+			describeHeldPart(
+				itemCost(
+					[
+						held('2026-09-20', 'a-01', 1000),
+						held('2026-09-21', 'a-02', 1000),
+						held('2026-09-22', 'a-03', largest)
+					],
+					THIRTY_DAYS
+				)
+			);
+		expect(note(2000)).toBe(
+			'In these 30 days, the amount already in memory changed a lot. The middle item had 1,000 tokens in memory, and the most any item had was 2,000 tokens. So here a lower percentage can mean less in memory, not only a longer article. Read the token counts, not the rise or fall of the percentages.'
+		);
+		expect(note(1999)).toBe(
+			'In these 30 days, the middle item had 1,000 tokens already in memory, and the most any item had was 1,999 tokens. A longer article makes the percentage lower, even if the amount in memory does not change. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
+
+	test('one day where most items had nothing in memory says the amount changed a lot', () => {
+		// A spread between items, not a step over time: two prompts read whole and
+		// one with 922 tokens in memory, on one day. The words are true of this too.
+		const cost = itemCost(
+			[held('2026-10-06', 'a-01', 0), held('2026-10-06', 'a-02', 0), held('2026-10-06', 'a-03', 922)],
+			ONE_DAY
+		);
+		expect(describeHeldPart(cost)).toBe(
+			'In this one day, the amount already in memory changed a lot. The middle item had 0 tokens in memory, and the most any item had was 922 tokens. So here a lower percentage can mean less in memory, not only a longer article. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
+
+	test('a window where no item had anything in memory, or none recorded a count, prints no note', () => {
+		// Every prompt read whole is 0 percent at any article length, so there is
+		// nothing to explain; and a note that names two figures needs both.
+		const readWhole = itemCost([held('2026-10-06', 'a-01', 0), held('2026-10-06', 'a-02', 0)], ONE_DAY);
+		expect([readWhole.reusedMedian, readWhole.reusedWidest]).toEqual([0, 0]);
+		expect(describeHeldPart(readWhole)).toBeNull();
+
+		const uncounted = itemCost(
+			[{ date: '2026-10-06', run_id: '2026-10-06-1', item_id: 'a-01', input_tokens: '4000' }],
+			ONE_DAY
+		);
+		expect(uncounted.counted).toBe(1);
+		expect(describeHeldPart(uncounted)).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
 // The built console
 // ---------------------------------------------------------------------------
 
@@ -429,32 +539,32 @@ test.describe('the section on the built console', () => {
 	test('the share is printed and never drawn as a trend, and the page says why', async ({
 		page
 	}) => {
-		// The held part is nearly fixed and the prompt is not, so a falling line
-		// would read as the cache getting worse when the articles merely got
-		// longer. That is the one wrong action this panel could cause.
+		// A longer article lowers the share while the part already in memory stays
+		// put, so a falling line would read as the cache getting worse when the
+		// articles merely got longer. The note says so only where its own two
+		// figures bear it out, and the oracle above holds which words each pair of
+		// figures gets. Left here is the page against itself: in every window the
+		// control offers, the note names that window and is the note its own two
+		// figures call for, whatever the canary holds.
 		await page.goto('/console/');
+		await hydrated(page);
 		const note = page.locator('[data-item-cost-share-note]');
-		await expect(note).toHaveCount(1);
-		await expect(note).toContainText('follows the article');
-
-		// The note names what the middle item and the largest one kept, as the
-		// section's reducer counts them: over three items that held 300, 900 and
-		// 1,000 of their 2,000-token prompts, the middle kept 900 and the largest
-		// 1,000. On the page, the middle can never have kept more than the largest.
-		const cost = itemCost(
-			[
-				row({ input_tokens: '2000', cached_tokens: '300' }),
-				row({ item_id: 'a-02', input_tokens: '2000', cached_tokens: '900' }),
-				row({ item_id: 'a-03', input_tokens: '2000', cached_tokens: '1000' })
-			],
-			WINDOW
-		);
-		expect([cost.reusedMedian, cost.reusedWidest]).toEqual([900, 1000]);
-		const said = (await note.innerText()).replace(/\s+/g, ' ');
-		const kept = /the middle item kept ([\d,]+) tokens and the largest kept ([\d,]+)/.exec(said);
-		expect(kept, `the note names no middle and largest item: ${said}`).not.toBeNull();
-		const [middle, largest] = [kept?.[1], kept?.[2]].map((figure) => Number((figure ?? '').replace(/,/g, '')));
-		expect(middle).toBeLessThanOrEqual(largest);
+		for (const preset of PRESETS) {
+			await setWindow(page, preset);
+			await expect(note, `no note under the share at ${preset} days`).toHaveCount(1);
+			const said = (await note.innerText()).replace(/\s+/g, ' ').trim();
+			const named =
+				/middle item had ([\d,]+) tokens (?:already )?in memory, and the most any item had was ([\d,]+) tokens/.exec(
+					said
+				);
+			expect(named, `the note names no middle and largest item: ${said}`).not.toBeNull();
+			const [middle, largest] = [named?.[1], named?.[2]].map((figure) =>
+				Number((figure ?? '').replace(/,/g, ''))
+			);
+			expect(said, `the note at ${preset} days is not the one its two figures call for`).toBe(
+				describeHeldPart({ days: preset, reusedMedian: middle, reusedWidest: largest })
+			);
+		}
 	});
 
 	test('a figure the ledger cannot answer prints a dash, never a zero', async ({ page }) => {
