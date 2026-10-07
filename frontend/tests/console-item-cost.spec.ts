@@ -7,6 +7,7 @@ import { itemCost } from '../src/lib/console/item-cost';
 import { telemetryRows } from '../src/lib/server/payload';
 import { windowDay } from '../src/lib/server/window-day';
 import { publishedSite } from './support/published-site';
+import { ONE_DAYS, spanSaid } from './support/span-said';
 
 /**
  * What one item cost the model, checked against answers written out here rather
@@ -485,9 +486,10 @@ test.describe('the section on the built console', () => {
 			await setWindow(page, preset);
 			const marks = await drawn(page);
 			expect(marks.days, 'the section is drawing a window the control did not set').toBe(preset);
-			expect(marks.says, `the section never says it is showing ${preset} days`).toContain(
-				`${preset} days`
+			expect(marks.says, `the section never says it is showing ${preset} days`).toMatch(
+				spanSaid(preset)
 			);
+			expect(marks.says, 'the section says "1 days"').not.toMatch(ONE_DAYS);
 			for (const [name, shown] of [
 				['reading', marks.reading],
 				['writing', marks.writing]

@@ -57,6 +57,8 @@ stops at the first that does not (`CompactTree.fit_to_budget`).
 A range that ends before the step's first period leaves nothing to take. A
 range that starts after it, while that first period is ready, is refused at
 that period, so the person widens the range rather than finding it left open.
+The refusal defers the pass with the fault `range-starts-late`: a person's
+range, not a defect, so the job stays green.
 Whether that period is ready is read from the calendar and the marks alone, so
 the refusal reads nothing outside the range. The year step counts only the
 whole years a range holds, January to December, so it reads no month outside
@@ -200,7 +202,7 @@ def _span(
             if ready is not None and start <= ready:
                 return StepChoice(
                     start=StartReason.OPERATOR_RANGE,
-                    stopped_because=StopReason.FAILED,
+                    stopped_because=StopReason.DEFERRED,
                     resume_from=start,
                 )
             return StepChoice(start=StartReason.OPERATOR_RANGE)
@@ -352,9 +354,8 @@ def _rerun_span(
 ) -> tuple[str, str] | None:
     """The packed days whose raw folders the day step names, because a re-run may write there.
 
-    GitHub lets a run be re-run for `GITHUB_RERUN_DAYS` days, and a re-run
-    writes into the day its run first wrote, so the span runs from that many
-    days before the wake's day to the daily mark.
+    Scheduled wakes look back `GITHUB_RERUN_DAYS` days. An explicit month
+    range also reaches older imports, up to the daily mark.
     """
     if tree.daily_through is None:
         return None
@@ -362,5 +363,5 @@ def _rerun_span(
     last = tree.daily_through
     if operator_range is not None:
         lowest, highest = month_partition.day_bounds(*operator_range)
-        first, last = max(first, lowest), min(last, highest)
+        first, last = lowest, min(last, highest)
     return (first, last) if first <= last else None

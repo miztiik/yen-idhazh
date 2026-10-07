@@ -26,7 +26,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
@@ -149,7 +149,9 @@ def test_no_ledger_that_failed_on_2026_10_04_is_offered_a_month_before_it_began(
     assert later.start is StartReason.OLDEST_INDEXED
 
 
-@pytest.mark.parametrize(("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)])
+@pytest.mark.parametrize(
+    ("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)]
+)
 def test_a_month_may_close_45_whole_days_after_it_ends(today: date, closes: bool) -> None:
     """September ends at 00:00 UTC on 1 October, and 45 days later is 15 November."""
     chosen = _compaction_periods.choose(
@@ -169,8 +171,12 @@ def test_the_daily_mark_must_reach_a_month_s_last_day() -> None:
     """A mark on 30 September closes September; one on 29 September does not."""
     policy = policy_of(TASK)
 
-    reached = months_chosen(marks(VISUALS, days("2026-09-01", "2026-09-30")), policy, date(2026, 12, 1))
-    short = months_chosen(marks(VISUALS, days("2026-09-01", "2026-09-29")), policy, date(2026, 12, 1))
+    reached = months_chosen(
+        marks(VISUALS, days("2026-09-01", "2026-09-30")), policy, date(2026, 12, 1)
+    )
+    short = months_chosen(
+        marks(VISUALS, days("2026-09-01", "2026-09-29")), policy, date(2026, 12, 1)
+    )
 
     assert (reached.first, reached.last) == ("2026-09", "2026-09")
     assert short.first is None
@@ -203,7 +209,7 @@ def test_a_ledger_with_nothing_indexed_offers_nothing() -> None:
 @pytest.mark.parametrize(
     ("operator", "today", "expected"),
     [
-        (("2026-10", "2026-10"), date(2027, 1, 1), (None, None, StopReason.FAILED, "2026-09")),
+        (("2026-10", "2026-10"), date(2027, 1, 1), (None, None, StopReason.DEFERRED, "2026-09")),
         (("2026-10", "2026-10"), date(2026, 11, 1), (None, None, None, None)),
         (("2026-07", "2026-08"), date(2027, 1, 1), (None, None, None, None)),
         (("2026-09", "2026-09"), date(2027, 1, 1), ("2026-09", "2026-09", None, None)),
@@ -259,13 +265,17 @@ def test_new_days_run_from_the_day_after_the_mark_to_the_cap() -> None:
 
 
 def test_new_days_end_at_the_newest_due_day() -> None:
-    choice = days_chosen(marks(VISUALS, days(FIRST_DAY, "2026-09-28")), policy_of(TASK), FAILED_WAKE)
+    choice = days_chosen(
+        marks(VISUALS, days(FIRST_DAY, "2026-09-28")), policy_of(TASK), FAILED_WAKE
+    )
 
     assert (choice.first, choice.last, choice.stopped_because) == ("2026-09-29", "2026-10-02", None)
 
 
 def test_a_mark_on_the_newest_due_day_offers_no_new_day() -> None:
-    choice = days_chosen(marks(VISUALS, days(FIRST_DAY, "2026-10-02")), policy_of(TASK), FAILED_WAKE)
+    choice = days_chosen(
+        marks(VISUALS, days(FIRST_DAY, "2026-10-02")), policy_of(TASK), FAILED_WAKE
+    )
 
     assert (choice.start, choice.first, choice.stopped_because) == (StartReason.MARK, None, None)
 
@@ -328,7 +338,9 @@ def test_a_first_run_starts_no_earlier_than_the_keep_line_while_month_deletes_ar
     )
     tree = marks(VISUALS, [], raw_days=("2026-08-12", "2026-09-03"))
 
-    chosen = _compaction_periods.choose(tree, policy, now=at(date(2026, 11, 16)), operator_range=None)
+    chosen = _compaction_periods.choose(
+        tree, policy, now=at(date(2026, 11, 16)), operator_range=None
+    )
 
     assert chosen.keep_line == "2026-09"
     assert (chosen.days.start, chosen.days.first) == (start, first)
@@ -337,7 +349,7 @@ def test_a_first_run_starts_no_earlier_than_the_keep_line_while_month_deletes_ar
 @pytest.mark.parametrize(
     ("operator", "today", "expected"),
     [
-        (("2026-10", "2026-10"), date(2026, 12, 20), (None, None, StopReason.FAILED, "2026-09-17")),
+        (("2026-10", "2026-10"), date(2026, 12, 20), (None, None, StopReason.DEFERRED, "2026-09-17")),
         (("2026-10", "2026-10"), date(2026, 9, 18), (None, None, None, None)),
         (("2026-07", "2026-08"), date(2026, 12, 20), (None, None, None, None)),
         (("2026-09", "2026-09"), date(2026, 12, 20), ("2026-09-17", "2026-09-30", None, None)),
@@ -364,15 +376,23 @@ def test_an_operator_range_limits_the_new_days_and_never_skips_a_due_one(
         ("2026-09-16", None, ("2026-09-04", "2026-09-16")),
         ("2026-09-03", None, None),
         (None, None, None),
-        ("2026-10-02", ("2026-09", "2026-09"), ("2026-09-04", "2026-09-30")),
+        ("2026-10-02", ("2026-09", "2026-09"), ("2026-09-01", "2026-09-30")),
+        ("2026-09-03", ("2026-09", "2026-09"), ("2026-09-01", "2026-09-03")),
         ("2026-09-16", ("2026-10", "2026-10"), None),
     ],
-    ids=["to-the-mark", "mark-older-than-the-span", "no-mark", "inside-a-range", "range-after"],
+    ids=[
+        "to-the-mark",
+        "mark-older-than-the-span",
+        "no-mark",
+        "inside-a-range",
+        "historical-range",
+        "range-after",
+    ],
 )
 def test_the_re_run_span_runs_from_thirty_days_before_the_wake_to_the_mark(
     through: str | None, operator: tuple[str, str] | None, span: tuple[str, str] | None
 ) -> None:
-    """GitHub lets a run be re-run for 30 days, and a re-run writes into its first day."""
+    """Scheduled wakes look back 30 days; an explicit range reaches older imports."""
     tree = marks(VISUALS, days("2026-09-01", through) if through is not None else [])
 
     chosen = _compaction_periods.choose(
@@ -380,6 +400,33 @@ def test_the_re_run_span_runs_from_thirty_days_before_the_wake_to_the_mark(
     )
 
     assert chosen.rerun_span == span
+
+
+def test_an_explicit_range_packs_an_import_older_than_the_scheduled_window(tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    held = {day: quiet(day) for day in days(FIRST_DAY, "2026-09-30")}
+    held["2026-09-19"] = a_packed_day(root, "2026-09-19")
+    an_index(root, VISUALS, Period.DAILY, [held[day] for day in sorted(held)])
+    an_index(root, VISUALS, Period.MONTHLY, [])
+    an_index(root, VISUALS, Period.YEARLY, [])
+    imported = a_pass("2026-09-19", run="2", before=222)
+    raw = filed(root, imported)
+    wake = date(2026, 11, 1)
+    scheduled = _compaction_periods.choose(
+        marks(VISUALS, days(FIRST_DAY, "2026-09-30")),
+        policy_of(TASK),
+        now=at(wake),
+        operator_range=None,
+    )
+    assert scheduled.rerun_span is None
+
+    outcome = compact(root, wake, period_range=("2026-09", "2026-09"))
+
+    assert outcome.stopped_because is StopReason.EXHAUSTED
+    assert not raw.exists()
+    packed = ledger.compact_file(state(root), VISUALS, Period.DAILY, imported.date)
+    assert packed is not None
+    assert imported in ledger.load([packed], model=VisualPruneRow)
 
 
 # --- the year step's choice: unit cases over literal marks -------------------------
@@ -497,7 +544,7 @@ def test_a_declaration_that_packs_no_year_chooses_no_year() -> None:
         (("2026-02", "2026-11"), (StartReason.OPERATOR_RANGE, None, None, None, None)),
         (
             ("2027-01", "2027-12"),
-            (StartReason.OPERATOR_RANGE, None, None, StopReason.FAILED, "2026"),
+            (StartReason.OPERATOR_RANGE, None, None, StopReason.DEFERRED, "2026"),
         ),
         (("2025-01", "2025-12"), (StartReason.OPERATOR_RANGE, None, None, None, None)),
     ],
@@ -751,7 +798,9 @@ ROWS_ON: Final = ("2026-09-12", "2026-09-20", "2026-09-25")
 
 
 @pytest.mark.parametrize("name", sorted(FAILED_ON_2026_10_04))
-def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path, name: str) -> None:
+def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(
+    tmp_path: Path, name: str
+) -> None:
     """A wake's listing names only each ledger's marks, and the month step names what it chooses."""
     first, last = FAILED_ON_2026_10_04[name]
     policy = policy_of(name)
@@ -766,7 +815,9 @@ def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path
     assert mark(root, Period.MONTHLY, policy.ledger) is None
 
 
-@pytest.mark.parametrize(("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)])
+@pytest.mark.parametrize(
+    ("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)]
+)
 def test_a_ledger_from_the_12th_closes_september_on_the_15th_of_november_from_its_first_day(
     tmp_path: Path, today: date, closes: bool
 ) -> None:
@@ -807,6 +858,7 @@ def test_a_day_missing_with_its_raw_files_is_packed_again_and_its_month_closes_n
     index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
     assert {entry.covers: entry.rows for entry in index.entries}["2026-09-20"] == 1
     assert held.stopped_because is not StopReason.FAILED
+    assert recovered(held, "2026-09-20") == [RecoveryNote.REPACKED_FROM_RAW]
 
     compact(root, date(2026, 11, 15), wake=wake)
 
@@ -821,37 +873,35 @@ def test_a_day_missing_with_its_raw_files_is_packed_again_and_its_month_closes_n
     ids=["other-days-hold-rows", "the-lost-day-held-the-only-row"],
 )
 def test_a_day_missing_with_nothing_to_rebuild_it_is_listed_lost_on_a_month_never_lost(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, rows_on: tuple[str, ...], state_: EntryState
+    tmp_path: Path, rows_on: tuple[str, ...], state_: EntryState
 ) -> None:
     root = tmp_path / "checkout"
     a_ledger(root, rows_on=rows_on)
     without(root, "2026-09-20", keep_file=False)
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, date(2026, 11, 15))
+    outcome = compact(root, date(2026, 11, 15))
 
     assert outcome.stopped_because is not StopReason.FAILED
     closed = september(root)
     assert (closed.state, closed.lost_days) == (state_, ["2026-09-20"])
-    assert recovered(caplog, "2026-09-20") == [f"note={RecoveryNote.RECORDED_LOST}"]
+    assert recovered(outcome, "2026-09-20") == [RecoveryNote.RECORDED_LOST]
     assert (ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-09") is None) is (
         state_ is EntryState.EMPTY
     )
 
 
 def test_a_day_whose_entry_is_gone_and_whose_file_is_kept_is_adopted_not_lost(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path
 ) -> None:
     root = tmp_path / "checkout"
     a_ledger(root, rows_on=ROWS_ON)
     without(root, "2026-09-25", keep_file=True)
 
-    with caplog.at_level(logging.WARNING):
-        compact(root, date(2026, 11, 15))
+    outcome = compact(root, date(2026, 11, 15))
 
     assert september(root).lost_days == []
     assert month_rows(root) == list(ROWS_ON)
-    assert recovered(caplog, "2026-09-25") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(outcome, "2026-09-25") == [RecoveryNote.INDEX_REBUILT]
 
 
 def test_a_month_with_no_row_is_an_empty_entry_with_no_file(tmp_path: Path) -> None:
@@ -860,7 +910,9 @@ def test_a_month_with_no_row_is_an_empty_entry_with_no_file(tmp_path: Path) -> N
 
     compact(root, date(2026, 11, 15))
 
-    assert september(root) == CompactEntry(covers="2026-09", rows=0, bytes=0, state=EntryState.EMPTY)
+    assert september(root) == CompactEntry(
+        covers="2026-09", rows=0, bytes=0, state=EntryState.EMPTY
+    )
     assert ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-09") is None
     assert daily_september(root) == []
 
@@ -879,7 +931,9 @@ def test_a_lost_day_entry_goes_into_its_month_s_lost_days(tmp_path: Path) -> Non
 
 def a_month_file(root: Path, rows_on: tuple[str, ...]) -> Path:
     """September's own month file at its path, built from these days' rows, named by no entry."""
-    raws = [filed(root / "scratch", a_pass(day, run=str(number))) for number, day in enumerate(rows_on)]
+    raws = [
+        filed(root / "scratch", a_pass(day, run=str(number))) for number, day in enumerate(rows_on)
+    ]
     return ledger.persist_period(
         state(root),
         ledger.load_stored(raws, model=VisualPruneRow),
@@ -899,20 +953,17 @@ def a_month_file(root: Path, rows_on: tuple[str, ...]) -> Path:
     )
 
 
-def test_a_month_file_no_entry_names_is_adopted_when_its_days_give_no_row(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_a_month_file_no_entry_names_is_adopted_when_its_days_give_no_row(tmp_path: Path) -> None:
     """An index restored from an older commit lost the month; its file is the month's record."""
     root = tmp_path / "checkout"
     a_ledger(root, rows_on=(), first="2026-09-01")
     held = a_month_file(root, ROWS_ON)
 
-    with caplog.at_level(logging.WARNING):
-        compact(root, date(2026, 11, 15))
+    outcome = compact(root, date(2026, 11, 15))
 
     assert september(root) == CompactEntry(covers="2026-09", rows=3, bytes=held.stat().st_size)
     assert month_rows(root) == list(ROWS_ON)
-    assert recovered(caplog, "2026-09") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(outcome, "2026-09") == [RecoveryNote.INDEX_REBUILT]
 
 
 def test_a_month_file_no_entry_names_that_holds_other_rows_than_its_days_is_refused(
@@ -926,7 +977,11 @@ def test_a_month_file_no_entry_names_that_holds_other_rows_than_its_days_is_refu
 
     outcome = compact(root, date(2026, 11, 15))
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09")
+    assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
+        StopReason.FAILED,
+        "2026-09",
+        GardenerFault.RAISED,
+    )
     assert held.read_bytes() == before
     assert mark(root, Period.MONTHLY) is None
     assert daily_september(root) == days("2026-09-01", "2026-09-30")
@@ -966,6 +1021,29 @@ def test_raw_days_after_the_mark_reach_the_newest_due_day_in_two_wakes(tmp_path:
     assert list(daily_entries(root)) == days(FIRST_DAY, "2026-10-02")
     assert ledger.list_raw_files(state(root), VISUALS) == []
     assert disjoint(first) and disjoint(second)
+
+
+def test_a_range_that_starts_after_a_due_day_defers_the_pass_and_names_why(
+    tmp_path: Path,
+) -> None:
+    """A person's range leaves out the day the step must take first: no defect, so no red job.
+
+    Nothing before the day is taken past it, the mark stays where it was, and
+    the record says the range starts late, so the person widens it.
+    """
+    root = tmp_path / "checkout"
+    a_marked_ledger(root, "2026-09-16")
+    raw = [filed(root, a_pass(day)) for day in days("2026-09-17", "2026-10-02")]
+
+    outcome = compact(root, FAILED_WAKE, period_range=("2026-10", "2026-10"))
+
+    assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
+        StopReason.DEFERRED,
+        "2026-09-17",
+        GardenerFault.RANGE_STARTS_LATE,
+    )
+    assert mark(root, Period.DAILY) == "2026-09-16"
+    assert all(path.is_file() for path in raw)
 
 
 def test_a_first_run_over_a_wake_s_listing_starts_at_its_oldest_raw_day(tmp_path: Path) -> None:
@@ -1027,19 +1105,16 @@ def test_a_re_run_into_a_day_recorded_with_no_file_is_packed_from_its_raw_files(
     assert mark(root, Period.DAILY) == "2026-10-02"
 
 
-def test_a_new_day_whose_file_no_entry_names_is_adopted_not_written_over(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_a_new_day_whose_file_no_entry_names_is_adopted_not_written_over(tmp_path: Path) -> None:
     """An index restored from an older commit lost the day; its file is the day's record."""
     root = tmp_path / "checkout"
     a_marked_ledger(root, "2026-09-28")
     adopted = a_packed_day(root, "2026-09-29")
 
-    with caplog.at_level(logging.WARNING):
-        compact(root, FAILED_WAKE)
+    outcome = compact(root, FAILED_WAKE)
 
     assert daily_entries(root)["2026-09-29"] == adopted
-    assert recovered(caplog, "2026-09-29") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(outcome, "2026-09-29") == [RecoveryNote.INDEX_REBUILT]
     assert mark(root, Period.DAILY) == "2026-10-02"
 
 

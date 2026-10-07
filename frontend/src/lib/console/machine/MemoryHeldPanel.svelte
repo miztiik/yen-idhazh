@@ -16,6 +16,7 @@
 	 */
 	import Panel from '$lib/components/Panel.svelte';
 	import { memoryHeldWithin, type MemoryHeldRecord } from '$lib/console/machine/memory-held';
+	import { nameSpan, openWithSpan } from '$lib/console/span-words';
 
 	let {
 		record,
@@ -36,7 +37,10 @@
 	heading="h3"
 	id="memory-held"
 	title="What is holding the machine's memory"
-	note="The two parts of the bar add up to the machine and the two brackets under it do not, which is why they are drawn overlapping rather than side by side - one bar for the tightest moment of each day, over the last {days} days."
+	note="The two parts of the bar add up to the machine and the two brackets under it do not, which is why they are drawn overlapping rather than side by side - {days ===
+	1
+		? `one bar for the tightest moment of ${nameSpan(days)}`
+		: `one bar for the tightest moment of each day, over ${nameSpan(days)}`}."
 	wide
 >
 	{#if view.empty}
@@ -45,8 +49,10 @@
 				No day this ledger holds recorded what the machine itself had, so there is nothing to
 				split up. Read over {record.daysRead} days.
 			{:else}
-				No day in these {days} days recorded what the machine itself had. The reading begins on
-				{record.firstDate}.
+				{days === 1
+					? `${openWithSpan(days)} did not record what the machine itself had.`
+					: `No day in ${nameSpan(days)} recorded what the machine itself had.`}
+				The reading begins on {record.firstDate}.
 			{/if}
 		</p>
 	{:else}

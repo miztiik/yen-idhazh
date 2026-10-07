@@ -106,7 +106,7 @@ The paths come back ascending by the day each file covers, never by path string.
 | `lost_days` | The UTC days inside a monthly or yearly entry whose rows were recorded lost, ascending. Always empty on a daily entry, where a lost day is a `lost` entry of its own |
 | `set_aside` | How many files were moved aside unread while the period was packed. The period's file holds every other row |
 
-**An empty or a lost period is an entry with no file, never a missing entry.** So a reader tells three things apart without opening a file: a quiet day (`empty`, or `rows: 0`), a day with no record (`lost`, or listed in its month's or year's `lost_days`), and a hole - a day between packed days that no entry names, which is a fault ([ledger-compaction.md](../publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). A lost day reaches a panel as a day with no record, never as a day with no rows ([how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#which-files-a-span-reads)).
+**An empty or a lost period is an entry with no file, never a missing entry.** So a reader tells three things apart without opening a file: a quiet day (`empty`, or `rows: 0`), a day with no record (`lost`, or listed in its month's or year's `lost_days`), and a hole - a day between packed days that no entry names, which is a fault ([ledger-compaction.md](../publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). A lost day reaches a panel as a day with no record, never as a day with no rows ([how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#which-files-a-span-reads)). Which entries each stage of a ledger's life leaves, from declared and never packed to stopped, is [ledger-lifecycle.md](ledger-lifecycle.md).
 
 **An index written before entries had a state reads as all `packed`.** The three later fields default to `packed`, no lost day and nothing set aside, so no committed index is rewritten, and a zero-row file written earlier stays a valid `packed` entry. The contract refuses an `empty` or `lost` entry that counts rows or bytes, a `lost` month or year, `lost_days` on a daily entry, and a lost day outside its entry's period, out of order or named twice.
 
@@ -252,6 +252,7 @@ Every job installs the same set, so whichever job saves `setup-python`'s pip cac
 ## See also
 
 - [ledger-registry.md](ledger-registry.md) - the registry, the lifecycle statuses and the check every writer asks.
+- [ledger-lifecycle.md](ledger-lifecycle.md) - which entries each stage of a ledger's life leaves in its indexes.
 - [state-ledgers.md](state-ledgers.md) - the CSV trees: what each ledger answers, and why it files at the grain it does.
 - [schemas.md](schemas.md) - how a contract is declared, versioned and read back.
 - [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - why `state/` moves to parquet under two roots.

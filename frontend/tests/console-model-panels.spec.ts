@@ -18,6 +18,7 @@ import {
 	type DayWindow
 } from '../src/lib/server/model-work';
 import { serverCompiler } from './support/server-render';
+import { ONE_DAYS, spanSaid } from './support/span-said';
 
 /**
  * The three panels the model route gained on 2026-08-31, and the figure that
@@ -219,7 +220,8 @@ test.describe('what one summary cost, as a distribution', () => {
 			for (const readout of ['[data-write-times="readout"]', '[data-score-cost="readout"]']) {
 				const found = page.locator(readout);
 				if ((await found.count()) === 0) continue;
-				await expect(found, `${readout} names a different span`).toContainText(`${preset} days`);
+				await expect(found, `${readout} names a different span`).toContainText(spanSaid(preset));
+				await expect(found, `${readout} says "1 days"`).not.toContainText(ONE_DAYS);
 			}
 		}
 	});

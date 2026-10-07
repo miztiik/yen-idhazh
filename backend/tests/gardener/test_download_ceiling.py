@@ -28,6 +28,7 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import runner
@@ -356,7 +357,11 @@ def test_a_day_larger_than_the_whole_budget_is_refused_by_name_and_never_downloa
         outcome, row = packed_by_a_shard(tmp_path, origin, said)
 
     assert outcome.exit_code == EXIT_TASK_FAILED, said
-    assert (row.stopped_because, row.resume_from) == (StopReason.FAILED, "2026-09-20")
+    assert (row.stopped_because, row.resume_from, row.fault) == (
+        StopReason.FAILED,
+        "2026-09-20",
+        GardenerFault.RAISED,
+    )
     assert row.downloaded_bytes == 0
     (refusal,) = [
         record.getMessage()
@@ -429,5 +434,5 @@ def test_a_period_larger_than_the_whole_budget_is_refused_by_name(
             ["2026-09-20"], lambda day: PeriodFetch(folders=(tree.raw_day_folder(day),))
         )
 
-    assert (fits, over) == ([], Stop(StopReason.FAILED, "2026-09-20"))
+    assert (fits, over) == ([], Stop(StopReason.FAILED, "2026-09-20", GardenerFault.RAISED))
     assert "period=2026-09-20 bytes=1048577 max_downloaded_mb=1" in caplog.text

@@ -183,7 +183,7 @@ test('THE ORACLE: the bar count is the window day count, at every preset', async
 					nodes.reduce((sum, node) => sum + Number(node.getAttribute('data-published')), 0)
 				);
 			await expect(card.locator('.kpi-value')).toHaveText(grouped(drawn));
-			await expect(card).toContainText(`in these ${preset} days`);
+			await expect(card).toContainText(preset === 1 ? 'in this one day' : `in these ${preset} days`);
 		}
 
 		// Both strips report the same span. That is the whole of "they are on one

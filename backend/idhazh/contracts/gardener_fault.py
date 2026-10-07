@@ -1,10 +1,11 @@
-"""What a gardener pass recovered instead of stopping.
+"""Why a gardener pass stopped, and what it recovered instead of stopping.
 
-A pass that meets a fault it can record records it on the period and moves on.
-Each kind of recovery has one word, declared once here, so the log line a step
-writes and any reader of it spell the word the same way. No persisted shape
-carries these words yet: a step logs one line for each recovery, naming the
-word and the period it is about, and nothing else.
+A pass that meets a fault it can record records it on the period or member it
+is about and moves on. A pass that cannot go on stops, and says why in one
+closed word. Each word is declared once here, so the record row, the log line a
+step writes and any reader of either spell it the same way. Neither vocabulary
+is text the pass read: a word, a period and a member id are all a record holds
+(Guardrail #11).
 """
 
 from __future__ import annotations
@@ -12,9 +13,39 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class GardenerFault(StrEnum):
+    """Why one pass stopped: a code defect, or a cause outside the code that something else settles.
+
+    `raised` ends a pass `failed`, the one stop that turns the job red. Every
+    other word ends it `deferred`: the next wake, or a person, settles it, and
+    the job stays green.
+    """
+
+    #: A code defect: an error no other word names, including any answer from
+    #: GitHub that refuses the request itself. A person reads the log.
+    RAISED = "raised"
+    #: GitHub's API did not answer: a 429 or 5xx, or a connection that failed or
+    #: timed out. Nothing inside a wake asks again; the next wake does.
+    API_UNAVAILABLE = "api-unavailable"
+    #: A range a person named starts after a period that is ready before it, so
+    #: the step would skip that period. The person widens the range.
+    RANGE_STARTS_LATE = "range-starts-late"
+    #: A raw day sits in a month the monthly mark is past that no monthly entry
+    #: names: the month never closed, was dropped, or sits in a packed year, so
+    #: there is no month to re-open. Its files wait for a person.
+    NO_MONTH_TO_REOPEN = "no-month-to-reopen"
+    #: A packed day or month file that a re-run or a late file would be settled
+    #: into cannot be read, or its index names it and it is not there. Every
+    #: file is kept, and a person restores the packed file from git history.
+    PACKED_FILE_UNREADABLE = "packed-file-unreadable"
+
+
 class RecoveryNote(StrEnum):
     """What one pass did with a fault it met, instead of stopping at it."""
 
+    #: A day inside the ledger's history had no index entry and raw files left
+    #: in its folder, so the pass packed it again from them.
+    REPACKED_FROM_RAW = "repacked-from-raw"
     #: A day inside the ledger's history had no index entry and nothing left to
     #: rebuild it from, so its month lists it in `lost_days`.
     RECORDED_LOST = "recorded-lost"
@@ -30,3 +61,6 @@ class RecoveryNote(StrEnum):
     #: A day held more raw files than one period is built from, so the pass
     #: packed the oldest and left the rest for the next wake to take in.
     CARRIED_OVER = "carried-over"
+    #: GitHub would not delete a member, answering 409 or 422, so the pass
+    #: recorded its id, counted it against the ceiling and went on.
+    NOT_DELETABLE = "not-deletable"
