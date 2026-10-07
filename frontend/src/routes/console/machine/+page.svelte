@@ -130,16 +130,16 @@
 	     not read, or read only as far as a day some while back, is the reason every
 	     panel built on it is empty or stops early, and the notes below it would
 	     otherwise explain an empty page as something the recording did. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes notes={data.recordNotes[String(view.days)] ?? []} />
 
 	<!-- What the recording was doing, before anything says what it recorded.
 	     None of these is an error and none is styled as one: each states a fact
 	     about the instrument, at body size, in the route it governs. A day the
 	     scrape never ran and a day the machine did nothing draw the same gap,
 	     and only a sentence can tell them apart. -->
-	{#if view.recording.off}
+	{#if view.measurementOff}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-			{view.recording.off}
+			{view.measurementOff}
 		</p>
 	{/if}
 	{#if view.recording.sampled}

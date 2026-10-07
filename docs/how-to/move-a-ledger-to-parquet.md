@@ -72,15 +72,17 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the eight layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the nine layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
 `counterfactual-scores`, `candidate-models`, `feed-health`, `seen` and
-`published`. This tool does not migrate `span-rollup` or an undeclared CSV
-layout. Moving another shape requires its own contract and reader design first.
-Family-nested prefixes such as `content-similarity-judge/scored-pairs` are
-supported by the door, but this migrator still does not move committed files at
-that depth. `item-health-summary` moved without a migrator entry because no
-committed file existed.
+`published`, plus `council-run-records` (old CSV folders
+`llm-council/shard-outcomes`). This tool does not migrate `span-rollup` or an
+undeclared CSV layout. Moving another shape requires its own contract and
+reader design first. The council's declared layout is one shared day file under
+two folders. Other family-nested prefixes such as
+`content-similarity-judge/scored-pairs` are supported by the door, but this
+migrator still does not move committed files at that depth. `item-health-summary`
+moved without a migrator entry because no committed file existed.
 
 Both CSV layouts refuse a filled cell under an unknown heading, a value with
 no heading, and conflicting filled values under an old heading and its current

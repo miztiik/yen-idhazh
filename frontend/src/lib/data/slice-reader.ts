@@ -2,8 +2,9 @@
  * How is one slice answered from what the page keeps?
  *
  * The door reads `daily.json`; `monthly.json` only when the span starts before
- * the oldest day `daily.json` names; and `yearly.json` only when it starts before
- * the oldest day those two name. It takes the coarsest file for each day
+ * the oldest day `daily.json` names, or when it names no day; and `yearly.json`
+ * only when it starts before the oldest day those two name, or when `daily.json`
+ * names no day. It takes the coarsest file for each day
  * (`slice.ts`), has the page keeper hold the files that hold rows
  * (`page-keeper.ts`), asks the engine one query over them (`slice-query.ts`),
  * and returns one of four states:
@@ -11,20 +12,26 @@
  * - `missing`: there is no `daily.json`, so the ledger is not published. Its
  *   fault is `not-packed`.
  * - `quiet`: every day asked for is covered and no row matched, or the span lies
- *   wholly after the newest day compacted. A file whose entry says `rows: 0` is
- *   never fetched, and neither is a period whose entry is `empty` or `lost`,
- *   which has no file, so a span of quiet days loads no engine at all.
+ *   wholly after the newest day compacted, or wholly before the ledger began. A
+ *   file whose entry says `rows: 0` is never fetched, and neither is a period
+ *   whose entry is `empty` or `lost`, which has no file, so a span of quiet days
+ *   loads no engine at all.
  * - `unreachable`: `at` is the first day that could not be answered, and the
  *   console says why. Its fault is `index-missing` for a span that reaches back
  *   past the days `daily.json` names when there is no `monthly.json`, or past
  *   the days those two name when there is no `yearly.json`; `day-missing` for a
  *   day between the first and the newest packed day that no index names; and
- *   `file-missing` for a named file that is not there. It is `null` for a span
- *   that starts before the oldest day any index names, an index this build will
- *   not act on, a file that did not arrive whole, or an engine that could not
- *   answer.
+ *   `file-missing` for a named file that is not there. It is `null` for an index
+ *   this build will not act on, a file that did not arrive whole, or an engine
+ *   that could not answer.
  * - `ok`: the rows, exactly as the files hold them. The door never merges rows:
  *   the compaction already wrote one row per record.
+ *
+ * `ok` and `quiet` carry `first`, the first day the answer covers. A span that
+ * starts before the oldest day any index names starts before the ledger began,
+ * and those days are outside the ledger rather than missing from it, so the
+ * door cuts them, answers from the ledger's first day, and names that day.
+ * The span's end stays where it was asked to end.
  *
  * `ok` and `quiet` carry `lostDays`, the days in the span an index records lost.
  * Such a day has no file to read and no record to draw, so it is named rather
@@ -32,8 +39,11 @@
  * They also carry `setAside`, the periods the span is read from whose packing
  * set files aside unread, so a panel can say its rows may be short.
  *
- * `through` is the newest day `daily.json` names. A day after it has not been
- * compacted yet, so it is clamped away rather than drawn as a zero.
+ * `through` is how far the ledger is packed: the newest day any index names. The
+ * packing moves a closed month's days out of `daily.json`, so while it names a
+ * day, its newest day is that one, and a short span reads one index. A day after
+ * `through` has not been compacted yet, so it is clamped away rather than drawn
+ * as a zero.
  *
  * **A day in a packed year is read from its year file, by byte range.** In a
  * browser the engine opens the year file at an address no earlier read used and
@@ -60,7 +70,7 @@
 
 import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type IndexReading, type IndexRefusal, type Period } from './compact-index';
 import type { FileShortfall, PageKeeper, WantedFile } from './page-keeper';
-import { filesFor, firstNamed, type ChosenFile } from './slice';
+import { filesFor, firstNamed, newestNamed, type ChosenFile } from './slice';
 import { rowsFor } from './slice-query';
 import {
 	checkedRequest,
@@ -192,8 +202,8 @@ export function explainRefusal(period: Period, refused: IndexRefusal): string {
 		: `${period}.json cannot be read: ${refused.detail}`;
 }
 
-/** Why a file a slice needs arrived but could not be used, as the console says it. */
-function explainShortfall(
+/** Why a file a slice or a written question needs arrived but could not be used, as the console says it. */
+export function explainShortfall(
 	wanted: WantedFile,
 	shortfall: Exclude<FileShortfall, { reason: 'absent' }>
 ): string {
@@ -213,11 +223,8 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		throw new SliceRequestError(`${JSON.stringify(ledger)} is not a ledger the console may query`);
 	}
 	const request = checkedRequest(options);
-	const unreachable = (at: DateStamp, why: string, fix = ''): SliceResult => {
-		keeper.warn(
-			`${LOG_PREFIX} ${ledger} ${request.from} to ${request.to}: ${why}, so nothing is drawn from ${at}` +
-				(fix === '' ? '' : `. ${fix}`)
-		);
+	const unreachable = (at: DateStamp, why: string): SliceResult => {
+		keeper.warn(`${LOG_PREFIX} ${ledger} ${request.from} to ${request.to}: ${why}, so nothing is drawn from ${at}`);
 		return { state: 'unreachable', rows: [], at, fault: null };
 	};
 	const faulted = (at: DateStamp, met: Exclude<FaultMet, { fault: 'not-packed' }>): SliceResult => {
@@ -232,18 +239,15 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 	}
 	if ('refused' in daily) return unreachable(request.from, explainRefusal('daily', daily.refused));
 	const days = daily.index.entries;
-	const through = days.at(-1)?.covers ?? null;
-	if (through === null || request.from > through) return { state: 'quiet', rows: [], through, lostDays: [], setAside: {} };
-	const until = request.to < through ? request.to : through;
 
 	let months: CompactEntry[] = [];
 	let years: CompactEntry[] = [];
-	if (request.from < days[0].covers) {
+	if (days.length === 0 || request.from < days[0].covers) {
 		const monthly = await readIndexFrom(keeper, ledger, 'monthly');
 		if (monthly === null) return faulted(request.from, { fault: 'index-missing', period: 'monthly' });
 		if ('refused' in monthly) return unreachable(request.from, explainRefusal('monthly', monthly.refused));
 		months = monthly.index.entries;
-		if (request.from < firstNamed(days, months, [])) {
+		if (days.length === 0 || request.from < firstNamed(days, months, [])) {
 			const yearly = await readIndexFrom(keeper, ledger, 'yearly');
 			if (yearly === null) return faulted(request.from, { fault: 'index-missing', period: 'yearly' });
 			if ('refused' in yearly) return unreachable(request.from, explainRefusal('yearly', yearly.refused));
@@ -251,21 +255,20 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 		}
 	}
 
-	const selection = filesFor(request.from, until, days, months, years);
-	if ('hole' in selection) {
-		const first = firstNamed(days, months, years);
-		if (selection.hole < first) {
-			return unreachable(
-				selection.hole,
-				`it starts before ${first}, the oldest day any index names`,
-				"Clamp the span to the reach's first day"
-			);
-		}
-		return faulted(selection.hole, { fault: 'day-missing', day: selection.hole });
+	const through = newestNamed(days, months, years);
+	if (through === null || request.from > through) {
+		return { state: 'quiet', rows: [], first: request.from, through, lostDays: [], setAside: {} };
 	}
+	const began = firstNamed(days, months, years);
+	const first = request.from < began ? began : request.from;
+	const until = request.to < through ? request.to : through;
+	if (first > until) return { state: 'quiet', rows: [], first, through, lostDays: [], setAside: {} };
+
+	const selection = filesFor(first, until, days, months, years);
+	if ('hole' in selection) return faulted(selection.hole, { fault: 'day-missing', day: selection.hole });
 	const { lostDays, setAside } = selection;
 	const holding = selection.files.filter((file) => file.entry.rows > 0);
-	if (holding.length === 0) return { state: 'quiet', rows: [], through, lostDays, setAside };
+	if (holding.length === 0) return { state: 'quiet', rows: [], first, through, lostDays, setAside };
 
 	const wanted: WantedFile[] = holding.map((file) => ({
 		path: dataPath(ledger, file.period, file.entry.covers),
@@ -284,16 +287,16 @@ export async function readSlice(keeper: PageKeeper, ledger: LedgerName, options:
 			return unreachable(file.firstDay, explainShortfall(wanted[held.failed], held.shortfall));
 		}
 		try {
-			rows = await rowsFor(held.engine, held.names, request, until, (message) =>
+			rows = await rowsFor(held.engine, held.names, { ...request, from: first }, until, (message) =>
 				keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`)
 			);
 		} finally {
 			await held.done();
 		}
 	} catch (error) {
-		return unreachable(request.from, `the query engine could not answer (${reason(error)})`);
+		return unreachable(first, `the query engine could not answer (${reason(error)})`);
 	}
 	return rows.length === 0
-		? { state: 'quiet', rows: [], through, lostDays, setAside }
-		: { state: 'ok', rows, through, lostDays, setAside };
+		? { state: 'quiet', rows: [], first, through, lostDays, setAside }
+		: { state: 'ok', rows, first, through, lostDays, setAside };
 }

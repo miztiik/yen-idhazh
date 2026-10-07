@@ -6,7 +6,12 @@ import {
 	summarizeConfig,
 	uiConfig
 } from '$lib/server/config';
-import { countersWithoutScores, recordingNotes, recordNotes } from '$lib/console/recording';
+import {
+	countersWithoutScores,
+	measurementOff,
+	recordingNotes,
+	recordNotesByWindow
+} from '$lib/console/recording';
 import {
 	evalColumnLabels,
 	evalDays,
@@ -41,13 +46,8 @@ import { stacked } from '$lib/charts/stacked';
 import { windowOfDays } from '$lib/charts/viewport';
 import { renderToSvg } from '$lib/server/chart-render';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
-import {
-	dayMetrics,
-	latestDate,
-	loadDay,
-	publishedDates,
-	shardDays
-} from '$lib/server/payload';
+import { dayMetrics, latestDate, loadDay, publishedDates } from '$lib/server/payload';
+import { windowDay } from '$lib/server/window-day';
 
 export const prerender = true;
 
@@ -122,19 +122,20 @@ export async function load() {
 	// The widest span the control can reach, worked out before the ledgers are
 	// read rather than after: nothing older than this can be drawn whatever the
 	// operator does, so nothing older is opened either (`CLAUDE.md` Guardrail #12).
-	// One cover, in days: both ledgers this route reads file by day.
+	// Every window ends on the site's newest published day, so the widest one is
+	// every day both ledgers are read for.
 	const widestDays = Math.max(...console.window_presets);
-	const days = shardDays(widestDays);
+	const day = windowDay();
+	const readSpan = windowOfDays(day, widestDays, console.today_anchor);
 	// Both from their packed files, so both stop at the newest packed day and say
 	// so on the page rather than drawing the days after it as quiet ones.
-	const scores = await evalRows(days);
-	const items = await itemHealthRows(days);
+	const scores = await evalRows(readSpan);
+	const items = await itemHealthRows(readSpan);
 	const { rows } = scores;
 	const itemRows = items.rows;
 	const modelOnDate = modelByDate(rows);
 	const itemHealthByDate = byDate(itemRows);
 	const bands = summarizeConfig().bands;
-	const today = new Date().toISOString().slice(0, 10);
 
 	// Every span the control offers, worked out once here. The two distribution
 	// panels have to re-read every millisecond to answer for a different span,
@@ -144,12 +145,12 @@ export async function load() {
 	// presets is four small objects; the alternative was inlining every timing
 	// the ledger holds so the page could re-bin them.
 	//
-	// Anchored on the same day list the cards anchor on, so every panel on the
-	// page names one span.
+	// Every span ends on the site's newest published day, the day the cards'
+	// lines end on too, so every panel on the page names one span.
 	const dated = workDates(rows, itemRows);
 	const windows = new Map<number, DayWindow>(
 		console.window_presets.map((days) => {
-			const span = windowOfDays(dated, today, days, console.today_anchor);
+			const span = windowOfDays(day, days, console.today_anchor);
 			return [days, { start: span.start, end: span.end, days }];
 		})
 	);
@@ -278,6 +279,21 @@ export async function load() {
 					? null
 					: countersWithoutScores()
 		},
+		// Whether the scorer is switched off, once for each span the control offers:
+		// a day the line names is one that span shows, and a span that holds none of
+		// the score record's rows names the span that reaches back to them instead.
+		measurementOff: Object.fromEntries(
+			[...windows].map(([days, window]) => [
+				days,
+				measurementOff({
+					enabled: observability.evaluation_enabled,
+					recorded: scoredDays,
+					read: scores.read,
+					open: window,
+					offered: [...windows.values()]
+				})
+			])
+		),
 		// One entry per span the control offers. Null where the span timed
 		// nothing, which the panel prints as a sentence rather than as an empty
 		// chart of zeroes.
@@ -342,16 +358,21 @@ export async function load() {
 		console,
 		chart: chartConfig(),
 		// What the page says about the two records it read before any panel draws
-		// from them: one not packed yet, one that did not load, one packed some
-		// days short of the newest published day, or one with a day it has no
-		// record for or files it set aside unread.
-		recordNotes: recordNotes(
+		// from them, one set for each span the control offers: one not packed yet,
+		// one that did not load, one packed short of the newest published day, one
+		// whose rows stop before the span, or one with a day it has no record for or
+		// files it set aside unread.
+		recordNotes: recordNotesByWindow(
 			[
 				{ record: 'article', read: items.read },
-				{ record: 'score', read: scores.read }
+				// The "Measurement is off" line below already says why this record's
+				// panels are empty when its switch is off.
+				{ record: 'score', read: scores.read, switchedOff: !observability.evaluation_enabled }
 			],
-			latestDate(undefined, 1)
+			latestDate(undefined, 1),
+			[...windows.values()]
 		),
-		today
+		// The day every window on this route ends on: the site's newest published day.
+		windowDay: day
 	};
 }

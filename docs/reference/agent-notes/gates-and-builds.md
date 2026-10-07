@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -58,6 +58,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   cmd /c rmdir frontend\node_modules
   ```
 
+- **A build through a linked `node_modules` fails on a missing package; the
+  code is fine, the linked install changed under you.** Its owner can run
+  `npm ci` or switch branches while you use it. On 2026-10-07, on this Windows
+  machine with Node 24.12.0, vite failed with `Rollup failed to resolve import
+  "@duckdb/duckdb-wasm"` after two builds through the same link had passed.
+  The tell is that package missing from the sibling's folder. Remove the link,
+  run your own `npm ci` (134 s in one run here), then build again:
+  ```powershell
+  cmd /c rmdir frontend\node_modules
+  npm --prefix frontend ci
+  ```
+
 - **A logic spec that renders a component fails with `Cannot find package '$lib'` on its first run in a fresh worktree or a copy of a commit, then passes; the spec is fine, `.svelte-kit/` did not exist yet.**
   `frontend/tsconfig.json` takes `$lib` from `.svelte-kit/tsconfig.json`, which
   `npm ci` does not write. Playwright reads the paths when it starts; the run's
@@ -94,6 +106,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
 - Reproduce a timing failure in isolation before changing code. Do not raise a timeout or weaken an assertion merely to obtain a pass.
+- **A `--repeat-each` run reads as hung between repeats, then as failed with every test passed; it is Playwright waiting for each repeat's new worker to exit, then killing it.**
+  The wait is `PWTEST_CHILD_PROCESS_TIMEOUT`, 5 minutes by default. On
+  2026-10-06, on Windows with Node 24.12.0 and Playwright 1.62.1, workers of
+  one `ledger-ranges.spec.ts` test outlived it 1 time in 2; with it at 20
+  seconds, 16 times in 30 and then 4 in 30. Only the worker and its esbuild
+  service process stay alive; the cause is unknown, and CI shows no stall.
+  The tell is `force-killed it` between results, and at the end
+  `errors were not a part of any test`. Shorten the wait, and run a spec that
+  never contacts the preview server from a config with no `webServer`:
+  ```powershell
+  $env:PWTEST_CHILD_PROCESS_TIMEOUT = '20000'
+  ```
 
 ## The canary build
 
@@ -108,6 +132,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   ```powershell
   git status --porcelain
   npm run build:canary
+  ```
+- **The same timeout from a fresh build reads as a stale one; the box was too busy to start the preview in 120 s.**
+  `verified-preview.ts` checks the build's inputs and output before it
+  serves. On this Windows box at 90 to 100 percent CPU on 2026-10-06, it
+  printed nothing for over 100 s from a clean tree, and once printed its
+  address just after the limit; the same build served on the next try. The
+  tell is an empty `git status --porcelain` since the build. Do not rebuild;
+  run the same command again when the load drops:
+  ```powershell
+  (Get-CimInstance Win32_Processor).LoadPercentage
   ```
 
 ## Serving a build to measure it

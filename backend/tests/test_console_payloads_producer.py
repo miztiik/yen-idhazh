@@ -915,6 +915,24 @@ def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
     assert "of the 1 GB limit" in band.size.sentence
 
 
+def test_the_band_prints_the_articles_the_headroom_buys(tree: tuple[Path, Path]) -> None:
+    """The room left is a count of articles, never of days.
+
+    Each published day in the widest span grew the tree by 30,000 bytes over the
+    3 articles it published, so one more article costs 10,000 bytes. The newest
+    day measured 1,420,000 bytes, about 1.4 MB, which leaves 1,073,741,824 -
+    1,420,000 = 1,072,321,824 bytes under the 1 GB cap: 107,232 articles, printed
+    at three significant figures. A count of days would need a daily article
+    rate, and nothing here measures one, so the sentence names no day at all.
+    """
+    state, digest = tree
+
+    band = _band(state, digest)
+
+    assert band.size.articles_to_cap == 107_232
+    assert band.size.sentence == "1.4 MB of the 1 GB limit - room for about 107,000 more articles."
+
+
 def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) -> None:
     """Null is a designed state. A band that printed 0 MB and a green verdict
     for a tree nothing has published is a lie a reader cannot see through."""

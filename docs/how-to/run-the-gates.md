@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -162,7 +162,9 @@ so it retains the sufficiency checks without generating review pictures.
 For a design review, dispatch CI on the review branch with `panel_captures=true`.
 That run uploads the `panel-captures` artifact on a pass or a fail. Locally,
 prepare the canary build, then run
-`npx playwright test --project panels tests/panel-captures.spec.ts`.
+`npx playwright test --project=panels tests/panel-captures.spec.ts`. Keep the
+`=`: with a space, Playwright reads the spec's path as a second project name
+and runs nothing.
 Leave `SKIP_PANEL_CAPTURES` unset for that command. The
 pictures land in `frontend/test-results/panels/` as
 `<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
@@ -313,7 +315,7 @@ Two extras are declared. Install only what you need:
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML` | always - this is the gate set |
-| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
+| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it uses the current `tokenizers` range |
 
 `faithfulness` is the heavy one, and it is the only one a gate does not need. No
 test imports it. Spans need no extra at all: the sink writes a JSON line with the
@@ -832,7 +834,7 @@ Run this from `frontend/` to print the number this checkout will use, which is
 the same derivation the config runs:
 
 ```powershell
-node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
+node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd()).digest().readUInt32BE(0)%10000)"
 ```
 
 Check these conditions before trusting browser evidence.
@@ -858,6 +860,32 @@ Check these conditions before trusting browser evidence.
  screenshot. If it does not match, use the native Playwright capture runner;
  do not label that image with the requested width. A hidden embedded page can
  also suspend animation-frame waits, so make it visible before relying on them.
+
+### A Data explorer test serves the data it checks
+
+A Data explorer browser test that runs a question serves the ledger it asks
+about. It builds that ledger with `frontend/tests/support/ledger-lifecycle.ts`,
+which writes the three indexes and real Parquet files through the query engine.
+It serves the ledger to the page with `serveBuilt` from
+`frontend/tests/support/explorer-answer.ts`, pins its own UTC day with
+`openExplorer(page, day)`, and writes out the rows, files and sentences it
+expects. Serving a built ledger also switches the page's writers' tier off,
+because a built ledger has no writer's files. The archive host stays blocked
+unless the test serves it a root it built, with `serveArchiveToPage`. No test
+works out its expected answer by running the query door again over the canary
+or the committed data (owner ruling, 2026-10-05). The canary keeps only the
+explorer checks that do not depend on what it holds: layout, notices and
+browser storage.
+
+**Find a test that depends on what the canary holds by moving the canary day.**
+Set `DATE` in `backend/utilities/build_canary_day.py` to a later day, run the
+specs with `npm run test:changed -- --spec <name>`, which builds the canary
+again from the edited file, then set `DATE` back. A test that turns red reads
+what the canary holds. The move is a measurement and is never committed.
+`test:changed` stops a browser run at its first failure, so to count every red
+test, run Playwright on the specs directly against that build. Setting `DATE`
+back needs no clean-up by hand: the canary day build deletes every folder it
+writes before it writes, so the next build holds nothing from the moved day.
 
 ## A chart has no plot until somebody scrolls to it
 

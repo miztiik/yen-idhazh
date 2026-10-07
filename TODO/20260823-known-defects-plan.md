@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 
-**Thirty-two defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-one defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -36,7 +36,8 @@ settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
 57 is the fourth that needs evidence, because one stall is not enough to find
 its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
-holds.
+holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
+explorer fetches each chosen ledger's three indexes twice.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -69,7 +70,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
-| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | **OPEN - a person settles which ruling holds** |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - owner ruled to drop the column; Plan 61 Row 2 removed it |
 | 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed ledger is exposed** |
 | 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
 | 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
@@ -100,10 +101,33 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
-| 56 | A byte-range test counts a correct 304 as a failure | 1 | **OPEN - the cause is settled; one test changes** |
+| 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
+| 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
+
+## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (OPEN)
+
+**When the data explorer opens, it fetches each chosen ledger's three indexes
+twice.** Plan 62's row L10 saw it on 2026-10-07, on the live site and on a
+local build, both before and after its own change (#1360). An index is fetched
+with `cache: 'no-store'` (`frontend/src/lib/data/fetched-bytes.ts`), so the
+second read is a request of its own, not a copy the browser kept. The likely
+cause, an estimate from reading the page and not measured, is two callers that
+each read the indexes: `updateCostAndColumns` in
+`frontend/src/routes/console/data-explorer/+page.svelte` asks for the window's
+cost (`askCost`), then for each ledger's columns, through `askColumns` since
+#1360 and through a `DESCRIBE` sent to `ask` before it.
+
+**Doing nothing costs three extra small requests for each chosen ledger, every
+time the page opens.** What the page shows is not wrong.
+
+**The next move is a worker's: find the two callers and share one read.**
+Level 1 - the reads of one page, and a wrong version shows on that page at
+once.
+
+Found by plan 62's row L10 (#1360), and filed on 2026-10-07.
 
 ## 59 - Reading named days of a door ledger lists every raw day folder the ledger holds (OPEN)
 
@@ -206,17 +230,17 @@ that three specs share.
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04.
 
-## 56 - A byte-range test counts a correct 304 as a failure (OPEN)
+## 56 - A byte-range test counts a correct 304 as a failure (FIXED 2026-10-06)
 
-**A browser test of reading a year file by byte range failed once on a 304
+**A browser test of reading a year file by byte range keeps failing on a 304
 that its own setup makes correct.** "A year file whose ETag changed after the
 browser kept part of it is still read by byte range"
 (`frontend/tests/ledger-ranges.spec.ts`, line 310 today and 271 on the commit
-that failed) failed in CI run 37218615995, attempt 1, at about 17:00 UTC on
-2026-10-04, and a re-run of the job passed. The test lets the browser keep an
-answer for 1 second, reads the year file, gives the file a new ETag (its
-`redeploy` step), waits 2 seconds, reads the file again from a new page, and
-expects the test's host to answer every GET with a 206.
+that failed first) failed first in CI run 37218615995, attempt 1, at about
+17:00 UTC on 2026-10-04, and a re-run of the job passed. The test lets the
+browser keep an answer for 1 second, reads the year file, gives the file a new
+ETag (its `redeploy` step), waits 2 seconds, reads the file again from a new
+page, and expects the test's host to answer every GET with a 206.
 
 **The host's own request log settles the cause.** The run's
 `playwright-traces` artifact keeps it, as `ledger-ranges/requests.json`, until
@@ -228,19 +252,35 @@ asks that only when its copy is older than the 1 second the test allows, so
 the read took longer than that, and the host answered 304, which is right. The
 read's answer still matched the disk, which the test checks first.
 
-**Doing nothing costs a red browser job whenever that read takes more than a
-second, and a re-run.** The site is not wrong: Pages lets the browser keep an
-answer for 600 seconds, and 304 is the right answer to a browser checking its
-copy.
+**It failed twice more the same way, and the second time in main's own
+checks.** CI run 37382246965, the checks of #1326, failed it on attempt 1 (job
+id 112007006566) at about 22:28 UTC on 2026-10-05, and a re-run of the job
+passed. CI run 37427112258, the checks main ran when #1328 merged, failed it
+in the browser job (job id 112149278674) at about 07:05 UTC on 2026-10-06, and
+that run stays red. The failed assertion prints the request it counted. In
+both runs that request is a GET for byte 0 of
+`compact/host-fingerprint/yearly/2026/2026.parquet`, answered 304 with no
+body. Its `If-None-Match` names the ETag the host was serving:
+`"6ac43266-4fe1"` in run 37382246965 and `"6ac4ab97-4fe1"` in run
+37427112258. Its address carries a `read` mark that no other read uses
+(`read=37617a44d53a84f5` and `read=f9688832d6ad26de`), so the copy the browser
+checked came from that same read. That is the request the host's log showed
+the first time, so the cause is the same.
 
-**The next move is a worker's.** Only what the first read kept has to be out
-of date, so the test can let the browser keep answers for the site's 600
-seconds again before the second read starts. Every GET of the second read is
-then a 206, and the test still reads a file whose ETag changed. Level 1 - one
-test.
+**Doing nothing costs a red browser job whenever that read takes more than a
+second, and a re-run.** It has cost that three times in three days, and once
+it was the one failure that turned main's own checks red. The site is not
+wrong: Pages lets the browser keep an answer for 600 seconds, and 304 is the
+right answer to a browser checking its copy.
+
+**Fixed on 2026-10-06 by #1354.** The test sets the host back to Pages' 600
+seconds after its 2-second wait and before the second read starts, so only what
+the first read kept is stale and every GET of the second read is a 206. Level 1 -
+one test.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
+different tests, and filed on 2026-10-04. The two later failures were added on
+2026-10-06.
 
 ## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
 
@@ -810,7 +850,7 @@ committed header, or the contract's own field list.
 
 Execution owner: this plan's row 26 worker; for each key cell, a bounded fixture pair differing only in that cell must stay separate, and dropping the cell must fail without deriving the expected answer from the key constant.
 
-## 25 - `host_model` is a column nothing fills, and two rulings disagree (OPEN)
+## 25 - `host_model` is a column nothing fills, and two rulings disagree (CLOSED 2026-10-04)
 
 `backend/idhazh/contracts/council_shard_outcome.py` declares `host_model`. No
 writer fills it.
@@ -822,8 +862,8 @@ rejected recording the machine per shard, on the grounds that the digest
 pipeline already characterises the same runner pool and the probe wants 1.9 GiB
 on a job whose two processes already hold up to 9.02 GiB in 16 GB.
 
-Both cannot be right. A person settles which, and then the column is either
-filled or migrated out the way defect 24 describes.
+The owner ruled on 2026-10-04 to drop the column. Plan 61 Row 2 removes it from
+the replacement contract and refuses a filled legacy cell during migration.
 
 Found 2026-09-21, while the council's own record was being built.
 

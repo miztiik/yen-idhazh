@@ -43,9 +43,11 @@ import {
 } from '$lib/server/host-fingerprint';
 import { windowOfDays } from '$lib/charts/viewport';
 import {
+	measurementOff,
 	recordingNotes,
-	recordNotes,
+	recordNotesByWindow,
 	type LostDay,
+	type OfferedWindow,
 	type RecordingNotes
 } from '$lib/console/recording';
 import {
@@ -59,6 +61,7 @@ import {
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import { latestDate, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
+import { windowDay } from '$lib/server/window-day';
 import { settingsMoved } from '$lib/console/settings-moved';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -86,6 +89,9 @@ export interface MachineWindow {
 	end: string;
 	runsRead: number;
 	refused: RefusedRun[];
+	/** The "Measurement is off" line for this span, null while the counters are
+	 * recorded. It names a day only inside the span. */
+	measurementOff: string | null;
 	recording: RecordingNotes;
 	/** What the MACHINE record was doing, which is a different instrument from
 	 * the counters above and can be in a different state on the same day. */
@@ -184,15 +190,18 @@ export async function load() {
 	// The widest span the control can reach. Nothing older can be drawn whatever
 	// the operator does, so nothing older is read (`CLAUDE.md` Guardrail #12), and the
 	// cover follows `console.window_presets` rather than a literal so raising a
-	// preset widens it (Guardrail #6). Every ledger this route reads files by day.
+	// preset widens it (Guardrail #6). Every window ends on the site's newest
+	// published day, so the widest one is every day the packed records are read for.
 	const widestPreset = Math.max(...console_.window_presets);
 	const days = shardDays(widestPreset);
+	const day = windowDay();
+	const readSpan = windowOfDays(day, widestPreset, console_.today_anchor);
 	const chart = chartConfig();
 	const limits = machineLimits();
 	// Both records from their packed files, each read once. The counters, the
 	// fleet and every panel below take their rows from these two reads, so no two
 	// panels on this route can answer over different days.
-	const machine = await machineRecord(days);
+	const machine = await machineRecord(readSpan);
 	// The days the machine record's own index records lost. No row of them
 	// survives, so the server's counters and the machine record both ran on them
 	// and neither has a figure: each note below dates its instrument's start by
@@ -201,11 +210,10 @@ export async function load() {
 	// The header as well as the rows: how many requests an article makes is a
 	// fact the ledger's own column names carry, and the reuse panel reads it off
 	// them rather than off a constant anybody would have to remember to change.
-	const healthTable = await itemHealthRows(days);
+	const healthTable = await itemHealthRows(readSpan);
 	const health = healthTable.rows;
 	const counters = machineCounters(machine.rows, health, plannedShards(days), limits);
 	const observability = observabilityConfig();
-	const today = new Date().toISOString().slice(0, 10);
 
 	// One row a job, bounded to the same cover every other read on this route
 	// takes (Guardrail #12), and the twelve flag names out of the generated
@@ -281,13 +289,24 @@ export async function load() {
 		named: console_.processor_lost_pct_named
 	};
 
+	// The default span is answered whether or not it is one of the presets, so
+	// the document the browser is handed always has an entry to fall back to.
+	const spans = [...new Set([console_.default_window_days, ...console_.window_presets])];
+	// Every span as the notes about the records read it, so a note for one span
+	// can name the narrowest other span that reaches back to a record's last rows.
+	const offered: OfferedWindow[] = spans.map((count) => ({
+		days: count,
+		...windowOfDays(day, count, console_.today_anchor)
+	}));
+
 	/** One span, and every figure that reads a span. */
 	function answer(days: number): MachineWindow {
-		const span = windowOfDays(dates, today, days, console_.today_anchor);
+		const span = windowOfDays(day, days, console_.today_anchor);
 		const inSpan = <T extends { date: string }>(rows: readonly T[]): T[] =>
 			rows.filter((row) => row.date >= span.start && row.date <= span.end);
 
 		const runs = inSpan(counters.runs);
+		const ranOn = [...new Set(runs.map((run) => run.date))].sort();
 		const lostInSpan = inSpan(lostDays);
 		const machineLostInSpan = machineLost.filter((date) => date >= span.start && date <= span.end);
 		const spanDays = [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort();
@@ -326,6 +345,16 @@ export async function load() {
 			// is named on the page with the reason, because a run count that quietly
 			// excludes one is a run count nobody can check.
 			refused: inSpan(counters.refused),
+			// Whether the counters are switched off, said of this span alone: a day
+			// it names is one the span shows, and a span that holds none of the
+			// record's rows names the span that reaches back to them instead.
+			measurementOff: measurementOff({
+				enabled: observability.host_fingerprint,
+				recorded: ranOn,
+				read: machine.read,
+				open: { days, start: span.start, end: span.end },
+				offered
+			}),
 			// What the recording itself was doing. Every panel below reads the model
 			// server's own counters, so a day the scrape never ran is a gap in the
 			// recording rather than a machine that did nothing - and the two states
@@ -335,7 +364,7 @@ export async function load() {
 			recording: recordingNotes({
 				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
-				recorded: [...new Set(runs.map((run) => run.date))].sort(),
+				recorded: ranOn,
 				window: spanDays,
 				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
 					.filter((date) => date !== '')
@@ -371,9 +400,6 @@ export async function load() {
 		};
 	}
 
-	// The default span is answered whether or not it is one of the presets, so
-	// the document the browser is handed always has an entry to fall back to.
-	const spans = [...new Set([console_.default_window_days, ...console_.window_presets])];
 	const windows = new Map<number, MachineWindow>(spans.map((days) => [days, answer(days)]));
 	// The span the prerendered document opens on. Its drawings are the ones
 	// inlined; a browser redraws from the arrays when the operator moves the
@@ -501,7 +527,7 @@ export async function load() {
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
 		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
-		modelChanges: pipelineChanges((await evalRows(days)).rows, manifests),
+		modelChanges: pipelineChanges((await evalRows(readSpan)).rows, manifests),
 		// WHICH settings moved on each of those days, off the same manifests, so a
 		// rule and its readout cannot be built from two different reads. A date the
 		// line above holds and this one does not is a day whose identity came from
@@ -540,15 +566,19 @@ export async function load() {
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
 		panelGroups: panelGroupsFor('machine', DRAWN_PANELS),
 		// What the page says about the two records every panel here is built on,
-		// before any of them draws: one not packed yet, one that did not load, one
-		// packed some days short of the newest published day, or one with a day it
+		// before any of them draws, one set for each span the control offers: one
+		// not packed yet, one that did not load, one packed short of the newest
+		// published day, one whose rows stop before the span, or one with a day it
 		// has no record for or files it set aside unread.
-		recordNotes: recordNotes(
+		recordNotes: recordNotesByWindow(
 			[
-				{ record: 'machine', read: machine.read },
+				// The counters' "Measurement is off" line above already says why this
+				// record's panels are empty when its switch is off.
+				{ record: 'machine', read: machine.read, switchedOff: !observability.host_fingerprint },
 				{ record: 'article', read: healthTable.read }
 			],
-			latestDate(undefined, 1)
+			latestDate(undefined, 1),
+			offered
 		),
 		console: console_,
 		chart

@@ -1,13 +1,18 @@
 import { expect, test, type Page } from './support/browser';
-import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
+import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt } from './support/explorer-answer';
+import { everyDay } from './support/ledger-lifecycle';
 
 /**
  * Where the Data explorer's regions stand: the workbench fills the window, Run
  * stands in one group with Save and Copy link, and the two copy buttons stand
  * on the answer's own heading line. Every expected value is a literal edge, a
  * literal order or a literal the test typed; nothing the canary holds decides
- * one.
+ * one. A test that runs a question serves the ledger it chooses from a root it
+ * built, so the answer it lays out never depends on what the canary holds.
  */
+
+/** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
+const PINNED = '2030-06-15';
 
 type Box = { left: number; top: number; right: number; bottom: number };
 
@@ -38,7 +43,7 @@ for (const view of [
 ] as const) {
 	test(`the workbench reaches the window's right and bottom edges at ${view.width} x ${view.height}`, async ({ page }) => {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const at = await measure(page, []);
 		expect(at.width, 'the window is not the width this test asked for').toBe(view.width);
 		expect(at.height, 'the window is not the height this test asked for').toBe(view.height);
@@ -55,7 +60,7 @@ for (const view of [
 ] as const) {
 	test(`the regions tile a window that holds them, and the page does not scroll, at ${view.width} x ${view.height}`, async ({ page }) => {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const at = await measure(page, ['ledgers', 'columns', 'answer', 'chart']);
 		expect(at.scrollHeight, 'the page scrolls under a workbench that fits the window').toBe(view.height);
 
@@ -81,11 +86,13 @@ for (const view of [
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
-	test(`a long list of a ledger's columns scrolls inside the column rail and never stretches the page, at ${view.width} x ${view.height}`, async ({ page }) => {
+	test(`a long list of a ledger's columns scrolls inside the column rail and never stretches the page, at ${view.width} x ${view.height}`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		await chooseExplorerQuestion(page, ['published'], prefixedColumns(80));
 		await runExplorer(page);
+		await expectAnswer(page, 'table');
 		await expect(page.locator('[data-explorer-columns] li')).toHaveCount(80);
 		const at = await page.evaluate(() => {
 			const list = document.querySelector('[data-explorer-column-box]') as HTMLElement;
@@ -115,7 +122,7 @@ for (const view of [
 	test(`the question strip stays one line, folds the rest into "{n} more" and keeps every title whole, at ${view.width}`, async ({ page }) => {
 		await page.addInitScript((saved) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(saved)), SAVED);
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const strip = page.locator('[data-workbench-region="questions"] .question-strip');
 		const fold = strip.locator(':scope > details > summary');
 		await expect(fold).toBeVisible();
@@ -165,11 +172,13 @@ for (const view of [
 	});
 }
 
-test('the chart heading line holds still and the drawing scrolls in its own box beneath it', async ({ page }) => {
+test('the chart heading line holds still and the drawing scrolls in its own box beneath it', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1024, height: 768 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3, 5), (DATE '2026-08-19', 5, 4), (DATE '2026-08-20', 8, 9)) AS t(date, a, b)");
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	const chart = page.locator('[data-workbench-region="chart"]');
 	await expect(chart.locator('[data-shape-choice]').first()).toBeVisible();
 	const body = chart.locator('.chart-body');
@@ -203,11 +212,13 @@ test('the chart heading line holds still and the drawing scrolls in its own box 
 	expect(after?.y).toBeCloseTo(before?.y ?? -1, 0);
 });
 
-test('a long answer and a long question scroll inside their own regions, and the page does not grow', async ({ page }) => {
+test('a long answer and a long question scroll inside their own regions, and the page does not grow', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT i AS row_number FROM range(0, 1200) AS t(i)');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	await expect(page.locator('[data-explorer-answer] tbody tr').first()).toBeVisible();
 	await page.locator('#explorer-sql').fill(Array.from({ length: 40 }, (_, index) => `SELECT ${index}`).join('\n'));
 	const at = await page.evaluate(() => {
@@ -231,14 +242,19 @@ for (const view of [
 	{ width: 390, height: 844 },
 	{ width: 768, height: 1024 }
 ] as const) {
-	test(`below the wide breakpoint the workbench runs edge to edge and the answer is one window tall, at ${view.width}`, async ({ page }) => {
+	test(`below the wide breakpoint the workbench runs edge to edge, and the answer is one window tall from a whole pixel, at ${view.width}`, async ({ page }) => {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const at = await measure(page, ['answer']);
 		expect(at.workbench.left).toBeCloseTo(0, 0);
 		expect(at.workbench.right).toBeCloseTo(at.width, 0);
 		expect(at.scrollWidth, 'the page scrolls sideways').toBe(at.width);
 		expect(at.regions.answer.bottom - at.regions.answer.top).toBeCloseTo(view.height, 0);
+		// The browser scrolls and sizes the page in whole pixels, so an answer that
+		// starts between two pixels never fills the window exactly, and a foot
+		// between two pixels is past the last pixel a scroll can reach.
+		expect(Number.isInteger(at.regions.answer.top), `the answer starts at ${at.regions.answer.top} px, between two pixels`).toBe(true);
+		expect(Number.isInteger(at.workbench.bottom), `the page ends at ${at.workbench.bottom} px, between two pixels`).toBe(true);
 	});
 }
 
@@ -249,7 +265,7 @@ test('only the Data explorer lifts the width cap and leaves the footer out', asy
 	const capped = await page.locator('.frame:has(> main)').evaluate((node) => node.getBoundingClientRect().width);
 	expect(capped, 'the Pipelines route lost its width cap').toBeLessThan(1920);
 
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await expect(page.locator('.frame:has(> main) > footer')).toBeHidden();
 	const lifted = await page.locator('.frame:has(> main)').evaluate((node) => node.getBoundingClientRect().width);
 	expect(lifted).toBeCloseTo(1920, 0);
@@ -273,7 +289,7 @@ for (const view of [
 	test(`Run, Save and Copy link stand next to each other in one group, and Run holds still in every state of it, at ${view.width}`, async ({ page, context }) => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const group = page.locator('[data-explorer-actions]');
 		await expect(group).toHaveCount(1);
 		await expect(page.locator('[data-workbench-region="toolbar"] .run-button')).toHaveCount(0);
@@ -355,7 +371,7 @@ for (const view of [
 test('the folded list closes on a press outside it, on Escape and after a pick, and stays open after Forget', async ({ page }) => {
 	await page.addInitScript((saved) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(saved)), SAVED);
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const strip = page.locator('[data-workbench-region="questions"] .question-strip');
 	const summary = strip.locator(':scope > details > summary');
 	const list = strip.locator(':scope > details .folded');
@@ -405,7 +421,7 @@ test('Forget on a chip on the line moves focus to the nearest Forget left on the
 	const saved = ['Kept one', 'Kept two', 'Kept three'].map((name, index) => kept(`line-${index + 1}`, name, index));
 	await page.addInitScript((entries) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(entries)), saved);
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const line = page.locator('[data-workbench-region="questions"] .question-strip > .saved-chip > .example');
 	await expect(line).toHaveText(['Kept one', 'Kept two', 'Kept three']);
 
@@ -425,7 +441,7 @@ test('Forget on the line moves focus to "{n} more" when no Forget is left on the
 	const saved = [kept('short', 'Kept', 0), kept('wide', 'W'.repeat(40), 1)];
 	await page.addInitScript((entries) => localStorage.setItem('yen-idhazh:data-explorer:saved', JSON.stringify(entries)), saved);
 	await page.setViewportSize({ width: 768, height: 1024 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const strip = page.locator('[data-workbench-region="questions"] .question-strip');
 	await expect(strip.locator(':scope > .saved-chip > .example')).toHaveText(['Kept']);
 
@@ -448,7 +464,7 @@ for (const view of [
 	test(`History opens its list in view, each line of it whole and inside the window, at ${view.width}`, async ({ page }) => {
 		await page.addInitScript((runs) => localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify(runs)), RUNS);
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		await page.locator('.history-list summary').click();
 		const menu = page.locator('.history-list .history-menu');
 		await expect(menu.getByRole('button')).toHaveCount(2);
@@ -471,7 +487,7 @@ for (const view of [
 test('History closes its list on Escape, on a press outside it and after a pick, as the folded list does', async ({ page }) => {
 	await page.addInitScript((runs) => localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify(runs)), RUNS);
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const history = page.locator('.history-list');
 	const summary = history.locator('summary');
 	const editor = page.locator('#explorer-sql');
@@ -514,8 +530,9 @@ test('the line that says the ledger list did not arrive starts where the editor 
 	expect(starts.words, 'the line has no side padding, so its words touch the column edge').toBeCloseTo(starts.label, 0);
 });
 
-test('Ctrl+Enter in the editor runs the question', async ({ page }) => {
-	await openExplorer(page);
+test('Ctrl+Enter in the editor runs the question', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT 42 AS answer');
 	await page.locator('#explorer-sql').press('Control+Enter');
 	await expect(page.locator('[data-explorer-answer] tbody td').first()).toHaveText('42', { timeout: 60_000 });
@@ -527,11 +544,13 @@ for (const view of [
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
-	test(`the copy buttons stand on the answer's heading line and overlap no other region, at ${view.width}`, async ({ page }) => {
+	test(`the copy buttons stand on the answer's heading line and overlap no other region, at ${view.width}`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		await chooseExplorerQuestion(page, ['published'], 'SELECT 1 AS one');
 		await runExplorer(page);
+		await expectAnswer(page, 'table');
 		const head = page.locator('[data-workbench-region="answer"] [data-explorer-answer-head]');
 		await expect(head.getByRole('button', { name: /^Copy as JSON$/ })).toBeVisible();
 		await expect(head.getByRole('button', { name: /^Copy as table$/ })).toBeVisible();

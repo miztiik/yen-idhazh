@@ -70,7 +70,7 @@ Table A - what is out
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | #1289 | Plan 60 row 29: doc_load every page |
 | 30 | Every reader and rewriter of a compact index keeps an entry's state | 8 | D | DONE | psychic-guide | #1293 | Plan 60 row 30: index readers keep state |
 | 31 | Panels say which days have no record | 8 | E | DONE | congenial-waddle | #1301 | Plan 60 row 31: panels show lost days |
-| 32 | The explorer's date chart breaks its line at a lost day | 31 | E | DONE | symmetrical-parakeet | - | Plan 60 row 32 |
+| 32 | The explorer's date chart breaks its line at a lost day | 31 | E | DONE | symmetrical-parakeet | #1318 | Plan 60 row 32 |
 
 ## 2. Shared declarations
 

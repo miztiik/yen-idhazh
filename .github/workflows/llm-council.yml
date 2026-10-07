@@ -337,7 +337,7 @@ jobs:
           # a unit's verdicts outlive the run that produced them.
           retention-days: 3
 
-  collect:
+  save_council_results:
     needs: [draw, judge]
     # A unit that died still leaves the others' work worth keeping, and a date
     # still owes whatever its tenants settle.
@@ -381,7 +381,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
-            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID"
+            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}"
           done
 
       # One call and one push, over every path the night's tenants named. The

@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import Final, NamedTuple
 
 from idhazh import ledger
+from idhazh.contracts.council_run_record import OLD_HEADINGS
 from idhazh.contracts.eval_row import RENAMED_CELLS
 from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
@@ -32,6 +33,11 @@ def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
 def _day_file(name: LedgerName) -> LedgerEntry:
     """One shared CSV file a day, under the ledger's own name."""
     return LedgerEntry(name=name, grain=Grain.DAY_FILE, prefix=(name.value,), suffix=".csv")
+
+
+def _shared_day_file(name: LedgerName, *, prefix: tuple[str, ...]) -> LedgerEntry:
+    """One shared CSV file a day, under an earlier family path."""
+    return LedgerEntry(name=name, grain=Grain.DAY_FILE, prefix=prefix, suffix=".csv")
 
 
 CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
@@ -65,6 +71,15 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         LedgerName.PUBLISHED: CsvLedger(
             _day_file(LedgerName.PUBLISHED), ForeverWindow(unit="forever")
         ),
+        # One old family folder and one old ledger folder, read before row 3 moves it.
+        LedgerName.COUNCIL_RUN_RECORDS: CsvLedger(
+            _shared_day_file(
+                LedgerName.COUNCIL_RUN_RECORDS,
+                prefix=("llm-council", "shard-outcomes"),
+            ),
+            ForeverWindow(unit="forever"),
+            OLD_HEADINGS,
+        ),
     }
 )
 # Removal condition: delete this package and its command when no program-written CSV
@@ -76,7 +91,7 @@ def require_layout(which: LedgerName) -> LedgerEntry:
     if which not in CSV_LEDGERS:
         raise RefusedError(f"{which.value}: no supported CSV layout in CSV_LEDGERS")
     entry = CSV_LEDGERS[which].old_entry
-    if len(entry.prefix) != 1 or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
+    if not entry.prefix or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
         raise RefusedError(
             f"{which.value}: unsupported CSV layout {entry.grain.value} "
             f"under {'/'.join(entry.prefix)}"

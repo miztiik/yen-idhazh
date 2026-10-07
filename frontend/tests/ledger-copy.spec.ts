@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { siteKeepsFrom, siteMayHaveTrimmed } from '../src/lib/data/site-window';
@@ -316,8 +316,13 @@ test('raw days after the newest packed day are listed through the newest raw day
 });
 
 test('the build listing keeps the compaction listing digest and adds file sizes', () => {
-	const fixtureRoot = join(process.cwd(), '..', 'tests', 'fixtures', 'raw-day-listing', 'state', 'raw', 'item-health');
-	const fixtureDay = join(fixtureRoot, '2026', '09', '02');
+	// The fixture's two writer files are 4 and 8 bytes long. Its listing, which an older
+	// compaction wrote, carries the digest below: SHA-256 over the two names joined with one
+	// newline, which `backend/tests/contracts/test_raw_day_listing_fixture.py` checks against
+	// the Python rule.
+	const first = '01a0fbc4-1707-8428-b765-119571d6249f.parquet';
+	const second = '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet';
+	const fixtureDay = join(process.cwd(), '..', 'tests', 'fixtures', 'raw-day-listing', 'state', 'raw', 'item-health', '2026', '09', '02');
 	const root = aStateTree({
 		'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
 		'compact/item-health/index/monthly.json': anIndex('item-health', 'monthly', []),
@@ -326,19 +331,16 @@ test('the build listing keeps the compaction listing digest and adds file sizes'
 	});
 	const targetDay = join(root, 'raw', 'item-health', '2026', '09', '02');
 	mkdirSync(targetDay, { recursive: true });
-	for (const name of ['01a0fbc4-1707-8428-b765-119571d6249f.parquet', '01a0fca4-b1cd-8c8b-a2ea-b2f6f3a7e52e.parquet']) {
-		cpSync(join(fixtureDay, name), join(targetDay, name));
-	}
+	for (const name of [first, second]) cpSync(join(fixtureDay, name), join(targetDay, name));
 
 	const copy = ledgerCopy(root, ['item-health']);
 	const staged = JSON.parse(copy.indexes['raw/item-health/index/2026-09-02.json']);
-	const fixture = JSON.parse(readFileSync(join(fixtureRoot, 'index', '2026-09-02.json'), 'utf8'));
 	expect(staged).toMatchObject({
-		ledger: fixture.ledger,
-		date: fixture.date,
-		files: fixture.files,
-		content_sha256: fixture.content_sha256,
-		bytes: fixture.files.map((name: string) => statSync(join(fixtureDay, name)).size)
+		ledger: 'item-health',
+		date: '2026-09-02',
+		files: [first, second],
+		content_sha256: 'd68833c946407d8c06fe5835c706cc425a3891d3e95f410652d0f7b5a6598495',
+		bytes: [4, 8]
 	});
 	expect(staged).not.toHaveProperty('version');
 });

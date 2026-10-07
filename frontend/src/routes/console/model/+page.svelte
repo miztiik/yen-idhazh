@@ -61,11 +61,6 @@
 
 	let { data } = $props();
 
-	/** A record this build could not read at all. Its note above already says why
-	 * the page is empty, so the sentence that reads an empty page as a model that
-	 * has written nothing yet would be false beside it. */
-	const recordUnread = $derived(data.recordNotes.some((note) => note.kind !== 'behind'));
-
 	/** The same key the other two routes read, so the operator's choice of span
 	 * follows him between them rather than resetting on every click. */
 	const WINDOW_KEY = 'idhazh:console-window';
@@ -76,6 +71,20 @@
 	let windowDays = $state(data.console.default_window_days);
 	/** False until a browser has run this page. */
 	let ready = $state(false);
+
+	/** What the page says about the records it read, for the window in force. The
+	 * server wrote one set for each preset, so changing the window recomputes
+	 * nothing. */
+	const notes = $derived(
+		data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []
+	);
+	/** A note above already says why this window is empty: a record this build
+	 * could not read, one not packed yet or not packed this far, or one whose rows
+	 * stop before the window. The sentence that reads an empty page as a model that
+	 * has written nothing yet would be false beside it. Decided by what each note
+	 * says about the window, not by its kind, because the line for a day packing
+	 * has not reached prints every day and empties only a window that day fills. */
+	const emptyExplained = $derived(notes.some((note) => note.emptiesWindow));
 
 	onMount(() => {
 		ready = true;
@@ -268,15 +277,9 @@
 	 * cannot disagree about when the ground moved. */
 	const modelSwaps = $derived(data.modelWork.flatMap((row) => (row.kind === 'swap' ? [row] : [])));
 
-	/** The days the cards' lines cover, oldest first. */
-	const modelSpan = $derived(
-		windowOfDays(
-			modelDays.map((day) => day.date),
-			data.today,
-			windowDays,
-			data.console.today_anchor
-		)
-	);
+	/** The days the cards' lines cover, oldest first: the window in force, which
+	 * ends on the site's newest published day like every other on this page. */
+	const modelSpan = $derived(windowOfDays(data.windowDay, windowDays, data.console.today_anchor));
 	const modelWindow = $derived(
 		[...modelDays.filter((day) => day.date >= modelSpan.start && day.date <= modelSpan.end)].reverse()
 	);
@@ -345,6 +348,9 @@
 	const span = $derived(data.windows[windowKey] ?? null);
 	const writeTimes = $derived(data.writeTimes[windowKey] ?? null);
 	const scoreCost = $derived(data.scoreCost[windowKey] ?? null);
+	/** The "Measurement is off" line for the open window, null while the scorer is
+	 * on. The server worded it for each preset, so it names only a day this window shows. */
+	const switchedOff = $derived(data.measurementOff[windowKey] ?? null);
 
 	/** Which sources the checker doubted, over the open window.
 	 *
@@ -524,11 +530,11 @@
 	<!-- Above every panel, because every panel here is built on the article and
 	     score records, and a record that is late or unread empties all of them for
 	     one reason. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes {notes} />
 
 	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
 		<h2 class="console-h2">What the model did</h2>
-		{#if !recordUnread}
+		{#if !emptyExplained}
 			<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model="empty">
 				The model has not summarised anything yet. This fills as days publish.
 			</p>
@@ -548,9 +554,9 @@
 			<!-- What the recording was doing, in the panel it governs rather than as
 			     a banner: three panels can be in three different states on one day.
 			     None of these is an error and none is styled as one. -->
-			{#if data.recording.off}
+			{#if switchedOff}
 				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-					{data.recording.off}
+					{switchedOff}
 				</p>
 			{/if}
 			{#if data.recording.sampled}

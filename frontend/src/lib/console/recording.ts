@@ -2,42 +2,82 @@
  *
  * Every figure on this console is read off a ledger, and a ledger has states
  * that are not "a number". Measurement can be switched off; it can be sampled;
- * it can have started after the window opened; it can have run on a day and
- * lost what it wrote; and two instruments that answer about the same day can
- * disagree about whether that day exists at all. None of those is a zero, and
- * printing them as one is how a figure nobody checks gets onto an operator's
- * page.
+ * it can have started after the window opened, or held its last rows before it;
+ * it can have run on a day and lost what it wrote; and two instruments that
+ * answer about the same day can disagree about whether that day exists at all.
+ * None of those is a zero, and printing them as one is how a figure nobody
+ * checks gets onto an operator's page.
  *
  * **The empty state is the panel, not a replacement for it.** Nothing here
  * removes a heading or the sentence under it. Each function returns the one
  * line that goes where the figure would have been, so an operator learns the
  * measurement exists and learns why it has no answer today.
  *
- * The strings are fixed - the owner wrote the first of them on 2026-08-30 - and
- * only the dates, counts and names inside them are computed. **A date that is
- * not true is worse than no date**, so every one of them is derived from the
- * ledger that is missing rather than typed here.
+ * The strings are fixed - Susan chose the first of them on 2026-08-30, and
+ * Reader and Jony chose the words of the "Measurement is off" line on
+ * 2026-10-07 - and only the dates, counts and names inside them are computed.
+ * **A date that is not true is worse than no date**, so every one of them is
+ * derived from the ledger that is missing rather than typed here.
  *
- * Pure and dependency-free apart from the date formatter, so the browser suite
- * drives every state without a page. The names of a ledger's missing-file faults
- * are types from the query door, and nothing of the door runs here.
+ * Pure and dependency-free apart from the date formatter and the door's own
+ * calendar of what an index entry covers, so the browser suite drives every
+ * state without a page. The names of a ledger's missing-file faults are types
+ * from the query door, and no read of the door runs here.
  */
 
 import type { LedgerFault, LedgerName, SetAsideFiles } from '../data/ledger';
-import { dayMonth, shortDate } from '../format';
+import { coveredDays, type HeldPeriod } from '../data/slice';
+import { dayMonth, MONTHS, shortDate } from '../format';
 
-/** A measurement that was switched off, and when it last recorded anything.
+/** What the "Measurement is off" line is worked out from, for one window. */
+export interface MeasurementFacts {
+	/** The toggle in `config/idhazh.json` that governs this instrument. */
+	enabled: boolean;
+	/** The days this instrument recorded, ascending. Only those inside `open` can be named. */
+	recorded: readonly string[];
+	/** How the read of the record behind this instrument went. Its index says
+	 * whether the record ever held a row, and where its rows stop. */
+	read: RecordRead;
+	/** The window the line is printed over. */
+	open: OfferedWindow;
+	/** Every window the control offers, so the line can name one that reaches back
+	 * to the last recorded day. */
+	offered: readonly OfferedWindow[];
+}
+
+/** A measurement that was switched off, and what the open window holds of it;
+ * null while it is on.
  *
  * It names `config/idhazh.json` and never the knob inside it: a term from a
  * subsystem is not a term for a user (CLAUDE.md section 0b), and an operator
  * looking for `host_fingerprint` does not know that is what he wants.
+ *
+ * It names a day only inside the open window. A window that holds no recorded
+ * day says so, and names the narrowest window the control offers that reaches
+ * back to the last recorded day, because the day itself is off screen. "At all"
+ * is said only of a record whose index names no row, in every window, because
+ * that is a fact about the whole record. A record that is not packed or did not
+ * load, a window that holds no packed day, and a window that holds no day this
+ * instrument recorded but overlaps the period of the record's newest rows get the
+ * switch and the fix and no claim about what was recorded: the page has not read
+ * what would make one true.
  */
-export function measurementOff(lastRecorded: string | null): string {
-	const since =
-		lastRecorded === null
-			? 'Nothing has been recorded at all'
-			: `Nothing has been recorded since ${shortDate(lastRecorded)}, so the figures below stop on that day`;
-	return `Measurement is off. ${since}. Turn it back on in config/idhazh.json.`;
+export function measurementOff(facts: MeasurementFacts): string | null {
+	if (facts.enabled) return null;
+	const { read, open } = facts;
+	const fix = 'Turn it on in config/idhazh.json.';
+	const newest = facts.recorded.filter((day) => day >= open.start && day <= open.end).sort().at(-1);
+	if (newest !== undefined) return `Measurement is off. Nothing has been recorded since ${shortDate(newest)}. ${fix}`;
+	if (read.state !== 'read') return `Measurement is off. ${fix}`;
+	if (read.lastRows === null) return `Measurement is off. Nothing has been recorded at all. ${fix}`;
+	const rowsInWindow = coveredDays(read.lastRows.period, read.lastRows.covers).last >= open.start;
+	if (read.through < open.start || rowsInWindow) return `Measurement is off. ${fix}`;
+	const wider = narrowestReaching(facts.offered, read.lastRows);
+	const reach =
+		wider === undefined
+			? 'No window here reaches back to the last recorded day.'
+			: `The ${wider.days}-day window reaches back to the last recorded day.`;
+	return `Measurement is off. Nothing was recorded ${windowPhrase(open)}. ${fix} ${reach}`;
 }
 
 /** A rate below 1.0, as one run in N.
@@ -125,7 +165,8 @@ export function recordDestroyed(lost: readonly LostDay[]): string | null {
 		: `${lost.length} days published ${counted} between them and their machine record is missing. The runs worked; what they measured about the machine did not survive.`;
 }
 
-/** Every state a panel governed by one instrument can be in.
+/** Every state a panel governed by one instrument can be in, apart from its
+ * switch: `measurementOff` words that for each window the control offers.
  *
  * Null where the state does not apply, so a panel renders whichever of them is
  * not null and prints nothing where the recording behaved. Three panels can be
@@ -133,7 +174,6 @@ export function recordDestroyed(lost: readonly LostDay[]): string | null {
  * never one banner across the page.
  */
 export interface RecordingNotes {
-	off: string | null;
 	sampled: string | null;
 	startedMidWindow: string | null;
 	scoresOnly: string | null;
@@ -165,7 +205,6 @@ export interface RecordingFacts {
 
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const recorded = [...facts.recorded].sort();
-	const last = recorded.at(-1) ?? null;
 	const lost = (facts.lost ?? []).filter((day) => !recorded.includes(day.date));
 	// The instrument started on the first day it is known to have run: a day it
 	// recorded, or a day whose record did not survive, destroyed or recorded lost.
@@ -177,7 +216,6 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const before = first === null ? 0 : facts.window.filter((date) => date < first).length;
 	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => !recorded.includes(date));
 	return {
-		off: facts.enabled ? null : measurementOff(last),
 		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
 		startedMidWindow: recordingStarted(first, before, facts.figures),
 		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters(),
@@ -194,17 +232,29 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
  * that did not load; `at` is the first day that failed, or null when the list
  * itself did not load, and `fault` names the missing file behind it as the door
  * does, or is null for another cause. `read` carries the newest packed day,
- * which is where every panel built on the record stops; `lostDays`, the days in
- * the read the record's index records lost, ascending; and `setAside`, the files
- * the packing of the read's periods set aside unread.
+ * `through`, after which no panel built on the record has rows to draw;
+ * `lastRows`, the newest period the record's index says holds rows, or null when
+ * none does, so a window that starts after it can say where the rows stop
+ * without reading a day before the window; `lostDays`, the days in the read the
+ * record's index records lost, ascending; and `setAside`, the files the packing
+ * of the read's periods set aside unread.
  */
 export type RecordRead =
-	| { state: 'read'; through: string; lostDays: string[]; setAside: SetAsideFiles }
+	| { state: 'read'; through: string; lastRows: HeldPeriod | null; lostDays: string[]; setAside: SetAsideFiles }
 	| { state: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreadable'; at: string | null; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
 /** The three records the console reads at build time, as its notes name them. */
 export type RecordName = 'article' | 'score' | 'machine';
+
+/** One record a route read, as its notes take it. */
+export interface RouteRecord {
+	record: RecordName;
+	read: RecordRead;
+	/** True where the route prints this record's "Measurement is off" line, which
+	 * already says why its panels are empty, so no second note says it again. */
+	switchedOff?: boolean;
+}
 
 /** The ledger each record is read from, so a note can send a person to its files. */
 const RECORD_LEDGERS: Readonly<Record<RecordName, LedgerName>> = {
@@ -213,11 +263,23 @@ const RECORD_LEDGERS: Readonly<Record<RecordName, LedgerName>> = {
 	machine: 'host-fingerprint'
 };
 
-/** One sentence about one or more records. `unreadable` is a fault; the others are not. */
+/** One sentence about one or more records. `unreadable` is a fault; the others are not.
+ *
+ * `emptiesWindow` is true when the state the note names leaves every panel built
+ * on its records empty for the whole window, so a sentence that reads an empty
+ * page as one with nothing to show would be false beside it. */
 export interface RecordNote {
-	kind: 'not-packed' | 'unreadable' | 'behind' | 'lost' | 'set-aside';
+	kind: 'not-packed' | 'unreadable' | 'behind' | 'rows-end' | 'lost' | 'set-aside' | 'on-time';
 	records: RecordName[];
 	text: string;
+	emptiesWindow: boolean;
+}
+
+/** One window the control offers, as a note reads it: how many days, and which. */
+export interface OfferedWindow {
+	days: number;
+	start: string;
+	end: string;
 }
 
 /** `a`, `a and b`, `a, b and c`. */
@@ -322,20 +384,31 @@ function unreadableText(record: RecordName, read: Extract<RecordRead, { state: '
  * One sentence a record and a state, never one a panel and never a banner: the
  * record is what is late, broken or short, and every panel built on it is empty,
  * stops early or misses the same rows for the same reason. `newestDay` is the
- * newest day the site published. A record packed as far as the day before it is
- * as current as packing can be - a day is packed only once it has ended - so it
- * earns no sentence. Further behind than that, the panels stop early for a
- * reason a reader cannot see, so the sentence says where they stop and how many
- * days are not shown yet. A record read in full can still be short: a day its
- * packing recorded lost has no record, and a file it set aside unread holds rows
- * no panel draws, so each says so, one record at a time and lost days first.
+ * newest day the site published, and every window ends on it. A day is packed
+ * only once it has ended, so a record packed as far as the day before it is as
+ * current as packing can be, and that day still shows nothing in every window:
+ * the quietest line on the page says so, last, and that it is normal. Further
+ * behind than that, the panels stop early for a reason a reader cannot see, so
+ * the sentence says where they stop and how many days are not shown yet.
+ * `open` is the window the notes are for, and `offered` every window the control
+ * offers: a record whose packed days in the open window hold no row, and whose
+ * newest packed rows are before it, leaves every panel built on it empty for the
+ * whole window, so the sentence says where its rows stop, and names the
+ * narrowest offered window that reaches back to them, when one does. A record
+ * read in full can still be short: a day its packing recorded lost has no
+ * record, and a file it set aside unread holds rows no panel draws, so each says
+ * so, one record at a time and lost days first.
  *
  * The words are fixed, like the other notes in this file; only the names, the
- * dates and the counts inside them are computed.
+ * dates and the counts inside them are computed. Reader and Jony chose the
+ * words for a record whose rows stop before the window, and Susan and Jony the
+ * line for the day packing has not reached yet, on 2026-10-06.
  */
 export function recordNotes(
-	reads: readonly { record: RecordName; read: RecordRead }[],
-	newestDay: string | null
+	reads: readonly RouteRecord[],
+	newestDay: string | null,
+	open: OfferedWindow,
+	offered: readonly OfferedWindow[]
 ): RecordNote[] {
 	const notes: RecordNote[] = [];
 	const notPacked = reads.filter((entry) => entry.read.state === 'not-packed').map((entry) => entry.record);
@@ -346,14 +419,17 @@ export function recordNotes(
 			text:
 				`The ${recordNoun(notPacked)} ${notPacked.length === 1 ? 'has' : 'have'} not been packed yet, ` +
 				`so nothing below that uses ${notPacked.length === 1 ? 'it' : 'them'} has anything to show. ` +
-				'That is a step not yet run, not a quiet pipeline.'
+				'That is a step not yet run, not a quiet pipeline.',
+			emptiesWindow: true
 		});
 	}
 	for (const { record, read } of reads) {
 		if (read.state !== 'unreadable') continue;
-		notes.push({ kind: 'unreadable', records: [record], text: unreadableText(record, read) });
+		notes.push({ kind: 'unreadable', records: [record], text: unreadableText(record, read), emptiesWindow: true });
 	}
-	if (newestDay !== null) notes.push(...behindNotes(reads, newestDay));
+	if (newestDay !== null) notes.push(...behindNotes(reads, newestDay, open));
+	const ended = rowsEndNotes(reads, open, offered);
+	notes.push(...ended);
 	for (const { record, read } of reads) {
 		if (read.state !== 'read') continue;
 		const subject = `${record} record`;
@@ -361,17 +437,22 @@ export function recordNotes(
 			notes.push({
 				kind: 'lost',
 				records: [record],
-				text: noRecordSentence(subject, read.lostDays, (them) => `nothing below that uses this record shows ${them}`)
+				text: noRecordSentence(subject, read.lostDays, (them) => `nothing below that uses this record shows ${them}`),
+				emptiesWindow: false
 			});
 		}
 		const setAside = setAsideSentence(subject, RECORD_LEDGERS[record], read.setAside, 'anything below that uses this record');
-		if (setAside !== null) notes.push({ kind: 'set-aside', records: [record], text: setAside });
+		if (setAside !== null) notes.push({ kind: 'set-aside', records: [record], text: setAside, emptiesWindow: false });
+	}
+	if (newestDay !== null) {
+		const said = new Set(ended.flatMap((note) => note.records));
+		notes.push(...onTimeNotes(reads.filter((entry) => !said.has(entry.record)), newestDay, open));
 	}
 	return notes;
 }
 
 /** The records packed short of the day before `newestDay`, one sentence for each day they stop on. */
-function behindNotes(reads: readonly { record: RecordName; read: RecordRead }[], newestDay: string): RecordNote[] {
+function behindNotes(reads: readonly RouteRecord[], newestDay: string, open: OfferedWindow): RecordNote[] {
 	const behind = new Map<string, RecordName[]>();
 	for (const { record, read } of reads) {
 		if (read.state !== 'read') continue;
@@ -390,12 +471,114 @@ function behindNotes(reads: readonly { record: RecordName; read: RecordRead }[],
 				text:
 					`The ${recordNoun(records)} ${records.length === 1 ? 'is' : 'are'} packed as far as ` +
 					`${shortDate(through)}, so the ${after} ${after === 1 ? 'day' : 'days'} after it ` +
-					`${after === 1 ? 'is' : 'are'} not shown yet.`
+					`${after === 1 ? 'is' : 'are'} not shown yet.`,
+				emptiesWindow: through < open.start
 			};
 		});
+}
+
+/** The records packed as far as the day before `newestDay`, in one sentence.
+ *
+ * As current as packing can be, and still the newest day in every window shows
+ * nothing from them, which reads as a quiet day unless the page says otherwise.
+ * It prints in normal running, every day, so it is the quietest note and the
+ * last one (`RecordNotes.svelte`), and it says that this is normal, so the late
+ * note above it still reads as news. */
+function onTimeNotes(reads: readonly RouteRecord[], newestDay: string, open: OfferedWindow): RecordNote[] {
+	const current = reads.filter(({ read }) => read.state === 'read' && daysAfter(read.through, newestDay) === 1);
+	const first = current[0]?.read;
+	if (first === undefined || first.state !== 'read') return [];
+	const records = current.map((entry) => entry.record);
+	const one = records.length === 1;
+	return [
+		{
+			kind: 'on-time',
+			records,
+			text:
+				`The ${recordNoun(records)} ${one ? 'is' : 'are'} packed as far as ${shortDate(first.through)}, ` +
+				`so nothing below that uses ${one ? 'it' : 'them'} shows ${shortDate(newestDay)} yet. ` +
+				'That is normal: a day is packed only after it ends.',
+			emptiesWindow: first.through < open.start
+		}
+	];
 }
 
 /** Whole UTC days from `from` to `to`, negative when `to` is earlier. */
 function daysAfter(from: string, to: string): number {
 	return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/** A period as a sentence names it: `6 May 2030`, a month in full as `May 2030`, or `2029`. */
+function namedPeriod(held: HeldPeriod): string {
+	if (held.period === 'daily') return shortDate(held.covers);
+	if (held.period === 'yearly') return held.covers;
+	const [year, month] = held.covers.split('-').map(Number);
+	return `${MONTHS[(month ?? 1) - 1]} ${year}`;
+}
+
+/** The open window as a sentence ends on it: `on 6 Oct 2026` for one day, `in these 14 days` for more. */
+function windowPhrase(open: OfferedWindow): string {
+	return open.days === 1 ? `on ${shortDate(open.start)}` : `in these ${open.days} days`;
+}
+
+/** The narrowest window the control offers that holds the whole of `held`, or undefined when none does. */
+function narrowestReaching(offered: readonly OfferedWindow[], held: HeldPeriod): OfferedWindow | undefined {
+	const covered = coveredDays(held.period, held.covers);
+	return [...offered]
+		.sort((left, right) => left.days - right.days)
+		.find((window) => window.start <= covered.first && window.end >= covered.last);
+}
+
+/** The records whose rows stop before the open window, one sentence for each period they stop in.
+ *
+ * Only where the open window holds a packed day: a window packing has not
+ * reached yet is the behind note's to name, and saying it holds no rows would
+ * claim days nothing has read. The period comes from the index, never from the
+ * rows, because the read covers only the window and the rows stop before it;
+ * and only packed rows count, because on the day a writer starts again its rows
+ * exist and are not packed yet. The sentence names no cause: a writer that
+ * stopped, one that paused and a quiet stretch are filed alike. It names the
+ * narrowest window the control offers that reaches back to the whole period,
+ * where one does, because an instruction that does not work costs a click, and
+ * on Pipelines a download. A record whose route already says its measurement is
+ * off gets no second explanation.
+ */
+function rowsEndNotes(reads: readonly RouteRecord[], open: OfferedWindow, offered: readonly OfferedWindow[]): RecordNote[] {
+	const ended = new Map<string, { held: HeldPeriod; records: RecordName[] }>();
+	for (const { record, read, switchedOff } of reads) {
+		if (switchedOff === true || read.state !== 'read' || read.lastRows === null || read.through < open.start) continue;
+		if (coveredDays(read.lastRows.period, read.lastRows.covers).last >= open.start) continue;
+		const key = `${read.lastRows.period} ${read.lastRows.covers}`;
+		const held = ended.get(key) ?? { held: read.lastRows, records: [] };
+		held.records.push(record);
+		ended.set(key, held);
+	}
+	const span = windowPhrase(open);
+	return [...ended.values()]
+		.map(({ held, records }) => ({ held, records, covered: coveredDays(held.period, held.covers) }))
+		.sort((left, right) => left.covered.last.localeCompare(right.covered.last))
+		.map(({ held, records }): RecordNote => {
+			const wider = narrowestReaching(offered, held);
+			return {
+				kind: 'rows-end',
+				records,
+				text:
+					`The newest packed rows in the ${recordNoun(records)} are from ${namedPeriod(held)}. ` +
+					`The packed days since then hold no rows, so nothing below that uses ` +
+					`${records.length === 1 ? 'this record' : 'them'} has anything to show ${span}. ` +
+					'This page cannot tell if that is a quiet stretch or a fault.' +
+					(wider === undefined ? '' : ` The ${wider.days}-day window reaches back to ${namedPeriod(held)}.`),
+				emptiesWindow: true
+			};
+		});
+}
+
+/** The notes for every window the control offers, keyed by its day count, so a
+ *  page picks the open window's and recomputes nothing. */
+export function recordNotesByWindow(
+	reads: readonly RouteRecord[],
+	newestDay: string | null,
+	offered: readonly OfferedWindow[]
+): Record<string, RecordNote[]> {
+	return Object.fromEntries(offered.map((open) => [String(open.days), recordNotes(reads, newestDay, open, offered)]));
 }

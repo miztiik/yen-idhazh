@@ -1,78 +1,33 @@
 import { expect, test, type Page } from './support/browser';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { grouped } from '../src/lib/charts/series';
-import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
+import { grouped, telemetryCsv } from '../src/lib/charts/series';
+import { monthsInWindow, panWindow } from '../src/lib/charts/viewport';
 import { shortDate } from '../src/lib/format';
-import { CUT_FLAG_MEANS_A_CUT_FROM } from '../src/lib/server/model-work';
-import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
-import { feedHealthRows } from '../src/lib/server/ledger-rows';
-import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
-import { canaryArticleRows, canaryScoreRows, heldRows } from './support/canary-records';
+import { publishedCharts, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
+import { reliability, type FeedRecord } from '../src/lib/feed-health';
 import { days } from './support/consecutive-days';
+import { publishedSite } from './support/published-site';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
  *
  * It runs against the canary build, whose fixtures carry one run of each colour
- * and one feed of each kind the page has to tell apart. The canary build writes
- * the item-health ledger because the console reads timing medians from it, and
- * the score ledger because the model table counts its rows. The failed-item
- * list is the section with nothing to show, which proves the page keeps
- * rendering when one of its sources holds nothing.
+ * and one feed of each kind the page has to tell apart. A case that once worked
+ * out its answer from the canary's own files now checks what the page draws
+ * against what the page itself publishes - its window, its counts and its
+ * sentences - or serves the rows it counts. The figures behind those drawings
+ * are pinned where they are computed, over rows a test writes: the feed record
+ * here, the run square in `console-run-health.spec.ts` and the model table in
+ * `console-model-work.spec.ts`. The failed-item list is the section with nothing
+ * to show, which proves the page keeps rendering when one of its sources holds
+ * nothing.
  *
  * The band section has its own file, `console-compression.spec.ts`.
  *
  * See `backend/utilities/build_canary_day.py` for the fixture.
  */
-
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
-
-/** Every score row the canary packed, and every article row.
- *
- * Read through the readers the page's own server uses, once before the tests
- * run, rather than through a listing here: a listing of the wrong shape reads
- * nothing, which makes every day look unscored, and a test whose fixture
- * silently empties passes for the wrong reason. The oracles below call one
- * another several levels deep, so the rows are held for them rather than read
- * again at every level.
- */
-const scoreHeld = heldRows(canaryScoreRows);
-const articleHeld = heldRows(canaryArticleRows);
-
-test.beforeAll(async () => {
-	await scoreHeld.load();
-	await articleHeld.load();
-});
-
-function scoreRows(): Record<string, string>[] {
-	return scoreHeld.rows();
-}
-
-function healthRows(): Record<string, string>[] {
-	return articleHeld.rows();
-}
-
-function dirs(at: string): string[] {
-	return readdirSync(at, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name)
-		.sort();
-}
-
-/** The day the canary build publishes, discovered rather than hardcoded.
- *
- * A hardcoded date passes on an empty 404 page the moment the fixture moves.
- */
-function publishedDay(): string {
-	const root = join(CANARY, 'digest');
-	const year = dirs(root).at(-1) as string;
-	const month = dirs(join(root, year)).at(-1) as string;
-	const day = dirs(join(root, year, month)).at(-1) as string;
-	return `${year}-${month}-${day}`;
-}
-
-const DAY = publishedDay();
 
 /** The cap read from the knob, so the test cannot drift from the config. */
 const FAILURE_LIST_MAX = (
@@ -95,25 +50,8 @@ const WINDOW_PRESETS = (
 	) as { console?: { window_presets?: number[] } }
 ).console?.window_presets ?? [1, 7, 14, 30, 90];
 
-/** Which end of the window today sits on, from the knob the page reads. */
-const TODAY_ANCHOR = (
-	JSON.parse(
-		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-	) as { console?: { today_anchor?: 'right' | 'centre' } }
-).console?.today_anchor ?? 'right';
-
-/** The span every windowed surface opens on, hung off the build clock the way
- * the page hangs it. Both daily tables follow the control since 2026-08-31, so
- * a test that expected every committed day would fail on the two the fixture
- * puts before the default window reaches back to. */
-function openWindow(dates: string[]) {
-	return windowOfDays(
-		dates,
-		new Date().toISOString().slice(0, 10),
-		DEFAULT_WINDOW_DAYS,
-		TODAY_ANCHOR
-	);
-}
+/** The widest span the control offers. Every column of the run strip is a day of it. */
+const WIDEST = Math.max(...WINDOW_PRESETS);
 
 /** Every window control is disabled in the prerendered document and enabled on
  * mount, so a click before this just times out. */
@@ -132,53 +70,24 @@ async function setWindow(page: Page, days: number) {
 	);
 }
 
-/** A telemetry corpus deliberately longer than the window, for the seed tests.
+/** A telemetry corpus deliberately longer than the window, for the read tests.
  *
  * The canary day carries two days, which is shorter than any window this knob
  * can hold. A window asserted against a corpus it cannot cut passes without
- * cutting anything, so the seed tests read this instead.
+ * cutting anything, so the telemetry read tests read this instead.
  */
 const TELEMETRY_FIXTURE = resolve(process.cwd(), 'tests', 'fixtures', 'telemetry');
 
-/** Every day the fixture wrote a manifest for, oldest first, with its run count.
- *
- * The strip is asserted against this rather than a number: a fixture that grows
- * a day must not need the test renumbered, and a test that is renumbered by
- * hand gets renumbered wrong.
- */
-function manifestDays(): { date: string; runs: number }[] {
-	const root = join(CANARY, 'digest');
-	const found: { date: string; runs: number }[] = [];
-	for (const year of dirs(root)) {
-		for (const month of dirs(join(root, year))) {
-			for (const day of dirs(join(root, year, month))) {
-				const raw = readFileSync(join(root, year, month, day, 'run.json'), 'utf8');
-				found.push({
-					date: `${year}-${month}-${day}`,
-					runs: (JSON.parse(raw) as { runs: unknown[] }).runs.length
-				});
-			}
-		}
-	}
-	return found.sort((a, b) => a.date.localeCompare(b.date));
+/** The day the page says its window ends on: the viewport publishes the span it draws. */
+async function windowEnd(page: Page): Promise<string> {
+	const end = (await page.locator('[data-viewport-control]').getAttribute('data-window-end')) ?? '';
+	expect(end, 'the viewport publishes no window end').toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	return end;
 }
 
-/** The narrowest preset that reaches back past the canary's first recorded run.
- *
- * The console opens on fourteen days since 2026-10-02, and the canary records
- * twenty, so the default window holds no day without a run and fewer columns
- * than a phone is wide. A rule about either needs a wider span, and this finds
- * it from the fixture and the presets, so a canary that grows a day moves the
- * span rather than a renumbered test.
- */
-function presetPastTheCanary(): number {
-	const recorded = manifestDays().map((day) => day.date);
-	const first = new Date(`${recorded[0]}T00:00:00Z`).getTime();
-	const last = new Date(`${recorded.at(-1)}T00:00:00Z`).getTime();
-	const span = Math.round((last - first) / 86_400_000) + 1;
-	const wide = WINDOW_PRESETS.find((preset) => preset > span);
-	expect(wide, `no preset reaches back past the canary's ${span} days`).toBeDefined();
-	return wide as number;
+/** The run strip's newest column: the day the window ends on. */
+function newestColumn(page: Page) {
+	return page.locator('[data-day]').last();
 }
 
 /** Open `/console/` on a stored span, the way a reader's last choice reopens it. */
@@ -237,22 +146,6 @@ function stripMetrics(page: Page) {
 		}));
 }
 
-/** How many runs the fixture manifest records for that day. */
-function runCount(): number {
-	const [year, month, day] = DAY.split('-');
-	const raw = readFileSync(join(CANARY, 'digest', year, month, day, 'run.json'), 'utf8');
-	return (JSON.parse(raw) as { runs: unknown[] }).runs.length;
-}
-
-/** How many items the fixture ledger scored.
- *
- * Read from the file rather than typed here: a count in a test is a count that
- * goes stale the day the fixture grows a row, and it goes stale silently.
- */
-function scoredItems(): number {
-	return scoreRows().length;
-}
-
 /** How many days a telemetry viewport window covers, ends included. */
 function span(start: string | null, end: string | null): number {
 	if (!start || !end) return 0;
@@ -279,15 +172,11 @@ test('the strip reads oldest to newest, left to right', async ({ page }) => {
 	const dates = await columns.evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-day') ?? '')
 	);
-	// The window's own calendar, one column a day, consecutive and oldest first.
-	// The days that carried a run inside it are a subset of it in the same order.
+	// The window's own calendar, one column a day, consecutive and oldest first,
+	// ending on the day the page says its window ends.
 	expect(dates.length).toBe(DEFAULT_WINDOW_DAYS);
 	expect(dates).toEqual(days(dates[0], dates.length));
-	const committed = manifestDays().map((day) => day.date);
-	const span = openWindow(committed);
-	const ran = committed.filter((date) => date >= span.start && date <= span.end);
-	expect(ran.length, 'the window reaches no committed day, so this asserts nothing').toBeGreaterThan(0);
-	expect(dates.filter((date) => ran.includes(date))).toEqual(ran);
+	expect(dates.at(-1)).toBe(await windowEnd(page));
 
 	// Chronology a reader can see, not only one the DOM asserts.
 	const boxes = await columns.evaluateAll(TO_BOX);
@@ -297,40 +186,42 @@ test('the strip reads oldest to newest, left to right', async ({ page }) => {
 });
 
 test('every recorded run gets a square, and nothing else does', async ({ page }) => {
-	// Wide enough to reach back past the canary's first run, so the window holds
-	// empty days as well as recorded ones and the rule below has both to check.
-	const wide = presetPastTheCanary();
-	await openOnWindow(page, wide);
+	// The widest span, so the window holds empty days as well as recorded ones and
+	// the rule below has both to check.
+	await openOnWindow(page, WIDEST);
 
-	const expected = manifestDays();
 	// One column a day of the WINDOW, not one a manifest. An empty column is the
 	// fact the strip exists to show, and the days with runs are a subset of it.
-	await expect(page.locator('[data-day]')).toHaveCount(wide);
+	await expect(page.locator('[data-day]')).toHaveCount(WIDEST);
+	const drawn = await page.locator('[data-day]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			date: node.getAttribute('data-day') ?? '',
+			labels: [...node.querySelectorAll('[data-health]')].map((square) => square.getAttribute('aria-label') ?? '')
+		}))
+	);
+	// No square stands outside a day's column.
 	await expect(page.locator('[data-health]')).toHaveCount(
-		expected.reduce((total, day) => total + day.runs, 0)
+		drawn.reduce((total, day) => total + day.labels.length, 0)
 	);
 
-	// A scheduled run that never wrote a manifest has left no evidence, so the
-	// strip cannot draw a slot for it without inventing one.
-	for (const day of expected) {
-		await expect(page.locator(`[data-day="${day.date}"] [data-health]`)).toHaveCount(day.runs);
+	// A column's squares are its own day's runs, in the order they landed. A
+	// scheduled run that never wrote a manifest has left no evidence, so the strip
+	// cannot draw a slot for it; two runs can finish in parallel, so a number may
+	// be skipped but never repeated.
+	for (const day of drawn) {
+		const numbers = day.labels.map((label) => {
+			const named = new RegExp(`^Run (\\d+) on ${shortDate(day.date)}: `).exec(label);
+			expect(named, `a square in the ${day.date} column names another day: ${label}`).not.toBeNull();
+			return Number(named?.[1]);
+		});
+		expect(numbers, `${day.date} draws its runs out of order`).toEqual([...numbers].sort((a, b) => a - b));
+		expect(new Set(numbers).size, `${day.date} draws one run twice`).toBe(numbers.length);
 	}
-
-	// And every other column of the window is drawn and empty.
-	const withRuns = new Set(expected.map((day) => day.date));
-	const drawn = await page
-		.locator('[data-day]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => [
-				node.getAttribute('data-day') ?? '',
-				node.querySelectorAll('[data-health]').length
-			])
-		);
-	const empties = drawn.filter(([date]) => !withRuns.has(date as string));
-	expect(empties.length, 'the window carries no empty day, so the rule is untested').toBeGreaterThan(
-		0
-	);
-	expect(empties.every(([, runs]) => runs === 0)).toBe(true);
+	expect(drawn.some((day) => day.labels.length > 0), 'the window holds no run, so the rule is untested').toBe(true);
+	expect(
+		drawn.some((day) => day.labels.length === 0),
+		'the window carries no empty day, so the rule is untested'
+	).toBe(true);
 });
 
 test('runs rise from a shared baseline, on a square day track', async ({ page }) => {
@@ -341,8 +232,8 @@ test('runs rise from a shared baseline, on a square day track', async ({ page })
 	await page.goto('/console/');
 	await expect(page.locator('[data-run-history="strip"]')).toHaveCount(1);
 
-	const stack = await page.locator(`[data-day="${DAY}"] [data-health]`).evaluateAll(TO_BOX);
-	expect(stack.length).toBe(runCount());
+	const stack = await newestColumn(page).locator('[data-health]').evaluateAll(TO_BOX);
+	expect(stack.length, 'the newest day ran once, so its stack has no gap to measure').toBeGreaterThan(1);
 
 	// Run 1 is first in the DOM so it is read first, and lowest on screen so the
 	// day reads upward from the ground like every other time series.
@@ -517,7 +408,7 @@ test('THE ORACLE: the run strip fills its frame, keeps a cadence and reads a day
 test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
 	await page.setViewportSize({ width: 360, height: 720 });
 	// More history than a phone is wide: the default fourteen days fit one.
-	await openOnWindow(page, presetPastTheCanary());
+	await openOnWindow(page, WIDEST);
 
 	// More history than a phone is wide. The operator reaches the rest by
 	// scrolling, and starts where the newest run is.
@@ -535,7 +426,7 @@ test('on a phone the strip scrolls, and opens on the newest run', async ({ page 
 		.toBe(true);
 
 	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
-	const [newest] = await page.locator(`[data-day="${DAY}"]`).evaluateAll(TO_BOX);
+	const [newest] = await newestColumn(page).evaluateAll(TO_BOX);
 	expect(newest.x).toBeGreaterThanOrEqual(strip.x - 1);
 	expect(newest.right).toBeLessThanOrEqual(strip.right + 1);
 
@@ -548,15 +439,30 @@ test('on a phone the strip scrolls, and opens on the newest run', async ({ page 
 test('the grid draws one square per run, coloured by what the run did', async ({ page }) => {
 	await page.goto('/console/');
 
-	const column = page.locator(`[data-day="${DAY}"]`);
-	await expect(column).toHaveCount(1);
-	await expect(column.locator('[data-health]')).toHaveCount(runCount());
-
-	// The fixture is authored as one run of each colour: it published
-	// everything, then found nothing new, then broke.
-	await expect(column.locator('[data-health="green"]')).toHaveCount(1);
-	await expect(column.locator('[data-health="amber"]')).toHaveCount(1);
-	await expect(column.locator('[data-health="red"]')).toHaveCount(1);
+	// The colour and the sentence on a square are made from the same facts of one
+	// run (`$lib/console/run-square.ts`), so each sentence names the colour its
+	// square wears: a run that failed, or fell under the floor, is red; one that
+	// tried nothing, failed an article, reused yesterday's sources or waited on
+	// another run is amber; and the rest are green.
+	const squares = await page.locator('[data-day] [data-health]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			health: node.getAttribute('data-health') ?? '',
+			label: node.getAttribute('aria-label') ?? ''
+		}))
+	);
+	expect(
+		new Set(squares.map((square) => square.health)).size,
+		'every run in the window wears one colour, so the rule is untested'
+	).toBeGreaterThan(1);
+	for (const square of squares) {
+		const said = square.label.replace(/^Run \d+ on [^:]+: /, '');
+		const colour = /the run failed|under \d+%/.test(said)
+			? 'red'
+			: /nothing new to try|\d+ failed|reused yesterday's list of sources|another run's failed article was still missing/.test(said)
+				? 'amber'
+				: 'green';
+		expect(square.health, square.label).toBe(colour);
+	}
 });
 
 test('a square says what happened without a mouse', async ({ page }) => {
@@ -566,9 +472,13 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	// between amber and red still has to be able to read the run - and a native
 	// tooltip is not how, because it needs a mouse held still over a 7px square.
 	// The words are the square's name and are printed in the strip under it.
-	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
-	await expect(first).toHaveAttribute('aria-label', new RegExp(`^Run 1 on ${shortDate(DAY)}: `));
-	await expect(first).toHaveAttribute('aria-label', /succeeded/);
+	const column = newestColumn(page);
+	const date = (await column.getAttribute('data-day')) ?? '';
+	const first = column.locator('[data-health]').first();
+	await expect(first).toHaveAttribute(
+		'aria-label',
+		new RegExp(`^Run \\d+ on ${shortDate(date)}: (\\d+ of \\d+ succeeded|nothing new to try)`)
+	);
 	expect(await first.getAttribute('title')).toBeNull();
 });
 
@@ -580,31 +490,19 @@ test('the run that read only the start of an article says so on its own square',
 	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
 	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that
 	// run, so a published figure would read as the cap moving when nothing did.
-	const rows = healthRows().filter(
-		(row) => row.date === DAY
-	);
-	const cutByRun = new Map<string, Set<string>>();
-	for (const row of rows) {
-		if (row.source_words_before_cap === '' || row.source_words === '') continue;
-		if (Number(row.source_words_before_cap) <= Number(row.source_words)) continue;
-		cutByRun.set(row.run_id, (cutByRun.get(row.run_id) ?? new Set()).add(row.url_key));
-	}
-	expect(cutByRun.size, 'no run on this day cut anything, so the clause is untested').toBe(1);
-
 	const labels = await page
-		.locator(`[data-day="${DAY}"] [data-health]`)
+		.locator('[data-day] [data-health]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
 	const carried = labels.filter((label) => label.includes('read only in part'));
-	expect(carried).toHaveLength(cutByRun.size);
-	for (const [runId, keys] of cutByRun) {
-		const n = Number(runId.split('-').at(-1));
-		expect(carried[0]).toContain(`Run ${n} on `);
-		expect(carried[0]).toContain(`${keys.size} read only in part`);
+	expect(carried.length, 'no run in the window cut anything, so the clause is untested').toBeGreaterThan(0);
+	for (const label of carried) {
+		// One clause, after the run's counts, naming how many of its articles were cut.
+		expect(label).toMatch(/^Run \d+ on [^:]+: .+, [1-9]\d* read only in part(, |$)/);
 	}
 
 	// And a run that cut nothing does not carry the clause at all. A `0 read
 	// only in part` on every other square is a sentence about nothing.
-	expect(labels.filter((label) => label.includes('0 read only in part'))).toEqual([]);
+	expect(labels.filter((label) => /(^|\D)0 read only in part/.test(label))).toEqual([]);
 	expect(labels.length).toBeGreaterThan(carried.length);
 });
 
@@ -674,84 +572,44 @@ const MIN_ATTEMPTS =
 		) as { console?: { min_attempts_for_rate?: number } }
 	).console?.min_attempts_for_rate ?? 5;
 
-/** A feed-health ledger, read again independently of the page.
+/** The feed record the voices page prints in its headline, read off its own attributes.
  *
- * The CANARY tree, because that is what `build:canary` built the site from.
- * Reading `state/` here would compare the page to a ledger it never saw.
- *
- * Through `feedHealthRows`, the reader the page's own server uses, so a grain
- * change cannot pass here and fail there.
+ * The record behind these numbers is pinned over rows written here (`a record too
+ * shallow for a rate says so instead of printing one`, `a record with more failing
+ * feeds than the list draws is counted whole`); what the page owes is to print the
+ * numbers it publishes, and to list every feed they count.
  */
-async function feedLedger(root: string): Promise<FeedRecord[]> {
-	const table = await feedHealthRows(-1, join(root, 'state'));
-	return table.rows.map((row) => ({
-		date: row.date ?? '',
-		runId: row.run_id ?? '',
-		outcome: row.outcome ?? '',
-		items: Number(row.items ?? 0) || 0,
-		feedId: row.feed_id ?? ''
-	}));
-}
-
-/** The clean count, the denominator and the span, computed here from scratch.
- *
- * A read is a row that asked the feed. A rest and a robots answer are neither -
- * neither one asked whether the feed still works - so a source the pipeline was
- * only ever refused by is in neither count. Until 2026-09-03 a refusal was
- * counted as an ask, which reported a source we did not read as one that did
- * not fail.
- */
-function recordByHand(rows: FeedRecord[]) {
-	const read = new Map<string, FeedRecord[]>();
-	const seen = new Set<string>();
-	for (const row of rows) {
-		seen.add(row.feedId);
-		if (preserves(row)) continue;
-		read.set(row.feedId, [...(read.get(row.feedId) ?? []), row]);
-	}
-	const clean: string[] = [];
-	const broken: string[] = [];
-	for (const [feedId, reads] of read) {
-		if (reads.some(failing)) broken.push(feedId);
-		else clean.push(feedId);
-	}
-	const byName = (a: string, b: string) => a.localeCompare(b);
+async function feedHeadline(page: Page) {
+	const headline = page.locator('[data-feed-reliability]');
+	await expect(headline, 'the feed section prints no denominator').toHaveCount(1);
+	const count = async (name: string) => Number(await headline.getAttribute(name));
 	return {
-		clean: clean.sort(byName),
-		broken: broken.sort(byName),
-		checked: read.size,
-		ineligible: [...seen].filter((feedId) => !read.has(feedId)).sort(byName),
-		runs: new Set(rows.map((row) => row.runId)).size
+		headline,
+		clean: await count('data-feed-clean'),
+		checked: await count('data-feed-checked'),
+		runs: await count('data-feed-runs')
 	};
 }
 
 test('THE ORACLE: the feed headline carries its own denominator and span', async ({ page }) => {
 	await page.goto('/console/voices/');
 
-	const byHand = recordByHand(await feedLedger(CANARY));
-	// Read against a fact the fixture owns, never against a locator count: a
+	const { headline, clean, checked, runs } = await feedHeadline(page);
+	// Read against facts the page publishes, never against a locator count alone: a
 	// renamed attribute would make every number zero and switch this off.
-	expect(byHand.checked, 'the canary ledger asked no feed at all').toBeGreaterThan(0);
-	expect(byHand.clean.length, 'the canary has no clean feed to name').toBeGreaterThan(0);
-	expect(byHand.broken.length, 'the canary has no failing feed, so the list is empty').toBeGreaterThan(
-		0
-	);
-
-	const headline = page.locator('[data-feed-reliability]');
-	await expect(headline, 'the feed section prints no denominator').toHaveCount(1);
-	await expect(headline).toHaveAttribute('data-feed-clean', String(byHand.clean.length));
-	await expect(headline).toHaveAttribute('data-feed-checked', String(byHand.checked));
-	await expect(headline).toHaveAttribute('data-feed-runs', String(byHand.runs));
+	expect(checked, 'the page checked no feed at all').toBeGreaterThan(0);
+	expect(clean, 'the page has no clean feed to name').toBeGreaterThan(0);
+	expect(clean, 'the page has no failing feed, so the list is empty').toBeLessThan(checked);
+	await expect(page.locator('[data-feed-clean-name]')).toHaveCount(clean);
 	// The numbers in the attributes are also the numbers in the type. An
 	// attribute nobody reads and a sentence that says something else is exactly
 	// the shape this section had before.
-	await expect(headline).toContainText(`${byHand.clean.length} of ${byHand.checked} feeds`);
-	await expect(headline).toContainText(String(byHand.runs));
-	// The record's depth decides which of the two sentences prints, and the
-	// canary is deep enough for the measured one.
+	await expect(headline).toContainText(`${clean} of ${checked} feeds`);
+	await expect(headline).toContainText(String(runs));
+	// The record's depth decides which of the two sentences prints.
 	await expect(headline).toHaveAttribute(
 		'data-feed-reliability',
-		byHand.runs >= MIN_ATTEMPTS ? 'measured' : 'shallow'
+		runs >= MIN_ATTEMPTS ? 'measured' : 'shallow'
 	);
 });
 
@@ -760,17 +618,25 @@ test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', 
 }) => {
 	await page.goto('/console/voices/');
 
-	const byHand = recordByHand(await feedLedger(CANARY));
+	const { clean } = await feedHeadline(page);
 	const named = await page
 		.locator('[data-feed-clean-name]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-clean-name') ?? ''));
 
-	expect(named).toEqual(byHand.clean);
-	// And the two lists are disjoint: no feed is both clean and listed as broken.
+	// Every clean feed the headline counts, once each, in name order.
+	expect(named).toHaveLength(clean);
+	expect(new Set(named).size).toBe(named.length);
+	expect(named).toEqual([...named].sort((a, b) => a.localeCompare(b)));
+	// And the lists are disjoint: no feed is both clean and listed as broken, or
+	// both clean and one the pipeline did not read.
 	const listed = await page
 		.locator('[data-feed]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-feed') ?? ''));
 	expect(named.filter((feedId) => listed.includes(feedId))).toEqual([]);
+	const unread = await page
+		.locator('[data-feed-ineligible-name]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-ineligible-name') ?? ''));
+	expect(named.filter((feedId) => unread.includes(feedId))).toEqual([]);
 });
 
 test('THE ORACLE: the failure list is capped and its tail counts the remainder', async ({
@@ -778,7 +644,9 @@ test('THE ORACLE: the failure list is capped and its tail counts the remainder',
 }) => {
 	await page.goto('/console/voices/');
 
-	const byHand = recordByHand(await feedLedger(CANARY));
+	const { clean, checked } = await feedHeadline(page);
+	// A feed the headline checked and did not count clean is a feed that failed.
+	const broken = checked - clean;
 	const table = page.locator('[data-feeds="table"]');
 	const drawn = Number(await table.getAttribute('data-feeds-drawn'));
 	const hidden = Number(await table.getAttribute('data-feeds-hidden'));
@@ -786,9 +654,9 @@ test('THE ORACLE: the failure list is capped and its tail counts the remainder',
 	// The identity that catches a cap dropping rows without counting them. It
 	// holds at zero hidden, which is what makes it worth asserting on a fixture
 	// the cap does not bite.
-	expect(drawn + hidden, 'the cap lost a feed on the way past it').toBe(byHand.broken.length);
+	expect(drawn + hidden, 'the cap lost a feed on the way past it').toBe(broken);
 	expect(drawn).toBeLessThanOrEqual(FEED_ROWS);
-	expect(drawn).toBe(Math.min(byHand.broken.length, FEED_ROWS));
+	expect(drawn).toBe(Math.min(broken, FEED_ROWS));
 	await expect(page.locator('[data-feed]')).toHaveCount(drawn);
 
 	const tail = page.locator('[data-feeds-more]');
@@ -833,25 +701,45 @@ test('a record too shallow for a rate says so instead of printing one', () => {
 	expect(withRest.clean.length + withRest.failed).toBe(withRest.checked);
 });
 
-test('the committed ledger is deeper than the cap, so the tail sentence has work to do', async () => {
-	// The canary cannot show a capped list, so the numbers the production build
-	// prints are pinned here off the ledger the production build reads. The
-	// click-through is the section-12 smoke.
-	const committed = await feedLedger(resolve(process.cwd(), '..'));
-	const real = recordByHand(committed);
-	expect(real.checked, 'no committed feed-health ledger - the read is broken').toBeGreaterThan(0);
-	expect(
-		real.broken.length,
-		'the committed ledger holds fewer failing feeds than the cap, so nothing is hidden'
-	).toBeGreaterThan(FEED_ROWS);
-	expect(real.runs).toBeGreaterThanOrEqual(MIN_ATTEMPTS);
-	expect(real.clean.length + real.broken.length).toBe(real.checked);
+test('a record with more failing feeds than the list draws is counted whole', () => {
+	// The canary cannot show a capped list, so a record deeper than the cap is
+	// written here, over five runs: twelve feeds that each failed once, in each of
+	// the four ways a read fails, two that never failed, one only ever rested and
+	// one only ever refused by its robots file. The page draws `feed_rows` of the
+	// twelve and counts the rest in its tail sentence; the count behind both is
+	// never capped.
+	const runs = ['2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14', '2030-06-15'];
+	const record = (feedId: string, last: { outcome: string; items: number }): FeedRecord[] =>
+		runs.map((date, at) => ({
+			feedId,
+			date,
+			runId: `${date}-1`,
+			...(at === runs.length - 1 ? last : { outcome: 'ok', items: 9 })
+		}));
+	const failures = [
+		{ outcome: 'transient', items: 0 },
+		{ outcome: 'permanent', items: 0 },
+		{ outcome: 'blocked', items: 0 },
+		{ outcome: 'ok', items: 0 }
+	];
+	const failed = Array.from({ length: 12 }, (_, at) =>
+		record(`failing-${String(at + 1).padStart(2, '0')}`, failures[at % failures.length])
+	);
+	const rows: FeedRecord[] = [
+		...failed.flat(),
+		...record('clean-a', { outcome: 'ok', items: 9 }),
+		...record('clean-b', { outcome: 'ok', items: 4 }),
+		...runs.map((date) => ({ feedId: 'rested', date, runId: `${date}-1`, outcome: 'skipped', items: 0 })),
+		...runs.map((date) => ({ feedId: 'refused', date, runId: `${date}-1`, outcome: 'robots_denied', items: 0 }))
+	];
+	expect(FEED_ROWS, 'the cap reaches past this record, so it hides nothing').toBeLessThan(12);
 
-	const measured = reliability(committed);
-	expect(measured.clean).toEqual(real.clean);
-	expect(measured.checked).toBe(real.checked);
-	expect(measured.runs).toBe(real.runs);
-	expect(measured.failed).toBe(real.broken.length);
+	const measured = reliability(rows);
+	expect(measured.runs).toBe(5);
+	expect(measured.checked).toBe(14);
+	expect(measured.failed).toBe(12);
+	expect(measured.clean).toEqual(['clean-a', 'clean-b']);
+	expect(measured.ineligible).toEqual(['refused', 'rested']);
 });
 
 test('stage medians come from item health, not the score ledger', async ({ page }) => {
@@ -1136,38 +1024,63 @@ test('reading and writing are drawn as separate candles per day', async ({ page 
 	await expect(verdict).not.toContainText('ms per token');
 });
 
+/** The newest day the throughput chart draws a candle for. The readout under it rests on that day. */
+async function newestCandleDay(page: Page): Promise<string> {
+	const dates = await page
+		.locator('[data-candle="write"]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-date') ?? ''));
+	expect(dates.length, 'the chart draws no write candle').toBeGreaterThan(0);
+	return [...dates].sort().at(-1) ?? '';
+}
+
 test('a candle carries its spread and its runs without a mouse', async ({ page }) => {
 	await page.goto('/console/model/');
 
-	const newest = page.locator('[data-candle="write"][data-date="2026-08-20"]');
+	const newest = page.locator(`[data-candle="write"][data-date="${await newestCandleDay(page)}"]`);
 	// Its name, never a native tooltip: a `<title>` needs a hover, and the strip
 	// under the chart prints every word of this sentence for a key and a thumb.
-	const caption = await newest.getAttribute('aria-label');
+	const caption = (await newest.getAttribute('aria-label')) ?? '';
 	await expect(newest.locator('title')).toHaveCount(0);
 
 	expect(caption).toContain('median');
 	expect(caption).toContain('middle half');
-	// Per run, because a day hides which of its four runs moved. The run's day is
-	// the strip's heading, so the name keeps what tells the runs apart.
-	expect(caption).toContain('by run, run 1 write');
-	expect(caption).toContain('run 2 write');
+	// Per run, because a day hides which of its runs moved. The strip rests on this
+	// day and lists its runs after the read, write and item rows; the name keeps
+	// each run's write rate, which is what tells the runs apart.
+	const runs = (
+		await page
+			.locator('[data-readout="throughput"] [data-readout-row]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-readout-row') ?? ''))
+	).slice(3);
+	expect(runs.length, 'the newest day ran once, so a rate a run is untested').toBeGreaterThan(1);
+	expect(caption).toContain(`by run, ${runs[0]} write`);
+	for (const run of runs) expect(caption).toContain(`${run} write`);
 });
 
-test('writing draws slower than reading, on one shared scale', async ({ page }) => {
+test('the slower of reading and writing sits lower, on one shared scale', async ({ page }) => {
 	await page.goto('/console/model/');
 
-	const medians = async (series: string) =>
-		page
-			.locator(`[data-candle="${series}"][data-date="2026-08-20"] rect`)
-			.evaluateAll((boxes) => boxes.map((box) => box.getBoundingClientRect().top));
-
-	const [read] = await medians('read');
-	const [write] = await medians('write');
+	// Each candle's last mark is its median. The strip under the chart rests on the
+	// newest day and prints both medians, so the drawing is held to the rates the
+	// page itself prints.
+	const day = await newestCandleDay(page);
+	const medianAt = async (series: string) =>
+		Number(await page.locator(`[data-candle="${series}"][data-date="${day}"] line`).last().getAttribute('y1'));
+	const rate = async (series: string) =>
+		Number(
+			/^median ([\d.]+) tok\/s/.exec(
+				await page.locator(`[data-readout="throughput"] [data-readout-row="${series}"] dd`).last().innerText()
+			)?.[1]
+		);
+	const read = { y: await medianAt('read'), rate: await rate('read') };
+	const write = { y: await medianAt('write'), rate: await rate('write') };
+	expect(read.rate, 'reading and writing ran at one median rate, so the scale is untested').not.toBe(write.rate);
 
 	// Y grows downward, so the slower series sits lower on the page. Drawn
 	// against their own maxima both would top out and say nothing.
-	expect(read).toBeGreaterThan(0);
-	expect(write).toBeGreaterThan(read);
+	expect(read.y > write.y, `read ${read.rate} tok/s at y ${read.y}, write ${write.rate} tok/s at y ${write.y}`).toBe(
+		read.rate < write.rate
+	);
 });
 
 test('the chart points at the write-up rather than restating it', async ({ page }) => {
@@ -1225,28 +1138,36 @@ test('the throughput axis covers the rates drawn, not zero to the fastest', asyn
 	await expect(page.locator('[data-series="reused"]')).toContainText('38%');
 });
 
+/** A month's telemetry shard as a test writes it: one row on every day of the month. */
+function everyDayOf(month: string): string {
+	const [year, number] = month.split('-').map(Number);
+	const length = new Date(Date.UTC(year, number, 0)).getUTCDate();
+	return telemetryCsv(
+		Array.from({ length }, (_, at) => {
+			const date = `${month}-${String(at + 1).padStart(2, '0')}`;
+			return telemetryRow({ date, run_id: `${date}-1`, item_id: 'served' });
+		})
+	);
+}
+
 test('the telemetry viewport renders the published projection', async ({ page }) => {
+	// Every month the page asks for is answered with a shard the test writes, one
+	// row on every day of it, so the window the page opens on holds one row a day.
+	const asked: string[] = [];
+	await page.route('**/telemetry/*.csv', (route) => {
+		const month = /\/telemetry\/(\d{4}-\d{2})\.csv$/.exec(new URL(route.request().url()).pathname)?.[1];
+		if (month === undefined) return route.fulfill({ status: 404 });
+		asked.push(month);
+		return route.fulfill({ status: 200, contentType: 'text/csv', body: everyDayOf(month) });
+	});
 	await page.goto('/console/');
 
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-band-distance]')).toBeVisible();
 
-	// Counted off the projection the page reads, over the window the page says it
-	// is showing. It was `11 rows in view` until the fixture grew the rows the
-	// source table needs - and a count against a window this test picked itself
-	// would go stale the day the fixture moves out from under it.
-	const control = page.locator('[data-viewport-control]');
-	const first = (await control.getAttribute('data-window-start')) ?? '';
-	const last = (await control.getAttribute('data-window-end')) ?? '';
-	expect(first, 'the viewport publishes no window, so there is nothing to count over').not.toBe('');
-	const shard = join(CANARY, 'state', 'telemetry');
-	const inView = readdirSync(shard)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(shard, name)).rows)
-		.filter((row) => row.date >= first && row.date <= last);
-	expect(inView.length, 'the window holds no row, so the count below is trivial').toBeGreaterThan(0);
-	await expect(control).toContainText(`${inView.length} rows in view`);
+	await expect(page.locator('[data-viewport-control]')).toContainText(`${DEFAULT_WINDOW_DAYS} rows in view`);
+	expect(asked.length, 'the page asked for no month, so it drew no served row').toBeGreaterThan(0);
 });
 
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
@@ -1404,54 +1325,33 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	expect(missing).toEqual([]);
 });
 
-test('the seed carries one window, however many months are committed', () => {
+test('a telemetry read holds exactly the window it is handed, however many months are committed', () => {
+	// The fixture holds one row a day from 1 May to 10 Jul 2026, in three month
+	// shards. The window ends a week before the newest row, as a console window
+	// does when the projection has run on past the newest published day.
 	const all = telemetryRows(TELEMETRY_FIXTURE);
-	const seeded = telemetryRows(TELEMETRY_FIXTURE, DEFAULT_WINDOW_DAYS);
-	const dates = all.rows.map((row) => row.date).sort();
-	const newest = dates.at(-1) as string;
-
-	// A corpus shorter than the window is windowed to itself, so everything
-	// below would pass with no window in the code at all. The fixture has to
-	// outlast the window or this test proves nothing.
-	expect(span(dates[0], newest)).toBeGreaterThan(DEFAULT_WINDOW_DAYS);
-
-	const cutoff = dayKey(new Date(toDay(newest).getTime() - (DEFAULT_WINDOW_DAYS - 1) * 86_400_000));
-	expect(all.rows.some((row) => row.date < cutoff)).toBe(true);
-	expect(seeded.rows.every((row) => row.date >= cutoff)).toBe(true);
-	expect(seeded.rows.length).toBeLessThan(all.rows.length);
-
-	// The seed still reaches the newest day, and still reads as the same table.
-	expect(seeded.rows.some((row) => row.date === newest)).toBe(true);
-	expect(seeded.columns).toEqual(all.columns);
-
-	// A window is a count of days, so it straddles a month boundary and reads
-	// two shards. Every older shard is skipped unread, which is the bound: two,
-	// however many months the pipeline has committed.
-	expect(monthsInWindow({ start: cutoff, end: newest }).length).toBeLessThanOrEqual(2);
-	expect(telemetryMonths(TELEMETRY_FIXTURE).length).toBeGreaterThan(
-		monthsInWindow({ start: cutoff, end: newest }).length
-	);
+	const read = telemetryRows(TELEMETRY_FIXTURE, { start: '2026-06-20', end: '2026-07-03' });
+	expect(all.rows.length).toBe(71);
+	expect(read.rows.map((row) => row.date)).toEqual(days('2026-06-20', 14));
+	// Still the same table. The window touches June and July, the two shards a
+	// read opens, however many months the pipeline has committed.
+	expect(read.columns).toEqual(all.columns);
+	expect(telemetryMonths(TELEMETRY_FIXTURE)).toEqual(['2026-05', '2026-06', '2026-07']);
+	expect(monthsInWindow({ start: '2026-06-20', end: '2026-07-03' })).toEqual(['2026-06', '2026-07']);
 });
 
-test('the days the seed drops stay on disk for a pan to reach', () => {
-	const seeded = telemetryRows(TELEMETRY_FIXTURE, DEFAULT_WINDOW_DAYS);
-	const dates = seeded.rows.map((row) => row.date).sort();
-	const back = panWindow(
-		{ start: dates[0], end: dates.at(-1) as string },
-		-DEFAULT_WINDOW_DAYS
-	);
+test('the days a window read leaves out stay on disk for a pan to reach', () => {
+	// Bounding the read must not put a day out of reach. The fortnight before the
+	// window is in a shard the browser can still fetch by name.
+	const opened = { start: '2026-06-20', end: '2026-07-03' };
+	const back = panWindow(opened, -14);
+	expect(back).toEqual({ start: '2026-06-06', end: '2026-06-19' });
+	expect(telemetryMonths(TELEMETRY_FIXTURE)).toContain('2026-06');
 
-	// Bounding the seed must not put a day out of reach. Every month the pan
-	// lands on is still a shard the browser can fetch by name.
-	const shards = telemetryMonths(TELEMETRY_FIXTURE);
-	expect(monthsInWindow(back).filter((month) => shards.includes(month)).length).toBeGreaterThan(0);
-
-	const older = telemetryRows(TELEMETRY_FIXTURE).rows.filter(
-		(row) => row.date >= back.start && row.date <= back.end
-	);
-	const seededIds = new Set(seeded.rows.map((row) => row.item_id));
-	expect(older.length).toBeGreaterThan(0);
-	expect(older.every((row) => !seededIds.has(row.item_id))).toBe(true);
+	const older = telemetryRows(TELEMETRY_FIXTURE, back).rows;
+	expect(older.map((row) => row.date)).toEqual(days('2026-06-06', 14));
+	const readIds = new Set(telemetryRows(TELEMETRY_FIXTURE, opened).rows.map((row) => row.item_id));
+	expect(older.filter((row) => readIds.has(row.item_id))).toEqual([]);
 });
 
 /** Open the daily figures.
@@ -1468,75 +1368,57 @@ async function openDailyCharts(page: Page) {
 	await expect(page.locator('[data-charts="table"]')).toBeVisible();
 }
 
-/** What the fixture's own files say the Charts table has to print for a day.
- *
- * Derived here from `run.json` and `digest.json` rather than typed as constants,
- * because the oracle is that every printed cell equals the value computed
- * directly from the day's committed record. A constant would only prove the
- * page still says what it said last week.
- */
-function chartCells(date: string): Record<string, string> {
-	const [year, month, day] = date.split('-');
-	const at = join(CANARY, 'digest', year, month, day);
-	type Run = {
-		items_routed?: number;
-		items_prefiltered?: number;
-		charts_drafted?: number;
-		route_ms?: number | null;
-	};
-	const runs = (JSON.parse(readFileSync(join(at, 'run.json'), 'utf8')) as { runs: Run[] }).runs;
-	const items = (
-		JSON.parse(readFileSync(join(at, 'digest.json'), 'utf8')) as {
-			items: { visual?: { kind: string; state: string } | null }[];
-		}
-	).items;
-
-	const sum = (of: (run: Run) => number) => runs.reduce((total, run) => total + of(run), 0);
-	const timed = runs.map((run) => run.route_ms).filter((ms): ms is number => typeof ms === 'number');
-	const minutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
-	// A diagram is a visual and is not a chart, and a chart that failed to render
-	// is not one a reader ever saw.
-	const published = items.filter(
-		(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
-	).length;
-	const printed = (value: number | null) => (value === null ? '-' : value.toFixed(1));
-
-	return {
-		reached: String(sum((run) => (run.items_routed ?? 0) + (run.items_prefiltered ?? 0))),
-		asked: String(sum((run) => run.items_routed ?? 0)),
-		drafted: String(sum((run) => run.charts_drafted ?? 0)),
-		published: String(published),
-		// The denominator of the chart coverage rule, and the reason a share of no
-		// articles is printed as an absence rather than as zero percent.
-		items: String(items.length),
-		minutes: printed(minutes),
-		'per-chart': printed(minutes === null || published === 0 ? null : minutes / published)
-	};
+/** Every row of the daily chart table, as the page prints it. */
+async function chartRows(page: Page) {
+	return page.locator('[data-chart-day]').evaluateAll((rows) =>
+		rows.map((row) => {
+			const cell = (name: string) =>
+				(row.querySelector(`[data-charts-cell="${name}"]`)?.textContent ?? '').trim();
+			return {
+				date: row.getAttribute('data-chart-day') ?? '',
+				reached: cell('reached'),
+				asked: cell('asked'),
+				drafted: cell('drafted'),
+				published: cell('published'),
+				items: cell('items'),
+				minutes: cell('minutes'),
+				perChart: cell('per-chart')
+			};
+		})
+	);
 }
 
-test('every chart cell equals what the day committed', async ({ page }) => {
+test('every chart row is a day of the window, newest first, and its rates follow its own counts', async ({ page }) => {
 	await page.goto('/console/');
 	await openDailyCharts(page);
 
-	const dates = await page
-		.locator('[data-chart-day]')
-		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-chart-day') ?? ''));
-	// Newest first, and every day inside the open window that the manifest covers
-	// - so a day the visual planner never reached still counts towards chart drawing's
-	// fourteen-day rule. Days older than the window are the section's own answer
-	// to a preset the reader picked, not rows that went missing.
-	const committed = manifestDays().map((day) => day.date);
-	const span = openWindow(committed);
-	const expected = committed.filter((date) => date >= span.start && date <= span.end).reverse();
-	expect(expected.length, 'the window reaches no committed day, so this asserts nothing').toBeGreaterThan(
-		0
-	);
-	expect(dates).toEqual(expected);
+	const rows = await chartRows(page);
+	expect(rows.length, 'the window reaches no published day, so this asserts nothing').toBeGreaterThan(0);
+	// Newest first, once each, and every day inside the open window. Days older
+	// than the window are the section's own answer to a preset the reader picked,
+	// not rows that went missing.
+	const viewport = page.locator('[data-viewport-control]');
+	const start = (await viewport.getAttribute('data-window-start')) ?? '';
+	const end = await windowEnd(page);
+	const dates = rows.map((row) => row.date);
+	expect(dates).toEqual([...dates].sort().reverse());
+	expect(new Set(dates).size).toBe(dates.length);
+	for (const date of dates) expect(date >= start && date <= end, `${date} is outside ${start} to ${end}`).toBe(true);
 
-	for (const date of dates) {
-		const row = page.locator(`[data-chart-day="${date}"]`);
-		for (const [cell, expected] of Object.entries(chartCells(date))) {
-			await expect(row.locator(`[data-charts-cell="${cell}"]`)).toHaveText(expected);
+	for (const row of rows) {
+		for (const count of [row.reached, row.asked, row.drafted, row.published, row.items]) {
+			expect(count, row.date).toMatch(/^\d+$/);
+		}
+		// Every item the planner was asked about reached it first.
+		expect(Number(row.reached), row.date).toBeGreaterThanOrEqual(Number(row.asked));
+		// Minutes print to one decimal, or as a dash where the planner timed nothing.
+		// A cost per visual exists only where both the minutes and a published visual do,
+		// and it is the minutes shared out over them.
+		expect(row.minutes, row.date).toMatch(/^(-|\d+\.\d)$/);
+		if (row.minutes === '-' || row.published === '0') expect(row.perChart, row.date).toBe('-');
+		else {
+			expect(row.perChart, row.date).toMatch(/^\d+\.\d$/);
+			expect(Math.abs(Number(row.perChart) - Number(row.minutes) / Number(row.published)), row.date).toBeLessThanOrEqual(0.1);
 		}
 	}
 });
@@ -1547,57 +1429,41 @@ test('the measured day prints rates, and the day with no minutes prints dashes',
 	await page.goto('/console/');
 	await openDailyCharts(page);
 
-	// The attack day is the one the fixture gives planner counts to. Asserting it
-	// is not all zeros is what stops the oracle above passing on an empty table.
-	const measured = page.locator(`[data-chart-day="${DAY}"]`);
-	const cells = chartCells(DAY);
-	expect(Number(cells.reached)).toBeGreaterThan(Number(cells.asked));
-	expect(Number(cells.drafted)).toBeGreaterThan(Number(cells.published));
-	expect(Number(cells.published)).toBeGreaterThan(0);
-	await expect(measured.locator('[data-charts-cell="minutes"]')).not.toHaveText('-');
-	await expect(measured.locator('[data-charts-cell="per-chart"]')).not.toHaveText('-');
-
-	// A quiet day ran and published nothing, so its visual planner never
-	// started. Zero items reached is a measurement; zero minutes would be an
-	// invention, and a per-visual cost over no visuals is not a number at all.
-	// The table follows the open window, so the quiet day is the oldest
-	// committed day inside it.
-	const committed = manifestDays().map((day) => day.date);
-	const span = openWindow(committed);
-	const quietDay = committed.find((date) => date >= span.start && date <= span.end && date !== DAY);
-	expect(quietDay, 'the open window holds no quiet day, so this asserts nothing').toBeDefined();
-	const quiet = page.locator(`[data-chart-day="${quietDay}"]`);
-	await expect(quiet.locator('[data-charts-cell="reached"]')).toHaveText('0');
-	await expect(quiet.locator('[data-charts-cell="published"]')).toHaveText('0');
-	await expect(quiet.locator('[data-charts-cell="minutes"]')).toHaveText('-');
-	await expect(quiet.locator('[data-charts-cell="per-chart"]')).toHaveText('-');
+	// Both states this table has to tell apart are in the window: a day the planner
+	// timed and published a visual on, which prints its minutes and a cost per
+	// visual; and a day the planner never started, whose minutes do not exist.
+	// Zero minutes would be an invention, and a per-visual cost over no visuals is
+	// not a number at all.
+	const rows = await chartRows(page);
+	const measured = rows.filter((row) => row.minutes !== '-' && row.published !== '0');
+	const unmeasured = rows.filter((row) => row.minutes === '-');
+	expect(measured.length, 'no day in the window was timed and published a visual').toBeGreaterThan(0);
+	expect(unmeasured.length, 'every day in the window was timed, so the dash is untested').toBeGreaterThan(0);
+	for (const row of measured) expect(row.perChart, row.date).not.toBe('-');
+	for (const row of unmeasured) expect(row.perChart, row.date).toBe('-');
 });
 
-test('a visual that never drew is a visual and is not a published chart', async ({ page }) => {
-	await page.goto('/console/');
-	await openDailyCharts(page);
-
-	const [year, month, day] = DAY.split('-');
-	const items = (
-		JSON.parse(
-			readFileSync(join(CANARY, 'digest', year, month, day, 'digest.json'), 'utf8')
-		) as { items: { visual?: { kind: string; state: string } | null }[] }
-	).items;
-	const visuals = items.filter((item) => item.visual != null).length;
-	const charts = items.filter(
-		(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
-	).length;
-
-	// The fixture publishes two charts and plans a third the renderer refused. The
-	// column is headed `Visuals published` since 2026-08-31 but still counts only
-	// rendered charts, because counting every visual would put a picture nobody
-	// can see on chart drawing's bill and chart drawing would look more productive than it is.
-	// Every visual on the committed days is a rendered chart, so the two numbers
-	// agree there; the fixture is the only place they can be told apart.
-	expect(visuals).toBeGreaterThan(charts);
-	await expect(
-		page.locator(`[data-chart-day="${DAY}"] [data-charts-cell="published"]`)
-	).toHaveText(String(charts));
+test('a visual that never drew is a visual and is not a published chart', () => {
+	// A day that published four items: two charts that drew, one chart whose drawing
+	// failed, and one with no visual. The column is headed `Visuals published` since
+	// 2026-08-31 but still counts only rendered charts, because counting every visual
+	// would put a picture nobody can see on chart drawing's bill and chart drawing
+	// would look more productive than it is.
+	const { digest } = publishedSite(test.info().outputPath('site'), { published: ['2030-06-15'] });
+	const item = (n: number, visual: { kind: string; state: string } | null) => ({ item_id: `item-${n}`, visual });
+	writeFileSync(
+		join(digest, '2030', '06', '15', 'digest.json'),
+		JSON.stringify({
+			date: '2030-06-15',
+			items: [
+				item(1, { kind: 'chart', state: 'rendered' }),
+				item(2, { kind: 'chart', state: 'rendered' }),
+				item(3, { kind: 'chart', state: 'render_failed' }),
+				item(4, null)
+			]
+		})
+	);
+	expect(publishedCharts(digest, 1)).toEqual(new Map([['2030-06-15', { items: 4, charts: 2 }]]));
 });
 
 test('no console route reads the word router to an operator', async ({ page }) => {
@@ -1643,101 +1509,6 @@ test('the renamed section draws what it drew before, figure for figure', async (
 	await expect(page.locator('[data-charts="table"] thead th')).toHaveCount(8);
 });
 
-/** The canary's own score rows and item-health rows for one date. */
-function ledgers(date: string): {
-	scores: Record<string, string>[];
-	health: Record<string, string>[];
-} {
-	return {
-		scores: scoreRows().filter((row) => row.date === date),
-		health: healthRows().filter((row) => row.date === date)
-	};
-}
-
-function middle(values: number[]): number {
-	const sorted = [...values].sort((a, b) => a - b);
-	const at = Math.floor(sorted.length / 2);
-	return sorted.length % 2 ? sorted[at] : (sorted[at - 1] + sorted[at]) / 2;
-}
-
-/** Every day the fixture gave the model work on, newest first. */
-function modelDays(): string[] {
-	const scored = scoreRows().map((row) => row.date);
-	const ran = healthRows()
-		.filter((row) => Number(row.summarize_ms) > 0)
-		.map((row) => row.date);
-	return [...new Set([...scored, ...ran])].sort().reverse();
-}
-
-/** What the fixture's own ledgers say the model table has to print for a day.
- *
- * Computed here from the committed CSVs rather than typed as constants, and
- * deliberately not through the page's own module: the oracle is that a printed
- * cell equals the value a second reading of the ledger produces.
- */
-function modelCells(date: string): Record<string, string> {
-	const { scores, health } = ledgers(date);
-	const times = health.map((row) => Number(row.summarize_ms)).filter((ms) => ms > 0);
-	const truthy = (value: string) => value === 'True' || value === 'true';
-	const tally = (of: (row: Record<string, string>) => boolean) =>
-		scores.length === 0 ? '-' : String(scores.filter(of).length);
-	// Whole units, and a measurement that rounds away prints `<1` rather than the
-	// `0` that would say the model ran for nothing.
-	const units = (ms: number, per: number) => {
-		const value = Math.round(ms / per);
-		return value === 0 && ms > 0 ? '<1' : String(value);
-	};
-	const copied = scores.map((row) =>
-		Math.max(Number(row.extractiveness), Number(row.verbatim_run))
-	);
-	// The cut flag is read only over the rows that carry its current meaning. An
-	// older row's cell held a faithfulness gap, so adding the two would print one
-	// number over two questions.
-	const cutKnown = scores.filter((row) => (row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM);
-	const readInPart = cutKnown.filter((row) => truthy(row.truncation_flagged)).length;
-	// The cut is the two lengths on one row, compared. Never the post-cap count
-	// against the cap, which moves the day the cap moves.
-	const cutTimes = health
-		.filter(
-			(row) =>
-				row.source_words_before_cap !== '' &&
-				row.source_words !== '' &&
-				Number(row.source_words_before_cap) > Number(row.source_words)
-		)
-		.map((row) => Number(row.summarize_ms))
-		.filter((ms) => ms > 0);
-
-	return {
-		summaries: scores.length === 0 ? '-' : String(scores.length),
-		'not-sure': tally((row) => row.band === 'low'),
-		unsupported: tally((row) => Number(row.unsupported_numbers) > 0),
-		hedge: tally((row) => truthy(row.hedge_dropped)),
-		part: cutKnown.length === 0 ? '-' : String(readInPart),
-		// The share is over the rows the flag still answers for, so its top and its
-		// bottom are the same question.
-		'part-pct':
-			cutKnown.length === 0
-				? '-'
-				: `${Math.round((readInPart / cutKnown.length) * 100)}%`,
-		copied: scores.length === 0 ? '-' : `${Math.round(middle(copied) * 100)}%`,
-		'per-item':
-			times.length === 0
-				? '-'
-				: units(middle(times), 1000) +
-					(cutTimes.length === 0 ? '' : ` ${units(middle(cutTimes), 1000)} when cut short`),
-		minutes:
-			times.length === 0 ? '-' : units(times.reduce((total, ms) => total + ms, 0), 60_000),
-		'too-long':
-			health.length === 0
-				? '-'
-				: String(health.filter((row) => row.code === 'context_exceeded').length),
-		failed:
-			health.length === 0
-				? '-'
-				: String(health.filter((row) => row.outcome === 'failed').length)
-	};
-}
-
 /** The daily figures sit behind a disclosure now; the cards above them lead.
  *
  * Opening it is a reader's own action, so a test that reads a cell takes it
@@ -1748,29 +1519,58 @@ async function openDailyFigures(page: Page) {
 	await expect(page.locator('[data-model="table"]')).toBeVisible();
 }
 
-test('every model cell equals what the day committed', async ({ page }) => {
+/** Every day row of the model table, as the page prints it: each cell by its column key. */
+async function modelRows(page: Page): Promise<{ date: string; cells: Record<string, string> }[]> {
+	return page.locator('[data-model-day]').evaluateAll((rows) =>
+		rows.map((row) => ({
+			date: row.getAttribute('data-model-day') ?? '',
+			cells: Object.fromEntries(
+				[...row.querySelectorAll('[data-model-cell]')].map((cell) => [
+					cell.getAttribute('data-model-cell') ?? '',
+					(cell.textContent ?? '').replace(/\s+/g, ' ').trim()
+				])
+			)
+		}))
+	);
+}
+
+/** How each column of the model table prints a value: a count, a whole percent, or
+ * whole units of time with `<1` for work too short to round to one. A day the
+ * ledger holds no answer for prints a dash. Which values are absent is the model
+ * work's own rule, pinned over rows written in `console-model-work.spec.ts`. */
+const MODEL_CELL: Record<string, RegExp> = {
+	summaries: /^(-|\d+)$/,
+	'not-sure': /^(-|\d+)$/,
+	unsupported: /^(-|\d+)$/,
+	hedge: /^(-|\d+)$/,
+	part: /^(-|\d+)$/,
+	'part-pct': /^(-|\d+%)$/,
+	copied: /^(-|\d+%)$/,
+	'per-item': /^(-|(<1|\d+)( (<1|\d+) when cut short)?)$/,
+	minutes: /^(-|<1|\d+)$/,
+	'too-long': /^(-|\d+)$/,
+	failed: /^(-|\d+)$/
+};
+
+test('every model cell prints a count, a share, a time or a dash, on a day of the window', async ({ page }) => {
 	await page.goto('/console/model/');
 	await openDailyFigures(page);
 
-	const dates = await page
-		.locator('[data-model-day]')
-		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-model-day') ?? ''));
-	// A day the pipeline found no article on gets no row at all. A row of zeroes
-	// would read as a day that went badly rather than a day with nothing in it.
-	// A day outside the open window gets none either, because the rows answer the
-	// same control the cards above them do.
-	const worked = modelDays();
-	const span = openWindow(worked);
-	const expected = worked.filter((date) => date >= span.start && date <= span.end);
-	expect(expected.length, 'the window reaches no worked day, so this asserts nothing').toBeGreaterThan(
-		0
-	);
-	expect(dates).toEqual(expected);
-
-	for (const date of dates) {
-		const row = page.locator(`[data-model-day="${date}"]`);
-		for (const [cell, expected] of Object.entries(modelCells(date))) {
-			await expect(row.locator(`[data-model-cell="${cell}"]`)).toHaveText(expected);
+	const rows = await modelRows(page);
+	expect(rows.length, 'the window reaches no worked day, so this asserts nothing').toBeGreaterThan(0);
+	// Newest first, once each, and inside the window the table says it follows. A
+	// day the pipeline found no article on gets no row at all: a row of zeroes would
+	// read as a day that went badly rather than a day with nothing in it.
+	const windowDays = Number(await page.locator('[data-model-table-control]').getAttribute('data-window-days'));
+	const dates = rows.map((row) => row.date);
+	expect(dates).toEqual([...dates].sort().reverse());
+	expect(new Set(dates).size).toBe(dates.length);
+	const spanned = (Date.parse(`${dates[0]}T00:00:00Z`) - Date.parse(`${dates.at(-1)}T00:00:00Z`)) / 86_400_000 + 1;
+	expect(spanned, `the rows run past the ${windowDays} days the table follows`).toBeLessThanOrEqual(windowDays);
+	for (const row of rows) {
+		expect(Object.keys(row.cells).sort()).toEqual(Object.keys(MODEL_CELL).sort());
+		for (const [key, printed] of Object.entries(row.cells)) {
+			expect(printed, `${row.date} ${key}`).toMatch(MODEL_CELL[key]);
 		}
 	}
 });
@@ -1781,29 +1581,28 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 	await page.goto('/console/model/');
 	await openDailyFigures(page);
 
-	// The attack day is the only day the fixture scored, so the day before it is
-	// the scorer-off state: the model wrote summaries and nothing measured them.
-	const unscored = modelDays().find((date) => ledgers(date).scores.length === 0);
-	expect(unscored, 'the fixture has no day with model work and no score row').toBeDefined();
-
-	const row = page.locator(`[data-model-day="${unscored}"]`);
-	for (const cell of ['summaries', 'not-sure', 'unsupported', 'hedge', 'part', 'part-pct', 'copied']) {
-		await expect(row.locator(`[data-model-cell="${cell}"]`)).toHaveText('-');
+	// A day the scorer never reached has summaries nobody counted, so every figure
+	// the scorer makes prints a dash rather than a zero that would say the model
+	// wrote nothing.
+	const rows = await modelRows(page);
+	const unscored = rows.filter((row) => row.cells.summaries === '-');
+	expect(unscored.length, 'every day in the window was scored, so the dashes are untested').toBeGreaterThan(0);
+	for (const row of unscored) {
+		for (const cell of ['not-sure', 'unsupported', 'hedge', 'part', 'part-pct', 'copied']) {
+			expect(row.cells[cell], `${row.date} ${cell}`).toBe('-');
+		}
 	}
 	// Speed is measured by the runtime, not by the scorer, so it still prints.
-	await expect(row.locator('[data-model-cell="per-item"]')).not.toHaveText('-');
-	await expect(row.locator('[data-model-cell="minutes"]')).not.toHaveText('-');
-	// So is a refusal. Nothing was refused for length, and zero is the answer -
-	// at the committed cap no prompt can reach the window the machine reads with.
-	await expect(row.locator('[data-model-cell="too-long"]')).toHaveText('0');
-	// And that day cut nothing, so there is no second figure to split out.
-	await expect(row.locator('[data-model-aside="per-item"]')).toHaveCount(0);
+	expect(
+		unscored.some((row) => row.cells['per-item'] !== '-' && row.cells.minutes !== '-'),
+		'no day the scorer never reached was timed, so the speed half is untested'
+	).toBe(true);
 
-	// And the scored day is not all dashes, which is what stops the oracle above
+	// And a scored day is not all dashes, which is what stops the check above
 	// passing on a table that prints nothing.
-	const scored = page.locator(`[data-model-day="${DAY}"]`);
-	await expect(scored.locator('[data-model-cell="summaries"]')).toHaveText(String(scoredItems()));
-	await expect(scored.locator('[data-model-cell="copied"]')).not.toHaveText('-');
+	const scored = rows.filter((row) => row.cells.summaries !== '-');
+	expect(scored.length, 'no day in the window was scored').toBeGreaterThan(0);
+	for (const row of scored) expect(row.cells.copied, row.date).not.toBe('-');
 });
 
 test('nothing under the heading is a score or an internal column name', async ({ page }) => {

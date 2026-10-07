@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-07
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -496,9 +496,11 @@ there would be a second rule for one question. `feedResults` still passes the
 feed rows through `settled` from `frontend/src/lib/feed-health.ts`, the same rule
 `discover.settled` runs, so on a packed day it keeps every row.
 
-**The panels stop at the newest packed day, never at today.** A day is packed
-once a whole day has passed since it ended, so the day a run is still
-publishing - the only day a repeated row ever reached a panel - is never read.
+**The rows stop at the newest packed day, though every window ends on the
+newest published day.** A day is packed once a whole day has passed since it
+ended, so the day a run is still publishing - the only day a repeated row ever
+reached a panel - is never read; it is the newest day of every window, and every
+panel built on a packed record draws it with nothing in it.
 Measured 2026-09-23 over the committed ledgers, before they moved: thirteen
 folded census days held 0 repeated keys between them and the unfolded day held
 240 repeats over 240 items, and the eval ledger's unfolded day held 441 rows over
@@ -508,6 +510,19 @@ more days before the newest published day (`recordNotes` in
 `frontend/src/lib/console/recording.ts`). A record that did not load because a
 packed file or a packed day is missing says which, because each has its own fix
 ([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
+A record whose packed rows stop before the open window says the day, month or
+year they are from, as its index names it, and that the page cannot tell a
+quiet stretch from a fault. It names the narrowest window the control offers
+that reaches back to them, and only when one does, because an instruction that
+does not work costs a click. A record whose route already prints its
+"Measurement is off" line gets no second explanation: that line is worded for
+the open window too, so it says the window holds nothing recorded and names the
+window that reaches back to the last recorded day, without naming a day the
+window does not show. A record packed as far as
+the day before the newest published day, which is normal running, gets the
+quietest line, last: that day is not shown yet, and that is normal. Each route
+writes its notes once for each window the control offers, and the page picks the
+open one.
 A record read whole can still be short, and says so in a plain line too: a day
 its packing recorded lost has no record, and a file it set aside unread holds
 rows no panel draws, so that line names the folder a person reads them in. A
