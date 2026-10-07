@@ -272,6 +272,10 @@ so the new test passes on "the base commit" while it ran the branch. Measured
 The tell is a `rootdir:` line in the output naming a folder outside the copy;
 the copy's own `-q` hides that line when its settings were read.
 
+**A copied test that reads a workflow file needs the base commit's `.github` in
+the copy too:** add it to the archive, or the test fails on a missing file, a
+failure the base commit did not cause (2026-10-07).
+
 **A canary build in the copy needs more of the tree.** Add `frontend` and the
 root `.gitignore` to the archive, run `git init` and commit the copy, and point
 `frontend\node_modules` at an installed one with a directory junction
