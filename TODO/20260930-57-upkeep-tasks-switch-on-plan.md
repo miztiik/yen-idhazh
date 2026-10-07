@@ -67,7 +67,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 
 ### Row #2 - The upkeep record, the picture cleanup's record and the feed retirements are packed live
 
-- **Scope:** `dry_run` becomes `false` in `config/gardener/compact-gardener.json`, `compact-visual-prunes.json` and `compact-feed-retirements.json`, so their raw files are packed into one file a day and then one a month. Their month windows stay as committed.
+- **Scope:** `dry_run` becomes `false` in `config/gardener/compact-gardener.json`, `compact-visual-prunes.json` and `compact-feed-retirements.json`, so their raw files are packed into one file a day and then one a month. Their month windows stay as committed. For `compact-gardener` the switch is done: #1382 set it on 2026-10-07 under the person's approval of that day, and plan 60's row "The gardener ledger is packed live" previewed its first live pass.
 - **Precondition:** the person's approval (section 2). It covers the month windows as committed, because they say when each ledger's first rows go, and a ledger the person does not approve stays report-only. Packing #1177 is merged; its first live wake must have packed `item-health` and `host-fingerprint` without failure before these three follow (section 3).
 - **Files touched:** the three declarations above; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; `docs/architecture/publishing/ledger-compaction.md`; `docs/how-to/run-the-pipeline.md`; `docs/concepts/config/retention-ages.md`; this plan's Reckoner line.
 - **Acceptance gates:** as row 1.
