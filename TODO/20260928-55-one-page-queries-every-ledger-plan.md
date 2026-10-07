@@ -1,6 +1,6 @@
 # Plan 55 - One page queries every ledger
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 **Level**: 5 (CLAUDE.md section 6). It adds a member to a persisted vocabulary (`RouteId` on the console band). It widens one persisted contract: `RawDayIndex` gains an optional `bytes` list, one size per listed file, so a browser can price a writer file and check its length before it fetches it (row 2). It adds an entry point to the query door, it publishes more of `state/` and the registry that names it, and it opens a surface where an operator's own text reaches a query engine. The site build writes listings in `RawDayIndex`'s shape into the staged site only, never into `state/` (row 7).
 
@@ -71,8 +71,13 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 16 | The History list opens in view and closes itself, Forget on the line keeps focus, the link limit is a knob, and a day the chart cannot place says so | 12, 15 | N | DONE | friendly-winner | #1340 | Data explorer small fixes |
 | 17 | The date chart leaves out a row whose day is NULL and says how many it left out | 16 | O | DONE | musical-umbrella | #1341 | Explorer chart skips a null day |
 | 18 | The Data explorer's panel pictures pass again at every width and theme | 12 | P | DONE | urban-goggles | - | Explorer captures fit again |
+| 19 | The reader chooses the chart and the columns it draws | 10 | Q | PENDING | - | - | - |
+| 20 | The explorer draws Side by side, Which days and Flow | 19; plan 52 row 2 | R | BLOCKED | - | - | - |
+| 21 | The site build checks that each published file carries its contract's columns | - | Q | PENDING | - | - | - |
+| 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | BLOCKED | - | - | - |
+| 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | PENDING | - | - | - |
 
-**One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
+**One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. **Rows 19 and 20 were added on 2026-10-07 on the owner's A1+A2 ruling, specified by Susan and Jony.** **Rows 21 to 23 were added on 2026-10-07 at plan 62's request, designed by Fowler.** Rows 19 and 21 share no file and may run together. Row 23 never runs while row 19 or row 20 is in flight, because all three edit `frontend/src/routes/console/data-explorer/+page.svelte`. Row 20 is BLOCKED on the owner deciding whether this plan carries the small slice of plan 52 row 2 that its charts need. Row 22 is BLOCKED on the owner clearing trigger 3 for `CONTRACT_COLUMNS`.
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The table below is the proof, recomputed on 2026-10-02 from the final `Files touched` lists of the third review cycle. Rows 2 and 3 are the only pair that runs at once, and no path appears under both. Every other wave holds one row.
 
@@ -1239,6 +1244,176 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
 - **Not in this row:** the command in `run-the-gates.md` that prints this checkout's preview port calls `process.cwd` and `digest` without their parentheses, so it throws instead of printing a port.
 
+### Row #19 - The reader chooses the chart and the columns it draws
+
+- **Scope:** The Chart tab implements the owner's A1 ruling of 2026-10-07 for the four chart types already drawn: `Over time`, `Ranked`, `Paired` and `Spread`. The switch stays `Draw it as` radio tiles, but every chart tile is present on every answer, in one order, and every tile can be pressed. The row writes Susan's replacement for section 2.11 chart rule 5: **Every type the explorer draws is a tile on every answer, in one order, and every tile can be pressed**: `Over time`, `Ranked`, `Paired`, `Spread`, and from row 20 `Side by side`, `Which days` and `Flow`. No tile is hidden, greyed or disabled. A type the answer cannot draw draws nothing, and the chart box says what it needs in one sentence. Before any answer and any press, no tile is checked. A checked tile is exactly as wide as an unchecked one. The row also writes Susan's replacement sentence for the mark-shapes page: `It opens on the shape the columns choose, in this order. Every chart type the explorer draws is offered on every answer, in one order, and the operator may press any of them and choose the columns for each of its roles. A type these columns cannot support draws nothing, and its box says what it needs, so the page still never draws a story the columns do not tell.` The row makes each role a pill that opens a filtered floating list. The list reuses `frontend/src/lib/console/explorer/floating-list.ts` and `ColumnType.svelte`, lists columns in answer order, and colours types through the existing type family. `ChoiceTiles.svelte` accepts an empty `selected` value so the page can show no checked tile before an answer or press. `tooFewSentence()` takes the place words; the explorer passes `in the answer`, and every other caller keeps `in this window`. Choices stay only on the page: they are not saved with a question and not carried in a link. The `DAYS_NOTICE` one-day text in `address.ts` uses `countDays()` from plan 62 row L17, so it prints one day correctly instead of `reads 1 days`. Slots a line follow Jony's ruling of 2026-10-07 on Flow's fourth role.
+- **What a reader sees change:** The reader can choose the chart and the columns that fill each role without another fetch. The first view still opens on today's automatic choice. A chart that cannot draw the answer keeps its tile and explains what role is missing inside the chart box.
+- **Files touched:**
+  - `frontend/src/lib/console/explorer/ShapePanel.svelte`
+  - `frontend/src/lib/console/explorer/ColumnPicker.svelte` (new)
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/src/lib/components/ChoiceTiles.svelte`
+  - `frontend/src/lib/console/waiting.ts`
+  - `frontend/src/lib/console/explorer/shape.ts`
+  - `frontend/src/lib/console/explorer/address.ts`
+  - `frontend/src/lib/console/explorer/floating-list.ts`
+  - `frontend/src/lib/console/explorer/ColumnType.svelte`
+  - `frontend/src/lib/icons/PROVENANCE.md`, `frontend/src/lib/icons/manifest.json`, `frontend/src/lib/icons/generated.ts` (Lucide `chevron-down`, unmodified, with its provenance line)
+  - `frontend/tests/console-data-explorer-shape.spec.ts`, `frontend/tests/console-data-explorer.spec.ts`, `frontend/tests/console-data-explorer-still.spec.ts`, `frontend/tests/panel-sufficiency.spec.ts`, `frontend/tests/icons.spec.ts`
+  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`, `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md`, `docs/concepts/console-design.md`
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected frontend checks named above; `python backend/utilities/doc_load.py docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md docs/concepts/console-design/how-the-data-explorer-shares-the-window.md docs/concepts/console-design.md` before and after; browser smoke for `/console/data-explorer/` at the touched states. CI runs the full suite.
+- **Checks:** `console-data-explorer-shape.spec.ts` asserts T1 to T5: every answer the existing cases draw opens on the same chart with the same columns; each role lists exactly its family's columns in answer order; `Lines` holds at most four checked columns and the foot says `Four at most. Uncheck one to choose another.`; every sentence in Susan's Tables B, C, D and M1 to M4 and M8 is literal; every too-few sentence says `in the answer`; no file under `frontend/src/lib/console/explorer/` imports a `d3-` package; and `frontend/tests/chart-vocabulary.spec.ts` stays green unchanged. `console-data-explorer.spec.ts` asserts the switch is `input[type=radio]` under `Draw it as`, every chart is present and none disabled, no tile is checked before an answer or press, Tab lands on the first tile, and choosing a chart or column makes no network request. Choices survive a second run of the same question, but a role whose column has gone takes its default. `console-data-explorer-still.spec.ts` asserts choosing a chart or column moves no box outside the drawing and Jony's I1, I3, I4 and I7 to I15 hold at 390 x 844, 768 x 1024, 1024 x 768 and 1440 x 900. `panel-sufficiency.spec.ts` asserts gates 1, 3, 4, 5 and 9 pass on each of the four charts after a non-default choice at 390, 768 and 1440 px in both themes. `icons.spec.ts` asserts `chevron-down` resolves to the unmodified Lucide source recorded in `PROVENANCE.md`. A one-day span prints `1 day`, never `1 days`.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | A1 is implemented as a reader choice over chart type and role columns; the default view stays today's automatic pick | Owner, 2026-10-07 |
+  | 2 | Every type is always offered and pressable; an unsupported type draws nothing and says what it needs inside the box | Susan and Jony, 2026-10-07 |
+  | 3 | A role is a pill with a floating filtered list, not native select and not radio tiles | Jony, 2026-10-07 |
+  | 4 | The picker borrows `floating-list.ts` and `ColumnType.svelte` and adds no second list behaviour or second type classifier | Owner and Jony, 2026-10-07 |
+  | 5 | Choices are page state only, not saved with a question and not carried in a link | Susan, 2026-10-07 |
+  | 6 | `d3.js` stays the standard charting library; no Vega-Lite or second charting library is added | Owner, 2026-10-07 |
+
+- **Not in this row:** The three new chart kinds from A2, saved or shared chart choices, a new chart type, a generator for chart roles, and any edit to plan 55 section 2.11 before the row that implements it.
+
+---
+
+### Row #20 - The explorer draws Side by side, Which days and Flow
+
+- **Scope:** The Chart tab implements the owner's A2 ruling of 2026-10-07 by adding three chart choices after row 19: `Side by side` through `PartsOfOne.svelte` and `partsOfOne()`, `Which days` through `TileStrip.svelte` and `tileStrip()`, and `Flow` through `Flow.svelte` and `flow()`. The layout does not change from row 19. `Side by side` always draws bars from zero with `overlapping: true`, prints no total, and gives the k-th checked bar the k-th series colour. `Which days` maps true to filled, false to outlined and NULL to not recorded; it uses `chooseDateSeriesDays()`, passes no reading, prints `true`, `false` and `null`, and carries `data-model-rule="no"` with the explorer's reason. `Flow` passes `narrow` from the measured width against `frame.breakpoints_px[0]`. The row changes the idle chart sentence in section 2.12 from `If the answer holds a number, it is drawn here.` to `Run a question, and its answer can be drawn here.` The row adds the three icons Susan named: `shape-side-by-side` from Lucide `align-start-vertical`, `shape-days` from Lucide `calendar-check`, and `shape-flow` from Lucide `split`, each unmodified with a provenance line. Slots a line follow Jony's ruling of 2026-10-07 on Flow's fourth role.
+- **What a reader sees change:** The reader can draw answers as bars side by side, true-or-false days, or a flow, using the same role row and pill behaviour as row 19.
+- **Files touched:**
+  - `frontend/src/lib/console/explorer/ShapePanel.svelte`
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/src/lib/components/ChoiceTiles.svelte`
+  - `frontend/src/lib/charts/d3/partsOfOne.ts`, `frontend/src/lib/charts/d3/PartsOfOne.svelte`
+  - `frontend/src/lib/charts/d3/tileStrip.ts`, `frontend/src/lib/charts/d3/TileStrip.svelte`
+  - `frontend/src/lib/charts/d3/flow.ts`, `frontend/src/lib/charts/d3/Flow.svelte`
+  - `frontend/src/lib/icons/PROVENANCE.md`, `frontend/src/lib/icons/manifest.json`, `frontend/src/lib/icons/generated.ts`
+  - `frontend/tests/console-data-explorer-shape.spec.ts`, `frontend/tests/console-data-explorer-still.spec.ts`, `frontend/tests/panel-sufficiency.spec.ts`, `frontend/tests/icons.spec.ts`, `frontend/tests/chart-vocabulary.spec.ts`
+  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected frontend checks named above; `python backend/utilities/doc_load.py docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` before and after; browser smoke for `/console/data-explorer/`. CI runs the full suite.
+- **Checks:** `console-data-explorer-shape.spec.ts` asserts Susan's Tables F, G and M5 to M7 word for word. `Which days` maps true, false and null to its three states, treats a lost day inside the span as not recorded, and never draws null as false. `Side by side` always draws `data-parts-overlapping="yes"` and prints no total. An answer whose counts are not one flow returns the module's own list and sentence. One derivation asserts each drawing's numbers equal the shared module output for the same chosen columns. `chart-vocabulary.spec.ts` stays green unchanged; no chart type and no module is added. `panel-sufficiency.spec.ts` asserts gates 1, 3, 4, 5 and 9 pass on each new chart, and gate 6 passes on `Which days`, at 390, 768 and 1440 px in both themes. The explorer's panel pictures gain the three charts. `icons.spec.ts` asserts all three icon ids resolve to unmodified Lucide sources recorded in `PROVENANCE.md`. Jony's L3 holds: adding each type changes no layout box from row 19.
+- **Waits for the owner:** Situation: the three charts need plan 52 row 2's shared changes: the readout each type carries for sufficiency gate 9, removing `title=` from `PartsOfOne` and `TileStrip` for gate 4, and Susan's K1 to K4. Problem: plan 52 has not started, every row is PENDING on 2026-10-07, and its row 2 depends on its row 1. Impact: row 20 stays blocked if it must wait for a 45-file row nobody is running, so A2 cannot ship. Options:
+
+  | # | Option | Benefit | Cost, and what it gives up |
+  | --- | --- | --- | --- |
+  | A1 | Wait for plan 52 rows 1 and 2 | No shared chart slice moves here | A2 waits for an unstarted dependency chain |
+  | A2 | **Recommended**: row 20 carries only the slice of plan 52 row 2 its three charts need, as optional props so no other route moves a pixel, and plan 52 row 2 keeps the rest | A2 ships without waiting, and nothing is built twice | Row 20 touches a small slice of shared chart code |
+  | A3 | Ship with gates 4 and 9 failing under a design rationale | Fastest merge | Susan refused it, so the page is known not good enough |
+
+  Recommendation: A2, because it ships the owner's A2 ruling without waiting for a broad row, keeps plan 52 row 2's own decision 3 rule, and duplicates nothing.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The three new choices reuse existing d3 modules and components; no new type or charting library is added | Susan, 2026-10-07 |
+  | 2 | Side by side draws bars from zero and never prints a total | Susan, 2026-10-07 |
+  | 3 | Which days prints the engine words `true`, `false` and `null`, and no threshold is invented | Susan, 2026-10-07 |
+  | 4 | Flow chooses diagram or list from the shared module and the measured width | Susan, 2026-10-07 |
+  | 5 | The row waits for the owner on whether to carry the small plan 52 slice | Plan 55 owner, 2026-10-07 |
+
+- **Not in this row:** Plan 52 row 2's unrelated shared chart work, `paired`, `overlapTimeline`, saved chart choices, a new chart type, and any edit to plan 55 section 2.12 before the row that implements it.
+
+---
+
+### Row #21 - The site build checks that each published file carries its contract's columns
+
+- **Scope:** A structural commit first renames `persist._columns` to `persist.file_columns`, then PR 21a adds the build check `python -m idhazh published-columns --site-tree <dir>`. The check runs one step after `site-weight` in `.github/workflows/ci.yml`, `.github/workflows/digest.yml` and `.github/workflows/backfill.yml`. It reads the staged site tree only. For each ledger in `ledger.published`, it reads every parquet file the build staged, including compact files and writer files, by footer only. It compares the file's stamp and Arrow columns with `file_columns(door_contract(ledger))` through the same Arrow mapping the packer uses. Guardrail 12 is bounded: the check reads only the site tree, whose ledger copy is capped at the widest span by section 2.8, so its cost grows with that window and not with repository history. The check must pass on the real published data before merge. If real data fails, the row stops for the owner instead of weakening the check.
+- **What a reader sees change:** Nothing on the page yet. A bad published file now blocks the build before the rail can describe it wrongly.
+- **Files touched:**
+  - `backend/idhazh/ledger/persist.py`
+  - `backend/idhazh/ledger/published_columns.py` (new)
+  - `backend/idhazh/ledger/parquet.py`
+  - `backend/idhazh/cli.py`
+  - `.github/workflows/ci.yml`, `.github/workflows/digest.yml`, `.github/workflows/backfill.yml`
+  - `backend/tests/ledger/test_published_columns.py` (new)
+  - `docs/how-to/run-the-gates.md`
+  - `docs/reference/site-weight.md`
+- **Acceptance gates:** `ruff check .`; `pytest -n 0 backend/tests/ledger/test_published_columns.py`; the three workflow snippets are checked for the `published-columns` step after `site-weight`; the command is run against a real `build` tree before merge; CI runs the full suite.
+- **Checks:** `backend/tests/ledger/test_published_columns.py` packs real files in `tmp_path` through `persist` from a fixture row and adds files that `parquet.render` writes with an older stamp or with one column removed or retyped. Six cases are literal: the current shape passes; an older shape lacking a newer column passes and prints that history; F1 fails when a current-stamped file's column names differ from the contract; F2 fails when a contract column has a different Arrow type; F3 fails when a file is stamped newer than the contract; and F4 fails when a published ledger has no row contract in `idhazh/ledger/keys.py`. On success the command prints one line per ledger with the count of checked files, the count at the current shape, and older-shape missing and extra columns. On failure it prints the ledger, site-relative path, file stamp, contract stamp, column, both types and the fix.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | `persist._columns` becomes public as `persist.file_columns` in a structural commit before behaviour moves | Fowler, 2026-10-07 |
+  | 2 | The build check runs beside `site-weight`, not in the packer, because it must see files already staged for the site | Fowler, 2026-10-07 |
+  | 3 | History passes: an older stamped file missing a newer column is printed, not failed | Fowler, 2026-10-07 |
+  | 4 | A failure on real published data stops the row for the owner rather than weakening the check | Plan 55 owner, 2026-10-07 |
+  | 5 | The check reads the capped site tree, so the read is bounded by the widest span and not by repository history | Fowler, 2026-10-07 |
+
+- **Not in this row:** `CONTRACT_COLUMNS`, changing the query view, deleting `askColumns()`, starting the engine later, plan 62 stamping, and the plan 59 PR #1352 merge-line holdout call. Plan 59 edits `backend/idhazh/cli.py` in another function, so this row does not wait for #1352.
+
+---
+
+### Row #22 - The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has
+
+- **Scope:** After row 21, PR 21b adds `frontend/src/lib/data/contract-columns.ts`, a hand-written copy of every published ledger's file columns and engine type names. `ledger.ts` exports `ledgerColumns(ledger): readonly Column[]` for pages, and `ask-reader.ts` uses the copy to put a typed zero-row contract part first in each `viewStatement`, joined to the file reads with `UNION ALL BY NAME`. A contract column that no file in the span has therefore resolves as NULL instead of failing. The rail lists exactly the names a question can use. The copy stores engine type names from one Python binding-test mapper; `classifyType()` remains the one place that maps engine type names to type colours. There is no TypeScript type mapper and no second classifier. Whether published files carry the contract's columns stays row 21's build check, not a frontend test, under the owner's 2026-10-05 testing ruling.
+- **What a reader sees change:** A question can name a new contract column in an old span. If no file in that span has the column, the answer returns NULLs instead of a missing-column error.
+- **Files touched:**
+  - `frontend/src/lib/data/contract-columns.ts` (new)
+  - `frontend/src/lib/data/ledger.ts`
+  - `frontend/src/lib/data/ask-reader.ts`
+  - `backend/tests/contracts/test_frontend_contract_columns.py` (new)
+  - `frontend/tests/contract-columns.spec.ts` (new)
+  - `frontend/tests/ledger-lifecycle.spec.ts`
+  - `docs/architecture/contracts/schemas.md`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - plan 55 section 2.4 rules 1 and 4, and trigger 3, after the owner answers
+- **Acceptance gates:** `ruff check .`; `pytest -n 0 backend/tests/contracts/test_frontend_contract_columns.py`; `npm --prefix frontend run test:changed -- --list`, then `frontend/tests/contract-columns.spec.ts` and the selected ledger lifecycle cases; docs load for the touched architecture pages; CI runs the full suite.
+- **Checks:** `test_frontend_contract_columns.py` reads the TypeScript copy as text and asserts three literals: keys equal `ledger.published`; each list equals `[(c.name, engine_type(c.type)) for c in persist.file_columns(door_contract(ledger))]` in order; and every name matches `^[a-z][a-z0-9_]*$` while every type is a mapper output. The mapper accepts only string -> `VARCHAR`, int64 -> `BIGINT`, float64 -> `DOUBLE` and bool -> `BOOLEAN` until a published fixture proves another type. `contract-columns.spec.ts` uses the real engine through `nodeEngine` to `DESCRIBE` producer-packed fixtures under `tests/fixtures/ledger-door/state/compact/host-fingerprint/` and `tests/fixtures/ledger-door/state/compact/item-health/`; each copied type equals the engine type for fixture columns, and each copied type appears in fixture data. Door integration asserts `SELECT count("fingerprint") AS f FROM "host-fingerprint"` answers `ok` with `f = 0`, and the answer types `fingerprint` as `VARCHAR`; before the contract part this question is refused. A second case selects two ledgers, one with only empty days, and the question answers. Unit checks assert `viewStatement` puts the contract part first, quotes names, uses the copy's types, and includes `WHERE false`.
+- **Waits for the owner:** Situation: row 22 needs the view to name every contract column, so `viewStatement` builds identifiers from `CONTRACT_COLUMNS`. Problem: plan 55 trigger 3 currently says the door builds identifiers only from `LEDGER_NAMES`. Impact: building this fires ESCALATE trigger 3 and PR 21b cannot start until the owner clears it; the page keeps downloading 9.2 MB on every open if it stays blocked. Options:
+
+  | # | Option | Benefit | Cost, and what it gives up |
+  | --- | --- | --- | --- |
+  | B1 | **Recommended**: clear trigger 3 for `CONTRACT_COLUMNS`, and change rule 1 to match | Every rail name resolves in every span, with no fetch. Condition a is met | A second closed list of identifiers. Its names are committed and checked by a test, never typed or fetched |
+  | B2 | Refuse, and ship the answer explaining the error | No trigger change | The rail does not warn. The reader learns after paying for a Run. The code depends on the engine's error wording. Condition a is met only loosely |
+  | B3 | Refuse, and make the row 21 check fail when the newest file lacks a contract column | The rail never lists a name that no published file has | Every contract change to a rarely written ledger blocks deploy until that ledger writes again. Older spans still fail, as under plan 62 L10 |
+
+  Recommendation: B1, because it is the only option that meets condition a for every span without fetching anything or blocking deploys.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | A hand-written `contract-columns.ts` copy, bound by tests, replaces engine DESCRIBE for the rail source | Fowler, 2026-10-07 |
+  | 2 | The view adds a typed zero-row contract part first so missing-in-span contract columns read NULL | Fowler, 2026-10-07 |
+  | 3 | Contract types map to type colours only through `classifyType()`; the copy stores engine names, and no second classifier exists | Plan 62 owner, 2026-10-07 |
+  | 4 | Published-file coverage is a producer or site-build check, not a test over production data | Owner, 2026-10-05 |
+  | 5 | Trigger 3 must be cleared by the owner before this row starts | Fowler, 2026-10-07 |
+
+- **Not in this row:** Deleting `askColumns()`, changing the rail to read the copy, plan 62 stamping, projecting away retired columns, `ITEM_HEALTH_COLUMNS` consolidation, and changing application code before the owner clears trigger 3.
+
+---
+
+### Row #23 - The column rail reads the copy, and the query engine starts on the first Run
+
+- **Scope:** After rows 19 and 22, PR 21c changes the column rail to read the committed copy through `ledgerColumns()` and stops loading the query engine on page open. `ledger.ts` deletes `askColumns()` and its `readColumns` import. `frontend/src/lib/data/ledger-columns.ts` is deleted. `+page.svelte` splits `updateCostAndColumns` into an async cost update and a rail derived immediately from `ledgerColumns()` for `selectedPublished`. The engine starts on the first Run that needs it, never on focus, never on a keystroke and never while the page is idle. A refused statement, a span above the fetch ceiling, or a span with no file can still answer without starting it. The row stamps plan 62's L10 line with `Plan 55 row 21 replaced its source: the rail reads contract-columns.ts, and askColumns() and ledger-columns.ts are deleted.` and B10 with `The rail half is answered by plan 55 row 21: the copy lists the columns of a ledger that has no file.` The plan 62 owner is told this row's PR number. Words: Reader and Jony rule them before this row starts.
+- **What a reader sees change:** Opening the page shows the rail without downloading the query engine or any parquet file. The first Run that needs the engine pays that download once.
+- **Files touched:**
+  - `frontend/src/lib/data/ledger.ts`
+  - `frontend/src/lib/data/ledger-columns.ts` (delete)
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/tests/ledger-lifecycle.spec.ts`
+  - `TODO/20261005-62-ledger-lifecycle-plan.md`
+  - `TODO/20260823-known-defects-plan.md`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - plan 55 section 2.4 paragraph and rule 8, section 2.5 rule 5, section 2.16 rule 5, and the row 23 Reckoner line
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected E2E browser checks and ledger lifecycle checks; docs load for touched docs; browser smoke for `/console/data-explorer/` in a fresh browser. CI runs the full suite.
+- **Checks:** E2E opens `/console/data-explorer/` with two published ledgers selected. The rail lists the copied columns in type colours. Before Run, no request goes out for the engine files and no request goes out for any `.parquet` file. After Run, the engine files are requested once. A third case checks that a published ledger with no file on the site still lists its columns. The deleted block in `ledger-lifecycle.spec.ts` is gone: `BUILT_COLUMNS`, `ROOMY_CEILING`, `columnNames`, `warnings`, the `readColumns` import, and the five-case block named `the column rail lists a ledger's columns from the file its empty view reads, whatever window is selected`. `ask-reader.ts` exports only what callers outside `ledger-columns.ts` still use after `git grep`. Section 12 smoke measures page-open transfer in a fresh browser and records it in the PR: the live site measured 9.2 MB on 2026-10-06, of which 8.9 MB was the query engine; after this row the estimate is at most 0.3 MB, labelled an estimate.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The engine starts on the first Run that needs it, not on focus, a keystroke or idle | Fowler, 2026-10-07 |
+  | 2 | `askColumns()` and `ledger-columns.ts` are deleted once the rail reads the copy | Plan 62 owner, 2026-10-07 |
+  | 3 | Plan 62 L10 and B10 are stamped through this row's PR, and plan 62's owner gets the PR number | Fowler, 2026-10-07 |
+  | 4 | The action-line words while the engine loads wait for Reader and Jony before the row starts | Fowler, 2026-10-07 |
+  | 5 | The transfer target is a measured page-open smoke, with 9.2 MB before and at most 0.3 MB after as an estimate | Fowler, 2026-10-07 |
+
+- **Not in this row:** Trigger 3 clearance, adding `CONTRACT_COLUMNS`, build-time published-column checks, starting the engine early, changing row 20 chart layout, and any merge.
+
+---
+
 ## Dependent plans
 
 - Plan 51, the query reader plan, closed on 2026-10-02 (#1191) and its plan-doc is gone from `TODO/`; [the shared query reader](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md) now owns what it shipped. Its row titled **The query door module and its two entry points** is DONE (#1154) and is what section 2.1 maps; every frontend row here extends it, and section 2.6 keeps its boundary exactly as it shipped. Its row titled **The three ledgers the console reads are published** is DONE (#1169, merged 2026-10-01): `ledger.published` names `host-fingerprint`, `item-health` and `summary-quality-evals`, and `published-ledgers.mjs` stages them. **Row 3 here widens that row's list and copy step** (row 3 decision 9). It also added `test_every_ledger_the_door_can_be_asked_for_is_published`, which row 2 deletes for the reason in section 2.4.
@@ -1246,7 +1421,9 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 - [`20260930-58-five-ledgers-leave-csv-plan.md`](20260930-58-five-ledgers-leave-csv-plan.md). **Open, and it edits files these rows edit.** Its row titled **Feed health moves to the door, and the Voices page reads it packed** edits `frontend/src/lib/data/slice-shapes.ts` (it adds `feed-health` to `LEDGER_NAMES` "unless plan 55 has already widened it"), `backend/tests/contracts/test_frontend_index_shapes.py`, `backend/utilities/build_canary_day.py`, `backend/idhazh/telemetry/publish/console_band.py`, `backend/tests/test_console_payloads_producer.py`, `frontend/tests/console-window-claims.spec.ts`, `config/ledgers.json`, `docs/reference/data-growth.md`, `docs/architecture/publishing/console-payloads.md` and `docs/reference/repository-layout.md`, and its other pending rows touch the same ledger layer. **Before dispatching any row here, the owner diffs its `Files touched` against every plan 58 row in flight and holds a row that shares a file** - rows 1, 2, 3, 4, 6 and 7 each name at least one file a plan 58 row edits - as execute-a-plan.md requires within one plan. Each ledger plan 58 moves to the door becomes publishable here by the rule in row 3 decision 11.
 - [`20260930-57-upkeep-tasks-switch-on-plan.md`](20260930-57-upkeep-tasks-switch-on-plan.md). Its first row waits on how the gardener's loader treats a published ledger's month window; row 3 here adds ledgers to `ledger.published`, which that loader reads, and widens `counterfactual-scores`' month window to two months (row 3 decision 12). Its first row is also what switches `summary-quality-evals`' packing from report-only to live; until then that ledger gains a day not packed yet every day, which row 7's walk lists up to its cap (section 2.7, listing rule 1).
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md). Delivered (#613, #614, #645, #649). Its ruling keeps the prerendered routes - six when it was written, eight today - and its section 6 is the executable price of reversing that. **This plan neither reverses it nor depends on it**: the new route simply never prerenders, the way the two dated routes already do. **It also inherits one contradiction and does not repair it** - telemetry-intent N4 says the existing prerendered routes come off, and plan 26 ruled they stay. That disagreement is older than this plan and belongs to whichever of the two moves next.
-- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **Row 2 here changes nothing it uses**: `engine.ts` and `filesFor()` are untouched, and `ask()` is a second entry point beside the `slice()` its panels call. The two can run beside each other. A panel it adds that names a ledger must still find that ledger in `ledger.published`, which `test_every_ledger_a_panel_asks_the_door_for_is_published` keeps holding. **Row 5 here shares files with its row titled "The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout"** (PENDING on 2026-10-02): both edit `Distribution.svelte` and `RankedList.svelte`, and both give the spread chart a readout strip. Whichever lands first does that work and the other reuses it; the owner never has both in flight at once.
+- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **Row 2 here changes nothing it uses**: `engine.ts` and `filesFor()` are untouched, and `ask()` is a second entry point beside the `slice()` its panels call. The two can run beside each other. A panel it adds that names a ledger must still find that ledger in `ledger.published`, which `test_every_ledger_a_panel_asks_the_door_for_is_published` keeps holding. **Row 5 here shares files with its row titled "The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout"** (PENDING on 2026-10-02): both edit `Distribution.svelte` and `RankedList.svelte`, and both give the spread chart a readout strip. Whichever lands first does that work and the other reuses it; the owner never has both in flight at once. **Row 20 now needs plan 52 row 2 or the owner-approved slice of it; this PR writes Susan's K1 into plan 52 row 2 by adding `ShapePanel.svelte` to its Files touched list.**
+- [`20261005-62-ledger-lifecycle-plan.md`](20261005-62-ledger-lifecycle-plan.md). Plan 62 row L10 asked plan 55 to replace the rail's source. Rows 21 to 23 do that: row 21 checks published columns, row 22 makes every copied contract column resolve, and row 23 deletes `askColumns()` and `ledger-columns.ts`. Row 23 stamps plan 62's L10 and B10 lines and tells plan 62's owner its PR number.
+- Plan 59 open PR #1352 edits `backend/idhazh/cli.py` at the merge-line holdout stage call, `commit_sha=args.commit`. Row 21 adds a new CLI stage beside `site-weight`; the edits do not overlap, so row 21 does not wait for #1352.
 
 ## See also
 
