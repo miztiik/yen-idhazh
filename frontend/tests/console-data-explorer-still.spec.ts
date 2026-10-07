@@ -237,7 +237,7 @@ test('M8: editor head, questions and narrow rails keep their density heights', a
 			return { control, space1, space2, space3, regions };
 		});
 		const oneControlRow = sizes.control + 2 * sizes.space1;
-		const questionsExpected = view.width < 640 ? oneControlRow + sizes.space3 + 1 : oneControlRow;
+		const questionsExpected = view.width < 640 ? 75 : oneControlRow;
 		expect(await page.locator('[data-workbench-region="editor"] .editor-head').evaluate((node) => node.getBoundingClientRect().height), `${view.width} editor head`).toBeGreaterThanOrEqual(oneControlRow - 1);
 		expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(questionsExpected, 0);
 		if (view.width < 1024) {
@@ -410,7 +410,9 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'running-query' })).toBe('Running the question.');
 	expect(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Answered in 100.0 s. Read 123 files, 64.0 MB.');
+	expect(statusSentence({ state: 'answered', ms: 99999, read: { files: 0, bytes: 0, alreadyHeld: 45, ms: 99999 } })).toBe('Answered in 100.0 s.');
 	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows. Read 123 files, 64.0 MB.');
+	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 0, bytes: 0, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows.');
 	expect(statusSentence({ state: 'refused' })).toBe('Did not run. The reason is where the answer would be.');
 	expect(statusSentence({ state: 'missing', ledger: 'published' })).toBe('Did not run. published is not on this site yet.');
 	expect(statusSentence({ state: 'unreachable-engine' })).toBe('Did not run. The query engine did not start.');
@@ -511,9 +513,28 @@ test('M15: panel ids stay ordered, headed and joined into one workbench surface'
 	}
 	await expect(page.getByRole('tablist', { name: 'Answer view' })).toHaveCount(1);
 	await expect(page.getByRole('tab', { name: 'Table' })).toHaveAttribute('aria-controls', 'data-explorer-rows');
+	await expect(page.getByRole('tab', { name: 'Table' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('tab', { name: 'Table' })).toHaveAttribute('tabindex', '0');
 	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('aria-controls', 'data-explorer-shape');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('aria-selected', 'false');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('tabindex', '-1');
 	await expect(page.locator('#data-explorer-rows')).toHaveAttribute('role', 'tabpanel');
+	await expect(page.locator('#data-explorer-rows')).toHaveAttribute('aria-labelledby', 'explorer-tab-table');
 	await expect(page.locator('#data-explorer-shape')).toHaveAttribute('role', 'tabpanel');
+	await expect(page.locator('#data-explorer-shape')).toHaveAttribute('aria-labelledby', 'explorer-tab-chart');
+	await page.getByRole('tab', { name: 'Table' }).focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toBeFocused();
+	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('tabindex', '0');
+	await expect(page.getByRole('tab', { name: 'Table' })).toHaveAttribute('tabindex', '-1');
+	await page.keyboard.press('ArrowLeft');
+	await expect(page.getByRole('tab', { name: 'Table' })).toBeFocused();
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+	await runExplorer(page);
+	await expectAnswer(page, 'quiet');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('aria-selected', 'true');
 	const colours = await page.evaluate(() => ({
 		page: getComputedStyle(document.body).backgroundColor,
 		workbench: getComputedStyle(document.querySelector('.workbench') as HTMLElement).backgroundColor
@@ -557,12 +578,33 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 				await runExplorer(page);
 				await expectAnswer(page, 'table');
 			}
-			const cut = await page.evaluate(() => {
+			for (const disclosure of ['closed', 'questions open'] as const) {
+				const summary = page.locator('[data-workbench-region="questions"] .question-strip summary');
+				if (disclosure === 'questions open' && await summary.count()) await summary.click();
+				const cut = await page.evaluate(() => {
 				// These regions never scroll, so a control outside them, or content past their
 				// height, is cut off. The rails scroll by design, so they are held only sideways.
 				const whole = ['questions', 'editor'];
 				const sideways = ['ledgers', 'columns'];
 				const offenders: string[] = [];
+				const overflows = (node: HTMLElement) => {
+					const style = getComputedStyle(node);
+					return style.overflowX !== 'visible' || style.overflowY !== 'visible';
+				};
+				const visible = (node: HTMLElement) => {
+					const rect = node.getBoundingClientRect();
+					return rect.width > 0 && rect.height > 0 && node.checkVisibility() && getComputedStyle(node).visibility !== 'hidden';
+				};
+				const label = (node: HTMLElement) => `${node.tagName.toLowerCase()} "${(node.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 50)}"`;
+				const fitsInside = (inner: DOMRect, outer: DOMRect) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5;
+				const intersects = (inner: DOMRect, outer: DOMRect) => inner.right > outer.left && inner.left < outer.right && inner.bottom > outer.top && inner.top < outer.bottom;
+				const isDrawnInsideOverflowAncestors = (control: HTMLElement, rect: DOMRect) => {
+					for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
+						if (!visible(ancestor) || !overflows(ancestor)) continue;
+						if (!intersects(rect, ancestor.getBoundingClientRect())) return false;
+					}
+					return true;
+				};
 				for (const name of [...whole, ...sideways]) {
 					const region = document.querySelector<HTMLElement>(`[data-workbench-region="${name}"]`);
 					if (region === null) {
@@ -570,24 +612,37 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 						continue;
 					}
 					const both = whole.includes(name);
-					if (both && region.scrollHeight > region.clientHeight + 0.5) {
+					const regionClips = overflows(region);
+					if (both && regionClips && region.scrollHeight > region.clientHeight + 0.5) {
 						offenders.push(`${name}: ${region.scrollHeight - region.clientHeight}px of content is hidden`);
 					}
 					const box = region.getBoundingClientRect();
 					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
 						const rect = control.getBoundingClientRect();
 						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
-						if (rect.width === 0 || rect.height === 0 || !control.checkVisibility() || getComputedStyle(control).visibility === 'hidden') continue;
+						if (!visible(control)) continue;
+						if (!isDrawnInsideOverflowAncestors(control, rect)) continue;
 						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
 						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
-						if (!across || (both && !down)) {
-							offenders.push(`${name}: ${control.tagName.toLowerCase()} "${(control.textContent ?? '').trim().slice(0, 40)}" at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${Math.round(box.left)},${Math.round(box.top)}-${Math.round(box.right)},${Math.round(box.bottom)}`);
+						if (!across || (both && regionClips && !down)) {
+							offenders.push(`${name}: ${label(control)} at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${Math.round(box.left)},${Math.round(box.top)}-${Math.round(box.right)},${Math.round(box.bottom)}`);
+						}
+						if ((control.matches('button, a[href], summary') || control.classList.contains('example')) && control.scrollWidth > control.clientWidth + 1) {
+							offenders.push(`${name}: ${label(control)} cuts its text by ${control.scrollWidth - control.clientWidth}px`);
+						}
+						for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
+							if (!visible(ancestor) || !overflows(ancestor)) continue;
+							const ancestorBox = ancestor.getBoundingClientRect();
+							if (!fitsInside(rect, ancestorBox)) {
+								offenders.push(`${name}: ${label(control)} is outside clipping ancestor ${ancestor.tagName.toLowerCase()}.${ancestor.className} at ${Math.round(ancestorBox.left)},${Math.round(ancestorBox.top)}-${Math.round(ancestorBox.right)},${Math.round(ancestorBox.bottom)}`);
+							}
 						}
 					}
 				}
 				return offenders;
-			});
-			expect(cut, `${view.width}px, ${phase}`).toEqual([]);
+				});
+				expect(cut, `${view.width}px, ${phase}, ${disclosure}`).toEqual([]);
+			}
 		}
 	}
 });

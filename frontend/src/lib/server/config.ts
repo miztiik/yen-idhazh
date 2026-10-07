@@ -608,7 +608,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	history_max: 10,
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
-	readout_lines: [7, 3, 4, 3],
+	readout_lines: [4, 3, 4, 3],
 	notice_ms: 6000,
 	editor_lines_shown: [8, 4],
 	strip_shown: [0, 6],

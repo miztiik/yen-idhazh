@@ -241,7 +241,7 @@ test('THE ORACLE: with no archive prefix, an old custom span reads from the site
 	await expectAnswer(page, 'table');
 	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
 	await expect(panel.locator('.answer-note')).toHaveText(
-		'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the published record before 5 Jun 2030 are not on this site.'
+		'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the published record before 5 Jun 2030 are not on this site.'
 	);
 	await expect(panel.locator('.warn')).toHaveCount(0);
 	expect(await tableRows(page)).toEqual([['2030-06-05', '11']]);
@@ -275,14 +275,14 @@ test('THE ORACLE: the 14-day preset cuts a ledger that began 5 days ago at its f
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['2030-06-10', '6']]);
-	await expect(note).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
+	await expect(note).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
 
 	const fetched = fetchedFiles(page);
 	await chooseExplorerQuestion(page, ['seen'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "seen"');
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['2030-06-02', '14']]);
-	await expect(note).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. All 1 rows shown.');
+	await expect(note).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. 1 row shown.');
 	expect(fetched.sort()).toEqual(daysBetween('2030-06-02', PINNED).map((day) => `compact/seen/daily/${day.replaceAll('-', '/')}.parquet`));
 	expect(archiveAsked).toEqual([]);
 });
@@ -300,7 +300,7 @@ test('THE ORACLE: an answer over two ledgers that began on different days names 
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['11', '6']]);
 	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
-	const read = 'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the host-fingerprint record before 5 Jun 2030 are not on this site. Days of the seen record before 10 Jun 2030 are not on this site.';
+	const read = 'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 5 Jun 2030 are not on this site. Days of the seen record before 10 Jun 2030 are not on this site.';
 	await expect(note).toHaveText(read);
 	await expect(note.locator('.warn')).toHaveCount(0);
 
@@ -343,7 +343,7 @@ test('THE ORACLE: when the repository host does not answer for the days the site
 		'Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
 	);
 	await expect(note).toHaveText(
-		'Read from 107 UTC days, 1 Mar 2030 to 15 Jun 2030. All 1 rows shown. Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
+		'Read from 107 UTC days, 1 Mar 2030 to 15 Jun 2030. 1 row shown. Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
 	);
 	expect([...archiveAsked]).toEqual([`${archive}/state/compact/seen/index/daily.json`]);
 	expect(archiveAnswered).toEqual([]);
@@ -512,7 +512,15 @@ test('THE ORACLE: a refused run after a fetch does not show held-byte text', asy
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['3']]);
 	const line = page.locator('[data-explorer-action-line]');
+	await expect(line).toContainText('Answered in');
+	await expect(line).not.toContainText('Read 0 files, 0.0 MB.');
 	await expect(line).not.toHaveAttribute('data-held-bytes');
+	await page.locator('#explorer-sql').fill('SELECT * FROM "published" WHERE false');
+	await runExplorer(page);
+	await expectAnswer(page, 'quiet');
+	await expect(line).toContainText('Ran in');
+	await expect(line).toContainText('matched no rows.');
+	await expect(line).not.toContainText('Read 0 files, 0.0 MB.');
 	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
 	await runExplorer(page);
 	await expectAnswer(page, 'refused');

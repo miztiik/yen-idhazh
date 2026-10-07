@@ -753,7 +753,7 @@
 	:global([data-workbench-region='questions'] .question-strip button) {
 		min-inline-size: 0;
 		max-inline-size: 100%;
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.run-button {
@@ -1090,11 +1090,13 @@
 			grid-template-columns: minmax(0, 1fr) auto;
 		}
 		:global([data-workbench-region='questions'] .question-strip) {
+			grid-column: 1 / -1;
 			inline-size: 100%;
 			flex-basis: 100%;
 		}
 		.question-links,
 		.how-to {
+			grid-column: 1 / -1;
 			min-inline-size: 0;
 			inline-size: 100%;
 			flex-basis: 100%;

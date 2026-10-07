@@ -100,6 +100,53 @@ for (const view of [
 	});
 }
 
+for (const view of [
+	{ width: 1440, height: 900 },
+	{ width: 390, height: 844 }
+] as const) {
+	test(`the selected ledger's many columns scroll inside the rail and do not stretch the page, at ${view.width}`, async ({ page }) => {
+		await page.setViewportSize(view);
+		await openExplorer(page, '2026-08-20');
+		await chooseExplorerQuestion(page, ['item-health'], 'SELECT * FROM "item-health"');
+		if (view.width < 1024) await page.locator('[data-workbench-region="columns"] summary').click();
+		const reading = await page.evaluate(() => {
+			const root = document.documentElement;
+			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
+			const list = document.querySelector<HTMLElement>('[data-explorer-columns]');
+			return {
+				columns: document.querySelectorAll('[data-explorer-columns] li code').length,
+				listScrolls: list !== null && list.scrollHeight > list.clientHeight,
+				pageScrollsSideways: root.scrollWidth > root.clientWidth,
+				railHeight: rail?.getBoundingClientRect().height ?? 0
+			};
+		});
+		expect(reading.columns).toBe(128);
+		expect(reading.listScrolls, 'the column list did not scroll inside the rail').toBe(true);
+		expect(reading.pageScrollsSideways, 'the column list stretched the page').toBe(false);
+		expect(reading.railHeight, 'the column rail collapsed').toBeGreaterThan(0);
+	});
+}
+
+test('a selected ledger named in the link opens inside the visible ledger list, not by scrolling the page', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, '2026-08-20', { address: '?ledgers=published&days=14' });
+	const reading = await page.evaluate(() => {
+		const root = document.documentElement;
+		const list = document.querySelector<HTMLElement>('[data-workbench-region="ledgers"] .ledger-options');
+		const chosen = document.querySelector<HTMLElement>('[data-ledger-name="published"]');
+		if (list === null || chosen === null) throw new Error('ledger list or selected ledger missing');
+		const box = list.getBoundingClientRect();
+		const rect = chosen.getBoundingClientRect();
+		return {
+			pageY: window.scrollY,
+			inView: rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5,
+			scrollTop: list.scrollTop
+		};
+	});
+	expect(reading.pageY).toBe(0);
+	expect(reading.inView, `published was not visible after list scrollTop ${reading.scrollTop}`).toBe(true);
+});
+
 /** Eight questions saved in this browser, each with a name the test wrote, near the 40-character cap. */
 const SAVED = Array.from({ length: 8 }, (_, index) => ({
 	id: `strip-${index + 1}`,

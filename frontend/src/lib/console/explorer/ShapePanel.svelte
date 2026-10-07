@@ -24,30 +24,11 @@
 	const shapes = $derived(chooseExplorerShapes(columns, rows, bounds));
 	const choices = $derived(shapes.filter((shape) => shape.kind === 'chart'));
 	const active = $derived(choices.find((shape) => shape.type === selectedType) ?? shapes[0]);
-	const note = $derived(noteFor(active));
 	const chartTokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 
 	function text(row: Row, column: string): string {
 		const spec = columns.find((one) => one.name === column) ?? { name: column, type: 'VARCHAR' };
 		return printCell(spec, row[column]).text;
-	}
-
-	function noteFor(next: ExplorerShape): string {
-		if (next.kind === 'none') return next.reason;
-		if (next.type === 'dateSeries') {
-			const why = `Drawn over time because the answer has a date column.`;
-			return next.rowsWithNoDay === 0 ? why : `${why} ${rowsWithNoDaySentence(next.rowsWithNoDay, next.dateColumn)}`;
-		}
-		if (next.type === 'rankedList') return `Drawn ranked because the answer has one text column and one number column.`;
-		if (next.type === 'pairedScatter') return `Drawn paired because the answer has two number columns.`;
-		return `Drawn as a spread because the answer has one number column.`;
-	}
-
-	/** The rows a date chart does not draw because their day is NULL, which the table prints as `null`. */
-	function rowsWithNoDaySentence(count: number, dateColumn: string): string {
-		return count === 1
-			? `1 row holds null in the column "${dateColumn}", so the chart does not draw it. It is in the table.`
-			: `${count} rows hold null in the column "${dateColumn}", so the chart does not draw them. They are in the table.`;
 	}
 
 	function lede(next: ExplorerShape): string {
@@ -113,7 +94,6 @@
 </script>
 
 <div class="shape-panel" style={`--shape-height:${height}px`}>
-	<p class="shape-note">{note}</p>
 	{#if active.kind === 'none'}
 		<div class="shape-none" data-shape-none>{active.reason}</div>
 	{:else if tooFew(active)}
@@ -164,7 +144,6 @@
 		overflow: auto;
 	}
 
-	.shape-note,
 	.shape-panel p {
 		margin: 0;
 		color: var(--color-text-secondary);

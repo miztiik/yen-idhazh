@@ -180,10 +180,10 @@
     "explorer_rank_max": 31,
     "explorer_reach_days": 366,
     "explorer_readout_lines": [
+      5,
       4,
-      3,
-      3,
-      2
+      5,
+      4
     ],
     "explorer_row_page": 51,
     "explorer_save_name_max_chars": 41,

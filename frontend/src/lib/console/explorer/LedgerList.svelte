@@ -1,5 +1,6 @@
 
 <script lang="ts">
+	import { tick } from 'svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { LedgerName } from '$lib/data/ledger';
 	import type { RegistryLedger } from './registry';
@@ -17,6 +18,21 @@
 		refreshing?: boolean;
 	} = $props();
 	const shown = $derived(ledgers.filter((ledger) => ledger.name.includes(filter.toLowerCase())));
+	let options = $state<HTMLDivElement | null>(null);
+
+	$effect(() => {
+		selected;
+		shown;
+		void tick().then(() => {
+			if (options === null) return;
+			const chosen = options.querySelector<HTMLElement>('[data-chosen="yes"]');
+			if (chosen === null) return;
+			const box = options.getBoundingClientRect();
+			const rect = chosen.getBoundingClientRect();
+			if (rect.top < box.top) options.scrollTop -= box.top - rect.top;
+			else if (rect.bottom > box.bottom) options.scrollTop += rect.bottom - box.bottom;
+		});
+	});
 </script>
 
 <div class="ledger-list">
@@ -25,7 +41,7 @@
 		<button type="button" onclick={onRefresh} disabled={refreshing}><Icon id="list-refresh" /> {refreshing ? 'Refreshing' : 'Refresh'}</button>
 	</div>
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
-	<div class="ledger-options">
+	<div class="ledger-options" bind:this={options}>
 		{#each shown as ledger (ledger.name)}
 			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
 				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />

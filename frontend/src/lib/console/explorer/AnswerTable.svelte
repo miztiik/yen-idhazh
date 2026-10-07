@@ -2,6 +2,7 @@
 <script lang="ts">
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { Column, Row } from '$lib/data/ledger';
+	import { plural } from '$lib/format';
 	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
 	import { nextSort, numericBarShare, printCell, sortedRows, type SortSpec } from './answer';
 	type GapLine = { ledger: string; kind: string; text: string };
@@ -14,14 +15,14 @@
 	const ordered = $derived(sortedRows(rows, columns, sort));
 	const visible = $derived(ordered.slice(0, shown));
 	const bars = $derived(new Map(columns.map((column) => [column.name, numericBarShare(column, rows, barSpreadShare)])));
-	const rowStatus = $derived(shown < rows.length ? `${shown} of ${rows.length} rows shown.` : `All ${rows.length} rows shown.`);
-	const noteText = $derived([spanText, rowStatus, capped ? `The answer stops at ${maxRows} rows; narrow the days or the question to see the rest.` : '', siteFromText].filter(Boolean).join(' '));
+	const rowStatus = $derived(shown < rows.length ? `${shown} of ${plural(rows.length, 'row', 'rows')} shown.` : `${plural(rows.length, 'row', 'rows')} shown.`);
+	const noteText = $derived([spanText, rowStatus, capped ? `The answer stops at ${plural(maxRows, 'row', 'rows')}; narrow the days or the question to see the rest.` : '', siteFromText].filter(Boolean).join(' '));
 	$effect(() => onOrderChange?.(ordered));
 </script>
 
 <div class="answer-table-region">
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-	<div class="table-box" role="region" tabindex="0" aria-label={`Answer, ${rows.length} rows by ${columns.length} columns`} data-chart="answer-table" data-readout-none="every value is printed in its own cell; agreed with Susan" style={`--cell-max:${cellMaxCh}ch`}>
+	<div class="table-box" role="region" tabindex="0" aria-label={`Answer, ${plural(rows.length, 'row', 'rows')} by ${plural(columns.length, 'column', 'columns')}`} data-chart="answer-table" data-readout-none="every value is printed in its own cell; agreed with Susan" style={`--cell-max:${cellMaxCh}ch`}>
 		<table data-explorer-answer>
 		<thead>
 			<tr>
