@@ -109,7 +109,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
-| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - two command lines need their own fix; plan 60 carries the gardener's** |
+| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 
 ## 62 - In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses (OPEN)
@@ -157,12 +157,16 @@ two hours on the machine where row L7 saw it.** A GitHub runner's local time is
 UTC, so a workflow's log is right, and the fault shows only on a machine set to
 another zone, such as a developer's.
 
-**The next move is a worker's.** Plan 60's row "Every gardener log line is one
-JSON event" rewrites the gardener's log lines, and its `settings_or_none`
-installs the handler once, so the gardener command line's stamp is that row's
-to set. The other two need a fix of their own: the records they log carry a
-UTC time and say so, with a test that reads one. Level 1 - the time printed on
-each log line, and a wrong version shows on the first line.
+**The gardener's part is fixed by plan 60's row "Every gardener log line is one
+JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
+install one handler through `settings_or_none`, and each line it writes carries
+`at`, the record's own instant in UTC as ISO-8601 with `Z`.
+`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
+in the test process and in a fresh one. The other two command lines,
+`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
+local time and need a fix of their own: the records they log carry a UTC time
+and say so, with a test that reads one. Level 1 - the time printed on each log
+line, and a wrong version shows on the first line.
 
 Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
 

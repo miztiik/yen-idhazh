@@ -59,7 +59,7 @@ Table A - what is out
 | 18 | An unreadable file is set aside, and extra files wait | 17 | D | DONE | special-succotash | - | Plan 60 row 18 |
 | 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | DONE | legendary-fortnight | - | Plan 60 row 19 |
 | 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | DONE | shiny-system | - | Plan 60 row 20 |
-| 21 | Every gardener log line is one JSON event | 2, 20 | E | PENDING | - | - | - |
+| 21 | Every gardener log line is one JSON event | 2, 20 | E | DONE | reimagined-winner | - | Plan 60 row 21 |
 | 22 | A person reads a shard at a glance | 21 | E | PENDING | - | - | - |
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
@@ -974,33 +974,59 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Scope:** The events of Table E become models, `event_log.py` writes each one as one JSON line (section 2.5), and the free-text log lines of the gardener are deleted. Level 3.
 - **Follow-ups:**
   - Row 11 (#1317) added three warning lines that become events here: the order check failed, a page's count differs from the first page's, and the list does not end where the count says. E2's pages read is filled from the walk; found during execution (row 11 report), owner 2026-10-05.
+  - `PruneInterruptedError` said "Those are gone" on a dry run as well as a live one; that is the oracle's dry-run case. A dry run's message now says it deleted none, and `FoldInterruptedError` says the same of a dry-run fold (found by Fowler). Source: row 20's report, owner, 2026-10-07.
+  - The compaction's refusal lines (`_refused`, `_kept`) logged the ledger's own fault word under `fault=` at error level, while the record's fault is a `GardenerFault` word. The `period-refused` event gives the two words two keys, `fault` and `ledger_fault`, and a refusal that ends `deferred` is a warning, not an error. Source: row 20's report, owner, 2026-10-07.
+  - `CompactTree.note_recovery` logged one warning line for each note. The line is gone: the notes are on the record and in `task-finished`. Source: row 20's report, owner, 2026-10-07.
+  - `report.WHY` and `report.NOTED` hold one sentence for each fault word and each note word. `task-finished`'s `next` takes `WHY` when a fault stopped the task; `NOTED` stays for row 22's summary. Source: row 20's report, owner, 2026-10-07.
+  - Fewer tests read `caplog` since row 20, because the notes are read from the record; every test left that read gardener log text now reads the event on the record. Source: row 20's report, owner, 2026-10-07.
+  - Known defect 61: `cli.py` formatted records with `%(asctime)s` on the local clock. Every line the new handler writes carries `at`, the record's instant in UTC with `Z`, and `test_event_log.py` pins it under a zone that is not UTC. Defect 61's entry says the gardener's part is fixed; the other two command lines stay open. Source: `TODO/20260823-known-defects-plan.md`, owner, 2026-10-07.
+  - A line that starts with a workflow command stays raw and unwrapped; row 22 owns its words. The gardener's only such lines are the publisher's `::warning::` for a `stale` or `lost` landing, printed on stdout. `.github/workflows/idhazh-gardener.yml`, the one workflow that runs the gardener, reads no gardener log text: its `run-tasks` step pipes nothing, and the two steps that write `$GITHUB_OUTPUT` read `gardener_shards.py` and `corpus_squash_due.py`, which install no gardener handler. Source: the owner's brief, owner, 2026-10-07.
 - **Files touched:**
   - `backend/idhazh/contracts/gardener_events.py`
   - `backend/idhazh/gardener/event_log.py` (new; first sentence "How a gardener event becomes one log line")
-  - `backend/idhazh/gardener/report.py` (`classify`)
-  - `backend/idhazh/gardener/one_at_a_time.py` (`Pass.idle_outcome`; WindowChosen in `take`; the message of `PruneInterruptedError`)
+  - `backend/idhazh/gardener/report.py` (`classify`; `next_step` and `finished` beside `row`; `lines`, `_span`, `_what_next` and `fold_lines` deleted; found during execution, Fowler)
+  - `backend/idhazh/gardener/one_at_a_time.py` (`Pass.idle_outcome`; WindowChosen in `take`; the message of `PruneInterruptedError`; `Pass.pages_read` and `Pass.periods`, `Collection.pages_read`, and `MemberOutOfOrder`; found during execution, Fowler)
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/idhazh/gardener/runner.py`
   - `backend/idhazh/gardener/cli.py` (`settings_or_none` installs the handler once)
+  - `backend/idhazh/gardener/__init__.py`, `closed_day_fold.py` (the dry-run fold's message), `github_collections.py` (row 11's three warnings become events; both walks count their pages) and `named_trees.py` (`RawFileSkipped`) (found during execution)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py`, `_daily_period.py`, `_monthly_period.py`, `_yearly_period.py`, `_reopened_month.py` and `_compaction_periods.py` (refusals, the budget stop, E4 and the idle word; the unused `why` text and the module loggers deleted; found during execution)
+  - `backend/idhazh/gardener/tasks/telemetry_aggregate.py` and `visual_prune.py` (their summary lines deleted; found during execution)
   - `backend/tests/gardener/test_event_log.py` (new)
+  - `backend/tests/gardener/_events.py` (new: reads events off records; found during execution)
   - `backend/tests/gardener/test_runner.py`
   - `backend/tests/gardener/test_one_at_a_time.py`
+  - `backend/tests/gardener/test_report.py` (`report.lines` is gone; found during execution)
   - `backend/tests/gardener/tasks/test_visual_prune_task.py`
   - `backend/tests/gardener/tasks/test_names_only_shard.py`
-  - every test that reads gardener log text with `caplog`, from a search for `caplog` under `backend/tests/gardener/` at dispatch
+  - every test that reads gardener log text with `caplog`, from a search for `caplog` under `backend/tests/gardener/` at dispatch: `test_download_ceiling.py`, `test_github_collections.py`, `tasks/test_compaction.py` (with `test_compaction_periods.py` through its `chosen_on`) and `tasks/test_compaction_years.py`
   - `docs/architecture/publishing/idhazh-gardener.md` (logging)
+  - `docs/architecture/publishing/ledger-compaction.md`, `docs/how-to/prune-a-collection.md` and `docs/how-to/run-the-pipeline.md` (each described a line that is gone; found during execution)
+  - `TODO/20260823-known-defects-plan.md` (defect 61; the owner's fold)
 - **Acceptance gates:** local: pytest on the listed test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** unit: each event renders as one line of valid ASCII JSON with `event` first, `None` left out and nested models kept nested. Integration in `tmp_path`: one ledger for each outcome word in Table F. TaskPlanned comes before TaskFinished, and each carries its fields; tests read the payload on the record, not the text. A dry run whose listing fails part way never logs that anything is gone: today `one_at_a_time.PruneInterruptedError` says "Those are gone" for a dry run too, and `runner._run_one` logs it. It cannot settle how readable JSON is in GitHub's log viewer; row 22's summary is the view for a person.
+- **Found during execution:** the line carries `at` and `level` after `event` and before the event's fields, so section 2.5's sentence on the line format, and Table E, which names none of the events this row added (decision 4), are the owner's to update; this row edits only its own section. Run on the base commit 0bde65e46, in a copy outside this checkout, 9 of the 10 changed test modules fail at import (`TaskOutcome`, `TaskFinished`, `CompactionStep` and the other new events are absent); the tenth reads the visual-prune report row, which the base already writes. A probe drove the base code for each case of the oracle: a dry run whose listing fails part way says "Those are gone"; the runner's records carry no event, its lines are free text ("periods chosen {...}", "compaction of visual-prunes: 4 files written, ..."), and the report goes to stdout as printed lines; and the line for 09:46:00.500 UTC reads "2026-10-07 15:16:00,548 WARNING ..." under a zone five and a half hours east. On this branch each case gives the opposite. The canary, built on the base and then on this branch through the gate lock, holds the same 45 files: 28 identical, and 17 packed files whose 155 rows and 89 index entries are identical and whose only differing keys are the write clocks `file_id` and `written_at_ms`. A refused period's sentence is gone with its line, so a person reading a `raised` refusal sees its step, period, words, and the exception's type and code place, but not the numbers the sentence held, such as a year file's size; the fault words row 20 sent to the owner are the fix. Known gap: a retention task run with `--from` and `--to` that finds nothing ends `not-due`, because `TaskContext` holds the person's range and the scheduled window in one field; `task-planned` shows the range all the same (Fowler, 2026-10-07). `idhazh.ledger` logs an exception's text in two places, `raw_files._skip` and the "skipped a ledger file" warning in `ledger_files.py`, and the compaction calls both; a pydantic error there prints row values, so this is ESCALATE trigger 3 from before this row, reported to the owner with a proposed Level 2 row that logs the exception's type instead. This row does not widen it: a `logged-text` line keeps that message as it was, and three gardener sources of the same kind are gone.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | JSON lines (decision T2) | The owner, 2026-10-04 |
 | 2 | One handler on stderr, its level from config (CLAUDE.md section 1b) | Fowler, 2026-10-04 |
+| 3 | A line is `event`, then `at` (the record's own instant, UTC, to the millisecond, with `Z`), then `level`, then the fields; the record's message is the event's JSON too, so a command that formats records as text still prints it; `install` is `logging.basicConfig`, so a second call adds nothing; no event declares a field named `event`, `at` or `level` | Fowler, 2026-10-07 (row 21 worker's consult); `at` from the owner's fold on defect 61 |
+| 4 | Events beyond Table E, one small model for each fact: `member-out-of-order`, `page-out-of-order`, `page-count-changed` and `list-end-missing` for the walk checks; `period-refused` (step, period, `fault`, `ledger_fault`, error type, code place), `download-over-budget`, `ledger-fault-met` and `raw-file-skipped` for the compaction; `logged-text` wraps a record another module logs as text | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 5 | No field holds an exception's text: `error` is its type and `where` the deepest `module:line` of this package it passed through, both checked by pattern | Fowler, 2026-10-07 (row 21 worker's consult); row 20, decision 3 |
+| 6 | The runner's printed per-task report (`report.lines`, `fold_lines`) is a second rendering of `task-finished`, rejected as T3, so it is deleted; the shard's own printed lines stay for row 22 | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 7 | E2 is said at the top of `take`, before the listing is read, so a walk that fails at once has already said its window; the total pages read moves to the pass and to `task-finished`, because it is only known at the end | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 8 | `next` is one fixed sentence for each outcome word, or the fault's own sentence; no sentence carries a value or says a member is gone | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 9 | `classify`: work is found when the window held a member, a file was or would be written, or the fold found a day or month; carried out when a live pass took, wrote or recovered something, or a live fold found something; `dry-run` is found and not carried out. The compaction's idle word is `outside-range` whenever a person named a range, `empty` when every step starts at `none`, else `not-due` | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 10 | E4 is built from the indexes the pass read compared with the end, plus the lists the drop steps and `set_aside` keep, and travels on `Pass.periods`; `task-finished` also carries `handled_through`, the fold, and the exception's type and place | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 11 | `declared` is the declaration as it dumps, without `kind`, `owns`, `reads`, `appends_to` and the prose of `prune_refusal`; a null knob stays null | Fowler, 2026-10-07 (row 21 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | One `key=value` line per event (decision T1) | The owner chose JSON | Nothing | The owner, 2026-10-04 |
 | 2 | JSON plus a readable line for each event (decision T3) | Two renderings to keep in step | Twice the lines | Fowler, 2026-10-04 |
+| 3 | Keep a refusal's sentence in its event | The large-file sentence and a pydantic error that prints a row arrive through one `except ValueError`, so keeping one keeps the other | A new exception type every refusal site must use | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 4 | Refusals as a list inside E4 | A refusal happens at a moment and has its own level; a task that crashed after it would lose it | Nothing to build | Fowler, 2026-10-07 (row 21 worker's consult) |
 
 ### Row #22 - A person reads a shard at a glance
 
