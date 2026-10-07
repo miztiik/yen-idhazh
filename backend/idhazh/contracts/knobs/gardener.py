@@ -469,8 +469,15 @@ class CompactionPolicy(_Declared):
     ledger: LedgerName = Field(
         description=(
             "The ledger this task compacts. Typed rather than read off the file's name, "
-            "and the declaration must be called compact-<ledger>."
+            "and the declaration must be called compact-<ledger> or compact-trial-<ledger>."
         )
+    )
+    state_roots: list[RelPath] = Field(
+        default_factory=lambda: ["state"],
+        description=(
+            "The repository-relative state roots this declaration compacts, in pass order. "
+            "Each root owns this ledger's raw and compact folders only."
+        ),
     )
     lookback: int | None = Field(
         default=None,
@@ -584,6 +591,8 @@ class CompactionPolicy(_Declared):
             raise ValueError("yearly_keep_months requires monthly_keep_days")
         if self.yearly_prune_enable and self.yearly_keep_months is None:
             raise ValueError("yearly_prune_enable requires yearly_keep_months")
+        if len(self.state_roots) != len(set(self.state_roots)):
+            raise ValueError("state_roots repeats a root")
         if self.monthly_keep_days is None:
             return self
         if not isinstance(self.monthly_window, ForeverWindow):

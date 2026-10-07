@@ -51,8 +51,7 @@ VALIDATION_PLAN_STEP = "Read the feeds"
 
 #: The two steps of the decide job, in the order they have to run: the gates
 #: file the verdict through the ledger door under the trial root, and the commit
-#: stages it. Nothing packs a trial root, so the verdict lands as the raw file the
-#: gates filed.
+#: stages it. Its separate compaction runs on a later gardener wake.
 VALIDATION_GATES_STEP = "Run the gates"
 
 VALIDATION_COMMIT_STEP = "Commit the candidate-models ledger"

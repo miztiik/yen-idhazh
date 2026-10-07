@@ -359,7 +359,7 @@ def refuse_what_the_declarations_break(
     _refuse_a_picture_window_the_archive_does_not_state(tasks, app)
     for name, policy in tasks.items():
         if isinstance(policy, CompactionPolicy):
-            _refuse_a_compaction_that_cuts_its_ledger(
+            _refuse_a_compaction_declaration(
                 name, policy, tasks, app=app, appearance=appearance
             )
         if isinstance(policy, CollectionTaskPolicy):
@@ -851,4 +851,69 @@ def _refuse_a_compaction_that_cuts_its_ledger(
         f"{where} {_kept_by(policy)}, and the {series} series of {_where(task)} keeps "
         f"{ledger.value} {_spelled(kept)}. The pair would delete a month before that series "
         "is done with it"
+    )
+
+
+def _refuse_a_compaction_declaration(
+    name: str,
+    policy: CompactionPolicy,
+    tasks: Mapping[str, TaskPolicy],
+    *,
+    app: AppConfig,
+    appearance: AppearanceConfig,
+) -> None:
+    """Keep production governance separate from explicit trial-root compactions."""
+    from idhazh import ledger
+
+    where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
+    production_name = f"compact-{policy.ledger.value}"
+    trial_name = f"compact-trial-{policy.ledger.value}"
+    trial = name == trial_name
+    if name not in (production_name, trial_name):
+        raise ValueError(
+            f"{where} compacts {policy.ledger.value}, and a compaction is named "
+            f"call it {production_name}.json for production or {trial_name}.json for trial roots"
+        )
+    if trial:
+        if not policy.state_roots or any(
+            root != "state/pipeline-tests"
+            and not (
+                len(PurePosixPath(root).parts) == 3
+                and PurePosixPath(root).parts[:2] == ("state", "pipeline-tests")
+            )
+            for root in policy.state_roots
+        ):
+            raise ValueError(
+                f"{where} state_roots must name only state/pipeline-tests or one "
+                "state/pipeline-tests/<case> root"
+            )
+    elif policy.state_roots != ["state"]:
+        raise ValueError(f"{where} is the production compaction and state_roots must be ['state']")
+
+    if trial:
+        prefix = ledger.door_folders(policy.ledger)
+        expected = {
+            PurePosixPath(root, tier, *prefix).as_posix()
+            for root in policy.state_roots
+            for tier in ("raw", "compact")
+        }
+        if set(policy.owns) != expected or len(policy.owns) != len(expected):
+            raise ValueError(
+                f"{where} owns {sorted(policy.owns)}, but its state_roots and "
+                f"{policy.ledger.value} require exactly {sorted(expected)}"
+            )
+        trials = tasks.get("trials")
+        if not isinstance(trials, RetentionPolicy):
+            raise ValueError(
+                f"{where} needs the retention window from config/gardener/trials.json"
+            )
+        if compaction_reaches(policy, trials.window):
+            return
+        raise ValueError(
+            f"{where} {_kept_by(policy)}, and config/gardener/trials.json keeps "
+            f"{_spelled(trials.window)}. The trial compaction must reach that window"
+        )
+
+    _refuse_a_compaction_that_cuts_its_ledger(
+        name, policy, tasks, app=app, appearance=appearance
     )
