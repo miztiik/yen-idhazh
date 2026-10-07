@@ -6,7 +6,12 @@ import {
 	summarizeConfig,
 	uiConfig
 } from '$lib/server/config';
-import { countersWithoutScores, recordingNotes, recordNotesByWindow } from '$lib/console/recording';
+import {
+	countersWithoutScores,
+	measurementOff,
+	recordingNotes,
+	recordNotesByWindow
+} from '$lib/console/recording';
 import {
 	evalColumnLabels,
 	evalDays,
@@ -274,6 +279,21 @@ export async function load() {
 					? null
 					: countersWithoutScores()
 		},
+		// Whether the scorer is switched off, once for each span the control offers:
+		// a day the line names is one that span shows, and a span that holds none of
+		// the score record's rows names the span that reaches back to them instead.
+		measurementOff: Object.fromEntries(
+			[...windows].map(([days, window]) => [
+				days,
+				measurementOff({
+					enabled: observability.evaluation_enabled,
+					recorded: scoredDays,
+					read: scores.read,
+					open: window,
+					offered: [...windows.values()]
+				})
+			])
+		),
 		// One entry per span the control offers. Null where the span timed
 		// nothing, which the panel prints as a sentence rather than as an empty
 		// chart of zeroes.

@@ -24,6 +24,7 @@ import {
 	type AskOptions,
 	type AskResult,
 	type Column,
+	type CutDays,
 	type DateStamp,
 	type FetchCost,
 	type LedgerName,
@@ -61,7 +62,7 @@ type LedgerPlan = {
 	files: PlannedFile[];
 	emptySource: PlannedFile[];
 	unpackedDays: DateStamp[];
-	siteFrom: DateStamp | null;
+	cutBefore: DateStamp | null;
 	unanswered: UnansweredDays | null;
 	lostDays: DateStamp[];
 	setAside: SetAsideFiles;
@@ -295,7 +296,7 @@ async function planLedger(
 ): Promise<LedgerPlan> {
 	const indexed = await compactIndexes(keeper, ledger, from, to);
 	if ('state' in indexed) {
-		return { ledger, through: null, files: [], emptySource: [], unpackedDays: [], siteFrom: null, unanswered: null, lostDays: [], setAside: {}, unreachable: indexed };
+		return { ledger, through: null, files: [], emptySource: [], unpackedDays: [], cutBefore: null, unanswered: null, lostDays: [], setAside: {}, unreachable: indexed };
 	}
 
 	const newestPacked = newestNamed(indexed.daily, indexed.monthly, indexed.yearly);
@@ -305,7 +306,7 @@ async function planLedger(
 	const lostDays: DateStamp[] = [];
 	const setAside: Record<string, number> = {};
 	let unreachable: AskResult | null = null;
-	let siteFrom: DateStamp | null = null;
+	let cutBefore: DateStamp | null = null;
 	let unanswered: UnansweredDays | null = null;
 	let siteStart = from;
 	/** One keeper's packed files for its part of the span, and what that part is missing.
@@ -317,21 +318,21 @@ async function planLedger(
 	};
 
 	// When the selected window begins before the site's first day, the days before the first day a
-	// tier names are cut from it, and `siteFrom` names that day; no end moves. The archive is a
+	// tier names are cut from it, and `cutBefore` names that day; no end moves. The archive is a
 	// tier only for days the site copy may have dropped (`site-window.ts`). When it does not answer
 	// for them, the ledger is read from the site's first day, and `unanswered` names that day.
 	if (siteFirst !== null && newestPacked !== null && from < siteFirst) {
-		siteFrom = siteFirst;
+		cutBefore = siteFirst;
 		if (archive !== null && siteMayHaveTrimmed(siteFirst, newestPacked, archive.siteWindowDays)) {
 			const archiveTo = to < siteFirst ? to : previousDay(siteFirst);
 			const choice = archiveAnswers ? await archiveSelection(archive.keeper, ledger, from, archiveTo) : 'unanswered';
 			if (choice === 'unanswered') {
 				unanswered = { tier: 'archive', ledger, before: siteFirst };
-				siteFrom = null;
+				cutBefore = null;
 			} else if ('state' in choice) unreachable = choice;
 			else {
 				take(choice, 'archive', archiveTo);
-				siteFrom = choice.start === from ? null : earlier(choice.start, siteFirst);
+				cutBefore = choice.start === from ? null : earlier(choice.start, siteFirst);
 			}
 		}
 		siteStart = siteFirst;
@@ -364,7 +365,7 @@ async function planLedger(
 		files,
 		emptySource: addPlanned(empty.files, empty.metas, 'site'),
 		unpackedDays: rawDays,
-		siteFrom,
+		cutBefore,
 		unanswered,
 		lostDays,
 		setAside,
@@ -379,6 +380,19 @@ function gapsOf(plans: readonly LedgerPlan[]): SpanGap[] {
 		.map((one) => ({ ledger: one.ledger, lostDays: one.lostDays, setAside: one.setAside }));
 }
 
+/** Each selected ledger whose days before its first day were cut from the window, with that day,
+ *  in the order chosen. */
+function cutOf(plans: readonly LedgerPlan[]): CutDays[] {
+	return plans.flatMap((one) => (one.cutBefore === null ? [] : [{ ledger: one.ledger, before: one.cutBefore }]));
+}
+
+/** The first day any selected ledger's answer reads. A ledger's answer starts on `from`, the
+ *  window's first day, unless its earlier days were cut or the repository could not give them;
+ *  then it starts on the day `cutBefore` or `unanswered` names. */
+function firstDayRead(plans: readonly LedgerPlan[], from: DateStamp): DateStamp {
+	return plans.map((one) => one.cutBefore ?? one.unanswered?.before ?? from).sort()[0] ?? from;
+}
+
 async function plan(
 	keeper: PageKeeper,
 	archive: ArchiveTier | null,
@@ -389,7 +403,7 @@ async function plan(
 ): Promise<Plan | AskResult> {
 	const chosen = [...new Set(ledgers)];
 	if (chosen.length === 0) {
-		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 }, siteFrom: null, unanswered: [], gaps: [] };
+		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: 0 }, cut: [], unanswered: [], gaps: [] };
 	}
 	for (const ledger of chosen) {
 		if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) return { state: 'missing', ledger };
@@ -412,7 +426,7 @@ function planOf(ledgersPlanned: LedgerPlan[]): Plan | AskResult {
 			files: files.length,
 			bytes: files.reduce((sum, plannedFile) => sum + plannedFile.file.bytes, 0),
 			unpackedDays: [...new Set(ledgersPlanned.flatMap((one) => one.unpackedDays))],
-			siteFrom: ledgersPlanned.map((one) => one.siteFrom).filter((day): day is DateStamp => day !== null).sort()[0] ?? null,
+			cut: cutOf(ledgersPlanned),
 			through: Object.fromEntries(ledgersPlanned.flatMap((one) => (one.through === null ? [] : [[one.ledger, one.through]])))
 		}
 	};
@@ -523,8 +537,8 @@ function sumCost(parts: readonly FetchCost[], started: number): FetchCost {
 }
 
 /** What a question over these ledgers and days would fetch. Days before the first day a tier
- *  names are cut from the window, and `siteFrom` names that day; `archive` is read only for days
- *  the site copy may have dropped. */
+ *  names are cut from the window, and `cut` names each such ledger with that day; `archive` is read
+ *  only for days the site copy may have dropped. */
 export async function readAskCost(
 	keeper: PageKeeper,
 	archive: ArchiveTier | null,
@@ -534,7 +548,7 @@ export async function readAskCost(
 	rawListed: RawListedThrough
 ): Promise<SpanCost> {
 	const planned = await plan(keeper, archive, ledgers, from, to, rawListed);
-	return 'state' in planned ? { files: 0, bytes: 0, unpackedDays: [], siteFrom: 'siteFrom' in planned ? planned.siteFrom : null, through: {} } : planned.cost;
+	return 'state' in planned ? { files: 0, bytes: 0, unpackedDays: [], cut: 'cut' in planned ? planned.cut : [], through: {} } : planned.cost;
 }
 
 /** What a plan answers before any file is held: `quiet` when no selected ledger holds a file in the
@@ -542,7 +556,7 @@ export async function readAskCost(
  *  columns from. `null` when there are files to read. */
 function answeredUnheld(planned: Plan, started: number): AskResult | null {
 	if (planned.ledgers.every((one) => one.files.length === 0)) {
-		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, siteFrom: planned.cost.siteFrom, unanswered: planned.unanswered, gaps: gapsOf(planned.ledgers) };
+		return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, cut: planned.cost.cut, unanswered: planned.unanswered, gaps: gapsOf(planned.ledgers) };
 	}
 	// An empty view over no file would reach the engine as `read_parquet([])`, which it refuses.
 	const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0);
@@ -630,19 +644,20 @@ async function answerHeld(
 		const columns = await describe(site.engine, sql);
 		const answer = await runRows(site.engine, sql, opts.maxRows, columns);
 		const read = sumCost(held.map((group) => readCost(group.files.map((one) => one.file), group.holding.fetched, started)), started);
-		const named = { siteFrom: planned.cost.siteFrom, unanswered: planned.unanswered, gaps: gapsOf(planned.ledgers) };
+		const named = { cut: planned.cost.cut, unanswered: planned.unanswered, gaps: gapsOf(planned.ledgers) };
 		return answer.rows.length === 0
 			? { state: 'quiet', columns, read, ...named }
-			: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, unpackedDays: planned.cost.unpackedDays, ...named };
+			: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, readFrom: firstDayRead(planned.ledgers, opts.from), unpackedDays: planned.cost.unpackedDays, ...named };
 	} catch (error) {
 		return { state: 'refused', because: { kind: 'engine-error', message: error instanceof Error ? error.message : String(error) } };
 	}
 }
 
 /** One read-only statement over the chosen ledgers and days. Days before the first day a tier
- *  names are cut from the window, and `siteFrom` names that day; `archive` is read only for days
- *  the site copy may have dropped. A ledger the archive cannot give those days for is read from
- *  the site's days alone, and `unanswered` names it with the day its answer starts on. */
+ *  names are cut from the window, and `cut` names each such ledger with that day; `archive` is read
+ *  only for days the site copy may have dropped. A ledger the archive cannot give those days for is
+ *  read from the site's days alone, and `unanswered` names it with the day its answer starts on. An
+ *  answer with rows names in `readFrom` the first day it read. */
 export async function readAsk(
 	keeper: PageKeeper,
 	archive: ArchiveTier | null,

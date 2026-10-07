@@ -137,9 +137,9 @@
 	     about the instrument, at body size, in the route it governs. A day the
 	     scrape never ran and a day the machine did nothing draw the same gap,
 	     and only a sentence can tell them apart. -->
-	{#if view.recording.off}
+	{#if view.measurementOff}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-			{view.recording.off}
+			{view.measurementOff}
 		</p>
 	{/if}
 	{#if view.recording.sampled}

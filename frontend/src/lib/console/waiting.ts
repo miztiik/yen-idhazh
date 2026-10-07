@@ -231,12 +231,6 @@ export function explorerUnreachableSentence(ledger: string | null, day: string |
 	return `No file on this site holds ${ledger ?? 'the ledger'} for ${day ?? 'that day'}.`;
 }
 
-/** The sentence an answer prints when the window began before a ledger's first day on this site
- *  and nothing failed: the ledger began then, or the page reads the site alone. */
-export function explorerSiteFromSentence(day: string): string {
-	return `Days before ${shortDate(day)} are not on this site.`;
-}
-
 /** The note an answer prints when the repository, the committed `state/` the archive address points
  *  at, could not give it a ledger's older days: one sentence a ledger, each naming the ledger's
  *  first day on this site, where its answer starts, then one retry. Each sentence stays true
