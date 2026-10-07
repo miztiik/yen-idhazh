@@ -16,9 +16,10 @@ rebuild left them.
 `first_ledger_year` to the newest year old enough to pack, and none when the
 declaration packs no year. For the monthly index, each month from the keep line
 of a monthly window whose deletes are live to the newest month old enough to
-close. A window that keeps every month, or whose deletes only report, keeps
-months older than any line, so its months start at the January after the
-newest yearly entry, or at January of `first_ledger_year`. For the daily index,
+close. A window that keeps every month, or whose deletes only report, or a task
+that is a dry run, keeps months older than any line, so its months start at the
+January after the newest yearly entry, or at January of `first_ledger_year`.
+For the daily index,
 each day from the month after the monthly mark to the newest due day; with no
 monthly mark, from the month a first day run looks back to, or the first month
 of an operator range when that is earlier. No period is from before
@@ -136,10 +137,14 @@ def pick_years(
 def pick_months(
     tree: CompactTree, policy: CompactionPolicy, *, now: datetime, first_ledger_year: str
 ) -> list[str]:
-    """The months whose own files an absent monthly index is rebuilt from, oldest first."""
+    """The months whose own files an absent monthly index is rebuilt from, oldest first.
+
+    A task that is a dry run deletes nothing, as a window whose deletes only
+    report does, so it is searched for every month it keeps.
+    """
     keep_line = (
         None
-        if policy.month_deletes_dry_run
+        if policy.month_deletes_dry_run or policy.dry_run
         else first_kept_month(
             now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
         )

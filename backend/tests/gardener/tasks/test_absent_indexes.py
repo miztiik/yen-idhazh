@@ -121,12 +121,19 @@ def test_a_declaration_that_packs_no_year_looks_for_no_year_file() -> None:
 @pytest.mark.parametrize(
     ("changed", "yearly", "first"),
     [
-        ({}, (), "2026-10"),
-        ({"month_deletes_dry_run": True}, (), "2026-01"),
-        (PACKS_YEARS, ("2026",), "2027-01"),
-        (PACKS_YEARS, (), "2026-01"),
+        ({"dry_run": False}, (), "2026-10"),
+        ({"dry_run": False, "month_deletes_dry_run": True}, (), "2026-01"),
+        ({"dry_run": True}, (), "2026-01"),
+        ({**PACKS_YEARS, "dry_run": False}, ("2026",), "2027-01"),
+        ({**PACKS_YEARS, "dry_run": False}, (), "2026-01"),
     ],
-    ids=["a-live-window", "a-window-that-only-reports", "kept-for-ever-after-a-year", "kept-for-ever"],
+    ids=[
+        "a-live-window",
+        "a-window-that-only-reports",
+        "a-whole-dry-run",
+        "kept-for-ever-after-a-year",
+        "kept-for-ever",
+    ],
 )
 def test_months_run_to_the_newest_that_may_close_from_where_a_kept_month_can_be(
     changed: dict[str, object], yearly: tuple[str, ...], first: str
@@ -134,9 +141,9 @@ def test_months_run_to_the_newest_that_may_close_from_where_a_kept_month_can_be(
     """On 16 December 2027 the newest month old enough to close is October 2027.
 
     A 13-month window whose deletes are live keeps October 2026 on. One that
-    only reports keeps every month, as a window kept for ever does, so the
-    months start at the January after the newest packed year, or at the first
-    ledger year's.
+    only reports keeps every month, as a window kept for ever does, and so does
+    a task that is a dry run, which deletes nothing, so the months start at the
+    January after the newest packed year, or at the first ledger year's.
     """
     months = _absent_indexes.pick_months(
         indexed(yearly=yearly),
