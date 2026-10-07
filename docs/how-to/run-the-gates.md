@@ -518,6 +518,7 @@ npm run check
 npm run build
 npm run bundle-gate
 python -m idhazh site-weight --site-tree build
+python -m idhazh published-columns --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: it compiles
@@ -567,6 +568,15 @@ by that rate at `run.safety_ceiling_per_run` items a day and prints the answer i
 published days, to the alarm point and to the cap. **The size on the line above
 is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
+
+`published-columns` runs on the same built tree, immediately after `site-weight`.
+It reads only the parquet footers under the staged `state/` copy and checks that
+each published ledger file carries the columns its row contract declares. An
+older file that lacks a newer column is reported as history and still passes; a
+current-stamped file with different columns, a shared column with a different
+type, a newer file, or a published ledger without a door contract fails the
+build. A run that reads no parquet file for any published ledger with a door
+contract also fails, because the tree was probably not the built site.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it holds every route named in `config/idhazh.json` under the gzip guardrail

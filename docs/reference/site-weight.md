@@ -1,6 +1,6 @@
 # What a reader downloads
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-07
 
 The published site's size, the bytes a browser receives, and the rules for
 measuring both. [pipeline-cost.md](pipeline-cost.md) covers production compute.
@@ -33,6 +33,10 @@ build before reporting its size or remaining capacity. Use the commands in
 - **Deployed size:** raw bytes in the directory uploaded to Pages,
   `frontend/build/`. Use the `site-weight` command with an explicit `--site-tree`.
   Neither the source checkout nor the committed digest payloads are this tree.
+- **Published ledger columns:** parquet footer columns in the same built tree.
+  Use `published-columns` with the same explicit `--site-tree`. It reads only
+  the staged `state/` copy, whose published-ledger span is capped to the widest
+  console window, so the check does not grow with repository history.
 - **Transfer size:** compressed bytes of the document and fetched assets needed
   for the interaction being measured. `bundle-gate` checks the configured HTML
   and payload bounds; an HTML-only reading misses later downloads.

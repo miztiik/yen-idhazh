@@ -166,7 +166,7 @@ def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
     return knobs.compression_raw if tier is Tier.RAW else knobs.compression_compact
 
 
-def _columns(model: type[Contract]) -> tuple[Column, ...]:
+def file_columns(model: type[Contract]) -> tuple[Column, ...]:
     """The contract's own columns, then every identity column it does not declare itself."""
     own = arrow_schema.columns_of(model)
     return own + tuple(
@@ -269,7 +269,7 @@ def _rendered(
         from idhazh.ledger import parquet
 
         return name, parquet.render(
-            _columns(model), stored, envelope=envelope, compression=compression
+            file_columns(model), stored, envelope=envelope, compression=compression
         )
     return name, json_lines.render(stored, envelope=envelope)
 
@@ -526,7 +526,7 @@ def render_grouped_period[C: Contract](
         from idhazh.ledger import parquet
 
         data = parquet.render_groups(
-            _columns(model), checked(), envelope=envelope, compression=compression
+            file_columns(model), checked(), envelope=envelope, compression=compression
         )
     else:
         whole = [cells for stored in checked() for cells in stored]
@@ -604,7 +604,7 @@ def render_renamed[C: Contract](
             f"{where}: rows written under {model.__name__} {envelope.row_schema_version}, and "
             f"this build reads {model.schema_version()}. Rename it with a build at least as new"
         )
-    known = {column.name: column for column in _columns(model)}
+    known = {column.name: column for column in file_columns(model)}
     cells = [{**row, "ledger": ledger.value} for row in stored]
     held = list(cells[0]) if cells else list(known)
     strangers = sorted(set(held) - set(known))

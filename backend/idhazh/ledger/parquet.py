@@ -90,6 +90,11 @@ def _schema(columns: Sequence[Column], metadata: Mapping[bytes, bytes] | None) -
     )
 
 
+def schema_of(columns: Sequence[Column]) -> Any:
+    """The arrow schema these columns make, without file metadata."""
+    return _schema(columns, None)
+
+
 def _codec(compression: Compression) -> str | None:
     return None if compression is Compression.NONE else compression.value
 
@@ -157,3 +162,9 @@ def read_footer(path: Path) -> tuple[dict[bytes, bytes], int]:
     """The envelope and how many rows the file holds, both read from its footer, not a row."""
     footer = pyarrow.parquet.read_metadata(path)
     return _envelope_of(footer.metadata), int(footer.num_rows)
+
+
+def read_footer_schema(path: Path) -> tuple[dict[bytes, bytes], Any]:
+    """The envelope and arrow schema read from a parquet footer, with no row read."""
+    footer = pyarrow.parquet.read_metadata(path)
+    return _envelope_of(footer.metadata), footer.schema.to_arrow_schema()
