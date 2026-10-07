@@ -55,9 +55,8 @@
 			{#if item.icon === 'shape-ranked'}<Icon id="shape-ranked" />{/if}
 			{#if item.icon === 'shape-scatter'}<Icon id="shape-scatter" />{/if}
 			{#if item.icon === 'shape-distribution'}<Icon id="shape-distribution" />{/if}
-			<span class="choice-word" aria-hidden="true">
-				<span class="choice-reserve">{item.shown}</span>
-				<span class="choice-shown">{item.shown}</span>
+			<span class="choice-word" data-shown={item.shown}>
+				<span class="choice-shown" aria-hidden="true">{item.shown}</span>
 			</span>
 			<span class="sr-only">{item.spoken}</span>
 		</label>
@@ -127,11 +126,13 @@
 		white-space: nowrap;
 	}
 
+	.choice-word::before,
 	.choice-word > span {
 		grid-area: 1 / 1;
 	}
 
-	.choice-reserve {
+	.choice-word::before {
+		content: attr(data-shown);
 		visibility: hidden;
 		font-weight: 600;
 	}
