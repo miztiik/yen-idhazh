@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -835,7 +835,7 @@ Run this from `frontend/` to print the number this checkout will use, which is
 the same derivation the config runs:
 
 ```powershell
-node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
+node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd()).digest().readUInt32BE(0)%10000)"
 ```
 
 Check these conditions before trusting browser evidence.
@@ -884,7 +884,9 @@ specs with `npm run test:changed -- --spec <name>`, which builds the canary
 again from the edited file, then set `DATE` back. A test that turns red reads
 what the canary holds. The move is a measurement and is never committed.
 `test:changed` stops a browser run at its first failure, so to count every red
-test, run Playwright on the specs directly against that build.
+test, run Playwright on the specs directly against that build. Setting `DATE`
+back needs no clean-up by hand: the canary day build deletes every folder it
+writes before it writes, so the next build holds nothing from the moved day.
 
 ## A chart has no plot until somebody scrolls to it
 
