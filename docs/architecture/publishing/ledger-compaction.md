@@ -371,6 +371,13 @@ If another writer changes an output path, the stale pass lands nothing; run
 the named pass again on current main. A distinct raw file that arrives after
 the pass read its inputs survives and needs a subsequent packing pass.
 
+Guarded publication preserves the checkout's existing history depth when it
+fetches main. Forcing a new depth-one boundary would hide the ancestors a
+local privacy hook must check before a push. An initially shallow workflow
+checkout stays shallow and fetches only commits added after its existing
+boundary, not the full history. The two real Git fixtures in
+`backend/tests/gardener/test_publish.py` check both cases.
+
 **A re-open that cannot finish keeps every file, and the pass stops at the
 month.** A `packed` entry whose month file is not there, logged as
 `fault=file-missing`, and a month file that cannot be read are both refused:
