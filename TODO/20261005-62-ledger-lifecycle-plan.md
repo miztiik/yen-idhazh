@@ -77,7 +77,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | PENDING | - | - | - |
 | L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | PENDING | - | - | - |
-| L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | PENDING | - | - | - |
+| L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | - | Plan 62 row l24 |
 | L25 | Hardware's platform-mix panel says the machine record is not packed yet | L7, L17 | G | PENDING | - | - | - |
 
 ## 2. Shared declarations
