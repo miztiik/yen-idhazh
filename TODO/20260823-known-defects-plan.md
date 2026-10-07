@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-07
 
-**Thirty-three defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-four defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -40,7 +40,10 @@ holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
 explorer fetches each chosen ledger's three indexes twice. Defects 61 and 62
 were filed the same day from plan 62's rows L7 and L20: three backend command
 lines stamp log records in local time, and in a worktree with no `.venv` the
-test launcher hands its inner run a Python it then refuses.
+test launcher hands its inner run a Python it then refuses. Defect 63 was
+filed the same day by plan 62's text update after row L7: the plan status
+utility's docstring shows a usage that does not work and a no-install claim
+that is not true.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -109,8 +112,38 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
-| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - two command lines need their own fix; plan 60 carries the gardener's** |
+| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
+| 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
+
+## 63 - The plan status utility does not do what its docstring says (OPEN)
+
+**`backend/utilities/plan_status.py`'s docstring does not match the command it
+describes.** Its own usage line reads `python backend/utilities/plan_status.py
+--plan 23    # one plan`, but `--plan` is `action="append", required=True,
+help="Named plan path. Repeatable."`: it takes a path, such as
+`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`, not a bare plan
+number, so the docstring's own example fails before it reads a line. The same
+docstring says the utility "imports nothing from idhazh and reads no
+configuration, so it runs from a fresh clone with any supported Python and no
+install," but `read_plans()` does `from utilities.named_inputs import
+named_files`, an import that only resolves once the project is installed; run
+that same example with a Python that has not installed the project, and the
+command stops with `ModuleNotFoundError: No module named 'utilities'`. Plan
+62's text update confirmed both after row L7, on 2026-10-07.
+
+**Doing nothing costs a worker who copies the docstring's own example into a
+terminal: the bare number is refused, and on a fresh clone with no install the
+same line fails at its first import, though the docstring promises neither
+failure.**
+
+**The next move is a worker's: correct the docstring's example to a real plan
+path, and either make the no-install claim true by moving the import inside
+the project, or drop the claim and say what install the command needs.**
+Level 1 - a docstring and, if the owner keeps the no-install claim, one
+import; a wrong version is obvious on the next run.
+
+Found by plan 62's text update after row L7, and filed on 2026-10-07.
 
 ## 62 - In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses (OPEN)
 
@@ -157,12 +190,16 @@ two hours on the machine where row L7 saw it.** A GitHub runner's local time is
 UTC, so a workflow's log is right, and the fault shows only on a machine set to
 another zone, such as a developer's.
 
-**The next move is a worker's.** Plan 60's row "Every gardener log line is one
-JSON event" rewrites the gardener's log lines, and its `settings_or_none`
-installs the handler once, so the gardener command line's stamp is that row's
-to set. The other two need a fix of their own: the records they log carry a
-UTC time and say so, with a test that reads one. Level 1 - the time printed on
-each log line, and a wrong version shows on the first line.
+**The gardener's part is fixed by plan 60's row "Every gardener log line is one
+JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
+install one handler through `settings_or_none`, and each line it writes carries
+`at`, the record's own instant in UTC as ISO-8601 with `Z`.
+`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
+in the test process and in a fresh one. The other two command lines,
+`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
+local time and need a fix of their own: the records they log carry a UTC time
+and say so, with a test that reads one. Level 1 - the time printed on each log
+line, and a wrong version shows on the first line.
 
 Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
 

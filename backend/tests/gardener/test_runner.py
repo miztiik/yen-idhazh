@@ -13,20 +13,28 @@ written out below, in UTC.
 
 from __future__ import annotations
 
+import json
+import logging
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Final
 
 import pytest
+from conftest import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
-from idhazh.gardener import runner
+from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
+from idhazh.contracts.gardener_fault import GardenerFault
+from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.gardener import event_log, report, runner
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
+from ._events import events, the_event
 from ._garden import (
     GARDENER_FIXTURES,
     a_config,
@@ -38,6 +46,7 @@ from ._garden import (
     write,
 )
 from ._garden import task_package as a_package
+from .tasks.test_compaction import a_pass, filed
 
 WAKE = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 RUN_ID = "2026-09-27-18012345678"
@@ -46,7 +55,7 @@ AGED, FRESH = "2026/09/19/2026-09-19.txt", "2026/09/26/2026-09-26.txt"
 
 DECLARATIONS = {
     "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
-    "breaks": ("broken.json", "old-days.json"),
+    "breaks": ("broken.json", "defect.json", "old-days.json"),
     "wander": ("wanderer.json",),
     "report": ("astray.json", "late.json", "reporter.json"),
 }
@@ -165,20 +174,76 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
-def test_a_task_that_fails_still_has_a_row_and_its_sibling_still_runs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_task_whose_service_is_down_is_deferred_and_the_shard_stays_green(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """THE ORACLE for an outage at the shard: its only non-green task is deferred, so it exits 0.
+
+    The listing service did not answer, which is a cause outside the code: the
+    row says `deferred` and why, the sibling still runs and lands, and nothing
+    asks a person for work. Its event is a warning, never an error.
+    """
     files = {f"state/old-days/{AGED}": "aged\n", "state/broken/.keep": ""}
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "breaks", files)
 
-    outcome, _ = ran(("broken", "old-days"), settings, checkout, "garden_tasks_breaks", monkeypatch)
+    with caplog.at_level("INFO", logger=event_log.__name__):
+        outcome, said = ran(
+            ("broken", "old-days"), settings, checkout, "garden_tasks_breaks", monkeypatch
+        )
 
-    assert outcome.exit_code == EXIT_TASK_FAILED
+    assert outcome.exit_code == EXIT_OK, said
     rows = rows_of(outcome.record)
-    assert rows["broken"].stopped_because is StopReason.FAILED
+    assert (rows["broken"].stopped_because, rows["broken"].fault) == (
+        StopReason.DEFERRED,
+        GardenerFault.API_UNAVAILABLE,
+    )
     assert (rows["broken"].deleted, rows["broken"].resume_from) == (0, None)
     assert rows["old-days"].stopped_because is StopReason.EXHAUSTED
     assert on_origin(origin, f"state/old-days/{AGED}") is None, "the sibling did not land"
+    assert finished_levels(caplog) == {
+        "broken": (TaskOutcome.DEFERRED, logging.WARNING),
+        "old-days": (TaskOutcome.DONE, logging.INFO),
+    }
+
+
+def test_a_task_whose_code_is_wrong_fails_and_its_sibling_still_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A code defect is the one stop that turns the shard red, and it still lands its record.
+
+    Its event is an error naming the exception's type and never what it said.
+    """
+    files = {f"state/old-days/{AGED}": "aged\n", "state/defect/.keep": ""}
+    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "breaks", files)
+
+    with caplog.at_level("INFO", logger=event_log.__name__):
+        outcome, _ = ran(
+            ("defect", "old-days"), settings, checkout, "garden_tasks_breaks", monkeypatch
+        )
+
+    assert outcome.exit_code == EXIT_TASK_FAILED
+    rows = rows_of(outcome.record)
+    assert (rows["defect"].stopped_because, rows["defect"].fault) == (
+        StopReason.FAILED,
+        GardenerFault.RAISED,
+    )
+    assert (rows["defect"].deleted, rows["defect"].resume_from) == (0, None)
+    assert rows["old-days"].stopped_because is StopReason.EXHAUSTED
+    assert on_origin(origin, f"state/old-days/{AGED}") is None, "the sibling did not land"
+    assert finished_levels(caplog)["defect"] == (TaskOutcome.FAILED, logging.ERROR)
+    (defect,) = [held for held in events(caplog.records, TaskFinished) if held.task == "defect"]
+    assert (defect.error, defect.next) == ("KeyError", report.WHY[GardenerFault.RAISED])
+    assert defect.where is not None and defect.where.startswith("idhazh.gardener.runner:")
+    assert "created_at" not in defect.model_dump_json(), "the exception's text reached a line"
+
+
+def finished_levels(caplog: pytest.LogCaptureFixture) -> dict[str, tuple[TaskOutcome, int]]:
+    """How each task ended, and the level its finished event was logged at."""
+    return {
+        held.task: (held.outcome, record.levelno)
+        for record in caplog.records
+        if isinstance(held := event_log.payload(record), TaskFinished)
+    }
 
 
 def test_a_task_that_reaches_outside_what_it_owns_stops_the_shard_before_anything_stages(
@@ -278,13 +343,13 @@ def test_a_folder_the_commit_does_not_hold_yet_is_walked_as_nothing(
     files = {key: text for key, text in RUNNER_FILES.items() if "rehearsal" not in key}
     _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", files)
 
-    with caplog.at_level("INFO", logger=runner.__name__):
+    with caplog.at_level("INFO", logger=event_log.__name__):
         outcome, _ = ran(("rehearsal",), settings, checkout, "garden_tasks_ok", monkeypatch)
 
     assert outcome.exit_code == EXIT_OK
     row = rows_of(outcome.record)["rehearsal"]
     assert (row.stopped_because, row.candidates_seen) == (StopReason.EXHAUSTED, 0)
-    assert "which the commit does not hold yet" in caplog.text
+    assert the_event(caplog.records, TaskPlanned).absent == ["state/rehearsal"]
 
 
 def test_without_the_commit_a_missing_folder_is_skipped_rather_than_failed(
@@ -327,7 +392,7 @@ def test_a_named_trial_root_runs_without_discovering_state_children(
 
 
 def test_a_named_trial_root_selects_its_period_and_ignores_unconfigured_children(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Only a configured trial root and a named date are in the pass's listing."""
     stray = "state/pipeline-tests-production-settings/seen/2026/06/25/2026-06-25.txt"
@@ -336,11 +401,12 @@ def test_a_named_trial_root_selects_its_period_and_ignores_unconfigured_children
     )
     write(checkout / "state" / "never-committed" / "2026-05-01.txt", "aged\n")
 
-    outcome, said = ran(("trials",), settings, checkout, "garden_tasks_ok", monkeypatch)
+    with caplog.at_level("INFO", logger=event_log.__name__):
+        outcome, _ = ran(("trials",), settings, checkout, "garden_tasks_ok", monkeypatch)
 
     assert outcome.exit_code == EXIT_OK
     assert rows_of(outcome.record)["trials"].selected == 1
-    assert f"  {stray}" in said
+    assert the_event(caplog.records, TaskFinished).taken == [stray]
 
 
 def test_modules_that_do_not_match_the_declarations_stop_the_shard(
@@ -413,3 +479,121 @@ def test_trials_owns_only_its_configured_roots(tmp_path: Path) -> None:
         assert not sweeps(f"{ledger.STATE_DIRNAME}/{claimed}/2026/09/27/x.csv"), claimed
     assert not sweeps(f"{ledger.STATE_DIRNAME}/a-trial-run/2026-09-01.json")
     assert not sweeps(ledger.STATE_DIRNAME), "the task does not own the state root"
+
+
+# --- What a task says before it runs and when it ends ---------------------------------
+
+#: The one compaction the outcome cases run, and the wakes they run at: 2026-09-21
+#: is the newest day the first may pack, and 2026-10-22 the newest the second may.
+PACKING: Final = "compact-visual-prunes"
+FIRST_WAKE: Final = datetime(2026, 9, 23, 0, 40, tzinfo=UTC)
+LATER_WAKE: Final = datetime(2026, 10, 24, 0, 40, tzinfo=UTC)
+
+#: The level each ending is logged at: a defect is an error, a deferred task a warning.
+LEVEL: Final = {TaskOutcome.FAILED: logging.ERROR, TaskOutcome.DEFERRED: logging.WARNING}
+
+
+def a_compaction(root: Path, **changed: Any) -> GardenerSettings:
+    """The committed visual-prunes compaction, live unless `changed` says otherwise."""
+    declared = root / "declared" / f"{PACKING}.json"
+    declared.parent.mkdir(parents=True)
+    committed = json.loads(read_text(CONFIG_DIR / "gardener" / f"{PACKING}.json"))
+    declared.write_text(json.dumps(committed | {"dry_run": False} | changed), encoding="ascii")
+    return config.load_gardener(a_config(root, declared))
+
+
+def compacted(
+    root: Path, settings: GardenerSettings, wake: datetime, named: tuple[str, str] | None
+) -> Outcome:
+    """One run of the compaction alone, in the checkout, at `wake`, over a range a person named."""
+    return runner.run(
+        (PACKING,),
+        settings=settings,
+        repo_root=root,
+        run_id=RUN_ID,
+        attempt=1,
+        shard=0,
+        git_sha="a" * 40,
+        committed_folders=None,
+        cone_bytes=None,
+        listing=None,
+        period_range=named,
+        clock=lambda: wake,
+    )
+
+
+def a_ledger_ending(
+    word: TaskOutcome, root: Path
+) -> tuple[GardenerSettings, datetime, tuple[str, str] | None]:
+    """A ledger under `root` whose next pass ends on `word`, the wake it runs at, and its range.
+
+    Each starts from one raw day of the cleanup report, filed through the ledger
+    door, except the ledger with nothing in it.
+    """
+    if word is not TaskOutcome.EMPTY:
+        filed(root, a_pass("2026-09-22" if word is TaskOutcome.NOT_DUE else "2026-09-20"))
+    match word:
+        case TaskOutcome.FAILED:
+            # A folder inside a raw day: there is no file to move aside, so the
+            # day is refused, raised, for a person.
+            write(root / "state/raw/visual-prunes/2026/09/20/sub/stray.txt", "stray\n")
+            return a_compaction(root), FIRST_WAKE, None
+        case TaskOutcome.DEFERRED:
+            settings = a_compaction(root)
+            compacted(root, settings, FIRST_WAKE, None)
+            return settings, LATER_WAKE, ("2026-10", "2026-10")
+        case TaskOutcome.DRY_RUN:
+            return a_compaction(root, dry_run=True), FIRST_WAKE, None
+        case TaskOutcome.CEILING:
+            return a_compaction(root, max_periods_per_run=1), FIRST_WAKE, None
+        case TaskOutcome.OUTSIDE_RANGE:
+            return a_compaction(root), FIRST_WAKE, ("2026-08", "2026-08")
+        case _:
+            return a_compaction(root), FIRST_WAKE, None
+
+
+@pytest.mark.parametrize("word", list(TaskOutcome), ids=str)
+def test_each_way_a_task_can_end_is_said_once_after_what_it_was_planned_with(
+    word: TaskOutcome, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """THE ORACLE for the events: one ledger for each word a task can end on, run by the runner.
+
+    The task says what it runs with before it runs, and how it ended after, in
+    that order and once each; both are read off the records, never the text.
+    How it ended agrees with the row the shard writes, and the level it is
+    logged at is an error only for a code defect.
+    """
+    root = tmp_path / "checkout"
+    settings, wake, named = a_ledger_ending(word, root)
+    caplog.clear()
+
+    with caplog.at_level(logging.INFO, logger=event_log.__name__):
+        outcome = compacted(root, settings, wake, named)
+
+    said = [event_log.payload(record) for record in caplog.records]
+    kinds = [type(held) for held in said if isinstance(held, (TaskPlanned, TaskFinished))]
+    assert kinds == [TaskPlanned, TaskFinished]
+    planned = the_event(caplog.records, TaskPlanned)
+    assert (planned.task, planned.kind, planned.run_id, planned.today) == (
+        PACKING,
+        TaskKind.COMPACTION,
+        RUN_ID,
+        wake.date().isoformat(),
+    )
+    assert planned.operator_range == named
+    assert planned.declared["dry_run"] is (word is TaskOutcome.DRY_RUN)
+    assert {"kind", "owns", "reads", "prune_refusal"}.isdisjoint(planned.declared)
+    (record,) = [held for held in caplog.records if isinstance(event_log.payload(held), TaskFinished)]
+    ended = the_event(caplog.records, TaskFinished)
+    assert (ended.task, ended.outcome) == (PACKING, word)
+    assert record.levelno == LEVEL.get(word, logging.INFO)
+    row = rows_of(outcome.record)[PACKING]
+    assert (ended.stopped_because, ended.fault, ended.resume_from) == (
+        row.stopped_because,
+        row.fault,
+        row.resume_from,
+    )
+    assert ended.periods is not None, "a compaction says what it did, period by period"
+    assert outcome.exit_code == (EXIT_TASK_FAILED if word is TaskOutcome.FAILED else EXIT_OK)
+    if word is TaskOutcome.EMPTY:
+        assert planned.absent == ["state/raw/visual-prunes", "state/compact/visual-prunes"]

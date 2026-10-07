@@ -1,1 +1,1 @@
-"""A fixture task package in which one task fails and its sibling does not."""
+"""A fixture task package: one task's service is down, one task's code is wrong, one is neither."""

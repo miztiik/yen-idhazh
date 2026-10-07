@@ -71,9 +71,10 @@ state would be mostly undesigned.
 
 Six states have fixed wording, held in
 [../../frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts):
-measurement off, sampled below 1.0, counters but no scores, scores but no
-counters, recording started mid-window, and a day that published and lost what
-it measured. Only the dates and counts inside them are computed, and every one
+measurement off, sampled below 1.0, days the machine was timed and nothing
+scored the summaries, days the server's own counters were not written down,
+recording started mid-window, and a day that published and lost what it
+measured. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
@@ -81,9 +82,16 @@ day. On Hardware and Summaries they sit after the record notes and before the
 first section, in one order - off, sampled, started, then the days one
 instrument covered alone - so a page whose sections have nothing to draw still
 says what the recording was doing; Jony chose the place on 2026-10-07. Susan
-chose the words of the first five on 2026-08-30. Reader and Jony chose new words
-for the measurement-off line on 2026-10-07, and Reader for the started line the
-same day.
+chose the words of the first five on 2026-08-30. On 2026-10-07 Reader and Jony
+chose new words for the measurement-off line and for the two lines about days
+one instrument covered alone, and Reader for the started line.
+
+**A panel keeps its own line for a nothing the route's note also states.** It
+says it in the note's words and never points at the note. On Hardware the
+platform-mix panel says `The machine record is not packed yet.` when that record
+has no packed day, which the route's note says too: the note sits several panels
+above, and is not always on the page when the box is empty. Jony chose to keep
+the panel's own line, and Reader chose its words, on 2026-10-07.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
@@ -115,6 +123,21 @@ did - the machine identity in the machine record - is named on its own first
 day. Once a record's first month is packed into one file, its indexes know the
 month and not the day, so when the widest window starts inside that month, after
 its 1st, no window prints a started line: no line rather than a false date.
+
+**The line about days one instrument covered alone names only days the other
+could have answered, and each day once.** On both routes the article record is
+the instrument that answered: on Summaries the scorer's figures are missing, on
+Hardware the server's own counters. The line is worked out once for each window
+the control offers. A day the missing record holds or recorded lost is a day it
+answered, and a lost day has a record note of its own. A day after that record's
+newest packed day is not packed yet, and a record that did not read answers
+nothing, so neither gets the line. The started line speaks for the days before
+the instrument began, and while measurement is off the off line speaks for the
+days after the newest one recorded, so this line names only the gaps between.
+It names the days and never counts them - `There are no quality figures for
+1 Oct and 3 Oct 2026.` - and where every day on screen is one of them it uses
+the window's own words, `these 7 days` or `this one day`. Hardware's line claims
+no score: it says only where its speed figures came from.
 
 ## A record that had not begun, a quiet day, and a record that was destroyed
 
@@ -210,6 +233,31 @@ no full stop.**
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 
+## A window's days take one of two names, and one day never needs a second
+
+Every windowed sentence takes its day words from one helper,
+`frontend/src/lib/console/span-words.ts`, so the 1-day window never prints
+`1 days` and one edit moves every sentence. Reader chose the words on
+2026-10-07.
+
+- **The days on screen:** `these 7 days`, and `this one day` at one day. A
+ sentence or a row label that opens on them is capitalised: `These 7 days`,
+ `This one day`.
+- **A bare count:** `7 days`, and `1 day` at one day - the days control's own
+ words. A count over the window takes it and drops `these`: `on 5 of 7 days`,
+ `on 1 of 1 day`.
+- **No `the last 7 days`.** Every console window ends on the newest published
+ day, which is not always today, so `the last` claims more than the page knows.
+- **At one day, a sentence must not need a second day.** No range - one day is
+ one date, never `2026-10-06 to 2026-10-06`. No order across days, no waiting for
+ a later day, and no worst, middle, median, quietest or loudest day. Such a
+ sentence is written whole for one day, in the same tense: `No day in these 7
+ days published a summary` is `This one day did not publish a summary`, and
+ `one tile a day, over these 7 days` is `one tile for this one day`.
+
+A sentence that counts something other than the window's days - runs, a rule's
+own span, the days a record read - keeps its own count.
+
 ## A section keeps the sentence that decides and loses the sentence that narrates
 
 Every panel writes its own heading, intro, readout and empty state, and many
@@ -231,7 +279,7 @@ new section.
 
 - **One name for one span.** Four phrasings for one window, and the same
  instruction written two ways, is what a page reads like when nobody has done
- this pass.
+ this pass. The two names a window's days may take are in the section above.
 - **One name for one control.** A name taken from a component outlives the
  component: `Failure rate against volume` went on naming a component that no
  longer existed.
@@ -245,6 +293,25 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+**Two names for a window's days, not one.** One name everywhere was the fewest
+words to keep, and it breaks a count: `on 1 of this one day`. The bare count is
+the days control's own words, so the second name adds no new kind of words to the
+page. A name per sentence was what the console had before, and at the 1-day
+window it printed `these 1 days`, `over the last 1 days` and `the 1 days ending
+there` from templates of their own on every route. Reader ruled the words on
+2026-10-07.
+
+**A line about days one instrument covered alone names its days, and Hardware's
+claims no score.** A count was the shorter line, and beside the started line it
+reads as a second set of days: `on 2 of 90 days` under `3 days had a run but no
+quality figures`. A name says where to look. Hardware could learn which days
+were scored from the score record it already reads for its change markers, but
+it draws no quality figure, so the claim would buy one clause at the price of
+that record's read states, its lost days and a second sentence for a day with
+neither. The line says where the speed figures came from, which is what the page
+draws. Reader and Jony chose the words and Fowler ruled the score claim out, on
+2026-10-07.
 
 **One classification of a column's type.** The table, the chart and the colours
 each read type names with lists of their own, and they disagreed about the same

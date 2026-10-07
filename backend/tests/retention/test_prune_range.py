@@ -53,6 +53,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
@@ -487,6 +488,10 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
         the_day_file(DAYS[1]),
         the_day_file(DAYS[2]),
     )
+    assert (stop.value.so_far.stopped_because, stop.value.so_far.fault) == (
+        StopReason.FAILED,
+        GardenerFault.RAISED,
+    ), "a file the system refused is a defect, never an outage"
     assert stop.value.so_far.resume_from == the_day_file(DAYS[3]), (
         "the next pass has to retry the day that failed"
     )
@@ -1164,6 +1169,7 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
         tuple(path for path in first_two if path in planned.rewritten),
     )
     assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, SINCE)
+    assert so_far.fault is GardenerFault.RAISED
     for state in (stopped, whole):
         prune_range(
             state,

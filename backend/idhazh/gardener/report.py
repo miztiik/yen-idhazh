@@ -1,14 +1,15 @@
 """What does one pass say to a person, and what does it write down?
 
 Two readings of the same `one_at_a_time.Pass`, kept together because they have
-to agree. `lines` is what an operator sees; `row` is the `CollectionPruneRow`
-the gardener lands in its record. Split between the core and the CLI, they
-would drift the day somebody added a field to one and not the other.
+to agree. `finished` is the `TaskFinished` event an operator reads in the log;
+`row` is the `CollectionPruneRow` the gardener lands in its record. Split
+between the core and the runner, they would drift the day somebody added a
+field to one and not the other.
 
-**Both say where it stopped, and that is the sentence that matters.** A pass
-that deleted 50 and a pass that cleared the backlog both print 50. Only why it
-stopped tells them apart, so it is on the first line rather than buried under a
-list.
+**Both say why it stopped, and that is the word that matters.** A pass that
+deleted 50 and a pass that cleared the backlog both took 50. Only why it
+stopped tells them apart, so the event leads with how the task ended, in one
+word (`classify`), before the list of what it took.
 
 **The row names the run that wrote it, and the pass cannot.** A pass knows what
 it walked; which run, attempt, job and shard it ran in, which task declared it,
@@ -17,25 +18,175 @@ folders weighed and what it downloaded are the runner's to say, so the runner
 hands them in. The day a walk handled through is the pass's own, and the row
 carries it for the task's next pass to start after.
 
-**A task's fold is said beside its pass, on the same row.** It has a switch of
-its own, so its lines say whether it was live, and a fold that stopped part way
-turns the row's `stopped_because` to `failed` - the task failed, whichever half
-of it did.
+**A task's fold is said beside its pass.** It has a switch of its own, so the
+event says whether it was live, and a fold that stopped part way turns the
+task's stop to the one its fault ends a pass with - the task stopped, whichever
+half of it did.
 
-**A dry run never says a member is gone.** One that found members says nothing
-was deleted, and names the setting that makes the task live: `dry_run` in the
-task's own declaration. The gardener takes no flag for that, so a line that
-named one would send a person looking for a switch that does not exist. A dry
-run that walks from a mark does not stop inside a day, so past its ceiling it
-says where a live pass would stop, and that the rest of the day was counted.
+**What happens next is one fixed sentence, and none says a member is gone.**
+A dry run names the setting that makes a task live: `dry_run` in the task's own
+declaration, because the gardener takes no flag for that. A pass that stopped
+for a fault says why, in the fault's own sentence. No sentence carries a value:
+the event's fields carry those, so a sentence can never disagree with them.
+
+**Why a pass stopped, and what it recovered, are words on the row and
+sentences here.** The row stores one closed word and one note a period or
+member; the sentence a person reads is written in this module and is never
+stored, so the wording can change with no migration.
 """
 
 from __future__ import annotations
 
-from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from collections.abc import Mapping
+from typing import Final
+
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
+from idhazh.contracts.gardener_events import FoldSettled, TaskFinished, TaskOutcome
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
+from idhazh.gardener import event_log
 from idhazh.gardener.closed_day_fold import Folded
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
+
+#: What a person reads for each fault word, beside where the pass stopped.
+WHY: Final[Mapping[GardenerFault, str]] = {
+    GardenerFault.RAISED: "a code defect stopped it, and the log names the error",
+    GardenerFault.API_UNAVAILABLE: "GitHub's API did not answer, so the next wake asks again",
+    GardenerFault.RANGE_STARTS_LATE: (
+        "the range named starts after a period that is ready before it; widen the range to "
+        "include it"
+    ),
+    GardenerFault.NO_MONTH_TO_REOPEN: (
+        "a raw day sits in a month no monthly entry names, so there is no month to re-open; "
+        "its files wait for a person"
+    ),
+    GardenerFault.PACKED_FILE_UNREADABLE: (
+        "a packed file it would settle a re-run or a late file into cannot be read or is not "
+        "there; restore it from git history"
+    ),
+}
+
+#: What a person reads for each recovery note, beside the period or member it names.
+NOTED: Final[Mapping[RecoveryNote, str]] = {
+    RecoveryNote.REPACKED_FROM_RAW: "packed again from its raw files, because no index named it",
+    RecoveryNote.RECORDED_LOST: "recorded lost, because nothing was left to rebuild it from",
+    RecoveryNote.REOPENED_MONTH: "re-opened to settle raw files that landed after it closed",
+    RecoveryNote.INDEX_REBUILT: "its own packed file adopted, because no index named it",
+    RecoveryNote.SET_ASIDE: "a file it could not read moved to the set-aside folder",
+    RecoveryNote.CARRIED_OVER: "its newest raw files left for the next wake",
+    RecoveryNote.NOT_DELETABLE: "GitHub would not delete it, so the pass went on",
+}
+
+#: What happens next, for each way a task can end. A task a fault stopped is
+#: told its fault's own sentence instead (`WHY`).
+NEXT: Final[Mapping[TaskOutcome, str]] = {
+    TaskOutcome.FAILED: "a code defect stopped it, and the next wake tries again",
+    TaskOutcome.DEFERRED: "a cause outside the code stopped it, and the next wake resumes",
+    TaskOutcome.DRY_RUN: (
+        "nothing was changed: it only named what a live pass would do. Set dry_run: false in "
+        "config/gardener/<task>.json to make the task live, or month_deletes_dry_run: false "
+        "to let a compaction drop months"
+    ),
+    TaskOutcome.CEILING: "it stopped at its ceiling, and the next wake goes on from there",
+    TaskOutcome.DONE: "nothing is left, and the next wake takes what reaches its line by then",
+    TaskOutcome.EMPTY: "the ledger holds nothing to work on yet",
+    TaskOutcome.NOT_DUE: "nothing has reached its line yet",
+    TaskOutcome.OUTSIDE_RANGE: (
+        "nothing that may be taken is inside the range named; widen it, or run the task "
+        "without one"
+    ),
+}
+
+
+def ended(outcome: Pass, folded: Folded | None) -> tuple[StopReason, GardenerFault | None]:
+    """How a task ended, and why: its fold's stop when the fold stopped, else its pass's."""
+    if folded is not None and folded.fault is not None:
+        return stop_for(folded.fault), folded.fault
+    return outcome.stopped_because, outcome.fault
+
+
+def classify(outcome: Pass, folded: Folded | None = None) -> TaskOutcome:
+    """The one word for how a task ended: the first of the outcome words that holds.
+
+    A fault first, then work only reported, then the ceiling, then work done.
+    Work was found when the window held a member, the pass wrote or would write
+    a file, or the fold found a closed day or month; it was carried out when a
+    live pass took, wrote or recovered something, or a live fold settled one.
+    A report the task files every pass is not work. Otherwise the pass's own
+    idle word.
+    """
+    stopped, _fault = ended(outcome, folded)
+    if stopped is StopReason.FAILED:
+        return TaskOutcome.FAILED
+    if stopped is StopReason.DEFERRED:
+        return TaskOutcome.DEFERRED
+    folded_any = folded is not None and bool(folded.months or folded.days)
+    found = outcome.selected > 0 or bool(outcome.written) or folded_any
+    carried = (
+        not outcome.dry_run and bool(outcome.taken or outcome.written or outcome.recovered)
+    ) or (folded is not None and folded_any and not folded.dry_run)
+    if found and not carried:
+        return TaskOutcome.DRY_RUN
+    if stopped is StopReason.CEILING:
+        return TaskOutcome.CEILING
+    if found:
+        return TaskOutcome.DONE
+    return outcome.idle_outcome
+
+
+def next_step(word: TaskOutcome, fault: GardenerFault | None) -> str:
+    """What happens next, for a person: the fault's own sentence when one stopped the task."""
+    return NEXT[word] if fault is None else WHY[fault]
+
+
+def finished(
+    outcome: Pass,
+    *,
+    task: str,
+    duration_ms: int,
+    folded: Folded | None,
+    settled: tuple[str, ...],
+    failure: BaseException | None,
+) -> TaskFinished:
+    """The pass as the event that says how its task ended.
+
+    `settled` is every file the fold settled, or would settle, relative to the
+    repository. `failure` is the exception that stopped the task, if one did:
+    the event names its type and its place in this package's code, never its
+    text.
+    """
+    stopped, fault = ended(outcome, folded)
+    word = classify(outcome, folded)
+    error, where = event_log.cause_of(failure)
+    return TaskFinished(
+        task=task,
+        outcome=word,
+        dry_run=outcome.dry_run,
+        seen=outcome.seen,
+        selected=outcome.selected,
+        taken=list(outcome.taken),
+        written=list(outcome.written),
+        bytes_freed=outcome.bytes_freed,
+        stopped_because=stopped,
+        resume_from=outcome.resume_from,
+        handled_through=outcome.handled_through,
+        fault=fault,
+        error=error,
+        where=where,
+        recovered=list(outcome.recovered),
+        next=next_step(word, fault),
+        pages_read=outcome.pages_read,
+        duration_ms=duration_ms,
+        fold=None
+        if folded is None
+        else FoldSettled(
+            dry_run=folded.dry_run,
+            settled=list(settled),
+            replaced=folded.files,
+            fault=folded.fault,
+        ),
+        periods=outcome.periods,
+    )
 
 
 def row(
@@ -50,9 +201,7 @@ def row(
     folded: Folded | None = None,
 ) -> CollectionPruneRow:
     """The pass as the persisted shape, under the name and identity of the run that took it."""
-    stopped = (
-        StopReason.FAILED if folded is not None and folded.failed else outcome.stopped_because
-    )
+    stopped, fault = ended(outcome, folded)
     return CollectionPruneRow(
         version=CollectionPruneRow.schema_version(),
         date=context.today.isoformat(),
@@ -70,6 +219,8 @@ def row(
         deleted=len(outcome.taken),
         bytes_freed=outcome.bytes_freed,
         stopped_because=stopped,
+        fault=fault,
+        recovered=list(outcome.recovered),
         resume_from=outcome.resume_from,
         handled_through=outcome.handled_through,
         duration_ms=duration_ms,
@@ -81,89 +232,3 @@ def row(
         folded_files=None if folded is None else folded.files,
         folded_months=None if folded is None else len(folded.months),
     )
-
-
-def fold_lines(task: str, folded: Folded) -> list[str]:
-    """What a task's fold did, one settled month or day folder per line, and whether it was live."""
-    verb = "would settle" if folded.dry_run else "settled"
-    head = (
-        f"{task} fold: {verb} {len(folded.months)} closed months and {len(folded.days)} closed "
-        f"days, replacing {folded.files} files with one settled.csv each"
-    )
-    months = [
-        f"  {month.tree.value} {month.month}: {len(month.replaced)} files"
-        for month in folded.months
-    ]
-    days = [f"  {day.tree.value} {day.day}: {len(day.replaced)} files" for day in folded.days]
-    said = [head, *months, *days]
-    if folded.failed:
-        said.append(
-            "  the fold stopped part way - the months and days above are settled, and the "
-            "next wake starts again from the oldest still waiting"
-        )
-    elif folded.dry_run and (folded.months or folded.days):
-        said.append("  nothing was written - set the fold's dry_run to false to settle these")
-    return said
-
-
-def lines(outcome: Pass) -> list[str]:
-    """What happened, as the lines a command prints, one member per line.
-
-    The members themselves rather than a count: this is what a person reads
-    before setting a task's `dry_run` to false, and a count says a deletion
-    happened and nothing about what it took.
-    """
-    span = _span(outcome)
-    verb = "would delete" if outcome.dry_run else "deleted"
-    if not outcome.taken:
-        nothing = f"{outcome.collection}: nothing {span}, out of {outcome.seen} members read"
-        return [nothing, *_what_next(outcome)]
-
-    head = (
-        f"{outcome.collection}: {verb} {len(outcome.taken)} members {span}, "
-        f"{outcome.bytes_freed} bytes, out of {outcome.seen} members read"
-    )
-    return [head, *(f"  {member}" for member in outcome.taken), *_what_next(outcome)]
-
-
-def _span(outcome: Pass) -> str:
-    """The window in the words an operator used to ask for it."""
-    if outcome.since is not None and outcome.until is not None:
-        return f"between {outcome.since} and {outcome.until}"
-    if outcome.until is not None:
-        return f"created on or before {outcome.until}"
-    return f"created on or after {outcome.since}"
-
-
-def _what_next(outcome: Pass) -> list[str]:
-    """Why the pass stopped and what the next one does, and on a dry run how to make it real."""
-    said: list[str] = []
-    if outcome.stopped_because is StopReason.CEILING:
-        if outcome.dry_run and outcome.handled_through is not None:
-            said.append(
-                f"  the ceiling of {outcome.ceiling} would stop a live pass at "
-                f"{outcome.resume_from}; the rest of that day was counted, not listed, and "
-                f"the next pass starts after {outcome.handled_through}"
-            )
-        else:
-            said.append(
-                f"  the ceiling of {outcome.ceiling} stopped this pass at {outcome.resume_from} - "
-                "there is more, so run it again"
-            )
-    elif outcome.stopped_because is StopReason.FAILED:
-        if outcome.resume_from is None:
-            where = f"after {len(outcome.taken)} members, before it could name the next one"
-            then = "the next pass starts again from the oldest member the window holds"
-        else:
-            where = f"at {outcome.resume_from}"
-            then = "the next pass retries that one"
-        gone = "" if outcome.dry_run else "the members above are gone, and "
-        said.append(f"  the pass failed {where} - {gone}{then}")
-    else:
-        said.append("  the collection is exhausted: nothing else is inside the window")
-    if outcome.dry_run and outcome.taken:
-        said.append(
-            "  nothing was deleted - a live run would delete the members above; set "
-            "dry_run: false in config/gardener/<task>.json to make the task live"
-        )
-    return said

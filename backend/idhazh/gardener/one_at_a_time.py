@@ -47,6 +47,19 @@ or an order it checks that broke - says so, and the mark stays where it was.
 reads as an oversight; a collection refused with a sentence reads as a decision.
 Somebody who typed a refused word is holding a real question, and the answer
 they need is why the answer is no.
+
+**A pass says its window before it lists a member.** `take` logs one
+`WindowChosen` event once its arguments are checked, so a pass that stops part
+way has already said what it was holding members to. A listing that pages says
+how many pages it read through `Collection.pages_read`, and the pass carries
+the count on its record.
+
+**An error part way is read for what it means, and never relabelled.** Every
+error the pass catches is classified once (`error_cause.classify`): a code
+defect stops it `failed`, an API that did not answer stops it `deferred`, and
+on a delete a member its collection will not let go of is recorded by its id,
+counted against the ceiling, and passed. The pass goes on to the next member,
+and the mark may pass it.
 """
 
 from __future__ import annotations
@@ -57,9 +70,16 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 
-from idhazh.contracts.collection_prune import StopReason
-
-logger = logging.getLogger(__name__)
+from idhazh.contracts.collection_prune import Recovery, StopReason, stop_for
+from idhazh.contracts.gardener_events import (
+    MemberOutOfOrder,
+    PeriodsTaken,
+    TaskOutcome,
+    WindowChosen,
+)
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
+from idhazh.gardener import error_cause, event_log
+from idhazh.gardener.error_cause import ErrorCause
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,9 +163,14 @@ def _always_intact() -> bool:
     return True
 
 
+def _no_pages() -> int | None:
+    """A listing that reads no pages has no count of them."""
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class Collection[Raw]:
-    """One collection, as three callables and a name, and a fourth that may report a gap.
+    """One collection, as three callables and a name, and two more that may report on the listing.
 
     `Raw` is whatever the caller's listing yields - a page of JSON, a `Path`.
     This module never looks inside one: it passes it to the caller's own
@@ -163,6 +188,9 @@ class Collection[Raw]:
     that checks itself - pages counted against each other, an order it relies
     on - turns it false when a check fails, and a walk from a mark then keeps its
     mark. A listing that checks nothing leaves the default, which is always true.
+
+    `pages_read` says how many pages the listing has read so far, for one that
+    reads an API a page at a time, and None for one that has no pages.
     """
 
     name: str
@@ -170,6 +198,7 @@ class Collection[Raw]:
     describe: Callable[[Raw], Member]
     delete: Callable[[Raw], None]
     listing_intact: Callable[[], bool] = _always_intact
+    pages_read: Callable[[], int | None] = _no_pages
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +225,19 @@ class Pass:
     `handled_through` is the newest UTC day through which every member was
     handled, by this pass or the ones before it, on a pass that walked from a
     mark. It is None on every other pass.
+
+    `fault` is why the pass stopped when a fault stopped it: `raised` on a
+    failed pass, every other word on a deferred one, and None on a pass that
+    ran out or met its ceiling. `recovered` is every fault it recorded instead
+    of stopping, in the order it met them: a member its collection would not
+    delete, or a period a compaction rebuilt, moved aside or recorded lost.
+
+    `idle_outcome` is the word for a pass that found nothing to do, which only
+    the pass can choose: nothing has reached its line yet, the ledger holds
+    nothing, or a range a person named holds nothing that may be taken.
+    `pages_read` is how many pages its listing read, or None for a listing with
+    no pages. `periods` is what a compaction did, period by period, and None
+    for every other pass.
     """
 
     collection: str
@@ -213,6 +255,11 @@ class Pass:
     resume_from: str | None
     appended: tuple[str, ...] = ()
     handled_through: str | None = None
+    fault: GardenerFault | None = None
+    recovered: tuple[Recovery, ...] = ()
+    idle_outcome: TaskOutcome = TaskOutcome.NOT_DUE
+    pages_read: int | None = None
+    periods: PeriodsTaken | None = None
 
     @property
     def changed(self) -> bool:
@@ -230,13 +277,15 @@ class Pass:
 
 
 class PruneInterruptedError(Exception):
-    """A pass failed part way. `so_far` says what had already gone.
+    """A pass stopped part way. `so_far` says what it had already taken, and why it stopped.
 
-    Raised rather than returned, because a failed pass is a failure and
+    Raised rather than returned, because a stopped pass is not a clean one and
     swallowing it would report a clean pass over a collection this could not
     touch. Carried rather than bare, because the caller still has to know that
     members 1 to N are gone and which one to retry - an exception with no record
-    would leave an operator unable to answer either.
+    would leave an operator unable to answer either. `so_far` carries the
+    classified cause in `fault`, so a code defect is never read as an outage.
+    A dry run deleted none of the members it named, and its message says so.
 
     A delete is not the only thing that fails. The listing can raise part way
     through a walk and `describe` can raise on one member, and either can happen
@@ -249,9 +298,12 @@ class PruneInterruptedError(Exception):
             if so_far.resume_from is not None
             else "the next pass starts again from the oldest member the window holds"
         )
+        how = "failed" if so_far.stopped_because is StopReason.FAILED else "was deferred"
+        cause = "" if so_far.fault is None else f" ({so_far.fault.value})"
+        kept = "It was a dry run, so none was deleted" if so_far.dry_run else "Those are gone"
         super().__init__(
-            f"{so_far.collection}: the pass failed after {len(so_far.taken)} members. "
-            f"Those are gone; {where}"
+            f"{so_far.collection}: the pass {how}{cause} after {len(so_far.taken)} members. "
+            f"{kept}; {where}"
         )
         self.so_far = so_far
 
@@ -316,7 +368,15 @@ def take[Raw](
     caller with no record of them, and the row it wrote would say nothing was
     deleted. Neither failure has a member to name, so the record's resume point
     is empty and the next pass starts again from the oldest member the window
-    holds.
+    holds. What stopped the pass is classified once (`error_cause`): a code
+    defect ends it `failed`, an API that did not answer ends it `deferred`.
+
+    **A member its collection will not delete is recorded and passed.** The
+    delete's answer says so (`NOT_DELETABLE`): the member's id becomes a
+    `not-deletable` note, it counts against the ceiling as a delete would, and
+    the pass goes on. Its day is handled all the same, so the mark may pass it.
+    Before, one refused member stopped every later pass, and nothing behind it
+    was ever deleted.
 
     **With a `mark`, the listing is a walk of whole days, oldest first.** Every
     member created on or before the mark was handled by an earlier pass, so one
@@ -326,7 +386,8 @@ def take[Raw](
     listing ends. A pass whose mark is already that day reads nothing. A member
     from an earlier day than one before it means the listing is out of order:
     the pass goes on, every member still held to the window, but which days are
-    whole can no longer be said, so the mark stays where the pass started. A
+    whole can no longer be said, so the mark stays where the pass started, and
+    the pass says so once (`MemberOutOfOrder`). A
     listing that reports a gap of its own through `listing_intact` keeps the
     mark there too, whichever way the pass ends.
     """
@@ -338,10 +399,22 @@ def take[Raw](
             raise ValueError(f"a mark takes a YYYY-MM-DD day, not {mark!r}")
         if line is None:
             raise ValueError("a walk from a mark ends at the window's last day, and it has none")
+    event_log.emit(
+        WindowChosen(
+            collection=collection.name,
+            since=window.since,
+            until=window.until,
+            ceiling=ceiling,
+            dry_run=dry_run,
+            mark=mark,
+        )
+    )
 
     seen = 0
     selected = 0
     taken: list[str] = []
+    #: The members the collection would not delete, by id, in the order met.
+    kept: list[str] = []
     freed = 0
     through = mark
     newest: str | None = None
@@ -350,7 +423,9 @@ def take[Raw](
     #: of that member's day is counted, and the pass stops at the next day.
     over: Member | None = None
 
-    def stopped(because: StopReason, resume_from: str | None) -> Pass:
+    def stopped(
+        because: StopReason, resume_from: str | None, fault: GardenerFault | None = None
+    ) -> Pass:
         """The record, built in one place so every exit describes a pass the same way."""
         return Pass(
             collection=collection.name,
@@ -366,26 +441,36 @@ def take[Raw](
             stopped_because=because,
             resume_from=resume_from,
             handled_through=through if collection.listing_intact() else mark,
+            fault=fault,
+            recovered=tuple(
+                Recovery(note=RecoveryNote.NOT_DELETABLE, subject=member) for member in kept
+            ),
+            pages_read=collection.pages_read(),
         )
+
+    def interrupted(failure: Exception, resume_from: str | None) -> PruneInterruptedError:
+        """The pass so far, stopped by `failure` for what it means and never for less."""
+        fault = error_cause.fault_of(error_cause.classify(failure))
+        return PruneInterruptedError(stopped(stop_for(fault), resume_from, fault))
 
     if mark is not None and line is not None and mark >= line:
         return stopped(StopReason.EXHAUSTED, None)
     try:
         members = iter(collection.listing())
     except Exception as failure:
-        raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
+        raise interrupted(failure, None) from failure
     while True:
         try:
             raw = next(members)
         except StopIteration:
             break
         except Exception as failure:
-            raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
+            raise interrupted(failure, None) from failure
         seen += 1
         try:
             member = collection.describe(raw)
         except Exception as failure:
-            raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
+            raise interrupted(failure, None) from failure
         if not window.holds(member.day):
             continue
         if mark is not None:
@@ -394,15 +479,11 @@ def take[Raw](
             try:
                 before = _day_before(member.day)
             except ValueError as failure:
-                raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
+                raise interrupted(failure, None) from failure
             if in_order and newest is not None and member.day < newest:
-                logger.warning(
-                    "%s: a member created on %s came after one created on %s, so the walk "
-                    "is out of day order and its mark stays on %s",
-                    collection.name,
-                    member.day,
-                    newest,
-                    mark,
+                event_log.emit(
+                    MemberOutOfOrder(collection=collection.name, day=member.day, after=newest),
+                    level=logging.WARNING,
                 )
                 in_order, through = False, mark
             newest = member.day if newest is None else max(newest, member.day)
@@ -414,7 +495,7 @@ def take[Raw](
             if member.day == over.day:
                 continue
             return stopped(StopReason.CEILING, over.id)
-        if ceiling is not None and len(taken) >= ceiling:
+        if ceiling is not None and len(taken) + len(kept) >= ceiling:
             if mark is not None and dry_run:
                 over = member
                 continue
@@ -424,7 +505,10 @@ def take[Raw](
             try:
                 collection.delete(raw)
             except Exception as failure:
-                raise PruneInterruptedError(stopped(StopReason.FAILED, member.id)) from failure
+                if error_cause.classify(failure) is ErrorCause.NOT_DELETABLE:
+                    kept.append(member.id)
+                    continue
+                raise interrupted(failure, member.id) from failure
         taken.append(member.id)
         freed += member.size_bytes
 

@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -224,7 +224,7 @@ mark on every date-axis panel is about 20 components in three drawing systems.
 What the line leaves, said rather than implied: on bar and day-strip panels the
 newest day looks like a day with nothing in it, and at the one-day window some
 panels print a sentence that reads as quiet, for example
-`Nothing was timed in these 1 days.` on Summaries, while the line above them
+`Nothing was timed in this one day.` on Summaries, while the line above them
 says that day is not packed yet. So waiting and quiet still look alike for one
 day on those panels. The follow-up row that marks the unpacked days on bar and
 strip panels, and gives every panel whose whole window is unpacked its own

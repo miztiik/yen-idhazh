@@ -7,7 +7,8 @@ the ledger's indexes (`ledger_marks.work_out_marks`), so a step has no mark only
 when no index names a period of its kind or a coarser one. The choice opens no
 file and lists nothing: the pass first names the months a first day run looks
 back over (`first_run_months`), then the choice is made once, before any step
-runs, logged, and handed to each step as its parameters (`PeriodsChosen`).
+runs, logged, and handed to each step as its parameters (`PeriodsChosen`). A
+pass that takes nothing ends on the word the same choice gives (`idle_word`).
 
 **The drop step takes the oldest months past the keep line**, the oldest month
 the monthly window keeps. It starts at the oldest monthly entry, because the
@@ -57,6 +58,8 @@ stops at the first that does not (`CompactTree.fit_to_budget`).
 A range that ends before the step's first period leaves nothing to take. A
 range that starts after it, while that first period is ready, is refused at
 that period, so the person widens the range rather than finding it left open.
+The refusal defers the pass with the fault `range-starts-late`: a person's
+range, not a defect, so the job stays green.
 Whether that period is ready is read from the calendar and the marks alone, so
 the refusal reads nothing outside the range. The year step counts only the
 whole years a range holds, January to December, so it reads no month outside
@@ -75,11 +78,27 @@ from datetime import UTC, date, datetime, timedelta
 
 from idhazh import month_partition
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice
+from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice, TaskOutcome
 from idhazh.contracts.knobs.gardener import GITHUB_RERUN_DAYS, CompactionPolicy
 from idhazh.gardener import schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree
 from idhazh.gardener.tasks._monthly_period import days_of, first_kept_month, shift
+
+
+def idle_word(chosen: PeriodsChosen) -> TaskOutcome:
+    """The word a pass that found nothing to do ends on, read off what it chose.
+
+    A range a person named answers first: a first day run with a range looks
+    only inside it, so its `none` cannot tell an empty ledger from an empty
+    range, and `outside-range` is true of both. Otherwise a ledger whose every
+    step has nothing to start from is `empty`, and any other is `not-due`.
+    """
+    if chosen.operator_range is not None:
+        return TaskOutcome.OUTSIDE_RANGE
+    steps = (chosen.drops, chosen.years, chosen.months, chosen.days)
+    if all(step is None or step.start is StartReason.NONE for step in steps):
+        return TaskOutcome.EMPTY
+    return TaskOutcome.NOT_DUE
 
 
 def choose(
@@ -200,7 +219,7 @@ def _span(
             if ready is not None and start <= ready:
                 return StepChoice(
                     start=StartReason.OPERATOR_RANGE,
-                    stopped_because=StopReason.FAILED,
+                    stopped_because=StopReason.DEFERRED,
                     resume_from=start,
                 )
             return StepChoice(start=StartReason.OPERATOR_RANGE)
@@ -352,9 +371,8 @@ def _rerun_span(
 ) -> tuple[str, str] | None:
     """The packed days whose raw folders the day step names, because a re-run may write there.
 
-    GitHub lets a run be re-run for `GITHUB_RERUN_DAYS` days, and a re-run
-    writes into the day its run first wrote, so the span runs from that many
-    days before the wake's day to the daily mark.
+    Scheduled wakes look back `GITHUB_RERUN_DAYS` days. An explicit month
+    range also reaches older imports, up to the daily mark.
     """
     if tree.daily_through is None:
         return None
@@ -362,5 +380,5 @@ def _rerun_span(
     last = tree.daily_through
     if operator_range is not None:
         lowest, highest = month_partition.day_bounds(*operator_range)
-        first, last = max(first, lowest), min(last, highest)
+        first, last = lowest, min(last, highest)
     return (first, last) if first <= last else None

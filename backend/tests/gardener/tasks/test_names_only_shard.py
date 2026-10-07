@@ -6,7 +6,8 @@ a full clone, where every file is on disk, and once in a partial clone whose
 checkout holds only config, where a task learns its members from the commit's
 names and fetches the folders it reads. Each lands on an origin of its own, and
 the two must write the same record rows, apart from what each downloaded and
-how long each took, and change the same paths.
+how long each took, say the same of each task in its finished event, apart from
+how long it took, and change the same paths.
 
 The census summary is also run in a shard of its own, the way a wake can plan
 it apart from the census compaction. It must still find its due months from
@@ -17,6 +18,7 @@ declaration it must fail rather than report a census it never saw.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 from datetime import UTC, datetime
@@ -30,12 +32,14 @@ from conftest import CONFIG_DIR
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.gardener_events import TaskFinished
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import shards
+from idhazh.gardener import event_log, shards
 from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
+from .._events import events
 from .._garden import (
     OriginBlobs,
     a_config,
@@ -178,8 +182,25 @@ def comparable(rows: dict[str, CollectionPruneRow]) -> dict[str, dict[str, Any]]
     return {task: row.model_dump(exclude=_OWN_TO_THE_RUN) for task, row in rows.items()}
 
 
+def said_of(caplog: pytest.LogCaptureFixture) -> dict[str, str]:
+    """How each task the shard ran ended, as its finished event says it, but how long it took.
+
+    A name the ledger door mints fresh is written as its pattern, as the
+    changed paths are. The records are cleared once read, so the next shard's
+    are its own.
+    """
+    finished = {
+        held.task: _FILE_ID.sub(
+            "<file_id>", held.model_dump_json(exclude={"duration_ms"})
+        )
+        for held in events(caplog.records, TaskFinished)
+    }
+    caplog.clear()
+    return finished
+
+
 def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
     seed, (full_origin, names_origin) = origins(tmp_path, 2)
@@ -189,10 +210,14 @@ def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
     only_code = a_partial_clone(tmp_path, names_origin, "config", name="only-code")
     package = named_task_package(tmp_path, monkeypatch)
 
-    whole, whole_rows, whole_said = landed(names, settings, full, full_origin, package)
-    lean, lean_rows, lean_said = landed(names, settings, only_code, names_origin, package)
+    with caplog.at_level(logging.INFO, logger=event_log.__name__):
+        whole, whole_rows, _ = landed(names, settings, full, full_origin, package)
+        whole_said = said_of(caplog)
+        lean, lean_rows, _ = landed(names, settings, only_code, names_origin, package)
+        lean_said = said_of(caplog)
 
     assert lean.exit_code == whole.exit_code, (whole_said, lean_said)
+    assert lean_said == whole_said, "the two shards said different things of one task"
     assert comparable(lean_rows) == comparable(whole_rows)
     changes = changed_paths(names_origin, seed)
     assert changes == changed_paths(full_origin, seed)

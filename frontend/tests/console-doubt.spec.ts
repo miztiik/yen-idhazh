@@ -366,7 +366,9 @@ test.describe('the ranked list, on the built console', () => {
 				'data-model-doubt-days',
 				String(preset)
 			);
-			await expect(page.locator('[data-model-doubt-intro]')).toContainText(`${preset} days`);
+			await expect(page.locator('[data-model-doubt-intro]')).toContainText(
+				preset === 1 ? 'over this one day' : `over these ${preset} days`
+			);
 		}
 	});
 });
