@@ -817,8 +817,10 @@
 										></span>
 									{/each}
 									<!-- The dwell is the AREA, not a number in a chip. It underlines
-									     exactly the contiguous under-the-mark squares at the newest
-									     end, so the run length is read off the picture. -->
+									     the run the producer counted, from that run's oldest square under
+									     the mark to the newest square, so a square inside the run that
+									     decided nothing sits under it too (`dwellStart()` in
+									     `$lib/server/source-retiring.ts`). -->
 									{#if row.dwellFrom !== null}
 										<span
 											class="yield-dwell"
