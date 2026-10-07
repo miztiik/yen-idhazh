@@ -440,8 +440,9 @@ stories, leads, run references and verticals on one line each. `RunManifest`
 keeps runs and model settings expanded, and puts configuration digests and
 vertical counts on one line each. The published day-metrics month encoder
 keeps days expanded, and puts sources, instruments and stage timings on one
-line each. The state day-metrics writer is unchanged. Existing helper callers
-keep their layout. All three producers preserve fields, values and stamps;
+line each. `DayMetrics` uses the same record selections for state day files,
+including each instrument's nested statistics. Other fields stay expanded.
+Existing helper callers keep their layout. These producers preserve fields, values and stamps;
 older layouts load normally and take the new layout when rewritten.
 
 The published run-days month encoder keeps days expanded and puts runs on one
