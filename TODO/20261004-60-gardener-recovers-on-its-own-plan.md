@@ -61,7 +61,7 @@ Table A - what is out
 | 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | DONE | legendary-fortnight | #1339 | Plan 60 row 19 |
 | 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | DONE | shiny-system | #1373 | Plan 60 row 20 |
 | 21 | Every gardener log line is one JSON event | 2, 20 | E | DONE | reimagined-winner | - | Plan 60 row 21 |
-| 22 | A person reads a shard at a glance | 21 | E | PENDING | - | - | - |
+| 22 | A person reads a shard at a glance | 21 | E | DONE | didactic-spork | - | Plan 60 row 22 |
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
 | 25 | The retired raw listings code goes | 15 | F | COLLAPSED #1267 | - | - | - |
@@ -1034,27 +1034,64 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Scope:** When it runs on GitHub, each task's lines fold into one group, a `failed` task adds one error line, and each shard writes a summary to its job page whether it passes or fails. The summary says where the record went, what the exit code means, and one line per task. Level 2.
 - **Follow-ups:**
   - A deferred row is green, so the summary lists it with its word. The `::error` line can use the GardenerFault word `raised` and the sentence in `report.WHY`. A shard over its download budget exits 1 with no failed row, so the summary needs its own line for that case; found during execution (row 20 report), owner 2026-10-07.
+  - These lines are still printed, and they are row 22's: the runner's exit-2 refusals, the over-budget message, `run-task`'s "shard N: wrote X and pushed nothing" line, and every publisher line, including the `::warning::` lines for a stale or lost landing; found during execution (row 21 report), owner 2026-10-07.
+  - The summary can read `task-finished`'s outcome word, periods, fold and next, and `report.WHY` and `report.NOTED` hold one sentence for each fault word and each note word; found during execution (row 21 report), owner 2026-10-07.
+  - A `task-finished` that ends `failed` carries `error`, the exception's type, and `where`, its `module:line`, so an `::error` line can name the place; found during execution (row 21 report), owner 2026-10-07.
+  - Trust boundary (ESCALATE trigger 3, Guardrail #11): the summary, the `::error` lines and every line printed carry closed words, counts, periods, member ids, the exception's type and its code place, and never an exception's message or a row's value, because a message can quote fetched text. A test pins it with a failure whose exception message carries a marker, and `backend/idhazh/ledger/` is left to the row that fixes its log lines; found during execution (row 21 report), owner 2026-10-07.
+  - Decision 1's `::error` form uses the fault word and the `report.WHY` sentence, never the exception's text; found during execution (row 21 report), owner 2026-10-07.
 - **Files touched:**
-  - `backend/idhazh/gardener/event_log.py` (GitHub mode)
+  - `backend/idhazh/gardener/event_log.py` (GitHub mode: `GitHubLines`, and `install` takes `github`)
+  - `backend/idhazh/gardener/workflow_commands.py` (new; first sentence "Which workflow commands does GitHub read beside a gardener event, and how is each escaped?"; found during execution, Fowler)
   - `backend/idhazh/gardener/run_summary.py` (new; first sentence "What one shard did, as Markdown for the job's summary page")
-  - `backend/idhazh/contracts/gardener_events.py` (ShardPublished)
-  - `backend/idhazh/gardener/runner.py` (`Outcome.finished_tasks`)
-  - `backend/utilities/gardener_publish.py` (writes the summary in `try/finally`; its push lines fold into ShardPublished)
+  - `backend/idhazh/contracts/gardener_events.py` (ShardPublished; `ShardStop` and `TaskFinished.collection` found during execution, Fowler)
+  - `backend/idhazh/gardener/outcome.py` (`Outcome.finished_tasks`, `downloaded_bytes` and `over_budget`, and `MEANS` beside the exit codes: `Outcome` lives here, not in `runner.py`; found during execution, Fowler)
+  - `backend/idhazh/gardener/runner.py` (fills those three; its record-name refusal no longer prints an exception's text; found during execution)
+  - `backend/idhazh/gardener/report.py` (`finished` takes the collection; Reader's carried-over sentence; found during execution)
+  - `backend/idhazh/gardener/cli.py` (`settings_or_none` takes `github`) and `backend/idhazh/gardener/__init__.py` (names the two new modules) (found during execution)
+  - `backend/utilities/gardener_publish.py` (says how the shard ended once, on every ending, with its summary; its push lines fold into ShardPublished; `main` reads `GITHUB_ACTIONS` and `GITHUB_STEP_SUMMARY`; the listing line names the exception's type, not its text)
   - `backend/tests/gardener/test_run_summary.py` (new)
+  - `backend/tests/gardener/test_workflow_commands.py` (new; found during execution, Fowler)
   - `backend/tests/gardener/test_event_log.py`
   - `backend/tests/gardener/test_publish.py`
+  - `backend/tests/gardener/test_runner.py` (a shard refused after a task ran still says how it ended; found during execution)
+  - `backend/tests/gardener/_garden.py` (`quiet_git` also clears `GITHUB_STEP_SUMMARY` and `GITHUB_ACTIONS`, which CI's own step sets; found during execution)
+  - `backend/tests/gardener/test_sparse_shard.py` (the listing line no longer quotes its exception; found during execution)
+  - `tests/fixtures/gardener/task_packages/garden_tasks_breaks/defect.py` (its exception quotes a row, the marker; found during execution)
   - `docs/architecture/publishing/idhazh-gardener.md` (the summary)
 - **Acceptance gates:** local: pytest on the three test files; ruff; mypy; `doc_load.py`. The sufficiency checks in `docs/concepts/design-system.md` apply to the summary, or a `## Design rationale` entry says why not. CI: the full suite.
 - **Oracle:** a shard with one `failed` task whose record landed writes a summary with the landing line and the failed row, and still exits 1. A shard with only `deferred` and `done` tasks writes its summary and exits 0. An error line escapes `%`, CR and LF. It cannot settle how GitHub draws the summary; the first scheduled run after the merge shows it.
+- **Found during execution:** `Outcome` lives in `outcome.py`, so `finished_tasks` is declared there and the runner fills it. The listing-failure line printed its exception's text, and `test_sparse_shard.py` asserted that text; the line now names the type and place, and the test checks that instead. A compaction's `months_dropped` and `raw_days_dropped` list both the months it deleted and the months a report-only monthly window only named, so the summary says "found past the keep line", not "deleted". Run on the base commit fa6379737, in a copy outside this checkout:
+  - `test_run_summary.py` and `test_workflow_commands.py` fail at import, because `ShardPublished` is absent, and `test_publish.py` fails at import, because `PushOutcome` is absent.
+  - In `test_event_log.py`, the two GitHub-mode tests fail: there is no `GitHubLines`, and `settings_or_none` takes no `github`.
+  - The listing test of `test_sparse_shard.py` fails, because the base prints "GitHub did not report a size for blob ...".
+  - A probe drove the base through each oracle case. A shard with a failed task exits 1, and a shard with a deferred and a done task exits 0. Both print "shard 0: landed on main, try 1 of 6", write no summary although `GITHUB_STEP_SUMMARY` names a file, and log no `shard-published`. A listing whose range is not a date prints "Invalid isoformat string: 'Breaking: click https://example.invalid/now'", the planted text.
+
+  On this branch every case gives the opposite. The canary was built on the base and then on this branch, through the gate lock. Its `state/` holds 45 files on both:
+  - 28 are byte-identical;
+  - 16 are packed files whose 155 rows are identical, and the only keys that differ are the write clocks `file_id` and `written_at_ms`;
+  - one raw item-health file's name holds its write time, and its one row is identical.
+
+  The site build at the end fails on both after `state/` is complete, because this machine has no `frontend/node_modules`. When an exception escapes the publisher, Python's own traceback prints the exception's text. That was already so before this row. A crash there has already passed every task's own error handling, so the fault is in the runner or publisher code, and removing the traceback would take the stack out of the job log. It is reported to the owner under ESCALATE trigger 3 rather than changed (Fowler, 2026-10-07). Reader also asked for a `::warning` on the run page for a deferred task that waits for a person. Fowler rejected it as more than the row needs (rejected option 2); the heading names every deferred task instead.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | `::group::<task> (<kind>)` before TaskPlanned and `::endgroup::` after TaskFinished; a `failed` task adds `::error title=<task>::<fault> at <resume_from>: <advice>` | Fowler, 2026-10-04 |
 | 2 | The summary is written in `try/finally`, so it exists on pass or fail | Fowler, 2026-10-04 |
+| 3 | ShardPublished is said once for every ending, a crash included, so the summary has one input: `landing`, or `stopped_because` (`listing-failed`, `check-refused`, `crashed`, declared beside the event), never both; `means`, `failed_tasks`, `stale_paths`, `downloaded_bytes`, `over_budget`, `max_downloaded_mb`. An error when the exit code is not 0, a warning for `stale` or `lost`, information otherwise | Fowler, 2026-10-07 (row 22 worker's consult) |
+| 4 | Decision 2 as Extract Function: `run_and_land` says how the shard ended when its body returns, and in `except Exception` before it raises again; a cancel or `SystemExit` has no exit 1 to report | Fowler, 2026-10-07 (row 22 worker's consult) |
+| 5 | The exit codes' sentences (`MEANS`) sit beside the codes in `outcome.py`; only the code that builds the event reads them, and the summary reads `means` | Fowler, 2026-10-07 (row 22 worker's consult) |
+| 6 | The commands around an event are `workflow_commands.py`, which imports only contracts; `::error` comes after `::endgroup::`, so it shows while the group is folded, and reads `<fault> while it worked on <resume_from> (<error> at <where>): <next>`, the event's own `next`, each part dropped when absent | Fowler, 2026-10-07 (row 22 worker's consult); "while it worked on" by Reader, because "at 2026-09-20" read as the date of the error |
+| 7 | `gardener_publish.main` alone reads `GITHUB_ACTIONS` and `GITHUB_STEP_SUMMARY` and passes both down; the workflow does not change | Fowler, 2026-10-07 (row 22 worker's consult) |
+| 8 | `TaskFinished.collection` says what `taken` holds, so the summary names files, runs or artifacts | Fowler, 2026-10-07, on Reader's ruling |
+| 9 | The summary's form: one H3 heading, meaning first and the exit code last; three columns, Task, How it ended, What it did, in run order; each `next` sentence once, below the table; only `failed` bold, and words for every state; the downloads against the budget on every measured shard; what was handled without stopping last | Susan, 2026-10-07 |
+| 10 | The summary's sentences: the heading words, where the record went for each landing and stop, the download and crash lines, "Handled without stopping", the carried-over sentence, and the name of what a task took; the heading names a deferred task, because a deferral that waits for a person exits 0 behind a green tick | Reader, 2026-10-07 |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | A shared helper for `$GITHUB_STEP_SUMMARY` | Two writers do not earn one | A module | Fowler, 2026-10-04 |
+| 2 | A `::warning` for a deferred task, and an `::error` for a shard over its budget or a refused push | The summary and the job's colour say them already | One line each in `workflow_commands.py`, and for the deferral a list of which faults wait for a person | Fowler, 2026-10-07; Reader asked for the deferral's warning, sent to the owner |
+| 3 | `--summary` and `--github` flags on the command line | A workflow edit and a workflow-test edit, and nothing gained | Two flags | Fowler, 2026-10-07 |
+| 4 | An emoji or an HTML-entity glyph beside a failed row | GitHub draws no emoji shortcode in a summary, and a glyph breaks the ASCII rule | One entity a word | Susan, 2026-10-07 |
 
 ### Row #23 - The gardener ledger is packed live
 
