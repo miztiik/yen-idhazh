@@ -102,6 +102,33 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   node node_modules/@playwright/test/cli.js test --config playwright.logic.config.ts tests/ledger-lifecycle.spec.ts; "exit $LASTEXITCODE"
   ```
 
+- **`test:changed` stops with `The selected Python executable does not exist.` in a worktree with no `.venv`; the Python is there, and the launcher refused the name it chose itself.**
+  With no `.venv`, `frontend/scripts/run-checks.ts` falls back to the bare
+  name `python` and hands that name to the run inside its lock as
+  `IDHAZH_PYTHON`, which that run refuses because no file has that path
+  ([defect 62](../../../TODO/20260823-known-defects-plan.md)). Plan 62's row
+  L20 met it on 2026-10-07. The tell is the message right after
+  `[checks] waiting for the test slot` and a second copy of the selection.
+  Set up `.venv` as
+  [run-the-gates.md](../../how-to/run-the-gates.md#set-up-the-backend-environment)
+  says, or hand the launcher a full path:
+  ```powershell
+  $env:IDHAZH_PYTHON = (Get-Command python).Source
+  ```
+
+- **A copied `bundle-gate.mjs` fails with a `SyntaxError` on an `import`; the
+  script is fine, it has no `package.json` beside it.**
+  `frontend/package.json` sets `"type": "module"`, which is what tells Node to
+  read `frontend/asset-base.js` as an ES module. Copy `bundle-gate.mjs` alone
+  into a bare folder and Node falls back to CommonJS, where `import` is a
+  syntax error. Plan 62's row L24 met it on 2026-10-07. The tell is the error
+  naming the `import` line itself, not a missing module. Copy the commit's
+  `frontend/package.json` beside the script, or run it from a full checkout
+  of `frontend/`:
+  ```powershell
+  Copy-Item frontend\package.json <bare-folder>\package.json
+  ```
+
 ## Two heavy gates on one box
 
 - Let `test:changed` acquire its own lock. Do not wrap it in the same lock, bypass coordination, launch duplicate checks, or stop another worker's run.
@@ -132,6 +159,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   ```powershell
   git status --porcelain
   npm run build:canary
+  ```
+- **The preview refuses a build your change never touched, after a browser tool ran in the worktree; the tool's files are inputs.**
+  Every untracked file that `.gitignore` does not cover is fingerprinted. The
+  Playwright MCP browser saves page snapshots and screenshots to
+  `.playwright-mcp/` in the worktree root; on 2026-10-07 one snapshot there
+  made `verified-preview.ts` refuse a fresh canary build, until `.gitignore`
+  listed the folder. The tell is `git status` naming a folder no change of
+  yours wrote. Ignore that folder in `.gitignore`; deleting its files before
+  each build only moves the trap:
+  ```powershell
+  git status --porcelain --untracked-files=all
   ```
 - **The same timeout from a fresh build reads as a stale one; the box was too busy to start the preview in 120 s.**
   `verified-preview.ts` checks the build's inputs and output before it

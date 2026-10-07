@@ -31,17 +31,17 @@ either way nothing else says which of its days held rows, so every day of the
 month is recorded lost, and the year packs from the rest.
 
 **The pass writes all year files, then the final yearly and monthly indexes
-once, then deletes absorbed month files, then advances the yearly watermark
-once, last.** A pass that stops before the yearly index leaves every
-month file in place, so the next wake packs that year again from them. A pass
-that stops after it leaves a year the yearly index already names, so the next
-wake finishes it instead: it finds remaining month files by calendar month,
-deletes them, rewrites the monthly index and moves the watermark, and builds
-nothing; an `empty` year has no file of its own to look for. Either way no row
-is lost, and none is read twice, because a reader reads a month both indexes
-name from its year. The month files are joined as they are and never settled,
-because each already holds one row per record; the monthly watermark is left
-alone.
+once, then deletes absorbed month files.** A pass that stops before the yearly
+index leaves every month file in place and a year file no entry names, so the
+next wake adopts that file as the year (above). The yearly mark is the newest
+year the yearly index names, so it moves when that index lands, and a later
+wake never comes back to the year. A pass on a person's machine that stops
+after that leaves the working tree partly written: restore the ledger's
+`state/compact/` and `state/raw/` folders from git, then run again. On a runner
+nothing of a pass lands until its shard's one commit does. A reader in between
+reads a month both indexes name from its year, so no row is read twice. The
+month files are joined as they are and never settled, because each already
+holds one row per record; the monthly mark is left alone.
 
 **A year file is built one month at a time**, one parquet row group per month
 that holds a row, so the pass holds one month's rows at once and a reader that
@@ -67,10 +67,10 @@ from pathlib import Path
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import StepChoice
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import GITHUB_LARGE_FILE_BYTES
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees
@@ -101,17 +101,26 @@ def _counted(tree: CompactTree, year: str) -> list[str]:
 
 
 def _refused(
-    tree: CompactTree, year: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree,
+    year: str,
+    why: str,
+    ledger_fault: ledger.LedgerFault | None = None,
+    *,
+    fault: GardenerFault = GardenerFault.RAISED,
 ) -> tuple[Stop, ...]:
-    """A year that cannot be packed, said once by name. The watermark stays where it is."""
+    """A year that cannot be packed, said once by name. The yearly mark stays where it is.
+
+    `fault` is the record's word for it: `raised`, a defect, unless the caller
+    names a cause outside the code, which defers the pass instead.
+    """
     logger.error(
         "a year is not packed ledger=%s year=%s fault=%s reason=%s",
         tree.ledger.value,
         year,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
-    return (Stop(StopReason.FAILED, year),)
+    return (Stop(stop_for(fault), year, fault),)
 
 
 def _drop_months(tree: CompactTree, year: str) -> None:
@@ -312,61 +321,32 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
     return ()
 
 
-def _finish(tree: CompactTree, year: str) -> tuple[Stop, ...]:
-    """Finish a year the yearly index already names: its entry stands, its month files go.
-
-    An `empty` year has no file of its own to look for, and a `packed` one whose
-    file is not there is refused as `file-missing`. The month files go by their
-    names, so none of them is downloaded.
-    """
-    if (
-        tree.yearly[year].names_file
-        and named_trees.compact_file(
-            tree.listing, tree.state_dir, tree.ledger, Period.YEARLY, year
-        )
-        is None
-    ):
-        where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.YEARLY)
-        return _refused(
-            tree,
-            year,
-            f"{where.name} names it and no yearly file holds it",
-            ledger.LedgerFault.FILE_MISSING,
-        )
-    _drop_months(tree, year)
-    return ()
-
-
 def _fetched(tree: CompactTree, year: str) -> PeriodFetch:
     """What packing one year downloads: its own file when one is at its path, else its months.
 
-    A year its index names is finished by names and downloads nothing, and a
-    year whose own file is there is adopted from that file alone.
+    A year whose own file is there is adopted from that file alone.
     """
-    if year in tree.yearly:
-        return PeriodFetch()
     own = named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.YEARLY, year)
     if own is not None:
         return PeriodFetch(beside=(own,))
     return PeriodFetch(folders=(tree.monthly_year_folder(year),))
 
 
-def absorb(
-    tree: CompactTree, choice: StepChoice, *, stamp: str, identity: WriterIdentity
-) -> tuple[Stop, ...]:
+def absorb(tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity) -> tuple[Stop, ...]:
     """Pack the years chosen for this wake, oldest first, stopping at the first one refused.
 
-    A choice an operator range refused stops here, at the year the range left
-    out, with nothing taken. The step packs only the years whose files fit what
-    is left of the shard's download budget, and stops at the first that does
-    not.
+    A choice an operator range refused stops here, deferred at the year the
+    range left out, with nothing taken. The step packs only the years whose
+    files fit what is left of the shard's download budget, and stops at the
+    first that does not.
     """
-    if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
+    if choice.stopped_because is StopReason.DEFERRED and choice.resume_from is not None:
         return _refused(
             tree,
             choice.resume_from,
             "the operator range leaves it out, and it is packed before any year the range "
             "names. Widen the range to include it",
+            fault=GardenerFault.RANGE_STARTS_LATE,
         )
     if choice.first is None or choice.last is None:
         return ()
@@ -378,18 +358,12 @@ def absorb(
         if over is not None and position == len(fits):
             return (over,)
         try:
-            if year in tree.yearly:
-                stops = _finish(tree, year)
-            else:
-                stops = _pack(tree, year, identity=identity)
+            stops = _pack(tree, year, identity=identity)
         except OverBudgetError as spent:
             return (tree.stop_spent(year, spent),)
         if stops:
             return stops
         tree.yearly_through = max(year, tree.yearly_through or year)
-        tree.write_watermark(
-            Period.YEARLY, through=tree.yearly_through, advanced_at=stamp, run_id=identity.run_id
-        )
     if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:
         return (Stop(StopReason.CEILING, choice.resume_from),)
     return ()

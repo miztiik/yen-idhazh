@@ -163,10 +163,10 @@ test.describe('the sentences count what the chart drew', () => {
 			);
 		const text = (await page.locator('[data-line-clamp-note]').innerText()).trim();
 		if (clamped === 0) {
-			expect(text).toContain('has not held the line back on any');
+			expect(text).toContain('has not held the line back in');
 		} else {
 			expect(text, 'the sentence and the chart disagree about the clamp').toContain(
-				`on ${clamped} of the last`
+				`on ${clamped} of `
 			);
 		}
 	});

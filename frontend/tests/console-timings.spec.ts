@@ -411,7 +411,7 @@ test.describe('the coverage sentence', () => {
 		expect(high, 'a stage timed more items than the days held').toBeLessThanOrEqual(items);
 
 		const said = ((await one.textContent()) ?? '').replace(/\s+/g, ' ').trim();
-		expect(said).toContain(`${measured} of these ${days} days`);
+		expect(said).toContain(`${measured} of ${days} days`);
 		const reached = low === high ? grouped(low) : `${grouped(low)} to ${grouped(high)}`;
 		expect(said).toContain(`${reached} of the ${grouped(items)} items on them`);
 	});
@@ -424,11 +424,11 @@ test.describe('the coverage sentence', () => {
 	test('where two stages disagree the numerator is a range', () => {
 		const sparse = coverage([true, false, false, false]);
 		expect(coverageSentence(sparse, 'We timed', { low: 3900, high: 3955, total: 5113 })).toBe(
-			'We timed 1 of these 4 days, and 3,900 to 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
+			'We timed 1 of 4 days, and 3,900 to 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
 		);
 		// And where they agree it is one number, not a range with two equal ends.
 		expect(coverageSentence(sparse, 'We timed', { low: 3955, high: 3955, total: 5113 })).toBe(
-			'We timed 1 of these 4 days, and 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
+			'We timed 1 of 4 days, and 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
 		);
 	});
 

@@ -34,10 +34,13 @@ refused otherwise, because nothing is written over a packed file no entry
 names.
 
 **The pass writes all month files, then the final monthly and daily indexes
-once, then deletes absorbed daily files, then advances the monthly watermark
-once, last.** Before the monthly index lands, daily files survive. After it
-lands, the next wake keeps the indexed month, removes remaining daily files
-by their calendar dates, and advances the watermark without rebuilding.
+once, then deletes absorbed daily files.** Before the monthly index lands,
+daily files survive. The monthly mark is the newest month the indexes name, so
+it moves when the monthly index lands, and a later wake never comes back to the
+month. A pass on a person's machine that stops part way leaves the working
+tree partly written: restore the ledger's `state/compact/` and `state/raw/`
+folders from git, then run again. On a runner nothing of a pass lands until its
+shard's one commit does.
 The daily files are joined as they are and never settled across days: a key
 with no date cell may repeat on two days, and both rows are facts. The step
 closes only the months whose day files fit what is left of the shard's
@@ -77,10 +80,10 @@ from pathlib import Path
 
 from idhazh import ledger, month_partition
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
 from idhazh.contracts.gardener_events import StepChoice
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees, schedule
@@ -208,17 +211,26 @@ def _waiting(tree: CompactTree, month: str) -> bool:
 
 
 def _refused(
-    tree: CompactTree, month: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree,
+    month: str,
+    why: str,
+    ledger_fault: ledger.LedgerFault | None = None,
+    *,
+    fault: GardenerFault = GardenerFault.RAISED,
 ) -> tuple[Stop, ...]:
-    """A month that cannot be absorbed, said once by name. The watermark stays where it is."""
+    """A month that cannot be absorbed, said once by name. The monthly mark stays where it is.
+
+    `fault` is the record's word for it: `raised`, a defect, unless the caller
+    names a cause outside the code, which defers the pass instead.
+    """
     logger.error(
         "a month is not absorbed ledger=%s month=%s fault=%s reason=%s",
         tree.ledger.value,
         month,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
-    return (Stop(StopReason.FAILED, month),)
+    return (Stop(stop_for(fault), month, fault),)
 
 
 def _forget_days(tree: CompactTree, month: str) -> None:
@@ -262,35 +274,6 @@ def _hold(tree: CompactTree, month: str) -> tuple[Stop, ...]:
     logger.info(
         "a month waits for its raw days to be packed ledger=%s month=%s", tree.ledger.value, month
     )
-    return ()
-
-
-def _finish(tree: CompactTree, month: str) -> tuple[Stop, ...]:
-    """Finish an indexed month without rebuilding it: its entry stands, its days' leftovers go.
-
-    An `empty` month has no file to look for, and a `packed` one whose file is
-    not there is refused as `file-missing`.
-    """
-    if (
-        tree.monthly[month].names_file
-        and named_trees.compact_file(
-            tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
-        )
-        is None
-    ):
-        return _refused(
-            tree,
-            month,
-            "the monthly index names it and no monthly file holds it",
-            ledger.LedgerFault.FILE_MISSING,
-        )
-    for day in days_of(month):
-        held = named_trees.compact_file(
-            tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day
-        )
-        if held is not None:
-            tree.delete(held)
-    _forget_days(tree, month)
     return ()
 
 
@@ -452,12 +435,7 @@ def _keep_own[C: Contract](
 
 
 def _fetched(tree: CompactTree, month: str) -> PeriodFetch:
-    """What closing one month downloads: its day files, and the month files beside its own.
-
-    An indexed month is finished by its names and downloads nothing.
-    """
-    if month in tree.monthly:
-        return PeriodFetch()
+    """What closing one month downloads: its day files, and the month files beside its own."""
     own = named_trees.compact_file(
         tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
     )
@@ -467,21 +445,22 @@ def _fetched(tree: CompactTree, month: str) -> PeriodFetch:
 
 
 def absorb(
-    tree: CompactTree, choice: StepChoice, *, stamp: str, identity: WriterIdentity
+    tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity
 ) -> tuple[Stop, ...]:
     """Close the months chosen for this wake, oldest first, stopping at the first one held.
 
-    A choice an operator range refused stops here, at the month the range left
-    out, with nothing taken. The step closes only the months whose files fit
-    what is left of the shard's download budget, and stops at the first that
-    does not.
+    A choice an operator range refused stops here, deferred at the month the
+    range left out, with nothing taken. The step closes only the months whose
+    files fit what is left of the shard's download budget, and stops at the
+    first that does not.
     """
-    if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
+    if choice.stopped_because is StopReason.DEFERRED and choice.resume_from is not None:
         return _refused(
             tree,
             choice.resume_from,
             "the operator range leaves it out, and it closes before any month the range "
             "names. Widen the range to include it",
+            fault=GardenerFault.RANGE_STARTS_LATE,
         )
     if choice.first is None or choice.last is None:
         return ()
@@ -501,18 +480,12 @@ def absorb(
                 return _hold(tree, month)
             if over is not None and position == len(fits):
                 return (over,)
-            if month in tree.monthly:
-                stops = _finish(tree, month)
-            else:
-                stops = _close(tree, month, model=model, identity=identity)
+            stops = _close(tree, month, model=model, identity=identity)
         except OverBudgetError as spent:
             return (tree.stop_spent(month, spent),)
         if stops:
             return stops
         tree.monthly_through = max(month, tree.monthly_through or month)
-        tree.write_watermark(
-            Period.MONTHLY, through=tree.monthly_through, advanced_at=stamp, run_id=identity.run_id
-        )
     if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:
         return (Stop(StopReason.CEILING, choice.resume_from),)
     return ()

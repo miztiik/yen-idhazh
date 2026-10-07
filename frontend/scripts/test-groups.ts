@@ -41,11 +41,12 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
+		'payload-ceilings',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
 		'publication',
 		'run-axis', 'run-yield',
-		'settings-moved', 'statement', 'raw-listed-through',
+		'settings-moved', 'span-sentences', 'span-words', 'statement', 'raw-listed-through',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
 		'tokens', 'verdict-split', 'vocabulary',
 		'weights'

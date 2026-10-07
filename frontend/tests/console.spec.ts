@@ -900,7 +900,7 @@ test('a stage with no number draws a gap, never a plunge to the axis floor', asy
 		'2030-06-13'
 	);
 	await expect(plot.locator('[data-coverage-empty]')).toHaveCount(2);
-	await expect(page.locator('[data-timing-coverage]')).toContainText('We timed 4 of these 15 days');
+	await expect(page.locator('[data-timing-coverage]')).toContainText('We timed 4 of 15 days');
 });
 
 test('a timing nobody took, a timing of zero and a partly timed day read apart', async ({
@@ -940,7 +940,7 @@ test('a timing nobody took, a timing of zero and a partly timed day read apart',
 	await expect(note).toHaveAttribute('data-coverage-timed-low', '7');
 	await expect(note).toHaveAttribute('data-coverage-timed-high', '9');
 	await expect(note).toHaveText(
-		'We timed 4 of these 15 days, and 7 to 9 of the 9 items on them. The tinted span is days nothing recorded, not quiet days.'
+		'We timed 4 of 15 days, and 7 to 9 of the 9 items on them. The tinted span is days nothing recorded, not quiet days.'
 	);
 
 	// One note for the chart, and the count no longer scales with the series.

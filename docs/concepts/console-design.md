@@ -77,8 +77,13 @@ it measured. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
-day. Susan chose the words of the first five on 2026-08-30, and Reader and Jony
-chose the words of the measurement-off line on 2026-10-07.
+day. On Hardware and Summaries they sit after the record notes and before the
+first section, in one order - off, sampled, started, then the days one
+instrument covered alone - so a page whose sections have nothing to draw still
+says what the recording was doing; Jony chose the place on 2026-10-07. Susan
+chose the words of the first five on 2026-08-30. Reader and Jony chose new words
+for the measurement-off line on 2026-10-07, and Reader for the started line the
+same day.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
@@ -94,6 +99,22 @@ that no window here does. It says nothing has been recorded at all only of a
 record whose index names no row, in every window. Where the page has not read
 what would make a claim true - a record not packed or not loaded, a window that
 holds no packed day - it says only that measurement is off and how to turn it on.
+
+**The started line names only a start the open window shows, and only a true
+one.** It is worked out once for each window the control offers, from the whole
+read. The instrument's first day is the first day it ran in what the route read -
+a day it recorded, or a day whose record was lost - and that is its true first
+day only when the read reaches back to the oldest named day of every record it
+draws on (the server's counters draw on the machine and the article records). A
+record whose indexes name a day before the read may hold a day the instrument
+ran before anything the read holds, so the instrument gets no started line, and
+no day before the read is opened to learn it. The line prints in each window
+that shows the instrument's first day, names it, and counts the days of the
+window before it that had a run. An instrument whose rows begin after its record
+did - the machine identity in the machine record - is named on its own first
+day. Once a record's first month is packed into one file, its indexes know the
+month and not the day, so when the widest window starts inside that month, after
+its 1st, no window prints a started line: no line rather than a false date.
 
 ## A record that had not begun, a quiet day, and a record that was destroyed
 
@@ -189,6 +210,31 @@ no full stop.**
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 
+## A window's days take one of two names, and one day never needs a second
+
+Every windowed sentence takes its day words from one helper,
+`frontend/src/lib/console/span-words.ts`, so the 1-day window never prints
+`1 days` and one edit moves every sentence. Reader chose the words on
+2026-10-07.
+
+- **The days on screen:** `these 7 days`, and `this one day` at one day. A
+ sentence or a row label that opens on them is capitalised: `These 7 days`,
+ `This one day`.
+- **A bare count:** `7 days`, and `1 day` at one day - the days control's own
+ words. A count over the window takes it and drops `these`: `on 5 of 7 days`,
+ `on 1 of 1 day`.
+- **No `the last 7 days`.** Every console window ends on the newest published
+ day, which is not always today, so `the last` claims more than the page knows.
+- **At one day, a sentence must not need a second day.** No range - one day is
+ one date, never `2026-10-06 to 2026-10-06`. No order across days, no waiting for
+ a later day, and no worst, middle, median, quietest or loudest day. Such a
+ sentence is written whole for one day, in the same tense: `No day in these 7
+ days published a summary` is `This one day did not publish a summary`, and
+ `one tile a day, over these 7 days` is `one tile for this one day`.
+
+A sentence that counts something other than the window's days - runs, a rule's
+own span, the days a record read - keeps its own count.
+
 ## A section keeps the sentence that decides and loses the sentence that narrates
 
 Every panel writes its own heading, intro, readout and empty state, and many
@@ -210,7 +256,7 @@ new section.
 
 - **One name for one span.** Four phrasings for one window, and the same
  instruction written two ways, is what a page reads like when nobody has done
- this pass.
+ this pass. The two names a window's days may take are in the section above.
 - **One name for one control.** A name taken from a component outlives the
  component: `Failure rate against volume` went on naming a component that no
  longer existed.
@@ -224,6 +270,14 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+**Two names for a window's days, not one.** One name everywhere was the fewest
+words to keep, and it breaks a count: `on 1 of this one day`. The bare count is
+the days control's own words, so the second name adds no new kind of words to the
+page. A name per sentence was what the console had before, and at the 1-day
+window it printed `these 1 days`, `over the last 1 days` and `the 1 days ending
+there` from templates of their own on every route. Reader ruled the words on
+2026-10-07.
 
 **One classification of a column's type.** The table, the chart and the colours
 each read type names with lists of their own, and they disagreed about the same

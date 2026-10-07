@@ -245,6 +245,8 @@ export async function load() {
 	 * them missed rather than drawing it as a day nothing happened. */
 	const scoredDays = [...new Set(rows.map((row) => row.date ?? ''))].filter((date) => date !== '').sort();
 	const timedDays = [...itemHealthByDate.keys()].sort();
+	/** The days either instrument answered for: a run happened on each of them. */
+	const answeredDays = [...new Set([...scoredDays, ...timedDays])].sort();
 
 	// One candle a timed day, bounded to the widest span the control can reach -
 	// the same seed the doubt reasons and the eval days take. A day older than the
@@ -258,27 +260,38 @@ export async function load() {
 	return {
 		modelWork: work,
 		throughputDays,
-		// What the recording itself was doing. Every quality figure on this route
-		// comes from the faithfulness scorer, so a day it was switched off for or
-		// sampled past has summaries nobody counted - which is not the same fact as
-		// a day the model wrote nothing, and a zero cannot tell them apart.
-		recording: {
-			...recordingNotes({
-				enabled: observability.evaluation_enabled,
-				rate: observability.sample_rate,
-				recorded: scoredDays,
-				window: [...new Set([...scoredDays, ...timedDays])].sort(),
-				// Days the score record's own index records lost: the scorer ran on
-				// them, so they date its start and are never days before it.
-				daysWithNoRecord: scores.read.state === 'read' ? scores.read.lostDays : []
-			}),
-			// The other direction: the machine ran and we timed it, and nothing
-			// scored what it wrote. Null where every timed day was also scored.
-			countersOnly:
-				timedDays.filter((date) => !scoredDays.includes(date)).length === 0
-					? null
-					: countersWithoutScores()
-		},
+		// What the recording itself was doing, once for each span the control
+		// offers, so a day a line names is one that span shows. Every quality figure
+		// on this route comes from the faithfulness scorer, so a day it was switched
+		// off for or sampled past has summaries nobody counted - which is not the
+		// same fact as a day the model wrote nothing, and a zero cannot tell them
+		// apart. Each span is handed the whole read and the score record's read, so
+		// a start is dated only where the read reaches back to the record's first day.
+		recording: Object.fromEntries(
+			[...windows].map(([days, window]) => [
+				days,
+				{
+					...recordingNotes({
+						enabled: observability.evaluation_enabled,
+						rate: observability.sample_rate,
+						recorded: scoredDays,
+						window: answeredDays,
+						reads: [scores.read],
+						from: readSpan.start,
+						open: window,
+						figures: 'quality figures'
+					}),
+					// The other direction: the machine ran and we timed it, and nothing
+					// scored what it wrote. Null where every timed day in the span was
+					// also scored.
+					countersOnly: timedDays.some(
+						(date) => date >= window.start && date <= window.end && !scoredDays.includes(date)
+					)
+						? countersWithoutScores()
+						: null
+				}
+			])
+		),
 		// Whether the scorer is switched off, once for each span the control offers:
 		// a day the line names is one that span shows, and a span that holds none of
 		// the score record's rows names the span that reaches back to them instead.

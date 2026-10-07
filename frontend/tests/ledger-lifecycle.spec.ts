@@ -676,6 +676,7 @@ test.describe('a console window ends on the newest published day, and reads only
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-14',
+			first: '2030-05-01',
 			lastRows: { period: 'monthly', covers: '2030-05' },
 			lostDays: [],
 			setAside: {}
@@ -698,6 +699,7 @@ test.describe('a console window ends on the newest published day, and reads only
 		expect(table.read).toEqual({
 			state: 'read',
 			through: '2030-06-10',
+			first: '2030-05-16',
 			lastRows: { period: 'daily', covers: '2030-06-10' },
 			lostDays: [],
 			setAside: {}
@@ -736,7 +738,7 @@ test.describe('a console window ends on the newest published day, and reads only
 	test('a ledger that has never held a row: its quiet days stay quiet, and no note says its rows stopped', async () => {
 		const { table } = await consoleRead(emptyDays(20, 0), FORTNIGHT);
 		expect(table.rows).toEqual([]);
-		expect(table.read).toEqual({ state: 'read', through: PINNED, lastRows: null, lostDays: [], setAside: {} });
+		expect(table.read).toEqual({ state: 'read', through: PINNED, first: '2030-05-26', lastRows: null, lostDays: [], setAside: {} });
 		expect(recordNotes([{ record: 'machine', read: table.read }], PINNED, FORTNIGHT, OFFERED)).toEqual([]);
 	});
 });

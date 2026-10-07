@@ -58,9 +58,9 @@ class StepChoice(Model):
     stopped_because: StopReason | None = Field(
         default=None,
         description=(
-            "`ceiling` when the cap cut the span short while more was ready, `failed` when "
-            "an operator range leaves out the period the step must take first. None when "
-            "neither."
+            "`ceiling` when the cap cut the span short while more was ready, `deferred` when "
+            "an operator range starts after the period the step must take first: the step "
+            "refuses that period with the fault `range-starts-late`. None when neither."
         ),
     )
     resume_from: PeriodStamp | None = Field(
@@ -80,11 +80,14 @@ class StepChoice(Model):
             raise ValueError(f"a span runs forward: {self.first} comes after {self.last}")
         if (self.stopped_because is None) != (self.resume_from is None):
             raise ValueError("a choice that stops names where the step resumes, and only then")
-        if self.stopped_because is StopReason.EXHAUSTED:
-            raise ValueError("a choice stops at the cap or at a refusal, not at an exhausted list")
+        if self.stopped_because in (StopReason.EXHAUSTED, StopReason.FAILED):
+            raise ValueError(
+                "a choice stops at the cap or at a range that starts late, never exhausted "
+                "and never for a defect"
+            )
         if self.stopped_because is StopReason.CEILING and self.first is None:
             raise ValueError("the cap cuts a span short, so a choice stopped by it has one")
-        if self.stopped_because is StopReason.FAILED and self.first is not None:
+        if self.stopped_because is StopReason.DEFERRED and self.first is not None:
             raise ValueError("a refused choice takes nothing, so it has no span")
         return self
 

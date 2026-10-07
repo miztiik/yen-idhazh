@@ -32,9 +32,14 @@ budget, which is a code defect. The downloads are paid for by the time the
 number is known, so stopping then would only stop the passes that shrink the
 tree.
 
-**A task that fails still has a row.** Its row says `failed`, its siblings still
-run, and the shard exits 1 when nothing worse happened. What it had already done
-is on the row, because the core carries it out of any failure part way.
+**A task that stops still has a row, and the row says why.** Every error a task
+meets is read once for what it means (`error_cause`). A code defect ends its row
+`failed` with the fault `raised`; a cause outside the code - GitHub's API that
+did not answer, or a period that waits for a later wake or a person - ends it
+`deferred` with a word that names it. Its siblings still run either way, and
+what it had already done is on the row, because the core carries it out of any
+stop part way. **Only a failed row, or a shard over its download budget, makes
+the shard exit 1**; a deferred one leaves the exit code as it was.
 
 **Every task is handed the folders it walks, judged against the commit.** A
 folder the commit holds is walked whether the checkout holds it or not, because
@@ -71,8 +76,8 @@ returned, skipping every day folder that pass took. What the fold writes and
 deletes is held to what the task owns like everything else, and it lands when
 the fold is live whatever the window's `dry_run` says - a live fold inside a
 dry task would otherwise change the disk and stage nothing. A window that
-failed stops the fold for that wake: what it took is then a list nothing has
-checked, and a closed day loses nothing by waiting.
+stopped - failed or deferred - stops the fold for that wake: what it took is
+then a list nothing has checked, and a closed day loses nothing by waiting.
 """
 
 from __future__ import annotations
@@ -90,8 +95,9 @@ from typing import Final
 from idhazh import ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, WriterIdentity
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
     RetentionPolicy,
     TaskKind,
@@ -99,10 +105,11 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import closed_day_fold, registry, report, shards
+from idhazh.gardener import closed_day_fold, error_cause, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
-from idhazh.gardener.file_listing import FileListing
+from idhazh.gardener.error_cause import ErrorCause
+from idhazh.gardener.file_listing import FileListing, OverBudgetError
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
@@ -214,8 +221,8 @@ def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
     return (*policy.owns, *policy.reads)
 
 
-def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
-    """The pass of a task that failed before it reached a single member."""
+def _nothing_reached(name: str, policy: TaskPolicy, fault: GardenerFault) -> Pass:
+    """The pass of a task that stopped before it reached a single member, for this cause."""
     return Pass(
         collection=name,
         since=None,
@@ -227,8 +234,9 @@ def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
         taken=(),
         written=(),
         bytes_freed=0,
-        stopped_because=StopReason.FAILED,
+        stopped_because=stop_for(fault),
         resume_from=None,
+        fault=fault,
     )
 
 
@@ -238,15 +246,16 @@ class _Ran:
     context: TaskContext
     outcome: Pass
     duration_ms: int
+    #: Whether the task's row says `failed`: a code defect, the one stop that
+    #: turns the shard's exit code to 1.
     failed: bool
     #: What the task's fold did. None when it has no fold, or the fold did not run.
     folded: closed_day_fold.Folded | None = None
 
 
 def _run_one(name: str, held: registry.TaskModule, context: TaskContext, folders: Folders) -> _Ran:
-    """One task, timed, with any failure turned into the row that says so."""
+    """One task, timed, with any error read for what it means and turned into its row."""
     started = time.monotonic()
-    failed = True
     folded: closed_day_fold.Folded | None = None
     for folder in folders.absent:
         logger.info(
@@ -256,31 +265,32 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext, folders
         )
     try:
         outcome = held.run(context)
-        failed = outcome.stopped_because is StopReason.FAILED
     except PruneInterruptedError as stop:
-        logger.error("%s failed part way: %s", name, stop)
+        logger.error("%s stopped part way: %s", name, stop)
         outcome = stop.so_far
-    except Exception:
-        logger.exception("%s failed before it reached a member", name)
-        outcome = _nothing_reached(name, context.policy)
+    except Exception as failure:
+        fault = error_cause.fault_of(error_cause.classify(failure))
+        logger.exception("%s stopped before it reached a member, fault=%s", name, fault)
+        outcome = _nothing_reached(name, context.policy, fault)
     policy = context.policy
-    if not failed and isinstance(policy, RetentionPolicy) and policy.fold is not None:
+    stopped = outcome.stopped_because in (StopReason.FAILED, StopReason.DEFERRED)
+    if not stopped and isinstance(policy, RetentionPolicy) and policy.fold is not None:
         try:
             folded = closed_day_fold.run(context, policy.fold, skip=outcome.taken)
         except closed_day_fold.FoldInterruptedError as stop:
-            logger.error("%s's fold failed part way: %s", name, stop)
-            folded, failed = stop.so_far, True
-        except Exception:
-            logger.exception("%s's fold failed before it settled a day", name)
-            folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, failed=True)
-            failed = True
+            logger.error("%s's fold stopped part way: %s", name, stop)
+            folded = stop.so_far
+        except Exception as failure:
+            fault = error_cause.fault_of(error_cause.classify(failure))
+            logger.exception("%s's fold stopped before it settled a day, fault=%s", name, fault)
+            folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, fault=fault)
     elapsed = int((time.monotonic() - started) * 1000)
     return _Ran(
         name=name,
         context=context,
         outcome=outcome,
         duration_ms=elapsed,
-        failed=failed,
+        failed=report.ended(outcome, folded)[0] is StopReason.FAILED,
         folded=folded,
     )
 
@@ -436,11 +446,15 @@ def over_the_ceiling(downloaded: Mapping[str, int], *, ceiling_mb: int, shard: i
 
     `downloaded` is what the shard's tasks downloaded under each folder it
     listed. Over means strictly more than the ceiling: a shard that downloaded
-    exactly the ceiling is inside it. A step that chooses its periods by the
-    budget never passes it, so a shard over it is a code defect to fix.
+    exactly the ceiling is inside it. `error_cause.classify` decides it by the
+    rule it decides a single period by, that more than the whole budget is a
+    defect: a step that chooses its periods by the budget never passes it, so a
+    shard over it is a code defect to fix, and no row can say which task did it.
     """
     total = sum(downloaded.values())
-    if total <= ceiling_mb * BYTES_PER_MB:
+    budget = ceiling_mb * BYTES_PER_MB
+    spent = OverBudgetError(needed=total, room=budget - total, budget=budget)
+    if error_cause.classify(spent) is not ErrorCause.RAISED:
         return None
     heaviest = sorted(downloaded.items(), key=lambda held: (-held[1], held[0]))
     named = ", ".join(
@@ -563,6 +577,7 @@ def run(
                 git_sha=git_sha,
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
+                first_ledger_year=settings.config.first_ledger_year,
                 period_range=period_ranges[name],
             )
             done = _run_one(name, bound[name], context, resolved[name])

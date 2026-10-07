@@ -282,10 +282,9 @@ as an input, and it ends with "Build inputs changed during compilation". Run
 `build_canary_day.py` from the copy's root with `PYTHONPATH` set to the copy's
 `backend`, and `build-canary.mjs` from its `frontend` with `IDHAZH_PYTHON` set
 to an installed interpreter, so the copy's code is what packs. Compare entries
-and names, not bytes, and leave out two clocks: the name of each raw file the
-canary writes after packing holds the time of its write, and each watermark's
-`advanced_at` the time of its pass, so both differ between any two builds of
-one commit.
+and names, not bytes, and leave out the one clock: the name of each raw file
+the canary writes after packing holds the time of its write, so it differs
+between any two builds of one commit.
 
 ## Set up the backend environment
 

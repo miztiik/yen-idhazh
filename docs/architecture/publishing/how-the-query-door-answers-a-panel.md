@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -46,7 +46,7 @@ of four nothings without inspecting an error:
 | --- | --- | --- |
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
 | 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted or before the ledger began. A filter that matches nothing is `quiet`, never an empty `ok` |
-| 3 | `missing` | The ledger has no `daily.json`, so it is not published. Its fault is `not-packed` |
+| 3 | `missing` | The ledger has no `daily.json`: it is not published, or it is published and not packed yet ([what the site holds](#what-the-site-holds-for-the-door)). Its fault is `not-packed` |
 | 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
 
 `ok` and `quiet` carry `first`, the first day the answer covers: the span's own
@@ -196,7 +196,7 @@ it learns where a record's rows stop when none of them is in the window:
 | --- | --- | --- |
 | 1 | `ok`, with `first`, `through` and `lastRows` | `through` is the newest day any index names, a month counting through its last UTC day and a year through 31 December: the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. `lastRows` is the newest period whose file holds rows - a day, a month or a year, as the index names it, a day before a month before a year - or `null` when no entry holds a row. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first`, `through` and `lastRows` are then what the indexes that are there name |
 | 2 | `quiet` | No index names a day yet |
-| 3 | `missing` | There is no `daily.json`, so the ledger is not published. Its fault is `not-packed` |
+| 3 | `missing` | There is no `daily.json`: the ledger is not published, or it is published and not packed yet. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
 It reads all three indexes at the same time through the page's keeper, so a slice
@@ -287,17 +287,25 @@ site only, and they keep the same `CompactIndex` shape. The committed registry
 `frontend/scripts/published-ledgers.mjs` decides which ledger files are in that
 staged tree.
 
-- **The trimmed indexes are the list.** No directory is walked, so the gardener's
-  watermark, a raw day and any file no trimmed index names stay off the site with
+- **The trimmed indexes are the list.** No directory is walked, so a raw day and
+  any file no trimmed index names stay off the site with
   no list of things to leave out. A file whose entry has `rows: 0` is copied too,
   so every entry resolves, although the door never asks for one. An entry
   `empty` or `lost` names no file, so nothing is copied for it and nothing is
   reported missing; it stays in its trimmed index.
-- **A published ledger without all three indexes stops the build**, which names the
-  ledger and the missing file. A browser asks for a ledger's indexes before
-  anything else, so a 404 there would be the only sign that the ledger was
-  published wrongly. The whole site waits, reading pages included, until the
-  ledger is whole again or leaves `ledger.published`.
+- **A published ledger with no compact folder is not packed yet, and the build
+  goes on.** Every ledger starts that way. The copy checks one named path,
+  `state/compact/<ledger>/`, stages nothing for that ledger and prints one line
+  in the build log that names it. The door then finds no `daily.json` and
+  answers `missing`: the route's note says the record is not packed yet, and
+  the Data explorer says the ledger has no days on this site yet. A compact
+  folder deleted by accident reads the same way, and that log line and the
+  bundle gate's report, which names the ledger, are the only signs of it.
+- **A published ledger with some of its indexes but not all three stops the
+  build**, which names the ledger and each missing index. A browser asks for a
+  ledger's indexes before anything else, so a 404 there would be the only sign
+  that the ledger was published wrongly. The whole site waits, reading pages
+  included, until the ledger is whole again or leaves `ledger.published`.
 - **The cap is the widest console span, anchored on the ledger's data.** On
   2026-10-03 that span is 90 UTC days. It is counted back from the newest day
   any of the three packed indexes names: a day as itself, a month through its
@@ -343,7 +351,14 @@ its longest bounded day or month index. The copied registry has its own
 `config/ledgers.json` key of 3,200 gzipped bytes, which is a little over twice
 the 1,469 bytes measured at gzip -5 on 2026-10-02. The bundle gate weighs all
 three indexes and the registry; `backend/tests/contracts/test_page_ceilings.py`
-also fails when a day or month keep window grows past its bound. Size a key from
+also fails when a day or month keep window grows past its bound. A ledger not
+packed yet has no file in the build, so the bundle gate reports its key as not
+weighed and names the ledger. That key fails nothing, so CI and the publish
+after a push to `main` go on while the ledger waits for its first packing. The
+gate looks for the ledger's files in the two folders the site copy stages for
+it, `state/compact/<ledger>/` and `state/raw/<ledger>/`, so a published ledger
+with some of its files in the build and no index still fails the gate
+(`frontend/scripts/payload-ceilings.mjs`). Size a key from
 the runner's reading, because zlib-ng, which some local Python builds use, reads
 the same index about 4 percent smaller. **The data files carry no ceiling, and no
 gate yet weighs what one span reads.**

@@ -90,11 +90,13 @@ def pack(
     policy: CompactionPolicy,
     today: date,
     months: Sequence[str],
+    first_ledger_year: str,
 ) -> tuple[list[str], list[str], list[str]]:
     """Pack only the named months until a pass writes and deletes no selected period.
 
     The first and last named month are each pass's range, as a person's `--from`
-    and `--to` would be.
+    and `--to` would be. `first_ledger_year` is `config/idhazh_gardener.json`'s,
+    which a pass that rebuilds an absent index looks from.
     """
     repo_root = state_dir.parent
     context = f"{label_path(state_dir)}: {which.value}"
@@ -119,6 +121,7 @@ def pack(
                     listing=FileListing.from_disk(
                         repo_root, folders, paths=packing_paths(state_dir, which, months)
                     ),
+                    first_ledger_year=first_ledger_year,
                     period_range=(min(months), max(months)),
                 ),
             )
@@ -136,9 +139,10 @@ def pack(
                         parts[index + 3].removesuffix(".parquet"),
                     )
                     packed.add(date.fromisoformat("-".join(day_parts)).isoformat())
-        if outcome.stopped_because is StopReason.FAILED:
+        if outcome.fault is not None:
             raise NotProvenError(
-                f"{context}: the compaction refused at {outcome.resume_from}; CSV files are kept"
+                f"{context}: the compaction refused at {outcome.resume_from} "
+                f"({outcome.fault.value}); CSV files are kept"
             )
         if outcome.written or outcome.taken:
             continue

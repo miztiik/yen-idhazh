@@ -227,19 +227,17 @@ test.describe('where the merge line sits', () => {
 	test('the clamp sentence counts the days a clamp fired and no others', () => {
 		// Two of the four: the daily step and the guard. The day that took its
 		// proposal whole and the day nothing was fitted are not clamps.
-		expect(clampNote(LINE, 30)).toBe('The clamp held the line back on 2 of the last 30 days.');
+		expect(clampNote(LINE, 30)).toBe('The clamp held the line back on 2 of 30 days.');
 	});
 
 	test('a window where the clamp never fired says so rather than printing a zero', () => {
-		expect(clampNote(LINE.slice(0, 1), 7)).toBe(
-			'The clamp has not held the line back on any of the last 7 days.'
-		);
+		expect(clampNote(LINE.slice(0, 1), 7)).toBe('The clamp has not held the line back in these 7 days.');
 	});
 
 	test('a held day is counted and a window with none says nothing at all', () => {
 		// Null rather than "0 days were held": a sentence a reader has to parse to
 		// learn that nothing happened is a sentence that should not be there.
-		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of these 30 days.');
+		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of 30 days.');
 		expect(heldNote(LINE.slice(0, 3), 30)).toBeNull();
 	});
 });

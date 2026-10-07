@@ -39,6 +39,7 @@
 		type SettingsMoved
 	} from '$lib/console/settings-moved';
 	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -187,11 +188,11 @@
 		heading="h3"
 		id="tail-trend"
 		title="Whether the slowest articles are getting slower"
-		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over the last {windowDays} days."
+		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over {nameSpan(windowDays)}."
 	>
 		{#if tailRuns.length === 0}
 			<p class="empty" data-machine-panel-empty="latency">
-				No run in these {days} days timed {floor} items, which is the floor
+				No run in {nameSpan(days)} timed {floor} items, which is the floor
 				below which a p99 is just the last item.
 			</p>
 			{#if tailUnread.length > 0}
@@ -207,7 +208,7 @@
 						viewBox={`0 0 ${tailW} ${tailH}`}
 						role="img"
 						tabindex="0"
-						aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}, over {days} days. All five plots share one scale."
+						aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}, over {countDays(days)}. All five plots share one scale."
 						data-latency-runs={tailRuns.length}
 						use:pointerReadout={{
 							marks: tailMarks,
@@ -363,7 +364,7 @@
 
 			<p class="reads" data-latency-note>
 				{tailRuns.length}
-				{tailRuns.length === 1 ? 'run' : 'runs'} of these {days} days. The value is
+				{tailRuns.length === 1 ? 'run' : 'runs'} of {nameSpan(days)}. The value is
 				<code>summarize_ms</code>, the whole model call for one item, and a percentile is
 				interpolated linearly between the two nearest ranks - at about a hundred items the
 				nearest-rank rule and this one disagree by more than the difference between two runs, so

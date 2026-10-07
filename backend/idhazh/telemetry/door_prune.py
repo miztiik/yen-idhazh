@@ -18,7 +18,7 @@ day of the range a ceiling left.
 1. it deletes the days' raw files;
 2. it rebuilds each daily, monthly and yearly file that holds a row of them,
    once, without their rows - a file whose every row goes stays as an empty
-   file, so no index and no watermark has a hole;
+   file, so no index has a hole;
 3. it rewrites each index that names a rebuilt file, in the bytes the
    compaction writes an index in. The rebuilt file's entry takes the file's
    new row count and size and keeps every other field as it was, so the days
@@ -27,7 +27,7 @@ day of the range a ceiling left.
 Deletes first, so a day the pass has not finished still holds a row in a
 compact file, or its index still says it does, and the same command takes it
 again; then each file before its index, as the compaction orders them. No
-watermark moves: no period was compacted.
+compaction mark moves: every index names the periods it named before.
 
 **No file is ever half-written, and the same command finishes a pass that
 stopped.** Each write is whole, through `atomic_write`, and each delete is one
@@ -35,7 +35,8 @@ stopped.** Each write is whole, through `atomic_write`, and each delete is one
 same command again: a deleted file is no longer listed, a rebuilt file no
 longer holds the days and is rebuilt to the same rows, and each index is
 rewritten from the files as they then stand. A failure part way raises
-`PruneInterruptedError`, carrying what had already changed.
+`PruneInterruptedError`, carrying what had already changed and, in its `fault`,
+what the failure means as `error_cause` reads it.
 
 **A dry run decides everything and changes nothing.** It reads the same files,
 builds every rebuilt file in memory, and reports the paths a live pass would
@@ -61,11 +62,12 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from idhazh import atomic_write, day_partition, ledger
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import one_at_a_time
+from idhazh.gardener import error_cause, one_at_a_time
 from idhazh.ledger import HeldFile
 
 
@@ -179,7 +181,10 @@ def take_days(
     changes = _changes(state_dir, name, held, taken, identity=identity)
 
     def record(
-        done: Sequence[_Change], because: StopReason, resume: str | None
+        done: Sequence[_Change],
+        because: StopReason,
+        resume: str | None,
+        fault: GardenerFault | None = None,
     ) -> one_at_a_time.Pass:
         """The record of the changes made so far, built in one place for every exit."""
         return one_at_a_time.Pass(
@@ -199,6 +204,7 @@ def take_days(
             bytes_freed=sum(change.freed for change in done),
             stopped_because=because,
             resume_from=resume,
+            fault=fault,
         )
 
     stopped = StopReason.EXHAUSTED if resume_from is None else StopReason.CEILING
@@ -210,8 +216,9 @@ def take_days(
             _apply(change)
         except OSError as failure:
             first = min(taken) if taken else None
+            fault = error_cause.fault_of(error_cause.classify(failure))
             raise one_at_a_time.PruneInterruptedError(
-                record(done, StopReason.FAILED, first)
+                record(done, stop_for(fault), first, fault)
             ) from failure
         done.append(change)
     return record(done, stopped, resume_from)

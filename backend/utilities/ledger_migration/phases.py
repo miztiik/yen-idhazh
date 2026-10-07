@@ -6,7 +6,7 @@ import errno
 from collections.abc import Sequence
 from pathlib import Path
 
-from idhazh import ledger
+from idhazh import config, ledger
 from utilities.ledger_migration.csv_layouts import csv_root
 from utilities.ledger_migration.inputs import MigrationInputs
 from utilities.ledger_migration.packing import pack, packs_here
@@ -14,9 +14,7 @@ from utilities.ledger_migration.planning import Moved, RootPlan, collect_reports
 from utilities.ledger_migration.proof import prove
 
 
-def write_roots(
-    plans: Sequence[RootPlan], *, raw_only: bool = False
-) -> list[tuple[Path, Moved]]:
+def write_roots(plans: Sequence[RootPlan], *, raw_only: bool = False) -> list[tuple[Path, Moved]]:
     """File a plan, optionally leaving production compaction for a later pass."""
     for plan in plans:
         for name, days in plan.planned.items():
@@ -30,6 +28,9 @@ def write_roots(
         for plan in plans:
             if not packs_here(plan.state_dir, plan.inputs.config_dir):
                 continue
+            first_ledger_year = config.load_gardener(
+                plan.inputs.config_dir
+            ).config.first_ledger_year
             for name in plan.planned:
                 packed, written, deleted = pack(
                     plan.state_dir,
@@ -38,6 +39,7 @@ def write_roots(
                     policy=plan.policies[name],
                     today=plan.inputs.today,
                     months=plan.inputs.months,
+                    first_ledger_year=first_ledger_year,
                 )
                 report = plan.reports[name]
                 report.packed = packed
