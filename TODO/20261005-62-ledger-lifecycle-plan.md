@@ -87,7 +87,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | PENDING | - | - | - |
 | L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | PENDING | - | - | - |
 | L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | PENDING | - | - | - |
-| L34 | The rest of the console reads right at the one-day window | L26, L28 (holds `docs/concepts/console-design.md`), L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `JudgeAgreement.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
+| L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `JudgeAgreement.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | PENDING | - | - | - |
 
 ## 2. Shared declarations
@@ -1525,7 +1525,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/console-window.spec.ts` (row L26's built cases, one of which pins the merge line's note; held by L30, L31 and L32 while they run)
   - `frontend/tests/span-sentences.spec.ts` (row L26's logic cases, for a sentence a function writes)
   - `frontend/tests/console-machine-panels.spec.ts` (pins "Which machines ran our jobs, day by day")
-  - `docs/concepts/console-design.md` (the one-day rule, where Reader's ruling adds to it; held by L28 while it runs)
+  - `docs/concepts/console-design.md` (the one-day rule, where Reader's ruling adds to it)
   - Left as they are, unless Reader rules otherwise: the data explorer's example "Summaries scored, day by day" (`config/appearance.json`, with its default copies in `backend/idhazh/contracts/knobs/console.py` and `frontend/src/lib/server/config.ts`), which opens at its own 14 days; `frontend/src/lib/charts/glance.ts`, whose "day by day" already drops at one measured day
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the specs it selects for the changed files; `npm --prefix frontend run check`; `doc_load.py` on the page if it changes; the browser smoke of Voices, Hardware, Pipelines, Summaries and Judgement at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-window.spec.ts` and `span-sentences.spec.ts`, on data the test builds (Table D, D3): at the 1-day preset each surface above reads right under the one-day rule, in Reader's words written out whole, and at 7 days each is unchanged. On `main` the 1-day cases print the words above, such as ", its newest day" on Voices and "One line is how often ..." on Judgement, which is what lets this check fail. It cannot settle the words, or whether a title keeps "day by day"; Reader rules (decision 1).
@@ -1536,7 +1536,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- |
 | 1 | Reader chooses the words, and rules whether a title or the cost switch that says "day by day" keeps it at one day (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
 | 2 | The surfaces are row L26's follow-ups, each found on its smoke at the 1-day window | Row L26's report; plan owner, 2026-10-07 |
-| 3 | L34 waits for L26 (#1400), which set the one-day rule and the one-column rule in `ChartReadout.svelte`, and for L28, L30, L31 and L32, which hold files it touches (the Depends-on cell names each) | Plan owner, 2026-10-07 |
+| 3 | L34 waits for L26 (#1400), which set the one-day rule and the one-column rule in `ChartReadout.svelte`, and for L30, L31 and L32, which hold files it touches (the Depends-on cell names each) | Plan owner, 2026-10-07 |
 | 4 | Level 1: words on panels, one surface at a time; a wrong version is obvious and local | Plan owner, 2026-10-07 |
 
 **Rejected alternatives**
