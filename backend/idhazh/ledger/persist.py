@@ -743,7 +743,9 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
     **Every `ValueError` this raises names closed facts only: a path, a field
     name declared by `RowIdentity` or `model`, and a pydantic error kind - never
     a row's own value** (Guardrail #11: a cell can hold text fetched from the
-    open web). A caller may log it whole.
+    open web). A caller may log it whole, and its traceback carries no chained
+    cause: the refusal it was raised from is suppressed, so an uncaught crash
+    never prints the row's value either.
     """
     wanted = model.schema_version()
     added = {column.name for column in _IDENTITY_COLUMNS} - set(model.model_fields)
@@ -771,7 +773,7 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
             )
         except ValidationError as refusal:
             facts = _refusal_facts(refusal, declared=declared)
-            raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from refusal
+            raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from None
     return held
 
 

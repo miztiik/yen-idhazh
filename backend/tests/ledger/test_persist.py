@@ -17,6 +17,7 @@ import json
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 from typing import Any, ClassVar, Final
 
@@ -886,6 +887,33 @@ def test_a_refused_rows_own_value_never_reaches_the_message(tmp_path: Path) -> N
     message = str(refused.value)
     assert canary not in message
     assert "count: int_parsing" in message
+
+
+def test_a_refused_rows_own_value_never_reaches_the_traceback(tmp_path: Path) -> None:
+    """The refusal's own text travels on as `__cause__` unless it is raised `from None`.
+
+    `str(ValueError)` is not the only door: `traceback.format_exception` walks
+    the chained cause and prints its text whole, which an uncaught crash or a
+    `logger.exception` call would do too. The row's own value must stay out of
+    that text as well (Guardrail #11; plan owner fold, 2026-10-07).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[0]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, count=canary)
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    rendered = "".join(traceback.format_exception(refused.value))
+    assert canary not in rendered
+    assert "count: int_parsing" in rendered
 
 
 def test_more_than_five_failing_fields_are_capped_with_the_total_shown(tmp_path: Path) -> None:
