@@ -528,9 +528,10 @@ its packing recorded lost has no record, and a file it set aside unread holds
 rows no panel draws, so that line names the folder a person reads them in. A
 recording note never counts a lost day as a day before the recording started:
 the instrument ran that day, so the day dates its start. It dates a start only
-for a record whose indexes begin inside the open window, the read's `first`
-beside `lastRows`, so a record that began before the window is never said to
-start in it, and no day before the window is read to know.
+where the route's read reaches back to the record's oldest named day, the read's
+`first` beside `lastRows`, and prints it only in a window that shows that day,
+so a record that began before the read is never said to start in it, and no day
+before the read is opened to learn it.
 
 **Packing settles rows per day, not over the whole requested window.** This
 scope preserves historical rows; it does not define measurement identity.

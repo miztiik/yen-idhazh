@@ -273,6 +273,13 @@ export async function load() {
 	const dates = [
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
 	].filter((date) => date !== '');
+	// What each instrument answered for over the whole read, so a recording note
+	// can tell where an instrument began from the days before a span as well as
+	// those inside it. The server's counters, the machine record and the item
+	// ledger each answer for different days of one run.
+	const counterDays = [...new Set(counters.runs.map((run) => run.date))].sort();
+	const machineDays = [...new Set(fingerprints.map((row) => row.date))].sort();
+	const healthDays = [...new Set(health.map((row) => row.date ?? ''))].filter((date) => date !== '').sort();
 
 	// The two shares a stolen-processor tile is drawn against, out of
 	// `console.*` rather than typed into the module (Guardrail #6). Both are
@@ -303,8 +310,6 @@ export async function load() {
 
 		const runs = inSpan(counters.runs);
 		const ranOn = [...new Set(runs.map((run) => run.date))].sort();
-		const lostInSpan = inSpan(lostDays);
-		const spanDays = [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort();
 		const healthRows = health.filter(
 			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
 		);
@@ -355,31 +360,31 @@ export async function load() {
 			// recording rather than a machine that did nothing - and the two states
 			// look identical on a chart unless the page says which one it is. The
 			// item ledger is the other instrument: a day it covers and the counters
-			// do not is the state most committed days are in. The machine record's
-			// read says where the record begins and which of its days were lost, so
-			// a start is dated only where it is inside this span, and a lost day
-			// dates it as a day the counters ran.
+			// do not is the state most committed days are in. Each note is handed
+			// the whole read and the machine record's read, so it names only what
+			// this span shows and dates a start only where the read reaches back to
+			// the record's first day.
 			recording: recordingNotes({
 				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
-				recorded: ranOn,
-				window: spanDays,
+				recorded: counterDays,
+				window: dates,
 				read: machine.read,
+				from: readSpan.start,
 				open,
-				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
-					.filter((date) => date !== '')
-					.sort()
+				coveredElsewhere: healthDays
 			}),
 			// The machine record is the other instrument on this route, and it has
 			// its own three states. It carries no sampling knob, so it owes no
 			// sampling caveat and passes no rate.
 			machineRecord: recordingNotes({
 				enabled: observability.host_fingerprint,
-				recorded: [...new Set(inSpan(fingerprints).map((row) => row.date))].sort(),
-				window: spanDays,
+				recorded: machineDays,
+				window: dates,
 				read: machine.read,
+				from: readSpan.start,
 				open,
-				lost: lostInSpan,
+				lost: lostDays,
 				figures: 'machine record'
 			}),
 			reuse: promptReuse(healthRows, healthTable.columns),

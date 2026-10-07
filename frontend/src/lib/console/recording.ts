@@ -190,16 +190,18 @@ export interface RecordingFacts {
 	/** Its sample rate, 1.0 where it measures everything. Omitted by an
 	 * instrument that has no sampling knob, which owes no caveat either way. */
 	rate?: number;
-	/** The days this instrument recorded, ascending. Only those inside `open` count. */
+	/** The days this instrument recorded, ascending, from `from` on. */
 	recorded: readonly string[];
-	/** The days the route has a run on, ascending. Only those inside `open` count,
-	 * and those before the first day this instrument ran had a run and none of
-	 * its figures. */
+	/** The days the route has a run on, from `from` on. Those inside `open` and
+	 * before the first day this instrument ran had a run and none of its figures. */
 	window: readonly string[];
 	/** How the read of this instrument's record went. Its indexes say where the
-	 * record begins and which of its days were lost, and a lost day is a day the
-	 * instrument ran. */
+	 * record begins and which of its days in the read were lost, and a lost day
+	 * is a day the instrument ran. */
 	read: RecordRead;
+	/** The first day the facts here cover: the first day the route read, or the
+	 * open window's first day where only that window's days are handed. */
+	from: string;
 	/** The window the notes are for. */
 	open: OfferedWindow;
 	/** Days another instrument answered for that this one did not. */
@@ -212,35 +214,36 @@ export interface RecordingFacts {
 
 /** What the recording was doing over the open window, from what the route read.
  *
- * Every fact is kept only where the open window shows it, as `measurementOff`
- * keeps its days, so a note never names a day off screen. **A start is dated only
- * for a record that began inside the window.** A record whose indexes name a day
- * before the window began before anything the window shows, so its first day in
- * the window is not when recording started, and no line is better than a false
- * one. The day a record began is the oldest day its indexes name; nothing before
- * the window is read to know it.
+ * Every line names only what the open window shows, as `measurementOff` does.
+ * **A start is dated only where it is known.** The instrument's first day is
+ * the first day it ran in the facts, and that is its true first day only when
+ * the facts reach back to the record's oldest named day: a record whose indexes
+ * name a day before `from` may have run before anything the facts hold, so no
+ * line is better than a false one. The line then prints only in a window that
+ * shows that day. The day a record began comes from its indexes, so no day
+ * before the read is opened to learn it.
  */
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const { read, open } = facts;
 	const shown = (day: string): boolean => day >= open.start && day <= open.end;
-	const recorded = facts.recorded.filter(shown).sort();
-	const lost = (facts.lost ?? []).filter((day) => shown(day.date) && !recorded.includes(day.date));
+	const recorded = [...facts.recorded].sort();
+	const lost = (facts.lost ?? []).filter((day) => !recorded.includes(day.date));
 	// The instrument started on the first day it is known to have run: a day it
 	// recorded, or a day whose record did not survive, destroyed or recorded lost.
 	// Dated from the recorded days alone, a loss before them would date the
 	// instrument's start to the day after the loss and count the loss as a day
 	// before it, which is the lie these states exist to stop.
-	const noRecord = read.state === 'read' ? read.lostDays.filter(shown) : [];
+	const noRecord = read.state === 'read' ? read.lostDays : [];
 	const ran = [...recorded, ...lost.map((day) => day.date), ...noRecord].sort();
-	const began = read.state === 'read' && read.first >= open.start;
-	const first = began ? (ran[0] ?? null) : null;
+	const known = read.state === 'read' && read.first >= facts.from ? (ran[0] ?? null) : null;
+	const first = known !== null && shown(known) ? known : null;
 	const before = first === null ? 0 : facts.window.filter((date) => shown(date) && date < first).length;
 	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => shown(date) && !recorded.includes(date));
 	return {
 		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
 		startedMidWindow: recordingStarted(first, before, facts.figures),
 		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters(),
-		recordDestroyed: recordDestroyed(lost)
+		recordDestroyed: recordDestroyed(lost.filter((day) => shown(day.date)))
 	};
 }
 

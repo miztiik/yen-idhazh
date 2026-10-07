@@ -292,6 +292,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-08-27', '2026-08-28'],
 			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28'],
 			read: begun('2026-08-27', '2026-08-28'),
+			from: '2026-08-25',
 			open: over('2026-08-25', '2026-08-28')
 		});
 		expect(notes.sampled).toBeNull();
@@ -300,20 +301,44 @@ test.describe('what the recording was doing, in fixed words', () => {
 		);
 	});
 
-	test('a record that began before the window is never said to start in it, though the window starts with days it missed', () => {
-		// The counters' first day in the window is 27 Aug 2026. Their record's indexes begin on
-		// 1 Aug, before the window, so recording did not start on the 27th.
+	test('a record that began before the days it is handed is never said to start in the window, though the window starts with days it missed', () => {
+		// The counters' first day in the window is 27 Aug 2026. Only the window's days are
+		// handed, and their record's indexes begin on 1 Aug, before them: what the record did
+		// before 25 Aug is not in hand, so recording may not have started on the 27th.
 		const facts = {
 			enabled: true,
 			recorded: ['2026-08-27', '2026-08-28'],
 			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28'],
+			from: '2026-08-25',
 			open: over('2026-08-25', '2026-08-28')
 		};
 		expect(recordingNotes({ ...facts, read: begun('2026-08-01', '2026-08-28') }).startedMidWindow).toBeNull();
-		// Begun on the window's own first day: a start the window shows.
+		// Begun on the first day handed: the record's whole history is in hand.
 		expect(recordingNotes({ ...facts, read: begun('2026-08-25', '2026-08-28') }).startedMidWindow).toBe(
 			'Recording started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
 		);
+	});
+
+	test('an instrument that began after its record did names its own first day in every window that shows it', () => {
+		// The record's indexes begin on 1 Aug 2026, the route read from 25 Jul, and this
+		// instrument's rows begin on 10 Aug: in hand is everything the record did, so the 10th
+		// is when this instrument started.
+		const facts = {
+			enabled: true,
+			recorded: daysBetween('2026-08-10', '2026-08-20'),
+			window: daysBetween('2026-07-25', '2026-08-20'),
+			read: begun('2026-08-01', '2026-08-20'),
+			from: '2026-07-25'
+		};
+		expect(recordingNotes({ ...facts, open: over('2026-08-05', '2026-08-20') }).startedMidWindow).toBe(
+			'Recording started on 10 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+		);
+		// A window that does not show the 10th says nothing of it.
+		expect(recordingNotes({ ...facts, open: over('2026-08-12', '2026-08-20') }).startedMidWindow).toBeNull();
+		// Handed only the window's days, the start is not known, so it is not said.
+		expect(
+			recordingNotes({ ...facts, from: '2026-08-05', open: over('2026-08-05', '2026-08-20') }).startedMidWindow
+		).toBeNull();
 	});
 
 	test('a window\'s lines name only what it shows, though the route hands it every day it read', () => {
@@ -326,6 +351,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 				recorded: daysBetween('2026-08-03', '2026-08-28'),
 				window: daysBetween('2026-07-31', '2026-08-28'),
 				read: begun('2026-08-03', '2026-08-28'),
+				from: '2026-07-31',
 				open
 			});
 		expect(lines(over('2026-08-22', '2026-08-28')).startedMidWindow).toBeNull();
@@ -341,6 +367,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2030-06-12'],
 			window: ['2030-06-12'],
 			read: begun('2030-06-12', '2030-06-14'),
+			from: OFFERED[2]!.start,
 			open: OFFERED[2]!
 		});
 		expect(offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }), ['2030-06-12'])).toBe(
@@ -358,6 +385,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-08-29'],
 			window: ['2026-08-28', '2026-08-29'],
 			read: begun('2026-08-01', '2026-08-29'),
+			from: '2026-08-28',
 			coveredElsewhere: ['2026-08-28', '2026-08-29']
 		};
 		expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).scoresOnly).toBe(
@@ -378,6 +406,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-09-17'],
 			window: ['2026-09-16', '2026-09-17'],
 			read: begun('2026-09-16', '2026-09-17'),
+			from: '2026-09-16',
 			open: over('2026-09-16', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }],
 			figures: 'machine record'
@@ -399,6 +428,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-09-17'],
 			window: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17'],
 			read: begun('2026-09-16', '2026-09-17'),
+			from: '2026-09-14',
 			open: over('2026-09-14', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }],
 			figures: 'machine record'
@@ -420,6 +450,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-08-20'],
 			window: ['2026-08-17', '2026-08-19', '2026-08-20'],
 			read: begun('2026-08-17', '2026-08-20', ['2026-08-19']),
+			from: '2026-08-17',
 			open: over('2026-08-17', '2026-08-20'),
 			figures: 'machine record'
 		});
@@ -431,6 +462,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-08-20'],
 			window: ['2026-08-19', '2026-08-20'],
 			read: begun('2026-08-19', '2026-08-20', ['2026-08-19']),
+			from: '2026-08-19',
 			open: over('2026-08-19', '2026-08-20')
 		});
 		expect(lostFirst.startedMidWindow).toBeNull();
@@ -444,6 +476,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-09-16', '2026-09-17'],
 			window: ['2026-09-16', '2026-09-17'],
 			read: begun('2026-09-16', '2026-09-17'),
+			from: '2026-09-16',
 			open: over('2026-09-16', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }]
 		});
@@ -471,6 +504,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			recorded: ['2026-09-17'],
 			window: ['2026-09-17'],
 			read: begun('2026-09-17', '2026-09-17'),
+			from: '2026-09-17',
 			open: over('2026-09-17', '2026-09-17')
 		});
 		expect(notes.sampled).toBeNull();

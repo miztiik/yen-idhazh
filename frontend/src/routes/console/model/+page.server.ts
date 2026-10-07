@@ -265,8 +265,8 @@ export async function load() {
 		// on this route comes from the faithfulness scorer, so a day it was switched
 		// off for or sampled past has summaries nobody counted - which is not the
 		// same fact as a day the model wrote nothing, and a zero cannot tell them
-		// apart. The score record's read says where it begins and which of its days
-		// were lost, so a start is dated only where the span holds it.
+		// apart. Each span is handed the whole read and the score record's read, so
+		// a start is dated only where the read reaches back to the record's first day.
 		recording: Object.fromEntries(
 			[...windows].map(([days, window]) => [
 				days,
@@ -277,6 +277,7 @@ export async function load() {
 						recorded: scoredDays,
 						window: answeredDays,
 						read: scores.read,
+						from: readSpan.start,
 						open: window,
 						figures: 'quality figures'
 					}),
