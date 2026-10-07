@@ -12,9 +12,9 @@ questions a prune asks first, and writes nothing:
   index entry covers, and none at all when that entry counts no row.
 - `rebuild_without` builds one compact file again with those days' rows left
   out. A file whose every row goes is built as an empty file rather than left
-  out, so the index that names it and the watermark beside it keep no hole. A
-  year file is built one month a row group, as the compaction builds it, so a
-  reader that filters on a date still skips the other months.
+  out, so the index that names it keeps no hole. A year file is built one
+  month a row group, as the compaction builds it, so a reader that filters on
+  a date still skips the other months.
 
 A raw file is never rebuilt: it holds one writer's rows of one day, so a day
 taken out takes it whole.

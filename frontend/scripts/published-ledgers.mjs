@@ -15,11 +15,10 @@
  * build clock, so a canary build keeps publishing the same fixture files next month.
  * That window is `src/lib/data/site-window.ts`, which the Data explorer reads too, so
  * it asks the archive only for days this copy may have dropped.
- * Reading the list rather than the tree also keeps `daily/watermark.json`, the
- * gardener's own marker, and any stray file off the site with no list of things
- * to leave out. The raw-day walk checks at most the widest console preset of
- * day directories after the newest packed day, so the door can read files a
- * writer produced before compaction takes them.
+ * Reading the list rather than the tree also keeps any stray file off the site
+ * with no list of things to leave out. The raw-day walk checks at most the
+ * widest console preset of day directories after the newest packed day, so the
+ * door can read files a writer produced before compaction takes them.
  *
  * **A missing index stops the build; a missing data file does not.** The
  * browser asks for a published ledger's indexes before anything else, so a

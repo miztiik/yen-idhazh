@@ -61,7 +61,7 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
         "monthly": ledger.compact_path(state, WHICH, Period.MONTHLY, A_MONTH),
         "yearly": ledger.compact_path(state, WHICH, Period.YEARLY, A_DAY[:4]),
         "daily index": ledger.compact_index_path(state, WHICH, Period.DAILY),
-        "monthly watermark": ledger.watermark_path(state, WHICH, Period.MONTHLY),
+        "monthly root": ledger.compact_root(state, WHICH, Period.MONTHLY),
     }
 
     assert {what: built.relative_to(state).as_posix() for what, built in below.items()} == {
@@ -71,7 +71,7 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
         "monthly": "compact/visual-prunes/monthly/2026/08.parquet",
         "yearly": "compact/visual-prunes/yearly/2026/2026.parquet",
         "daily index": "compact/visual-prunes/index/daily.json",
-        "monthly watermark": "compact/visual-prunes/monthly/watermark.json",
+        "monthly root": "compact/visual-prunes/monthly",
     }
 
 
@@ -79,16 +79,14 @@ def test_each_builder_answers_its_one_shape(tmp_path: Path) -> None:
     ("period", "covers"),
     [(Period.DAILY, A_DAY), (Period.MONTHLY, A_MONTH), (Period.YEARLY, A_DAY[:4])],
 )
-def test_no_compact_file_sits_beside_its_periods_watermark(
+def test_a_compact_file_sits_inside_the_folder_a_reader_walks_for_its_period(
     period: Period, covers: str, tmp_path: Path
 ) -> None:
-    """The upkeep checkout fetches a watermark with every file beside it, so one there
-    would be downloaded on every wake."""
+    """`compact_path` is built from `compact_root`, so the two cannot disagree."""
     state = tmp_path / "state"
 
-    assert (
-        ledger.compact_path(state, WHICH, period, covers).parent
-        != ledger.watermark_path(state, WHICH, period).parent
+    assert ledger.compact_root(state, WHICH, period) in (
+        ledger.compact_path(state, WHICH, period, covers).parents
     )
 
 
@@ -98,9 +96,9 @@ def test_no_compact_file_sits_beside_its_periods_watermark(
         ("RAW_DIRNAME", lambda state: ledger.raw_path(state, WHICH, A_DAY, A_FILE)),
         ("COMPACT_DIRNAME", lambda state: ledger.compact_path(state, WHICH, Period.DAILY, A_DAY)),
         ("COMPACT_DIRNAME", lambda state: ledger.compact_index_path(state, WHICH, Period.DAILY)),
-        ("COMPACT_DIRNAME", lambda state: ledger.watermark_path(state, WHICH, Period.DAILY)),
+        ("COMPACT_DIRNAME", lambda state: ledger.compact_root(state, WHICH, Period.DAILY)),
     ],
-    ids=["raw_path", "compact_path", "compact_index_path", "watermark_path"],
+    ids=["raw_path", "compact_path", "compact_index_path", "compact_root"],
 )
 def test_a_builder_whose_root_is_neither_raw_nor_compact_is_refused_by_name(
     root: str, build: Callable[[Path], Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch

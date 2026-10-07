@@ -157,7 +157,7 @@ test('THE ORACLE: every address a published index names is in the build, at the 
 	).toBeGreaterThan(0);
 });
 
-test('nothing else of state/ reaches the site: no raw day, no watermark, no other ledger', () => {
+test('nothing else of state/ reaches the site: no raw day, no stray file, no other ledger', () => {
 	const { sizes } = addressed();
 	const raw = rawAddressed();
 	for (const [path, bytes] of raw.sizes) sizes.set(path, bytes);

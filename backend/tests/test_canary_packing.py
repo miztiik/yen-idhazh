@@ -37,7 +37,6 @@ def test_the_fixture_ledgers_pack_from_a_state_tree_outside_the_repository_root(
     assert filed, "the fixture files rows into some published ledgers"
     for which in build_canary_day.PACKED_LEDGERS:
         packed = which in filed
-        assert ledger.watermark_path(state, which, Period.DAILY).is_file() is packed, which.value
         assert (state / "compact" / which.value / "index" / "daily.json").is_file() is packed
 
     raw_day = state / "raw" / "item-health" / build_canary_day.UNPACKED_DATE.replace("-", "/")

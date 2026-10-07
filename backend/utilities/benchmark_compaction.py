@@ -56,7 +56,7 @@ def measure_fixture(root: Path, original_tests: Path) -> None:
             name: sum(
                 entry.callcount for entry in profile.getstats() if _function(entry.code)[2] == name
             )
-            for name in ("write_index", "write_watermark", "_decide_index", "_take", "resolve")
+            for name in ("write_index", "_decide_index", "_take", "resolve")
         }
 
     with tempfile.TemporaryDirectory() as folder:

@@ -1,14 +1,13 @@
-"""Which files does a ledger hold for one day or one period, and how far has compaction reached?
+"""Which files does a ledger hold for one day or one period, and so how far has compaction reached?
 
-Three small files answer it, one question each, and a later run reads every one
-of them, so each is a contract with its own stem and changelog:
+Two small files answer it, one question each, and a later run reads both of
+them, so each is a contract with its own stem and changelog:
 
 - `RawDayIndex` lists the raw files one day of one ledger holds.
 - `CompactIndex` lists the compact files one period of one ledger holds. It is
   what a reader outside Python fetches to learn which days, months and years
-  exist.
-- `Watermark` says how far one period of one ledger has been compacted, which
-  is where the next compaction resumes.
+  exist, and what the compaction works out how far it has packed from: every
+  period it has looked at has an entry, an empty one included.
 
 Each is written whole, never appended to. `CompactEntry` is one line of a
 `CompactIndex` and has no file of its own, so it is a `Model`.
@@ -21,10 +20,10 @@ hole, without opening a file.
 
 **A day, a month and a year are told apart by shape, and one function decides
 the shape.** A `PeriodStamp` holds any of them, so without a check a daily index
-could list a month and a daily watermark could stand on one. `covers_fits` in
-`file_envelope` is the rule the file envelope already applies to a compact
-file, so an index, a watermark and the file they describe cannot disagree about
-what a daily, a monthly or a yearly period looks like.
+could list a month. `covers_fits` in `file_envelope` is the rule the file
+envelope already applies to a compact file, so an index and the file it
+describes cannot disagree about what a daily, a monthly or a yearly period
+looks like.
 
 Every day, month and year here is a UTC one, and every instant is UTC
 (CLAUDE.md section 2).
@@ -47,7 +46,6 @@ from idhazh.contracts.base import (
     FileIdName,
     Model,
     PeriodStamp,
-    RunId,
     Sha256,
     Timestamp,
     records_json,
@@ -364,69 +362,4 @@ class CompactIndex(Contract):
                     f"{where} lists the lost days of {entry.covers!r} out of order: "
                     f"{descent[0]!r} comes before {descent[1]!r}, and they must ascend, none twice"
                 )
-        return self
-
-
-class Watermark(Contract):
-    """How far one period of one ledger has been compacted.
-
-    A producer file. It says where the next run resumes and nothing else.
-    """
-
-    __schema_stem__: ClassVar[str] = "watermark"
-    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
-        ChangelogEntry(
-            version="2026-10-01T16:50",
-            change="Remove the retired aggregate from the ledger vocabulary.",
-            why="Only declared families may reach a watermark; surviving periods are unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-10-01",
-            change="ledger may name summary-quality-evals, and scores is refused.",
-            why="The eval ledger is named for what it holds; its files were rewritten.",
-        ),
-        ChangelogEntry(
-            version="2026-09-30",
-            change="period may be yearly, and through then stands on a UTC year.",
-            why="A finished year's month files may be packed into one year file.",
-        ),
-        ChangelogEntry(
-            version="2026-09-27",
-            change="Initial shape: the newest period compacted, when, and by which run.",
-            why="The next compaction has to know where to resume without reading the tree.",
-        ),
-    )
-
-    ledger: LedgerName = Field(description="Which ledger this watermark belongs to.")
-    period: Period = Field(
-        description=(
-            "`daily`, `monthly` or `yearly`: which of the ledger's compactions it tracks."
-        )
-    )
-    through: PeriodStamp = Field(
-        description=(
-            "The newest period fully compacted: a UTC day on a daily watermark, a UTC "
-            "month on a monthly one and a UTC year on a yearly one. The next run resumes "
-            "after it."
-        )
-    )
-    advanced_at: Timestamp = Field(
-        description="When the watermark last moved, UTC, to the whole second."
-    )
-    run_id: RunId = Field(
-        description=(
-            "The run that moved it here, `<YYYY-MM-DD>-<execution>`. It outlives the "
-            "record row that also names that run, because that row is pruned and this "
-            "file is not."
-        )
-    )
-
-    @model_validator(mode="after")
-    def _through_is_at_the_period_s_grain(self) -> Self:
-        """A daily watermark stands on a day, a monthly one on a month, a yearly one on a year."""
-        if not covers_fits(self.through, tier=Tier.COMPACT, period=self.period):
-            raise ValueError(
-                f"the {self.ledger.value} {self.period.value} watermark stands at "
-                f"{self.through!r}, and it must stand at {_SHAPE[self.period]}"
-            )
         return self

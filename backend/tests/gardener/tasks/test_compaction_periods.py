@@ -28,7 +28,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice
 from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener.file_listing import FileListing
@@ -40,12 +40,13 @@ from .test_compaction import (
     DROP_WAKE,
     VISUALS,
     a_pass,
+    chosen_on,
     compact,
     disjoint,
     filed,
+    mark,
     recovered,
     state,
-    watermark,
 )
 
 pytestmark = pytest.mark.contract
@@ -99,22 +100,18 @@ def marks(
     daily: list[str],
     *,
     monthly: tuple[str, ...] = (),
-    monthly_through: str | None = None,
     yearly: tuple[str, ...] = (),
-    yearly_through: str | None = None,
     raw_days: tuple[str, ...] = (),
 ) -> CompactTree:
-    """A ledger's marks as a pass reads them, with no file behind them: the chooser reads none.
+    """A ledger's indexes as a pass reads them, with no file behind them: the chooser reads none.
 
+    The marks are worked out from the entries, as every pass works them out.
     `raw_days` are the names of the raw days the pass's listing holds.
     """
     return CompactTree(
         state_dir=Path("state"),
         ledger=which,
         listing=FileListing.from_paths(Path(), [], folders=["state"]),
-        daily_through=daily[-1] if daily else None,
-        monthly_through=monthly_through,
-        yearly_through=yearly_through,
         daily={day: quiet(day) for day in daily},
         monthly={month: CompactEntry(covers=month, rows=1, bytes=1) for month in monthly},
         yearly={year: CompactEntry(covers=year, rows=1, bytes=1) for year in yearly},
@@ -190,7 +187,7 @@ def test_the_cap_cuts_the_span_and_names_where_the_next_wake_starts() -> None:
 
 
 def test_the_span_starts_after_the_monthly_mark() -> None:
-    tree = marks(VISUALS, days("2026-09-01", "2026-10-31"), monthly=("2026-08",), monthly_through="2026-08")
+    tree = marks(VISUALS, days("2026-09-01", "2026-10-31"), monthly=("2026-08",))
 
     choice = months_chosen(tree, policy_of(TASK), date(2027, 1, 1))
 
@@ -219,7 +216,7 @@ def test_an_operator_range_limits_the_span_and_never_skips_a_ready_month(
     expected: tuple[str | None, str | None, StopReason | None, str | None],
 ) -> None:
     """A range that leaves out the month the step must close first is refused at that month."""
-    tree = marks(VISUALS, days("2026-09-01", "2026-11-30"), monthly=("2026-08",), monthly_through="2026-08")
+    tree = marks(VISUALS, days("2026-09-01", "2026-11-30"), monthly=("2026-08",))
 
     choice = months_chosen(tree, policy_of(TASK), today, operator=operator)
 
@@ -312,20 +309,6 @@ def test_a_first_run_with_no_raw_day_in_reach_takes_nothing() -> None:
     choice = days_chosen(tree, policy_of(TASK, lookback=2), FAILED_WAKE)
 
     assert (choice.start, choice.first, choice.stopped_because) == (StartReason.NONE, None, None)
-
-
-def test_a_daily_index_with_no_mark_starts_a_first_run_at_its_oldest_day() -> None:
-    """A pass cut after its index landed and before its mark did leaves exactly this."""
-    tree = marks(VISUALS, days(FIRST_DAY, "2026-09-14"), raw_days=("2026-09-20",))
-    tree.daily_through = None
-
-    choice = days_chosen(tree, policy_of(TASK), FAILED_WAKE)
-
-    assert (choice.start, choice.first, choice.last) == (
-        StartReason.OLDEST_INDEXED,
-        FIRST_DAY,
-        "2026-09-19",
-    )
 
 
 @pytest.mark.parametrize(
@@ -434,7 +417,7 @@ def test_a_year_may_be_packed_63_whole_days_after_it_ends(today: date, ready: bo
     January 2027 is old enough to close on both days, which is why the monthly
     index holds it and the monthly mark stands on it.
     """
-    tree = marks(VISUALS, [], monthly=closed("2026-01", "2027-01"), monthly_through="2027-01")
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2027-01"))
 
     chosen = _compaction_periods.choose(
         tree, policy_of(TASK, **PACKS_YEARS), now=at(today), operator_range=None
@@ -457,7 +440,7 @@ def test_a_year_waits_while_the_monthly_mark_stands_on_its_december(
     operator: tuple[str, str] | None,
 ) -> None:
     """The mark must be strictly past December, whether or not a range names the year."""
-    tree = marks(VISUALS, [], monthly=closed("2026-01", "2026-12"), monthly_through="2026-12")
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2026-12"))
 
     choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2027, 6, 1), operator=operator)
 
@@ -465,7 +448,7 @@ def test_a_year_waits_while_the_monthly_mark_stands_on_its_december(
 
 
 def test_a_ledger_that_began_in_may_chooses_its_first_year() -> None:
-    tree = marks(VISUALS, [], monthly=closed("2026-05", "2027-01"), monthly_through="2027-01")
+    tree = marks(VISUALS, [], monthly=closed("2026-05", "2027-01"))
 
     choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2027, 3, 5))
 
@@ -478,9 +461,7 @@ def test_the_years_start_after_the_yearly_mark_and_the_cap_cuts_them() -> None:
         VISUALS,
         [],
         monthly=closed("2027-01", "2032-01"),
-        monthly_through="2032-01",
         yearly=("2026",),
-        yearly_through="2026",
     )
 
     choice = years_chosen(
@@ -491,15 +472,6 @@ def test_the_years_start_after_the_yearly_mark_and_the_cap_cuts_them() -> None:
     assert (choice.stopped_because, choice.resume_from) == (StopReason.CEILING, "2029")
 
 
-def test_a_yearly_index_with_no_mark_starts_the_years_at_its_oldest() -> None:
-    """A pass cut after the yearly index landed and before its mark did leaves exactly this."""
-    tree = marks(VISUALS, [], monthly=("2027-01",), monthly_through="2027-01", yearly=("2026",))
-
-    choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2027, 3, 5))
-
-    assert (choice.start, choice.first, choice.last) == (StartReason.OLDEST_INDEXED, "2026", "2026")
-
-
 def test_a_ledger_with_nothing_indexed_offers_no_year() -> None:
     choice = years_chosen(marks(VISUALS, []), policy_of(TASK, **PACKS_YEARS), date(2027, 3, 5))
 
@@ -507,7 +479,7 @@ def test_a_ledger_with_nothing_indexed_offers_no_year() -> None:
 
 
 def test_a_declaration_that_packs_no_year_chooses_no_year() -> None:
-    tree = marks(VISUALS, [], monthly=closed("2026-01", "2027-01"), monthly_through="2027-01")
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2027-01"))
 
     chosen = _compaction_periods.choose(
         tree, policy_of(TASK), now=at(date(2028, 1, 1)), operator_range=None
@@ -549,7 +521,7 @@ def test_an_operator_range_limits_the_years_to_those_it_holds_whole(
     range that holds a whole year and leaves out an older ready one is refused
     at that year, as the month step refuses a month.
     """
-    tree = marks(VISUALS, [], monthly=closed("2026-01", "2028-01"), monthly_through="2028-01")
+    tree = marks(VISUALS, [], monthly=closed("2026-01", "2028-01"))
 
     choice = years_chosen(tree, policy_of(TASK, **PACKS_YEARS), date(2028, 6, 1), operator=operator)
 
@@ -579,7 +551,7 @@ def drops_chosen(
 
 def test_the_drop_step_takes_the_oldest_months_past_the_keep_line_to_the_cap() -> None:
     """Nine months are past the line and eight go a wake: January to August 2025, then September."""
-    tree = marks(VISUALS, [], monthly=closed("2025-01", "2026-09"), monthly_through="2026-09")
+    tree = marks(VISUALS, [], monthly=closed("2025-01", "2026-09"))
 
     chosen = _compaction_periods.choose(
         tree, policy_of(TASK), now=at(DROP_WAKE), operator_range=None
@@ -604,7 +576,7 @@ def test_the_next_wake_starts_at_the_oldest_month_the_index_still_names(
     oldest: str, span: tuple[str | None, str | None]
 ) -> None:
     """A dropped month has left the index, so no later wake chooses it again."""
-    tree = marks(VISUALS, [], monthly=closed(oldest, "2026-09"), monthly_through="2026-09")
+    tree = marks(VISUALS, [], monthly=closed(oldest, "2026-09"))
 
     choice = drops_chosen(tree, policy_of(TASK), DROP_WAKE)
 
@@ -621,7 +593,6 @@ def test_the_cap_counts_entries_so_a_month_the_index_does_not_name_is_not_one() 
         VISUALS,
         [],
         monthly=("2025-01", *closed("2025-03", "2026-09")),
-        monthly_through="2026-09",
     )
 
     choice = drops_chosen(tree, policy_of(TASK, max_periods_per_run=3), DROP_WAKE)
@@ -635,7 +606,7 @@ def test_the_cap_counts_entries_so_a_month_the_index_does_not_name_is_not_one() 
 
 
 def test_a_monthly_window_that_keeps_every_month_chooses_no_drop() -> None:
-    tree = marks(VISUALS, [], monthly=closed("2025-01", "2026-09"), monthly_through="2026-09")
+    tree = marks(VISUALS, [], monthly=closed("2025-01", "2026-09"))
 
     chosen = _compaction_periods.choose(
         tree,
@@ -678,7 +649,7 @@ def test_an_operator_range_only_narrows_the_drops_and_refuses_nothing(
     expected: tuple[StartReason, str | None, str | None, StopReason | None, str | None],
 ) -> None:
     """A month the range leaves out stays in the index for a later pass, so no month is skipped."""
-    tree = marks(VISUALS, [], monthly=closed("2025-01", "2026-09"), monthly_through="2026-09")
+    tree = marks(VISUALS, [], monthly=closed("2025-01", "2026-09"))
 
     choice = drops_chosen(tree, policy_of(TASK), DROP_WAKE, operator=operator)
 
@@ -701,20 +672,6 @@ def an_index(root: Path, which: LedgerName, period: Period, entries: list[Compac
         version=CompactIndex.schema_version(), ledger=which, period=period, entries=entries
     )
     path.write_bytes(held.to_json().encode("ascii"))
-
-
-def a_daily_mark(root: Path, which: LedgerName, through: str) -> None:
-    path = ledger.watermark_path(state(root), which, Period.DAILY)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    mark = Watermark(
-        version=Watermark.schema_version(),
-        ledger=which,
-        period=Period.DAILY,
-        through=through,
-        advanced_at="2026-10-02T00:41:00Z",
-        run_id="2026-10-02-1",
-    )
-    path.write_bytes(mark.to_json().encode("ascii"))
 
 
 def a_packed_day(root: Path, day: str, *, rows: int = 1) -> CompactEntry:
@@ -757,7 +714,6 @@ def a_ledger(
     an_index(root, VISUALS, Period.DAILY, [held[day] for day in sorted(held)])
     an_index(root, VISUALS, Period.MONTHLY, [])
     an_index(root, VISUALS, Period.YEARLY, [])
-    a_daily_mark(root, VISUALS, "2026-10-01")
     return held
 
 
@@ -803,12 +759,11 @@ def test_none_of_the_seven_ends_failed_on_the_wake_they_failed_on(tmp_path: Path
     an_index(root, policy.ledger, Period.DAILY, [quiet(day) for day in days(first, last)])
     an_index(root, policy.ledger, Period.MONTHLY, [])
     an_index(root, policy.ledger, Period.YEARLY, [])
-    a_daily_mark(root, policy.ledger, last)
 
     outcome = run_task(name, root, today=FAILED_WAKE, wake=True)
 
     assert outcome.stopped_because is not StopReason.FAILED, outcome.resume_from
-    assert watermark(root, Period.MONTHLY, policy.ledger) is None
+    assert mark(root, Period.MONTHLY, policy.ledger) is None
 
 
 @pytest.mark.parametrize(("today", "closes"), [(date(2026, 11, 14), False), (date(2026, 11, 15), True)])
@@ -822,7 +777,7 @@ def test_a_ledger_from_the_12th_closes_september_on_the_15th_of_november_from_it
     outcome = compact(root, today)
 
     assert outcome.stopped_because is not StopReason.FAILED
-    assert watermark(root, Period.MONTHLY) == ("2026-09" if closes else None)
+    assert mark(root, Period.MONTHLY) == ("2026-09" if closes else None)
     if closes:
         closed = september(root)
         assert (closed.state, closed.rows, closed.lost_days) == (EntryState.PACKED, 3, [])
@@ -848,14 +803,14 @@ def test_a_day_missing_with_its_raw_files_is_packed_again_and_its_month_closes_n
 
     held = compact(root, date(2026, 11, 15), wake=wake)
 
-    assert watermark(root, Period.MONTHLY) is None, "a raw day waiting holds its month"
+    assert mark(root, Period.MONTHLY) is None, "a raw day waiting holds its month"
     index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
     assert {entry.covers: entry.rows for entry in index.entries}["2026-09-20"] == 1
     assert held.stopped_because is not StopReason.FAILED
 
     compact(root, date(2026, 11, 15), wake=wake)
 
-    assert watermark(root, Period.MONTHLY) == "2026-09"
+    assert mark(root, Period.MONTHLY) == "2026-09"
     assert september(root).lost_days == []
     assert month_rows(root) == list(ROWS_ON)
 
@@ -922,21 +877,6 @@ def test_a_lost_day_entry_goes_into_its_month_s_lost_days(tmp_path: Path) -> Non
     assert month_rows(root) == list(ROWS_ON)
 
 
-def test_an_indexed_empty_month_finishes_without_a_file_to_look_for(tmp_path: Path) -> None:
-    """A pass that stopped after the monthly index landed left the month's days behind."""
-    root = tmp_path / "checkout"
-    a_ledger(root, rows_on=())
-    a_packed_day(root, "2026-09-13")
-    an_index(root, VISUALS, Period.MONTHLY, [quiet("2026-09")])
-
-    outcome = compact(root, date(2026, 11, 15))
-
-    assert outcome.stopped_because is not StopReason.FAILED
-    assert watermark(root, Period.MONTHLY) == "2026-09"
-    assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-13") is None
-    assert daily_september(root) == []
-
-
 def a_month_file(root: Path, rows_on: tuple[str, ...]) -> Path:
     """September's own month file at its path, built from these days' rows, named by no entry."""
     raws = [filed(root / "scratch", a_pass(day, run=str(number))) for number, day in enumerate(rows_on)]
@@ -988,7 +928,7 @@ def test_a_month_file_no_entry_names_that_holds_other_rows_than_its_days_is_refu
 
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026-09")
     assert held.read_bytes() == before
-    assert watermark(root, Period.MONTHLY) is None
+    assert mark(root, Period.MONTHLY) is None
     assert daily_september(root) == days("2026-09-01", "2026-09-30")
 
 
@@ -1000,7 +940,6 @@ def a_marked_ledger(root: Path, through: str) -> None:
     an_index(root, VISUALS, Period.DAILY, [quiet(day) for day in days(FIRST_DAY, through)])
     an_index(root, VISUALS, Period.MONTHLY, [])
     an_index(root, VISUALS, Period.YEARLY, [])
-    a_daily_mark(root, VISUALS, through)
 
 
 def daily_entries(root: Path) -> dict[str, CompactEntry]:
@@ -1018,12 +957,12 @@ def test_raw_days_after_the_mark_reach_the_newest_due_day_in_two_wakes(tmp_path:
     first = compact(root, FAILED_WAKE, wake=True)
 
     assert (first.stopped_because, first.resume_from) == (StopReason.CEILING, "2026-09-25")
-    assert watermark(root, Period.DAILY) == "2026-09-24"
+    assert mark(root, Period.DAILY) == "2026-09-24"
 
     second = compact(root, FAILED_WAKE, wake=True)
 
     assert second.stopped_because is StopReason.EXHAUSTED
-    assert watermark(root, Period.DAILY) == "2026-10-02"
+    assert mark(root, Period.DAILY) == "2026-10-02"
     assert list(daily_entries(root)) == days(FIRST_DAY, "2026-10-02")
     assert ledger.list_raw_files(state(root), VISUALS) == []
     assert disjoint(first) and disjoint(second)
@@ -1039,7 +978,7 @@ def test_a_first_run_over_a_wake_s_listing_starts_at_its_oldest_raw_day(tmp_path
 
     assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "2026-09-20")
     assert list(daily_entries(root)) == days(FIRST_DAY, "2026-09-19")
-    assert watermark(root, Period.DAILY) == "2026-09-19"
+    assert mark(root, Period.DAILY) == "2026-09-19"
 
 
 def test_a_day_with_no_row_is_an_entry_with_no_file(tmp_path: Path) -> None:
@@ -1054,7 +993,7 @@ def test_a_day_with_no_row_is_an_entry_with_no_file(tmp_path: Path) -> None:
         assert held[day] == quiet(day)
         assert ledger.compact_file(state(root), VISUALS, Period.DAILY, day) is None
     assert (held["2026-09-30"].state, held["2026-09-30"].rows) == (EntryState.PACKED, 1)
-    assert watermark(root, Period.DAILY) == "2026-10-02", "a day with no row moves the mark too"
+    assert mark(root, Period.DAILY) == "2026-10-02", "a day with no row moves the mark too"
 
 
 @pytest.mark.parametrize("wake", [False, True], ids=["whole-listing", "wake-listing"])
@@ -1074,7 +1013,6 @@ def test_a_re_run_into_a_day_recorded_with_no_file_is_packed_from_its_raw_files(
     an_index(root, VISUALS, Period.DAILY, [held[day] for day in sorted(held)])
     an_index(root, VISUALS, Period.MONTHLY, [])
     an_index(root, VISUALS, Period.YEARLY, [])
-    a_daily_mark(root, VISUALS, "2026-09-28")
     late = filed(root, a_pass("2026-09-20", run="2", before=222))
 
     outcome = compact(root, FAILED_WAKE, wake=wake)
@@ -1086,7 +1024,7 @@ def test_a_re_run_into_a_day_recorded_with_no_file_is_packed_from_its_raw_files(
     assert found is not None
     assert ledger.load([found], model=VisualPruneRow) == [a_pass("2026-09-20", run="2", before=222)]
     assert not late.is_file()
-    assert watermark(root, Period.DAILY) == "2026-10-02"
+    assert mark(root, Period.DAILY) == "2026-10-02"
 
 
 def test_a_new_day_whose_file_no_entry_names_is_adopted_not_written_over(
@@ -1102,13 +1040,18 @@ def test_a_new_day_whose_file_no_entry_names_is_adopted_not_written_over(
 
     assert daily_entries(root)["2026-09-29"] == adopted
     assert recovered(caplog, "2026-09-29") == [f"note={RecoveryNote.INDEX_REBUILT}"]
-    assert watermark(root, Period.DAILY) == "2026-10-02"
+    assert mark(root, Period.DAILY) == "2026-10-02"
 
 
-def test_a_daily_index_with_no_mark_keeps_its_entries_and_the_mark_moves_past_them(
-    tmp_path: Path,
+def test_a_ledger_with_an_index_and_no_watermark_resumes_where_its_index_ends(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A lost day stays lost and a packed day's file is not rewritten: only the mark catches up."""
+    """THE ORACLE for a ledger with no watermark file: its index alone says where to resume.
+
+    The daily index names days to 16 September, so the pass takes the eight days
+    after it. Nothing the index names is taken again: a lost day stays lost, and
+    a packed day's file is not rewritten.
+    """
     root = tmp_path / "checkout"
     held = {day: quiet(day) for day in days(FIRST_DAY, "2026-09-16")}
     held["2026-09-13"] = CompactEntry(covers="2026-09-13", rows=0, bytes=0, state=EntryState.LOST)
@@ -1120,11 +1063,19 @@ def test_a_daily_index_with_no_mark_keeps_its_entries_and_the_mark_moves_past_th
     assert packed is not None
     before = packed.read_bytes()
 
-    outcome = compact(root, FAILED_WAKE)
+    with caplog.at_level(logging.INFO):
+        outcome = compact(root, FAILED_WAKE)
 
+    assert chosen_on(caplog)["days"] == {
+        "start": "mark",
+        "first": "2026-09-17",
+        "last": "2026-09-24",
+        "stopped_because": "ceiling",
+        "resume_from": "2026-09-25",
+    }
     entries = daily_entries(root)
     assert all(entries[day] == held[day] for day in held)
     assert packed.read_bytes() == before
     assert packed.relative_to(root).as_posix() not in outcome.written
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "2026-09-20")
-    assert watermark(root, Period.DAILY) == "2026-09-19"
+    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.CEILING, "2026-09-25")
+    assert mark(root, Period.DAILY) == "2026-09-24"
