@@ -52,6 +52,8 @@ import { articleCost } from '../src/lib/console/machine/article-cost';
 import { processorLostOverDays } from '../src/lib/console/machine/processor-lost';
 import { diskReads } from '../src/lib/console/machine/disk-reads';
 import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
+import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
+import { describeServerCounters } from '../src/lib/server/server-counter-notes';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig, runConfig } from '../src/lib/server/config';
 
@@ -904,6 +906,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	// machine records that disagree. So these cases build one refused run and one
 	// accepted run on one day, hand each figure the article rows of both runs and
 	// then of the accepted run alone, and record what the refused run moves. The
+	// last two check the refused-runs box's words against what these find. The
 	// thresholds are today's committed ones; no count below depends on them.
 	const REFUSED = '2026-09-04-1';
 	const ACCEPTED = '2026-09-04-2';
@@ -1097,6 +1100,81 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		const both = promptReuse(bothRuns, columns);
 		expect([both.rowsRead, both.items, both.floor?.pct]).toEqual([4, 4, 0]);
 		expect(both.requests[0].read).toEqual({ low: 10, median: 26, high: 45, from: 4 });
+	});
+
+	test("the box says what leaves the run out and what still counts it, in Reader's words", () => {
+		const { runs, refused } = machineCounters(
+			hosts,
+			bothRuns,
+			plan([REFUSED, 2], [ACCEPTED, 1]),
+			LIMITS
+		);
+		// "The run count above" is the route's first line, over the runs the
+		// counters keep: one run, though two filed rows. "Figures that pick
+		// articles by date" are the six cases above, and each one counts it.
+		const open = { days: 7, start: '2026-08-29', end: '2026-09-04' };
+		const firstLine = describeServerCounters({
+			runs,
+			ran: ['2026-09-04'],
+			articleDays: ['2026-09-04'],
+			machineRead: {
+				state: 'read',
+				through: '2026-09-04',
+				first: '2026-09-04',
+				lastRows: { period: 'daily', covers: '2026-09-04' },
+				lostDays: [],
+				setAside: {}
+			},
+			from: open.start,
+			open,
+			offered: [open],
+			observability: {
+				cost_currency: 'USD',
+				cost_input_per_million: 0.2,
+				cost_output_per_million: 0.6,
+				evaluation_enabled: true,
+				host_fingerprint: true,
+				host_fingerprint_bandwidth_cache_multiple: 2,
+				sample_rate: 1
+			}
+		}).intro;
+		expect(firstLine).toBe(
+			'1 run in these 7 days, with figures from the model server itself. 2026-08-29 to 2026-09-04.'
+		);
+		expect(describeRefusedRuns(refused)).toEqual({
+			head:
+				'1 run has records that do not fit together. The run count above does not include it. ' +
+				'Figures that pick articles by date still include the articles of this run.',
+			runs: [
+				{
+					runId: REFUSED,
+					says:
+						'has 5 rows: shard 1 filed two machine records that disagree, so two servers ' +
+						'answered for one shard and neither can be read over the other.'
+				}
+			]
+		});
+	});
+
+	test('the box reads right for several runs and for a run of one row, and is absent with none', () => {
+		const box = describeRefusedRuns([
+			{ runId: REFUSED, date: '2026-09-04', rows: 1, why: 'neither ledger holds a shard for this run' },
+			{
+				runId: '2026-09-03-1',
+				date: '2026-09-03',
+				rows: 4,
+				why: 'its rows disagree about which day the run belongs to'
+			}
+		]);
+		expect(box?.head).toBe(
+			'2 runs have records that do not fit together. The run count above does not include them. ' +
+				'Figures that pick articles by date still include the articles of these runs.'
+		);
+		expect(box?.runs.map((run) => run.says)).toEqual([
+			'has 1 row: neither ledger holds a shard for this run.',
+			'has 4 rows: its rows disagree about which day the run belongs to.'
+		]);
+		expect(describeRefusedRuns([])).toBeNull();
 	});
 });
 
