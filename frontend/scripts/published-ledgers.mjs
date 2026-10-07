@@ -20,13 +20,17 @@
  * widest console preset of day directories after the newest packed day, so the
  * door can read files a writer produced before compaction takes them.
  *
- * **A missing index stops the build; a missing data file does not.** The
- * browser asks for a published ledger's indexes before anything else, so a
- * published ledger without all three is published wrongly and a 404 would be the only
- * sign of it. A data file an index names and the tree lacks is one lost day: the
- * rest is copied, the build log names the file and the fix, and the browser's
- * query door answers `unreachable` for a span that reaches it - degrade, do not
- * fail (CLAUDE.md section 1a).
+ * **A ledger not packed yet is left out; a missing index stops the build; a
+ * missing data file does not.** A published ledger with no compact folder has not
+ * been packed yet, which is how every ledger starts: nothing is copied for it, the
+ * build log names it, and the browser's query door answers `missing`, which the
+ * console words as not packed yet. A ledger with a compact folder but not all
+ * three indexes is published wrongly, and a 404 would be the only sign of it,
+ * because the browser asks for a ledger's indexes before anything else. A data
+ * file an index names and the tree lacks is one lost day: the rest is copied, the
+ * build log names the file and the fix, and the browser's query door answers
+ * `unreachable` for a span that reaches it - degrade, do not fail (CLAUDE.md
+ * section 1a).
  *
  * **Every path is built from checked parts.** A ledger name is lower-case words
  * joined by hyphens, and a `covers` value is a UTC day, month or year in digits, or
@@ -65,7 +69,7 @@ const PERIODS = /** @type {const} */ (['daily', 'monthly', 'yearly']);
  * @property {Record<string, string>} indexes Trimmed index payloads, keyed by the same path in `files`.
  * @property {string[]} refused One line a fault that stops the build; empty when it may go on.
  * @property {string[]} missing Every data file an index names and the tree lacks, under the state root.
- * @property {string[]} logs Lines about bounded raw-day listing decisions.
+ * @property {string[]} logs Lines for the build log: a ledger not packed yet, and raw-day listing decisions.
  */
 
 /**
@@ -392,7 +396,7 @@ function rawDaysNotPackedYet(stateRoot, ledger, newestPacked, spanDays, listedAt
  *
  * @param {string} stateRoot
  * @param {readonly string[]} ledgers
- * @param {string} [rootName] How a refusal names `stateRoot`: a repository path, never an absolute one.
+ * @param {string} [rootName] How a refusal or a log line names `stateRoot`: a repository path, never an absolute one.
  * @param {number} [spanDays] How many UTC days the copy keeps: the widest console preset, unless a test names its own.
  * @returns {LedgerCopy}
  */
@@ -412,6 +416,13 @@ export function ledgerCopy(stateRoot, ledgers, rootName = 'state', spanDays = pu
 	const missing = new Set();
 	const listedAt = new Date(Date.now()).toISOString().replace(/\.\d{3}Z$/, 'Z');
 	for (const ledger of ledgers) {
+		if (!existsSync(join(stateRoot, 'compact', ledger))) {
+			copy.logs.push(
+				`published ledgers: ${rootName}/compact/${ledger}/ is not there, so ${ledger} is not packed yet ` +
+					'and the site holds none of its files. If it was packed before, restore that folder from git history.'
+			);
+			continue;
+		}
 		const missingIndexes = PERIODS.filter(
 			(period) => !existsSync(join(stateRoot, 'compact', ledger, 'index', `${period}.json`))
 		);
