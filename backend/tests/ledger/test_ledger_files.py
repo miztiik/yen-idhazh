@@ -14,17 +14,19 @@ nothing reads the committed `state/` (CLAUDE.md section 13).
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
+from idhazh.contracts.file_envelope import Format, Period, RowIdentity, WriterIdentity
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
@@ -65,7 +67,7 @@ def a_pass(on: str, *, run: str = "1", before: int = 1000) -> VisualPruneRow:
     )
 
 
-def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1) -> Path:
+def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None) -> Path:
     """One raw file, through the door, under the identity its own run carries."""
     (written,) = ledger.persist(
         state,
@@ -80,6 +82,7 @@ def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1) -> Path:
             producer="gardener.tasks.visual_prune",
             git_sha="a" * 40,
         ),
+        fmt=fmt,
     )
     return written
 
@@ -108,7 +111,9 @@ def kept(row: VisualPruneRow) -> ledger.StoredRow[VisualPruneRow]:
     )
 
 
-def compacted(state: Path, period: Period, covers: str, rows: list[VisualPruneRow]) -> Path:
+def compacted(
+    state: Path, period: Period, covers: str, rows: list[VisualPruneRow], *, fmt: Format | None = None
+) -> Path:
     """One compact file, written through the door the way the compaction writes it."""
     return ledger.persist_period(
         state,
@@ -119,6 +124,7 @@ def compacted(state: Path, period: Period, covers: str, rows: list[VisualPruneRo
         covers=covers,
         identity=COMPACTION,
         built_from=len(rows),
+        fmt=fmt,
     )
 
 
@@ -139,6 +145,37 @@ def indexed(state: Path, period: Period, covers: list[str]) -> Path:
 def days(first: str, last: str) -> list[str]:
     start, end = date.fromisoformat(first), date.fromisoformat(last)
     return [(start + timedelta(days=step)).isoformat() for step in range((end - start).days + 1)]
+
+
+def indexed_from_the_fixture(state: Path, name: str) -> CompactIndex:
+    """A committed compact-index sample written as this ledger's index, the other two empty.
+
+    Read inside the test that asks, and only its ledger changes: the reader never
+    checks an entry's `rows` or `bytes` against a file, so the sample's own do.
+    """
+    sample = CompactIndex.from_json(read_text(CONTRACT_FIXTURES_DIR / "compact-index" / f"{name}.json"))
+    index = sample.model_copy(update={"ledger": WHICH})
+    path = ledger.compact_index_path(state, WHICH, index.period)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(index.to_json().encode("ascii"))
+    for period in Period:
+        if period is not index.period:
+            indexed(state, period, [])
+    return index
+
+
+#: The one line a read prints for the days an index records lost, so a test can count it.
+LOST_GAP: Final = "days an index records lost have no rows, and no file is read for them"
+
+
+def faults_named(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Each missing-file fault a warning named, in order."""
+    return [
+        fault.value
+        for record in caplog.records
+        for fault in ledger.LedgerFault
+        if f"fault={fault}" in record.getMessage()
+    ]
 
 
 def a_tree_with_every_kind_of_file(state: Path) -> dict[str, Path]:
@@ -165,7 +202,7 @@ def a_tree_with_every_kind_of_file(state: Path) -> dict[str, Path]:
 
 
 def test_every_date_is_read_from_exactly_one_file_and_a_hole_is_named(tmp_path: Path) -> None:
-    """The oracle: no date is readable twice, and a day the watermark passed is never skipped."""
+    """The oracle: no date is readable twice, and a day the daily mark passed is never skipped."""
     made = a_tree_with_every_kind_of_file(tmp_path)
 
     found = ledger.list_ledger_files(tmp_path, WHICH)
@@ -228,6 +265,80 @@ def test_a_named_file_that_is_not_there_is_named_file_missing_and_the_other_days
         and "covers=2026-08-01" in line
         for line in lines
     ), lines
+
+
+def test_an_empty_day_names_no_file_and_is_neither_a_hole_nor_a_missing_file(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A reader that treats every entry as a file fails this: it looks for the day's file,
+    names it file-missing, and counts the day a hole, named day-missing."""
+    index = indexed_from_the_fixture(tmp_path, "an-empty-day")
+    for entry in index.entries:
+        if entry.names_file:
+            compacted(tmp_path, Period.DAILY, entry.covers, [a_pass(entry.covers)])
+
+    with caplog.at_level(logging.WARNING):
+        found = ledger.list_ledger_files(tmp_path, WHICH)
+        rows = ledger.load_visual_prunes(tmp_path)
+        asked = ledger.load_days(tmp_path, WHICH, days("2026-09-22", "2026-09-24"), model=VisualPruneRow)
+
+    assert (found.holes, found.lost) == ((), ())
+    assert found.source_of("2026-09-23") == ledger.Source(
+        covers="2026-09-23", period=Period.DAILY, paths=()
+    )
+    assert [row.date for row in rows] == [row.date for row in asked] == ["2026-09-22", "2026-09-24"]
+    assert faults_named(caplog) == []
+    assert LOST_GAP not in caplog.text
+
+
+def test_a_lost_day_is_one_gap_a_read_and_never_a_missing_file(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A reader that treats every entry as a file fails this: it names the lost day
+    file-missing and day-missing, where nothing is missing that a re-pack could restore."""
+    index = indexed_from_the_fixture(tmp_path, "a-lost-day")
+    for entry in index.entries:
+        if entry.names_file:
+            compacted(tmp_path, Period.DAILY, entry.covers, [a_pass(entry.covers)])
+    gap = f"{LOST_GAP} ledger=visual-prunes lost=2026-09-23"
+
+    with caplog.at_level(logging.WARNING):
+        found = ledger.list_ledger_files(tmp_path, WHICH)
+        rows = ledger.load_visual_prunes(tmp_path)
+    whole = [record.getMessage() for record in caplog.records]
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        asked = ledger.load_days(tmp_path, WHICH, days("2026-09-22", "2026-09-24"), model=VisualPruneRow)
+
+    assert (found.holes, found.lost) == ((), ("2026-09-23",))
+    assert [row.date for row in rows] == [row.date for row in asked] == ["2026-09-22", "2026-09-24"]
+    assert whole == [gap]
+    assert [record.getMessage() for record in caplog.records] == [gap]
+
+
+def test_a_month_that_lists_lost_days_serves_its_other_days_and_an_empty_month_serves_none(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A reader that treats every entry as a file fails this: it names the empty July
+    file-missing and counts its days holes."""
+    indexed_from_the_fixture(tmp_path, "a-month-with-lost-days")
+    compacted(tmp_path, Period.MONTHLY, "2026-08", [a_pass("2026-08-05")])
+
+    with caplog.at_level(logging.WARNING):
+        found = ledger.list_ledger_files(tmp_path, WHICH)
+        asked = ledger.load_days(
+            tmp_path, WHICH, ["2026-07-15", "2026-08-05", "2026-08-12"], model=VisualPruneRow
+        )
+
+    assert (found.holes, found.lost) == ((), ("2026-08-12", "2026-08-13"))
+    assert found.source_of("2026-07-15") == ledger.Source(
+        covers="2026-07", period=Period.MONTHLY, paths=()
+    )
+    assert [row.date for row in asked] == ["2026-08-05"]
+    assert faults_named(caplog) == []
+    assert [record.getMessage() for record in caplog.records] == [
+        f"{LOST_GAP} ledger=visual-prunes lost=2026-08-12"
+    ]
 
 
 def test_a_daily_index_alone_is_named_index_missing_and_empty_coarser_ones_are_not(
@@ -341,6 +452,46 @@ def test_a_read_asking_for_another_ledgers_rows_is_refused_naming_both() -> None
     with pytest.raises(ValueError, match="rows are VisualPruneRow") as refused:
         ledger.load_ledger_rows(Path("state"), WHICH, model=FeedRetirementRow)
     assert "FeedRetirementRow" in str(refused.value)
+
+
+def _row_rewritten(path: Path, **cells: object) -> Path:
+    """A JSON-lines file with its one row's named cells changed, as a bit flip would leave it."""
+    lines = path.read_text(encoding="ascii").splitlines()
+    head, row = lines[0], json.loads(lines[1]) | cells
+    path.write_text("\n".join([head, json.dumps(row, sort_keys=True)]) + "\n", "ascii")
+    return path
+
+
+def test_a_refused_rows_own_value_never_reaches_either_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A row this build refuses never quotes its own cells, read as a raw file or a compact one.
+
+    `ledger_files.py` carries two warnings of the same shape, `path=... reason=
+    ...`; both read `reason` from `load_stored`'s `ValueError`, which names only
+    closed facts since persist.py's fix (Guardrail #11; Fowler, 2026-10-07; plan
+    60 row 33). A raw day with no compaction yet, and a day a compact index
+    names, are both read here, so both warnings are exercised.
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+
+    raw = filed(tmp_path, a_pass("2026-09-06"), fmt=Format.JSON)
+    _row_rewritten(raw, payload_bytes_before=canary)
+
+    with caplog.at_level(logging.WARNING):
+        assert ledger.load_visual_prunes(tmp_path) == []
+    assert canary not in caplog.text
+    assert "payload_bytes_before: int_parsing" in caplog.text
+    caplog.clear()
+
+    compact = compacted(tmp_path, Period.DAILY, "2026-08-01", [a_pass("2026-08-01")], fmt=Format.JSON)
+    _row_rewritten(compact, payload_bytes_before=canary)
+    indexed(tmp_path, Period.DAILY, ["2026-08-01"])
+
+    with caplog.at_level(logging.WARNING):
+        assert ledger.load_days(tmp_path, WHICH, ["2026-08-01"], model=VisualPruneRow) == []
+    assert canary not in caplog.text
+    assert "payload_bytes_before: int_parsing" in caplog.text
 
 
 def test_every_ledger_the_registry_files_under_the_two_roots_has_a_key_and_a_reader() -> None:

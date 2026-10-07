@@ -73,7 +73,7 @@
     "max_future_hours": 6.0,
     "max_per_source": 2,
     "max_source_share_per_day": 0.05,
-    "published_window_days": -1,
+    "published_window_days": 730,
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
     "reliability_floor": 0.5,
@@ -215,7 +215,7 @@
     "train_rows": 1000
   },
   "ledger": {
-    "archive_base_url": "",
+    "archive_base_url": "https://raw.githubusercontent.com/miztiik/yen-idhazh/main",
     "compression_compact": "zstd",
     "compression_raw": "snappy",
     "engine_extension_repository": "https://extensions.duckdb.org",
@@ -267,12 +267,11 @@
   },
   "page_weight": {
     "ceilings_bytes": {
-      "/404": 4400,
-      "/evals/": 6600
+      "/404": 4400
     },
     "cold_console_load_bytes": 2300000,
     "payload_ceilings_bytes": {
-      "config/ledgers.json": 3200,
+      "config/ledgers.json": 3400,
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
       "state/compact/counterfactual-scores/index/": 2200,

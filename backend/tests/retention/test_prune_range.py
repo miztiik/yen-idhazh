@@ -21,8 +21,8 @@ emptied exactly, and a delete that fails on the third file of four.
 A ledger on the ledger door is a target too, of its own kind. Its days sit in
 raw files and in daily, monthly and yearly files that hold other days as well,
 so its property is about rows rather than files: no row of a day the range
-names is left, every other day reads back the same rows, and every index and
-watermark still loads. Those trees are built through the door and the shipped
+names is left, every other day reads back the same rows, and every index still
+loads. Those trees are built through the door and the shipped
 compaction (`ledger/_every_tier.py`), and whether a ledger on the door is a
 target at all is its compaction declaration's `prune_refusal`.
 """
@@ -40,10 +40,10 @@ from typing import Final
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
+from gardener.tasks._marks import marks_on_disk
 from ledger._every_tier import (
     CENSUS,
     FILED_DAYS,
-    QUIET_DAY,
     RAW_DAYS,
     a_census_in_every_tier,
 )
@@ -53,9 +53,10 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry import door_prune, prune
@@ -111,7 +112,6 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
     )
 }
 
@@ -357,27 +357,23 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
 
 
 #: The ledgers whose rows must never be forgotten, so a range of them is refused
-#: by name: two that stop a repeat publication or discovery, and the eval
-#: ledger's ID folder, whose IDs stop a measurement counting as new.
+#: by name: they stop a repeat publication or discovery.
 MUST_NOT_FORGET: Final = (
     LedgerName.PUBLISHED,
     LedgerName.SEEN,
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX,
 )
 
 
 @pytest.mark.parametrize("target", MUST_NOT_FORGET)
 def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
-    """`published`, `seen` and the eval ledger's ID folder are refused by name, with the reason.
+    """`published` and `seen` are refused by name, with the reason.
 
     Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
-    question whose answer is why the answer is no. The first two are on the
-    ledger door, so each one's compaction declaration gives its reason in
-    `prune_refusal`; the ID folder, which no compaction declares, is in `REFUSED`.
+    question whose answer is why the answer is no. Both are on the ledger door,
+    so each one's compaction declaration gives its reason in `prune_refusal`.
     """
-    assert set(prune.REFUSED) == {LedgerName.SUMMARY_QUALITY_EVALS_INDEX}
-    reasons = {**prune.REFUSED, **prune.door_refusals(committed_tasks())}
+    reasons = prune.door_refusals(committed_tasks())
     state = a_threshold_record(tmp_path / "state")
     before = fingerprints(state)
 
@@ -492,6 +488,10 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
         the_day_file(DAYS[1]),
         the_day_file(DAYS[2]),
     )
+    assert (stop.value.so_far.stopped_because, stop.value.so_far.fault) == (
+        StopReason.FAILED,
+        GardenerFault.RAISED,
+    ), "a file the system refused is a defect, never an outage"
     assert stop.value.so_far.resume_from == the_day_file(DAYS[3]), (
         "the next pass has to retry the day that failed"
     )
@@ -610,36 +610,11 @@ def the_range() -> list[str]:
     return [(first + timedelta(days=step)).isoformat() for step in range((last - first).days + 1)]
 
 
-def a_left_listing(state: Path, day: str) -> None:
-    """A raw listing for one packed day, as an older compaction left it."""
-    path = ledger.raw_index_path(state, CENSUS, day)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        RawDayIndex(
-            version=RawDayIndex.schema_version(),
-            ledger=CENSUS,
-            date=day,
-            files=[],
-            content_sha256=hashlib.sha256(b"").hexdigest(),
-            listed_at="2026-03-05T00:00:00Z",
-        ).to_json(),
-        encoding="ascii",
-        newline="\n",
-    )
-
-
 @pytest.fixture(scope="module")
 def every_tier(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """One census in every kind of file, built once for this module and copied by each test.
-
-    Each packed day of the range also keeps the listing an older compaction left,
-    because the prune still deletes the listing of a day it takes.
-    """
+    """One census in every kind of file, built once for this module and copied by each test."""
     root = tmp_path_factory.mktemp("every-tier")
-    state = a_census_in_every_tier(root)
-    for day in the_range():
-        if day not in RAW_DAYS:
-            a_left_listing(state, day)
+    a_census_in_every_tier(root)
     return root
 
 
@@ -663,14 +638,6 @@ def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
     """Every compact index of the census, each read whole, so one that cannot load fails here."""
     return {
         period: CompactIndex.read(ledger.compact_index_path(state, CENSUS, period)).entries
-        for period in Period
-    }
-
-
-def watermarks(state: Path) -> dict[Period, str]:
-    """Where each period of the census stands, each read whole, so one that cannot load fails here."""
-    return {
-        period: Watermark.read(ledger.watermark_path(state, CENSUS, period)).through
         for period in Period
     }
 
@@ -706,18 +673,13 @@ def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
 
     The range reaches into a year file, a month file, two daily files and a raw
     day, so each kind of file is rebuilt or deleted, and the year file and the raw
-    days each keep a day outside it. Every index and watermark still loads, no
-    day reads as a hole, and no watermark moves, because nothing was compacted.
-    A taken day's listing goes with it; a day in the range that held no row
-    keeps its own.
+    days each keep a day outside it. Every index still loads, no day reads as a
+    hole, and no mark the indexes give moves, because nothing was compacted.
     """
     state = a_copy(every_tier, tmp_path / "checkout")
     before = census_by_day(state)
-    marks = watermarks(state)
-    taken_listing = ledger.raw_index_path(state, CENSUS, "2026-02-10")
-    quiet_listing = ledger.raw_index_path(state, CENSUS, QUIET_DAY)
+    marks = marks_on_disk(state, CENSUS)
     assert set(before) == set(FILED_DAYS), "the built census is not the one this test reads"
-    assert taken_listing.is_file() and quiet_listing.is_file()
 
     outcome = prune_range(
         state,
@@ -733,11 +695,9 @@ def test_a_range_taken_out_of_a_ledger_on_the_door_takes_its_rows_and_no_other(
         day: rows for day, rows in before.items() if not SINCE <= day <= UNTIL
     }
     assert set(indexes(state)) == set(Period)
-    assert watermarks(state) == marks, "a prune moved a watermark"
+    assert marks_on_disk(state, CENSUS) == marks, "a prune moved a mark"
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
     assert ledger.list_raw_files(state, CENSUS, days=[RAW_DAYS[0]]) == []
-    assert not taken_listing.exists(), "a taken day kept its listing"
-    assert quiet_listing.is_file(), "a day in the range that held no row lost its listing"
     assert outcome.removed and outcome.rewritten and outcome.bytes_freed > 0
 
 
@@ -999,6 +959,86 @@ def test_a_file_whose_every_row_goes_stays_as_an_empty_file_its_index_names(
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
 
 
+def a_month_with_lost_days(state: Path) -> CompactIndex:
+    """Row 8's sample monthly index, written over a real file for the month that names one.
+
+    That month is packed through the door from census rows filed on two of its
+    days, and its entry counts that file's rows and bytes; its state, lost days
+    and set-aside count are the sample's. The daily and yearly indexes are
+    written empty, because a ledger's three indexes exist together.
+    """
+    sample = CompactIndex.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "compact-index" / "a-month-with-lost-days.json")
+    )
+    entries: list[CompactEntry] = []
+    for entry in sample.entries:
+        if not entry.names_file:
+            entries.append(entry)
+            continue
+        days = [f"{entry.covers}-05", f"{entry.covers}-20"]
+        for number, day in enumerate(days):
+            seed_item_health(
+                state, day, [health_row(day=day, run=1, number=number, stage=ItemStage.PUBLISH)]
+            )
+        raws = ledger.list_raw_files(state, CENSUS, days=days)
+        month = ledger.persist_period(
+            state,
+            ledger.load_stored([raw.path for raw in raws], model=ItemHealthRow),
+            model=ItemHealthRow,
+            ledger=CENSUS,
+            period=Period.MONTHLY,
+            covers=entry.covers,
+            identity=raws[0].envelope.identity,
+            built_from=len(raws),
+        )
+        for raw in raws:
+            raw.path.unlink()
+            day_partition.drop_empty_day_dirs(raw.path)
+        entries.append(entry.model_copy(update={"rows": len(days), "bytes": month.stat().st_size}))
+    planted = sample.model_copy(update={"entries": entries})
+    for period in Period:
+        index = (
+            planted
+            if period is planted.period
+            else CompactIndex(
+                version=CompactIndex.schema_version(), ledger=CENSUS, period=period, entries=[]
+            )
+        )
+        path = ledger.compact_index_path(state, CENSUS, period)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(index.to_json().encode("ascii"))
+    return planted
+
+
+def test_a_rebuilt_entry_keeps_its_state_its_lost_days_and_what_was_set_aside(
+    tmp_path: Path,
+) -> None:
+    """A prune that builds the rebuilt month's entry afresh fails this: it counts the rows and
+    bytes left and drops the two days recorded lost and the file set aside, so the record of
+    a gap is gone. The empty month beside it is carried as it was."""
+    state = tmp_path / ledger.STATE_DIRNAME
+    empty, packed = a_month_with_lost_days(state).entries
+
+    prune_range(
+        state,
+        target=CENSUS,
+        since=f"{packed.covers}-05",
+        until=f"{packed.covers}-05",
+        dry_run=False,
+        run_id=PRUNE_RUN,
+        commit=PRUNE_COMMIT,
+    )
+
+    month = ledger.compact_file(state, CENSUS, Period.MONTHLY, packed.covers)
+    assert month is not None
+    left = ledger.load([month], model=ItemHealthRow)
+    assert [row.date for row in left] == [f"{packed.covers}-20"]
+    assert indexes(state)[Period.MONTHLY] == [
+        empty,
+        packed.model_copy(update={"rows": len(left), "bytes": month.stat().st_size}),
+    ]
+
+
 def test_a_rebuilt_file_names_the_prune_as_its_writer_and_each_kept_row_keeps_its_own(
     every_tier: Path, tmp_path: Path
 ) -> None:
@@ -1089,7 +1129,7 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
 
     The failure is injected the way the CSV test above injects it: the real
     change runs for every file but the third, so the tree is the one a file
-    system that refused one delete leaves. The record names the first two
+    system that refused one change leaves. The record names the first two
     paths of the dry run's list, and the first day of the range as the place
     the next pass starts, because no day was finished.
     """
@@ -1122,9 +1162,14 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
     monkeypatch.undo()
 
     so_far = stop.value.so_far
+    first_two = (*planned.removed, *planned.rewritten)[:2]
     assert changes == 3, "the pass kept changing files after a failure"
-    assert (so_far.taken, so_far.written) == (planned.removed[:2], ())
+    assert (so_far.taken, so_far.written) == (
+        tuple(path for path in first_two if path in planned.removed),
+        tuple(path for path in first_two if path in planned.rewritten),
+    )
     assert (so_far.stopped_because, so_far.resume_from) == (StopReason.FAILED, SINCE)
+    assert so_far.fault is GardenerFault.RAISED
     for state in (stopped, whole):
         prune_range(
             state,

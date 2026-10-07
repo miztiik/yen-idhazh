@@ -1,312 +1,73 @@
 {
   "entries": [
-    {
-      "bytes": 9055,
-      "covers": "2026-08-01",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-02",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-03",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-04",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-05",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-06",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-07",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-08",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-09",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-10",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-11",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-12",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-13",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-14",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-15",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-16",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-17",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-18",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-19",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-20",
-      "rows": 0
-    },
-    {
-      "bytes": 9055,
-      "covers": "2026-08-21",
-      "rows": 0
-    },
-    {
-      "bytes": 18379,
-      "covers": "2026-08-22",
-      "rows": 10
-    },
-    {
-      "bytes": 48920,
-      "covers": "2026-08-23",
-      "rows": 142
-    },
-    {
-      "bytes": 173638,
-      "covers": "2026-08-24",
-      "rows": 731
-    },
-    {
-      "bytes": 172117,
-      "covers": "2026-08-25",
-      "rows": 724
-    },
-    {
-      "bytes": 151488,
-      "covers": "2026-08-26",
-      "rows": 621
-    },
-    {
-      "bytes": 99626,
-      "covers": "2026-08-27",
-      "rows": 334
-    },
-    {
-      "bytes": 48519,
-      "covers": "2026-08-28",
-      "rows": 117
-    },
-    {
-      "bytes": 114332,
-      "covers": "2026-08-29",
-      "rows": 399
-    },
-    {
-      "bytes": 130609,
-      "covers": "2026-08-30",
-      "rows": 431
-    },
-    {
-      "bytes": 172762,
-      "covers": "2026-08-31",
-      "rows": 601
-    },
-    {
-      "bytes": 180579,
-      "covers": "2026-09-01",
-      "rows": 627
-    },
-    {
-      "bytes": 167423,
-      "covers": "2026-09-02",
-      "rows": 598
-    },
-    {
-      "bytes": 171385,
-      "covers": "2026-09-03",
-      "rows": 593
-    },
-    {
-      "bytes": 167337,
-      "covers": "2026-09-04",
-      "rows": 582
-    },
-    {
-      "bytes": 131820,
-      "covers": "2026-09-05",
-      "rows": 456
-    },
-    {
-      "bytes": 118037,
-      "covers": "2026-09-06",
-      "rows": 387
-    },
-    {
-      "bytes": 112492,
-      "covers": "2026-09-07",
-      "rows": 357
-    },
-    {
-      "bytes": 92540,
-      "covers": "2026-09-08",
-      "rows": 282
-    },
-    {
-      "bytes": 123113,
-      "covers": "2026-09-09",
-      "rows": 424
-    },
-    {
-      "bytes": 113844,
-      "covers": "2026-09-10",
-      "rows": 365
-    },
-    {
-      "bytes": 115698,
-      "covers": "2026-09-11",
-      "rows": 372
-    },
-    {
-      "bytes": 109715,
-      "covers": "2026-09-12",
-      "rows": 356
-    },
-    {
-      "bytes": 79683,
-      "covers": "2026-09-13",
-      "rows": 255
-    },
-    {
-      "bytes": 48006,
-      "covers": "2026-09-14",
-      "rows": 145
-    },
-    {
-      "bytes": 91458,
-      "covers": "2026-09-15",
-      "rows": 316
-    },
-    {
-      "bytes": 112963,
-      "covers": "2026-09-16",
-      "rows": 364
-    },
-    {
-      "bytes": 102007,
-      "covers": "2026-09-17",
-      "rows": 343
-    },
-    {
-      "bytes": 70193,
-      "covers": "2026-09-18",
-      "rows": 208
-    },
-    {
-      "bytes": 38249,
-      "covers": "2026-09-19",
-      "rows": 75
-    },
-    {
-      "bytes": 114377,
-      "covers": "2026-09-20",
-      "rows": 365
-    },
-    {
-      "bytes": 94957,
-      "covers": "2026-09-21",
-      "rows": 291
-    },
-    {
-      "bytes": 106567,
-      "covers": "2026-09-22",
-      "rows": 356
-    },
-    {
-      "bytes": 103140,
-      "covers": "2026-09-23",
-      "rows": 341
-    },
-    {
-      "bytes": 117198,
-      "covers": "2026-09-24",
-      "rows": 370
-    },
-    {
-      "bytes": 113806,
-      "covers": "2026-09-25",
-      "rows": 363
-    },
-    {
-      "bytes": 117719,
-      "covers": "2026-09-26",
-      "rows": 366
-    },
-    {
-      "bytes": 105630,
-      "covers": "2026-09-27",
-      "rows": 345
-    },
-    {
-      "bytes": 107001,
-      "covers": "2026-09-28",
-      "rows": 355
-    },
-    {
-      "bytes": 112407,
-      "covers": "2026-09-29",
-      "rows": 366
-    },
-    {
-      "bytes": 113251,
-      "covers": "2026-09-30",
-      "rows": 367
-    }
+    {"bytes": 9055,"covers": "2026-08-01","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-02","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-03","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-04","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-05","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-06","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-07","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-08","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-09","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-10","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-11","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-12","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-13","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-14","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-15","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-16","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-17","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-18","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-19","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-20","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 9055,"covers": "2026-08-21","lost_days": [],"rows": 0,"set_aside": 0,"state": "packed"},
+    {"bytes": 18379,"covers": "2026-08-22","lost_days": [],"rows": 10,"set_aside": 0,"state": "packed"},
+    {"bytes": 48920,"covers": "2026-08-23","lost_days": [],"rows": 142,"set_aside": 0,"state": "packed"},
+    {"bytes": 173638,"covers": "2026-08-24","lost_days": [],"rows": 731,"set_aside": 0,"state": "packed"},
+    {"bytes": 172117,"covers": "2026-08-25","lost_days": [],"rows": 724,"set_aside": 0,"state": "packed"},
+    {"bytes": 151488,"covers": "2026-08-26","lost_days": [],"rows": 621,"set_aside": 0,"state": "packed"},
+    {"bytes": 99626,"covers": "2026-08-27","lost_days": [],"rows": 334,"set_aside": 0,"state": "packed"},
+    {"bytes": 48519,"covers": "2026-08-28","lost_days": [],"rows": 117,"set_aside": 0,"state": "packed"},
+    {"bytes": 114332,"covers": "2026-08-29","lost_days": [],"rows": 399,"set_aside": 0,"state": "packed"},
+    {"bytes": 130609,"covers": "2026-08-30","lost_days": [],"rows": 431,"set_aside": 0,"state": "packed"},
+    {"bytes": 172762,"covers": "2026-08-31","lost_days": [],"rows": 601,"set_aside": 0,"state": "packed"},
+    {"bytes": 180579,"covers": "2026-09-01","lost_days": [],"rows": 627,"set_aside": 0,"state": "packed"},
+    {"bytes": 167423,"covers": "2026-09-02","lost_days": [],"rows": 598,"set_aside": 0,"state": "packed"},
+    {"bytes": 171385,"covers": "2026-09-03","lost_days": [],"rows": 593,"set_aside": 0,"state": "packed"},
+    {"bytes": 167337,"covers": "2026-09-04","lost_days": [],"rows": 582,"set_aside": 0,"state": "packed"},
+    {"bytes": 131820,"covers": "2026-09-05","lost_days": [],"rows": 456,"set_aside": 0,"state": "packed"},
+    {"bytes": 118037,"covers": "2026-09-06","lost_days": [],"rows": 387,"set_aside": 0,"state": "packed"},
+    {"bytes": 112492,"covers": "2026-09-07","lost_days": [],"rows": 357,"set_aside": 0,"state": "packed"},
+    {"bytes": 92540,"covers": "2026-09-08","lost_days": [],"rows": 282,"set_aside": 0,"state": "packed"},
+    {"bytes": 123113,"covers": "2026-09-09","lost_days": [],"rows": 424,"set_aside": 0,"state": "packed"},
+    {"bytes": 113844,"covers": "2026-09-10","lost_days": [],"rows": 365,"set_aside": 0,"state": "packed"},
+    {"bytes": 115698,"covers": "2026-09-11","lost_days": [],"rows": 372,"set_aside": 0,"state": "packed"},
+    {"bytes": 109715,"covers": "2026-09-12","lost_days": [],"rows": 356,"set_aside": 0,"state": "packed"},
+    {"bytes": 79683,"covers": "2026-09-13","lost_days": [],"rows": 255,"set_aside": 0,"state": "packed"},
+    {"bytes": 48006,"covers": "2026-09-14","lost_days": [],"rows": 145,"set_aside": 0,"state": "packed"},
+    {"bytes": 91458,"covers": "2026-09-15","lost_days": [],"rows": 316,"set_aside": 0,"state": "packed"},
+    {"bytes": 112963,"covers": "2026-09-16","lost_days": [],"rows": 364,"set_aside": 0,"state": "packed"},
+    {"bytes": 102007,"covers": "2026-09-17","lost_days": [],"rows": 343,"set_aside": 0,"state": "packed"},
+    {"bytes": 70193,"covers": "2026-09-18","lost_days": [],"rows": 208,"set_aside": 0,"state": "packed"},
+    {"bytes": 38249,"covers": "2026-09-19","lost_days": [],"rows": 75,"set_aside": 0,"state": "packed"},
+    {"bytes": 114377,"covers": "2026-09-20","lost_days": [],"rows": 365,"set_aside": 0,"state": "packed"},
+    {"bytes": 94957,"covers": "2026-09-21","lost_days": [],"rows": 291,"set_aside": 0,"state": "packed"},
+    {"bytes": 106567,"covers": "2026-09-22","lost_days": [],"rows": 356,"set_aside": 0,"state": "packed"},
+    {"bytes": 103140,"covers": "2026-09-23","lost_days": [],"rows": 341,"set_aside": 0,"state": "packed"},
+    {"bytes": 117198,"covers": "2026-09-24","lost_days": [],"rows": 370,"set_aside": 0,"state": "packed"},
+    {"bytes": 113806,"covers": "2026-09-25","lost_days": [],"rows": 363,"set_aside": 0,"state": "packed"},
+    {"bytes": 117719,"covers": "2026-09-26","lost_days": [],"rows": 366,"set_aside": 0,"state": "packed"},
+    {"bytes": 105630,"covers": "2026-09-27","lost_days": [],"rows": 345,"set_aside": 0,"state": "packed"},
+    {"bytes": 107001,"covers": "2026-09-28","lost_days": [],"rows": 355,"set_aside": 0,"state": "packed"},
+    {"bytes": 112407,"covers": "2026-09-29","lost_days": [],"rows": 366,"set_aside": 0,"state": "packed"},
+    {"bytes": 113251,"covers": "2026-09-30","lost_days": [],"rows": 367,"set_aside": 0,"state": "packed"},
+    {"bytes": 106747,"covers": "2026-10-01","lost_days": [],"rows": 350,"set_aside": 0,"state": "packed"},
+    {"bytes": 101119,"covers": "2026-10-02","lost_days": [],"rows": 346,"set_aside": 0,"state": "packed"},
+    {"bytes": 109240,"covers": "2026-10-03","lost_days": [],"rows": 362,"set_aside": 0,"state": "packed"},
+    {"bytes": 101679,"covers": "2026-10-04","lost_days": [],"rows": 343,"set_aside": 0,"state": "packed"},
+    {"bytes": 59722,"covers": "2026-10-05","lost_days": [],"rows": 148,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "summary-quality-evals",
   "period": "daily",
-  "version": "2026-10-01"
+  "version": "2026-10-04"
 }

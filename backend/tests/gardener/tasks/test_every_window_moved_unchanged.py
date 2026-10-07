@@ -3,13 +3,13 @@
 `tests/fixtures/gardener/prune-oracle/windows.json` froze each knob the old state
 cleanup read, key by key, before the ones that moved left for the declarations of
 the tasks that read them. Each is read back here out of the declaration that took
-it, and the three that stayed in `config/idhazh.json` are read back from there as
-well, so a window that changed while it moved fails by name. A window changed on
-purpose after it moved is named below with its reason.
+it in the recorded pre-expiry config, and the three that stayed in
+`config/idhazh.json` are read back from there as well. This checks the original
+move, not the owner's later change to finite yearly retention.
 
 A window whose declaration went when its ledger moved to the ledger door is read
 from the migrator's table of how long each moved ledger's CSV was kept, which
-`backend/tests/ledger/test_migrate_to_parquet.py` holds the ledger's compaction
+`backend/tests/ledger_migration/test_csv_layouts.py` holds the ledger's compaction
 to.
 """
 
@@ -21,6 +21,8 @@ from typing import Any, Final
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
+from gardener._historical_config import PRE_YEARLY_CONFIG
+from idhazh import config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.gardener import (
     CompactionPolicy,
@@ -33,9 +35,7 @@ from idhazh.contracts.knobs.gardener import (
     Window,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from utilities.migrate_to_parquet import CSV_LEDGERS
-
-from ._task import declared
+from utilities.ledger_migration.csv_layouts import CSV_LEDGERS
 
 pytestmark = pytest.mark.contract
 
@@ -73,7 +73,7 @@ def _series(policy: TaskPolicy, name: str) -> Window:
 
 def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     frozen: dict[str, Any] = json.loads(WINDOWS.read_text(encoding="utf-8"))
-    tasks = declared()
+    tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
     folded, scores, machine, pictures = (
         tasks["telemetry-aggregate"],
         tasks["compact-summary-quality-evals"],

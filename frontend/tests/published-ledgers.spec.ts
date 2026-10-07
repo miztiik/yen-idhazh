@@ -9,7 +9,7 @@ import { nodeEngine } from '../src/lib/data/engine';
 import { pageKeeper } from '../src/lib/data/page-keeper';
 import { readRawDayIndex } from '../src/lib/data/raw-day-index';
 import { readAsk } from '../src/lib/data/ask-reader';
-import { daysBetween } from '../src/lib/data/slice';
+import { daysBetween, namesFile } from '../src/lib/data/slice';
 import { dataPath, indexPath, rawDataPath, rawIndexPath } from '../src/lib/data/slice-reader';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { diskBytes } from '../src/lib/server/ledger-disk';
@@ -80,7 +80,8 @@ function rangeFor(period: string, covers: string): { first: number; last: number
 	return { first, last: after - 1 };
 }
 
-/** What the published indexes send the door to, and each file's size as its entry names it. */
+/** What the published indexes send the door to, and each file's size as its entry names it.
+ *  An entry `empty` or `lost` names no file, so it sends the door nowhere. */
 function addressed(): { sizes: Map<string, number | null>; problems: string[] } {
 	const sizes = new Map<string, number | null>();
 	const problems: string[] = [];
@@ -97,7 +98,9 @@ function addressed(): { sizes: Map<string, number | null>; problems: string[] } 
 				problems.push(`state/${index} is one the door will not act on: ${JSON.stringify(reading.refused)}`);
 				continue;
 			}
-			for (const entry of reading.index.entries) sizes.set(dataPath(ledger, period, entry.covers), entry.bytes);
+			for (const entry of reading.index.entries) {
+				if (namesFile(entry)) sizes.set(dataPath(ledger, period, entry.covers), entry.bytes);
+			}
 		}
 	}
 	return { sizes, problems };
@@ -154,7 +157,7 @@ test('THE ORACLE: every address a published index names is in the build, at the 
 	).toBeGreaterThan(0);
 });
 
-test('nothing else of state/ reaches the site: no raw day, no watermark, no other ledger', () => {
+test('nothing else of state/ reaches the site: no raw day, no stray file, no other ledger', () => {
 	const { sizes } = addressed();
 	const raw = rawAddressed();
 	for (const [path, bytes] of raw.sizes) sizes.set(path, bytes);
@@ -241,6 +244,7 @@ test('the query door reads the canary raw day through the staged listing', async
 	try {
 		const answer = await readAsk(
 			keeper,
+			null,
 			{
 				ledgers: ['item-health'],
 				from: '2026-08-21',

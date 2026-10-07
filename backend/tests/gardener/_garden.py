@@ -43,6 +43,7 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 #: The task declarations these integration fixtures exercise, not a directory census.
 COMMITTED_DECLARATIONS: Final = (
     "compact-candidate-models.json",
+    "compact-council-run-records.json",
     "compact-counterfactual-scores.json",
     "compact-feed-health.json",
     "compact-feed-retirements.json",
@@ -88,7 +89,7 @@ FIXTURE_DECLARATIONS: Final = {
         "workflow-artifacts.json",
     ),
     "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
-    "breaks": ("broken.json", "old-days.json"),
+    "breaks": ("broken.json", "defect.json", "old-days.json"),
 }
 
 #: Who the seed commits are by. Not the repository's identity, on purpose: a

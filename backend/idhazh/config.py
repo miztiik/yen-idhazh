@@ -52,7 +52,6 @@ from idhazh.contracts.knobs.gardener import (
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.observation_lookup import ObservationLookupSettings
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -61,14 +60,6 @@ from idhazh.llm.server import SETTING_KEYS, refuse_a_sampling_key_a_route_sets
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
-
-
-@cache
-def load_observation_lookup(config_dir: Path = DEFAULT_CONFIG_DIR) -> ObservationLookupSettings:
-    """Read the declared limits for exact evaluation-ID lookup partitions."""
-    return ObservationLookupSettings.model_validate_json(
-        (config_dir / "observation-lookup.json").read_text(encoding="utf-8")
-    )
 
 
 _FILES: Final[tuple[str, ...]] = ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json")
@@ -236,7 +227,7 @@ PUBLIC_COPY: Final = "public-copy"
 class _Series:
     """One series a task may keep, and the ledger under `state/` whose files it deletes."""
 
-    #: The published copy covers a tree outside `state/`, so it names none.
+    #: Only an input series sets a source-ledger floor. Outputs name none.
     ledger: LedgerName | None
 
 
@@ -248,7 +239,7 @@ _SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
             {
                 FULL_GRAIN: _Series(LedgerName.ITEM_HEALTH),
                 PUBLIC_COPY: _Series(None),
-                "aggregate": _Series(LedgerName.ITEM_HEALTH_SUMMARY),
+                "aggregate": _Series(None),
             }
         ),
     }
@@ -488,23 +479,29 @@ def _spelled(window: Window) -> str:
 
 
 def _reach(policy: CompactionPolicy) -> int | None:
-    """The fewest days a compaction's two periods reach back, or None when it keeps for ever.
+    """A conservative day-count reach, or None when the compaction retains all history.
 
     A month file lives `monthly_window` after its month is absorbed, and a month
     is absorbed `daily_keep_days` after it ends, so no pair of the two can leave a
-    day in no period. The months are counted at the fewest days they can hold.
+    day in no period. Enabled yearly expiry bounds it instead, using at least
+    28 days per calendar month; month-count readers compare months directly.
     """
     monthly = _days_kept(policy.monthly_window)
+    if policy.yearly_prune_enable and policy.yearly_keep_months is not None:
+        return policy.yearly_keep_months * 28
     return None if monthly is None else policy.daily_keep_days + monthly
 
 
 def compaction_reaches(policy: CompactionPolicy, needed: Window) -> bool:
     """Whether this compaction keeps every day `needed` asks for.
 
-    A `monthly_window` of forever reaches anything, and nothing shorter reaches a
-    floor of forever. Otherwise the pair's reach is set against the most days
+    Forever monthly retention reaches anything unless yearly expiry is enabled.
+    No finite expiry reaches a forever reader. Otherwise the reach is set against the most days
     `needed` can ask for, so the answer never depends on the day the build ran.
     """
+    if policy.yearly_prune_enable and isinstance(needed, MonthsWindow):
+        assert policy.yearly_keep_months is not None
+        return policy.yearly_keep_months >= needed.value
     reach = _reach(policy)
     if reach is None:
         return True
@@ -551,6 +548,11 @@ def _kept_by(policy: RetentionPolicy | CompactionPolicy) -> str:
     reach = _reach(policy)
     if reach is None:
         return "keeps every month file for ever"
+    if policy.yearly_prune_enable:
+        return (
+            f"reaches back at least {reach} days with yearly_keep_months "
+            f"{policy.yearly_keep_months}"
+        )
     return (
         f"reaches back {reach} days with daily_keep_days {policy.daily_keep_days} and "
         f"monthly_window {_spelled(policy.monthly_window)}"
@@ -763,7 +765,7 @@ def _old_tree_floor(
     A task that summarises a ledger's months reads them for as long as the series
     that covers the ledger lasts, whether or not it still owns the tree they sat
     in. How long a retention task kept a moved ledger's CSV is not read here:
-    `CSV_LEDGERS` in `backend/utilities/migrate_to_parquet.py` records it, and
+    `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` records it, and
     that table's test holds every moved ledger's compaction to it.
     """
     for name, policy in tasks.items():
@@ -790,13 +792,13 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
     grow with the archive, unless the ledger packs each finished year into one
     file: its month files then last until their year is packed, and the yearly
     index grows by one entry a year. A ledger that packs years keeps every month
-    until its year is packed and every year for ever, so it reaches back past any
-    span the console offers, and it waits as long as its own declaration says. A
+    until its year is packed. Finite yearly expiry must cover the console's
+    widest span too. A
     ledger that deletes its month files reaches back at least the widest span the
     console offers.
     """
     ledger = policy.ledger.value
-    if policy.monthly_keep_days is not None:
+    if policy.monthly_keep_days is not None and reach is None:
         return
     if reach is None:
         raise ValueError(

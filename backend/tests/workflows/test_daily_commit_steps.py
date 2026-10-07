@@ -85,8 +85,7 @@ THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
 ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
 
 #: The other two elements of a writer's identity. One attempt and one job is all
-#: these three tests need: what they vary is the run. The job is a work shard,
-#: the job that files the one CSV day tree left, the eval ledger's ID folder.
+#: these three tests need: what they vary is the run. The job is a work shard.
 THIS_ATTEMPT: Final = 1
 THIS_JOB: Final = ServerJob.WORK
 
@@ -388,13 +387,6 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
         assert staged_paths == COMMIT_STAGED_PATHS[job_name]
         assert set(settings) == COMMIT_SCRIPT_ENV[job_name]
         assert all(value for value in settings.values())
-        if job_name in {"work", "assemble"}:
-            command = shlex.split(settings["PREPARE_COMMAND"])
-            assert command[:2] == ["python", "backend/utilities/prepare_evaluation_publication.py"]
-            assert command[command.index("--state-dir") + 1] == ledger.STATE_DIRNAME
-            assert command[command.index("--paths-file") + 1] == settings["PREPARED_PATHS_FILE"]
-            assert command[command.index("--inputs") + 1] != settings["PREPARED_PATHS_FILE"]
-            assert command[command.index("--attempt") + 1].isdigit()
 
     plan = _commit_call("plan")[1]
     assemble = _commit_call("assemble")[1]
@@ -403,6 +395,25 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
     assert plan != assemble
     assert plan["COMMIT_MESSAGE"] == f"plan: {SUBSTITUTED_DATE}"
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
+
+
+def test_published_file_writers_stage_the_inventory_and_assemble_refreshes_it() -> None:
+    inventory = "frontend/public/publication.json"
+    staged, settings = _commit_call("assemble")
+    assert inventory in staged
+    assert inventory in path_classes.DERIVED
+    assert inventory in settings["REFRESH_PATHS"].split()
+
+    workflow = _load_workflows()["backfill.yml"]
+    step = _step(workflow, "backfill", "name", "Commit the repaired days")
+    command = shlex.split(_script(step, "backfill commit").splitlines()[-1])
+    assert command == [
+        "python",
+        "backend/utilities/commit_and_push.py",
+        "frontend/public/digest",
+        "frontend/public/assist/index",
+        inventory,
+    ]
 
 
 def test_the_plan_job_takes_the_tips_state_before_anything_writes_into_it() -> None:
@@ -454,8 +465,7 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     assert settings["REFRESH_PATHS"].split() == path_classes.refresh_paths(
         day_dir=SUBSTITUTED_DAY_DIR
     ).split()
-    # Never the day's directory itself. The visuals artifact unpacks this run's
-    # rendered charts into it and no producer here can make them again, so the
+    # Never the day's directory itself: it also holds the day's charts, so the
     # two payload files are named one at a time.
     assert SUBSTITUTED_DAY_DIR not in settings["REFRESH_PATHS"].split()
     # Which is why the charts get their own answer: this run's copy is dropped

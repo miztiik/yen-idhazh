@@ -17,6 +17,9 @@ from ._harness import (
     DISPATCH_READ_BY_NAME,
     EXPECTED_WORKFLOWS,
     RUNS_MAY_OVERLAP,
+    SUBSTITUTED_DATE,
+    SUBSTITUTED_DAY_DIR,
+    SUBSTITUTED_PLAN_DIR,
     UNPUBLISHABLE_DATES,
     _declared_dispatch_inputs,
     _every_env,
@@ -435,11 +438,13 @@ def test_a_scheduled_run_still_decides_its_own_date(tmp_path: Path) -> None:
 
 @requires_bash
 def test_a_dispatched_date_becomes_the_day_it_names(tmp_path: Path) -> None:
-    completed, outputs = _run_the_decide_step("2026-08-25", tmp_path)
+    completed, outputs = _run_the_decide_step(SUBSTITUTED_DATE, tmp_path)
 
     assert completed.returncode == 0, completed.stderr
-    assert outputs["date"] == "2026-08-25"
-    assert outputs["day_dir"] == "frontend/public/digest/2026/08/25"
+    assert outputs["date"] == SUBSTITUTED_DATE
+    assert outputs["day_dir"] == SUBSTITUTED_DAY_DIR
+    # The plan job hands this folder on, so it is the one the ledger door files the plan in.
+    assert outputs["plan_dir"] == SUBSTITUTED_PLAN_DIR
 
 
 @requires_bash

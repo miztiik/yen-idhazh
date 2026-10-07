@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
@@ -62,7 +62,7 @@ from idhazh.contracts.file_envelope import (
 )
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle
+from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle, paths
 from idhazh.ledger.arrow_schema import Column
 from idhazh.ledger.keys import DATE_CELL
 from idhazh.ledger.paths import compact_path, raw_path
@@ -101,6 +101,15 @@ class PeriodFile:
 
     path: Path
     data: bytes
+    #: How many rows the file holds.
+    rows: int
+
+
+@dataclass(frozen=True, slots=True)
+class FileFooter:
+    """What one ledger file says of itself with no row read: its envelope and its row count."""
+
+    envelope: FileEnvelope
     #: How many rows the file holds.
     rows: int
 
@@ -313,6 +322,7 @@ def persist(
     covers: PeriodStamp,
     identity: WriterIdentity,
     fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> list[Path]:
     """File these new rows under `state/raw/` and return where they went, one path per day.
 
@@ -335,9 +345,7 @@ def persist(
     if not rows:
         return []
     model = _one_contract(rows)
-    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(
-        ledger, len(rows)
-    ):
+    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(ledger, len(rows)):
         return []
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
@@ -371,7 +379,7 @@ def persist(
             compression=compression,
             written_at_ms=written_at_ms,
         )
-        built.append((raw_path(state_dir, ledger, day, name, fmt=chosen), data))
+        built.append((raw_path(state_dir, ledger, day, name, fmt=chosen, registry=registry), data))
     for target, data in built:
         atomic_write.write_atomic_bytes(target, data)
     return [target for target, _ in built]
@@ -425,6 +433,8 @@ def render_period[C: Contract](
     covers: PeriodStamp,
     identity: WriterIdentity,
     built_from: int,
+    fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> PeriodFile:
     """One compact period's file, built in memory and written nowhere.
 
@@ -439,7 +449,8 @@ def render_period[C: Contract](
     _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
     _refuse_rows_outside_the_period(rows, model=model, ledger=ledger, covers=covers)
     knobs = _knobs()
-    compression = _compression(knobs.format, Tier.COMPACT, knobs)
+    chosen = knobs.format if fmt is None else fmt
+    compression = _compression(chosen, Tier.COMPACT, knobs)
     _, data = _rendered(
         _stored(rows),
         model=model,
@@ -449,11 +460,11 @@ def render_period[C: Contract](
         tier=Tier.COMPACT,
         period=period,
         built_from=built_from,
-        fmt=knobs.format,
+        fmt=chosen,
         compression=compression,
         written_at_ms=int(datetime.now(UTC).timestamp() * 1000),
     )
-    path = compact_path(state_dir, ledger, period, covers, fmt=knobs.format)
+    path = compact_path(state_dir, ledger, period, covers, fmt=chosen, registry=registry)
     return PeriodFile(path, data, len(rows))
 
 
@@ -467,6 +478,8 @@ def render_grouped_period[C: Contract](
     covers: PeriodStamp,
     identity: WriterIdentity,
     built_from: int,
+    fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> PeriodFile:
     """One compact period's file built one group of rows at a time, and written nowhere.
 
@@ -479,7 +492,8 @@ def render_grouped_period[C: Contract](
     """
     _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
     knobs = _knobs()
-    compression = _compression(knobs.format, Tier.COMPACT, knobs)
+    chosen = knobs.format if fmt is None else fmt
+    compression = _compression(chosen, Tier.COMPACT, knobs)
     written_at_ms = int(datetime.now(UTC).timestamp() * 1000)
     digest = hashlib.sha256()
     counted = 0
@@ -502,13 +516,13 @@ def render_grouped_period[C: Contract](
             tier=Tier.COMPACT,
             period=period,
             built_from=built_from,
-            fmt=knobs.format,
+            fmt=chosen,
             compression=compression,
             written_at_ms=written_at_ms,
             content_sha256=digest.hexdigest(),
         )[1]
 
-    if knobs.format is Format.PARQUET:
+    if chosen is Format.PARQUET:
         from idhazh.ledger import parquet
 
         data = parquet.render_groups(
@@ -517,7 +531,7 @@ def render_grouped_period[C: Contract](
     else:
         whole = [cells for stored in checked() for cells in stored]
         data = json_lines.render(whole, envelope=envelope())
-    path = compact_path(state_dir, ledger, period, covers, fmt=knobs.format)
+    path = compact_path(state_dir, ledger, period, covers, fmt=chosen, registry=registry)
     return PeriodFile(path, data, counted)
 
 
@@ -531,6 +545,8 @@ def persist_period[C: Contract](
     covers: PeriodStamp,
     identity: WriterIdentity,
     built_from: int,
+    fmt: Format | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> Path:
     """Write one compact period's file whole, and return where it went.
 
@@ -547,6 +563,8 @@ def persist_period[C: Contract](
         covers=covers,
         identity=identity,
         built_from=built_from,
+        fmt=fmt,
+        registry=registry,
     )
     atomic_write.write_atomic_bytes(built.path, built.data)
     return built.path
@@ -559,6 +577,7 @@ def render_renamed[C: Contract](
     *,
     model: type[C],
     ledger: LedgerName,
+    registry: paths.DoorRegistry | None = None,
 ) -> PeriodFile:
     """One ledger file built again under another ledger's name, and written nowhere.
 
@@ -624,9 +643,13 @@ def render_renamed[C: Contract](
             compression=envelope.compression,
         )
     if envelope.period is None:
-        path = raw_path(state_dir, ledger, envelope.covers, envelope.file_id, fmt=fmt)
+        path = raw_path(
+            state_dir, ledger, envelope.covers, envelope.file_id, fmt=fmt, registry=registry
+        )
     else:
-        path = compact_path(state_dir, ledger, envelope.period, envelope.covers, fmt=fmt)
+        path = compact_path(
+            state_dir, ledger, envelope.period, envelope.covers, fmt=fmt, registry=registry
+        )
     return PeriodFile(path, data, len(cells))
 
 
@@ -659,13 +682,53 @@ def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
 
 def read_envelope(path: Path) -> FileEnvelope:
     """One file's envelope. A parquet file's comes from its footer, without touching a row."""
+    return read_footer(path).envelope
+
+
+def read_footer(path: Path) -> FileFooter:
+    """One file's envelope and how many rows it holds.
+
+    A parquet file answers both from its footer, without touching a row. A
+    JSON-lines file has no footer, so it is read whole. The container is told
+    from the file's first bytes, as `_opened` tells it.
+    """
     with path.open("rb") as handle:
         head = handle.read(len(_PARQUET_MAGIC))
     if head == _PARQUET_MAGIC:
         from idhazh.ledger import parquet
 
-        return FileEnvelope.from_metadata(parquet.read_envelope(path))
-    return _opened(path)[0]
+        metadata, rows = parquet.read_footer(path)
+        return FileFooter(envelope=FileEnvelope.from_metadata(metadata), rows=rows)
+    envelope, stored = _opened(path)
+    return FileFooter(envelope=envelope, rows=len(stored))
+
+
+#: How many of a `ValidationError`'s failing fields a refusal names, oldest first.
+_REFUSAL_FIELDS_SHOWN: Final = 5
+
+
+def _refusal_facts(refusal: ValidationError, *, declared: Collection[str]) -> str:
+    """The failing fields and each one's pydantic error kind, never the row's own values.
+
+    Never the exception's text: `str(ValidationError)` quotes the cell beside
+    each error, and a cell can hold text fetched from the open web (Guardrail
+    #11). `loc` is shown only where it is a list index or a name `declared`
+    names; anything else - an extra key read off a tampered file's header - is
+    not a closed fact either, and is shown as `?`. Capped at the first
+    `_REFUSAL_FIELDS_SHOWN` entries, with the total count when there are more.
+    """
+    errors = refusal.errors()
+    shown = []
+    for error in errors[:_REFUSAL_FIELDS_SHOWN]:
+        where = ".".join(
+            str(part) if isinstance(part, int) or part in declared else "?"
+            for part in error["loc"]
+        )
+        shown.append(f"{where}: {error['type']}")
+    facts = "; ".join(shown)
+    if len(errors) > _REFUSAL_FIELDS_SHOWN:
+        facts += f" ({len(errors)} total)"
+    return facts
 
 
 def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[StoredRow[C]]:
@@ -676,9 +739,17 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
     naming the file, the stamp it holds and the stamp this build reads: only a
     build at least that new knows what those rows mean. A row whose cells either
     shape refuses is refused naming its file.
+
+    **Every `ValueError` this raises names closed facts only: a path, a field
+    name declared by `RowIdentity` or `model`, and a pydantic error kind - never
+    a row's own value** (Guardrail #11: a cell can hold text fetched from the
+    open web). A caller may log it whole, and its traceback carries no chained
+    cause: the refusal it was raised from is suppressed, so an uncaught crash
+    never prints the row's value either.
     """
     wanted = model.schema_version()
     added = {column.name for column in _IDENTITY_COLUMNS} - set(model.model_fields)
+    declared = {column.name for column in _IDENTITY_COLUMNS} | set(model.model_fields)
     held: list[StoredRow[C]] = []
     for path in paths:
         envelope, stored = _opened(path)
@@ -701,7 +772,8 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                 for cells in stored
             )
         except ValidationError as refusal:
-            raise ValueError(f"{path.name} holds a row this build refuses: {refusal}") from refusal
+            facts = _refusal_facts(refusal, declared=declared)
+            raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from None
     return held
 
 

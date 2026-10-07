@@ -91,10 +91,8 @@ const primed = new WeakSet<Page>();
  * and stays put.** `/` carried its whole day inline until 2026-09-10 and fetches
  * the rest now, so opening it puts one interception and one held day into every
  * case here - which reads as the loader asking for a date it should have refused,
- * and as a session holding a day it never visited. `/evals/` is not the answer
- * either: it is a `meta refresh` to the console, so the context is destroyed
- * under the next `page.evaluate`. `/archive/` is prerendered, asks for no
- * digest until a reader opens a search result, and does not move.
+ * and as a session holding a day it never visited. `/archive/` is prerendered,
+ * asks for no digest until a reader opens a search result, and does not move.
  */
 async function armed(page: Page): Promise<void> {
 	if (!primed.has(page)) {

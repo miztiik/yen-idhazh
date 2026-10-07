@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-05
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -19,13 +19,14 @@ There are three models in this project and they are tested differently:
 ## Before anything
 
 ```bash
-python -m venv.venv
-.venv/bin/pip install -e ".[dev,faithfulness]" #.venv/Scripts/pip on Windows
+python -m venv .venv
+.venv/bin/pip install -e ".[dev,faithfulness]" # .venv/Scripts/pip on Windows
 ```
 
-`faithfulness` pulls torch and transformers - several hundred megabytes. Without
-it the pipeline still runs and still publishes; you simply get no faithfulness
-scores, and every item is banded by the model-free counterweights instead.
+`faithfulness` pulls torch and the current Transformers 5 line - several hundred
+megabytes. Without it the pipeline still runs and still publishes; you simply
+get no faithfulness scores, and every item is banded by the model-free
+counterweights instead.
 
 ## Get llama.cpp and the weights
 
@@ -433,10 +434,10 @@ a historical number into a gate.
 To prove the digest does not depend on it at all:
 
 ```bash
-mv static/assist../assist-parked && npm run build
+mv static/assist ../assist-parked && npm run build
 test ! -d build/assist && grep -q Archive build/archive/index.html
 test -d build/index
-mv../assist-parked static/assist
+mv ../assist-parked static/assist
 ```
 
 The digest must render complete with the model directory gone. CI runs exactly
@@ -455,7 +456,7 @@ puts `static/assist/` back and `build/assist` reappears.
 | --- | --- |
 | `error while loading shared libraries: libllama-common.so.0` | You copied `llama-server` alone. Copy the whole `bin` directory - some of those files are symlinks. |
 | Every item logs `model unreachable` | The server is not up. `curl` the health endpoint before blaming the pipeline. |
-| `'HHEMv2ForSequenceClassification' has no attribute 'all_tied_weights_keys'` | transformers is too new. The pin is `<5`; check what actually resolved. |
+| `'HHEMv2ForSequenceClassification' has no attribute 'all_tied_weights_keys'` | The pinned HHEM remote code is not compatible with the resolved Transformers release; report the resolved version and keep the scorer load failure visible. |
 | The reply "did not hold its shape" | Usually the output budget, not the model. Each rendered call is bounded by a budget derived from the shape its reply is held to - `classify.calls.label_budget_tokens` and `summarize_and_plan_budget_tokens`. At 250 a reply ran out mid-object and failed as a shape error, which named the wrong cause. |
 | An item degrades with "page furniture is short" | Extraction found under `extract.min_source_words` (60). That floor is derived, not chosen: `brief_target_words_min / brief_compression_ceiling`, or 30 / 0.5. A short release note no longer trips it - it publishes as a brief and the census row carries `not_prose`. |
 | A summary is dropped for word count | Only one length does that now: under `summarize.length_policy.absolute_floor_words` (25) from a source above `floor_applies_above_source_words` (700). Every other miss publishes, trims or publishes over-length. |

@@ -8,8 +8,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 build/
-.observation-lookup-lock*
-.transaction.json
 
 # Node / frontend
 node_modules/
@@ -27,6 +25,9 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+# Page snapshots and screenshots the Playwright MCP browser writes into the
+# worktree root. An untracked file that is not ignored is a build input.
+.playwright-mcp/
 
 # Editor / OS
 .DS_Store

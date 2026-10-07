@@ -13,15 +13,22 @@ count what the clone downloaded from git's own trace of it.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import json
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from conftest import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
@@ -31,6 +38,7 @@ from ._garden import (
     a_config,
     a_partial_clone,
     an_origin,
+    git,
     lazy_fetches,
     on_origin,
     quiet_git,
@@ -211,3 +219,115 @@ def test_a_deletion_the_commit_never_listed_lands_nothing(
         "lists no such file. Nothing lands"
     ) in said
     assert on_origin(origin, AGED) == FILES[AGED], "a deletion landed"
+
+
+#: The ledger the month-closing shard packs, the wake it closes September on, and
+#: the days of September that hold a row. The planner names only the ledger's
+#: marks on that wake, so September is named by the month step as it runs.
+CLOSED: Final = LedgerName.VISUAL_PRUNES
+CLOSING_WAKE: Final = datetime(2026, 11, 15, 0, 40, tzinfo=UTC)
+SEPTEMBER_ROWS: Final = ("2026-09-12", "2026-09-20")
+
+
+def a_ledger_on_origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, list[str]]:
+    """An origin holding one ledger packed from 12 September to 1 October, and its day files."""
+    quiet_git(tmp_path, monkeypatch)
+    origin, seeder = an_origin(tmp_path, {".gitattributes": "* text=auto eol=lf\n"})
+    state_dir = seeder / ledger.STATE_DIRNAME
+    identity = WriterIdentity(
+        run_id="2026-10-02-1",
+        attempt=1,
+        job=ServerJob.RUN_TASKS,
+        shard=0,
+        producer="gardener.tasks.compaction",
+        git_sha="d" * 40,
+    )
+    entries: list[CompactEntry] = []
+    day_files: list[str] = []
+    first = date(2026, 9, 12)
+    for offset in range(20):
+        day = (first + timedelta(days=offset)).isoformat()
+        if day not in SEPTEMBER_ROWS:
+            entries.append(CompactEntry(covers=day, rows=0, bytes=0, state=EntryState.EMPTY))
+            continue
+        row = VisualPruneRow(
+            version=VisualPruneRow.schema_version(),
+            date=day,
+            run_id=f"{day}-1",
+            policy_months=-1,
+            max_deletes_per_run=200,
+            dry_run=True,
+            candidates_found=0,
+            deleted=0,
+            skipped_by_fuse=0,
+            fuse_tripped=False,
+            bytes_reclaimed=0,
+            oldest_kept=None,
+            payload_bytes_before=1,
+            payload_bytes_after=1,
+        )
+        raw = ledger.persist(tmp_path / "scratch", [row], ledger=CLOSED, covers=day, identity=identity)
+        written = ledger.persist_period(
+            state_dir,
+            ledger.load_stored(raw, model=VisualPruneRow),
+            model=VisualPruneRow,
+            ledger=CLOSED,
+            period=Period.DAILY,
+            covers=day,
+            identity=identity,
+            built_from=1,
+        )
+        entries.append(CompactEntry(covers=day, rows=1, bytes=written.stat().st_size))
+        day_files.append(written.relative_to(seeder).as_posix())
+    for period, held in ((Period.DAILY, entries), (Period.MONTHLY, []), (Period.YEARLY, [])):
+        index = ledger.compact_index_path(state_dir, CLOSED, period)
+        index.parent.mkdir(parents=True, exist_ok=True)
+        index.write_bytes(
+            CompactIndex(
+                version=CompactIndex.schema_version(), ledger=CLOSED, period=period, entries=held
+            )
+            .to_json()
+            .encode("ascii")
+        )
+    git(seeder, "add", "--all")
+    git(seeder, "commit", "--quiet", "-m", "a packed ledger")
+    git(seeder, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    return origin, day_files
+
+
+def test_a_month_the_step_names_as_it_runs_is_closed_and_its_deletions_land(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shard's listing named only the ledger's marks; the month step names September itself.
+
+    September's day files come from the commit when the step names them, arrive
+    in the one download that reads them, and their deletions land beside the
+    month file that replaces them.
+    """
+    origin, day_files = a_ledger_on_origin(tmp_path, monkeypatch)
+    shard = a_partial_clone(tmp_path, origin, "config")
+    declaration = tmp_path / "compact-visual-prunes.json"
+    committed = json.loads(read_text(CONFIG_DIR / "gardener" / "compact-visual-prunes.json"))
+    declaration.write_text(json.dumps(committed | {"dry_run": False}), encoding="ascii")
+    settings = config.load_gardener(a_config(shard, declaration))
+
+    said: list[str] = []
+    outcome = gardener_publish.run_and_land(
+        ("compact-visual-prunes",),
+        settings=settings,
+        repo_root=shard,
+        run_id=RUN_ID,
+        attempt=1,
+        shard=0,
+        trees=OriginBlobs(origin),
+        clock=lambda: CLOSING_WAKE,
+        say=said.append,
+    )
+
+    assert outcome.exit_code == EXIT_OK, said
+    compact_root = f"state/compact/{CLOSED.value}"
+    assert on_origin(origin, f"{compact_root}/monthly/2026/09.parquet") is not None
+    assert all(on_origin(origin, path) is None for path in day_files), "a day file stayed"
+    monthly = on_origin(origin, f"{compact_root}/index/monthly.json")
+    assert monthly is not None
+    assert [entry.covers for entry in CompactIndex.from_json(monthly).entries] == ["2026-09"]

@@ -1,10 +1,10 @@
 # Address length on GitHub Pages
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-07
 
-How long a Records page address can be before GitHub Pages refuses it, and how long an ASCII question can be while still fitting a shared link.
+How long a Data explorer page address can be before GitHub Pages refuses it, and how long an ASCII question can be while still fitting a shared link.
 
-GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. For this page, that means the largest ASCII statement that fits a worst-case link is 5,782 characters. ASCII means one byte per character; non-ASCII text can still fit, but this number does not promise it.
+GitHub Pages answered a request target of 8,192 bytes and refused 8,193 bytes. With all 24 current ledgers and a custom date span, the address test's 6,954-character question uses an 8,192-byte request target; one more character uses 8,193 bytes. Compression depends on the question text, so this measured cap is for the test's fixed input, not a promise for every question. The address writer still drops the question when the complete link exceeds 8,192 bytes.
 
 ## Conditions
 
@@ -24,7 +24,7 @@ The probe did not run through a browser and did not load the page. It measured t
 The script doubled `q` until GitHub Pages refused the request, then bisected the last accepted and first refused lengths. It used base64url characters so every `q` character was one byte in the address.
 
 ```js
-// Row 5's reading: the longest address GitHub Pages answers for the Records page.
+// Row 5's reading: the longest address GitHub Pages answers for the Data explorer page.
 const base = 'https://miztiik.github.io/yen-idhazh/console/data-explorer/?q=';
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const q = (n) => Array.from({ length: n }, (_, i) => alphabet[(i * 7) % 64]).join('');
@@ -60,31 +60,31 @@ The origin, `https://miztiik.github.io`, is 25 bytes. Removing it leaves the req
 
 ## Query size in force
 
-The Records page link must leave room for the path, every ledger name, the widest span preset and row 6's future `end=YYYY-MM-DD` field. The address writer uses `URLSearchParams`, so each comma between ledgers is `%2C`, three bytes.
+The Data explorer page link must leave room for the path, every ledger name and a custom span with `from=YYYY-MM-DD` and `end=YYYY-MM-DD`. The address writer uses `URLSearchParams`, so each comma between ledgers is `%2C`, three bytes.
 
 | Part | Bytes |
 | --- | ---: |
 | Base path, `/yen-idhazh/console/data-explorer/` | 34 |
 | `?ledgers=` | 9 |
-| All 24 ledger names | 361 |
+| All 24 ledger names, with a raw comma between each | 347 |
 | The 23 encoded commas, two extra bytes each over a raw comma | 46 |
-| `&days=90` | 8 |
-| `&end=YYYY-MM-DD` reserved for row 6 | 15 |
+| `&from=YYYY-MM-DD` | 16 |
+| `&end=YYYY-MM-DD` | 15 |
 | `&q=` | 3 |
-| Fixed total before the encoded question | 476 |
-| Space left under 8,192 bytes | 7,716 |
+| Fixed total before the encoded question | 470 |
+| Encoded test question at 6,954 characters | 7,722 |
+| Whole request target at 6,954 characters | 8,192 |
 
-A stored `deflate-raw` block for an incompressible ASCII statement costs the statement bytes plus a 5-byte header. Base64url without padding needs at most `ceil(4 * bytes / 3)` characters. The largest `n` that fits is:
+The question uses the deterministic printable ASCII sequence in `frontend/tests/console-data-explorer-address.spec.ts`, seed `0x1234abcd`, then `CompressionStream('deflate-raw')` and base64url encoding. Node 24.12.0 on Windows reproduced this local byte reading on 2026-10-07; it does not re-measure the host's HTTP limit:
 
 ```text
-476 + ceil(4 * (n + 5) / 3) <= 8192
-ceil(4 * (5782 + 5) / 3) = 7716
-476 + 7716 = 8192
-ceil(4 * (5783 + 5) / 3) = 7718
-476 + 7718 = 8194, which is 2 bytes too long
+6,954 characters -> 5,791 compressed bytes -> 7,722 base64url characters
+470 + 7,722 = 8,192 bytes
+6,955 characters -> 5,792 compressed bytes -> 7,723 base64url characters
+470 + 7,723 = 8,193 bytes
 ```
 
-So the current answer is 5,782 ASCII characters. The test `frontend/tests/console-data-explorer-address.spec.ts` binds this number to the real encoder by writing a 5,782-character printable ASCII statement, adding every ledger name, using the 90-day preset and reserving 15 bytes for `end=YYYY-MM-DD`.
+The configured cap is 6,954 characters. The address test checks that the question fits at this cap and is left out one character later. The cap is tied to that fixed test input; the byte limit remains the final guard for other question text.
 
 ## What would make this stale
 

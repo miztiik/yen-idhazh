@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import gzip
+import subprocess
 from datetime import date, timedelta
 from typing import Final
 
@@ -74,8 +74,20 @@ def an_index(ledger: LedgerName, period: Period, entries: int) -> bytes:
 
 
 def gzipped(data: bytes) -> int:
-    """The size the bundle gate weighs a file at: gzip level 5."""
-    return len(gzip.compress(data, compresslevel=5, mtime=0))
+    """Use the bundle gate's Node gzip, not the platform-dependent Python compressor."""
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            "const {gzipSync}=require('node:zlib');"
+            "const {readFileSync}=require('node:fs');"
+            "process.stdout.write(String(gzipSync(readFileSync(0),{level:5}).length));",
+        ],
+        input=data,
+        capture_output=True,
+        check=True,
+    )
+    return int(result.stdout)
 
 
 def months_kept(policy: CompactionPolicy) -> int:
@@ -120,8 +132,8 @@ def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
     has ever had - a layout inlining a day, 313,300 gzipped bytes on 2026-08-26 -
     and the marker check returns the same verdict whatever the archive holds.
 
-    So the assertion is now on absence. `/404` and `/evals/` stay, because they
-    pass the test in the name: they move only when a person edits source, never
+    So the assertion is now on absence. `/404` stays, because it
+    passes the test in the name: it moves only when a person edits source, never
     when a run appends a day. Owner ruling, 2026-09-10.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
@@ -129,7 +141,6 @@ def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
 
     assert PageWeightConfig().ceilings_bytes == {}, "the model default must stay empty"
     assert ceilings["/404"] > 0
-    assert ceilings["/evals/"] > 0
     for route in ("/archive/", "/console/", "/console/model/", "/console/machine/"):
         assert route not in ceilings, (
             f"{route} has a byte number again. Its weight moves when the pipeline "
@@ -248,9 +259,9 @@ def test_the_index_the_ceilings_are_checked_against_weighs_what_a_real_one_does(
 def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:
     """A ceiling of zero passes nothing and a key that is not a route bounds nothing."""
     with pytest.raises(ValueError, match="above zero"):
-        PageWeightConfig(ceilings_bytes={"/evals/": 0})
+        PageWeightConfig(ceilings_bytes={"/404": 0})
     with pytest.raises(ValueError, match="is not a route"):
-        PageWeightConfig(ceilings_bytes={"evals": 2475})
+        PageWeightConfig(ceilings_bytes={"404": 2475})
 
 
 def test_a_payload_ceiling_bounds_a_path_in_the_build() -> None:

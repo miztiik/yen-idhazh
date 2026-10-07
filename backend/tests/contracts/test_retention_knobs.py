@@ -37,8 +37,7 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     """A summary costs kilobytes and is what makes a year-over-year claim citable.
 
     The eval ledger has no summary at all. Every row is kept for ever, so its
-    compaction may pack a month and never drops one, and the index the dedupe
-    reads keeps every day.
+    compaction may pack a month and never drops one.
     """
     tasks = config.load_gardener().tasks
     folded = tasks["telemetry-aggregate"]
@@ -50,9 +49,6 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     assert isinstance(packed, CompactionPolicy)
     assert isinstance(packed.monthly_window, ForeverWindow), (
         "config/gardener/compact-summary-quality-evals.json drops a month of eval rows"
-    )
-    assert "summary-quality-evals-index" not in tasks, (
-        "the exact evaluation lookup has no dated partitions to fold or prune"
     )
 
 
@@ -201,7 +197,9 @@ def test_the_console_falls_back_to_the_strike_count_the_pipeline_reads() -> None
     fallback = dict(re.findall(r"(\w+):\s*(\d+)", declared.group(1)))
 
     fresh = CollectConfig()
-    assert fallback == {"availability_strikes_before_rest": str(fresh.availability_strikes_before_rest)}
+    assert fallback == {
+        "availability_strikes_before_rest": str(fresh.availability_strikes_before_rest)
+    }
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["collect"]
     for name, value in fallback.items():
         assert str(committed[name]) == value, (
@@ -251,16 +249,11 @@ def test_the_published_window_is_unbounded_or_outlives_the_first_sight_store() -
         CollectConfig(published_window_days=120, seen_window_days=119).published_window_days == 120
     )
 
-    # A finite cover under an unbounded first-sight ledger is not expressible -
-    # `seen_window_days` is `ge=1` - so the only pairing left to check is the
-    # committed one, and it must ship unbounded.
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    assert raw["collect"]["published_window_days"] == -1, (
-        "the committed config must ship the cover unbounded"
-    )
+    assert raw["collect"]["published_window_days"] == 730
     assert (
         AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).collect.published_window_days
-        == -1
+        == 730
     )
 
 
@@ -304,9 +297,7 @@ def test_no_configured_age_deletes_a_shard_a_366_day_read_still_selects() -> Non
         if oldest_month_kept(anchor, kept - 1) > oldest_read:
             too_short += 1
 
-    assert too_short > 0, (
-        "one month less has to fail somewhere, or the value is not the minimum"
-    )
+    assert too_short > 0, "one month less has to fail somewhere, or the value is not the minimum"
 
 
 def test_a_config_written_before_observability_existed_still_reads() -> None:

@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -60,7 +60,7 @@ The plan stage reads back the newest 31 days the ledger holds - just enough that
 
 **`state/raw/feed-retirements/` is never a candidate.** It is a ledger of its own with its own compaction, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in days this ledger's window is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
 
-**The window ships reporting.** `monthly_window_dry_run` is true, so a wake logs every month file a live window would delete and deletes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit a person makes after a scheduled wake has printed the list. Worked out from `first_kept_month` in `backend/idhazh/gardener/tasks/_monthly_period.py` on 2026-10-02: the first month a live window would take is August 2026, at the first wake on or after 2027-12-16. It is arithmetic on a fixed calendar, so there is no spread.
+**The window ships reporting.** `month_deletes_dry_run` is true, so a wake logs every month file a live window would delete and deletes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit a person makes after a scheduled wake has printed the list. Worked out from `first_kept_month` in `backend/idhazh/gardener/tasks/_monthly_period.py` on 2026-10-02: the first month a live window would take is August 2026, at the first wake on or after 2027-12-16. It is arithmetic on a fixed calendar, so there is no spread.
 
 ## One row per feed per run, enforced rather than assumed
 
@@ -572,9 +572,8 @@ cannot disagree about what a failure is. Three facts it settles:
  honouring its own `robots.txt` has not broken. It has not delivered either,
  which is the other half and the half that was missing.
 - **The span is the days the widest window preset reaches, and the sentence
- says so.** The console hands `reliability` the rows from
- `feedResults(shardDays(widest))`, the newest packed days a widest preset of
- 90 days reaches. The streak beside each feed is read over those same rows,
+ says so.** The console hands `reliability` the rows `feedResults` reads over
+ the widest window preset, the 90 days that end on the newest published day. The streak beside each feed is read over those same rows,
  because two spans in one section is the defect the shared window exists to
  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
  which claims every run there has been over a read that opens a bounded set of

@@ -330,21 +330,26 @@ export interface ExplorerExample {
 	sql: string;
 }
 
+export type ConsoleChrome = 'console' | 'workbench';
+
 export interface ExplorerConfig {
+	chrome: ConsoleChrome;
 	row_page: number;
 	max_rows: number;
 	max_fetch_bytes: number;
 	query_max_chars: number;
+	link_max_bytes: number;
+	reach_days: number;
 	chart_min_rows: number;
 	rank_max: number;
 	saved_max: number;
 	history_max: number;
 	save_name_max_chars: number;
 	series_floor_share: number;
-	rail_rem: number;
-	editor_lines: [number, number];
+	readout_lines: [number, number, number, number];
+	notice_ms: number;
+	editor_lines_shown: [number, number];
 	strip_shown: [number, number];
-	table_max_vh: number;
 	cell_max_ch: number;
 	bar_spread_share: number;
 	counter_from_share: number;
@@ -590,20 +595,23 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	context_cut_off_reason: 'length'
 };
 const EXPLORER_DEFAULTS: ExplorerConfig = {
+	chrome: 'workbench',
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
-	query_max_chars: 5782,
+	query_max_chars: 6939,
+	link_max_bytes: 8192,
+	reach_days: 365,
 	chart_min_rows: 3,
 	rank_max: 30,
 	saved_max: 20,
 	history_max: 10,
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
-	rail_rem: 14,
-	editor_lines: [8, 20],
+	readout_lines: [7, 3, 4, 3],
+	notice_ms: 6000,
+	editor_lines_shown: [8, 4],
 	strip_shown: [3, 6],
-	table_max_vh: 70,
 	cell_max_ch: 40,
 	bar_spread_share: 0.5,
 	counter_from_share: 0.9,
@@ -770,7 +778,7 @@ interface RawConfig {
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
 	/** The one `ledger` knob the site reads. */
-	ledger?: { engine_extension_repository?: string };
+	ledger?: LedgerBlock;
 	/** Where the merge line's own block sits. Nested under `same_story` rather
 	 * than flat, because a knob whose legal value depends on another knob's value
 	 * belongs where a validator can see both. */
@@ -840,6 +848,10 @@ type DigestBlock = Partial<UiConfig> &
  * only the sufficiency specs read, straight from the file - so no type here
  * names them and `consoleConfig()` leaves them out too. */
 type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups } & Partial<Record<`explorer_${string}`, any>>;
+type LedgerBlock = {
+	engine_extension_repository?: string;
+	archive_base_url?: string;
+};
 
 interface RawAppearance {
 	digest?: DigestBlock;
@@ -1086,6 +1098,12 @@ export function engineExtensionRepository(): string {
 	return typeof value === 'string' ? value : '';
 }
 
+/** Where Data explorer reads packed ledgers older than this site carries; empty means site only. */
+export function ledgerArchiveBaseUrl(): string {
+	const value = raw().ledger?.archive_base_url;
+	return typeof value === 'string' ? value : '';
+}
+
 export function inferenceConfig(): InferenceConfig {
 	const declared = models().summarizer?.server?.['--ctx-size'];
 	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
@@ -1141,16 +1159,19 @@ export function explorerConfig(): ExplorerConfig {
 		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
 		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
 		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
+		link_max_bytes: consoleBlock.explorer_link_max_bytes ?? EXPLORER_DEFAULTS.link_max_bytes,
+		reach_days: consoleBlock.explorer_reach_days ?? EXPLORER_DEFAULTS.reach_days,
 		chart_min_rows: consoleBlock.explorer_chart_min_rows ?? EXPLORER_DEFAULTS.chart_min_rows,
 		rank_max: consoleBlock.explorer_rank_max ?? EXPLORER_DEFAULTS.rank_max,
 		saved_max: consoleBlock.explorer_saved_max ?? EXPLORER_DEFAULTS.saved_max,
 		history_max: consoleBlock.explorer_history_max ?? EXPLORER_DEFAULTS.history_max,
 		save_name_max_chars: consoleBlock.explorer_save_name_max_chars ?? EXPLORER_DEFAULTS.save_name_max_chars,
 		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
-		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
-		editor_lines: (consoleBlock.explorer_editor_lines ?? EXPLORER_DEFAULTS.editor_lines) as [number, number],
+		chrome: consoleBlock.explorer_chrome === 'console' ? 'console' : EXPLORER_DEFAULTS.chrome,
+		readout_lines: (consoleBlock.explorer_readout_lines ?? EXPLORER_DEFAULTS.readout_lines) as [number, number, number, number],
+		notice_ms: consoleBlock.explorer_notice_ms ?? EXPLORER_DEFAULTS.notice_ms,
+		editor_lines_shown: (consoleBlock.explorer_editor_lines_shown ?? EXPLORER_DEFAULTS.editor_lines_shown) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],
-		table_max_vh: consoleBlock.explorer_table_max_vh ?? EXPLORER_DEFAULTS.table_max_vh,
 		cell_max_ch: consoleBlock.explorer_cell_max_ch ?? EXPLORER_DEFAULTS.cell_max_ch,
 		bar_spread_share: consoleBlock.explorer_bar_spread_share ?? EXPLORER_DEFAULTS.bar_spread_share,
 		counter_from_share: consoleBlock.explorer_counter_from_share ?? EXPLORER_DEFAULTS.counter_from_share,

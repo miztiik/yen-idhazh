@@ -40,9 +40,9 @@ DAY_DIR: Final = "{day_dir}"
 #: Every committed path a run rebuilds rather than merges.
 #:
 #: The day's own directory is deliberately absent and the two payload files in it
-#: are named one at a time: the `shard-visuals-*` artifacts unpack this run's
-#: rendered charts into that directory and no producer in the assemble job can
-#: make those again, so handing the directory back would delete them.
+#: are named one at a time. The directory also holds the day's charts, and a
+#: chart is never handed back: this run's copy of one the tip already publishes
+#: is dropped before the rebase instead (`render.write.drop_raced_assets`).
 #:
 #: **Eight `state/` trees left this list on 2026-09-22 and the reason is the
 #: same for all of them.** Each one now names its file for the single writer
@@ -54,6 +54,7 @@ DAY_DIR: Final = "{day_dir}"
 DERIVED: Final[tuple[str, ...]] = (
     f"{DAY_DIR}/digest.json",
     f"{DAY_DIR}/run.json",
+    "frontend/public/publication.json",
     "frontend/public/telemetry",
     "frontend/public/assist/index",
     "frontend/public/source-health.json",
@@ -81,7 +82,6 @@ DERIVED: Final[tuple[str, ...]] = (
 #: no driver before it moved. Nothing under `state/raw/` takes one: every file
 #: there has one writer, so a union would have nothing to settle.
 UNION_SAFE: Final[tuple[str, ...]] = (
-    "state/llm-council/shard-outcomes",
     "state/content-similarity-judge/metrics",
     "state/content-similarity-judge/merge-line-holdout-scores",
     "state/content-similarity-judge/scored-pairs",

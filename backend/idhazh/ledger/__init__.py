@@ -11,6 +11,7 @@ would be a second home for something a module below already owns, and the two
 would drift.
 """
 
+from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.ledger import paths
 from idhazh.ledger.csv_file import (
     CsvContract,
@@ -21,7 +22,6 @@ from idhazh.ledger.csv_file import (
     require_matching_header,
 )
 from idhazh.ledger.day_removal import HeldFile, find_holding_files, rebuild_without
-from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.filenames import (
     BEFORE_PARTITION_NAME,
     PRE_IDENTITY_TRACE,
@@ -37,7 +37,7 @@ from idhazh.ledger.filenames import (
 from idhazh.ledger.headers import migrate_header, refiler
 from idhazh.ledger.keys import (
     COLLECTION_PRUNE_KEY,
-    COUNCIL_SHARD_OUTCOME_KEY,
+    COUNCIL_RUN_RECORD_KEY,
     COUNTERFACTUAL_SCORE_KEY,
     DATE_CELL,
     FEED_HEALTH_KEY,
@@ -48,7 +48,6 @@ from idhazh.ledger.keys import (
     ITEM_HEALTH_KEY,
     ITEM_HEALTH_RULE,
     MERGE_LINE_HOLDOUT_SCORE_KEY,
-    OBSERVATION_INDEX_KEY,
     OBSERVATION_KEY,
     STORY_SIMILARITY_PAIR_CARRIED,
     STORY_SIMILARITY_PAIR_KEY,
@@ -78,19 +77,24 @@ from idhazh.ledger.lifecycle import accepts_new_rows
 from idhazh.ledger.paths import (
     STATE_DIRNAME,
     claimed_roots,
+    compact_folder,
     compact_index_path,
     compact_path,
+    compact_root,
+    door_folders,
+    door_ledger_at,
     entry,
     path,
-    raw_index_path,
     raw_path,
     raw_root,
+    registry_entries,
     relpath,
+    set_aside_path,
     tree_relpath,
     tree_root,
-    watermark_path,
 )
 from idhazh.ledger.persist import (
+    FileFooter,
     PeriodFile,
     StoredRow,
     load,
@@ -98,22 +102,23 @@ from idhazh.ledger.persist import (
     persist,
     persist_period,
     read_envelope,
+    read_footer,
     render_grouped_period,
     render_period,
     render_renamed,
 )
 from idhazh.ledger.raw_files import (
+    DayFolder,
     RawFile,
     list_raw_files,
-    listed_days,
     load_current_rows,
     raw_days,
     read_day_files,
+    read_day_folder,
     settle_rows,
 )
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
-    append_council_shard_outcomes,
     append_fitted_thresholds,
     append_published,
     append_seen,
@@ -148,19 +153,24 @@ __all__ = [  # noqa: RUF022
     # under the two roots the door files into.
     "STATE_DIRNAME",
     "claimed_roots",
+    "compact_folder",
     "compact_index_path",
     "compact_path",
+    "compact_root",
+    "door_folders",
+    "door_ledger_at",
     "entry",
     "path",
     "paths",
-    "raw_index_path",
     "raw_path",
     "raw_root",
+    "registry_entries",
     "relpath",
+    "set_aside_path",
     "tree_relpath",
     "tree_root",
-    "watermark_path",
     # persist.py: the one door a contract payload takes to disk, and back.
+    "FileFooter",
     "PeriodFile",
     "StoredRow",
     "load",
@@ -168,16 +178,18 @@ __all__ = [  # noqa: RUF022
     "persist",
     "persist_period",
     "read_envelope",
+    "read_footer",
     "render_grouped_period",
     "render_period",
     "render_renamed",
     # raw_files.py: which raw files hold a ledger's current rows, and what they are.
+    "DayFolder",
     "RawFile",
     "list_raw_files",
-    "listed_days",
     "load_current_rows",
     "raw_days",
     "read_day_files",
+    "read_day_folder",
     "settle_rows",
     # ledger_files.py: which files - yearly, monthly, daily or raw - hold a ledger's current rows.
     "LedgerFiles",
@@ -193,13 +205,13 @@ __all__ = [  # noqa: RUF022
     "HeldFile",
     "find_holding_files",
     "rebuild_without",
-    # faults.py: the four ways a packed ledger can be missing a file, by name.
+    # contracts/ledger_fault.py: the four ways a packed ledger can be missing a file, by name.
     "LedgerFault",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",
     # keys.py: what makes two rows one record, and which contract reads one.
     "COLLECTION_PRUNE_KEY",
-    "COUNCIL_SHARD_OUTCOME_KEY",
+    "COUNCIL_RUN_RECORD_KEY",
     "COUNTERFACTUAL_SCORE_KEY",
     "DATE_CELL",
     "FEED_HEALTH_KEY",
@@ -210,7 +222,6 @@ __all__ = [  # noqa: RUF022
     "ITEM_HEALTH_KEY",
     "ITEM_HEALTH_RULE",
     "MERGE_LINE_HOLDOUT_SCORE_KEY",
-    "OBSERVATION_INDEX_KEY",
     "OBSERVATION_KEY",
     "STORY_SIMILARITY_PAIR_CARRIED",
     "STORY_SIMILARITY_PAIR_KEY",
@@ -247,7 +258,6 @@ __all__ = [  # noqa: RUF022
     "refiler",
     # rows.py: how a caller puts rows in and gets them back.
     "HEALTH_WINDOW_DAYS",
-    "append_council_shard_outcomes",
     "append_fitted_thresholds",
     "append_published",
     "append_seen",

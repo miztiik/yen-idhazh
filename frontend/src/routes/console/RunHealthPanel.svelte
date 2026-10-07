@@ -25,6 +25,7 @@
 	import { plannedDays, runYield, yieldSeries, type RunYieldSource } from '$lib/charts/run-yield';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import { HEALTH_FILL, type DayColumn } from '$lib/console/run-square';
+	import { nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 
 	let {
@@ -141,7 +142,7 @@
 				</p>
 			{:else if runs === 0}
 				<p class="run-health-empty" data-grid="outside-window">
-					No run is on record in these {windowDays} days. Widen the window to look further back.
+					No run is on record in {nameSpan(windowDays)}. Widen the window to look further back.
 				</p>
 			{:else}
 				<RunSquares bind:this={squares} {days} {slots} {narrow} {tickDensity} bind:selected />

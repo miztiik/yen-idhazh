@@ -8,12 +8,11 @@
   "max_deletes_per_run": null,
   "max_periods_per_run": 8,
   "max_raw_files_per_period": 2000,
-  "monthly_keep_days": null,
+  "monthly_keep_days": 93,
   "monthly_window": {
-    "unit": "months",
-    "value": 2
+    "unit": "forever"
   },
-  "monthly_window_dry_run": true,
+  "month_deletes_dry_run": true,
   "owns": [
     "state/raw/seen",
     "state/compact/seen"
@@ -21,5 +20,7 @@
   "prune_refusal": "it is what the planner remembers having already seen, so removing a day from it lets the next run rediscover every address it holds - one operator command becomes a loop",
   "window": {
     "unit": "forever"
-  }
+  },
+  "yearly_keep_months": 36,
+  "yearly_prune_enable": true
 }

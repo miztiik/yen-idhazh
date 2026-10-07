@@ -12,6 +12,7 @@ reads the committed `state/` (CLAUDE.md section 13).
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from pathlib import Path
@@ -54,9 +55,7 @@ def a_pass(*, on: str = A_DAY, run: str = "1", before: int = 1000) -> VisualPrun
     )
 
 
-def filed(
-    state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None
-) -> Path:
+def filed(state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None) -> Path:
     """One pass through the door, under the identity its own run would carry."""
     (written,) = ledger.persist(
         state,
@@ -142,6 +141,32 @@ def test_a_json_lines_file_is_read_like_a_parquet_one(tmp_path: Path) -> None:
     assert ledger.load_visual_prunes(tmp_path) == [a_pass()]
 
 
+def _row_rewritten(path: Path, **cells: object) -> Path:
+    """A JSON-lines file with its one row's named cells changed, as a bit flip would leave it."""
+    lines = path.read_text(encoding="ascii").splitlines()
+    head, row = lines[0], json.loads(lines[1]) | cells
+    path.write_text("\n".join([head, json.dumps(row, sort_keys=True)]) + "\n", "ascii")
+    return path
+
+
+def test_a_refused_rows_own_value_never_reaches_the_skip_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`_skip`'s risky caller, `load_current_rows`, never lets a row's own cell into its warning.
+
+    `reason` here is `load_stored`'s `ValueError`, which names only closed facts
+    since persist.py's fix (Guardrail #11; Fowler, 2026-10-07; plan 60 row 33).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    written = filed(tmp_path, a_pass(), fmt=Format.JSON)
+    _row_rewritten(written, payload_bytes_before=canary)
+
+    with caplog.at_level("WARNING"):
+        assert ledger.load_current_rows(tmp_path, WHICH, model=VisualPruneRow, key=("date",)) == []
+    assert canary not in caplog.text
+    assert "payload_bytes_before: int_parsing" in caplog.text
+
+
 def test_a_file_filed_under_another_day_is_skipped_and_named(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -161,19 +186,23 @@ def test_a_file_filed_under_another_day_is_skipped_and_named(
     assert f"raw/visual-prunes/2026/09/07/{wrong.name}" in caplog.text
 
 
-def test_the_day_listing_beside_the_years_is_not_read_as_rows(
+def test_a_nested_state_root_warning_names_the_real_path(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """`index/` holds the compaction's listings, which are not ledger files."""
-    filed(tmp_path, a_pass())
-    listing = ledger.raw_index_path(tmp_path, WHICH, A_DAY)
-    listing.parent.mkdir(parents=True)
-    listing.write_text("{}", encoding="utf-8")
+    """A trial case root is shown from its containing `state/`, not as production."""
+    state = tmp_path / "state" / "pipeline-tests" / "case-2026-09-06"
+    written = filed(state, a_pass(on=A_DAY))
+    wrong = ledger.raw_path(state, WHICH, NEXT_DAY, uuid.UUID(written.stem))
+    wrong.parent.mkdir(parents=True)
+    written.rename(wrong)
 
     with caplog.at_level("WARNING"):
-        assert len(ledger.list_raw_files(tmp_path, WHICH)) == 1
+        assert ledger.list_raw_files(state, WHICH) == []
 
-    assert "skipped" not in caplog.text
+    assert (
+        f"state/pipeline-tests/case-2026-09-06/raw/visual-prunes/2026/09/07/{wrong.name}"
+        in caplog.text
+    )
 
 
 # --- the settlement, over rows written out literally --------------------------------
@@ -228,7 +257,9 @@ def test_settling_keeps_the_first_row_of_a_key_two_units_both_filed() -> None:
     assert ledger.settle_rows([[earlier], [later]], ledger.VISUAL_PRUNE_KEY) == [earlier]
 
 
-def an_item(unit: str, *, machine: bool, fetch_ms: int | None = None) -> ledger.StoredRow[ItemHealthRow]:
+def an_item(
+    unit: str, *, machine: bool, fetch_ms: int | None = None
+) -> ledger.StoredRow[ItemHealthRow]:
     """One item's health row, as a work shard (`machine`) or assemble's census filed it."""
     base = ItemHealthRow.model_validate_json(
         (CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json").read_text(encoding="utf-8")
@@ -284,7 +315,7 @@ def test_a_settled_row_is_kept_whole_and_a_cell_only_the_dropped_row_held_is_nam
 
 
 def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_path: Path) -> None:
-    """The compaction deletes what it read, so a file it cannot read stops the day."""
+    """A reader that deletes what it read may not skip a file, so one it cannot read stops it."""
     written = filed(tmp_path, a_pass())
     assert [one.path for one in ledger.read_day_files(tmp_path, WHICH, A_DAY)] == [written]
     stray = written.parent / "notes.txt"
@@ -295,16 +326,44 @@ def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_pat
     assert ledger.read_day_files(tmp_path, WHICH, NEXT_DAY) == []
 
 
-def test_the_days_a_ledger_holds_raw_files_for_and_the_days_it_has_listings_for(
+def test_a_nested_state_root_refusal_names_the_real_path(tmp_path: Path) -> None:
+    """Strict readers report the nested case root, not a false production path."""
+    state = tmp_path / "state" / "pipeline-tests" / "case-2026-09-06"
+    written = filed(state, a_pass())
+    stray = written.parent / "notes.txt"
+    stray.write_text("not a ledger file\n", encoding="ascii")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"state/pipeline-tests/case-2026-09-06/raw/visual-prunes/2026/09/06/"
+            r"notes\.txt cannot be read"
+        ),
+    ):
+        ledger.read_day_files(state, WHICH, A_DAY)
+
+
+def test_one_days_folder_names_each_file_it_cannot_read_beside_the_files_it_can(
     tmp_path: Path,
 ) -> None:
-    """Folder names only: an emptied day is not a raw day, and a listing is named by its day."""
+    """The compaction moves a file it cannot read aside, so its read names that file and goes on."""
+    written = filed(tmp_path, a_pass())
+    stray = written.parent / "notes.txt"
+    stray.write_text("not a ledger file\n", encoding="ascii")
+
+    found = ledger.read_day_folder(tmp_path, WHICH, A_DAY)
+
+    assert [one.path for one in found.files] == [written]
+    assert [path for path, _why in found.unreadable] == [stray]
+    assert ledger.read_day_folder(tmp_path, WHICH, NEXT_DAY) == ledger.DayFolder(
+        files=[], unreadable=[]
+    )
+
+
+def test_the_days_a_ledger_holds_raw_files_for(tmp_path: Path) -> None:
+    """Folder names only: an emptied day is not a raw day."""
     filed(tmp_path, a_pass(on=A_DAY))
     emptied = filed(tmp_path, a_pass(on=NEXT_DAY))
     emptied.unlink()
-    listing = ledger.raw_index_path(tmp_path, WHICH, A_DAY)
-    listing.parent.mkdir(parents=True)
-    listing.write_text("{}", encoding="ascii")
 
     assert ledger.raw_days(tmp_path, WHICH) == [A_DAY]
-    assert ledger.listed_days(tmp_path, WHICH) == [A_DAY]

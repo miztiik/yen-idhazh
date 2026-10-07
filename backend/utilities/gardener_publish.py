@@ -2,7 +2,8 @@
 
 This is the entry point a wake's shard runs. Its checkout holds only the code
 and config it runs. It reads the commit this checkout is at, the exact folders
-its tasks own or read, and the files under each task's named periods. It runs the shard through
+its tasks own or read, and the files under each task's named periods. A task
+that names a period as it runs has it listed from the same commit then. It runs the shard through
 `idhazh.gardener.runner`, whose tasks fetch only the folders they read, and
 lands what the runner hands back. It sits here rather than in the package
 because landing and reading the commit run git, and nothing under
@@ -38,6 +39,24 @@ shard. If `origin/main` already holds that path with those bytes, an earlier try
 landed and this one stops with success; the same path with other bytes is two
 runs claiming one identity, and that is exit 2.
 
+**A shard whose paths main changed after its commit lands nothing.** After each
+fetch, `git diff-tree` compares the commit this checkout is at - the one the
+shard ran on - with `origin/main`, over every path the shard writes or deletes
+but its record. A path it lists is one main changed after the shard's commit, so
+the shard's version is stale. A re-run is the usual cause: it checks out its
+run's old commit and names its record afresh, so the record check cannot catch
+it. Nothing lands, not even the record; the shard warns and exits 0, and the
+next wake does the work again on the new main. Only trees are compared, so
+nothing is downloaded.
+
+**When every try failed, main's tip says why.** The tip is fetched once more. If
+it moved after the last try's base, other writers are landing: a warning, and
+exit 0. If it did not move, main refused the push: exit 3. A push's error text
+is never read, because git's words change with versions and languages.
+
+How the shard came to rest is one word of `idhazh.contracts.shard_landing`, and
+the line that says so names it.
+
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
 bytes already equal `origin/main`'s, which is a write that already landed. And
@@ -64,6 +83,7 @@ from types import ModuleType
 from typing import Final
 
 from idhazh.config import GardenerSettings
+from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import cli as gardener_cli
 from idhazh.gardener import github_collections, runner
 from idhazh.gardener import tasks as shipped_tasks
@@ -73,17 +93,19 @@ from idhazh.gardener.file_listing import (
     TreeReader,
     parse_tree,
     sizes_from_github,
+    sizes_of,
 )
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
-    EXIT_PUSH_KEPT_LOSING,
+    EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
     Outcome,
     Shard,
     worst,
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.site_weight import BYTES_PER_MB
 
 #: The one identity every commit in this repository carries. The same two values
 #: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
@@ -198,6 +220,38 @@ class Checkout:
         """The commit this checkout is at, or None when it is not a git checkout."""
         done = self._run("rev-parse", "--verify", "--quiet", "HEAD")
         return done.stdout.strip() if done.returncode == 0 else None
+
+    def fetch(self) -> str:
+        """Fetch `main` as it is now into `origin/main`, and hand back the commit it is at."""
+        # Keep existing ancestry for push hooks; shallow callers fetch only new commits.
+        self.git("fetch", "--quiet", REMOTE, BRANCH)
+        return self.git("rev-parse", "--verify", f"{REMOTE}/{BRANCH}").strip()
+
+    def changed_on_main(self, paths: Sequence[str]) -> list[str]:
+        """Which of these paths differ between the commit this checkout is at and `origin/main`.
+
+        Trees only, so a partial clone downloads nothing: it holds every tree of
+        both commits. Rename detection is off, so each path is judged by its own
+        entry. The names are taken literally, as `ls-tree` takes them, in groups
+        below Windows' process limit.
+        """
+        listed: set[str] = set()
+        for batch in _pathspec_batches(paths):
+            listed.update(
+                self.git(
+                    "--literal-pathspecs",
+                    "diff-tree",
+                    "-r",
+                    "--no-renames",
+                    "--name-only",
+                    "-z",
+                    "HEAD",
+                    f"{REMOTE}/{BRANCH}",
+                    "--",
+                    *batch,
+                ).split("\0")
+            )
+        return sorted(listed - {""})
 
     def remote_blob(self, path: str) -> str | None:
         """The object `origin/main` holds at this path, or None when it holds nothing there."""
@@ -394,37 +448,65 @@ def publish(
     repo: Path,
     say: Callable[[str], None] = print,
 ) -> int:
-    """Commit and push this shard, trying again on a newer tip, `attempts` times at most."""
+    """Land this shard on main, trying again on a newer tip, `attempts` times at most.
+
+    Every way it comes to rest is said with its word from `ShardLanding`.
+    """
     refused = _refuse_a_directory(shard, repo)
     if refused is not None:
         say(f"shard {shard.index}: {refused}")
         return EXIT_INTEGRITY
     checkout = Checkout(repo)
     written, deleted = sorted(shard.written_paths), sorted(shard.deleted_paths)
+    compared = sorted((shard.written_paths | shard.deleted_paths) - {shard.record_path})
+    base = ""
     for attempt in range(1, attempts + 1):
-        checkout.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        base = checkout.fetch()
         landed = checkout.remote_blob(shard.record_path)
         if landed is not None:
             if landed == checkout.local_blob(shard.record_path):
-                say(f"shard {shard.index}: already on {BRANCH}, try {attempt}")
+                say(f"shard {shard.index}: {ShardLanding.ALREADY_ON_MAIN}, try {attempt}")
                 return EXIT_OK
             say(
                 f"shard {shard.index}: {shard.record_path} is on {BRANCH} with other bytes, "
                 "so two runs claimed one record"
             )
             return EXIT_INTEGRITY
+        stale = checkout.changed_on_main(compared)
+        if stale:
+            more = f" and {len(stale) - 1} more" if len(stale) > 1 else ""
+            say(
+                f"::warning::shard {shard.index}: {ShardLanding.STALE} - {BRANCH} changed "
+                f"{stale[0]}{more} after the commit this shard ran on, so nothing landed. "
+                f"The next wake does the work again on the new {BRANCH}"
+            )
+            return EXIT_OK
         index = checkout.stage(written, deleted)
         missed = _what_staging_missed(shard, checkout, index)
         if missed is not None:
             say(f"shard {shard.index}: {missed}")
             return EXIT_INTEGRITY
         if checkout.push(checkout.commit(index, shard.message)):
-            say(f"shard {shard.index}: landed on {BRANCH}, try {attempt} of {attempts}")
+            say(
+                f"shard {shard.index}: {ShardLanding.LANDED} on {BRANCH}, "
+                f"try {attempt} of {attempts}"
+            )
             return EXIT_OK
-        say(f"shard {shard.index}: try {attempt} of {attempts} lost the push")
+        say(f"shard {shard.index}: try {attempt} of {attempts}, the push failed")
         if attempt < attempts:
             sleep_with_jitter(attempt)
-    return EXIT_PUSH_KEPT_LOSING
+    if checkout.fetch() != base:
+        say(
+            f"::warning::shard {shard.index}: {ShardLanding.LOST} - {BRANCH} moved after try "
+            f"{attempts} of {attempts}, so other writers are landing. Nothing landed; the "
+            "next wake does the work again"
+        )
+        return EXIT_OK
+    say(
+        f"shard {shard.index}: {ShardLanding.REFUSED} - {BRANCH} did not move after try "
+        f"{attempts} of {attempts}, so {BRANCH} refused the push. Nothing landed"
+    )
+    return EXIT_PUSH_REFUSED
 
 
 def read_the_listing(
@@ -433,33 +515,55 @@ def read_the_listing(
     folders: Sequence[str],
     period_paths: Sequence[str],
     trees: TreeReader | None,
+    *,
+    budget: int | None = None,
 ) -> FileListing:
     """Every file the commit holds under these named period paths, with its size.
 
-    Git's size where the clone holds the file. For one it never downloaded,
-    GitHub's blob API is asked for that named file and its size is matched by
-    blob id. `trees` stands in for that API, and None reaches it for this repo.
+    The listing answers only for these paths, and refuses a path under its
+    folders that none of them names. Git's size where the clone holds the
+    file. For one it never downloaded, GitHub's blob API is asked for that
+    named file and its size is matched by blob id. `trees` stands in for that
+    API, and None reaches it for this repo. A step that names a period as it
+    runs has it listed the same way, from the same commit. `budget` is the most
+    bytes the shard may download, which a step that chooses its periods by it
+    asks the listing about; None answers to no budget.
 
     The checkout is widened only by a file the commit lists, a folder above one,
     or a name directly inside such a folder - a file an earlier task of the
     shard wrote beside the commit's own - so a name a task hands back never
-    widens it where the commit holds nothing.
+    widens it where the commit holds nothing. A period named later counts once
+    it is listed.
     """
     chosen = sorted(set(folders))
     named = sorted(set(period_paths))
-    entries = checkout.list_files(named)
-    unsized = [entry.blob for entry in entries if entry.size is None]
-    sizes: dict[str, int] = {}
-    if unsized:
+    listed: set[str] = set()
+    above: set[str] = set()
+
+    def asked_of_github(entries: Sequence[TreeEntry]) -> dict[str, int]:
+        """The size GitHub gives each blob git printed no size for, by blob id."""
+        unsized = [entry.blob for entry in entries if entry.size is None]
+        if not unsized:
+            return {}
         api = trees if trees is not None else github_collections.api_of_this_repository()
-        sizes = sizes_from_github(api, unsized)
-    listed = {entry.path for entry in entries}
-    above = {
-        parent.as_posix()
-        for path in listed
-        for parent in PurePosixPath(path).parents
-        if parent.parts
-    }
+        return sizes_from_github(api, unsized)
+
+    def remember(entries: Sequence[TreeEntry]) -> None:
+        listed.update(entry.path for entry in entries)
+        above.update(
+            parent.as_posix()
+            for entry in entries
+            for parent in PurePosixPath(entry.path).parents
+            if parent.parts
+        )
+
+    entries = checkout.list_files(named)
+    remember(entries)
+
+    def lister(wanted: Sequence[str]) -> dict[str, int]:
+        found = checkout.list_files(wanted)
+        remember(found)
+        return sizes_of(found, asked_of_github(found))
 
     def widen(wanted: Sequence[str]) -> None:
         stray = [
@@ -476,7 +580,16 @@ def read_the_listing(
             )
         checkout.widen(wanted)
 
-    return FileListing.from_commit(repo_root, chosen, entries, sizes, widen=widen)
+    return FileListing.from_commit(
+        repo_root,
+        chosen,
+        entries,
+        asked_of_github(entries),
+        paths=named,
+        widen=widen,
+        lister=lister,
+        budget=budget,
+    )
 
 
 def declared_folders(
@@ -486,14 +599,6 @@ def declared_folders(
     owned = sorted({folder for name in names for folder in settings.tasks[name].owns})
     read = sorted({folder for name in names for folder in settings.tasks[name].reads})
     return owned, read
-
-
-def folder_weights(listing: FileListing, folders: Sequence[str]) -> dict[str, int]:
-    """What each folder weighs at the commit, in bytes. A folder the commit lacks weighs 0."""
-    return {
-        folder: sum(listing.size_of(path) for path in listing.files_under(folder))
-        for folder in folders
-    }
 
 
 def run_and_land(
@@ -512,10 +617,11 @@ def run_and_land(
 ) -> Outcome:
     """Read the commit's names, run the shard, and land what it hands back; the worst code wins.
 
-    The listing covers only the named periods each task may read. A listing that
-    cannot be read runs no task and lands nothing, and the shard exits 1, so the
-    next wake tries again. A deletion of a file the commit did not list lands
-    nothing either: a task decided it from something other than the commit.
+    The listing covers only the named periods each task may read, and a period
+    a step names as it runs. A listing that cannot be read runs no task and
+    lands nothing, and the shard exits 1, so the next wake tries again. A
+    deletion of a file the shard never listed from the commit lands nothing
+    either: a task decided it from something other than the commit.
     """
     checkout = Checkout(repo_root)
     sha = checkout.head()
@@ -544,7 +650,14 @@ def run_and_land(
                 )
             }
         )
-        listing = read_the_listing(checkout, repo_root, [*owned, *read], paths, trees)
+        listing = read_the_listing(
+            checkout,
+            repo_root,
+            [*owned, *read],
+            paths,
+            trees,
+            budget=settings.config.max_downloaded_mb * BYTES_PER_MB,
+        )
     except (OSError, RuntimeError, ValueError) as refusal:
         say(
             f"shard {shard}: the files under its folders could not be listed, so no task "
@@ -570,7 +683,7 @@ def run_and_land(
     )
     if ran.landing is None:
         return ran
-    unlisted = sorted(ran.landing.deleted_paths - set(listing.sizes))
+    unlisted = sorted(ran.landing.deleted_paths - listing.listed())
     if unlisted:
         say(
             f"shard {shard}: {unlisted[0]} was deleted, and the commit this shard read lists "

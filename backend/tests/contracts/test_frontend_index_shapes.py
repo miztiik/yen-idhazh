@@ -4,7 +4,8 @@
 by hand and carries the stamp it reads, because the query door runs in a browser
 that cannot import a Pydantic model. This holds that copy in step: each shape's
 field set, each field's TypeScript type and their order, the stamp against
-`CompactIndex.schema_version()`, and the periods against `Period`. It also
+`CompactIndex.schema_version()`, the periods against `Period`, and the entry
+states against `EntryState`. It also
 holds three names the door carries beside the copy: every ledger it may query is
 a `LedgerName`, the cell it filters days on is the ledger's own date cell, and
 the four faults it names a missing file with are the backend's `LedgerFault`, in
@@ -26,9 +27,9 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.ledger_index import CompactIndex, RawDayIndex
+from idhazh.contracts.ledger_fault import LedgerFault
+from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger.faults import LedgerFault
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -142,6 +143,15 @@ def test_the_periods_are_the_contract_s_own() -> None:
     assert constant_list(read_text(COPY), "COMPACT_PERIODS", COPY) == [p.value for p in Period]
 
 
+def test_the_entry_states_are_the_contract_s_own() -> None:
+    """The door fetches a file only for a packed entry, so a misspelt state hides a period."""
+    states = constant_list(read_text(COPY), "ENTRY_STATES", COPY)
+    assert states == [state.value for state in EntryState], (
+        f"{COPY.name} names the entry states {states} and EntryState in "
+        f"backend/idhazh/contracts/ledger_index.py names {[state.value for state in EntryState]}"
+    )
+
+
 def test_every_ledger_the_door_may_query_is_a_ledger() -> None:
     """The written-question door names every declared ledger, and no other."""
     shapes = DOOR / "slice-shapes.ts"
@@ -172,5 +182,5 @@ def test_the_four_missing_file_faults_are_one_list_on_both_sides() -> None:
     names = constant_list(read_text(shapes), "LEDGER_FAULTS", shapes)
     assert names == [fault.value for fault in LedgerFault], (
         f"{shapes.name} names the faults {names} and LedgerFault in "
-        f"backend/idhazh/ledger/faults.py names {[fault.value for fault in LedgerFault]}"
+        f"backend/idhazh/contracts/ledger_fault.py names {[fault.value for fault in LedgerFault]}"
     )

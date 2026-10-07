@@ -17,17 +17,19 @@ import json
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
-from typing import ClassVar, Final
+from typing import Any, ClassVar, Final
 
 import pyarrow.parquet
 import pytest
 from conftest import FIXTURES_DIR, REPO_ROOT
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh import ledger
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import (
@@ -62,6 +64,7 @@ LEDGER_OF: Final[dict[type[Contract], LedgerName]] = {
     FeedRetirementRow: LedgerName.FEED_RETIREMENTS,
     HostFingerprintRow: LedgerName.HOST_FINGERPRINT,
     EvalRow: LedgerName.SUMMARY_QUALITY_EVALS,
+    CouncilRunRecord: LedgerName.COUNCIL_RUN_RECORDS,
 }
 
 
@@ -93,6 +96,82 @@ class EveryColumn(Contract):
     tier: Tier
     maybe_period: Period | None = None
     run_ids: tuple[RunId, ...] = Field(default=())
+
+
+class NestedLedgerItem(Model):
+    """One structured list member in the recursive ledger fixture."""
+
+    name: str
+    tier: Tier
+
+
+class NestedLedgerRow(Contract):
+    """A real contract fixture for generic nested persistence."""
+
+    __schema_stem__: ClassVar[str] = "nested-ledger-row"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Initial shape: lists and an optional nested item.",
+            why="Both ledger engines need one generic recursive fixture.",
+        ),
+    )
+
+    labels: list[str]
+    items: list[NestedLedgerItem]
+    optional_item: NestedLedgerItem | None = None
+
+
+class LegacyNestedLedgerItem(Model):
+    """The nested item spelling an earlier build wrote."""
+
+    old_name: str
+
+
+class LegacyNestedLedgerRow(Contract):
+    """The bounded older nested payload used to prove read-side migration."""
+
+    __schema_stem__: ClassVar[str] = "nested-ledger-migration"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-03",
+            change="Initial shape: a nested item uses old_name.",
+            why="The fixture records the earlier spelling the current reader migrates.",
+        ),
+    )
+
+    items: list[LegacyNestedLedgerItem]
+
+
+class MigratedNestedLedgerItem(Model):
+    """The current nested item, including its read-side field migration."""
+
+    name: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _the_old_name_still_reads(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "old_name" in data and "name" not in data:
+            migrated = dict(data)
+            migrated["name"] = migrated.pop("old_name")
+            return migrated
+        return data
+
+
+class MigratedNestedLedgerRow(Contract):
+    """The current shape of the bounded nested migration fixture."""
+
+    __schema_stem__: ClassVar[str] = "nested-ledger-migration"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-04",
+            change="Nested item old_name is renamed to name.",
+            why="A row written by the earlier fixture must still validate on read.",
+        ),
+        *LegacyNestedLedgerRow.__changelog__,
+    )
+
+    items: list[MigratedNestedLedgerItem]
 
 
 def _every_column_rows() -> list[Contract]:
@@ -204,6 +283,63 @@ def test_every_column_type_comes_back_equal_and_in_order(fmt: Format, tmp_path: 
 
     assert len(written) == 1
     assert ledger.load(written, model=EveryColumn) == rows
+
+
+@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
+def test_nested_contract_comes_back_through_the_public_door(fmt: Format, tmp_path: Path) -> None:
+    rows = [
+        NestedLedgerRow(
+            version=NestedLedgerRow.schema_version(),
+            labels=["first", "second"],
+            items=[NestedLedgerItem(name="one", tier=Tier.RAW)],
+            optional_item=NestedLedgerItem(name="held", tier=Tier.COMPACT),
+        ),
+        NestedLedgerRow(
+            version=NestedLedgerRow.schema_version(),
+            labels=[],
+            items=[],
+            optional_item=None,
+        ),
+    ]
+
+    written = ledger.persist(
+        tmp_path,
+        rows,
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-10-04",
+        identity=_identity(),
+        fmt=fmt,
+    )
+
+    assert ledger.load(written, model=NestedLedgerRow) == rows
+    stored = _stored(written[0])
+    assert stored[0]["items"] == [{"name": "one", "tier": "raw"}]
+    assert stored[1]["labels"] == []
+    assert stored[1]["items"] == []
+    assert stored[1]["optional_item"] is None
+
+
+@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
+def test_nested_read_side_migration_runs_under_both_engines(fmt: Format, tmp_path: Path) -> None:
+    legacy = LegacyNestedLedgerRow(
+        version=LegacyNestedLedgerRow.schema_version(),
+        items=[LegacyNestedLedgerItem(old_name="kept")],
+    )
+    written = ledger.persist(
+        tmp_path,
+        [legacy],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-10-04",
+        identity=_identity(),
+        fmt=fmt,
+    )
+
+    assert ledger.load(written, model=MigratedNestedLedgerRow) == [
+        MigratedNestedLedgerRow(
+            version=LegacyNestedLedgerRow.schema_version(),
+            items=[MigratedNestedLedgerItem(name="kept")],
+        )
+    ]
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
@@ -347,7 +483,11 @@ def test_pack_v8_packs_the_worked_example() -> None:
 
 def test_a_file_id_sorts_by_its_clock_across_milliseconds() -> None:
     unit = filenames.unit_id(
-        ledger="visual-prunes", covers="2026-09-24", run_id=A_RUN, job="run-tasks", shard=3,
+        ledger="visual-prunes",
+        covers="2026-09-24",
+        run_id=A_RUN,
+        job="run-tasks",
+        shard=3,
         producer="tests.ledger",
     )
     earlier = filenames.file_id(unit=unit, attempt=2, written_at_ms=1_790_200_000_431)
@@ -432,7 +572,9 @@ def test_a_compact_write_covers_its_period_and_keeps_every_rows_own_identity(
     )
     envelope = ledger.read_envelope(written)
 
-    assert written.relative_to(tmp_path).as_posix() == "compact/visual-prunes/monthly/2026/08.parquet"
+    assert (
+        written.relative_to(tmp_path).as_posix() == "compact/visual-prunes/monthly/2026/08.parquet"
+    )
     assert (envelope.tier, envelope.period, envelope.built_from) == (
         Tier.COMPACT,
         Period.MONTHLY,
@@ -587,7 +729,11 @@ def test_one_file_holds_rows_of_one_contract(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError, match="one file holds rows of one contract"):
         ledger.persist(
-            tmp_path, mixed, ledger=LedgerName.VISUAL_PRUNES, covers="2026-09-24", identity=_identity()
+            tmp_path,
+            mixed,
+            ledger=LedgerName.VISUAL_PRUNES,
+            covers="2026-09-24",
+            identity=_identity(),
         )
 
 
@@ -705,3 +851,120 @@ def test_a_file_whose_envelope_names_another_writer_is_refused(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="its bytes are"):
         ledger.load([written], model=EveryColumn)
+
+
+def _row_rewritten(path: Path, **cells: object) -> Path:
+    """A JSON-lines file with its one row's named cells changed, as a bit flip would leave it."""
+    lines = path.read_text(encoding="ascii").splitlines()
+    head, row = lines[0], json.loads(lines[1]) | cells
+    path.write_text("\n".join([head, json.dumps(row, sort_keys=True)]) + "\n", "ascii")
+    return path
+
+
+def test_a_refused_rows_own_value_never_reaches_the_message(tmp_path: Path) -> None:
+    """A validation refusal names the failing field and its pydantic error kind, never the cell.
+
+    `count` is a closed int column; a bit flip turning it into a string is the
+    same accident that could land a fetched article's title in a text column.
+    `load_stored` feeds every one of `ledger_files.py`'s two warnings and
+    `raw_files.py`'s through this one raise, so proving it here proves all
+    three never quote a row's own value (Guardrail #11; Fowler, 2026-10-07).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[0]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, count=canary)
+
+    with pytest.raises(ValueError, match=r"holds a row this build refuses") as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    message = str(refused.value)
+    assert canary not in message
+    assert "count: int_parsing" in message
+
+
+def test_a_refused_rows_own_value_never_reaches_the_traceback(tmp_path: Path) -> None:
+    """The refusal's own text travels on as `__cause__` unless it is raised `from None`.
+
+    `str(ValueError)` is not the only door: `traceback.format_exception` walks
+    the chained cause and prints its text whole, which an uncaught crash or a
+    `logger.exception` call would do too. The row's own value must stay out of
+    that text as well (Guardrail #11; plan owner fold, 2026-10-07).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[0]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, count=canary)
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    rendered = "".join(traceback.format_exception(refused.value))
+    assert canary not in rendered
+    assert "count: int_parsing" in rendered
+
+
+def test_more_than_five_failing_fields_are_capped_with_the_total_shown(tmp_path: Path) -> None:
+    """More than `_REFUSAL_FIELDS_SHOWN` failing fields show the first five and a total count."""
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[1]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(
+        written,
+        count="x",
+        maybe_count="x",
+        share="x",
+        maybe_share="x",
+        flag="x",
+        maybe_flag="x",
+    )
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    message = str(refused.value)
+    assert message.endswith("(6 total)")
+    assert message.count("; ") == 4
+    assert "maybe_flag" not in message
+
+
+def test_an_unlisted_cell_key_in_loc_is_shown_as_a_question_mark(tmp_path: Path) -> None:
+    """A `loc` segment naming neither a declared top-level field nor a list index is not closed.
+
+    `tier` is declared on the nested `NestedLedgerItem`, never on `NestedLedgerRow`
+    itself, so a reader of the message alone cannot tell it is a closed fact -
+    it is shown as `?` rather than risk a segment some other row's cell supplies.
+    """
+    (written,) = ledger.persist(
+        tmp_path,
+        [NestedLedgerRow(version=NestedLedgerRow.schema_version(), labels=[], items=[])],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, items=[{"name": "a-fetched-name", "tier": "not-a-tier"}])
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=NestedLedgerRow)
+
+    message = str(refused.value)
+    assert "a-fetched-name" not in message
+    assert "items.0.?" in message

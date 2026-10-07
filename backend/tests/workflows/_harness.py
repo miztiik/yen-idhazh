@@ -20,7 +20,7 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_publication_inventory
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
@@ -69,7 +69,6 @@ RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
-    "compaction-profile.yml": ("Compaction profile", frozenset({"workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
@@ -140,6 +139,8 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # The one that decides a published address. See the two tests that run the
     # step for what it accepts and what it now stops.
     ("digest.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    # Blank plans the full day; a number lowers the run's crash guard to it.
+    ("digest.yml", "article_limit"): "^[1-9][0-9]*$",
     ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
@@ -680,14 +681,12 @@ COMMIT_BASE_ENV: Final = frozenset(
 # rebase.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV | {"SHARD", "PREPARE_COMMAND", "PREPARED_PATHS_FILE"},
+    "work": COMMIT_BASE_ENV | {"SHARD"},
     "assemble": COMMIT_BASE_ENV
     | {
         "REFRESH_PATHS",
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
-        "PREPARE_COMMAND",
-        "PREPARED_PATHS_FILE",
     },
     "bench": COMMIT_BASE_ENV,
 }
@@ -714,6 +713,7 @@ COMMIT_STAGED_PATHS: Final = {
     ],
     "assemble": [
         "frontend/public/digest",
+        "frontend/public/publication.json",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
@@ -821,20 +821,16 @@ WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STE
 
 TOLERATED: Final = "true"
 
-# The two artifacts a work shard hands to assemble, spelled the way `with.name`
-# spells them. A step with no `if:` runs on `success()` and a job stopped by
-# `timeout-minutes` is cancelled, so both were skipped on every shard that ran
-# out of time while the `always()` ledger steps above them ran. They travel
-# together or not at all: the decision naming a chart is in the first and the
-# chart's own bytes are in the second.
+# The artifact a work shard hands to assemble, spelled the way `with.name`
+# spells it. A step with no `if:` runs on `success()` and a job stopped by
+# `timeout-minutes` is cancelled, so it was skipped on every shard that ran out
+# of time while the `always()` ledger steps above it ran. A rendered chart's
+# bytes travel inside its decision, so this is the whole hand-off.
 #
 # `evidence-*` is not here. It is the labelling queue's copy of the article
 # text, no job downloads it and nothing on the publish path reads it, so
 # guarding it is a decision of its own rather than part of this hand-off.
-WORK_PAYLOAD_ARTIFACTS: Final = (
-    "items-${{ matrix.shard }}",
-    "shard-visuals-${{ matrix.shard }}",
-)
+WORK_PAYLOAD_ARTIFACTS: Final = ("items-${{ matrix.shard }}",)
 
 COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 
@@ -851,6 +847,14 @@ GIT_IDENTITY_SOURCES: Final = WORKFLOW_PATHS
 SUBSTITUTED_DATE: Final = "2026-08-25"
 
 SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
+
+#: The run-plan ledger's folder for `SUBSTITUTED_DATE`, built by the ledger's own
+#: path code, so the workflow's spelling of it is held to the one the writer uses.
+SUBSTITUTED_PLAN_DIR: Final = (
+    ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.RUN_PLAN)
+    .joinpath(*SUBSTITUTED_DATE.split("-"))
+    .as_posix()
+)
 
 SUBSTITUTED_SHA: Final = "0" * 40
 
@@ -878,10 +882,12 @@ SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
+    "needs.plan.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
+    "steps.decide.outputs.plan_dir": SUBSTITUTED_PLAN_DIR,
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
     # written out. A second copy of that list is the thing this expression
     # exists to remove.
@@ -1460,7 +1466,10 @@ def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> 
     lines = [line.strip() for line in script.splitlines()]
     pattern_line = "SHARD_PATTERN='^[1-8]$'"
     input_line = 'SHARDS="${{ inputs.shards }}"'
-    derive_line = 'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")'
+    derive_line = (
+        'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}"'
+        ' --execution "${{ github.run_id }}")'
+    )
     clamp_line = 'while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do'
     guard_block = [
         'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
@@ -1996,14 +2005,13 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # whether two runs that both appended are in conflict, so a scripted origin
     # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
-        _write(seed / relative, read_text(REPO_ROOT / relative))
-    # A caller that resolves the checkout's own retry config, as
-    # `publish_inputs` does, would otherwise back off at production speed.
+    _write(seed / ".gitignore", read_text(REPO_ROOT / ".gitignore"))
+    # A caller that resolves the checkout's own retry config would otherwise back
+    # off at production speed.
     _write(seed / "config/push-retry.json", json.dumps(_fast_push_retry()) + "\n")
     _git(
         seed, env, "add", ".gitattributes", ".gitignore", "config/push-retry.json",
-        "backend/utilities/prepare_evaluation_publication.py", "docs", "runner-noise.txt",
+        "docs", "runner-noise.txt",
         *staged_paths,
     )
     _git(seed, env, "commit", "-m", "seed")
@@ -2115,18 +2123,17 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     seed = root / "seed"
     _git(root, env, "clone", str(origin), str(seed))
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    for relative in (".gitignore", "backend/utilities/prepare_evaluation_publication.py"):
-        _write(seed / relative, read_text(REPO_ROOT / relative))
+    _write(seed / ".gitignore", read_text(REPO_ROOT / ".gitignore"))
     _write(seed / "docs" / "unrelated.md", "seed\n")
     # Empty files suffice: the commit loop does not interpret corpus contents.
     for relative in CORPUS_SEED:
         _write(seed / relative, "")
     for dirname in series.PUBLISHED_ROOTS:
         _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
+    seed_publication_inventory(seed / "frontend" / "public")
     _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(
-        seed, env, "add", ".gitattributes", ".gitignore",
-        "backend/utilities/prepare_evaluation_publication.py", "docs",
+        seed, env, "add", ".gitattributes", ".gitignore", "docs",
         *COMMIT_STAGED_PATHS["assemble"],
     )
     _git(seed, env, "commit", "-m", f"digest: {date}")

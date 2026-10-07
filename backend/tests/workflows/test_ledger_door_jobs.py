@@ -36,11 +36,11 @@ DOOR_WRITING_VERBS: Final[dict[str, str]] = {
     ),
     "record": (
         "idhazh.stages.record (item-health) and idhazh.evals.writer "
-        "(summary-quality-evals, summary-quality-evals-index)"
+        "(summary-quality-evals)"
     ),
     "assemble": (
         "idhazh.stages.assemble (item-health, published, digest-fragments), "
-        "idhazh.evals.writer (summary-quality-evals, summary-quality-evals-index), "
+        "idhazh.evals.writer (summary-quality-evals), "
         "idhazh.telemetry.source_health (feed-retirements) and "
         "idhazh.telemetry.publish.day_metrics (day-metrics)"
     ),
@@ -48,6 +48,7 @@ DOOR_WRITING_VERBS: Final[dict[str, str]] = {
     "qualify-decide": "idhazh.stages.qualify_decide (candidate-models)",
     "fingerprint": "idhazh.telemetry.silicon (host-fingerprint)",
     "job-clock": "idhazh.telemetry.silicon (host-fingerprint)",
+    "council-settle": "idhazh.council.session._collect (council-run-records)",
 }
 
 

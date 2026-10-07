@@ -1,7 +1,7 @@
 {
   "compact_after_days": 1,
   "daily_keep_days": 45,
-  "dry_run": true,
+  "dry_run": false,
   "kind": "compaction",
   "ledger": "summary-quality-evals",
   "lifecycle_status": "active",
@@ -12,13 +12,15 @@
   "monthly_window": {
     "unit": "forever"
   },
-  "monthly_window_dry_run": false,
+  "month_deletes_dry_run": false,
   "owns": [
     "state/raw/summary-quality-evals",
     "state/compact/summary-quality-evals"
   ],
-  "prune_refusal": "every eval row is kept for ever - nothing summarises a month of it and nothing deletes one of its rows, so no range of its days may be taken out of it",
+  "prune_refusal": "manual pruning removes quality evidence inside the retained history; only configured yearly expiry may remove old evidence",
   "window": {
     "unit": "forever"
-  }
+  },
+  "yearly_keep_months": 36,
+  "yearly_prune_enable": true
 }

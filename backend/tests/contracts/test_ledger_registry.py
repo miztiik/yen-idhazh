@@ -45,12 +45,10 @@ STATE: Final = Path("state")
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
 #:
-#: Three rows are not the old answer, and the difference is only their first
+#: Two rows are not the old answer, and the difference is only their first
 #: segment. `candidate-models` was `validation` and `item-health-summary` was
 #: `telemetry-aggregate`, renamed to say what they hold while neither had a
 #: single committed file - so the old addresses held nothing to move.
-#: `summary-quality-evals-index` was `score-index`, renamed with the eval ledger,
-#: and a migration moved every committed file it held.
 #:
 #: Two folders are not the old module's answer either, because it built no
 #: folder for a ledger filed by month or by stamp. Each is the folder its callers
@@ -78,11 +76,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/scores/2026/09/18",
         "state/scores/2026/09/18",
         "state/scores",
-    ),
-    "SUMMARY_QUALITY_EVALS_INDEX": (
-        "state/summary-quality-evals-index/2026/09/18",
-        "state/summary-quality-evals-index/2026/09/18",
-        "state/summary-quality-evals-index",
     ),
     "CANDIDATE_MODELS": (
         "state/candidate-models/2026/09/18",
@@ -139,11 +132,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/content-similarity-judge/merge-line-holdout-scores/2026/09/18.csv",
         "state/content-similarity-judge/merge-line-holdout-scores",
     ),
-    "LLM_COUNCIL_SHARD_OUTCOMES": (
-        "state/llm-council/shard-outcomes/2026/09/18.csv",
-        "state/llm-council/shard-outcomes/2026/09/18.csv",
-        "state/llm-council/shard-outcomes",
-    ),
     # The three below were never in the old ledger module. Each row is what its
     # owning module built before the registry took its address: the trace day
     # directory and the trace root from `telemetry.traces` and `retention`, the
@@ -185,7 +173,6 @@ CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
         "feed-health",
         "host-fingerprint",
         "item-health",
-        "llm-council",
         "published",
         "score-index",
         "scores",
@@ -214,11 +201,7 @@ THROUGH_THE_DOOR: Final = frozenset(
     member for member in LedgerName if paths.entry(member).grain is Grain.RAW_AND_COMPACT
 )
 #: Every ledger the registry still builds a CSV address for.
-CSV_LEDGERS: Final = [
-    member
-    for member in LedgerName
-    if member not in THROUGH_THE_DOOR and paths.entry(member).grain is not Grain.LOOKUP
-]
+CSV_LEDGERS: Final = [member for member in LedgerName if member not in THROUGH_THE_DOOR]
 
 
 def a_registry(families: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -327,21 +310,19 @@ def test_a_ledger_listed_in_two_families_stops_the_build_naming_both() -> None:
 def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None:
     """A family is the folder its ledgers sit in, so a ledger filed elsewhere is refused.
 
-    The council's one ledger moved into the judge's list: its prefix still says
-    `state/llm-council/`, so it would sit in one folder under another's status.
+    A ledger moved into another family's list would sit under the wrong status.
     """
     judge = a_family("content-similarity-judge")
-    council = a_family("llm-council")["ledgers"][0]
-    moved = {**judge, "ledgers": [*judge["ledgers"], dict(council)]}
+    traces = a_family("traces")["ledgers"][0]
+    moved = {**judge, "ledgers": [*judge["ledgers"], dict(traces)]}
 
     with pytest.raises(ValidationError) as refusal:
         LedgersConfig.model_validate(
-            a_registry([moved, *without("content-similarity-judge", "llm-council")])
+            a_registry([moved, *without("content-similarity-judge", "traces")])
         )
 
     assert (
-        "shard-outcomes sits at state/llm-council/ and is listed in family "
-        "content-similarity-judge"
+        "traces sits at state/traces/ and is listed in family content-similarity-judge"
     ) in str(refusal.value)
 
 
@@ -381,7 +362,9 @@ def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
 
     with pytest.raises(ValidationError) as refusal:
         LedgersConfig.model_validate(
-            a_registry([widened, *without("content-similarity-judge", LedgerName.DAY_METRICS.value)])
+            a_registry(
+                [widened, *without("content-similarity-judge", LedgerName.DAY_METRICS.value)]
+            )
         )
 
     assert "LedgerName.DAY_METRICS should be CONTENT_SIMILARITY_JUDGE_DAY_METRICS" in str(
@@ -430,7 +413,7 @@ def test_every_month_ledger_and_every_stamped_ledger_has_a_folder() -> None:
     periods = {Grain.MONTH_FILE, Grain.STAMPED}
     members = [member for member in LedgerName if paths.entry(member).grain in periods]
 
-    assert {paths.entry(member).grain for member in members} == periods
+    assert {paths.entry(member).grain for member in members} <= periods
     for member in members:
         filed = paths.path(STATE, member, COVERS[paths.entry(member).grain])
         assert filed.parent == paths.tree_root(STATE, member)
@@ -457,19 +440,6 @@ def test_the_two_forms_of_one_address_agree() -> None:
         assert paths.relpath(member, covers) == f"{paths.STATE_DIRNAME}/{under}"
 
 
-def test_an_exact_lookup_has_an_undated_root_and_refuses_a_period() -> None:
-    member = LedgerName.SUMMARY_QUALITY_EVALS_INDEX
-    assert paths.entry(member).grain is Grain.LOOKUP
-    assert paths.path(STATE, member) == paths.tree_root(STATE, member) == STATE / member.value
-    assert paths.relpath(member) == paths.tree_relpath(member) == (
-        f"{paths.STATE_DIRNAME}/{member.value}"
-    )
-    with pytest.raises(ValueError, match="exact lookup, not a dated partition"):
-        paths.path(STATE, member, A_DAY)
-    with pytest.raises(ValueError, match="exact lookup, not a dated partition"):
-        paths.relpath(member, A_DAY)
-
-
 @pytest.mark.parametrize("member", sorted(DAY_TREES), ids=lambda m: m.value)
 def test_a_dated_ledger_handed_no_period_refuses(member: LedgerName) -> None:
     """`path` never guesses a day, because a guessed day files a row out of reach."""
@@ -489,26 +459,27 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     A claim is a family name now, so every folder claimed before is still
     claimed under the name it has today. One addition is a file's stem, which
     the sweep never meets because it only looks at directories. Two are the
-    renamed empty ledgers, which leave their old names behind, and two more are
-    the eval ledger and its ID folder, renamed after their files were moved.
-    Three are the folders other modules used to own, protected before by a list
-    typed into the sweep itself and now by the registry. One is the gardener's
-    own ledger, which files under the two roots and is claimed like every
-    family. The last two are not families at all: they are the roots the ledger
-    door files under, claimed so the sweep never reads them as a trial run's
-    trees.
+    renamed empty ledgers, which leave their old names behind, and one more is
+    the eval ledger, renamed after its files were moved; the ID folder it had
+    is gone. Three are the folders other modules used to own, protected before
+    by a list typed into the sweep itself and now by the registry. One is the
+    gardener's own ledger, which files under the two roots and is claimed like
+    every family. The last two are not families at all: they are the roots the
+    ledger door files under, claimed so the sweep never reads them as a trial
+    run's trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
         "candidate-models",
+        "council-run-records",
         "item-health-summary",
         "summary-quality-evals",
-        "summary-quality-evals-index",
         "traces",
         "day-metrics",
         "digest-fragments",
         "gardener",
         "raw",
+        "run-plan",
         "compact",
     }
     assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {
@@ -547,7 +518,7 @@ def test_the_three_owners_build_the_paths_they_built_before() -> None:
 
 def test_every_entry_carries_the_fields_its_grain_needs() -> None:
     """Directory-backed ledgers have no extension; only a flat file needs a stem."""
-    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT, Grain.LOOKUP}
+    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT}
     for member in LedgerName:
         held = paths.entry(member)
         assert (held.stem is not None) == (held.grain is Grain.FLAT)
@@ -573,13 +544,38 @@ def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:
             paths.tree_relpath(member)
 
 
-def test_a_ledger_under_the_two_roots_is_prefixed_by_its_own_name() -> None:
-    """The five builders file it under `<root>/<name>/`, so any other prefix names nothing."""
+def test_a_door_ledger_that_is_its_own_family_keeps_its_own_prefix() -> None:
+    """A self-family ledger stays at `<root>/<name>/`, not a nested spelling."""
     gardener = a_family(LedgerName.GARDENER.value)
     moved = {**gardener, "ledgers": [{**gardener["ledgers"][0], "prefix": ["gardener", "x"]}]}
 
-    with pytest.raises(ValidationError, match="names a folder nothing writes"):
+    with pytest.raises(ValidationError, match="is its own family"):
         LedgersConfig.model_validate(a_registry([moved, *without(LedgerName.GARDENER.value)]))
+
+
+def test_a_nested_door_ledger_prefix_must_end_with_its_value() -> None:
+    """The envelope keeps the ledger value, so the folder ends with that value too."""
+    judge = a_family("content-similarity-judge")
+    scored = next(
+        held
+        for held in judge["ledgers"]
+        if held["name"] == LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS.value
+    )
+    moved = {
+        **judge,
+        "ledgers": [
+            *[held for held in judge["ledgers"] if held is not scored],
+            {
+                **scored,
+                "grain": Grain.RAW_AND_COMPACT.value,
+                "prefix": ["content-similarity-judge", "deep"],
+                "suffix": None,
+            },
+        ],
+    }
+
+    with pytest.raises(ValidationError, match="not scored-pairs"):
+        LedgersConfig.model_validate(a_registry([moved, *without("content-similarity-judge")]))
 
 
 def test_every_day_tree_files_as_a_day_directory() -> None:

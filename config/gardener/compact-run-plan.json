@@ -1,0 +1,26 @@
+{
+  "compact_after_days": 1,
+  "daily_keep_days": 45,
+  "dry_run": false,
+  "kind": "compaction",
+  "ledger": "run-plan",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "max_periods_per_run": 8,
+  "max_raw_files_per_period": 2000,
+  "monthly_keep_days": 93,
+  "monthly_window": {
+    "unit": "forever"
+  },
+  "month_deletes_dry_run": true,
+  "owns": [
+    "state/raw/run-plan",
+    "state/compact/run-plan"
+  ],
+  "prune_refusal": null,
+  "window": {
+    "unit": "forever"
+  },
+  "yearly_keep_months": 36,
+  "yearly_prune_enable": true
+}

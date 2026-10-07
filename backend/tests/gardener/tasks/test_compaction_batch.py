@@ -13,11 +13,11 @@ from idhazh import ledger
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.gardener.tasks import _daily_period, _monthly_period
+from idhazh.gardener.tasks import _compaction_periods, _daily_period, _monthly_period
 from idhazh.gardener.tasks._compact_tree import CompactTree
 
 from ._task import context_for
-from .test_compaction import VISUALS, a_pass, compact, filed, state, watermark
+from .test_compaction import VISUALS, a_pass, compact, filed, mark, state
 from .test_compaction_years import index_entries
 
 pytestmark = pytest.mark.contract
@@ -62,19 +62,18 @@ def decide(root: Path, today: date) -> CompactTree:
         producer="gardener.tasks.compaction",
         git_sha=context.git_sha,
     )
-    assert (
-        _monthly_period.absorb(
-            tree, policy, now=now, stamp="2026-03-05T00:00:00Z", identity=identity
-        )
-        == ()
+    tree.name_raw_months(
+        _compaction_periods.first_run_months(tree, policy, now=now, operator_range=None)
     )
+    chosen = _compaction_periods.choose(tree, policy, now=now, operator_range=None)
+    assert _monthly_period.absorb(tree, chosen.months, identity=identity) == ()
     assert (
         _daily_period.compact(
             tree,
             policy,
-            first_kept=None,
-            now=now,
-            stamp="2026-03-05T00:00:00Z",
+            chosen.days,
+            rerun_span=chosen.rerun_span,
+            first_kept=chosen.keep_line,
             identity=identity,
         )
         == ()
@@ -104,6 +103,14 @@ def test_indexes_are_written_once_and_an_interrupted_pass_resumes(
     monthly: bool,
     phase: str,
 ) -> None:
+    """Every row is served once between the two passes and after them, whatever part landed.
+
+    The marks are worked out from the indexes, so they move when the indexes
+    land. A raw file left after that sits in a day at or below the daily mark,
+    and the next pass takes the day again. A day file of the closed month left
+    after that is read by no reader, because the monthly index names its month,
+    and no later pass deletes it: a person restores the ledger from git.
+    """
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-01-05"))
     if monthly:
@@ -122,8 +129,7 @@ def test_indexes_are_written_once_and_an_interrupted_pass_resumes(
     before = served(root)
     tree = decide(root, today)
     indexes = {ledger.compact_index_path(state(root), VISUALS, p) for p in Period}
-    marks = {ledger.watermark_path(state(root), VISUALS, p) for p in Period}
-    counts = Counter(change.path for change in tree.changes if change.path in indexes | marks)
+    counts = Counter(change.path for change in tree.changes if change.path in indexes)
     assert counts and set(counts.values()) == {1}
     index_positions = [i for i, change in enumerate(tree.changes) if change.path in indexes]
     delete_positions = [i for i, change in enumerate(tree.changes) if change.data is None]
@@ -146,8 +152,9 @@ def test_indexes_are_written_once_and_an_interrupted_pass_resumes(
     )
 
     assert served(root) == before
-    assert watermark(root, Period.DAILY) == ("2026-03-03" if monthly else "2026-01-06")
+    assert mark(root, Period.DAILY) == ("2026-03-03" if monthly else "2026-01-06")
     assert ledger.list_raw_files(state(root), VISUALS) == []
     if monthly:
-        assert watermark(root, Period.MONTHLY) == "2026-01"
-        assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-01-05") is None
+        assert mark(root, Period.MONTHLY) == "2026-01"
+        left = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-01-05")
+        assert (left is not None) is (phase == "indexes"), "only a cut before any delete leaves it"

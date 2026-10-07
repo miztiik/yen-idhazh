@@ -2,6 +2,8 @@
 
 Task declarations own stable roots. The task's window chooses the periods below
 those roots, so neither a publisher nor a local run discovers older siblings.
+A compaction has no window: it is handed its ledger's marks alone, and each of
+its steps names the periods it chooses as it runs.
 """
 
 from __future__ import annotations
@@ -22,7 +24,8 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import schedule
+from idhazh.contracts.ledgers import Grain
+from idhazh.gardener import ledger_marks, schedule
 
 _TRIAL_ROOT_PREFIX = "state/pipeline-tests-"
 
@@ -100,17 +103,11 @@ def _fold_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None
 def scheduled_range(
     name: str, policy: TaskPolicy, today: date
 ) -> tuple[str, str] | None:
-    """The fixed period range this scheduled task may read, or none for a collection."""
-    if isinstance(policy, CompactionPolicy):
-        if isinstance(policy.monthly_window, MonthsWindow):
-            kept_from = month_partition.oldest_month_kept(today, policy.monthly_window.value)
-            months = month_partition.months_before(kept_from, policy.lookback_periods + 1)
-        else:
-            newest = _newest_eligible_month(today, policy.daily_keep_days)
-            months = month_partition.months_between(
-                _month_shift(newest, -policy.lookback_periods), newest
-            )
-        return months[0], months[-1]
+    """The fixed period range this scheduled retention task may read, or None for any other kind.
+
+    A compaction has none: each of its steps chooses its own periods from its
+    ledger's marks.
+    """
     if not isinstance(policy, RetentionPolicy):
         return None
     if isinstance(policy.window, DaysWindow):
@@ -142,8 +139,7 @@ def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], t
     ):
         raise ValueError("day range endpoints must be ordered YYYY-MM-DD dates")
     days = tuple(
-        start_day + timedelta(days=offset)
-        for offset in range((end_day - start_day).days + 1)
+        start_day + timedelta(days=offset) for offset in range((end_day - start_day).days + 1)
     )
     months = tuple(sorted({day.strftime("%Y-%m") for day in days}))
     return days, months
@@ -184,6 +180,13 @@ def _dated_paths(
     return paths
 
 
+def _trial_ledger_folder(root: Path, which: LedgerName) -> Path:
+    """One trial root's folder for a ledger, using the door prefix where it has one."""
+    if ledger.entry(which).grain is Grain.RAW_AND_COMPACT:
+        return root.joinpath(*ledger.door_folders(which))
+    return root / which.value
+
+
 def _trial_paths(
     root: Path, days: tuple[date, ...], months: tuple[str, ...], *, monthly: bool
 ) -> set[Path]:
@@ -200,12 +203,14 @@ def _trial_paths(
         suffix = Path(f"{day:%Y}/{day:%m}/{day:%d}")
         paths.add(root / "traces" / suffix)
         for which in LedgerName:
-            paths.add(root / which.value / suffix)
-            paths.add(root / "raw" / which.value / suffix)
-            paths.add(root / which.value / f"{day:%Y-%m}.csv")
+            folder = _trial_ledger_folder(root, which)
+            raw_folder = _trial_ledger_folder(root / "raw", which)
+            paths.add(folder / suffix)
+            paths.add(raw_folder / suffix)
+            paths.add(folder / f"{day:%Y-%m}.csv")
             for extension in (".csv", ".json", ".parquet"):
-                paths.add(root / which.value / suffix.with_suffix(extension))
-                paths.add(root / "raw" / which.value / suffix.with_suffix(extension))
+                paths.add(folder / suffix.with_suffix(extension))
+                paths.add(raw_folder / suffix.with_suffix(extension))
     return paths
 
 
@@ -218,7 +223,7 @@ def _ledger_paths(
     *,
     monthly: bool,
 ) -> set[Path]:
-    """Named ledger periods plus compact indexes and watermarks."""
+    """Named ledger periods plus compact indexes."""
     paths: set[Path] = set()
     state_dir = repo_root / ledger.STATE_DIRNAME
     root = repo_root / folder
@@ -228,7 +233,6 @@ def _ledger_paths(
                 paths.add(root / month[:4] / month[5:7])
         else:
             for day in days:
-                stamp = day.isoformat()
                 paths.add(root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}")
         return paths
 
@@ -245,9 +249,7 @@ def _ledger_paths(
     for year in sorted({month[:4] for month in months}):
         for fmt in Format:
             paths.add(ledger.compact_path(state_dir, which, Period.YEARLY, year, fmt=fmt))
-    for period in Period:
-        paths.add(ledger.compact_index_path(state_dir, which, period))
-        paths.add(ledger.watermark_path(state_dir, which, period))
+    paths.update(ledger_marks.name_marks(state_dir, which))
     return paths
 
 
@@ -259,7 +261,15 @@ def paths_for_task(
     *,
     today: date,
 ) -> tuple[Path, ...]:
-    """The exact period roots this task may list, each one file or one named period."""
+    """The exact period roots this task may list, each one file or one named period.
+
+    A compaction lists its ledger's marks and nothing else, whatever the range:
+    each of its steps names the periods it chooses as it runs.
+    """
+    if isinstance(policy, CompactionPolicy):
+        return tuple(
+            sorted(ledger_marks.name_marks(repo_root / ledger.STATE_DIRNAME, policy.ledger))
+        )
     if period_range is None:
         return ()
     days, months = periods_in_range(period_range)
@@ -284,24 +294,13 @@ def paths_for_task(
                     monthly=False,
                 )
             )
-        if isinstance(policy, CompactionPolicy):
-            paths.update(
-                _ledger_paths(
-                    folder, repo_root, policy.ledger, days, months, monthly=monthly
-                )
-            )
-            continue
         if folder.startswith("state/raw/") or folder.startswith("state/compact/"):
-            try:
-                which = LedgerName(folder.removeprefix("state/raw/").removeprefix("state/compact/"))
-            except ValueError:
+            suffix = folder.removeprefix("state/raw/").removeprefix("state/compact/")
+            which = ledger.door_ledger_at(tuple(suffix.split("/")))
+            if which is None:
                 paths.update(_dated_paths(root, days, months, monthly=monthly))
             else:
-                paths.update(
-                    _ledger_paths(
-                        folder, repo_root, which, days, months, monthly=monthly
-                    )
-                )
+                paths.update(_ledger_paths(folder, repo_root, which, days, months, monthly=monthly))
             continue
         paths.update(_dated_paths(root, days, months, monthly=monthly))
     if isinstance(policy, RetentionPolicy) and policy.fold is not None:

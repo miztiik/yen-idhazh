@@ -262,6 +262,7 @@ def plan(
     max_age_hours: float | None = None,
     source_share: float | None = None,
     cap: int | None = None,
+    article_limit: int | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
     if safety_ceiling is not None:
@@ -321,6 +322,7 @@ def plan(
         execution=run_n,
         state_dir=state if state is not None else Path(tempfile.mkdtemp()),
         cap=cap,
+        article_limit=article_limit,
     )
 
 
@@ -680,14 +682,44 @@ def test_a_cap_takes_the_best_of_each_vertical_and_leaves_the_ceiling_alone() ->
     assert plan([LAB, TRADE, COMMUNITY], cap=None).to_json() == full.to_json()
 
 
+def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
+    """A short test run plans fewer stories, chosen across every vertical.
+
+    Unset, it plans exactly what it planned before. It can lower the crash
+    guard and never raise it.
+    """
+    full = plan([LAB, TRADE, COMMUNITY])
+    assert len(full.items) > 2, "the fixture pool has to be big enough to show a trim"
+
+    limited = plan([LAB, TRADE, COMMUNITY], article_limit=2)
+    assert [item.item_id for item in limited.items] == [
+        item.item_id for item in _within_ceiling(list(full.items), ceiling=2)
+    ]
+    assert plan([LAB, TRADE, COMMUNITY], article_limit=None).to_json() == full.to_json()
+    assert plan([LAB, TRADE, COMMUNITY], article_limit=len(full.items) + 1).to_json() == (
+        full.to_json()
+    )
+
+    guarded = plan([LAB, TRADE, COMMUNITY], safety_ceiling=1, article_limit=len(full.items))
+    assert len(guarded.items) == 1, "the limit never raises the safety ceiling"
+
+
+def test_an_article_limit_below_one_is_refused_before_any_feed_is_read() -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        plan([LAB, TRADE, COMMUNITY], article_limit=0, fetcher=fetcher_over())
+
+
+@pytest.mark.parametrize("flag", ["--cap", "--article-limit"])
 def test_the_cap_flag_reaches_the_plan_stage(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    flag: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`--cap` was declared, parsed, and read by nothing at all.
 
     A validation run therefore planned a whole day and could outrun the job it
-    was given. The fetcher is the same fixture seam every other test here uses;
-    only the way it is reached changes, because `main` builds its own.
+    was given. `--article-limit` is the whole-run twin a short digest test run
+    uses, and it must reach the stage the same way. The fetcher is the same
+    fixture seam every other test here uses; only the way it is reached changes,
+    because `main` builds its own.
     """
     settings = settings_for([LAB, TRADE, COMMUNITY])
     config_dir = tmp_path / "config"
@@ -713,9 +745,14 @@ def test_the_cap_flag_reaches_the_plan_stage(
         common, "live_fetcher", lambda _settings: fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL)
     )
 
-    assert cli.main(["plan", "--date", DATE, "--config", str(config_dir), "--cap", "1"]) == 0
+    assert cli.main(["plan", "--date", DATE, "--config", str(config_dir), flag, "1"]) == 0
 
-    written = RunPlan.from_json((tmp_path / "run" / DATE / "plan.json").read_text(encoding="utf-8"))
+    written = ledger.load_days(
+        tmp_path / "state",
+        LedgerName.RUN_PLAN,
+        [DATE],
+        model=RunPlan,
+    )[0]
     assert len(written.items) == 1
     assert len(plan([LAB, TRADE, COMMUNITY]).items) > 1, "the same day is bigger uncapped"
 

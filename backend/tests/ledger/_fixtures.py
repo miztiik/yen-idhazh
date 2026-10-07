@@ -8,7 +8,11 @@ from idhazh.contracts.base import Contract
 
 FIXTURE_NAMES = {
     "collection-prune-row": (
+        "a-compaction-that-recovered-three-periods.json",
+        "a-dry-walk-that-counted-past-its-ceiling.json",
         "a-live-fold-beside-a-dry-window.json",
+        "a-live-walk-past-a-member-github-kept.json",
+        "a-pass-github-did-not-answer.json",
         "ceiling-reached.json",
         "exhausted-dry-run.json",
     ),
@@ -20,9 +24,10 @@ FIXTURE_NAMES = {
         "a-shard-that-read-its-pairs.json",
         "a-shard-that-was-dealt-nothing.json",
     ),
-    "council-shard-outcome": (
-        "a-unit-that-ran-no-model.json",
-        "a-unit-that-stopped-on-its-own-clock.json",
+    "council-run-record": (
+        "a-part-that-ran-the-model.json",
+        "a-selection-that-ran-no-model.json",
+        "a-migrated-count-that-had-nothing-to-do.json",
     ),
     "day-metrics": ("full.json", "with-label-similarity.json"),
     "eval-row": (
@@ -43,7 +48,6 @@ FIXTURE_NAMES = {
         "every-reading-taken.json",
         "the-clock-a-job-kept.json",
     ),
-    "observation-index-row": ("one.json",),
     "published-row": ("one-item.json",),
     "seen-row": ("first-sight.json",),
     "story-similarity-pair": (

@@ -4,10 +4,12 @@ export const ssr = false;
 
 export function load() {
 	return {
+		chrome: __EXPLORER_CONFIG__.chrome,
 		console: __CONSOLE_CONFIG__,
 		explorer: __EXPLORER_CONFIG__,
 		publishedLedgers: __PUBLISHED_LEDGERS__,
 		frame: __FRAME_CONFIG__,
-		panelGroups: [{ id: 'data-explorer', title: '', panels: ['data-explorer-ask', 'data-explorer-rows'] }]
+		docsBase: __UI_CONFIG__.repo_url.replace(/\/+$/, ''),
+		panelGroups: [{ id: 'data-explorer', title: '', panels: ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape'] }]
 	};
 }

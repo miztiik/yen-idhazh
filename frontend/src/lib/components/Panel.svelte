@@ -146,4 +146,36 @@
 	.panel-block.wide .panel-body > :global(*) {
 		padding-inline: var(--space-5);
 	}
+
+	/* Under workbench chrome a panel is a region of one tool: no card of its
+	   own, and its body fills whatever share of the window the page gives it. */
+	:global([data-console-chrome='workbench']) .panel-block {
+		display: grid;
+		margin-top: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
+		background: transparent;
+	}
+
+	:global([data-console-chrome='workbench']) .panel-body {
+		display: grid;
+	}
+
+	:global([data-console-chrome='workbench']) .panel-head {
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+	}
+
+	:global([data-console-chrome='workbench']) .panel-body,
+	:global([data-console-chrome='workbench']) .panel-block.wide .panel-body,
+	:global([data-console-chrome='workbench']) .panel-block.wide .panel-body > :global(*) {
+		margin-inline: 0;
+		padding-inline: 0;
+	}
 </style>

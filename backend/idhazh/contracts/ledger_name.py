@@ -26,7 +26,7 @@ class LedgerName(StrEnum):
     the file and a second spelling of it can disagree with the first.
 
     **A value is one segment, and the nest above it is not part of it.** Several
-    of these sit under `content-similarity-judge/` or `llm-council/`. Where a
+    of these sit under `content-similarity-judge/`. Where a
     ledger lives is the path builder's answer; this is only its name.
 
     **The Python name is spelled from the value and the family, and nothing
@@ -47,7 +47,6 @@ class LedgerName(StrEnum):
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
     SUMMARY_QUALITY_EVALS = "summary-quality-evals"
-    SUMMARY_QUALITY_EVALS_INDEX = "summary-quality-evals-index"
     CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     PUBLISHED = "published"
@@ -59,13 +58,14 @@ class LedgerName(StrEnum):
     CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS = "holdout-pairs"
     CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION = "score-distribution"
     CONTENT_SIMILARITY_JUDGE_ARCHIVE = "archive"
-    LLM_COUNCIL_SHARD_OUTCOMES = "shard-outcomes"
     CONTENT_SIMILARITY_JUDGE_METRICS = "metrics"
     CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES = "merge-line-holdout-scores"
     TRACES = "traces"
     DAY_METRICS = "day-metrics"
     DIGEST_FRAGMENTS = "digest-fragments"
     GARDENER = "gardener"
+    RUN_PLAN = "run-plan"
+    COUNCIL_RUN_RECORDS = "council-run-records"
 
 
 #: Ledgers whose writers still file one CSV segment per run under a day directory.

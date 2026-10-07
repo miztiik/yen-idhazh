@@ -654,8 +654,9 @@ jobs:
       # `--execution` is the GitHub run id for the reason digest.yml gives: two
       # dispatches on one day would otherwise compute the same run id, and the
       # machine record is keyed on it - so the second dispatch's host would read
-      # as a repeat of the first and be settled away. Nothing else here reads a
-      # run id.
+      # as a repeat of the first and be settled away. The freeze, the machine
+      # probe and every repeat's `work` name the same run, so each reads this
+      # run's plan and never another dispatch's from the same day.
       #
       # How big the corpus is comes from `bench.corpus_items` and is read once,
       # here, by the module that also freezes the plan. It was a `--cap` literal
@@ -693,7 +694,9 @@ jobs:
           python3 backend/utilities/runtime_sweep.py freeze-corpus \
             --config backend/var/candidate-config \
             --offset "$RUNTIME_CORPUS_OFFSET" \
-            --date "$DATE"
+            --date "$DATE" \
+            --execution "${{ github.run_id }}" \
+            --commit "${GITHUB_SHA}"
 
       # A bench reading is about a machine, and until now the bench recorded
       # which processor it drew in one line of a JSON summary that expires with
@@ -715,6 +718,7 @@ jobs:
           python -m idhazh fingerprint \
             --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
+            --execution "${{ github.run_id }}" \
             --commit "${GITHUB_SHA}" \
             --shard 0 \
             --job runtime
@@ -733,6 +737,7 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/runtime_sweep.py sweep \
             --date "$RUNTIME_DATE" \
+            --execution "${{ github.run_id }}" \
             --candidate "$RUNTIME_CANDIDATE" \
             --candidate-file "$CANDIDATE_FILE" \
             --candidate-id "$CANDIDATE_ID" \

@@ -2,10 +2,10 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
-import { assistConfig, consoleConfig, engineExtensionRepository, explorerConfig, frameConfig, iconsConfig, uiConfig } from './src/lib/server/config';
+import { assistConfig, consoleConfig, engineExtensionRepository, explorerConfig, frameConfig, iconsConfig, ledgerArchiveBaseUrl, uiConfig } from './src/lib/server/config';
 import { queryEngineAssetModule } from './scripts/query-engine-assets';
 import { rawListedThrough } from './scripts/raw-listed-through.mjs';
-import { publishedLedgers } from './scripts/published-ledgers.mjs';
+import { publishedLedgers, publishedWindowDays } from './scripts/published-ledgers.mjs';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), queryEngineAssetModule()],
@@ -60,10 +60,15 @@ export default defineConfig({
 		__ENCODER_SOURCE__: JSON.stringify(encoderSource()),
 		// Where the query engine downloads its add-ons; `connect-src` admits the same origin.
 		__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository()),
+		// Where Records reads older packed ledgers; the page fetches whole files and hands buffers to the engine.
+		__ARCHIVE_BASE_URL__: JSON.stringify(ledgerArchiveBaseUrl()),
 		__CONSOLE_CONFIG__: JSON.stringify(consoleConfig()),
 		__EXPLORER_CONFIG__: JSON.stringify(explorerConfig()),
 		__FRAME_CONFIG__: JSON.stringify(frameConfig()),
 		__PUBLISHED_LEDGERS__: JSON.stringify(publishedLedgers()),
+		// How many UTC days of each published ledger the site copy keeps, from the copy's own
+		// reading of the config, so Data explorer asks the archive only for days it dropped.
+		__SITE_WINDOW_DAYS__: JSON.stringify(publishedWindowDays()),
 		__RAW_LISTED_THROUGH__: JSON.stringify(rawListedThrough()),
 		// The icon line width in screen pixels. Icon.svelte converts it to Lucide's 24-unit grid.
 		__ICON_STROKE_PX__: JSON.stringify(iconsConfig().stroke_px)

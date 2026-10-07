@@ -248,8 +248,8 @@ column - four series or one - and the rules are not negotiable per chart:
  wide. The strip is a CSS container and the reserve is capped at its width, so on
  a phone a value whose widest reading would not fit takes the strip's width
  rather than pushing the page sideways, and every value that does fit keeps its
- room at every width. Measured 2026-09-28: an uncapped reserve pushed `/evals/`
- and the console 31 px sideways at 360 px. A share of the plot and not a pixel
+ room at every width. Measured 2026-09-28: an uncapped reserve pushed
+ the console 31 px sideways at 360 px. A share of the plot and not a pixel
  count, so the rule holds at every window width. Susan, 2026-09-28.
 - **A long entry wraps as text, not as three separate boxes.** Its swatch stays
  on the name's first line and its value follows the name's last word. The
@@ -467,6 +467,6 @@ to need editing.
 - [../../architecture/publishing/console-charts.md](../../architecture/publishing/console-charts.md) - the chart frame these rules are implemented in.
 - [../config/appearance.md](../config/appearance.md) - `chart.*` and `console.*`, the knobs these rules read.
 
-## Records table exception
+## Data explorer table exception
 
-The Records page table is not a chart. It prints what DuckDB returned so the operator can copy names and values into the next question. Its later chart panel must still follow the chart rules on this page.
+The Data explorer page table is not a chart. It prints what DuckDB returned so the operator can copy names and values into the next question. Its later chart panel must still follow the chart rules on this page.

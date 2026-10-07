@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -91,15 +91,8 @@ outgrows it.
 ### 2. A cover that is not a clock
 
 Sometimes a clock would answer a different question from the one asked. Then the
-answer is a cheaper cover, not a shorter memory. Three shapes, all in service
+answer is a cheaper cover, not a shorter memory. Two shapes, both in service
 today.
-
-**The inputs and files this job owns.** Evaluation publication takes a named
-batch manifest and the paths prepared from it. A push retry replays those
-original batches, not all recorded measurements. The
-[publication protocol](../architecture/contracts/observation-lookup.md#publication-across-jobs)
-owns the durable input and prepared-path rules. Its bound is the supplied work,
-not a date window; this does not bound a full Git checkout or fetch.
 
 **One run, or one date.** `ledger.load_settled_failures` and
 `ledger.load_source_counts` take a date and read that one day through
@@ -109,20 +102,8 @@ ledger the same way, because a run id already names its date.
 by construction - the input never had a clock, and putting one on it could only
 lose work the run just did.
 
-**The candidate identities themselves.** `evals.writer.recorded_observations`
-takes the supplied digests and asks which are already present. The
-[observation lookup](../architecture/contracts/observation-lookup.md) reads one
-fixed root, the bounded routes selected by those keys and capped SQLite leaves.
-It uses the leaf's primary-key index. It does not reconstruct the historical ID
-set, open unrelated leaves or scan evaluation rows. IDs never expire, so a
-measurement does not become new merely because it was last recorded long ago.
-
-The one-time [migration](../how-to/migrate-observation-lookup.md) reads all legacy
-IDs and raw and compact evaluation rows explicitly. It is not a fallback in the
-routine writer and is listed under [unbounded](#unbounded-and-it-says-so).
-
-`fingerprint.append_new` carries digests rather than built rows, and the set
-stops growing when the inputs stop changing.
+**The distinct inputs themselves.** `fingerprint.append_new` carries digests
+rather than built rows, and the set stops growing when the inputs stop changing.
 
 ### 3. Unbounded, on purpose, and it says so
 
@@ -218,7 +199,6 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Its cover |
 | --- | --- | --- |
-| `evals.writer.recorded_observations` | the fixed lookup root, candidate-selected routing pages and capped SQLite leaves | the supplied candidate digests; routing depth and leaf bytes are bounded independently of retained history ([lookup bounds](../architecture/contracts/observation-lookup.md#bounds-and-costs)) |
 | `ledger.persist` on `LedgerName.COUNTERFACTUAL_SCORES` | one raw file of `state/raw/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
@@ -230,7 +210,7 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 | `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
 | the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
-| the compaction's listing of a ledger's days, `raw_files.raw_days` and `raw_files.listed_days` | the day folder names under `state/raw/<ledger>/` and the file names under its `index/`, never a file's contents | the raw days not compacted yet, and any listing an earlier build left, which every pass deletes. A live compaction empties both as it goes, so it names about two raw days and no listing. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
+| the compaction's listing of a ledger's days, `raw_files.raw_days` | the day folder names under `state/raw/<ledger>/`, never a file's contents | the raw days not compacted yet. A live compaction empties them as it goes, so it names about two raw days. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
 | the gardener's closed-day fold, `closed_day_fold` | the day folder and file names of each CSV day tree its task owns, then every file of each closed day that still holds a writer file, and, where the task's fold settles months, every file of each closed month that still holds a day's file | what it opens is the days closed since the last wake - about one a tree a day - plus any a failed wake left, and in a tree that settles months, the month just closed once a month and a month a late day landed in. What it lists is every day folder of the tree, the listing the task's window pass already makes over the same tree. A bounded input cannot answer it: which days still hold a writer file is a question about every day, and a day a failed wake skipped is still waiting however old it is |
 
 ### Unbounded, and it says so
@@ -252,10 +232,10 @@ reads are here and not how many. These are `backend/`'s;
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 | `ledger_families.listing` | every file under every ledger's folder in `state/` | the question is how many files each ledger holds, and only a listing answers it. It is a verb a person types, off the daily path, and its test drives it from a registry and a state tree the test writes (2026-09-27) |
 | the gardener's `run-tasks` listing, `gardener_publish.read_the_listing` | the name and size of every file under the folders one shard's tasks own or read, from one `git ls-tree -r -l` over the commit, and for a file the clone never downloaded one GitHub trees API request per listed folder. No file content | a task deletes what its window no longer keeps, so it has to see every name it owns. What still grows is the number of names listed, one entry a file: measured 2026-09-30, the whole repository held 3,493 files and 980 of them under `state/`. What no longer grows with the tree is what the shard downloads: its checkout holds only code and config, and a task fetches only the day or month folders it reads. Every row carries that as `downloaded_bytes` beside the owned folders' weight as `cone_bytes`, and a shard over `max_downloaded_mb` - committed at 128, an estimate - exits 1 once its record has landed ([the reasoning](../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
-| `backend/utilities/migrate_observation_lookup.py`, through `evals.observation_migration.migrate` | all legacy index CSVs and all raw and compact evaluation files and metadata in the explicitly named state directory | the one-time cutover must preserve every legacy ID and add current keys recomputed from all retained rows; a date range cannot recover a legacy ID's missing date. Cost grows with those files and rows. Source validation precedes CSV removal; evaluation bytes are never rewritten. It requires the [approved cutover procedure](../how-to/migrate-observation-lookup.md), not a routine writer call |
-| `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, `grader_length_bias.py` joins every row, and the explicit lookup migration checks settled-row semantics. Each is an operator pass, off the daily path |
+| `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, and `grader_length_bias.py` joins every row. Each is an operator pass, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
-| `backend/utilities/migrate_to_parquet.py` | every CSV day left of each ledger it is given, under the folder its table `CSV_LEDGERS` names for that ledger, in each state root it is given: `state/`, and any trial run's tree inside it | a migration moves every day there is, once, and a CSV file that lands later is moved by running it again. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
+| `pipeline_test_state_verifier.refusals` | the raw days, compact periods, indexes and watermarks under the roots, ledgers and UTC months a caller names | it is a proof command for a migration or trial cutover. The caller names each root, each ledger and each month, so another committed trial root or another month on disk adds no read until the command names it. The command validates stored files through the door's raw and compact checkers rather than walking `state/` to discover cases |
+| `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/`, and any trial run's tree inside it | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on
@@ -424,7 +404,7 @@ the last day there was.
 | `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
 | `payload.publishedItems` | one day payload a day in range | its caller's `windowDays` |
 | `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
-| `payload.telemetryRows` | the telemetry shards the span touches | its caller's `windowDays` |
+| `payload.telemetryRows` | the telemetry shards the window touches, and only the rows inside it | the window its caller hands over: the console's home page hands over its widest preset, which ends on the site's newest published day |
 
 ### A cover that is not a clock
 
@@ -432,12 +412,12 @@ the last day there was.
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
-| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the newest `days` packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the same 91, counted back from the newest packed day that holds a row: when the newest packed days hold none, the reader reads as many earlier days to make up for them. `-1` reads every packed day, and a caller that passes it says why beside the call. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
-| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same 91 |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
+| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
-| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the day cover, for all three |
+| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
@@ -732,14 +712,13 @@ listing the task's window pass already makes over the same tree, and it has to:
 which days still hold a writer file is a question about every day. The listing
 reads names only, and its row is in the inventory above.
 
-**A tree nothing ever trims settles by the month.** The eval ledger's ID folder
-keeps every file for ever, so one `settled.csv` a closed day still grew it by 365
-files a year, and the dedupe opens every one of them on every run. Its task's
-fold settles each closed month into one `settled.csv` in the month's own folder
-once the month's last day is closed (`fold.settles_months`), so the folder grows
-by twelve files a year. A settled month's rows name no day, so only a tree whose
-window keeps whole months may settle one, and the loader refuses the switch
-beside a window of days.
+**A tree nothing ever trims settles by the month.** `fold.settles_months`
+settles each closed month into one `settled.csv` in the month's own folder once
+the month's last day is closed, so a tree that keeps every file for ever grows
+by twelve files a year rather than 365. The eval ledger's ID folder was its one
+user until that folder was deleted on 2026-10-04. A settled month's rows name
+no day, so only a tree whose window keeps whole months may settle one, and the
+loader refuses the switch beside a window of days.
 
 **The item-health, summary-quality-evals and host-fingerprint ledgers have left this count.**
 They moved to the ledger door, where each ledger's compaction, not this fold,

@@ -7,14 +7,16 @@ import { bandShares } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { stacked } from '../src/lib/charts/stacked';
 import {
-	countersWithoutScores,
 	measurementOff,
 	recordDestroyed,
 	recordingNotes,
 	recordingStarted,
 	sampledAt,
-	scoresWithoutCounters
+	type OfferedWindow,
+	type RecordingNotes,
+	type RecordRead
 } from '../src/lib/console/recording';
+import { daysBetween, type HeldPeriod } from '../src/lib/data/slice';
 
 /** `chart.readout_max_share`, read off the committed config inside the test
  * that uses it, so a malformed file fails one test rather than the module. */
@@ -115,21 +117,128 @@ test.describe('a readout column sits where the engine drew it', () => {
 	});
 });
 
-test.describe('what the recording was doing, in the owner words', () => {
-	test('measurement off names the day it stopped and never the knob', () => {
-		const said = measurementOff('2026-08-29');
-		expect(said).toBe(
-			'Measurement is off. Nothing has been recorded since 29 Aug 2026, so the figures below stop on that day. Turn it back on in config/idhazh.json.'
-		);
+test.describe('what the recording was doing, in fixed words', () => {
+	/** The windows the control offers, each ending on 15 Jun 2030, the newest published day. */
+	const OFFERED: OfferedWindow[] = [
+		{ days: 1, start: '2030-06-15', end: '2030-06-15' },
+		{ days: 7, start: '2030-06-09', end: '2030-06-15' },
+		{ days: 14, start: '2030-06-02', end: '2030-06-15' },
+		{ days: 30, start: '2030-05-17', end: '2030-06-15' },
+		{ days: 90, start: '2030-03-18', end: '2030-06-15' }
+	];
+
+	/** A record read whole, packed as far as `through`, whose newest rows are in `lastRows`. Its
+	 *  indexes begin long before every window here, which no off line reads. */
+	const packed = (through: string, lastRows: HeldPeriod | null): RecordRead => ({
+		state: 'read',
+		through,
+		first: '2029-01-01',
+		lastRows,
+		lostDays: [],
+		setAside: {}
+	});
+
+	/** A record read whole whose indexes begin on `first`, packed as far as `through`, with
+	 *  `lostDays` recorded lost. */
+	const begun = (first: string, through: string, lostDays: string[] = []): RecordRead => ({
+		state: 'read',
+		through,
+		first,
+		lastRows: { period: 'daily', covers: through },
+		lostDays,
+		setAside: {}
+	});
+
+	/** The window from `start` to `end`, both included. */
+	const over = (start: string, end: string): OfferedWindow => ({
+		days: daysBetween(start, end).length,
+		start,
+		end
+	});
+
+	/** The line a switched-off instrument prints over the `days`-day window. */
+	const offOver = (days: number, read: RecordRead, recorded: string[] = []) =>
+		measurementOff({
+			enabled: false,
+			recorded,
+			read,
+			open: OFFERED.find((window) => window.days === days)!,
+			offered: OFFERED
+		});
+
+	test('a measurement that is on prints no line', () => {
+		expect(
+			measurementOff({
+				enabled: true,
+				recorded: [],
+				read: packed('2030-06-14', null),
+				open: OFFERED[2]!,
+				offered: OFFERED
+			})
+		).toBeNull();
+	});
+
+	test('measurement off names the newest day it recorded in the window, and never the knob', () => {
+		const said = offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }), [
+			'2030-05-06',
+			'2030-06-10',
+			'2030-06-12'
+		]);
+		expect(said).toBe('Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.');
 		// A term from a subsystem is not a term for a user (CLAUDE.md section 0b).
 		expect(said).not.toContain('host_fingerprint');
 		expect(said).not.toContain('evaluation_enabled');
 	});
 
-	test('measurement off with nothing on record says so rather than dating it', () => {
-		expect(measurementOff(null)).toBe(
-			'Measurement is off. Nothing has been recorded at all. Turn it back on in config/idhazh.json.'
+	test('a window that holds no recorded day names none, and names the window that reaches back to the last one', () => {
+		const stopped = packed('2030-06-14', { period: 'daily', covers: '2030-05-06' });
+		// 6 May 2030 is the last day this record recorded, and it is in the 90-day window
+		// alone, so every narrower window names that window and not the day.
+		expect(offOver(7, stopped, ['2030-05-06'])).toBe(
+			'Measurement is off. Nothing was recorded in these 7 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
 		);
+		expect(offOver(30, stopped, ['2030-05-06'])).toBe(
+			'Measurement is off. Nothing was recorded in these 30 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
+		);
+		// Packed as far as the window's one day, which held no row: the window names its day.
+		expect(offOver(1, packed('2030-06-15', { period: 'daily', covers: '2030-05-06' }))).toBe(
+			'Measurement is off. Nothing was recorded on 15 Jun 2030. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
+		);
+	});
+
+	test('a window reaches back to a closed month only when it holds the whole month', () => {
+		// The 90-day window starts on 18 Mar 2030: it holds the whole of April and part of March.
+		expect(offOver(14, packed('2030-06-14', { period: 'monthly', covers: '2030-04' }))).toBe(
+			'Measurement is off. Nothing was recorded in these 14 days. Turn it on in config/idhazh.json. The 90-day window reaches back to the last recorded day.'
+		);
+		expect(offOver(14, packed('2030-06-14', { period: 'monthly', covers: '2030-03' }))).toBe(
+			'Measurement is off. Nothing was recorded in these 14 days. Turn it on in config/idhazh.json. No window here reaches back to the last recorded day.'
+		);
+		// The widest window can never point to a wider one.
+		expect(offOver(90, packed('2030-06-14', { period: 'yearly', covers: '2029' }))).toBe(
+			'Measurement is off. Nothing was recorded in these 90 days. Turn it on in config/idhazh.json. No window here reaches back to the last recorded day.'
+		);
+	});
+
+	test('measurement off with nothing on record says so in every window, rather than dating it', () => {
+		const never = packed('2030-06-14', null);
+		for (const window of OFFERED) {
+			// The 1-day window holds no packed day, and the record has still never held a row.
+			expect(offOver(window.days, never), `the ${window.days}-day window`).toBe(
+				'Measurement is off. Nothing has been recorded at all. Turn it on in config/idhazh.json.'
+			);
+		}
+	});
+
+	test('measurement off claims nothing about what was recorded where the page has not read it', () => {
+		const said = 'Measurement is off. Turn it on in config/idhazh.json.';
+		// Not packed yet, and a read that failed: the note above the line says which.
+		expect(offOver(14, { state: 'not-packed' })).toBe(said);
+		expect(offOver(14, { state: 'unreadable', at: '2030-06-10', fault: 'file-missing' })).toBe(said);
+		// Packed as far as 14 Jun 2030, so the 1-day window of 15 Jun holds no packed day.
+		expect(offOver(1, packed('2030-06-14', { period: 'daily', covers: '2030-05-06' }))).toBe(said);
+		// The record holds rows on 12 Jun 2030 that the instrument's figures do not use.
+		expect(offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }))).toBe(said);
 	});
 
 	test('a clean fraction reads as one run in four', () => {
@@ -149,22 +258,37 @@ test.describe('what the recording was doing, in the owner words', () => {
 	});
 
 	test('the two one-sided days each name which instrument answered', () => {
-		expect(countersWithoutScores()).toBe(
-			'The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.'
+		const facts = {
+			enabled: true,
+			recorded: ['2026-08-29'],
+			window: ['2026-08-28', '2026-08-29'],
+			reads: [begun('2026-08-01', '2026-08-29')],
+			from: '2026-08-28',
+			open: over('2026-08-28', '2026-08-29'),
+			coveredElsewhere: ['2026-08-28', '2026-08-29']
+		};
+		expect(recordingNotes({ ...facts, missing: 'scores' }).coveredElsewhere).toBe(
+			'There are no quality figures for 28 Aug 2026. The machine ran and we timed it, but nothing scored the summaries.'
 		);
-		expect(scoresWithoutCounters()).toBe(
-			"The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server."
+		expect(recordingNotes({ ...facts, missing: 'server-counters' }).coveredElsewhere).toBe(
+			'No server figures were written down for 28 Aug 2026. The speed figures for that day come from the summariser, not the server.'
 		);
 	});
 
-	test('a gap before the first recorded day is named as a gap in the recording', () => {
+	test('a start inside the window counts the days before it that had a run, in Reader\'s words', () => {
 		expect(recordingStarted('2026-08-27', 5)).toBe(
-			'Recording started on 27 Aug 2026. The 5 days before it have no server figures, and the gap in the chart is a gap in the recording, not a quiet day.'
+			'Recording started on 27 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+		);
+		// Each instrument names what it lacks: the summary checker's figures are quality figures.
+		expect(recordingStarted('2026-08-27', 5, 'quality figures')).toBe(
+			'Recording started on 27 Aug 2026. Earlier in this window, 5 days had a run but no quality figures.'
 		);
 	});
 
 	test('one day reads as one day, and no gap reads as nothing at all', () => {
-		expect(recordingStarted('2026-08-27', 1)).toContain('The 1 day before it has');
+		expect(recordingStarted('2026-08-27', 1)).toBe(
+			'Recording started on 27 Aug 2026. Earlier in this window, 1 day had a run but no server figures.'
+		);
 		expect(recordingStarted('2026-08-27', 0)).toBeNull();
 		expect(recordingStarted(null, 4)).toBeNull();
 	});
@@ -174,36 +298,133 @@ test.describe('what the recording was doing, in the owner words', () => {
 			enabled: true,
 			rate: 1,
 			recorded: ['2026-08-27', '2026-08-28'],
-			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28']
+			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28'],
+			reads: [begun('2026-08-27', '2026-08-28')],
+			from: '2026-08-25',
+			open: over('2026-08-25', '2026-08-28')
 		});
-		expect(notes.off).toBeNull();
 		expect(notes.sampled).toBeNull();
-		expect(notes.startedMidWindow).toContain('Recording started on 27 Aug 2026');
-		expect(notes.startedMidWindow).toContain('The 2 days before it have');
+		expect(notes.startedMidWindow).toBe(
+			'Recording started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
+		);
+	});
+
+	test('a record that began before the days it is handed is never said to start in the window, though the window starts with days it missed', () => {
+		// The counters' first day in the window is 27 Aug 2026. Only the window's days are
+		// handed, and their record's indexes begin on 1 Aug, before them: what the record did
+		// before 25 Aug is not in hand, so recording may not have started on the 27th.
+		const facts = {
+			enabled: true,
+			recorded: ['2026-08-27', '2026-08-28'],
+			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28'],
+			from: '2026-08-25',
+			open: over('2026-08-25', '2026-08-28')
+		};
+		expect(recordingNotes({ ...facts, reads: [begun('2026-08-01', '2026-08-28')] }).startedMidWindow).toBeNull();
+		// Begun on the first day handed: the record's whole history is in hand.
+		expect(recordingNotes({ ...facts, reads: [begun('2026-08-25', '2026-08-28')] }).startedMidWindow).toBe(
+			'Recording started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
+		);
+	});
+
+	test('an instrument that began after its record did names its own first day in every window that shows it', () => {
+		// The record's indexes begin on 1 Aug 2026, the route read from 25 Jul, and this
+		// instrument's rows begin on 10 Aug: in hand is everything the record did, so the 10th
+		// is when this instrument started.
+		const facts = {
+			enabled: true,
+			recorded: daysBetween('2026-08-10', '2026-08-20'),
+			window: daysBetween('2026-07-25', '2026-08-20'),
+			reads: [begun('2026-08-01', '2026-08-20')],
+			from: '2026-07-25'
+		};
+		expect(recordingNotes({ ...facts, open: over('2026-08-05', '2026-08-20') }).startedMidWindow).toBe(
+			'Recording started on 10 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+		);
+		// A window that does not show the 10th says nothing of it.
+		expect(recordingNotes({ ...facts, open: over('2026-08-12', '2026-08-20') }).startedMidWindow).toBeNull();
+		// Handed only the window's days, the start is not known, so it is not said.
+		expect(
+			recordingNotes({ ...facts, from: '2026-08-05', open: over('2026-08-05', '2026-08-20') }).startedMidWindow
+		).toBeNull();
+	});
+
+	test('an instrument drawn from two records dates its start only where both reach back to their first days', () => {
+		// The server's counters are formed from the machine record and the article record. Here
+		// the machine record began on 1 Sep 2026, inside the read from 25 Aug, and the counters'
+		// first day in the read is 30 Aug.
+		const facts = {
+			enabled: true,
+			recorded: daysBetween('2026-08-30', '2026-09-10'),
+			window: daysBetween('2026-08-25', '2026-09-10'),
+			from: '2026-08-25',
+			open: over('2026-08-25', '2026-09-10')
+		};
+		const machine = begun('2026-09-01', '2026-09-10');
+		expect(recordingNotes({ ...facts, reads: [machine, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe(
+			'Recording started on 30 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+		);
+		// The article record began on 1 Aug, before the read, so it may hold counters from before it.
+		expect(recordingNotes({ ...facts, reads: [machine, begun('2026-08-01', '2026-09-10')] }).startedMidWindow).toBeNull();
+		// A day either record lost is a day the instrument ran.
+		expect(
+			recordingNotes({ ...facts, reads: [machine, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow
+		).toBe('Recording started on 28 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
+	});
+
+	test('a window\'s lines name only what it shows, though the route hands it every day it read', () => {
+		// The route read 29 days, 31 Jul to 28 Aug 2026, and hands every window all of them. The
+		// record began on 3 Aug, before the 7-day window of 22 to 28 Aug, so only the wider window
+		// may say when recording started.
+		const lines = (open: OfferedWindow) =>
+			recordingNotes({
+				enabled: true,
+				recorded: daysBetween('2026-08-03', '2026-08-28'),
+				window: daysBetween('2026-07-31', '2026-08-28'),
+				reads: [begun('2026-08-03', '2026-08-28')],
+				from: '2026-07-31',
+				open
+			});
+		expect(lines(over('2026-08-22', '2026-08-28')).startedMidWindow).toBeNull();
+		expect(lines(over('2026-07-31', '2026-08-28')).startedMidWindow).toBe(
+			'Recording started on 3 Aug 2026. Earlier in this window, 3 days had a run but no server figures.'
+		);
 	});
 
 	test('a switched-off instrument owes no sampling caveat as well', () => {
 		const notes = recordingNotes({
 			enabled: false,
 			rate: 0.25,
-			recorded: ['2026-08-29'],
-			window: ['2026-08-29']
+			recorded: ['2030-06-12'],
+			window: ['2030-06-12'],
+			reads: [begun('2030-06-12', '2030-06-14')],
+			from: OFFERED[2]!.start,
+			open: OFFERED[2]!
 		});
-		expect(notes.off).toContain('Measurement is off.');
+		expect(offOver(14, packed('2030-06-14', { period: 'daily', covers: '2030-06-12' }), ['2030-06-12'])).toBe(
+			'Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.'
+		);
 		// Two sentences about the same absence is one too many: a measurement that
 		// is off was not sampled, it was not taken.
 		expect(notes.sampled).toBeNull();
 	});
 
 	test('a day another instrument covered is named, not drawn as a quiet day', () => {
-		const notes = recordingNotes({
+		const facts = {
 			enabled: true,
 			rate: 1,
 			recorded: ['2026-08-29'],
 			window: ['2026-08-28', '2026-08-29'],
-			coveredElsewhere: ['2026-08-28', '2026-08-29']
-		});
-		expect(notes.scoresOnly).toBe(scoresWithoutCounters());
+			reads: [begun('2026-08-01', '2026-08-29')],
+			from: '2026-08-28',
+			coveredElsewhere: ['2026-08-28', '2026-08-29'],
+			missing: 'server-counters' as const
+		};
+		expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).coveredElsewhere).toBe(
+			'No server figures were written down for 28 Aug 2026. The speed figures for that day come from the summariser, not the server.'
+		);
+		// A day another instrument covered outside the window is not this window's to name.
+		expect(recordingNotes({ ...facts, open: over('2026-08-29', '2026-08-29') }).coveredElsewhere).toBeNull();
 	});
 
 	test('a day that published and kept no row is a loss, not a quiet day', () => {
@@ -216,6 +437,9 @@ test.describe('what the recording was doing, in the owner words', () => {
 			enabled: true,
 			recorded: ['2026-09-17'],
 			window: ['2026-09-16', '2026-09-17'],
+			reads: [begun('2026-09-16', '2026-09-17')],
+			from: '2026-09-16',
+			open: over('2026-09-16', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }],
 			figures: 'machine record'
 		});
@@ -235,11 +459,45 @@ test.describe('what the recording was doing, in the owner words', () => {
 			enabled: true,
 			recorded: ['2026-09-17'],
 			window: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17'],
+			reads: [begun('2026-09-16', '2026-09-17')],
+			from: '2026-09-14',
+			open: over('2026-09-14', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }],
 			figures: 'machine record'
 		});
-		expect(notes.startedMidWindow).toContain('The 2 days before it have no machine record');
+		// The record ran on the day it lost, so that day dates its start; the day
+		// after the loss would be the lie the loss sentence exists to stop.
+		expect(notes.startedMidWindow).toBe(
+			'Recording started on 16 Sep 2026. Earlier in this window, 2 days had a run but no machine record.'
+		);
 		expect(notes.recordDestroyed).not.toBeNull();
+	});
+
+	test('a day the record has no record for is a day it ran, never a day before it started', () => {
+		// The record's own index says the day was lost: an empty day, then a lost one,
+		// then the first day with rows. Counted the old way, the note said recording
+		// started on the day after the loss.
+		const notes = recordingNotes({
+			enabled: true,
+			recorded: ['2026-08-20'],
+			window: ['2026-08-17', '2026-08-19', '2026-08-20'],
+			reads: [begun('2026-08-17', '2026-08-20', ['2026-08-19'])],
+			from: '2026-08-17',
+			open: over('2026-08-17', '2026-08-20'),
+			figures: 'machine record'
+		});
+		expect(notes.startedMidWindow).toBe(
+			'Recording started on 19 Aug 2026. Earlier in this window, 1 day had a run but no machine record.'
+		);
+		const lostFirst = recordingNotes({
+			enabled: true,
+			recorded: ['2026-08-20'],
+			window: ['2026-08-19', '2026-08-20'],
+			reads: [begun('2026-08-19', '2026-08-20', ['2026-08-19'])],
+			from: '2026-08-19',
+			open: over('2026-08-19', '2026-08-20')
+		});
+		expect(lostFirst.startedMidWindow).toBeNull();
 	});
 
 	test('a day the record kept a row of is never counted as lost', () => {
@@ -249,6 +507,9 @@ test.describe('what the recording was doing, in the owner words', () => {
 			enabled: true,
 			recorded: ['2026-09-16', '2026-09-17'],
 			window: ['2026-09-16', '2026-09-17'],
+			reads: [begun('2026-09-16', '2026-09-17')],
+			from: '2026-09-16',
+			open: over('2026-09-16', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }]
 		});
 		expect(notes.recordDestroyed).toBeNull();
@@ -273,9 +534,156 @@ test.describe('what the recording was doing, in the owner words', () => {
 		const notes = recordingNotes({
 			enabled: true,
 			recorded: ['2026-09-17'],
-			window: ['2026-09-17']
+			window: ['2026-09-17'],
+			reads: [begun('2026-09-17', '2026-09-17')],
+			from: '2026-09-17',
+			open: over('2026-09-17', '2026-09-17')
 		});
 		expect(notes.sampled).toBeNull();
+	});
+
+	test.describe("THE ORACLE: a one-sided line names only the days the article record alone answered for, in Reader's words", () => {
+		/** The 14-day window from 23 Sep to 6 Oct 2026. The article record timed a run on every day of it. */
+		const FORTNIGHT = daysBetween('2026-09-23', '2026-10-06');
+		const WINDOW = over('2026-09-23', '2026-10-06');
+		/** Every day of the window but `days`. */
+		const except = (...days: string[]): string[] => FORTNIGHT.filter((day) => !days.includes(day));
+		/** Every line the notes print, whichever field holds it, so a line is checked absent by what
+		 *  the page would say rather than by where it sits. */
+		const printed = (notes: RecordingNotes): string[] =>
+			Object.values(notes).filter((line): line is string => line !== null);
+		/** Both records read whole, packed as far as 6 Oct 2026. They began on 1 Aug, before the
+		 *  days handed here, so no started line prints. */
+		const BOTH = [begun('2026-08-01', '2026-10-06'), begun('2026-08-01', '2026-10-06')];
+
+		/** Summaries: the scorer, handed only the window's days, with the days it scored. */
+		const scorer = (recorded: readonly string[], read: RecordRead, open: OfferedWindow = WINDOW, enabled = true) =>
+			recordingNotes({
+				enabled,
+				recorded,
+				window: FORTNIGHT,
+				reads: [read],
+				from: WINDOW.start,
+				open,
+				figures: 'quality figures',
+				coveredElsewhere: FORTNIGHT,
+				missing: 'scores'
+			});
+
+		/** Hardware: the server's counters, drawn from the machine and the article records, with the
+		 *  days they hold a run of. */
+		const counters = (recorded: readonly string[], open: OfferedWindow = WINDOW, reads: RecordRead[] = BOTH) =>
+			recordingNotes({
+				enabled: true,
+				recorded,
+				window: FORTNIGHT,
+				reads,
+				from: WINDOW.start,
+				open,
+				coveredElsewhere: FORTNIGHT,
+				missing: 'server-counters'
+			});
+
+		test('a day the score record lost is a day the scorer ran, so no line says nothing scored it', () => {
+			// Scored on every day but 3 Oct 2026, which the score record recorded lost. The record
+			// note names that day; this line has nothing to add.
+			expect(printed(scorer(except('2026-10-03'), begun('2026-08-01', '2026-10-06', ['2026-10-03'])))).toEqual([]);
+		});
+
+		test('two days nothing scored are named in one line, and never called this day', () => {
+			const lines = printed(scorer(except('2026-10-01', '2026-10-03'), begun('2026-08-01', '2026-10-06')));
+			expect(lines).toEqual([
+				'There are no quality figures for 1 Oct and 3 Oct 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+			expect(lines.join(' ')).not.toContain('this day');
+		});
+
+		test('on Hardware a day with articles and no counters says where its speed figures came from, and claims no score', () => {
+			// The article record holds 2 Oct 2026, the machine record holds no counters row for it,
+			// and Hardware reads no score row for its line at all.
+			const lines = printed(counters(except('2026-10-02')));
+			expect(lines).toEqual([
+				'No server figures were written down for 2 Oct 2026. The speed figures for that day come from the summariser, not the server.'
+			]);
+			expect(lines.join(' ')).not.toContain('scored');
+		});
+
+		test('a day the missing record has not packed yet, or a record that did not read, gets no line', () => {
+			// The score record is packed as far as 4 Oct 2026, so nothing is known yet of 5 and 6 Oct.
+			expect(printed(scorer(except('2026-10-05', '2026-10-06'), begun('2026-08-01', '2026-10-04')))).toEqual([]);
+			// The counters draw on two records, and the one packed less far decides.
+			const behind = [begun('2026-08-01', '2026-10-04'), begun('2026-08-01', '2026-10-06')];
+			expect(printed(counters(except('2026-10-05', '2026-10-06'), WINDOW, behind))).toEqual([]);
+			expect(printed(scorer([], { state: 'not-packed' }))).toEqual([]);
+			expect(printed(scorer([], { state: 'unreadable', at: '2026-10-01', fault: 'file-missing' }))).toEqual([]);
+		});
+
+		test('a day the started line counts is said there, once', () => {
+			// The score record began on 25 Sep 2026, inside the read, and the scorer first scored on
+			// 26 Sep. 23 to 25 Sep had a run before it started; 2 Oct had a run it did not score.
+			const lines = printed(
+				recordingNotes({
+					enabled: true,
+					recorded: daysBetween('2026-09-26', '2026-10-06').filter((day) => day !== '2026-10-02'),
+					window: FORTNIGHT,
+					reads: [begun('2026-09-25', '2026-10-06')],
+					from: WINDOW.start,
+					open: WINDOW,
+					figures: 'quality figures',
+					coveredElsewhere: FORTNIGHT,
+					missing: 'scores'
+				})
+			);
+			expect(lines).toEqual([
+				'Recording started on 26 Sep 2026. Earlier in this window, 3 days had a run but no quality figures.',
+				'There are no quality figures for 2 Oct 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+		});
+
+		test('while measurement is off, the off line speaks for the days after the newest one recorded', () => {
+			// Switched off after 30 Sep 2026, and the record packed on through 6 Oct with no rows.
+			// Before the switch the scorer missed 27 Sep, a gap only this line names.
+			const stopped = (covers: string): RecordRead => ({
+				state: 'read',
+				through: '2026-10-06',
+				first: '2026-08-01',
+				lastRows: { period: 'daily', covers },
+				lostDays: [],
+				setAside: {}
+			});
+			const recorded = daysBetween('2026-09-23', '2026-09-30').filter((day) => day !== '2026-09-27');
+			expect(measurementOff({ enabled: false, recorded, read: stopped('2026-09-30'), open: WINDOW, offered: [WINDOW] })).toBe(
+				'Measurement is off. Nothing has been recorded since 30 Sep 2026. Turn it on in config/idhazh.json.'
+			);
+			expect(printed(scorer(recorded, stopped('2026-09-30'), WINDOW, false))).toEqual([
+				'There are no quality figures for 27 Sep 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+			// Nothing recorded in the window: the off line speaks for every day of it.
+			expect(printed(scorer([], stopped('2026-09-10'), WINDOW, false))).toEqual([]);
+		});
+
+		test("every day on screen takes the window's own words, and one day never needs a second", () => {
+			const lastDay = over('2026-10-06', '2026-10-06');
+			expect(printed(scorer(except('2026-10-06'), begun('2026-08-01', '2026-10-06'), lastDay))).toEqual([
+				'There are no quality figures for this one day. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+			expect(printed(counters(except('2026-10-06'), lastDay))).toEqual([
+				'No server figures were written down for this one day. The speed figures here come from the summariser, not the server.'
+			]);
+			// No counters on any of the 7 days from 30 Sep 2026.
+			expect(printed(counters(daysBetween('2026-09-23', '2026-09-29'), over('2026-09-30', '2026-10-06')))).toEqual([
+				'No server figures were written down for these 7 days. The speed figures here come from the summariser, not the server.'
+			]);
+			expect(printed(counters(except('2026-10-01', '2026-10-03')))).toEqual([
+				'No server figures were written down for 1 Oct and 3 Oct 2026. The speed figures for those days come from the summariser, not the server.'
+			]);
+			// Consecutive days are one run of dates.
+			expect(
+				printed(scorer(except('2026-09-24', '2026-09-25', '2026-09-26'), begun('2026-08-01', '2026-10-06')))
+			).toEqual([
+				'There are no quality figures for 24 Sep to 26 Sep 2026. The machine ran and we timed it, but nothing scored the summaries.'
+			]);
+		});
 	});
 });
 
@@ -452,7 +860,7 @@ test('the shape switch is one control per panel and reaches the chart', async ({
 	await expect(chart).toHaveAttribute('aria-label', /one column a day/);
 });
 
-test('a route in a state says which state, in the owner words', async ({ page }) => {
+test('a route in a state says which state, in fixed words', async ({ page }) => {
 	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
 
 	// The states are the panel rather than a replacement for it, so the heading
@@ -476,6 +884,26 @@ test('a route in a state says which state, in the owner words', async ({ page })
 		expect(note.text).not.toContain('evaluation_enabled');
 		expect(note.text).not.toContain('sample_rate');
 	}
+});
+
+test('Summaries prints its recording lines before its first section, never inside it', async ({ page }) => {
+	await page.goto('/console/model/', { waitUntil: 'domcontentloaded' });
+
+	// One group, printed whatever the sections below hold. Inside the section, which
+	// prints only when the widest window holds model data, the "Measurement is off"
+	// line went unsaid on the page that needed it most.
+	await expect(page.locator('[data-recording-lines]')).toHaveCount(1);
+	await expect(page.locator('[data-model-section] [data-recording]')).toHaveCount(0);
+	await expect(page.locator('[data-model-section] [data-recording-lines]')).toHaveCount(0);
+	const beforeHeading = await page.evaluate(() => {
+		const group = document.querySelector('[data-recording-lines]');
+		const heading = [...document.querySelectorAll('h2')].find(
+			(node) => (node.textContent ?? '').trim() === 'What the model did'
+		);
+		if (group === null || heading === undefined) return false;
+		return (group.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+	});
+	expect(beforeHeading, 'the recording lines are not above the first section').toBe(true);
 });
 
 // The route-wide sweep for a nought standing in for an absent reading lived

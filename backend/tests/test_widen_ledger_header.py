@@ -72,7 +72,6 @@ UNREGISTERED: Final = frozenset(
         "-".join(
             ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix
         ),
-        "-".join(ledger.entry(LedgerName.SUMMARY_QUALITY_EVALS_INDEX).prefix),
     }
 )
 
@@ -311,16 +310,9 @@ def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:
         widen_ledger_header.widen("scored-pairs", names=["2026/09/18.csv"], state_dir=tmp_path)
 
 
-def test_the_store_a_prune_refuses_by_name_is_still_re_filable() -> None:
-    """It is refused a DELETION, and re-filing a header deletes nothing.
-
-    `summary-quality-evals-index` is what the eval writer reads to refuse a
-    measurement it already holds, so no day of it may be taken out. That reason
-    is not about a column list, and a widener that inherited it would refuse a
-    legitimate migration with a sentence about deletion.
-    """
-    assert set(widen_ledger_header.LEDGERS) >= set(prune.REFUSED)
-    assert set(widen_ledger_header.LEDGERS) >= set(prune.TARGETS)
+def test_the_utility_names_exactly_the_prune_verbs_csv_ledgers() -> None:
+    """One vocabulary, two commands: a ledger an operator prunes by day is one this re-files."""
+    assert dict(widen_ledger_header.LEDGERS) == dict(prune.TARGETS)
 
 
 def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: Path) -> None:
@@ -371,6 +363,6 @@ def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
             refused.add(name)
 
     assert refused == UNREGISTERED
-    assert len(widen_ledger_header.LEDGERS) - len(refused) == 3, (
-        "three of six have CSV headers; the other three are named in UNREGISTERED"
+    assert len(widen_ledger_header.LEDGERS) - len(refused) == 2, (
+        "two of four have CSV headers; the other two are named in UNREGISTERED"
     )

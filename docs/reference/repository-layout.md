@@ -35,7 +35,8 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Two of them partition by day - `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/`. A ledger more than one job writes is a day directory holding one file per writer, so two writers never share a path. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<ledger>/` and `state/compact/<ledger>/` instead ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/llm-council/` is the other | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
+| `state/` | The append-only ledgers one run leaves for the next. Two of them partition by day - `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/`. A ledger more than one job writes is a day directory holding one file per writer, so two writers never share a path. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<ledger>/` and `state/compact/<ledger>/` instead ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/raw/council-run-records/` holds the council's own step records, later packed under `state/compact/council-run-records/` | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
+| `state/raw/<ledger>/set-aside/` | Each file a compaction could not read, moved under its old path below `state/` - a raw file, or a day or month file that could not be read when its period closed - and counted in its period's `set_aside`. No gardener step names the folder, so nothing reads a file there again or deletes it; a person reads it when the console shows a non-zero count ([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md#a-file-that-cannot-be-read)) | the gardener's compaction, in CI | **never**: the site copies only `state/compact/` |
 | `state/pipeline-tests*/` | A trial run's own copy of the tree above. The bench and `Model validation` write `state/pipeline-tests/`; each pipeline test case writes `state/pipeline-tests-<id>/`. Nothing reads any of it - no published series, no gate, no console band - so the gardener's `trials` task empties it past the window in `config/gardener/trials.json`, and the root goes with its last file. The task finds these roots as everything under `state/` that no other task owns and the registry does not claim, because the knob that names one is null in production and cannot be set there | a dispatch, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
@@ -137,8 +138,7 @@ interface between the two halves.
 
 ## What is deliberately not a directory
 
-- **`evals/`** - folded into `state/`. The published dashboard keeps its
- `/evals/` route, because a reader's URL is a promise and a folder name is not.
+- **`evals/`** - folded into `state/`.
 - **`.github/scripts/`** - removed 2026-09-23. A program is written in Python
  under `backend/utilities/` and a workflow step calls one. Shell there needed
  its own linter in CI, a bash-on-the-host skip in every test that drove it, and
@@ -159,8 +159,7 @@ conflict on work nobody asked it to touch.
 
 `evals/` was folded into `state/` because two top-level directories were
 answering the same question: what does a run leave behind for a later reader?
-One answer, one place. The `/evals/` route survived the fold because the folder
-was an implementation detail and the URL was a promise to a reader.
+One answer, one place.
 
 **`backend/idhazh/stages/` exists because the router had eaten the work.**
 `backend/idhazh/cli.py` held the argument parser, the verb table, and the body of
@@ -219,7 +218,6 @@ filename and you know what the code inside answers, whoever calls it.
 | Ledgers under `frontend/public/` | Published to a reader, and counted against the 1 GB site cap, for data no reader wants. |
 | A top-level `schemas/` of generated JSON Schemas | Deleted 2026-09-23. It held 66 files, 61 of which were read by nothing but the gate that checked they had been generated, and it put a regenerated diff in front of about one reviewer in ten. |
 | Keeping `evals/` as its own top-level directory | A second answer to a question `state/` already answered. |
-| Renaming the `/evals/` route when the folder was folded | A reader's bookmark is a promise. A directory name is not. |
 | A shared workflow step under `backend/utilities/` | `backend/` is the producer, and a step only GitHub Actions runs is not producer code. Filing it there puts a runner detail inside the installable package and hides it from the workflow that calls it. |
 | Leaving the step duplicated in both jobs | Two copies of a retry loop, neither executable by a test. The copies had already drifted in two log strings. |
 | A `decisions/` directory of ADR files | A decision filed away from the thing it governs is a decision the next reader does not find. |

@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-07
 
-**Twenty-seven defects are open.** Three of them need evidence or a ruling before any code
+**Thirty-six defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -28,7 +28,26 @@ its workers found outside their own rows. Defect 50 was already fixed that day;
 defect 51 is the third that needs evidence, because one abort is not enough to
 find its cause. Defects 53 and 54 were filed the same day from two findings plan
 50's rows wrote down and never filed, and 54 has a date: the first squash that
-rewrites history is due on 2026-10-29.
+rewrites history is due on 2026-10-29. Defect 55 was filed on 2026-10-04 from
+Fowler's review of plan 60: a page names a test that two pull requests deleted.
+Defects 56 to 58 were filed the same day: three tests that each failed once in
+the checks of plan 60's row 7 and passed when run again. The runs' own records
+settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
+57 is the fourth that needs evidence, because one stall is not enough to find
+its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
+days of a ledger that the ledger door files lists every raw day folder the ledger
+holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
+explorer fetches each chosen ledger's three indexes twice. Defects 61 and 62
+were filed the same day from plan 62's rows L7 and L20: three backend command
+lines stamp log records in local time, and in a worktree with no `.venv` the
+test launcher hands its inner run a Python it then refuses. Defect 63 was
+filed the same day by plan 62's text update after row L7: the plan status
+utility's docstring shows a usage that does not work and a no-install claim
+that is not true. Defects 64 and 65 were filed the same day by the plan text
+update after plan 60's row 21: the canary's telemetry step refuses a
+repository path spelled with a short name, which plan 62's row L25 met, and a
+retention task run over a person's range that finds nothing ends `not-due`,
+which plan 60's row 21 found.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -61,7 +80,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
-| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | **OPEN - a person settles which ruling holds** |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - the council record rationale ([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant)) keeps machine details out of each row |
 | 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed ledger is exposed** |
 | 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
 | 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
@@ -91,6 +110,362 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
+| 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
+| 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
+| 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
+| 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
+| 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
+| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
+| 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
+| 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
+| 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
+| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+
+## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
+
+**A retention task that a person runs with `--from` and `--to`, and that finds
+nothing, ends `not-due` instead of `outside-range`.** `TaskContext.period_range`
+in `backend/idhazh/gardener/context.py` holds either the range a person named
+or, on a scheduled wake, the window the runner built: `runner.run` fills it
+from `scheduled_range` when no range was named. A retention task reads that one
+field, so it cannot tell the two apart, and its pass keeps the idle word
+`not-due` that `Pass` in `backend/idhazh/gardener/one_at_a_time.py` starts
+with. Only the compaction chooses its own idle word, and it is `outside-range`
+whenever a person named a range. `task-planned` still shows the range a person
+named, because the runner hands that event the range itself, not the field.
+Plan 60's row 21 found it on 2026-10-07.
+
+**Doing nothing costs a person who named a range the wrong advice about it.**
+`task-finished` says "nothing has reached its line yet", the sentence for a
+scheduled wake. The one that helps is the sentence for `outside-range`:
+"nothing that may be taken is inside the range named; widen it, or run the
+task without one".
+
+**The next move is a worker's: keep the person's range apart from the scheduled
+window on `TaskContext`, and let a retention pass that finds nothing inside a
+person's range end `outside-range`, as the compaction's does.** Level 1 - the
+idle word of a retention task run by hand; a wrong version shows on the first
+such run.
+
+Found by plan 60's row 21 (#1387), and filed on 2026-10-07.
+
+## 64 - The canary's telemetry step refuses a repository path spelled with a short name (OPEN)
+
+**Where `TEMP` is a short 8.3 name, with a `~1` in it, a canary build in a copy
+under it stops in its telemetry step with `ValueError: ... is not in the
+subpath of ...`.** `main()` in
+`backend/idhazh/telemetry/publish/public_telemetry.py` prints each shard it
+writes as `path.relative_to(config.REPO_ROOT)` (lines 237 and 248).
+`config.REPO_ROOT` is resolved (`backend/idhazh/config.py` line 61), so it
+spells the long name. The shard's path comes from `--public`, which
+`frontend/scripts/build-canary.mjs` passes as it spelled the copy's path, and
+`main()` does not resolve it, so the two spellings of one folder do not
+compare. Plan 62's row L25 met it on 2026-10-07 (Windows, Python 3.14.2).
+
+**Doing nothing costs a canary build in any copy named by a short `TEMP`,
+after the build's earlier steps have run.**
+[run-the-gates.md](../docs/how-to/run-the-gates.md#run-a-new-test-against-the-base-commit)
+now names the base-commit copy by the long form of `TEMP` (row L25, #1384),
+which steers around it; a copy named any other way still stops.
+
+**The next move is a worker's: resolve the path before `relative_to`, in both
+places `main()` prints one.** Level 1 - two lines of one command's output; a
+wrong version stops the first canary build that meets a short name.
+
+Found by plan 62's row L25 (#1384), and filed on 2026-10-07.
+
+## 63 - The plan status utility does not do what its docstring says (OPEN)
+
+**`backend/utilities/plan_status.py`'s docstring does not match the command it
+describes.** Its own usage line reads `python backend/utilities/plan_status.py
+--plan 23    # one plan`, but `--plan` is `action="append", required=True,
+help="Named plan path. Repeatable."`: it takes a path, such as
+`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`, not a bare plan
+number, so the docstring's own example fails before it reads a line. The same
+docstring says the utility "imports nothing from idhazh and reads no
+configuration, so it runs from a fresh clone with any supported Python and no
+install," but `read_plans()` does `from utilities.named_inputs import
+named_files`, an import that only resolves once the project is installed; run
+that same example with a Python that has not installed the project, and the
+command stops with `ModuleNotFoundError: No module named 'utilities'`. Plan
+62's text update confirmed both after row L7, on 2026-10-07.
+
+**Doing nothing costs a worker who copies the docstring's own example into a
+terminal: the bare number is refused, and on a fresh clone with no install the
+same line fails at its first import, though the docstring promises neither
+failure.**
+
+**The next move is a worker's: correct the docstring's example to a real plan
+path, and either make the no-install claim true by moving the import inside
+the project, or drop the claim and say what install the command needs.**
+Level 1 - a docstring and, if the owner keeps the no-install claim, one
+import; a wrong version is obvious on the next run.
+
+Found by plan 62's text update after row L7, and filed on 2026-10-07.
+
+## 62 - In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses (OPEN)
+
+**In a worktree with no `.venv`, `npm run test:changed` stops with "The
+selected Python executable does not exist." whenever it selects a test
+group.** `pythonPath` in `frontend/scripts/run-checks.ts` finds no `.venv` and
+falls back to the bare name `python`, or `python3` off Windows (line 182). The
+launcher starts its test lock with that name, which the system finds on the
+`PATH`, and hands the same name to the run inside the lock as `IDHAZH_PYTHON`
+(line 220). That run calls `pythonPath` again, which requires `IDHAZH_PYTHON`
+to name a file that exists (lines 174 to 176), and a bare name does not. So the
+fallback can never work. Plan 62's row L20 met it on 2026-10-07.
+
+**Doing nothing costs a stopped check in every worktree without a `.venv`, and
+the time to find out why.** The workaround is to set `IDHAZH_PYTHON` to the
+full path of a Python, or to set up `.venv` first, as
+[run-the-gates.md](../docs/how-to/run-the-gates.md#set-up-the-backend-environment)
+says. [gates-and-builds.md](../docs/reference/agent-notes/gates-and-builds.md)
+carries the symptom and the workaround where an agent looks for them.
+
+**The next move is a worker's: hand the inner run a full path.** One way is for
+the fallback to ask that Python for its own path, `sys.executable`, before it
+hands the path on. Level 1 - one function of the test launcher, and a wrong
+version stops the first check that uses it.
+
+Found by plan 62's row L20 (#1371), and filed on 2026-10-07.
+
+## 61 - Three backend command lines stamp log records in local time (OPEN)
+
+**Three backend command lines stamp each log record with the machine's local
+time, not UTC** (CLAUDE.md section 2). `backend/idhazh/cli.py` line 541,
+`backend/idhazh/gardener/cli.py` line 87 and `backend/idhazh/telemetry/cli.py`
+line 135 set the format `%(asctime)s %(levelname)s %(name)s %(message)s` and
+keep the clock `logging` uses by default, which is local time. The stamp names
+no zone, so nothing on the line says which clock it read. Plan 62's row L7 saw
+it on 2026-10-07: `site-weight` printed 11:46 when it was 09:46 UTC.
+
+**The three do not share one logging setup.** Each command line calls
+`logging.basicConfig` on its own (lines 539, 85 and 133), with the same three
+arguments.
+
+**Doing nothing puts every log time off by its machine's distance from UTC:
+two hours on the machine where row L7 saw it.** A GitHub runner's local time is
+UTC, so a workflow's log is right, and the fault shows only on a machine set to
+another zone, such as a developer's.
+
+**The gardener's part is fixed by plan 60's row "Every gardener log line is one
+JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
+install one handler through `settings_or_none`, and each line it writes carries
+`at`, the record's own instant in UTC as ISO-8601 with `Z`.
+`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
+in the test process and in a fresh one. The other two command lines,
+`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
+local time and need a fix of their own: the records they log carry a UTC time
+and say so, with a test that reads one. Level 1 - the time printed on each log
+line, and a wrong version shows on the first line.
+
+Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
+
+## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (OPEN)
+
+**When the data explorer opens, it fetches each chosen ledger's three indexes
+twice.** Plan 62's row L10 saw it on 2026-10-07, on the live site and on a
+local build, both before and after its own change (#1360). An index is fetched
+with `cache: 'no-store'` (`frontend/src/lib/data/fetched-bytes.ts`), so the
+second read is a request of its own, not a copy the browser kept. The likely
+cause, an estimate from reading the page and not measured, is two callers that
+each read the indexes: `updateCostAndColumns` in
+`frontend/src/routes/console/data-explorer/+page.svelte` asks for the window's
+cost (`askCost`), then for each ledger's columns, through `askColumns` since
+#1360 and through a `DESCRIBE` sent to `ask` before it.
+
+**Doing nothing costs three extra small requests for each chosen ledger, every
+time the page opens.** What the page shows is not wrong.
+
+**The next move is a worker's: find the two callers and share one read.**
+Level 1 - the reads of one page, and a wrong version shows on that page at
+once.
+
+Found by plan 62's row L10 (#1360), and filed on 2026-10-07.
+
+## 59 - Reading named days of a door ledger lists every raw day folder the ledger holds (OPEN)
+
+**`ledger.load_days` lists every raw day folder its ledger holds, then keeps the
+days it was handed.** It finds raw files with `raw_files.list_raw_files` and its
+`days` argument. That walks every `<YYYY>/<MM>/<DD>` folder under
+`state/raw/<ledger>/` (`_day_folders` in `backend/idhazh/ledger/raw_files.py`)
+and skips the days nobody asked for. It opens only the files of the days it was
+handed, so what grows is the walk: one folder name for every raw day on disk.
+[`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) says the
+read is the raw files of the named days alone, and Guardrail #12 forbids a walk
+over a committed tree that grows.
+
+**It costs little today, and it grows where a ledger is not packed live.** A
+ledger packed live keeps only its newest days raw, so the walk is a day or two.
+A ledger packed report-only keeps every raw day: `state/raw/gardener/` held 6
+day folders on 2026-10-05, from 2026-09-30, and gains one a day until plan 60's
+row 23 packs it live. A gardener shard's checkout holds only the folders it
+fetched, so on a runner the walk sees those alone; a full checkout, such as a
+developer's, holds them all.
+
+**The fix is one function.** When `days` is named, `list_raw_files` builds each
+named day's folder from `paths.raw_root` and reads those alone. With `days=None`
+it keeps the walk, which `raw_days` and the whole-ledger reads need, and only
+those then warn about a folder that is not a day. Level 2 - the rows each caller
+gets do not change, and the callers include the reads that keep a story from
+being published twice, so each is checked by name.
+
+Found on 2026-10-05 by plan 60's row 10 (#1307), whose `workflow-runs` task reads
+seven named days of the gardener's own record at every wake.
+
+Since #1335 a ledger's raw root can also hold a `set-aside/` folder, and the
+reads that walk a whole raw root - `ledger.raw_days`, `list_raw_files` and
+`named_trees.raw_days` - log it as a stray folder (plan 60's row 18 report).
+The fix above stops that warning in a read of named days, and a walk it keeps
+still logs it.
+
+## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
+
+**A ledger test failed once because two runs of one day came back in the
+other order.**
+`backend/tests/test_ledger.py::test_a_second_attempt_replaces_its_first_and_another_run_is_kept`
+writes three visual-prune files for one day, back to back: run 1, run 1's
+second attempt, then run 2. It expects run 1's row before run 2's. In CI run
+37221095434, attempt 1, at about 17:37 UTC on 2026-10-04, it read run 2's row
+first, and a re-run of the job passed. The likely cause, an estimate, is how a
+day's files are ordered: by the millisecond each was written, then by the
+file's id (`_order` in `backend/idhazh/ledger/raw_files.py`). The part of that
+id after the clock is a hash (`file_id` in `backend/idhazh/ledger/filenames.py`),
+so two files written in one millisecond sort by the hash, which that function's
+own docstring calls arbitrary.
+
+**Doing nothing costs a red `gates` job now and then, and a re-run.** The read
+is not wrong. `load_visual_prunes` promises the oldest day first and one row
+per run, not an order for two runs of one day, and nothing outside the tests
+calls it.
+
+**The next move is a worker's.** Write the three files with the clock held at
+one millisecond and see whether the order follows the hash; that confirms the
+cause. Then the test compares the day's rows without an order, because what it
+is about is the attempt that replaced its first and the run that was kept.
+Level 1 - one test.
+
+Found by plan 60's row 7 (#1286), whose checks went red three times with three
+different tests, and filed on 2026-10-04.
+
+## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (OPEN)
+
+**One browser test waited out its whole 180-second limit for a page that had
+stopped drawing.** "Every drawn string resolves to a size on a 390 px screen"
+(`frontend/tests/item-visual.spec.ts`, line 547) timed out in CI run
+37220465924, attempt 1, at 17:32 UTC on 2026-10-04. It stopped inside
+`revealDayDrawings` (`frontend/tests/support/day-drawings.ts`), which scrolls
+the day one screen at a time and waits for two animation frames after each
+step. The test's trace shows the scroll start at 17:29:26.790 UTC, the page's
+last drawn frame at 17:29:26.937 and its last request at 17:29:26.948. Nothing
+was drawn or asked for in the three minutes after. The next run, on the next
+commit, passed the test, and on the last green run of that pull request it
+took 1.6 seconds.
+
+**The runner was not slow, though row 7's report read it that way.** The 374
+other tests that the red run and the last green run share took 335 seconds in
+all on the red run and 361 on the green one: 7 percent less time, not more. A
+page script that never finished and a browser that stopped drawing look the
+same in this trace, so it cannot say which one happened.
+
+**Doing nothing costs a red browser job each time it comes back, three runner
+minutes and a re-run.** How often that is, nobody knows: it has been seen once.
+
+**The next move is a worker's: make the stall come back where it can be
+watched.** Run this one test a few hundred times with Playwright's
+`--repeat-each`. At 1.6 seconds a run, 400 runs take about 11 minutes, an
+estimate. A stall caught that way shows whether a page script or the browser
+stopped. If none comes back, a second stall in CI opens a row, as defect 51
+does. The run's trace is kept in its `playwright-traces` artifact until
+2026-10-11. A raised timeout or a retry would hide the stall, not explain it
+(CLAUDE.md Guardrail #5). Level 2 - the fix is in the day page or in a helper
+that three specs share.
+
+Found by plan 60's row 7 (#1286), whose checks went red three times with three
+different tests, and filed on 2026-10-04.
+
+## 56 - A byte-range test counts a correct 304 as a failure (FIXED 2026-10-06)
+
+**A browser test of reading a year file by byte range keeps failing on a 304
+that its own setup makes correct.** "A year file whose ETag changed after the
+browser kept part of it is still read by byte range"
+(`frontend/tests/ledger-ranges.spec.ts`, line 310 today and 271 on the commit
+that failed first) failed first in CI run 37218615995, attempt 1, at about
+17:00 UTC on 2026-10-04, and a re-run of the job passed. The test lets the
+browser keep an answer for 1 second, reads the year file, gives the file a new
+ETag (its `redeploy` step), waits 2 seconds, reads the file again from a new
+page, and expects the test's host to answer every GET with a 206.
+
+**The host's own request log settles the cause.** The run's
+`playwright-traces` artifact keeps it, as `ledger-ranges/requests.json`, until
+2026-10-11. The second read asked for byte 0 and got a 206, then for the end
+of the file. Then, before fetching the middle, the browser checked the copy of
+byte 0 it held from that same read: the request names the file's new ETag in
+`If-None-Match`, which asks whether a held copy is still current. The browser
+asks that only when its copy is older than the 1 second the test allows, so
+the read took longer than that, and the host answered 304, which is right. The
+read's answer still matched the disk, which the test checks first.
+
+**It failed twice more the same way, and the second time in main's own
+checks.** CI run 37382246965, the checks of #1326, failed it on attempt 1 (job
+id 112007006566) at about 22:28 UTC on 2026-10-05, and a re-run of the job
+passed. CI run 37427112258, the checks main ran when #1328 merged, failed it
+in the browser job (job id 112149278674) at about 07:05 UTC on 2026-10-06, and
+that run stays red. The failed assertion prints the request it counted. In
+both runs that request is a GET for byte 0 of
+`compact/host-fingerprint/yearly/2026/2026.parquet`, answered 304 with no
+body. Its `If-None-Match` names the ETag the host was serving:
+`"6ac43266-4fe1"` in run 37382246965 and `"6ac4ab97-4fe1"` in run
+37427112258. Its address carries a `read` mark that no other read uses
+(`read=37617a44d53a84f5` and `read=f9688832d6ad26de`), so the copy the browser
+checked came from that same read. That is the request the host's log showed
+the first time, so the cause is the same.
+
+**Doing nothing costs a red browser job whenever that read takes more than a
+second, and a re-run.** It has cost that three times in three days, and once
+it was the one failure that turned main's own checks red. The site is not
+wrong: Pages lets the browser keep an answer for 600 seconds, and 304 is the
+right answer to a browser checking its copy.
+
+**Fixed on 2026-10-06 by #1354.** The test sets the host back to Pages' 600
+seconds after its 2-second wait and before the second read starts, so only what
+the first read kept is stale and every GET of the second read is a 206. Level 1 -
+one test.
+
+Found by plan 60's row 7 (#1286), whose checks went red three times with three
+different tests, and filed on 2026-10-04. The two later failures were added on
+2026-10-06.
+
+## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
+
+**The page that says how the query door answers a panel names a test that is
+gone.**
+[how-the-query-door-answers-a-panel.md](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)
+says that `backend/tests/contracts/test_published_ledgers_cover_the_panels.py`
+holds the two sides together: every ledger a panel names in a `slice()` or
+`ledgerReach()` call is in `ledger.published` in `config/idhazh.json`. #1228
+deleted that file on 2026-10-03, when the contract tests stopped reading trees
+that grow with the repository; it took out the scan of the frontend source and
+its parser. Its description names
+`test_every_ledger_the_door_can_be_asked_for_is_published` as the check that
+stays, but #1201 had deleted that check three hours before. Neither test is on
+`main`, and no test there names `cover_the_panels` or calls `ledgerReach(`.
+
+**Doing nothing costs a broken panel that no check catches.** A panel that asks
+the door for a ledger the site does not hold gets a 404 on that ledger's index,
+and that 404 is the only sign that the ledger was left out. The tests that read
+`ledger.published` today, such as `backend/tests/contracts/test_page_ceilings.py`
+and `frontend/tests/published-ledgers.spec.ts`, check other things: each
+published ledger's page-weight key, and what the build copies.
+
+**The next move is a worker's.** Find which test, if any, holds the rule now.
+If one does, the page names it instead, Level 0. If none does, restore a
+bounded test that reads only named config and never scans the frontend tree,
+Level 2.
+
+Found by Fowler's review of plan 60 on 2026-10-04 (item 17), and filed the same
+day.
 
 ## 54 - The first squash that rewrites history may not fit in its 30-minute job (OPEN)
 
@@ -630,7 +1005,7 @@ committed header, or the contract's own field list.
 
 Execution owner: this plan's row 26 worker; for each key cell, a bounded fixture pair differing only in that cell must stay separate, and dropping the cell must fail without deriving the expected answer from the key constant.
 
-## 25 - `host_model` is a column nothing fills, and two rulings disagree (OPEN)
+## 25 - `host_model` is a column nothing fills, and two rulings disagree (CLOSED 2026-10-04)
 
 `backend/idhazh/contracts/council_shard_outcome.py` declares `host_model`. No
 writer fills it.
@@ -642,8 +1017,10 @@ rejected recording the machine per shard, on the grounds that the digest
 pipeline already characterises the same runner pool and the probe wants 1.9 GiB
 on a job whose two processes already hold up to 9.02 GiB in 16 GB.
 
-Both cannot be right. A person settles which, and then the column is either
-filled or migrated out the way defect 24 describes.
+The council record rationale
+([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant))
+keeps machine details out of each row. The replacement contract refuses a
+filled legacy cell during migration.
 
 Found 2026-09-21, while the council's own record was being built.
 

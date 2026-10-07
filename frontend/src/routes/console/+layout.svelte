@@ -38,6 +38,7 @@
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import WindowStatus from '$lib/components/WindowStatus.svelte';
 	import { stripRoutes } from '$lib/console/band';
+	import { consoleChromeOf } from '$lib/console/chrome';
 	import {
 		completenessOf,
 		completenessSentence,
@@ -70,17 +71,20 @@
 	 * the layout is drawn before the route's script runs. */
 	const routeData = $derived(
 		page.data as {
+			chrome?: unknown;
 			console?: ConsoleConfig;
 			panelGroups?: ConsolePanelGroup[];
 		}
 	);
+	const chrome = $derived(consoleChromeOf(routeData));
+	const workbench = $derived(chrome === 'workbench');
 
 	// Every console route loads the console knobs, so the configured window is on
 	// the page before any route script runs. A route that failed to load has none,
 	// and then there is no window to hold and no control to draw.
 	const configured = $derived(routeData.console);
 
-	/** The tabs the strip draws. The band carries every route; the Records tab
+	/** The tabs the strip draws. The band carries every route; the Data explorer tab
 	 * waits for `console.data_explorer_tab`, and a route that loaded no knobs
 	 * keeps it hidden. */
 	const strip = $derived(stripRoutes(data.routes));
@@ -135,20 +139,20 @@
 	const contents = $derived((routeData.panelGroups ?? []).filter((group) => group.title !== ''));
 </script>
 
-<section class="py-6" data-surface="operator" data-console-route={active}>
-	<h1 id="console-top" class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">
+<section class="py-6" data-surface="operator" data-console-route={active} data-console-chrome={chrome}>
+	<h1 id="console-top" class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text" class:sr-only={workbench}>
 		Console
 	</h1>
 
 	<!-- The space above the strip, drawn as its own box so that its bottom edge
 	     is the strip's top edge in the flow. `strip.ts` watches it: once it has
 	     scrolled off the top of the screen, the strip below it is stuck. -->
-	<div class="strip-edge" aria-hidden="true"></div>
+	{#if !workbench}<div class="strip-edge" aria-hidden="true"></div>{/if}
 	<div class="console-strip" data-console-strip use:stickStrip>
 		<div class="strip-tabs">
 			<ConsoleNav routes={strip} {active} worst={data.band.worst?.id ?? null} />
 		</div>
-		{#if windowSource !== null}
+		{#if !workbench && windowSource !== null}
 			<div class="strip-control">
 				<WindowControl
 					days={windowSource.days}
@@ -164,9 +168,9 @@
 	     nothing under the strip moves. Empty and zero tall until `strip.ts`
 	     measures it. A margin on the strip itself would not do: it collapses
 	     into the margin of whatever comes next, and the page moves by that. -->
-	<div class="strip-give" aria-hidden="true"></div>
+	{#if !workbench}<div class="strip-give" aria-hidden="true"></div>{/if}
 
-	{#if completeness !== null}
+	{#if !workbench && completeness !== null}
 		<!-- A sentence, not a badge, a colour or a grey timestamp. It is the same
 		     words with or without a script; a browser only adds the count of days
 		     missing, because only a browser knows what day it is. -->
@@ -175,22 +179,22 @@
 		</p>
 	{/if}
 
-	<ConsoleBand band={data.band} />
+	{#if !workbench}<ConsoleBand band={data.band} />{/if}
 
 	<!-- Said once, above every panel, and only to a reader with no script.
 	     The band above is real markup and stays readable; the panels below draw
 	     rows a browser fetches, so with no script they keep their reserved shape
 	     and stay empty. A page that let those boxes sit there unexplained would
 	     be a page claiming the pipeline recorded nothing. -->
-	<noscript>
+	{#if !workbench}<noscript>
 		<p class="console-noscript" data-console-noscript>
 			The verdict above is in this page. Everything below it is drawn from
 			month files a browser fetches, so with JavaScript off the panels keep
 			their shape and stay empty.
 		</p>
-	</noscript>
+	</noscript>{/if}
 
-	{#if windowSource !== null}
+	{#if !workbench && windowSource !== null}
 		<WindowStatus
 			days={windowSource.days}
 			presets={windowSource.presets}
@@ -201,7 +205,7 @@
 		/>
 	{/if}
 
-	{#if contents.length > 0}
+	{#if !workbench && contents.length > 0}
 		<!-- Named anchors, one per group heading, and each heading carries a `Top`
 		     link back. They work with no script at every width, and a route with
 		     several groups needs one destination per group - which is what a
@@ -333,5 +337,40 @@
 
 	.contents-link:hover {
 		text-decoration: underline;
+	}
+
+	/* Workbench chrome runs to the window's edges: the section steps out of the
+	   frame's gutter, the header keeps it, and the strip pads its own sides.
+	   From the wide breakpoint the section is the column the route's workbench
+	   fills, under a frame held to the window's height (`app.css`). */
+	:global([data-console-chrome='workbench']) {
+		padding-block: 0;
+		margin-inline: calc(-1 * var(--gutter));
+	}
+
+	@media (min-width: 1024px) {
+		:global([data-console-chrome='workbench']) {
+			display: flex;
+			flex-direction: column;
+			flex: 1 1 0;
+			min-block-size: 0;
+		}
+	}
+
+	:global([data-console-chrome='workbench']) .console-strip {
+		flex-wrap: nowrap;
+		min-block-size: calc(var(--workbench-control) + 1px);
+		padding-inline: var(--space-3);
+		border-block-end: 1px solid var(--item-edge);
+		background: var(--color-bg);
+	}
+
+	:global([data-console-chrome='workbench']) .strip-tabs {
+		flex: 1 1 auto;
+		min-inline-size: 0;
+	}
+
+	:global([data-console-chrome='workbench']) .console-strip:global([data-console-strip-live='yes']) {
+		position: static;
 	}
 </style>

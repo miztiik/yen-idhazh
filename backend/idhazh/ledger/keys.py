@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
@@ -30,7 +31,9 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
@@ -68,6 +71,11 @@ FEED_HEALTH_KEY: Final = ("run_id", "feed_id")
 #: assemble writes the whole day's census afterwards, so both see the same item
 #: under the same run and the second one has nothing new to say.
 ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
+
+
+#: What makes two item-health summary rows the same record. One folded month
+#: keeps one total for one UTC day and one pipeline stage.
+ITEM_HEALTH_SUMMARY_KEY: Final = ("date", "stage")
 
 
 #: One machine a job, so four cells identify the host a job drew.
@@ -131,6 +139,11 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
 
 
+#: What makes two metrics rows the same record while the CSV ledger still spells
+#: the split unit `shard`. The row that moves the ledger renames that field.
+CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "shard")
+
+
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
 #: nothing the first did not. `feed_id` is deliberately absent - renaming a feed
@@ -146,30 +159,30 @@ FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 
 
-#: What makes two council rows the same record. `judge_id` is in the key and a
-#: night running two tenants is why: one council run has one run id, so tenant
-#: A's unit 0 and tenant B's unit 0 on one judged date carry the same date, the
-#: same run and the same unit number. Without the slug the settlement would
-#: delete the second as a repeat, and the night would read as half of what it
-#: was. A repeat under all four cells is a second attempt at one unit, which did
-#: the same work under the same clock, so the first row wins.
-COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
+# What makes two rows of one council step the same record. A once-a-date step
+# has an empty part index; a repeated attempt at the same key is settled by the
+# door's writer identity, which keeps the highest attempt.
+COUNCIL_RUN_RECORD_KEY: Final = (
+    "date",
+    "run_id",
+    "judge_id",
+    "evaluation_step",
+    "work_part_index",
+)
+
+
+# One plan is the settled planning answer for one execution of one UTC day.
+RUN_PLAN_KEY: Final = ("date", "run_id")
 
 
 #: What makes two eval rows the same measurement. The address says which article,
 #: the digest says which words came out, and the scorer version says which
 #: instrument read them. Change any one and the row is a new measurement worth
 #: keeping. `item_id` is deliberately absent: it is a slot on a page, not an
-#: identity. It carries no date either - re-measuring an article a year later is
-#: the same measurement - so it is the one key here that settles two rows of one
-#: day and leaves the cross-day question to the dedupe in
-#: `evals.writer.file_measurements`, which reads the index.
+#: identity. It carries no date either, so a read of named days keeps one row
+#: per measurement each day, and a read of the whole ledger keeps the first row
+#: across every day.
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
-
-
-#: What makes two index rows the same record. The digest is the whole row apart
-#: from the stamp, so two of them say one thing twice and the fold keeps one.
-OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
 
 
 #: What makes two validation rows the same record. One candidate, judged once,
@@ -289,8 +302,7 @@ class _TreeShape(NamedTuple):
 #: What settles two rows of one day tree, and the contract that reads one. A
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
-_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-}
+_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {}
 
 
 def _refuse_outside_day_trees(ledger: LedgerName) -> None:
@@ -351,6 +363,7 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
     LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
+    LedgerName.ITEM_HEALTH_SUMMARY: _DoorShape(ITEM_HEALTH_SUMMARY_KEY, ItemHealthSummaryRow),
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),
@@ -358,6 +371,10 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
+    LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
+    LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
+        COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
+    ),
 }
 
 

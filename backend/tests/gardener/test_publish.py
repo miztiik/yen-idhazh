@@ -2,9 +2,13 @@
 
 Every test pushes to a real bare repository standing in for origin, from a real
 clone, with no network. A race is staged the way it happens: another clone
-pushes first, or the origin refuses a push through its own hook. The idempotence
-oracle is that running the loop twice leaves the tree running it once left, and
-the moved-tip oracle is that the mover's change and this shard's both survive.
+pushes first, or the origin refuses a push through its own hook, or the hook
+moves main first and then refuses, the way a run of other writers looks. A
+re-run is a clone whose paths main changed after the clone was made. The
+idempotence oracle is that running the loop twice leaves the tree running it
+once left, the moved-tip oracle is that the mover's change and this shard's both
+survive, and the stale oracle is that main's newer file survives and nothing of
+the shard lands.
 
 The loop is `backend/utilities/gardener_publish.py`, because nothing under
 `backend/idhazh/` may start a process.
@@ -15,26 +19,50 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as parquet
 import pytest
 from pydantic import ValidationError
 
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
-    EXIT_PUSH_KEPT_LOSING,
+    EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
     Shard,
     worst,
 )
 from utilities import commit_and_push, gardener_publish
 
-from ._garden import a_hook, an_origin, commits_on, git, on_origin, quiet_git, write
+from ._garden import (
+    OriginBlobs,
+    a_hook,
+    a_partial_clone,
+    an_origin,
+    commits_on,
+    git,
+    on_origin,
+    quiet_git,
+    write,
+)
 
 RECORD = "state/raw/gardener/2026/09/27/record.json"
 AGED = "state/old/2026-01-01.txt"
 KEPT = "state/old/2026-09-26.txt"
 MESSAGE = "gardener: old on 2026-09-27"
 SEEDED = {AGED: "aged\n", KEPT: "kept\n", "state/dir/a.txt": "a\n", ".gitignore": "*.skip\n"}
+
+#: A pre-receive hook that moves `main` to the next prepared commit, `refs/race/<n>`
+#: on the n-th push, and then refuses that push: on every try another writer lands
+#: first. It steps out of the quarantine the pushed objects wait in, because git
+#: refuses a ref update from inside it.
+MOVE_MAIN_THEN_REFUSE = (
+    'race=$(( $(cat "$GIT_DIR/race-count" 2>/dev/null || echo 0) + 1 ))\n'
+    'echo "$race" > "$GIT_DIR/race-count"\n'
+    "unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES\n"
+    'git update-ref refs/heads/main "refs/race/$race" || exit 2\n'
+    "exit 1"
+)
 
 
 def a_shard(*, written: set[str] | None = None, deleted: set[str] | None = None) -> Shard:
@@ -95,12 +123,70 @@ def test_running_it_twice_leaves_the_tree_running_it_once_left(
 
     assert code == EXIT_OK
     assert (git(origin, "rev-parse", "main^{tree}"), len(commits_on(origin))) == once
-    assert any("already on main" in line for line in said)
+    assert any(line == "shard 0: already-on-main, try 1" for line in said)
+
+
+def test_fetch_preserves_a_deep_checkouts_ancestry_for_its_push_hook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    root = git(checkout, "rev-parse", "HEAD").strip()
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / "README.md", "another commit\n")
+    git(mover, "add", "README.md")
+    git(mover, "commit", "--quiet", "-m", "advance main")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    hook = write(
+        checkout / ".git" / "hooks" / "pre-push",
+        "#!/bin/sh\n"
+        "while read -r local_ref local_sha remote_ref remote_sha; do\n"
+        f'  git merge-base --is-ancestor {root} "$local_sha" || exit 1\n'
+        "done\n",
+    )
+    hook.chmod(0o755)
+
+    fetched = gardener_publish.Checkout(checkout).fetch()
+
+    git(checkout, "merge-base", "--is-ancestor", root, fetched)
+    assert git(checkout, "rev-parse", "--is-shallow-repository").strip() == "false"
+    assert landed(a_shard(), checkout)[0] == EXIT_OK
+    git(origin, "merge-base", "--is-ancestor", root, "main")
+
+
+def test_fetch_keeps_a_depth_one_clone_shallow_and_downloads_only_new_commits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, mover = an_origin(tmp_path, SEEDED)
+    for number in range(2):
+        write(mover / "README.md", f"prior commit {number}\n")
+        git(mover, "add", "README.md")
+        git(mover, "commit", "--quiet", "-m", f"prior commit {number}")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    shallow = tmp_path / "shallow"
+    git(tmp_path, "clone", "--quiet", "--depth=1", origin.as_uri(), str(shallow))
+    assert git(shallow, "rev-list", "--count", "origin/main").strip() == "1"
+    for number in range(2):
+        write(mover / "README.md", f"new commit {number}\n")
+        git(mover, "add", "README.md")
+        git(mover, "commit", "--quiet", "-m", f"new commit {number}")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+
+    fetched = gardener_publish.Checkout(shallow).fetch()
+
+    assert fetched == git(origin, "rev-parse", "main").strip()
+    assert git(shallow, "rev-parse", "--is-shallow-repository").strip() == "true"
+    assert git(shallow, "rev-list", "--count", "origin/main").strip() == "3"
+    assert git(origin, "rev-list", "--count", "main").strip() == "5"
+    gardener_publish.Checkout(shallow).fetch()
+    assert git(shallow, "rev-list", "--count", "origin/main").strip() == "3"
 
 
 def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Main moved on a path this shard does not touch, so the shard's version is not stale."""
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     mover = tmp_path / "mover"
     git(tmp_path, "clone", "--quiet", str(origin), str(mover))
@@ -108,42 +194,167 @@ def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     git(mover, "add", "docs/moved.md")
     git(mover, "commit", "--quiet", "-m", "another shard landed first")
     git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    (checkout / AGED).unlink()
 
-    code, _ = landed(a_shard(), checkout)
+    code, _ = landed(a_shard(deleted={AGED}), checkout)
 
     assert code == EXIT_OK
     assert on_origin(origin, "docs/moved.md") == "the other shard\n"
     assert on_origin(origin, RECORD) is not None
+    assert on_origin(origin, AGED) is None
     assert [line.split(": ", 1)[1] for line in commits_on(origin)[:2]] == [
         MESSAGE,
         "another shard landed first",
     ]
 
 
+def test_a_raw_arrival_survives_an_older_compactors_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    raw = "state/raw/council-run-records/2026/09/20/arrival.parquet"
+    packed = "state/compact/council-run-records/daily/2026/09/20.parquet"
+    mover = tmp_path / "writer"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    (mover / raw).parent.mkdir(parents=True, exist_ok=True)
+    parquet.write_table(pa.table({"writer": ["later"]}), mover / raw)
+    raw_bytes = (mover / raw).read_bytes()
+    git(mover, "add", raw)
+    git(mover, "commit", "--quiet", "-m", "another writer filed raw data")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    (checkout / packed).parent.mkdir(parents=True, exist_ok=True)
+    parquet.write_table(pa.table({"writer": ["older"]}), checkout / packed)
+
+    code, _ = landed(a_shard(written={packed}), checkout)
+
+    assert code == EXIT_OK
+    landed_checkout = tmp_path / "landed"
+    git(tmp_path, "clone", "--quiet", str(origin), str(landed_checkout))
+    assert (landed_checkout / raw).read_bytes() == raw_bytes
+    assert parquet.read_table(landed_checkout / packed).to_pydict() == {"writer": ["older"]}
+
+
 def test_a_push_that_lost_is_tried_again_on_the_new_tip(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     origin, checkout = a_checkout(tmp_path, monkeypatch)
-    a_hook(origin, 'if [ -f "$GIT_DIR/lost-once" ]; then exit 0; fi\ntouch "$GIT_DIR/lost-once"\nexit 1')
+    a_hook(
+        origin,
+        'if [ -f "$GIT_DIR/lost-once" ]; then exit 0; fi\ntouch "$GIT_DIR/lost-once"\nexit 1',
+    )
 
     code, said = landed(a_shard(), checkout, attempts=2)
 
     assert code == EXIT_OK
-    assert "shard 0: try 1 of 2 lost the push" in said
+    assert said == ["shard 0: try 1 of 2, the push failed", "shard 0: landed on main, try 2 of 2"]
     assert on_origin(origin, RECORD) is not None
 
 
-def test_a_push_that_keeps_losing_is_exit_3_and_lands_nothing(
+def test_a_push_main_refuses_at_every_try_is_exit_3_and_lands_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Main did not move after the last try, so nobody else was landing: main refused the push."""
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     a_hook(origin, "exit 1")
+    tip = git(origin, "rev-parse", "main")
 
     code, said = landed(a_shard(), checkout, attempts=2)
 
-    assert code == EXIT_PUSH_KEPT_LOSING
+    assert code == EXIT_PUSH_REFUSED
+    assert git(origin, "rev-parse", "main") == tip
     assert on_origin(origin, RECORD) is None
-    assert sum("lost the push" in line for line in said) == 2
+    assert said[-1] == (
+        "shard 0: refused - main did not move after try 2 of 2, so main refused the push. "
+        "Nothing landed"
+    )
+    assert sum("the push failed" in line for line in said) == 2
+
+
+def test_a_push_that_loses_to_other_writers_at_every_try_lands_nothing_and_exits_0(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Main moved after the last try, so other writers are landing: a warning, not a red job."""
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    racer = tmp_path / "racer"
+    git(tmp_path, "clone", "--quiet", str(origin), str(racer))
+    for race in (1, 2):
+        write(racer / f"docs/race-{race}.md", f"writer {race}\n")
+        git(racer, "add", f"docs/race-{race}.md")
+        git(racer, "commit", "--quiet", "-m", f"writer {race} landed")
+        git(racer, "push", "--quiet", "origin", f"HEAD:refs/race/{race}")
+    a_hook(origin, MOVE_MAIN_THEN_REFUSE)
+
+    code, said = landed(a_shard(), checkout, attempts=2)
+
+    assert code == EXIT_OK
+    assert git(origin, "rev-parse", "main") == git(origin, "rev-parse", "refs/race/2")
+    assert on_origin(origin, RECORD) is None
+    assert said[-1] == (
+        "::warning::shard 0: lost - main moved after try 2 of 2, so other writers are "
+        "landing. Nothing landed; the next wake does the work again"
+    )
+
+
+def test_a_shard_whose_path_main_changed_after_its_commit_lands_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A re-run checks out its run's old commit, and main's newer file must survive it.
+
+    The shard's other paths, which main left alone, do not land either, and nor
+    does its record: the next wake does the whole of the work again.
+    """
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / KEPT, "newer, on main\n")
+    git(mover, "add", KEPT)
+    git(mover, "commit", "--quiet", "-m", "main changed a file the shard also writes")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    tip = git(origin, "rev-parse", "main")
+    write(checkout / KEPT, "older, from the shard\n")
+    (checkout / AGED).unlink()
+
+    code, said = landed(a_shard(written={KEPT}, deleted={AGED}), checkout)
+
+    assert code == EXIT_OK
+    assert git(origin, "rev-parse", "main") == tip, "a stale shard landed a commit"
+    assert on_origin(origin, KEPT) == "newer, on main\n"
+    assert on_origin(origin, AGED) == "aged\n"
+    assert on_origin(origin, RECORD) is None
+    assert said == [
+        f"::warning::shard 0: stale - main changed {KEPT} after the commit this shard ran "
+        "on, so nothing landed. The next wake does the work again on the new main"
+    ]
+
+
+def test_every_group_of_names_is_compared_and_the_warning_counts_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The names go to git in groups below Windows' process limit, and every group is read.
+
+    Two hundred long names fill more than one group. Main changes the first of
+    them, which sorts into the first group, and `KEPT`, which sorts into the last.
+    """
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    many = sorted(f"state/old/2026-01-01-{'x' * 60}-{n:03}.txt" for n in range(200))
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / many[0], "made on main\n")
+    write(mover / KEPT, "newer, on main\n")
+    git(mover, "add", many[0], KEPT)
+    git(mover, "commit", "--quiet", "-m", "main changed two paths the shard also changes")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    write(checkout / KEPT, "older, from the shard\n")
+
+    code, said = landed(a_shard(written={KEPT}, deleted=set(many)), checkout)
+
+    assert code == EXIT_OK
+    assert on_origin(origin, RECORD) is None
+    assert said == [
+        f"::warning::shard 0: stale - main changed {many[0]} and 1 more after the commit "
+        "this shard ran on, so nothing landed. The next wake does the work again on the "
+        "new main"
+    ]
 
 
 def test_one_record_with_two_identities_is_exit_2(
@@ -244,8 +455,8 @@ def test_a_folder_named_for_deletion_is_refused_before_anything_stages(
 def test_a_shard_reports_the_worst_code_it_earned() -> None:
     assert worst() == EXIT_OK
     assert worst(EXIT_OK, EXIT_TASK_FAILED) == EXIT_TASK_FAILED
-    assert worst(EXIT_TASK_FAILED, EXIT_PUSH_KEPT_LOSING) == EXIT_PUSH_KEPT_LOSING
-    assert worst(EXIT_PUSH_KEPT_LOSING, EXIT_INTEGRITY, EXIT_OK) == EXIT_INTEGRITY
+    assert worst(EXIT_TASK_FAILED, EXIT_PUSH_REFUSED) == EXIT_PUSH_REFUSED
+    assert worst(EXIT_PUSH_REFUSED, EXIT_INTEGRITY, EXIT_OK) == EXIT_INTEGRITY
 
 
 def test_a_folder_that_is_not_a_checkout_has_no_commit_to_name(
@@ -282,7 +493,12 @@ def test_the_commit_listing_names_only_the_requested_folders(
     shutil.rmtree(checkout / "state" / "traces")
 
     listed = gardener_publish.Checkout(checkout).committed_folders(
-        ["state/traces/", "state/summary-quality-evals-index", "state/raw/visual-prunes", "frontend/public/digest"]
+        [
+            "state/traces/",
+            "state/a-folder-nothing-committed",
+            "state/raw/visual-prunes",
+            "frontend/public/digest",
+        ]
     )
 
     assert listed == {
@@ -290,6 +506,33 @@ def test_the_commit_listing_names_only_the_requested_folders(
         "state/raw/visual-prunes",
         "frontend/public/digest",
     }
+
+
+def test_a_period_a_step_names_as_the_shard_runs_is_listed_from_the_same_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """October was not in the listing the shard read; a step names it, and it is listed then.
+
+    The clone never downloaded October's file, so its size is GitHub's, and the
+    checkout widens for the folder only once the step has named it.
+    """
+    quiet_git(tmp_path, monkeypatch)
+    september, october = "state/raw/x/2026/09/01/a.csv", "state/raw/x/2026/10/01/b.csv"
+    origin, _ = an_origin(tmp_path, {september: "a\n", october: "bb\n"})
+    shard = a_partial_clone(tmp_path, origin, "config")
+    blobs = OriginBlobs(origin)
+    listing = gardener_publish.read_the_listing(
+        gardener_publish.Checkout(shard), shard, ["state/raw/x"], ["state/raw/x/2026/09"], blobs
+    )
+    assert dict(listing.sizes) == {september: 2}
+
+    named = listing.name(["state/raw/x/2026/10"])
+    named.fetch(["state/raw/x/2026/10"])
+
+    assert named.size_of(october) == 3
+    assert len(blobs.asked) == 2, "each file the clone lacked was sized by its blob, once"
+    assert (shard / october).read_text(encoding="ascii") == "bb\n"
+    assert listing.listed() == {september, october}
 
 
 def test_a_shard_names_its_record_among_its_writes_and_never_both_writes_and_deletes() -> None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -13,6 +13,9 @@ from idhazh.contracts.base import Model
 class TodayAnchor(StrEnum):
     RIGHT = "right"
     CENTRE = "centre"
+
+
+ConsoleChrome = Literal["console", "workbench"]
 
 
 class ConsolePanelGroup(Model):
@@ -78,7 +81,13 @@ class ConsoleConfig(Model):
     )
     today_anchor: TodayAnchor = Field(
         default=TodayAnchor.RIGHT,
-        description="Where today sits in the initial viewport when enough history exists.",
+        description=(
+            "Where every console window places the site's newest published day, "
+            "the day the console treats as today: `right` makes it the window's "
+            "last day, and `centre` puts it in the middle, leaving room for days "
+            "not yet published. Neither the build clock nor the newest day a "
+            "record holds places a window."
+        ),
     )
     completeness_grace_days: int = Field(
         default=1,
@@ -488,21 +497,29 @@ class ConsoleConfig(Model):
         ),
     )
 
+    explorer_chrome: ConsoleChrome = Field(
+        default="workbench",
+        description=(
+            "The frame the console layout draws around the Data explorer route. "
+            "Console keeps the full chrome; workbench keeps the compact strip "
+            "and lets the route draw the span and Run beside the question."
+        ),
+    )
     explorer_row_page: int = Field(
         default=50,
         ge=1,
-        description="Rows added by one Show more press on the Records answer table.",
+        description="Rows added by one Show more press on the Data explorer answer table.",
     )
     explorer_max_rows: int = Field(
         default=1000,
         ge=1,
-        description="Most rows one Records answer holds before it is capped.",
+        description="Most rows one Data explorer answer holds before it is capped.",
     )
     explorer_max_fetch_bytes: int = Field(
         default=67108864,
         ge=1,
         description=(
-            "Most bytes one Records question may fetch. Measured 2026-10-04 on a local "
+            "Most bytes one Data explorer question may fetch. Measured 2026-10-04 on a local "
             "real build in Chromium with the CPU slowed 4x: a question fetching 9.9 MB "
             "(10,379,116 bytes, 138 files, six ledgers over 30 days) answered in about "
             "6 seconds, and no main-thread task passed 1 second; the longest of three "
@@ -511,72 +528,104 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_query_max_chars: int = Field(
-        default=5782,
+        default=5790,
         ge=1,
         description=(
-            "Most characters one Records SQL statement may hold. The value comes "
-            "from docs/reference/benchmarks/address-length-on-pages.md: 5,782 "
+            "Most characters one Data explorer SQL statement may hold. The value comes "
+            "from docs/reference/benchmarks/address-length-on-pages.md: 5,790 "
             "ASCII characters is the longest worst-case question that fits the "
             "measured GitHub Pages request target with every ledger selected."
+        ),
+    )
+    explorer_link_max_bytes: int = Field(
+        default=8192,
+        ge=1,
+        description=(
+            "Most bytes a Data explorer link may hold, its path and query together, and "
+            "still carry the question; a longer link carries the ledgers and the days "
+            "only. The value comes from docs/reference/benchmarks/address-length-on-pages.md: "
+            "GitHub Pages answered a request target of 8,192 bytes and refused 8,193."
+        ),
+    )
+    explorer_reach_days: int = Field(
+        default=365,
+        ge=1,
+        description=(
+            "The number of UTC days the Data explorer page's custom From and To date "
+            "inputs may reach, including the reader's UTC day."
         ),
     )
     explorer_chart_min_rows: int = Field(
         default=3,
         ge=1,
-        description="Fewest UTC days the Records chart panel needs before it draws a date chart.",
+        description=(
+            "Fewest UTC days the Data explorer chart panel needs before it draws "
+            "a date chart."
+        ),
     )
     explorer_rank_max: int = Field(
         default=30,
         ge=1,
-        description="Most rows the Records chart panel draws in a ranked list.",
+        description="Most rows the Data explorer chart panel draws in a ranked list.",
     )
     explorer_saved_max: int = Field(
         default=20,
         ge=1,
-        description="Saved Records questions this browser keeps before dropping the oldest.",
+        description="Saved Data explorer questions this browser keeps before dropping the oldest.",
     )
     explorer_history_max: int = Field(
         default=10,
         ge=1,
-        description="Recent Records runs this browser keeps.",
+        description="Recent Data explorer runs this browser keeps.",
     )
     explorer_save_name_max_chars: int = Field(
         default=40,
         ge=1,
-        description="Longest name the Records Save field fills from the statement's first line.",
+        description=(
+            "Longest name the Data explorer Save field fills from the statement's "
+            "first line."
+        ),
     )
     explorer_series_floor_share: float = Field(
         default=0.05,
         ge=0.0,
         le=1.0,
         description=(
-            "Smallest largest-value share a Records date-chart series must have "
+            "Smallest largest-value share a Data explorer date-chart series must have "
             "against the largest series before it is drawn."
         ),
     )
-    explorer_rail_rem: float = Field(
-        default=14.0,
-        gt=0.0,
-        description="Side rail width on the Records question panel, in rem.",
+    explorer_readout_lines: tuple[int, int, int, int] = Field(
+        default=(7, 3, 4, 3),
+        description=(
+            "Lines reserved by the Data explorer status bar, for the four frame "
+            "breakpoint bands from narrowest to widest."
+        ),
     )
-    explorer_editor_lines: tuple[int, int] = Field(
-        default=(8, 20),
-        description="Minimum and maximum visible lines for the Records SQL editor.",
+    explorer_notice_ms: int = Field(
+        default=6000,
+        ge=0,
+        description=(
+            "How long a Data explorer notice that answers a press stays visible, "
+            "in milliseconds. Focus or hover holds it."
+        ),
+    )
+    explorer_editor_lines_shown: tuple[int, int] = Field(
+        default=(8, 4),
+        description=(
+            "Fewest lines the Data explorer SQL editor shows, below 1024 px and from "
+            "1024 px. Below 1024 px the editor is exactly this tall; from 1024 px it "
+            "fills its share of the window and never drops under this."
+        ),
     )
     explorer_strip_shown: tuple[int, int] = Field(
         default=(3, 6),
         description="Example chips shown before the rest fold at phone and wider widths.",
     )
-    explorer_table_max_vh: int = Field(
-        default=70,
-        ge=10,
-        le=100,
-        description="Tallest Records answer table box, in svh percent.",
-    )
     explorer_cell_max_ch: int = Field(
         default=40,
         ge=1,
-        description="Text cell wrap width in the Records answer table, in characters.",
+        description="Text cell wrap width in the Data explorer answer table, in characters.",
     )
     explorer_bar_spread_share: float = Field(
         default=0.5,
@@ -648,7 +697,7 @@ class ConsoleConfig(Model):
             }
         ],
         description=(
-            "Example questions shown on the Records page. Each statement is written "
+            "Example questions shown on the Data explorer page. Each statement is written "
             "against its ledgers' row contracts and answers what its title says."
         ),
     )
@@ -831,11 +880,10 @@ class ConsoleConfig(Model):
 
     @model_validator(mode="after")
     def _explorer_editor_bounds(self) -> Self:
-        if (
-            self.explorer_editor_lines[0] < 1
-            or self.explorer_editor_lines[0] > self.explorer_editor_lines[1]
-        ):
-            raise ValueError("console.explorer_editor_lines must be ascending and positive")
+        if any(lines < 1 for lines in self.explorer_readout_lines):
+            raise ValueError("console.explorer_readout_lines must hold four positive values")
+        if any(lines < 1 for lines in self.explorer_editor_lines_shown):
+            raise ValueError("console.explorer_editor_lines_shown must hold two positive values")
         if (
             self.explorer_strip_shown[0] < 1
             or self.explorer_strip_shown[0] > self.explorer_strip_shown[1]

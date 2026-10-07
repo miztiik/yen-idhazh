@@ -18,28 +18,40 @@
  *
  * **The guard checks what the door acts on, and nothing else.** An older index
  * may carry a field this build no longer declares, and that is not a reason to
- * refuse it. The ledger, the period and every entry's `covers`, `rows` and
- * `bytes` are checked in full, because file selection trusts them and a `covers`
- * becomes part of a file's address.
+ * refuse it. The ledger, the period and every entry's `covers`, `rows`, `bytes`,
+ * `state`, `lost_days` and `set_aside` are checked in full, because file
+ * selection and the answers trust them and a `covers` becomes part of a file's
+ * address. An entry that carries no `state`, `lost_days` or `set_aside` was
+ * written before entries had them, and is handed on without them: `namesFile()`
+ * in `slice.ts` reads it as packed, with nothing lost or set aside, as the
+ * contract does.
  *
  * Imports nothing tied to one environment, so a Node test loads it as it is.
  */
 
-import type { LedgerName } from './slice-shapes';
+import { isDay, type LedgerName } from './slice-shapes';
 
 /** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
-export const COMPACT_INDEX_STAMP = '2026-10-01T16:50';
+export const COMPACT_INDEX_STAMP = '2026-10-07';
 
 /** How much time one compact file covers. Also the directory name. */
 export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;
 
 export type Period = (typeof COMPACT_PERIODS)[number];
 
-/** One compact file named in a `CompactIndex`: what it covers, its rows, its size. */
+/** Whether a period named in an index has a file: `packed` has one, `empty` and `lost` have none. Only a day is `lost`. */
+export const ENTRY_STATES = ['packed', 'empty', 'lost'] as const;
+
+export type EntryState = (typeof ENTRY_STATES)[number];
+
+/** One period of a `CompactIndex`: what it covers, whether it has a file, its rows and size. */
 export interface CompactEntry {
 	covers: string;
 	rows: number;
 	bytes: number;
+	state?: EntryState;
+	lost_days?: string[];
+	set_aside?: number;
 }
 
 /** Which compact files exist in one period of one ledger. */
@@ -48,6 +60,7 @@ export interface CompactIndex {
 	ledger: LedgerName;
 	period: Period;
 	entries: CompactEntry[];
+	expired_through?: string | null;
 }
 
 /** A stamp as the contract spells one: a UTC day, to the minute or second on a same-day revision. */
@@ -76,18 +89,51 @@ function isCount(value: unknown): value is number {
 	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
+function isState(value: unknown): value is EntryState {
+	return typeof value === 'string' && (ENTRY_STATES as readonly string[]).includes(value);
+}
+
+/** Why an entry's `lost_days` cannot be acted on, or null when it can: real UTC
+ *  days of the month or year the entry covers, ascending, none twice, and none
+ *  on a daily entry, where a lost day is an entry of its own. */
+function brokenLostDays(days: unknown, covers: string, period: Period): string | null {
+	if (!Array.isArray(days)) return `has lost_days ${JSON.stringify(days)}`;
+	if (period === 'daily' && days.length > 0) return 'is a day and lists lost_days';
+	let previous = '';
+	for (const day of days) {
+		if (!isDay(day) || !day.startsWith(`${covers}-`)) {
+			return `lists ${JSON.stringify(day)} as lost, which is not a day it covers`;
+		}
+		if (day <= previous) return `lists the lost day ${day} after ${previous}`;
+		previous = day;
+	}
+	return null;
+}
+
 /** The first entry that breaks the shape, named, or null when every entry holds it. */
 function brokenEntry(entries: unknown[], period: Period): string | null {
 	let previous = '';
 	for (const [at, entry] of entries.entries()) {
 		if (!isRecord(entry)) return `entry ${at} is not an object`;
-		const { covers, rows, bytes } = entry;
+		const { covers, rows, bytes, state, lost_days: lostDays, set_aside: setAside } = entry;
 		if (typeof covers !== 'string' || !COVERS[period].test(covers)) {
 			return `entry ${at} covers ${JSON.stringify(covers)}, which is not a ${period} period`;
 		}
 		if (!isCount(rows)) return `entry ${at} (${covers}) has rows ${JSON.stringify(rows)}`;
 		if (!isCount(bytes)) return `entry ${at} (${covers}) has bytes ${JSON.stringify(bytes)}`;
 		if (covers <= previous) return `entry ${at} (${covers}) does not come after ${previous}`;
+		if (state !== undefined && !isState(state)) return `entry ${at} (${covers}) has state ${JSON.stringify(state)}`;
+		if (state !== undefined && state !== 'packed' && (rows > 0 || bytes > 0)) {
+			return `entry ${at} (${covers}) is ${state}, which names no file, and has rows ${rows} and bytes ${bytes}`;
+		}
+		if (state === 'lost' && period !== 'daily') {
+			return `entry ${at} (${covers}) is lost, and only a day is: a ${period} entry lists the days it lost in lost_days`;
+		}
+		const lost = lostDays === undefined ? null : brokenLostDays(lostDays, covers, period);
+		if (lost !== null) return `entry ${at} (${covers}) ${lost}`;
+		if (setAside !== undefined && !isCount(setAside)) {
+			return `entry ${at} (${covers}) has set_aside ${JSON.stringify(setAside)}`;
+		}
 		previous = covers;
 	}
 	return null;
@@ -111,12 +157,22 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 	if (value.ledger !== ledger) return unreadable(`it names the ledger ${JSON.stringify(value.ledger)}`);
 	if (value.period !== period) return unreadable(`it names the period ${JSON.stringify(value.period)}`);
 	if (!Array.isArray(value.entries)) return unreadable('it has no list of entries');
+	const expired = value.expired_through ?? null;
+	if (expired !== null && (period !== 'yearly' || typeof expired !== 'string' || !COVERS.yearly.test(expired))) {
+		return unreadable('its expired_through is not a UTC year on a yearly index');
+	}
 	const broken = brokenEntry(value.entries, period);
 	if (broken !== null) return unreadable(broken);
-	const entries = value.entries.map((entry: { covers: string; rows: number; bytes: number }) => ({
-		covers: entry.covers,
-		rows: entry.rows,
-		bytes: entry.bytes
+	if (typeof expired === 'string' && value.entries.some((entry) => entry.covers <= expired)) {
+		return unreadable('it lists entries at or before expired_through');
+	}
+	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, state, lost_days, set_aside }) => ({
+		covers,
+		rows,
+		bytes,
+		state,
+		lost_days,
+		set_aside
 	}));
-	return { index: { version: stamp, ledger, period, entries } };
+	return { index: { version: stamp, ledger, period, entries, expired_through: expired } };
 }

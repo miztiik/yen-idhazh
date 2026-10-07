@@ -7,23 +7,6 @@
     ],
     "written": []
   },
-  "summary-quality-evals-index": {
-    "dry_written": [],
-    "removed": [
-      "state/score-index/2026/08/04/2026-08-04-1-1-assemble-00.csv",
-      "state/score-index/2026/08/17/2026-08-17-1-1-assemble-00.csv",
-      "state/score-index/2026/09/04/2026-09-04-1-1-assemble-00.csv",
-      "state/score-index/2026/09/17/2026-09-17-1-1-assemble-00.csv",
-      "state/scores/2026/08/04/2026-08-04-1-1-assemble-00.csv",
-      "state/scores/2026/08/17/2026-08-17-1-1-assemble-00.csv",
-      "state/scores/2026/09/04/2026-09-04-1-1-assemble-00.csv",
-      "state/scores/2026/09/17/2026-09-17-1-1-assemble-00.csv"
-    ],
-    "written": [
-      "state/score-archive/2026-08.json",
-      "state/score-archive/2026-09.json"
-    ]
-  },
   "telemetry-aggregate": {
     "dry_written": [],
     "removed": [
@@ -36,8 +19,10 @@
       "state/item-health/2026/09/17/settled.csv"
     ],
     "written": [
-      "state/item-health-summary/2026-08.csv",
-      "state/item-health-summary/2026-09.csv"
+      "state/raw/item-health-summary/2026/08/04/<file_id>.parquet",
+      "state/raw/item-health-summary/2026/08/17/<file_id>.parquet",
+      "state/raw/item-health-summary/2026/09/04/<file_id>.parquet",
+      "state/raw/item-health-summary/2026/09/17/<file_id>.parquet"
     ]
   },
   "traces": {

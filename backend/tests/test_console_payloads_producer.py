@@ -858,7 +858,7 @@ def test_the_strip_carries_six_routes_and_every_one_answers_at_its_own_address(
 
     The ids, the addresses and the order are what a browser resolves, so they
     are asserted here rather than left to the component that draws them. The
-    band carries `Records` before its page exists; the strip draws that tab only
+    band carries `Data explorer` before its page exists; the strip draws that tab only
     while `console.data_explorer_tab` is on, which is what keeps the strip true.
     """
     state, digest = tree
@@ -887,14 +887,14 @@ def test_the_strip_carries_six_routes_and_every_one_answers_at_its_own_address(
         "Hardware",
         "Judgement",
         "Voices",
-        "Records",
+        "Data explorer",
     ]
     # Every route points at a panel another route owns, the newest ones
     # included: a route carrying nothing is a route that hides the page which
     # explains it.
     for route in band.routes:
         assert len(route.carries) > 20, route.id
-    # Records judges nothing, so it never carries a worst state of its own.
+    # Data explorer judges nothing, so it never carries a worst state of its own.
     records = next(route for route in band.routes if route.id is RouteId.DATA_EXPLORER)
     assert records.worst is None
     assert records.severity == console_band.CLEAR
@@ -913,6 +913,24 @@ def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
     # and the oldest of them has no day before it to difference against.
     assert band.size.measured_days == 2
     assert "of the 1 GB limit" in band.size.sentence
+
+
+def test_the_band_prints_the_articles_the_headroom_buys(tree: tuple[Path, Path]) -> None:
+    """The room left is a count of articles, never of days.
+
+    Each published day in the widest span grew the tree by 30,000 bytes over the
+    3 articles it published, so one more article costs 10,000 bytes. The newest
+    day measured 1,420,000 bytes, about 1.4 MB, which leaves 1,073,741,824 -
+    1,420,000 = 1,072,321,824 bytes under the 1 GB cap: 107,232 articles, printed
+    at three significant figures. A count of days would need a daily article
+    rate, and nothing here measures one, so the sentence names no day at all.
+    """
+    state, digest = tree
+
+    band = _band(state, digest)
+
+    assert band.size.articles_to_cap == 107_232
+    assert band.size.sentence == "1.4 MB of the 1 GB limit - room for about 107,000 more articles."
 
 
 def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) -> None:

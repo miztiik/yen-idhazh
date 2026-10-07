@@ -1,6 +1,6 @@
 # What the truncation cap costs
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-06
 The truncation cap removes words from an article before the model ever reads
 them, and nothing about a published summary says it happened. The console says
 it in four places across three routes, and this page is what each of them is
@@ -134,7 +134,7 @@ track it describes. Authority: Susan, 2026-08-30.
 **Aggregated on the server, ten rows per preset.** A window of the committed
 ledger is a few thousand rows, and this page inlines whatever it is handed, so
 the browser never sees the rows the plot was made from. The window ends on the
-newest day the ledger holds rather than on the build clock, so rebuilding an old
+newest day the site published rather than on the build clock, so rebuilding an old
 tree draws what that tree said rather than an empty plot. The 10 rows are a
 constant in
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)

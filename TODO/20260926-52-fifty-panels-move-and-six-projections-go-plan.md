@@ -1,6 +1,6 @@
 # Plan 52 - The console's panels ask the ledger when they are looked at, ECharts leaves, and six projections go
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-07
 
 **Status**: Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED. The remaining rows stay in this plan; this change does not execute them.
 
@@ -754,6 +754,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 - **Scope:** section 2.5 and the colour table of section 2.4. **No pixel moves**, except that dark `--chart-6` takes its re-tuned value, and no route row edits `frontend/src/lib/charts/d3/` or a shared chart component this row changes afterwards. The settings line's data is row 5's; this row declares `ModelRule` in `frontend/src/lib/charts/d3/model-rule.ts` and makes `dateSeries` take it.
 - **Files touched:**
   - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (adapt the shipped caller to the chart props, preserving its host-only rule declaration)
+  - `frontend/src/lib/console/explorer/ShapePanel.svelte` (Susan, 2026-10-07: it calls `dateSeries`, `distribution` and `RankedList.svelte`, whose signatures this row changes; whichever of this row and plan 55 rows 19 and 20 merges later adapts the calls)
   - `frontend/src/lib/charts/d3/rankedList.ts`, `dateSeries.ts`, `DateSeries.svelte`, `distribution.ts`, `Distribution.svelte`, `tileStrip.ts`, `TileStrip.svelte`, `partsOfOne.ts`, `PartsOfOne.svelte`, `Flow.svelte`, `PairedScatter.svelte`, `model-rule.ts` (new)
   - `frontend/src/lib/components/RankedList.svelte`, `BandDistance.svelte`, `FailureList.svelte`, `KpiCard.svelte`, `frontend/src/routes/console/model/+page.svelte` (the geometry prop), `frontend/src/lib/components/ShardBoard.svelte`, `frontend/src/lib/components/MemoryBoard.svelte` (the marks move out), `frontend/src/lib/charts/machine.ts` (`rangeMark` moves out), `frontend/src/lib/components/TimeHistogram.svelte` (`domain`)
   - `frontend/src/lib/charts/targetbar.ts`, `frontend/tests/vocabulary.spec.ts`, `frontend/tests/console-ranked.spec.ts`
@@ -857,11 +858,11 @@ Row 4 owns known defect 40: write one canary job as separate probe and completio
 
 ### Row #5 - The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go
 
-- **Scope:** section 2.6, less the aggregate retirement carried by #1189 (row 12). In `backend/idhazh/telemetry/publish/console_band.py`: the machine facts read `state/host-fingerprint/` (the comment naming `machine/` is corrected); the site size is read from `run.json` and the article count from `state/day-metrics/`, never from `digest.json`; the months list names the `telemetry` months only. Then the `machine`, `run-days` and public `day-metrics` projections go with their producers, contracts, knobs, copy-step entries, publication checks and canary calls; `state/day-metrics/` stays. **In its own commit, `backend/utilities/migrate_to_parquet.py` and its test go**, gated on `git ls-files state/item-health state/scores state/host-fingerprint` finding no `.csv` - its own declared condition.
+- **Scope:** section 2.6, less the aggregate retirement carried by #1189 (row 12). In `backend/idhazh/telemetry/publish/console_band.py`: the machine facts read `state/host-fingerprint/` (the comment naming `machine/` is corrected); the site size is read from `run.json` and the article count from `state/day-metrics/`, never from `digest.json`; the months list names the `telemetry` months only. Then the `machine`, `run-days` and public `day-metrics` projections go with their producers, contracts, knobs, copy-step entries, publication checks and canary calls; `state/day-metrics/` stays. The migration tool stays: Plan 58 widened it to every ledger still on CSV, so it is deleted by Plan 59 row "The item health summary moves to the door, or stays CSV by ruling", when no ledger a program writes is left on CSV.
 - **Files touched:**
   - `backend/idhazh/telemetry/publish/console_band.py`, `settings_moved.py` (new), `machine.py`, `run_days.py`, `day_metrics.py` (the public half only), `dispatch.py`, `series.py`
   - `backend/idhazh/contracts/console_band.py`, `backend/idhazh/contracts/fingerprint.py` (read only unless a name moves), `backend/idhazh/contracts/machine_shard.py`, `backend/idhazh/contracts/public_run_day.py`, `backend/idhazh/contracts/console_payloads.py`, `backend/idhazh/contracts/__init__.py`, `backend/idhazh/contracts/knobs/observability.py`, `backend/idhazh/config.py`, `backend/idhazh/path_classes.py`
-  - `backend/idhazh/publication_checks/checks/console.py`, `backend/utilities/build_canary_day.py`, `backend/utilities/migrate_to_parquet.py` (deleted), `backend/tests/ledger/test_migrate_to_parquet.py` (deleted)
+  - `backend/idhazh/publication_checks/checks/console.py`, `backend/utilities/build_canary_day.py`
   - `frontend/src/lib/console/band.ts`, `frontend/src/lib/console/settings-moved.ts`, `frontend/tests/settings-moved.spec.ts`, `frontend/tests/console-band.spec.ts`, `tests/fixtures/settings-moved/five-on-one-day.json`, `tests/fixtures/settings-moved/five-on-one-day.expected.json` (new), `tests/fixtures/contracts/console-band/newest-day.json`
   - `config/idhazh.json`, `frontend/scripts/copy-visuals.mjs`, `.gitignore`, `.github/workflows/digest.yml`
   - `backend/tests/test_console_payloads_producer.py`, `backend/tests/contracts/test_console_band_fields.py` (new, the field-set binding), `backend/tests/telemetry/test_settings_moved.py` (new), `backend/tests/contracts/test_app_config.py`, `backend/tests/contracts/test_gardener_config.py`, `backend/tests/contracts/test_stamped_boundary.py`, `backend/tests/pipeline/test_day_shards.py`, `backend/tests/workflows/_harness.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
@@ -1060,7 +1061,7 @@ live in [telemetry](../docs/concepts/telemetry.md).
 | --- | --- | --- |
 | 1 | Plan 51: four routes draw no panel id | rows 1 (structure), 3 and 6 to 9 (ids) |
 | 2 | Plan 51: `echarts` stays installed while two grammars coexist | row 11 |
-| 3 | Plan 50's row **The three ledgers the console's routes read become parquet**: `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`" | row 5, its own commit |
+| 3 | Plan 50's row **The three ledgers the console's routes read become parquet**: `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`" | superseded: Plan 58 widened the tool to every ledger left on CSV; Plan 59 row "The item health summary moves to the door, or stays CSV by ruling" deletes it |
 | 4 | Plan 50's collapsed aggregate migration: delete the family rather than migrate it | completed by #1189; row 12 stays COLLAPSED |
 | 5 | Telemetry-intent N7 and N8 | rows 5 and 10; the band is owner ruling R1 |
 | 6 | The [shared readout rules](../docs/concepts/console-design/the-rules-every-console-chart-obeys.md): remove the house-style components' remaining native tooltips when they gain their readouts | row 2 |

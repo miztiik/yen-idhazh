@@ -1,6 +1,6 @@
 # What a Compaction Pass Costs
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 How much time and repeated index work the every-tier ledger fixture costs.
 This measures local file work, not the production runner's six-hour limit.
@@ -72,9 +72,8 @@ The passes load 101 ledger files; monthly absorption accounts for 92 daily
 files, including quiet days.
 
 **The 30 ms figure is a cost of that Windows machine, not a cost of the
-code.** The same profile, on the same fixture, run on GitHub's own
-`ubuntu-latest` runner (4 vCPU, no GPU; see `.github/workflows/compaction-profile.yml`,
-dispatched by hand on 2026-10-03) took 1.748 seconds wall time end to end -
+code.** On GitHub's own `ubuntu-latest` runner (4 vCPU, no GPU) on 2026-10-03,
+the same profile and fixture took 1.748 seconds wall time end to end -
 33 times faster than the 57.561-second Windows reading for the same work.
 Table C ranks the same ten functions by total time on Linux; none of them
 is a file operation.
@@ -134,15 +133,8 @@ fixture once and prints the ten largest functions by total time and by time
 spent inside the function itself. Total time includes called functions, so
 those numbers overlap and must not be added.
 
-To reproduce the Linux reading above instead of a local one, dispatch
-`.github/workflows/compaction-profile.yml` by hand (Actions tab, or
-`gh workflow run compaction-profile.yml`) on `main`. It installs the same
-development environment as the `gates` job in `ci.yml` and runs the second
-command above on GitHub's `ubuntu-latest` runner, printing both ranked
-tables to the job log and the step summary.
-
 ## See also
 
-- [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md) - the compaction order and restart behavior.
+- [../../architecture/publishing/ledger-compaction.md](../../architecture/publishing/ledger-compaction.md) - the compaction order and restart behavior.
 - [../../architecture/contracts/persistence.md](../../architecture/contracts/persistence.md) - root checks and ledger file writes.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the local gate lock and focused tests.

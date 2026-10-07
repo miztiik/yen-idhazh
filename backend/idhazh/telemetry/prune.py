@@ -103,7 +103,7 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: file system is the one accident nobody can undo.
 #:
 #: The rule that decides membership is one line: a ledger files
-#: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the ledgers refused below.
+#: `<YYYY>/<MM>/<DD>.csv` day files.
 #: `state/day-metrics/` and `state/traces/` are day-shaped and are deliberately
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_partition.day_files` refuses, and a second walker here would be a second
@@ -115,11 +115,6 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: that walked its old folder would select nothing for ever, and on the door it is
 #: a target of the other kind.
 #:
-#: **`summary-quality-evals-index` left too, and is refused by name below.** It is
-#: what the eval writer reads to refuse a measurement it already holds, and once a
-#: month is closed the gardener settles its days into one file, which no range of
-#: days can take part of.
-#:
 #: **`content-similarity-judge-scored-pairs` and
 #: `content-similarity-judge-fitted-thresholds` are
 #: not a pair.** The pairs are folded into `score-distribution.json` once and
@@ -127,19 +122,15 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: deleting a fitted row takes a day out of the guard's median and out of what
 #: step 4 compares against. Either can go on its own.
 #:
-#: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
-#: and the path land ahead of the step that appends to them (Guardrail #3), and a
-#: ledger an operator cannot name is a ledger a day cannot be taken out of. A range
-#: over a ledger with no file selects nothing and says so. The four
-#: `content-similarity-judge` ledgers are here for the same reason, and they are
-#: the judge's rather than the council's: what a reading is about decides where
-#: it is filed, never what executed it.
+#: The four `content-similarity-judge` ledgers are here before their first row
+#: for the same reason: a ledger an operator cannot name is a ledger a day
+#: cannot be taken out of. What a reading is about decides where it is filed,
+#: never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-    LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
@@ -168,24 +159,6 @@ DOOR_LEDGERS: Final[Mapping[str, LedgerName]] = MappingProxyType(
         )
     )
 )
-
-
-#: The ledgers this refuses by name, each with the reason it is refused.
-#:
-#: Named rather than left out of the list above, because a ledger missing from a
-#: vocabulary reads as an oversight and a ledger refused with a sentence reads as
-#: a decision. Somebody who types one of these is holding a real question, and
-#: the answer they need is why the answer is no. These are the ledgers no
-#: compaction declares; a ledger on the door is refused by its own declaration,
-#: in `door_refusals`.
-REFUSED: Final[Mapping[str, str]] = {
-    LedgerName.SUMMARY_QUALITY_EVALS_INDEX: (
-        "it is what the eval writer reads to refuse a measurement it already holds, "
-        "so an identity taken out of it makes that measurement count as new, and no "
-        "identity is ever deleted. A closed month of it is one file besides, which no "
-        "range of days can take part of"
-    ),
-}
 
 
 def door_refusals(tasks: Mapping[str, TaskPolicy]) -> dict[str, str]:
@@ -314,9 +287,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
             + "; or one of "
             + ", ".join(DOOR_LEDGERS)
             + ", unless its compaction declaration under config/gardener/ sets a "
-            "prune_refusal. Never a path: "
-            + ", ".join(REFUSED)
-            + " are refused by name."
+            "prune_refusal. Never a path."
         ),
     )
     parser.add_argument(
@@ -383,7 +354,7 @@ def resolve(target: str, tasks: Mapping[str, TaskPolicy]) -> str:
     ledger's path is `TARGETS[word]`, and a ledger on the door has two folders
     rather than one.
     """
-    refused = {**REFUSED, **door_refusals(tasks)}
+    refused = door_refusals(tasks)
     allowed = sorted({*TARGETS, *(word for word in DOOR_LEDGERS if word not in refused)})
     return one_at_a_time.refuse_by_name(target, allowed=allowed, refused=refused, noun="ledger")
 

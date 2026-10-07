@@ -77,9 +77,12 @@ class PageWeightConfig(Model):
             "for the same reason as ceilings_bytes: config/idhazh.json is the single "
             "source and the gate reads the file. A key that matches no file in the "
             "build fails the gate - a guardrail over nothing still reads as a bound "
-            "somebody checked. Each number is a guardrail on the same rule the routes "
-            "follow: at least twice the heaviest the file can realistically reach, so "
-            "only a change of a different order fires it."
+            "somebody checked - except a published ledger's index key while the build "
+            "holds none of that ledger's files: the ledger is not packed yet, so the "
+            "gate reports the key as not weighed and names the ledger. Each number is "
+            "a guardrail on the same rule the routes follow: at least twice the "
+            "heaviest the file can realistically reach, so only a change of a "
+            "different order fires it."
         ),
     )
 

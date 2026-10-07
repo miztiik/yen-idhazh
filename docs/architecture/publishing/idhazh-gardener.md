@@ -1,13 +1,13 @@
 # The gardener
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-07
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
-shard checks before and after its tasks run, how its one record lands on
-`main` however many shards race it, how its compaction task moves a ledger's
-rows from raw files into day and month files, and how a retention task folds
-the closed days of a CSV day tree into one file each. What each knob means is
+shard checks before and after its tasks run, what each line of its log says,
+how its one record lands on `main` however many shards race it, and how a
+retention task folds the closed days of a CSV day tree into one file each. What
+each knob means is
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md);
 the workflow that wakes it is `.github/workflows/idhazh-gardener.yml`, once a
 day at 00:40 UTC or when a person dispatches it.
@@ -38,11 +38,11 @@ cannot change which tasks a wake plans.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each task's fixed UTC period window, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
-| 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if it lost |
+| 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if the push failed. Lands nothing when `main` changed one of those paths after the commit the shard ran on |
 | 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
@@ -82,13 +82,17 @@ directly under `state/`, and the runner turns that into
 `TaskContext.owned_folders` before any task runs. A folder the commit holds is
 walked whether the checkout holds it or not, because its names come from the
 commit. A declared folder the commit does not hold yet - a ledger's
-`state/compact/` folder before its first day is packed - is left out and
-logged, and the task's first write makes it. A complement task's folders come
+`state/compact/` folder before its first day is packed - is left out and named
+in the task's `task-planned` event, and the task's first write makes it. A complement task's folders come
 from the commit alone, so a folder somebody left in the checkout and never
 committed is not the sweep's to take, and `idhazh gardener run-task`, which
 starts no process and so reads no commit, refuses one by name. A folder a task
 reads and does not own is declared under `reads`; asking about a folder it
-neither owns nor reads is refused rather than answered empty.
+neither owns nor reads is refused rather than answered empty, and so is asking
+for every file under a folder no step named, nor a folder above it, rather than
+answered with the named periods inside it. A step that chooses its periods as
+it runs - every step of a compaction - names them first, and the shard lists
+them from the same commit then.
 
 **The plan is written twice.** The plan job runs before anything of ours is
 installed, so `gardener_shards.py` cannot import the typed planner in
@@ -99,7 +103,11 @@ shape, on one line:
 `{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shards":[]}`.
 The workflow reads three of those keys - `any_active_task`, `shard_count` and
 `matrix` - and `backend/tests/contracts/test_gardener_plan_matrix.py` fails if
-it reads a key the model does not declare.
+it reads a key the model does not declare. Each leg of `matrix` carries its
+shard's number and task names, and the `run-tasks` job's name lists them, for
+example `shard 0: compact-feed-health, traces`, so a run's page shows what every
+shard ran without opening a job; the workflow holds that format and never a
+list of tasks.
 
 **The job graph.** Three jobs, in order. `plan` prints the shards, one
 `run-tasks` job runs each shard - all of them at once - and `history` runs the
@@ -121,20 +129,22 @@ flowchart TB
     OWNED{"every path a task<br/>wrote or deleted inside<br/>that task's owns?"}
     OUTSIDE["exit 2<br/>the ownership<br/>claim is wrong"]
     LANDED{"this shard's record<br/>already on origin/main?"}
+    STALE{"main changed one of<br/>the shard's paths after<br/>the commit it ran on?"}
+    STALEW["stale: a warning,<br/>nothing lands"]
     REAPPLY["an index of its own from<br/>origin/main: the same writes<br/>set, the same deletions out"]
     PUSHED{"push accepted?"}
+    MOVED{"main moved<br/>after the last try?"}
+    LOSTW["lost: a warning,<br/>nothing landed"]
     CLEAN{"every task passed,<br/>and what it downloaded<br/>within max_downloaded_mb?"}
     OK["exit 0"]
-    ALARM["exit 1<br/>the record landed,<br/>naming the failed task<br/>or what it downloaded"]
-    LOST["exit 3<br/>attempts exhausted,<br/>nothing landed"]
+    ALARM["exit 1<br/>naming the failed task<br/>or what it downloaded"]
+    REFUSED["exit 3<br/>refused: main did not<br/>move, nothing landed"]
     HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
   end
 
   subgraph TREE["The committed tree - state/"]
     RAW[("state/raw/ledger/YYYY/MM/DD/file_id.parquet")]
-    RIDX[("state/raw/ledger/index/YYYY-MM-DD.json")]
     COMPACT[("state/compact/ledger/daily, monthly, index")]
-    WM[("watermark.json, one for each period")]
   end
 
   WAKE --> PLAN
@@ -146,23 +156,27 @@ flowchart TB
   OWNED -->|"no"| OUTSIDE
   OWNED -->|"yes"| LANDED
   LANDED -->|"yes"| CLEAN
-  LANDED -->|"no"| REAPPLY
+  LANDED -->|"no"| STALE
+  STALE -->|"yes"| STALEW
+  STALE -->|"no"| REAPPLY
+  STALEW --> CLEAN
   REAPPLY --> PUSHED
   PUSHED -->|"yes"| CLEAN
   PUSHED -->|"no, attempts left"| LANDED
-  PUSHED -->|"no, attempts gone"| LOST
+  PUSHED -->|"no, attempts gone"| MOVED
+  MOVED -->|"yes"| LOSTW
+  MOVED -->|"no"| REFUSED
+  LOSTW --> CLEAN
   CLEAN -->|"yes"| OK
   CLEAN -->|"no"| ALARM
   OK --> HIST
   ALARM --> HIST
   OUTSIDE --> HIST
-  LOST --> HIST
+  REFUSED --> HIST
   IDLE --> HIST
   REAPPLY -->|"the record, and every live task's files"| RAW
-  RAW -->|"a live compaction lists a due day"| RIDX
-  RIDX -->|"then takes it into its day file"| COMPACT
-  COMPACT -->|"watermark moved last"| WM
-  WM -.->|"Next compaction reads the updated watermark"| RUN
+  RAW -->|"a live compaction takes a due day into its day file"| COMPACT
+  COMPACT -.->|"the next compaction works out its marks from the indexes"| RUN
 
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
   classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
@@ -174,11 +188,11 @@ flowchart TB
   classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
 
   class WAKE,PLAN,TEND,RUN,REAPPLY,HIST stage;
-  class ANY,OWNED,LANDED,PUSHED,CLEAN decision;
+  class ANY,OWNED,LANDED,STALE,PUSHED,MOVED,CLEAN decision;
   class OK yes;
-  class OUTSIDE,LOST,ALARM no;
-  class IDLE warn;
-  class RAW,RIDX,COMPACT,WM ledger;
+  class OUTSIDE,REFUSED,ALARM no;
+  class IDLE,STALEW,LOSTW warn;
+  class RAW,COMPACT ledger;
   class OPS sysOps;
   class TREE sysPublish;
 ```
@@ -192,6 +206,10 @@ person's cancel still stops it. The person's ruling, 2026-09-29. It replaced
 `always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')`,
 under which a task that failed at every wake - a compaction that meets a hole, a
 shard over its ceiling - held off every squash until a person acted.
+
+**The history job writes its record with the plan job's run id**, so every
+record of one run carries one id even when the run crosses 00:00 UTC, and the
+job makes an id from its own UTC day only when a failed `plan` job left none.
 
 **The push carries a lease, and a refused push squashes again.**
 `corpus_history.py` pushes with `--force-with-lease=refs/heads/main:<tip>`,
@@ -223,16 +241,16 @@ lower `push_attempts` or raise the job's `timeout-minutes`.
 today's rows, and every day the gardener acts on ended at least a whole day
 before, so a digest run and a gardener wake never want one file. A re-run is the
 one writer into an older day, and a compaction takes its file at the next wake
-([below](#a-day)).
+([A day](ledger-compaction.md#a-day)).
 
 ## What stops a shard
 
 | Exit | What it means | Retried |
 | --- | --- | --- |
-| 0 | every task ran and the record landed, or had already landed | - |
-| 1 | a task failed - its row says `failed` and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, and either way the record still landed; or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person acts |
+| 0 | every task ran and the record landed, or had already landed. A task whose row says `deferred` - GitHub's API did not answer, or a period waits for a range that starts earlier or for a person - is in this code too: it is no code defect, and its row names why. Also 0, with a warning, when nothing landed because the shard's work is out of date: `main` changed one of its paths after the commit it ran on (`stale`), or every try failed and `main` moved after the last one (`lost`) | a `stale` or `lost` shard's work is done again at the next wake, and so is a deferred task's |
+| 1 | a task failed for a code defect - its row says `failed`, with the fault `raised`, and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, which a task that chooses its periods by the budget never does, so that is a code defect too; either way the record still landed. Or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person fixes the task that passed it |
 | 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, one record path with two sets of bytes, or a deletion of a file the commit did not list | never; a person fixes it |
-| 3 | the push kept losing for every attempt | at the next wake |
+| 3 | `main` refused the push: every try failed, and `main` did not move after the last one (`refused`) | at the next wake |
 
 A shard reports the worst code it earned, in the order 2, 3, 1, 0.
 
@@ -280,24 +298,33 @@ The code folders every shard checks out - `config/`, `backend/` and `.github/` -
 are in neither: they are the same in every shard, and they grow with code rather
 than with what the pipeline keeps.
 
-**Over `max_downloaded_mb` the shard still runs its tasks and lands its record,
-then exits 1.** The number is an alarm, not a stop: the downloads are paid for
-by the time the number is known, and stopping would only stop the passes that
-make the tree lighter - a live task's deletes - and the dry-run rows a person
-reads before turning a task live. The message names the three folders the
-shard downloaded most under. `idhazh gardener run-task` starts no git process,
-so a hand run records both weights as empty and is never over.
+**A compaction takes only what fits what is left of `max_downloaded_mb`.**
+Each step reads its periods' sizes off the listing before anything is
+downloaded and stops at the first period that does not fit, at `ceiling` for a
+later wake, or `failed` by name when that period alone is larger than the
+whole budget ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)).
+The shard's other tasks that download do not choose by the budget yet, so the
+check after its tasks stays: over `max_downloaded_mb` the shard still runs its
+tasks and lands its record, then exits 1, and the message calls it what it is,
+a code defect - a task downloaded without choosing by the budget. Stopping then
+would not save the downloads, which are paid for by the time the number is
+known, and would only stop the passes that make the tree lighter. The message
+names the three folders the shard downloaded most under. `idhazh gardener
+run-task` starts no git process, so a hand run records both weights as empty
+and is never over.
 
 **128 MB is the committed ceiling, and it is an estimate.** A megabyte here is
 1024 x 1024 bytes. A shard downloads only what its tasks read: the days and
 months a compaction packs, the months the census summary summarises. Measured
 on the development machine on 2026-09-30, a month of the eval ledger is 31
 files and 3.5 MB, so 128 leaves room for a compaction that catches up on
-several months at once. Move it to about twice the largest `downloaded_bytes`
-of the first thirty scheduled wakes. A month file sits in its year folder, so a
-step that reads one month file fetches every month file of that year beside it,
-up to twelve: a later row can move the month files into folders of their own if
-the readings show that cost.
+several months at once. Move it from what the wakes that did not stop at it
+downloaded: a compaction that stopped at `ceiling` because of the budget
+records the budget, not what it needed, so doubling the largest
+`downloaded_bytes` would raise the ceiling on every reset. A month file sits in
+its year folder, so a step that reads one month file fetches every month file
+of that year beside it, up to twelve: a later row can move the month files into
+folders of their own if the readings show that cost.
 
 ## The record
 
@@ -313,6 +340,88 @@ task's own `duration_ms`, and `work_ended_at`, the instant the shard finished
 working and began to publish. A slow push is therefore never read as a slow task.
 Each row also carries `cone_bytes`, what the shard's owned folders weighed, and
 `downloaded_bytes`, what its tasks downloaded ([above](#what-a-shard-downloads)).
+
+**A row says why its pass stopped, and what it recovered instead of stopping.**
+Every error a task meets is read once for what it means, from its type and its
+status code and never its text (`backend/idhazh/gardener/error_cause.py`). A
+pass that stopped names the cause in `fault`, one closed word declared in
+`backend/idhazh/contracts/gardener_fault.py`, beside `stopped_because` and
+`resume_from`:
+
+| # | `fault` | `stopped_because` | What stopped the pass | What happens next |
+| --- | --- | --- | --- | --- |
+| 1 | `raised` | `failed` | A code defect: any error no other word names, including an answer from GitHub that refuses the request itself, and a period larger than the shard's whole download budget | The shard exits 1, and a person reads the log |
+| 2 | `api-unavailable` | `deferred` | GitHub's API answered 429 or 5xx, or a connection failed or timed out | The next wake asks again; nothing inside a wake does |
+| 3 | `range-starts-late` | `deferred` | A range a person named starts after a period that is ready before it | The person widens the range |
+| 4 | `no-month-to-reopen` | `deferred` | A raw day sits in a month the monthly mark is past that no monthly entry names | Its files wait for a person ([ledger-compaction.md](ledger-compaction.md#a-late-file)) |
+| 5 | `packed-file-unreadable` | `deferred` | A packed day or month file a re-run or a late file would be settled into cannot be read, or is not there | A person restores the file from git history |
+
+`recovered` lists every fault the pass recorded instead of stopping, one note for
+each period or member it took or adopted, in the order it met them:
+`repacked-from-raw`, `recorded-lost`, `reopened-month`, `set-aside`,
+`carried-over` and `index-rebuilt` from a compaction
+([ledger-compaction.md](ledger-compaction.md#a-file-that-cannot-be-read)), and
+`not-deletable` from a collection task ([below](#the-collection-tasks)). A
+recovered pass still ends `exhausted` or at its ceiling. Neither cell holds text
+the pass read, and the sentence a person reads for each word is written in
+`backend/idhazh/gardener/report.py` when the pass is read, never stored, so the
+wording can change with no migration. A row written before 2026-10-07 has no
+`fault` and no `recovered`, and reads as one that named none; on such a row
+`failed` means any stop for an error.
+
+## What a shard logs
+
+**Every line a task logs is one event: one line of JSON on stderr.** Each event
+is a model in `backend/idhazh/contracts/gardener_events.py`, and
+`backend/idhazh/gardener/event_log.py` writes it. `idhazh gardener` and
+`gardener_publish.py` install that module's one handler, at the level
+`config/idhazh.json` names. A line starts with three keys: `event`, the event's
+name; `at`, the UTC instant the line was made, to the millisecond, with a `Z`;
+and `level`. The event's own fields follow, in the order it declares them, and a
+field with no value is left out. JSON escapes every character outside ASCII and
+every line break, so one event is always one line, and no text inside it can
+start a line that GitHub reads as a workflow command. A test reads the event off
+the log record (`event_log.payload`), never its text.
+
+| # | Event | When | What it says |
+| --- | --- | --- | --- |
+| 1 | `task-planned` | Before each task runs | The task, its kind, shard, run and attempt, the wake's day, a range a person named, every knob of its declaration, and the declared folders the commit does not hold yet |
+| 2 | `window-chosen` | Before a pass that deletes one member at a time lists one | The window it holds members to, its ceiling, whether it is a dry run, and the mark it walks after |
+| 3 | `member-out-of-order`, `page-out-of-order`, `page-count-changed`, `list-end-missing` | When a walk's check fails ([below](#the-collection-tasks)) | What the check saw; the mark stays where it was |
+| 4 | `periods-chosen` | Before a compaction's steps run | Which periods each step may take, and why they start where they do ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)) |
+| 5 | `period-refused`, `download-over-budget`, `ledger-fault-met`, `raw-file-skipped` | When a compaction step refuses a period, stops at the download budget, passes a month file already gone, or meets a raw file outside a day folder | The ledger, the step, the period or path, and the words that say why |
+| 6 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, what its fold did, and what a compaction did period by period |
+| 7 | `logged-text` | When a module outside the gardener logs text while a task runs | The logger and the message as it was said |
+
+**How a task ended is one word.** `report.classify` takes the first that holds:
+`failed`, `deferred`, `dry-run`, `ceiling`, `done`, and otherwise the pass's
+own idle word - `outside-range` when a person named a range, `empty` when the
+ledger holds nothing for any step to start from, and `not-due` for everything
+else. A pass found work when its window held a member, it wrote or would write
+a file, or its fold found a closed day or month. A pass that found work and
+carried none of it out ends `dry-run`, so a live compaction whose only work is
+the months a report-only monthly window names ends `dry-run` too. A report a
+task files on every pass is not work. `next` is one fixed sentence for the word, or the
+fault's own sentence when a fault stopped the task; no sentence says a member
+is gone. A `failed` task's event is an error, a `deferred` task's event is a
+warning, and every other ending is information. A period refused for a cause a
+person settles is a warning too, so an error in a shard's log always means a
+code defect.
+
+**An exception is named by its type and where it was raised, never by its
+text.** `error` is the type, such as `ValueError`. `where` is the deepest line
+of this package's own code that the exception passed through, as
+`module:line`. The text of an exception can carry a ledger row, and a row can
+hold text fetched from the open web (Guardrail #11), so no event field holds
+it. A line that another module logged with an exception keeps its message and
+names the exception the same way.
+
+**The shard's own lines stay printed text.** A refusal that stops a shard
+before its tasks run, a download over the budget, `run-task`'s closing line, and
+every line the publisher prints are command output on stdout, not events. The
+publisher's two warnings, for a `stale` or `lost` landing, start with
+`::warning::`, so GitHub shows them on the job's page; GitHub reads such a
+command only at the start of a line.
 
 ## Landing the commit
 
@@ -330,7 +439,7 @@ whole objects: a delta against a file the clone lacks could only be computed by
 downloading the file, and with lazy fetching off the push would fail instead.
 Every git call but the one that widens the checkout runs with lazy fetching
 off, so a call that would download a file fails rather than pays for it
-quietly. A lost push waits a random time - up to 1, 2, 4, 8 and then 8 seconds -
+quietly. A failed push waits a random time - up to 1, 2, 4, 8 and then 8 seconds -
 and tries again on the new tip. No wait follows the last attempt. A deletion of
 a file the commit did not list lands nothing, and the shard exits 2: a task
 decided it from something other than the commit.
@@ -338,6 +447,31 @@ decided it from something other than the commit.
 **The record decides whether the shard already landed.** Its bytes are unique to
 the shard, so `main` holding that path with those bytes means an earlier attempt
 landed and this one stops with 0; the same path with other bytes is exit 2.
+
+**A shard whose paths `main` changed lands nothing.** After each fetch the
+publisher compares the commit the shard ran on with `main`, over every path the
+shard writes or deletes but its record, with `git diff-tree -r --no-renames
+--name-only`, in groups below Windows' command-line limit. A path it lists is one
+`main` changed after the shard's commit, so the shard's version of it is older
+than `main`'s. A re-run is the usual cause: it checks out its run's commit again,
+after later runs have landed, and it names its record afresh, so the record check
+above cannot catch it. Nothing lands, not even the record. The shard writes a
+warning naming the first such path and exits 0, and the next wake does the work
+again on the new `main`. The comparison reads trees only, so the clone downloads
+no file for it.
+
+**When every try failed, `main`'s tip says why.** The publisher fetches `main`
+once more after the last try. If `main` moved after the last try's base, other
+writers are landing: the shard writes a warning and exits 0, and the next wake
+does the work again. If it did not move, `main` refused this push, and the shard
+exits 3 and its job is red. The publisher never reads the push's error text,
+because git's words change with versions and languages. A GitHub outage through
+every try reads as a refusal, so it costs one red job.
+
+**Each way a shard comes to rest has one word.** Its log line names it:
+`landed`, `already-on-main`, `stale`, `lost` or `refused`. The words live in
+`backend/idhazh/contracts/shard_landing.py`. They are not persisted: the record
+lands inside the commit, so it cannot say how that commit landed.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
@@ -391,333 +525,115 @@ missing one fails that task by name, and its siblings still run. The
 config change. Both ship `dry_run: true`: a wake lists what the window selects
 and deletes nothing. How to read the list and turn one live is
 [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
+GitHub keeps a run's logs and artifacts for 90 days, this repository's setting
+and the most a public repository allows (read 2026-10-05). So a run past the
+90-day line of `workflow-runs` has already lost its logs, and deleting it removes
+only the run itself from the Actions history.
+
+**Each task reads only the members past its line that no earlier pass
+handled.** Its row in each record carries `handled_through`: the newest UTC day
+on or before which every member was handled - deleted, recorded as not
+deletable, or on a dry run reported or counted. The next pass reads that day
+back from the gardener's own ledger, over the last `mark_lookback_days` UTC
+days, today included, and starts the day after. Only a row from a pass with the
+same `dry_run` counts, because a day a dry run reported is a day nothing
+deleted. A row with no mark is passed over, and of the rest the latest day wins.
+Both declarations name `state/raw/gardener` and `state/compact/gardener` under
+`reads`, and the task names the days it reads before it fetches them, so the
+read is those days and no more - about 35 record files a week, 10 KB each.
+
+**The mark moves a whole day at a time.** A live pass that its ceiling stops
+inside a day leaves the mark on the day before, and the next pass reads that day
+again for what is left. A dry run deletes nothing, so stopping inside a day would
+report the same members at every wake: past its ceiling it counts the rest of
+that day without listing them, and its mark moves to that day. A member that
+arrives from an earlier day than one before it means the order failed: the pass
+goes on, says so in one `member-out-of-order` event, and its mark stays where
+it started.
+
+**GitHub's answer to a delete is read for what it means, and one refused member
+stops nothing.** `error_cause.py` reads the status code alone. A 404 or 410 says
+the member is already gone, and it counts as deleted. A 409 or 422 says GitHub
+will not delete it: the row records its id as a `not-deletable` note, it counts
+against `max_deletes_per_run` as a delete would, and the pass goes on, so its
+day is handled and the mark may pass it. Stopping there instead would stop
+every later pass at the same member, and nothing behind it would ever be
+deleted. That 409 and 422 mean
+this is a reading of GitHub's documentation, not a measurement: the first time
+a pass meets one, its answer is recorded as a test fixture. A 429, a 5xx, or a
+connection that fails or times out ends the pass `deferred` with the fault
+`api-unavailable`: the mark never passes the member it stopped at, the job stays
+green, and the next wake asks again. Any other answer, a 403 included, is a
+defect and ends the pass `failed`.
+
+**The runs: one search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day
+first.** Both ends carry `Z`, so GitHub never chooses which day is meant. One
+search returns at most 1,000 runs, so a day GitHub counts over that is searched
+again an hour at a time; an hour over it stops the pass, and its mark stays on
+the day before. GitHub's count for a search by date stops at 2,500: on
+2026-10-05 the runs created on or before 2026-09-20 counted 2,500, where their
+days add up to 4,404. The walk compares a count only with 0 and with 1,000, so
+that stop changes nothing it decides. Each search is read from its last page
+back. GitHub lists the newest run first, and a run deleted from a page moves
+every later run up one place, so a pass that read front to back while deleting
+would step over runs it never read. Every run is still held to the line before
+it is taken, so GitHub's own filter is never what keeps a delete safe.
+
+**With no mark in reach, GitHub's answers say where the first walk of the runs
+starts.** No run is older than the repository, so a line before the day it was
+created leaves nothing to walk: the mark is the line, and no page of runs is
+read. On 2026-10-04 the line was 2026-07-06, before the repository was created
+on 2026-08-20. Its oldest run is from 2026-08-22, so the first run reaches the
+line on 2026-11-20. Once one does, the oldest day with a run is found by halving
+the days from the repository's first day to the line, one count of the runs
+created on or before a day a step - about 9 counts for a year of days - and the
+walk starts on that day.
+
+**The artifacts: from the oldest end, a page at a time.** GitHub lists them by
+id, newest first, 100 to a page, and offers no search by day. So the first page
+is read only for its count, which names the last page, and the walk reads from
+the last page back: a delete then moves only artifacts already read. It stops
+at the first artifact created after the line. On 2026-10-05 GitHub held 1,613
+artifacts on 17 pages and the line fell inside the last one, so a pass read 3
+pages - the first, the last and the one before it - where reading every page
+took 17. A dry run deletes nothing, so as its mark moves on it reads from the
+last page up to its line. With no mark in reach, the first walk starts after
+the day before the repository was created: no artifact is older than that.
+
+**Each page is checked before any of its artifacts is taken.** The walk reads
+the next page before it hands on the one in hand, so a pass that ends inside a
+page never ends past a boundary nobody checked. It sorts each page by the
+instant its artifacts were created, and checks three things.
+
+- **Day order.** The oldest day on a page must be at or after the newest day on
+  every page read before it. When it is not, the walk says so in one
+  `page-out-of-order` event, reads every page, each once and still from the
+  last back, and the mark stays where it was.
+- **The count.** Each page's `total_count` must equal the first page's, less
+  the artifacts this pass deleted. An artifact made during the walk moves every
+  older one a place on, so one can slip onto a page already read while the order
+  still holds. When the count differs, the walk says so in one
+  `page-count-changed` event, the pass handles what it reads, and the mark stays
+  where it was.
+- **Where the list ends.** The last page must hold what is left of the first
+  page's count, and when it is full, the page after it is read and must be
+  empty; its artifacts are never handed on. GitHub's count for a search by date
+  stops at 2,500. The artifacts list is not a search, and its count was exact on
+  2026-10-05 - 17 pages held the 1,613 artifacts it named - but a count that
+  stopped short would start the walk in the middle of the list. When the list
+  does not end there, the walk says so in one `list-end-missing` event, the
+  pass handles what it reads, and the mark stays where it was.
+
+Every artifact is still held to the line before it is taken, so a failed check
+costs completeness and never safety. Neither check sees an artifact made and
+another gone between two reads, which leave the count as it was. GitHub's own
+retention - 90 days in this repository, read on 2026-10-05 - deletes an
+artifact missed that way at most 60 days after the 30-day line.
 
 ## The compaction
 
-**A compaction moves one ledger's rows out of the many small raw files its
-writers leave, into one file a day and then one file a month, and deletes what
-it moved.** Where its declaration asks, it then packs each finished year's month
-files into one file a year. A raw file holds one writer's rows for one day, so a
-ledger gains a file on every run, and at a few rows a file a parquet file is
-mostly its footer.
-One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
-by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
-ledger is one declaration and no Python. Six ship - for `gardener`,
-`visual-prunes`, `feed-retirements`, `item-health`, `summary-quality-evals` and
-`host-fingerprint`. **`item-health` and `host-fingerprint` pack live**, and each
-packs a month 31 days after it ends: the console reads their packed files and
-nothing newer, so a finished day reaches it within about 48 hours. The other
-four only report, so the console shows the `summary-quality-evals` days up to the day that
-ledger's migration ran
-([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
-**`summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so it may pack
-the eval rows and never drops a month** ([below](#design-rationale)). It is the one
-ledger that packs a finished year into one year file ([A year](#a-year)). The files it
-writes are laid out in
-[../contracts/persistence.md](../contracts/persistence.md#the-two-roots), and
-its knobs are in
-[../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
-
-```mermaid
-%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
-flowchart TB
-  subgraph REFRESH["Content refresh - digest.yml"]
-    W["work and assemble, and a re-run of either<br/>one raw file per writer per day"]
-  end
-
-  RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
-
-  subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
-    DROP["1 and 2. drop the listings, and the month files and raw days<br/>the monthly window no longer keeps, or only name<br/>those while monthly_window_dry_run is true"]
-    YDONE{"a year done?<br/>monthly_keep_days since it ended,<br/>its next January absorbed, every month named"}
-    YWAIT["the year waits for a later wake,<br/>or the declaration packs no year"]
-    YHOLE["a month of it is named nowhere:<br/>refused by name, exit 1"]
-    PACK["3. plan year files, one row group a month:<br/>indexes and deletes wait for the end of the pass"]
-    MDONE{"a month done?<br/>daily_keep_days since it ended,<br/>every day compacted, no raw day left"}
-    MWAIT["the month waits for a later wake"]
-    MHOLE["a day of it is named nowhere:<br/>refused by name, exit 1"]
-    ABSORB["4. plan month files:<br/>indexes and deletes wait for the end of the pass"]
-    DDUE{"compact_after_days whole days<br/>since the day ended?"}
-    DHOLD["the day waits: a run may still be writing"]
-    TAKE["5. plan day files:<br/>write all data, each final index once,<br/>delete sources, each watermark once last"]
-    DRY{"dry_run?"}
-    REPORT["report every path, land the record only<br/>four of the six compactions, today"]
-    LAND["land every write and delete<br/>in the shard's one commit"]
-  end
-
-  DAILY[("state/compact/ledger/daily/YYYY/MM/DD.parquet<br/>index/daily.json, daily/watermark.json")]
-  MONTHLY[("state/compact/ledger/monthly/YYYY/MM.parquet<br/>index/monthly.json, monthly/watermark.json")]
-  YEARLY[("state/compact/ledger/yearly/YYYY.parquet<br/>index/yearly.json, yearly/watermark.json")]
-  READER["ledger_files.py: each date from one file<br/>its year, else its month, else its day,<br/>else its raw files"]
-
-  W --> RAWF
-  RAWF --> DROP
-  DROP --> YDONE
-  YDONE -->|"not yet, or not asked"| YWAIT
-  YDONE -->|"a month missing"| YHOLE
-  YDONE -->|"yes"| PACK
-  YWAIT --> MDONE
-  YHOLE --> MDONE
-  PACK --> MDONE
-  MDONE -->|"not yet"| MWAIT
-  MDONE -->|"a day missing"| MHOLE
-  MDONE -->|"yes"| ABSORB
-  MWAIT --> DDUE
-  MHOLE --> DDUE
-  ABSORB --> DDUE
-  DDUE -->|"no"| DHOLD
-  DDUE -->|"yes"| TAKE
-  DHOLD --> DRY
-  TAKE --> DRY
-  DRY -->|"yes"| REPORT
-  DRY -->|"no"| LAND
-  LAND --> DAILY
-  LAND --> MONTHLY
-  LAND --> YEARLY
-  RAWF --> READER
-  DAILY --> READER
-  MONTHLY --> READER
-  YEARLY --> READER
-
-  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
-  classDef decision fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
-  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#166534;
-  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
-  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#92400e;
-  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1f2937;
-  classDef sysOps fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#475569;
-  classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
-
-  class W,DROP,PACK,ABSORB,TAKE,READER stage;
-  class YDONE,MDONE,DDUE,DRY decision;
-  class LAND yes;
-  class YHOLE,MHOLE no;
-  class YWAIT,MWAIT,DHOLD,REPORT warn;
-  class RAWF,DAILY,MONTHLY,YEARLY ledger;
-  class REFRESH sysPublish;
-  class GARDEN sysOps;
-```
-
-**The CSV day trees are not on this path.** A compaction never reads or writes
-them; their closed days are folded in place by the retention task that owns each
-tree, in [the closed-day fold](#the-closed-day-fold) below.
-
-### One pass, in order
-
-| Step | What it does |
-| --- | --- |
-| 1 | Drops each month file the monthly window no longer keeps, and its entry in `index/monthly.json`. While the window only reports, names them and keeps them |
-| 2 | Drops every raw listing an earlier build left under `state/raw/<ledger>/index/`, and every raw day in a month the window no longer keeps. While the window only reports, the listings still go, and those raw days are named and kept |
-| 3 | Packs every year that is done into its year file, where the declaration sets `monthly_keep_days` |
-| 4 | Absorbs every month that is done into its month file |
-| 5 | Takes every raw day that is due into its day file |
-
-**Drops first and days last, because no pass may write a path it deletes.** A
-shard refuses a path it both wrote and deleted, so a pass that did either would
-stall every wake after it. In this order a year packs month files and a month
-absorbs day files that an earlier wake wrote, never one this pass wrote, and a
-period whose last part this pass writes is taken at the next wake.
-
-**Every rule counts whole UTC days after a period's own end.** The pass measures
-from 00:00 UTC on the wake's own day, so every wake of one UTC day gets the same
-answer, and moving a cron changes nothing ([CLAUDE.md](../../../CLAUDE.md)
-section 2).
-
-### A day
-
-**A day is due once `compact_after_days` whole days have passed since it
-ended.** At one, a wake on the 25th takes the days up to the 23rd.
-Days go in order, each on its own, at most `max_periods_per_run` a pass. For each
-one the pass reads every raw file of the day and settles the rows: one file's
-rows per work unit - the last file of its highest attempt - then the first row
-of each key. It writes the day's day file and no raw listing.
-After all stages decide their files, the pass writes each final index once,
-in yearly, monthly, daily order; deletes source files; then writes each changed
-watermark once, last. Monthly absorption and new days share one final daily
-index. Index bytes grow linearly with the final entry count, not with that count
-times the number of days taken. Before the indexes land, source files survive.
-After they land, an interrupted pass resumes from the indexed compact files
-and any source files left, with no row lost.
-The bounded fixture measurement is
-[what-a-compaction-pass-costs.md](../../reference/benchmarks/what-a-compaction-pass-costs.md).
-
-**A watermark records what the data covers, never when a job ran.** It names
-the newest day taken, so a lost watermark write costs repeated work and never a
-skipped day: the next wake finds the mark behind and takes those days again,
-from their indexed day files and any raw files still there.
-
-**A quiet day still gets a file.** A day with no raw files gets a day file with
-no rows and an index entry. So the newest day `index/daily.json` names is always
-the watermark's day, and a reader can tell a quiet day from a missing one
-without opening the watermark.
-
-**A day that cannot be read whole is not taken.** A file that is not a ledger
-file, or that this build cannot read, stops its day, and so does a day holding
-more than `max_raw_files_per_period` files. Nothing of that day is deleted, the
-watermark stays before it, and the pass ends `failed` naming it, so the task
-exits 1. Every step the pass took before that day still lands.
-
-**A re-run that lands after its day was compacted replaces its first attempt.**
-GitHub lets a failed job run again for 30 days, and the re-run writes into the
-day its run first wrote. A day at or below the watermark that has raw files
-again is taken again, and before the new days: its day file is rebuilt from its
-own rows and the new raw files, settled once. A compact row keeps the identity
-its raw file gave it, which is what lets attempt 2 replace attempt 1 even when it
-filed fewer rows. The watermark does not move back.
-
-**The first pass starts on the first of a month**: the month of the older of the
-oldest raw day and the newest due day, or the oldest month the monthly window
-keeps if that is later. So every month the daily index holds is whole, and the
-check a month makes for a missing day is exact.
-
-### A month
-
-**A month is absorbed whole or not at all, and only when four things are
-true**: `daily_keep_days` whole days have passed since it ended; the daily
-watermark is past its last day; `index/daily.json` names every one of its days;
-and none of its raw days still holds files. The first two say the month is done,
-the third that nothing of it is missing, and the fourth that no re-run is still
-waiting in it. A month that fails the first, second or fourth waits for a later
-wake. **A month whose days the daily index does not all name is a hole**: it is
-refused by name, the watermark stays, and the task exits 1, because absorbing it
-would put the missing day in no file.
-
-Month files follow the pass-wide write order described above. A pass that stops
-before the monthly index lands keeps all daily sources. Once that index names
-the month, the next pass keeps its file and removes any remaining daily files
-by their calendar dates, even if the daily index already excludes them.
-The monthly watermark advances last. A live pass lands all changes in one commit, so no commit on `main`
-holds one of the month's dates in both periods, or in neither.
-The day files are joined as they are and never settled across days: a key with
-no date in it may repeat on two days, and both rows are facts.
-
-**A month file lives exactly `monthly_window` after its month is absorbed.**
-Month M goes on the day month M plus the window becomes absorbable, so the
-monthly period holds exactly `monthly_window` month files on every day, and the
-ledger reaches back `daily_keep_days` further than that. At 13 months and 45
-days, January 2026 goes on 15 April 2027, the day February 2027 is absorbed.
-
-**Raw files that land in a month already absorbed are refused and kept.**
-`daily_keep_days` is at least 31, one day more than GitHub's 30-day re-run
-window, so no re-run can land there; a file that does is for a person to read.
-The rest of the pass still runs.
-
-### A year
-
-**A year is packed only where its declaration sets `monthly_keep_days`.** One
-declaration sets it: `compact-summary-quality-evals`, whose `monthly_keep_days` in
-`config/gardener/compact-summary-quality-evals.json` (93) is how many whole days
-after a year ends the eval ledger waits to pack it. Every other ledger keeps its
-month files exactly as `monthly_window` says. A ledger that packs years keeps
-`monthly_window` forever, because a window would delete a month file before its
-year took it, and its year files are kept for ever. **Each ledger's own
-declaration sets its wait, a ledger the site publishes included**: the browser
-reads a year file by byte range, at an address no earlier read used
-([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-a-year-file-is-read-by-byte-range)),
-so no wait has to keep the console's reads away from year files.
-
-**A year is packed whole or not at all, and only when three things are true**:
-`monthly_keep_days` whole days have passed since it ended, at 00:00 UTC on 1
-January; the monthly watermark is past its December, so its next January is
-absorbed; and `index/monthly.json` names every one of its months, each with its
-file. A year that fails the first or second waits for a later wake. A year
-missing a month is refused by name, the yearly watermark stays, and the task
-exits 1. A year's months run from January to December, except in the first year
-a ledger packs, whose months start at the oldest month the monthly index names.
-That year's file still covers the whole year, so a reach that counts from the
-yearly index starts on its 1 January even when its first rows came later.
-
-**The earliest a year can go is `daily_keep_days` plus 32 days after it ends.**
-Its next January is absorbed `daily_keep_days` after that January ends, 31 days
-into the new year, and the pass packs years before it absorbs months, so the
-year goes one wake later. A smaller `monthly_keep_days` would change nothing, so
-the loader refuses one. At a `daily_keep_days` of 45, 2026 is packed on 19 March
-2027 at the earliest.
-
-Year files follow the pass-wide write order described above.
-The month files are joined as they are and never settled, and the monthly
-watermark stays where it is. A pass that stopped before the yearly index leaves
-every month file, so the next wake packs that year again. A pass that stopped
-after it leaves a year the yearly index already names, so the next wake deletes
-the month files still there by calendar month, even if the monthly index no
-longer names them, rewrites the monthly index and moves the
-watermark, and builds nothing. Either way a reader in between reads each month
-once: a month both indexes name is read from its year.
-
-**A year file is built one month at a time, one row group a month.** The pass
-holds one month's rows at a time rather than the year's, and a reader that
-filters on a date can skip the row groups of the other months. A year file over
-50 MiB, the size at which GitHub warns about a pushed file, is refused by name
-and its month files are kept: GitHub refuses a push that holds a file over
-100 MiB, and one that did would stall every later wake.
-
-### The three indexes, and a file that is missing
-
-**A ledger's three indexes exist together.** Whatever writes one of
-`index/daily.json`, `index/monthly.json` and `index/yearly.json` also writes
-each of the others the ledger does not have, with no entries, and no pass
-deletes one. An empty index truthfully says no period of its kind is packed yet;
-a missing one says nothing, so a reader could not tell a lost list from a period
-never packed, and would have to ask the site for a file that is not there. A
-ledger that holds `daily.json` alone gains the other two, empty, at its next pass
-that writes a day. A ledger whose declaration packs no year still has an empty
-`yearly.json`, because the console reads all three together
-([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
-
-**An index its watermark says was packed, and that is not there, stops the
-pass by name.** A pass that read it as empty would rewrite it naming only what
-this pass packs, and every period packed before would drop out of sight. The task
-fails that wake, and a person restores the file from git history.
-
-**A missing file has one of four names**, declared once as `LEDGER_FAULTS` in
-`frontend/src/lib/data/slice-shapes.ts`. The backend's copy is `LedgerFault` in
-`backend/idhazh/ledger/faults.py`, and
-`backend/tests/contracts/test_frontend_index_shapes.py` holds the two to one list.
-The query door carries the name on its answer
-([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)),
-and the gardener's logs and the backend's own ledger reader print it as
-`fault=<name>`, so one search finds a fault on both sides.
-
-| # | Name | What is missing | What the gardener does |
-| --- | --- | --- | --- |
-| 1 | `not-packed` | `index/daily.json`: no day of the ledger is packed | A first pass writes all three indexes |
-| 2 | `index-missing` | `index/monthly.json` or `index/yearly.json`, while `index/daily.json` is there | Writes an empty one when no period of its kind was ever packed; stops the pass by name when that period's watermark says one was |
-| 3 | `file-missing` | A file an index names | Refuses the year it would pack, the month it would absorb, or the day it would take again, and keeps every file it would have read; a person restores the file from git history |
-| 4 | `day-missing` | A day between the first and the newest packed day that no index names | Refuses the month or the year that holds it |
-
-**Three gaps are expected, and none of them is a fault**: a day newer than the
-newest packed day, an entry with `rows: 0`, and an index with no entries. None
-of them makes a reader ask for a file that is not there.
-
-### What a dry run does, and what the record says
-
-**A dry run does all of the work and changes nothing.** It reads every file,
-settles the rows, builds every file in memory, and reports every path a live
-pass would write and delete. So the list a person reads before turning a
-compaction live is the list the live pass carries out.
-
-**The monthly window has a switch of its own, `monthly_window_dry_run`.** With
-it `true`, steps 1 and 2 name every month file past the window and every raw
-file of a day in a month past it, and keep them; steps 3 to 5 then pack those
-days and months like any other, as if the window kept every month, so a first
-pass does not start at the oldest month the window keeps. The raw listings of
-step 2 still go, because they hold no row. `dry_run` still
-decides whether anything lands, so a dry run with the window reporting names
-what that live pass would do. With it `false`, a pass drops what the window no
-longer keeps, as above.
-
-**The record row says what the pass did, or would have.** `deleted` and
-`bytes_freed` count the files it deleted. `selected` counts the same files and
-every file the monthly window would have deleted that the pass kept because the
-window only reports, so `selected` minus `deleted` is what turning the window
-live would take at that wake. A raw file the pass packed is deleted either way,
-and is counted once. `bytes_freed` is never netted against the files it wrote:
-the net is `bytes_freed` minus the `bytes` of the index entries it wrote.
-`candidates_seen` counts every raw day folder it listed and every file it read,
-weighed or named, so a listing that grows while a compaction only reports shows
-in every row. `until` is the newest day that was due. A pass that used its
-budget stops `ceiling`, with `resume_from` naming the day, month or year the
-next pass starts at; one that refused a period stops `failed`, naming it.
+How a ledger's daily, monthly and yearly files are packed and dropped, by one
+compaction task a ledger, is [ledger-compaction.md](ledger-compaction.md).
 
 ## The closed-day fold
 
@@ -732,8 +648,7 @@ the files it read. It changes no answer a reader gets
 
 **The retention task that owns each tree folds it**, when its declaration
 carries a `fold` block. No current task carries one: feed-health now uses the
-ledger door, and the [evaluation ID lookup](../contracts/observation-lookup.md)
-uses JSON and SQLite. Neither is a CSV day tree. A future fold can run only for
+ledger door, so it is not a CSV day tree. A future fold can run only for
 a ledger registered in `DAY_TREES`, and the task that owns that tree must own
 its folder. Which trees a task folds is read from the folders it walks, so one
 job writes each tree a wake and no tree is checked out twice. Other ledgers
@@ -770,7 +685,10 @@ window only reports.
 `folded_months` counts the closed months settled whole, 0 where none was, and
 `folded_files` counts every file a month or a day replaced. A fold that stops
 part way - a row that will not read, a stray file - keeps the months and days it
-settled, turns the row's `stopped_because` to `failed`, and the task exits 1.
+settled, and its fault decides the task's row: `failed`, fault `raised`, for a
+defect, and the task exits 1; `deferred`, fault `api-unavailable`, when a
+download it needed did not answer. A window that stopped either way stops the
+fold for that wake.
 
 **A re-run that lands after a fold is folded in at the next wake.** Its writer
 file sits beside the day's `settled.csv`, or in a day of a settled month, and the
@@ -816,98 +734,6 @@ root, the replay and the push - in the history job, and binds the
 `corpus-squash` task through the registry only for the step that needs none,
 recording the run. It never lands through `gardener_publish.py`, whose reset to
 `origin/main` would throw the rewrite away.
-
-**2026-09-28: a compaction pass drops, then absorbs months, then takes days.**
-The first design took the days and then the months. A shard refuses a path it
-both wrote and deleted, and in that order a catch-up pass takes a day and
-then absorbs the month that holds it - writing a day file and deleting it in one
-pass - which would stall every later wake. The order costs a month one more wake
-after its last day is taken (Carmack).
-
-**2026-10-03: the compaction writes no raw listing.** It used to write
-`state/raw/<ledger>/index/<YYYY-MM-DD>.json` for each day it took and keep it
-90 days. Nothing read it: a browser reads the daily index for a packed day, and
-the site build stages its own listing, with sizes, for a day not packed yet. A
-re-run is rebuilt from the day file and the new raw files, never the listing.
-So every pass now deletes each listing it finds, and the setting that kept them
-is gone. A pass lists the raw day folders once, by name, and opens only the
-days it takes, so what one pass reads is bounded by its budget rather than by
-the backlog (Fowler, Carmack).
-
-**2026-09-28: the monthly window counts from the month's absorption.** A month
-file goes when the month `monthly_window` later is absorbed, so the period holds
-exactly `monthly_window` files on every day. Counted from the month's own end, a
-window shorter than `daily_keep_days` plus a month would drop a month before it
-was absorbed, and the loader carried a rule to refuse that pair. Counted this
-way no such gap can open, so the rule went (Fowler and Carmack).
-
-**2026-09-28: `daily_keep_days` is at least 31.** GitHub lets a failed run be
-re-run for 30 days, and the re-run writes into its first day, so a month absorbed
-sooner could still be reached by one. The 30 is declared once, as
-`GITHUB_RERUN_DAYS` in `backend/idhazh/contracts/knobs/gardener.py`, and the
-floor is derived from it. A raw file that lands in an absorbed month anyway is
-refused and kept for a person (Carmack and Fowler).
-
-**The two ledgers packed live wait 31 days, not 45.** 31 is the
-shortest wait that still catches every re-run GitHub allows, and nothing needs
-the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
-month file rebuilt when a late re-run lands, which the packing refuses. The two
-declarations set 31, and the four that only report set 45.
-
-**A compaction's monthly window has a switch of its own.** Packing deletes only
-files whose rows it has just written into a coarser file; the monthly window
-deletes rows. With one `dry_run` for both, a ledger could not pack live while its
-window only reported, so `monthly_window_dry_run` reports the window's drops
-while the rest of the pass runs live. A window of forever where the window
-should only report would have taken the retention number out of the file a
-person reads. A second task for the window's drops would have had two tasks
-writing one ledger's periods in one wake, and the shard refuses a path one task
-writes and another deletes. The record keeps its fields and their meaning:
-`selected` counts what the window would also take, so a person reads it before
-turning the window live, and no reader of the record changes.
-
-**A missing file has a name, and a ledger's three indexes always exist.** Large
-table formats handle a missing file the same way, and this design copies them:
-
-| # | Platform | What it does |
-| --- | --- | --- |
-| 1 | Delta Lake | The first version of a table must hold its `metaData` action, so the log exists before any data file does, and readers take the files to read from the log rather than from a listing ([protocol](https://github.com/delta-io/delta/blob/master/PROTOCOL.md)). Its errors have fixed names, such as `DELTA_PATH_DOES_NOT_EXIST`, `DELTA_FILE_NOT_FOUND` and `DELTA_VERSIONS_NOT_CONTIGUOUS` for a gap in the log ([error classes](https://raw.githubusercontent.com/delta-io/delta/master/spark/src/main/resources/error/delta-error-classes.json)) |
-| 2 | Apache Iceberg | The table tracks individual data files rather than directories, and a scan is planned by reading the manifests of the current snapshot ([spec](https://iceberg.apache.org/spec/)) |
-| 3 | Apache Spark | A file a table names that is gone is `FAILED_READ_FILE.FILE_NOT_EXIST`, and the message names the fix, `REFRESH TABLE` ([error conditions](https://spark.apache.org/docs/latest/sql-error-conditions.html)). Skipping such files instead, `ignoreMissingFiles`, is an option a reader has to switch on ([file source options](https://spark.apache.org/docs/latest/sql-data-sources-generic-options.html)) |
-| 4 | Apache Hudi | The table keeps its own file listings, so a reader or writer need not ask storage whether a file exists ([metadata](https://hudi.apache.org/docs/metadata)) |
-
-Three rules follow. **An empty index is right, and an empty data file never
-is**: an empty `monthly.json` or `yearly.json` truthfully says no month or year
-is packed, while an empty
-day file standing in for a lost one would draw a lost day as a quiet one. **No
-list of allowed 404s**: it would be Spark's `ignoreMissingFiles` under another
-name, and a lost index would then look exactly like one never written. So a
-ledger that packs no year still carries an empty `yearly.json`. **No
-field in `daily.json` names the other indexes**: it would change a stored shape
-to say what an empty file already says.
-
-**2026-09-28: a first pass starts on the first of a month.** Starting at the
-oldest raw day would leave the daily index holding part of a month, and that
-month's check would call the days before it holes. The start asks the same
-function the window drops months by, `first_kept_month`, so a first pass never
-takes a day the same pass would drop; while the window only reports, nothing is
-dropped, and the first pass starts without regard to the window (Carmack and
-Fowler).
-
-**A finished year's month files may be packed into one year file.** A ledger
-may pack each finished year into one file, kept for ever, rather than delete its
-month files once they pass `monthly_window`. The packing is written once and
-turned on in each ledger's own declaration. The switch is one field,
-`monthly_keep_days`, whose null packs nothing, so no ledger's behaviour changes
-until its declaration says so. A pass packs years before it absorbs months,
-which keeps it from deleting a file it wrote. A year waits for its next January,
-and a smaller wait is refused rather than silently lengthened. The year is built
-one month at a time: for the eval ledger at September 2026's rate, that holds
-about a quarter of the memory a whole-year build holds, 0.33 GB against 1.41 GB,
-measured once on a laptop. The first live pass times it on a runner. A year file
-sits in a folder of its own, `yearly/<YYYY>/<YYYY>.parquet`, because a shard
-fetches a watermark together with every file beside it: a year file beside the
-year watermark would be downloaded on every wake, one more file every year.
 
 **2026-09-30: the alarm is on what a shard downloads, and it is 128 MB.** Over
 it, a shard still runs its tasks and lands its record, then exits 1: stopping
@@ -973,6 +799,57 @@ files the clone lacks. Every command on that index runs with the checkout's
 sparse patterns off, because git applies them to any index it reads, and that
 reads files the clone never downloaded (Carmack).
 
+**2026-10-04: `workflow-runs` keeps its mark on its own record row.** A mark
+file of its own under `state/raw/gardener/` would sit in a folder
+`compact-gardener` owns, and the loader refuses two owners of one folder; a new
+folder outside `state/raw/` was not where the owner asked for it. The record
+lands at every wake anyway, so the mark costs one cell, `handled_through`. A
+date filter with no mark was rejected: in a dry run, or with a backlog, it reads
+the same runs again at every wake (the owner, decisions O1 and O2).
+
+**2026-10-04: the first walk of the runs starts from days, never from a count.**
+`total_count` says how many runs there are and nothing of the day the oldest one
+was made, so it cannot say where a walk starts. The repository's own creation
+day and a halving of counts by day can. The latest day on any matching row is
+the mark rather than the newest row's, because a day stays true once a pass has
+written it (Fowler).
+
+**2026-10-04: a search of the runs is read from its last page back.** A live
+pass that read front to back while deleting would move each next page past runs
+it never read, and once the mark passed their day nobody would read them again.
+Read from the end, a delete moves only runs already read (Fowler).
+
+**2026-10-05: the artifacts are read from the oldest end, and their order is
+checked by UTC day.** Reading every page front to back took 17 requests on
+2026-10-05, and a live pass that deleted while it read would step over
+artifacts it never read. Reading from the last page back, with a mark on the
+record as `workflow-runs` keeps one, read 3 pages that day (the owner,
+2026-10-04). The order was first to be checked by the instant each artifact was
+created. GitHub orders by id, and across the 1,613 artifacts it listed on
+2026-10-05 an id and its instant disagreed by up to 76 minutes: that check
+failed at 9 of the 16 page boundaries, so the walk would have read every page
+and kept its mark on about half of all wakes. Compared by UTC day, each page
+sorted by instant, all 16 held. The mark and the line are days, so the day is
+the order the walk relies on. A walk by id was rejected: 19 artifacts came after
+one from a later day, all in the half hour before one of 4 midnights, and each
+would have held the mark. A listing that may have missed a member says so
+through `listing_intact`, so the one rule that holds a mark stays in
+`one_at_a_time.take`, beside the check it already made on day order (Fowler).
+
+**2026-10-04: a stale shard lands nothing, and `main`'s tip tells a lost push
+from a refused one.** The publisher used to check only whether `main` held the
+shard's record. A re-run checks out its run's old commit and names its record
+afresh, so it landed its old indexes over newer ones, and the next wake read a
+ledger that had forgotten work. Now a shard whose paths `main` changed after its
+commit lands nothing, not even its record, and the next wake does the work again
+on the new `main`. Two other answers were rejected. Refusing every re-run of an
+earlier day's run misses a stale re-run on the same day, and refuses a good one
+whose paths nobody touched. Running the tasks again inside the push loop repeats
+minutes of work, and the downloads, on every lost try. When every try fails,
+whether `main` moved decides between a warning and a red job. Reading git's
+error text instead was rejected: it is not a contract, it changes with versions
+and languages, and a misread is silent (Fowler).
+
 **2026-09-30: a task names the folders it only reads.** The census summary finds
 its due months in the item-health census, which the census compaction owns, and
 from another shard it saw no census, found no month due and reported success.
@@ -1000,21 +877,51 @@ Carmack). A day is closed one whole day after it ends, the compaction's rule: of
 755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
 its day ended (Carmack's reading).
 
-**The `compact-summary-quality-evals` compaction packs the eval rows and never drops a month.** Every
-eval row is kept for ever and nothing summarises a month: the
-rows are the evidence behind every quality claim, and a chart that wants a
-monthly figure computes it from them when it draws. So the `monthly_window` of
-`config/gardener/compact-summary-quality-evals.json` is `forever`, and a live pass may make one
-file a day and one a month without taking a row. Its `monthly_keep_days` packs a
-finished year's month files into one year file, kept for ever, so the month files
-stop adding up and no row goes. Measurement IDs survive independently in the
-[exact-ID lookup](../contracts/observation-lookup.md). No gardener task folds
-that tree or removes its IDs by age; compaction must not make an old measurement
-new again.
+**2026-10-07: only a code defect turns a run red, and every stop says why in one
+word.** A stop for a cause outside the code - GitHub's API not answering, a
+person's range that starts late, a period that waits for a person - ends
+`deferred` and leaves the shard's exit code alone; only `failed`, whose fault is
+always `raised`, asks a person for work through a red job. The word is closed,
+and the sentence a person reads is rendered from it, because a stored free-text
+reason could carry fetched text into the record and no reader can act on prose
+(the owner, decision S2 and the recovery theme, 2026-10-04). Exception text is
+never stored for the same reason (Fowler, 2026-10-04). There is no word for an
+interruption: both wrappers caught every error, so a code defect would have
+been recorded as one, ended `deferred`, and left the job green (Fowler review,
+2026-10-04). Nothing inside a wake asks GitHub again, because the next wake
+already does and nothing yet says how often its API is unavailable; how often
+`deferred` appears on the record is what would price a retry library (Fowler
+review, 2026-10-04). One function, `error_cause.classify`, reads every error a
+pass meets, in a module of its own rather than the GitHub driver, because the
+walk, the runner, the fold, the ledger prune and the compaction's download
+budget all ask it, and the walk could not import the driver that imports it
+(Fowler, 2026-10-07). A missing packed file a re-run or a late file would be
+settled into takes the word an unreadable one does, `packed-file-unreadable`,
+because a packed file its index names and the tree lacks is already treated as
+unreadable when its month or year closes, and a person fixes both the same way
+(Fowler, 2026-10-07).
+
+**2026-10-07: every line a task logs is one event, and nothing beside it says
+the same thing in prose.** JSON lines, so a program and a person read one line
+the same way (the owner, decision T2, 2026-10-04). A readable line beside each
+event was rejected as a second rendering to keep in step by hand (Fowler,
+2026-10-04), and the per-task report the runner printed was exactly that, so it
+went: `task-finished` carries its list of members, why the pass stopped, and
+what happens next. A pass says its window before it lists a member, so a walk
+that fails part way has already said what it held members to; how many pages
+the walk read is only known at its end, so it is on `task-finished`, not on
+`window-chosen`. A refusal is an event of its own, at the moment it happens and
+at its own level, rather than a list inside `task-finished`, which a task that
+crashed later would never reach. Its two words are kept apart: `fault` is the
+word the record carries, and `ledger_fault` is the ledger's own word for a
+missing file, which the ledger reader and the query door print too. An event
+names an exception's type and place only, so a line can never carry a ledger
+row's text (Fowler, 2026-10-07).
 
 ## See also
 
 - [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md) - every knob, and every refusal the loader makes.
+- [ledger-compaction.md](ledger-compaction.md) - how a ledger's daily, monthly and yearly files are packed and dropped.
 - [committing.md](committing.md) - how every other job commits, and why the gardener stages its own files.
 - [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - the gardener's ledger, and what one of its rows holds.
 - [../contracts/ledger-registry.md](../contracts/ledger-registry.md) - the grain that ledger files at, and the builders that refuse it.

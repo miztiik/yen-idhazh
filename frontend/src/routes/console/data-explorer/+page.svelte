@@ -1,28 +1,31 @@
 
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { base } from '$app/paths';
-	import { ask, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost } from '$lib/data/ledger';
+	import { onMount, tick } from 'svelte';
+	import { ask, askColumns, askCost, pageHeldBytes, startAfresh, type AskResult, type Column, type DateStamp, type FetchCost, type LedgerName, type Row, type SpanCost, type SpanGap } from '$lib/data/ledger';
 	import Panel from '$lib/components/Panel.svelte';
 	import ChoiceTiles from '$lib/components/ChoiceTiles.svelte';
-	import { fillWindowSlot } from '$lib/console/window-slot';
-	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
-	import { shortDate, dayMonth } from '$lib/format';
+	import WindowControl from '$lib/components/WindowControl.svelte';
+	import Notice from '$lib/components/Notice.svelte';
+	import { explorerIdleSentence, explorerMissingSentence, explorerQuietSentence, explorerUnansweredNote, explorerUnreachableSentence, refusedSentence } from '$lib/console/waiting';
+	import { shortDate } from '$lib/format';
 	import QuestionStrip from '$lib/console/explorer/QuestionStrip.svelte';
 	import LedgerList from '$lib/console/explorer/LedgerList.svelte';
 	import ColumnList from '$lib/console/explorer/ColumnList.svelte';
 	import QueryEditor from '$lib/console/explorer/QueryEditor.svelte';
-	import ActionLine from '$lib/console/explorer/ActionLine.svelte';
+	import RunStatus from '$lib/console/explorer/RunStatus.svelte';
 	import AnswerTable from '$lib/console/explorer/AnswerTable.svelte';
 	import CopyAnswer from '$lib/console/explorer/CopyAnswer.svelte';
 	import HistoryList from '$lib/console/explorer/HistoryList.svelte';
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
 	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
+	import { describeCutDays, describeDaysRead } from '$lib/console/explorer/days-read';
+	import { gapLines } from '$lib/console/explorer/gaps';
+	import { size, statusSentence, statusWithHeld } from '$lib/console/explorer/status';
 	import { explorerAddress, parseExplorerAddress, LINK_TOO_LONG_NOTICE } from '$lib/console/explorer/address';
 	import { keepRecentRun, keepSavedQuestion, forgetSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '$lib/console/explorer/keep';
 	import { fetchRegistry, flattenRegistry, type LedgerRegistry, type RegistryLedger } from '$lib/console/explorer/registry';
 	import type { ExplorerExample } from '$lib/server/config';
-	import { LEDGER_NAMES } from '$lib/data/slice-shapes';
+	import { isDay, LEDGER_NAMES, type CutDays, type UnansweredDays } from '$lib/data/slice-shapes';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { data } = $props();
@@ -32,6 +35,8 @@
 	const presets = $derived(data.console.window_presets);
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
+	let fromDay = $state('');
+	let toDay = $state('');
 	let ready = $state(false);
 	let registry = $state<LedgerRegistry>({ families: [] });
 	let registryError = $state<string | null>(null);
@@ -39,9 +44,10 @@
 	let selected = $state<LedgerName[]>([]);
 	let sql = $state('SELECT count(*) AS rows FROM "published"');
 	let costing = $state(false);
+	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} });
 	let heldBytes = $state(0);
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
@@ -51,24 +57,34 @@
 	let showAnswerColumns = $state(false);
 	let runSpan = $state<{ from: DateStamp; to: DateStamp } | null>(null);
 	let wide = $state(false);
+	let readoutBand = $state(0);
 	let savedQuestions = $state<KeptQuestion[]>([]);
 	let recentRuns = $state<RecentRun[]>([]);
 	let keepNotice = $state<string | null>(null);
 	let linkNotices = $state<string[]>([]);
-	let copiedLink = $state('');
+	let copyNotice = $state('');
 	let storageWorks = $state(true);
+	let storageNoticeDismissed = $state(false);
 	let selectedShapeType = $state<ExplorerChartType | null>(null);
+	let saving = $state(false);
+	let draftName = $state('');
+	let nameField = $state<HTMLInputElement | null>(null);
+	let saveButton = $state<HTMLButtonElement | null>(null);
+	let answerOffscreen = $state(false);
 
 	const ledgers = $derived<RegistryLedger[]>(flattenRegistry(registry));
 	const selectedPublished = $derived(selected.filter((name) => published.includes(name)));
 	const columns = $derived(showAnswerColumns && result !== null && 'columns' in result ? result.columns : ledgerColumns);
-	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Columns in the selected ledgers');
+	const columnLabel = $derived(showAnswerColumns ? 'Answer columns' : 'Ledger columns');
 	const answerRows = $derived(result !== null && result.state === 'ok' ? (result.rows as Row[]) : []);
 	const answerColumns = $derived(result !== null && result.state === 'ok' ? result.columns : []);
-	const statusLine = $derived(
-		`The next question will read ${windowDays} UTC ${windowDays === 1 ? 'day' : 'days'} ending today.`
-	);
-	const actionNotice = $derived([...linkNotices, keepNotice, copiedLink].filter(Boolean).join(' '));
+	const noticeText = $derived([keepNotice, copyNotice, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
+	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
+	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
+	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
+	const statusText = $derived(statusWithHeld(statusLine(), heldBytes));
+	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
+	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
 		rankMax: config.rank_max,
@@ -94,12 +110,63 @@
 		d.setUTCDate(d.getUTCDate() + delta);
 		return d.toISOString().slice(0, 10);
 	}
-	function span(): { from: DateStamp; to: DateStamp } {
-		const to = todayUtc();
-		return { to, from: addDays(to, 1 - windowDays) };
+	function minReachDay(): DateStamp {
+		return addDays(todayUtc(), 1 - config.reach_days);
 	}
-	function quoteLedger(name: LedgerName): string {
-		return `"${name.replace(/"/g, '""')}"`;
+	function setSpan(from: DateStamp, to: DateStamp) {
+		const min = minReachDay();
+		const max = todayUtc();
+		const clampedTo = to > max ? max : to < min ? min : to;
+		const clampedFrom = from < min ? min : from > clampedTo ? clampedTo : from;
+		fromDay = clampedFrom;
+		toDay = clampedTo;
+		windowDays = spanDays();
+		void updateCostAndColumns();
+	}
+	function changeFrom(input: HTMLInputElement) {
+		const next = input.value > toDay ? toDay : input.value;
+		input.value = next;
+		setSpan(next, toDay);
+	}
+	function changeTo(input: HTMLInputElement) {
+		const next = input.value < fromDay ? fromDay : input.value;
+		input.value = next;
+		setSpan(fromDay, next);
+	}
+	function spanDays(): number {
+		if (!fromDay || !toDay) return windowDays;
+		return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86_400_000) + 1;
+	}
+	function span(): { from: DateStamp; to: DateStamp } {
+		return { from: fromDay, to: toDay };
+	}
+
+	function emptyLedgerLines(): string {
+		const lines = selected
+			.map((ledger) => ({ ledger, through: cost.through[ledger] }))
+			.filter((entry): entry is { ledger: LedgerName; through: string } => entry.through !== undefined && fromDay !== '' && entry.through < fromDay)
+			.map((entry) => `Nothing in ${entry.ledger} after ${shortDate(entry.through)}.`);
+		return lines.join(' ');
+	}
+
+	function statusLine(): string {
+		if (keepNotice !== null) return statusSentence({ state: 'notice', notice: keepNotice });
+		if (linkNotices.length > 0) return statusSentence({ state: 'link', linkNotices });
+		if (running) {
+			return statusSentence(lastRead === null ? { state: 'running-fetch', files: cost.files, bytes: cost.bytes } : { state: 'running-query' });
+		}
+		if (costing) return statusSentence({ state: 'costing' });
+		if (result?.state === 'ok' && lastRead !== null) {
+			return statusSentence({ state: 'answered', ms: lastMs, read: lastRead });
+		}
+		if (result?.state === 'quiet' && lastRead !== null) {
+			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
+		}
+		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
+		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
+		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
+		const empty = emptyLedgerLines();
+		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
 	function toggle(name: LedgerName) {
 		selected = selected.includes(name) ? selected.filter((one) => one !== name) : [...selected, name];
@@ -108,48 +175,36 @@
 	}
 	function pick(example: ExplorerExample) {
 		selected = example.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-		windowDays = presets.includes(example.days) ? example.days : windowDays;
+		const days = presets.includes(example.days) ? example.days : windowDays;
+		windowDays = days;
+		toDay = todayUtc();
+		fromDay = addDays(toDay, 1 - days);
 		sql = example.sql;
 		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pickSaved(question: KeptQuestion) {
 		selected = question.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-		windowDays = presets.includes(question.days) ? question.days : windowDays;
+		if (question.from !== undefined && question.end !== undefined) setSpan(question.from, question.end);
+		else setWindow(presets.includes(question.days) ? question.days : windowDays);
 		sql = question.statement;
 		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function pickRun(run: RecentRun) {
 		selected = run.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-		windowDays = presets.includes(run.days) ? run.days : windowDays;
+		if (run.from !== undefined && run.end !== undefined) setSpan(run.from, run.end);
+		else setWindow(presets.includes(run.days) ? run.days : windowDays);
 		sql = run.statement;
 		showAnswerColumns = false;
 		void updateCostAndColumns();
 	}
 	function setWindow(days: number) {
 		windowDays = days;
+		toDay = todayUtc();
+		fromDay = addDays(toDay, 1 - days);
 		void updateCostAndColumns();
 	}
-	function monthsFor(): number {
-		// Records prices ledger-day files in the action line, so the span control prices no month files.
-		return 0;
-	}
-
-	function carrySentence(): string {
-		return data.carries?.['data-explorer'] ?? 'Every published ledger the other routes draw from, open to a question of your own.';
-	}
-
-	fillWindowSlot({
-		get days() { return windowDays; },
-		get presets() { return presets; },
-		get busy() { return costing || running; },
-		get ready() { return ready; },
-		get statusLine() { return statusLine; },
-		monthsFor,
-		onChange: setWindow
-	});
-
 	async function refreshRegistry() {
 		refreshing = true;
 		registryError = null;
@@ -161,7 +216,7 @@
 				const first = config.examples.find((example) => example.ledgers.every((ledger) => published.includes(ledger)));
 				if (first !== undefined) {
 					selected = first.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
-					windowDays = presets.includes(first.days) ? first.days : windowDays;
+					setWindow(presets.includes(first.days) ? first.days : windowDays);
 					sql = first.sql;
 				}
 			}
@@ -192,6 +247,13 @@
 		return typeof value === 'number' && Number.isInteger(value) && presets.includes(value) ? value : null;
 	}
 
+	function validStoredDay(value: unknown): DateStamp | null {
+		if (!isDay(value)) return null;
+		const min = minReachDay();
+		const max = todayUtc();
+		return value >= min && value <= max ? value : null;
+	}
+
 	function validName(value: unknown): string | null {
 		return typeof value === 'string' && value.length > 0 && value.length <= config.save_name_max_chars ? value : null;
 	}
@@ -204,7 +266,10 @@
 		const statement = validStatement(raw.statement);
 		const name = validName(raw.name);
 		if (ledgers === null || days === null || statement === null || name === null || typeof raw.id !== 'string' || typeof raw.updatedAt !== 'string') return null;
-		return { id: raw.id, name, statement, ledgers, days, updatedAt: raw.updatedAt };
+		const from = validStoredDay(raw.from);
+		const end = validStoredDay(raw.end);
+		if ((raw.from !== undefined || raw.end !== undefined) && (from === null || end === null || from > end)) return null;
+		return { id: raw.id, name, statement, ledgers, days, ...(from !== null && end !== null ? { from, end } : {}), updatedAt: raw.updatedAt };
 	}
 
 	function validStoredRun(value: unknown): RecentRun | null {
@@ -214,7 +279,10 @@
 		const days = validDays(raw.days);
 		const statement = validStatement(raw.statement);
 		if (ledgers === null || days === null || statement === null || typeof raw.id !== 'string' || typeof raw.askedAt !== 'string' || typeof raw.rows !== 'number' || typeof raw.ms !== 'number') return null;
-		return { id: raw.id, statement, ledgers, days, rows: raw.rows, ms: raw.ms, askedAt: raw.askedAt };
+		const from = validStoredDay(raw.from);
+		const end = validStoredDay(raw.end);
+		if ((raw.from !== undefined || raw.end !== undefined) && (from === null || end === null || from > end)) return null;
+		return { id: raw.id, statement, ledgers, days, ...(from !== null && end !== null ? { from, end } : {}), rows: raw.rows, ms: raw.ms, askedAt: raw.askedAt };
 	}
 
 	function readStored<T>(key: string, keep: (value: unknown) => T | null): T[] {
@@ -223,18 +291,19 @@
 			if (raw === null) return [];
 			const parsed = JSON.parse(raw);
 			if (!Array.isArray(parsed)) {
-				console.info(`Records storage ${key} was not a list and was dropped.`);
+				console.info(`Data explorer storage ${key} was not a list and was dropped.`);
 				return [];
 			}
 			const kept: T[] = [];
 			for (const entry of parsed) {
 				const item = keep(entry);
-				if (item === null) console.info(`Records storage ${key} entry was invalid and was dropped.`);
+				if (item === null) console.info(`Data explorer storage ${key} entry was invalid and was dropped.`);
 				else kept.push(item);
 			}
 			return kept;
 		} catch {
 			storageWorks = false;
+			storageNoticeDismissed = false;
 			return [];
 		}
 	}
@@ -243,8 +312,10 @@
 		try {
 			localStorage.setItem(key, JSON.stringify(value));
 			storageWorks = true;
+			storageNoticeDismissed = false;
 		} catch {
 			storageWorks = false;
+			storageNoticeDismissed = false;
 		}
 	}
 
@@ -254,7 +325,9 @@
 			ledgers: selected,
 			days: windowDays,
 			statement: sql,
-			maxBytes: 8192
+			maxBytes: config.link_max_bytes,
+			from: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : fromDay,
+			end: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : toDay
 		});
 		history.replaceState(history.state, '', `${address.href}${location.hash}`);
 		linkNotices = [...address.notices];
@@ -265,18 +338,18 @@
 		await replaceAddress();
 		try {
 			await navigator.clipboard.writeText(location.href);
-			copiedLink = 'Copied the link. Opening it fills the editor and runs nothing.';
+			copyNotice = 'Copied the link. Opening it fills the editor and runs nothing.';
 		} catch {
-			copiedLink = 'This browser did not let the page write to the clipboard.';
+			copyNotice = 'This browser did not let the page write to the clipboard.';
 		}
 	}
 
 	async function copyQuestion() {
 		try {
 			await navigator.clipboard.writeText(sql);
-			copiedLink = 'Copied the question.';
+			copyNotice = 'Copied the question.';
 		} catch {
-			copiedLink = 'This browser did not let the page write to the clipboard.';
+			copyNotice = 'This browser did not let the page write to the clipboard.';
 		}
 	}
 
@@ -287,6 +360,8 @@
 			statement: sql,
 			ledgers: selected,
 			days: windowDays,
+			from: fromDay,
+			end: toDay,
 			updatedAt: new Date(Date.now()).toISOString()
 		};
 		const kept = keepSavedQuestion(savedQuestions, next, config.saved_max);
@@ -294,6 +369,28 @@
 		keepNotice = kept.notice ?? `Saved "${next.name}".`;
 		writeStored(SAVED_KEY, savedQuestions);
 		void replaceAddress();
+	}
+
+	// Save hands focus to the name field with the suggestion selected, so typing replaces it;
+	// Keep and Cancel hand it back to Save, so it never falls to the page.
+	async function startSaving() {
+		draftName = suggestedSaveName(sql, config.save_name_max_chars);
+		saving = true;
+		await tick();
+		nameField?.focus();
+		nameField?.select();
+	}
+
+	async function stopSaving() {
+		saving = false;
+		await tick();
+		saveButton?.focus();
+	}
+
+	function keepDraft() {
+		if (!draftName.trim()) return;
+		saveQuestion(draftName);
+		void stopSaving();
 	}
 
 	function forget(question: KeptQuestion) {
@@ -305,7 +402,7 @@
 		if (!ready) return;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, unpackedDays: [], through: {} };
+			cost = { files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} };
 			ledgerColumns = [];
 			return;
 		}
@@ -315,11 +412,7 @@
 			cost = await askCost(picked, nextSpan.from, nextSpan.to);
 			const described: Column[] = [];
 			for (const ledger of picked) {
-				const day = cost.through[ledger] ?? nextSpan.to;
-				const answer = await ask({ ledgers: [ledger], from: day, to: day, sql: `DESCRIBE ${quoteLedger(ledger)}`, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
-				if ((answer.state === 'ok' || answer.state === 'quiet') && 'columns' in answer) {
-					for (const column of answer.columns) described.push({ name: `${ledger}.${column.name}`, type: column.type });
-				}
+				for (const column of await askColumns(ledger, config.max_fetch_bytes)) described.push({ name: `${ledger}.${column.name}`, type: column.type });
 			}
 			ledgerColumns = described;
 		} finally {
@@ -332,12 +425,13 @@
 		running = true;
 		await replaceAddress();
 		const nextSpan = span();
-		runSpan = nextSpan;
 		lastRead = null;
 		const started = performance.now();
 		try {
 			const answer = await ask({ ledgers: selected, from: nextSpan.from, to: nextSpan.to, sql, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
 			lastMs = Math.round(performance.now() - started);
+			// The window goes with its answer, so the lines under the answer change only on a run.
+			runSpan = nextSpan;
 			result = answer;
 			selectedShapeType = null;
 			showAnswerColumns = answer.state === 'ok' || answer.state === 'quiet';
@@ -352,6 +446,8 @@
 				statement: sql,
 				ledgers: selected,
 				days: windowDays,
+				from: fromDay,
+				end: toDay,
 				rows,
 				ms: lastMs ?? Math.round(performance.now() - started),
 				askedAt: new Date(Date.now()).toISOString()
@@ -365,64 +461,115 @@
 
 	onMount(() => {
 		ready = true;
+		setWindow(data.console.default_window_days);
 		const query = matchMedia(`(min-width: ${data.frame.breakpoints_px[1]}px)`);
-		const sync = () => (wide = query.matches);
+		const sync = () => {
+			wide = query.matches;
+			const width = window.innerWidth;
+			readoutBand = width < data.frame.breakpoints_px[0] ? 0 : width < data.frame.breakpoints_px[1] ? 1 : width < data.frame.breakpoints_px[2] ? 2 : 3;
+		};
 		sync();
 		query.addEventListener('change', sync);
+		addEventListener('resize', sync);
+		const answerRegion = document.querySelector('[data-workbench-region="answer"]');
+		const answerObserver = answerRegion === null ? null : new IntersectionObserver(([entry]) => {
+			answerOffscreen = !entry.isIntersecting && entry.boundingClientRect.top > 0;
+		});
+		if (answerRegion !== null) answerObserver?.observe(answerRegion);
 		void (async () => {
 			savedQuestions = readStored<KeptQuestion>(SAVED_KEY, validStoredSaved);
 			recentRuns = readStored<RecentRun>(HISTORY_KEY, validStoredRun);
 			if (location.search) {
-				const parsed = await parseExplorerAddress(location.search, { ledgerNames: LEDGER_NAMES, windowPresets: presets, defaultDays: data.console.default_window_days });
+				const parsed = await parseExplorerAddress(location.search, { ledgerNames: LEDGER_NAMES, windowPresets: presets, defaultDays: data.console.default_window_days, today: todayUtc(), reachDays: config.reach_days });
 				if (parsed.ledgers.length > 0) selected = [...parsed.ledgers];
-				windowDays = parsed.days;
+				if (parsed.from !== null && parsed.end !== null) setSpan(parsed.from, parsed.end);
+				else setWindow(parsed.days);
 				sql = parsed.statement;
 				linkNotices = [...parsed.notices, ...(parsed.statement ? ['This question came from a link. Read it before you press Run.'] : [])];
 			} else if (recentRuns[0] !== undefined) {
 				selected = [...recentRuns[0].ledgers];
-				windowDays = recentRuns[0].days;
+				if (recentRuns[0].from !== undefined && recentRuns[0].end !== undefined) setSpan(recentRuns[0].from, recentRuns[0].end);
+				else setWindow(recentRuns[0].days);
 				sql = recentRuns[0].statement;
 			}
 			await refreshRegistry();
+			initializing = false;
 		})();
-		return () => query.removeEventListener('change', sync);
+		return () => {
+			query.removeEventListener('change', sync);
+			removeEventListener('resize', sync);
+			answerObserver?.disconnect();
+		};
 	});
 </script>
 
-<p class="cross-link" data-console-carry>{carrySentence()} <a href={`${base}/console/`}>Open Pipelines.</a></p>
+<Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copyNotice = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
-{#snippet questionActions()}
-	<button type="button" class="panel-button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
-{/snippet}
-
-<Panel id="data-explorer-ask" title="Your question" note={`One read-only DuckDB statement at a time, up to ${config.query_max_chars} characters.`} actions={questionActions}>
-	<div class="question-panel" style={`--rail:${config.rail_rem}rem;--idle-height:${data.console.chart_height}px`}>
-		<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
-		{#if keepNotice}<p class="state">{keepNotice}</p>{/if}
-		{#if !storageWorks}<p class="state warn">This browser is not letting the page keep anything, so Save and the history are off.</p>{/if}
+<div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
+<Panel id="data-explorer-ask" title="Your question">
+	<div class="question-panel">
+		<div class="workbench-toolbar" data-workbench-region="toolbar">
+			<WindowControl
+				days={windowDays}
+				presets={presets}
+				busy={costing || running}
+				ready={ready}
+				onChange={setWindow}
+			/>
+			<div class="date-fields">
+				<label>From (UTC)<input type="date" value={fromDay} min={minReachDay()} max={toDay < todayUtc() ? toDay : todayUtc()} oninput={(event) => changeFrom(event.currentTarget)} onchange={(event) => changeFrom(event.currentTarget)} /></label>
+				<label>To (UTC)<input type="date" value={toDay} min={fromDay > minReachDay() ? fromDay : minReachDay()} max={todayUtc()} oninput={(event) => changeTo(event.currentTarget)} onchange={(event) => changeTo(event.currentTarget)} /></label>
+			</div>
+		</div>
+		<div data-workbench-region="questions">
+			<QuestionStrip examples={config.examples} {published} saved={savedQuestions} shown={config.strip_shown} onPick={pick} onPickSaved={pickSaved} onForget={forget} />
+			<div class="question-links">
+				<HistoryList runs={recentRuns} onPick={pickRun} />
+				<a class="how-to" href={`${data.docsBase}/blob/main/docs/how-to/query-a-ledger-from-the-console.md`}><Icon id="docs" /> Read the Data explorer how-to</a>
+			</div>
+		</div>
 		<div class="question-grid" class:wide>
-			<LedgerList ledgers={ledgers} selected={selected} {published} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
+			<div data-workbench-region="ledgers">
+				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
+			</div>
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}
-				<QueryEditor value={sql} maxChars={config.query_max_chars} minLines={config.editor_lines[0]} maxLines={config.editor_lines[1]} counterFromShare={config.counter_from_share} onInput={(value) => (sql = value)} onRun={run} />
-				<ActionLine files={cost.files} bytes={cost.bytes} {heldBytes} read={lastRead} busy={running || costing} disabled={selected.length === 0 || sql.trim() === ''} notice={actionNotice} saveName={suggestedSaveName(sql, config.save_name_max_chars)} saveNameMaxChars={config.save_name_max_chars} canSave={storageWorks && sql.trim() !== ''} canCopyQuestion={linkNotices.includes(LINK_TOO_LONG_NOTICE)} onRun={run} onSave={saveQuestion} onCopyQuestion={copyQuestion} />
-				<HistoryList runs={recentRuns} onPick={pickRun} />
+				<div data-workbench-region="editor">
+					<div class="editor-head">
+						<label for="explorer-sql">DuckDB SQL</label>
+						<div class="editor-actions" data-explorer-actions>
+							{#if saving}
+								<label>Name <input bind:this={nameField} bind:value={draftName} maxlength={config.save_name_max_chars} /></label>
+								<button type="button" onclick={keepDraft} disabled={!draftName.trim()}><Icon id="saved" /> Keep</button>
+								<button type="button" onclick={stopSaving}>Cancel</button>
+							{:else}
+								<button type="button" bind:this={saveButton} onclick={startSaving} disabled={!storageWorks || sql.trim() === ''}><Icon id="saved" /> Save</button>
+								<button type="button" onclick={copyLink}><Icon id="share-link" /> Copy link</button>
+								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" class="copy-question" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
+							{/if}
+							<!-- Last, so nothing that changes to its left moves it. -->
+							<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
+								<Icon id="query-run" />
+								<span class="run-words"><span class:hidden-word={running}>Run</span><span class:hidden-word={!running}>Running</span></span>
+								<span class="run-shortcut">Ctrl+Enter</span>
+							</button>
+						</div>
+					</div>
+					<QueryEditor value={sql} maxChars={config.query_max_chars} lines={editorLines} onInput={(value) => { sql = value; if (linkNotices.some((notice) => notice.includes('came from a link'))) linkNotices = []; }} onRun={run} />
+				</div>
+				<RunStatus text={statusText} lines={readoutLines} tone={statusTone} href={answerLink} files={lastRead?.files ?? cost.files} bytes={lastRead?.bytes ?? cost.bytes} {heldBytes} />
 			</div>
-			<ColumnList columns={columns} label={columnLabel} />
+			<div data-workbench-region="columns">
+				<ColumnList columns={columns} label={columnLabel} />
+			</div>
 		</div>
 	</div>
 </Panel>
 
-{#snippet answerActions()}
-	{#if result !== null && result.state === 'ok'}
-		<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} />
-	{/if}
-{/snippet}
-
 {#snippet shapeActions()}
 	{#if shapeChoices.length > 1}
 		<fieldset class="shape-actions">
-			<legend>Draw it as</legend>
+			<legend class="sr-only">Draw it as</legend>
 			<ChoiceTiles
 				name="explorer-shape"
 				items={shapeChoices.map((shape) => ({ value: shape.type, shown: shape.option, spoken: shape.option, icon: shape.icon }))}
@@ -434,54 +581,463 @@
 	{/if}
 {/snippet}
 
-<Panel id="data-explorer-rows" title="The answer" wide actions={answerActions}>
-	{#if running}
-		<div class="answer-state shimmer" data-state="loading"></div>
-	{:else if result === null}
-		<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
-	{:else if result.state === 'ok'}
-		<div class="answer-note">{#if runSpan}Read from {windowDays} UTC days, {dayMonth(runSpan.from)} to {shortDate(runSpan.to)}.{/if}</div>
-		<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} tableMaxVh={config.table_max_vh} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
-	{:else if result.state === 'quiet'}
-		<div class="answer-state" data-state="quiet">{explorerQuietSentence()}</div>
-	{:else if result.state === 'missing'}
-		<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
-	{:else if result.state === 'unreachable'}
-		<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
-	{:else if result.state === 'refused'}
-		<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
-	{/if}
+{#snippet gapNotes(gaps: readonly SpanGap[])}
+	{#each gapLines(gaps) as line (`${line.ledger} ${line.kind}`)}
+		<p class="gap-note" data-explorer-gap={line.kind} data-ledger={line.ledger}>{line.text}</p>
+	{/each}
+{/snippet}
+
+<!-- Where an answer starts when its window began earlier: grey for each ledger whose earlier days
+     are not on this site, amber for days the repository could not give it. -->
+{#snippet startNotes(cut: readonly CutDays[], unanswered: readonly UnansweredDays[], lastDay: DateStamp)}
+	{#each cut as one (one.ledger)}{' '}{describeCutDays(one, lastDay)}{/each}{#if unanswered.length > 0}{' '}<span class="warn" data-explorer-unanswered>{explorerUnansweredNote(unanswered)}</span>{/if}
+{/snippet}
+
+<Panel id="data-explorer-rows" title="The answer" wide>
+	<div class="answer-region" data-workbench-region="answer">
+		<div class="region-bar" data-explorer-answer-head>
+			<!-- Seen, not heard: the panel's hidden heading already names it. -->
+			<span class="region-label" aria-hidden="true">Answer</span>
+			{#if result !== null && result.state === 'ok'}
+				<CopyAnswer columns={answerColumns} rows={orderedRows.length > 0 ? orderedRows : answerRows} onMessage={(text) => (copyNotice = text)} />
+			{/if}
+		</div>
+	{#key running ? 'loading' : result?.state ?? 'idle'}
+		{#if running}
+			<div class="answer-state shimmer" data-state="loading"></div>
+		{:else if result === null}
+			<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
+		{:else if result.state === 'ok'}
+				<div class="answer-note">
+					{#if runSpan}{describeDaysRead(result.readFrom, runSpan.to)}{@render startNotes(result.cut, result.unanswered, runSpan.to)}{/if}
+					{@render gapNotes(result.gaps)}
+				</div>
+			<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} onOrderChange={(rows) => (orderedRows = rows)} />
+			{:else if result.state === 'quiet'}
+				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, result.unanswered, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
+		{:else if result.state === 'missing'}
+			<div class="answer-state" data-state="missing">{explorerMissingSentence(result.ledger, published.includes(result.ledger))}</div>
+		{:else if result.state === 'unreachable'}
+			<div class="answer-state warn" data-state="unreachable">{explorerUnreachableSentence(result.ledger, result.at, result.fault)}</div>
+		{:else if result.state === 'refused'}
+			<div class="answer-state" data-state="refused">{refusedSentence(result.because)}{#if result.because.kind === 'engine-error'}<pre>{result.because.message}</pre>{/if}</div>
+		{/if}
+	{/key}
+	</div>
 </Panel>
 
-<Panel id="data-explorer-shape" title="The answer, drawn" wide actions={shapeActions}>
-	{#if running}
-		<div class="answer-state shimmer" data-state="loading"></div>
-	{:else if result === null}
-		<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
-	{:else if result.state === 'ok'}
-		<ShapePanel columns={result.columns} rows={result.rows as Row[]} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} />
-	{:else if result.state === 'quiet'}
-		<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
-	{:else if result.state === 'refused'}
-		<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
-	{:else}
-		<div class="answer-state" data-state={result.state}>The answer did not arrive, so nothing to draw.</div>
-	{/if}
+<Panel id="data-explorer-shape" title="The answer, drawn" wide>
+	<div class="chart-region" data-workbench-region="chart">
+		<div class="region-bar">
+			<span class="region-label" aria-hidden="true">Chart</span>
+			{@render shapeActions()}
+		</div>
+	{#key running ? 'loading' : result?.state ?? 'idle'}
+		{#if running}
+			<div class="answer-state shimmer" data-state="loading"></div>
+		{:else if result === null}
+			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
+		{:else if result.state === 'ok'}
+			<div class="chart-body"><ShapePanel columns={result.columns} rows={result.rows as Row[]} lostDays={result.gaps.flatMap((gap) => gap.lostDays)} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} /></div>
+		{:else if result.state === 'quiet'}
+			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
+		{:else if result.state === 'refused'}
+			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
+		{:else}
+			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+		{/if}
+	{/key}
+	</div>
 </Panel>
+</div>
 
 <style>
-	.cross-link { margin: var(--space-4) 0; color: var(--color-text-secondary); }
-	.cross-link a { color: var(--color-accent-strong); }
-	.question-panel { display: grid; gap: var(--space-4); }
-	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-	.editor-stack { display: grid; gap: var(--space-4); align-content: start; }
-	.state, .answer-note { margin: 0; color: var(--color-text-secondary); }
+	/* The workbench is a tool, so it has the whole window and no card edge: the
+	   strip's rule above it is its top edge, and a border at the window's edge
+	   would frame nothing. */
+	.workbench {
+		overflow-x: clip;
+		background: var(--color-surface);
+	}
+
+	.question-panel { display: grid; }
+	.workbench-toolbar {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: var(--space-2);
+		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		padding: var(--space-1) var(--space-3);
+		border-block-end: 1px solid var(--color-rule);
+	}
+
+	.date-fields {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		align-items: end;
+		min-inline-size: 0;
+		overflow: hidden;
+	}
+
+	.date-fields label,
+	.editor-actions label {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		min-block-size: var(--workbench-control);
+		color: var(--color-text-tertiary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: var(--tracking-label);
+		text-transform: uppercase;
+	}
+
+	input,
+	button,
+	.how-to,
+	.run-button {
+		max-inline-size: 100%;
+		min-inline-size: 0;
+		min-block-size: var(--workbench-control);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		padding-inline: var(--space-3);
+		font: inherit;
+	}
+
+	:global([data-workbench-region='toolbar'] [data-window-control]),
+	:global([data-workbench-region='toolbar'] [data-window-control] button),
+	:global([data-workbench-region='questions'] .question-strip button),
+	:global([data-workbench-region='questions'] .question-strip summary),
+	:global([data-workbench-region='questions'] .history-list summary) {
+		min-block-size: var(--workbench-control);
+	}
+
+	/* The strip takes the room the links leave and stays one line from 640 px, so a saved
+	   question folds an example away instead of making the row taller. */
+	:global([data-workbench-region='questions'] .question-strip) {
+		flex: 1 1 0;
+		min-inline-size: 0;
+	}
+
+	:global([data-workbench-region='questions'] .question-strip button) {
+		min-inline-size: 0;
+		max-inline-size: 100%;
+		overflow: hidden;
+	}
+
+	.run-button {
+		display: flex;
+		gap: var(--space-2);
+		align-items: center;
+		border-color: var(--color-accent);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		font-weight: 600;
+	}
+
+	.run-button[aria-disabled='true'] {
+		opacity: 0.75;
+	}
+
+	.run-shortcut {
+		font-family: var(--font-data);
+		font-size: var(--text-xs);
+		font-weight: 400;
+	}
+
+	.run-words {
+		display: grid;
+	}
+
+	.run-words > span {
+		grid-area: 1 / 1;
+	}
+
+	.hidden-word {
+		opacity: 0;
+	}
+
+	[data-workbench-region='questions'] {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		min-block-size: calc(var(--workbench-control) + 2 * var(--space-1));
+		padding-inline: var(--space-3);
+		border-block-end: 1px solid var(--color-rule);
+	}
+
+	/* History's list hangs from this group's end, so nothing here may clip it. */
+	.question-links {
+		flex: none;
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-inline-size: 0;
+	}
+
+	.how-to {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		text-decoration: none;
+		font-size: var(--text-sm);
+	}
+
+	.question-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+	.editor-stack { display: grid; align-content: start; }
+	.state, .answer-note { margin: 0; padding-inline: var(--space-3); color: var(--color-text-secondary); }
+	.gap-note { margin: var(--space-1) 0 0; }
 	.warn { color: var(--band-low); }
-	.answer-state { min-block-size: var(--idle-height); display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); border: 1px solid var(--color-rule); border-radius: var(--radius-md); }
+	.answer-state { min-block-size: 0; block-size: 100%; display: grid; place-items: center; padding: var(--space-6); color: var(--color-text-secondary); background: var(--tint-neutral); }
 	.answer-state pre { max-inline-size: 100%; overflow-x: auto; white-space: pre; font-family: var(--font-data); color: var(--code-string); }
 	.shimmer { background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-raised) 50%, var(--color-surface) 100%); }
-	.question-grid.wide { grid-template-columns: minmax(12rem, var(--rail)) minmax(0, 1fr) minmax(12rem, var(--rail)); }
-	.panel-button { min-block-size: 2.75rem; border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding-inline: var(--space-3); font-weight: 600; }
-	.shape-actions { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
-	.shape-actions legend { color: var(--color-text-tertiary); font-size: var(--text-xs); }
+	.question-grid.wide { grid-template-columns: minmax(12rem, 1fr) minmax(0, 4fr) minmax(12rem, 1fr); grid-template-rows: 1fr; }
+
+	/* A region's content never sets its size: a long ledger list, a long
+	   question or a thousand rows scroll inside the region that holds them. */
+	[data-workbench-region='ledgers'],
+	[data-workbench-region='columns'] {
+		contain: size;
+		min-block-size: 0;
+		overflow: auto;
+		border-inline-end: 1px solid var(--color-rule);
+		padding: var(--space-3);
+	}
+
+	[data-workbench-region='columns'] {
+		border-inline: 1px solid var(--color-rule) 0;
+	}
+
+	[data-workbench-region='editor'] {
+		padding: var(--space-3);
+	}
+
+	.editor-head,
+	.region-bar {
+		min-block-size: var(--workbench-control);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		color: var(--color-text-tertiary);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		letter-spacing: var(--tracking-label);
+		text-transform: uppercase;
+	}
+
+	/* One line: the words at its start are cut short before any button moves
+	   or wraps, because a heading line that wraps after a click moves the
+	   region under it. */
+	.editor-head > label,
+	.region-label {
+		flex: 0 1000 auto;
+		min-inline-size: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.region-bar {
+		padding-inline: var(--space-3);
+	}
+
+	.region-bar > :global(:not(.region-label)) {
+		flex: none;
+	}
+
+	.editor-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.editor-actions > :global(*) {
+		flex: none;
+	}
+
+	/* While a question is named, the name field is the one part of the group
+	   that gives way, so Keep, Cancel and Run keep their size and place. It
+	   starts from nothing and takes the room the buttons leave; the field's
+	   percentage width lets it shrink to its 3rem floor. */
+	.editor-actions > label {
+		flex: 1 1 0;
+	}
+
+	.editor-actions label input {
+		flex: 1 1 auto;
+		inline-size: 100%;
+		min-inline-size: 3rem;
+	}
+
+	.editor-actions button,
+	.region-bar :global(button),
+	.region-bar :global(.choice-tile) {
+		font-size: var(--text-sm);
+		font-weight: 400;
+		letter-spacing: normal;
+		text-transform: none;
+	}
+
+	.editor-actions .run-button {
+		font-weight: 600;
+	}
+
+	.answer-region {
+		contain: size;
+		display: grid;
+		grid-template-rows: var(--workbench-control) auto minmax(0, 1fr);
+		border-block-start: 1px solid var(--color-rule);
+		background: var(--color-surface);
+	}
+
+	.answer-region > :global(.answer-state) {
+		grid-row: 2 / -1;
+	}
+
+	/* The heading line holds still and the drawing scrolls in its own box beneath it, so
+	   nothing the chart draws ever passes under the shape tiles. */
+	.chart-region {
+		contain: size;
+		display: grid;
+		grid-template-rows: var(--workbench-control) minmax(0, 1fr);
+		overflow: clip;
+		border-block-start: 1px solid var(--color-rule);
+		background: var(--color-surface);
+	}
+
+	.chart-region > :global(.answer-state) {
+		block-size: 100%;
+	}
+
+	.chart-body {
+		min-block-size: 0;
+		overflow: auto;
+		padding: 0 var(--space-3) var(--space-3);
+	}
+
+	.shape-actions { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+	.shape-actions :global(.choice-tile) { min-block-size: var(--workbench-control); }
+
+	/* From the wide breakpoint the workbench fills the window: the question
+	   above, the answer and the chart side by side below, each half taking the
+	   share the other leaves. The value matches `frame.breakpoints_px[1]`, which
+	   a media query cannot read. */
+	@media (min-width: 1024px) {
+		/* `min-block-size: 0` hands the split to the two `1fr` rows: each half
+		   keeps its own smallest size, and only a window shorter than both
+		   together makes the page scroll. Left to its content, the box would ask
+		   for twice the larger half, because two equal rows size to their larger
+		   minimum. */
+		.workbench {
+			flex: 1 1 0;
+			min-block-size: 0;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			grid-template-rows: 1fr 1fr;
+		}
+
+		.workbench > :global([data-console-panel-id='data-explorer-ask']) {
+			grid-column: 1 / -1;
+		}
+
+		.question-panel {
+			grid-template-rows: auto auto 1fr;
+		}
+
+		.editor-stack {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.editor-stack > .state,
+		.editor-stack > :global([data-workbench-region='status']) {
+			flex: none;
+		}
+
+		[data-workbench-region='editor'] {
+			flex: 1 1 0;
+			display: grid;
+			grid-template-rows: auto 1fr;
+		}
+
+		.chart-region {
+			min-block-size: calc(var(--workbench-control) + var(--idle-height));
+			border-inline-start: 1px solid var(--color-rule);
+		}
+	}
+
+	/* Below it the regions stack in one column and the page scrolls: their
+	   smallest useful sizes add up to more than one screen. */
+	@media (max-width: 1023px) {
+		.workbench-toolbar {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.run-shortcut {
+			display: none;
+		}
+		[data-workbench-region='ledgers'],
+		[data-workbench-region='columns'] {
+			block-size: calc(4 * var(--space-3) + var(--workbench-control) + var(--editor-lines) * var(--workbench-field-leading) + var(--readout-lines) * var(--leading-sm) + 2 * var(--space-1));
+			border-inline: 0;
+			border-block: 1px solid var(--color-rule);
+		}
+		.answer-region {
+			min-block-size: 100svh;
+		}
+		/* The question is rounded up to a whole pixel, because the answer under it
+		   is one window tall and the browser scrolls and sizes the page in whole
+		   pixels. Its text lines are not whole pixels tall, so left to its content
+		   it ends between two pixels: the answer could never fill the window
+		   exactly, and the page's foot would lie past the last pixel a scroll
+		   reaches. A browser without `calc-size()` keeps the content's height. */
+		.workbench > :global([data-console-panel-id='data-explorer-ask']) {
+			block-size: calc-size(auto, round(up, size, 1px));
+		}
+		.chart-region {
+			block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
+		}
+	}
+
+	@media (max-width: 639px) {
+		[data-workbench-region='questions'] {
+			flex-wrap: wrap;
+			align-items: stretch;
+		}
+		:global([data-workbench-region='questions'] .question-strip) {
+			inline-size: 100%;
+			flex-basis: 100%;
+		}
+		.question-links,
+		.how-to {
+			min-inline-size: 0;
+			inline-size: 100%;
+			flex-basis: 100%;
+		}
+		.how-to {
+			overflow: hidden;
+		}
+		.editor-head {
+			flex-wrap: wrap;
+		}
+		.editor-actions {
+			flex: 1 1 100%;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
+		/* Run holds its place at the end of the group's first line in every state: the
+		   name field and Copy question take a whole line of their own beneath it, so a
+		   wider face can never push Run down, and a name has the phone's full width. */
+		.editor-actions > label,
+		.editor-actions > .copy-question {
+			order: 1;
+			flex: 1 1 100%;
+		}
+	}
 </style>

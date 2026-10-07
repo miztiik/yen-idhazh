@@ -57,7 +57,7 @@ def test_a_day_is_assembled_only_when_the_plan_it_is_built_from_succeeded() -> N
 def test_the_plan_a_day_is_built_from_cannot_go_missing_quietly() -> None:
     """The job downstream reads this artifact by name, so an absent one fails here.
 
-    `if-no-files-found` warns by default, so a plan job that wrote no plan.json
+    `if-no-files-found` warns by default, so a plan job that filed no plan
     would finish green and hand a missing-artifact failure to `assemble` - one
     job away from whatever actually went wrong.
     """

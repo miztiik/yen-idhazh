@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -37,15 +37,8 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/run.json append-only runs[] for that dat
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn in the browser
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
-state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
-state/summary-quality-evals-index/lookup/root.json the current exact-ID lookup generation
-state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.json bounded routing page
-state/summary-quality-evals-index/lookup/nodes/<prefix>/<digest>.sqlite capped membership leaf
-state/summary-quality-evals-index/incoming/<batch-id>.json durable pending evaluation input
+state/raw/summary-quality-evals/<YYYY>/<MM>/<DD>/ the ledger - read as one row per measurement a day, never published twice, kept for ever
 ```
-
-The [observation lookup](../contracts/observation-lookup.md) owns these index
-paths and their publication protocol; they are not reader-facing URLs.
 
 ```
 / the newest published day, rendered inline moving
@@ -53,7 +46,6 @@ paths and their publication protocol; they are not reader-facing URLs.
 /<YYYY-MM-DD>/<vertical>/ that day, one vertical - a projection canonical
 /<YYYY-MM-DD>/#<item id> an item anchor
 /archive/ every surviving day moving
-/evals/ a signpost to /console/, where the scores went
 /console/ the run-health dashboard moving
 ```
 
@@ -200,9 +192,9 @@ That is why the plain address is the moving one and dated addresses are the froz
 
 The engineering half is driven by arithmetic rather than preference. Segmented date directories were chosen over a flat layout because a flat directory of tens of thousands of entries rewrites a large tree object on every commit. One file per day was chosen over per-item files because compression works far better across a whole day than across many small bodies, and because a per-item file buys nothing an already-fetched day payload does not have.
 
-### Two append paths, and only one of them deduplicates
+### Two kinds of row, and only one of them deduplicates
 
-`idhazh.ledger.extend_ledger_file` writes every row it is handed. `idhazh.evals.writer.file_measurements` files no row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
+`idhazh.ledger.extend_ledger_file` writes every row it is handed, and a read keeps every one. The eval ledger's reader keeps one row per address, words and scorer version a day. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
 
 So the blind path stays blind, and each caller that owns a repeat is now named next to it. The seen and published ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a row two runs file for one address costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, the published ledger held 2,097 rows and 2,097 distinct addresses in the flat file it has since moved off.
 
