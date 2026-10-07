@@ -25,6 +25,7 @@ MODULE_NAMES = (
     "idhazh.contracts.file_envelope",
     "idhazh.contracts.fingerprint",
     "idhazh.contracts.fitted_similarity_threshold",
+    "idhazh.contracts.gardener_fault",
     "idhazh.contracts.host_fingerprint",
     "idhazh.contracts.item_health",
     "idhazh.contracts.item_health_summary",

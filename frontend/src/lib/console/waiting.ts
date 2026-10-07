@@ -24,6 +24,7 @@ import { MONTHS, shortDate } from '$lib/format';
 import { megabytes } from '$lib/assist/session';
 import { grouped } from '$lib/charts/series';
 import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
+import { nameSpan } from '$lib/console/span-words';
 import type { AskRefusal } from '$lib/data/ledger';
 import type { UnansweredDays } from '$lib/data/slice-shapes';
 
@@ -143,7 +144,7 @@ export function wideningPreset(
  * preset is the only action there is, so it is named with the span it reaches.
  */
 export function quietSentence(days: number, widen: number | null): string {
-	const read = `Nothing was recorded in these ${days} days.`;
+	const read = `Nothing was recorded in ${nameSpan(days)}.`;
 	return widen === null
 		? `${read} No wider window reaches a day that has anything.`
 		: `${read} The ${widen}-day window reaches back to months that do.`;

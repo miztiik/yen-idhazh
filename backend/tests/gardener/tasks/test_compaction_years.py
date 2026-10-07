@@ -37,7 +37,7 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
@@ -455,7 +455,7 @@ def test_a_year_whose_months_hold_no_row_is_an_empty_entry_with_no_file(tmp_path
 
 
 def test_a_year_whose_months_hold_no_row_adopts_its_own_file_when_one_is_at_its_path(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path
 ) -> None:
     """An index restored from an older commit can name a year's months while its file holds them.
 
@@ -481,8 +481,7 @@ def test_a_year_whose_months_hold_no_row_adopts_its_own_file_when_one_is_at_its_
     before = own.read_bytes()
     recorded(root, quiet=tuple(MONTHS_OF_2026), lost={"2026-03": ["2026-03-14"]})
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, READY, **SMALLEST)
+    outcome = compact(root, READY, **SMALLEST)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     assert yearly(root) == [
@@ -490,7 +489,7 @@ def test_a_year_whose_months_hold_no_row_adopts_its_own_file_when_one_is_at_its_
             covers="2026", rows=len(rows), bytes=len(before), lost_days=["2026-03-14"]
         )
     ]
-    assert recovered(caplog, "2026") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(outcome, "2026") == [RecoveryNote.INDEX_REBUILT]
     assert own.read_bytes() == before
     assert covers(root, Period.MONTHLY) == ["2027-01"]
 
@@ -616,21 +615,20 @@ def without_june(root: Path) -> None:
 
 
 def test_a_year_missing_a_month_with_nothing_of_it_left_records_its_days_lost(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path
 ) -> None:
     """No entry, no month file, no day file and no raw file: June's rows are gone, and 2026 packs."""
     root = a_finished_year(tmp_path)
     month_file(root, "2026-06").unlink()
     without_june(root)
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, TODAY, **PACKS)
+    outcome = compact(root, TODAY, **PACKS)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     (entry,) = yearly(root)
     assert (entry.covers, entry.state, entry.rows) == ("2026", EntryState.PACKED, 22)
     assert entry.lost_days == days("2026-06-01", "2026-06-30")
-    assert recovered(caplog, "2026-06") == [f"note={RecoveryNote.RECORDED_LOST}"]
+    assert recovered(outcome, "2026-06") == [RecoveryNote.RECORDED_LOST]
     assert covers(root, Period.MONTHLY) == ["2027-01"]
 
 
@@ -660,48 +658,48 @@ def test_a_year_missing_a_month_whose_raw_day_is_still_there_is_refused_and_noth
     with caplog.at_level(logging.ERROR):
         outcome = compact(root, TODAY, **PACKS)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026")
+    assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
+        StopReason.FAILED,
+        "2026",
+        GardenerFault.RAISED,
+    )
     assert "monthly.json does not name 2026-06" in caplog.text
     assert f"fault={ledger.LedgerFault.DAY_MISSING}" in caplog.text
     assert files_under(root) == before
 
 
-def test_a_month_no_entry_names_is_adopted_from_its_own_file_into_its_year(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_a_month_no_entry_names_is_adopted_from_its_own_file_into_its_year(tmp_path: Path) -> None:
     """June's file is at its path while no entry names it, so its rows go into 2026 and none is lost."""
     root = a_finished_year(tmp_path)
     without_june(root)
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, TODAY, **PACKS)
+    outcome = compact(root, TODAY, **PACKS)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     (entry,) = yearly(root)
     assert (entry.rows, entry.lost_days) == (24, [])
-    assert recovered(caplog, "2026-06") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(outcome, "2026-06") == [RecoveryNote.INDEX_REBUILT]
     assert ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-06") is None
 
 
 def test_a_month_file_its_entry_names_that_is_gone_costs_its_year_that_month_s_days(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path
 ) -> None:
     """THE ORACLE for a packed month file that is gone when its year closes: no file to set aside."""
     root = a_finished_year(tmp_path)
     month_file(root, "2026-06").unlink()
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, TODAY, **PACKS)
+    outcome = compact(root, TODAY, **PACKS)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     (entry,) = yearly(root)
     assert (entry.rows, entry.set_aside) == (22, 0)
     assert entry.lost_days == days("2026-06-01", "2026-06-30")
-    assert recovered(caplog, "2026-06") == [f"note={RecoveryNote.RECORDED_LOST}"]
+    assert recovered(outcome, "2026-06") == [RecoveryNote.RECORDED_LOST]
 
 
 def test_a_month_file_that_cannot_be_read_is_set_aside_and_its_year_counts_every_file(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path
 ) -> None:
     """June's file moves under set-aside, its days are lost, and the year adds March's count to it."""
     root = a_finished_year(tmp_path)
@@ -722,8 +720,7 @@ def test_a_month_file_that_cannot_be_read_is_set_aside_and_its_year_counts_every
         ],
     )
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, TODAY, **PACKS)
+    outcome = compact(root, TODAY, **PACKS)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     (entry,) = yearly(root)
@@ -732,15 +729,15 @@ def test_a_month_file_that_cannot_be_read_is_set_aside_and_its_year_counts_every
     moved = state(root) / "raw/visual-prunes/set-aside/compact/visual-prunes/monthly/2026/06.parquet"
     assert moved.read_bytes() == b"not a ledger file\n"
     assert not broken.exists()
-    assert recovered(caplog, "2026-06") == [
-        f"note={RecoveryNote.SET_ASIDE}",
-        f"note={RecoveryNote.RECORDED_LOST}",
+    assert recovered(outcome, "2026-06") == [
+        RecoveryNote.SET_ASIDE,
+        RecoveryNote.RECORDED_LOST,
     ]
 
 
 @pytest.mark.parametrize("months_kept", [True, False], ids=["months-kept", "months-gone"])
 def test_a_year_file_no_entry_names_is_adopted_before_any_month_is_read_or_called_lost(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, months_kept: bool
+    tmp_path: Path, months_kept: bool
 ) -> None:
     """A year file holds exactly its months' rows, so it is adopted first and never written over.
 
@@ -768,14 +765,13 @@ def test_a_year_file_no_entry_names_is_adopted_before_any_month_is_read_or_calle
         for month in MONTHS_OF_2026:
             month_file(root, month).unlink()
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, TODAY, **PACKS)
+    outcome = compact(root, TODAY, **PACKS)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     assert yearly(root) == [CompactEntry(covers="2026", rows=24, bytes=len(before))]
     assert own.read_bytes() == before
-    assert recovered(caplog, "2026") == [f"note={RecoveryNote.INDEX_REBUILT}"]
-    assert recovered(caplog, "2026-06") == []
+    assert recovered(outcome, "2026") == [RecoveryNote.INDEX_REBUILT]
+    assert recovered(outcome, "2026-06") == []
     gone = [ledger.compact_file(state(root), VISUALS, Period.MONTHLY, m) for m in MONTHS_OF_2026]
     assert gone == [None] * len(MONTHS_OF_2026)
     assert covers(root, Period.MONTHLY) == ["2027-01"]
@@ -793,6 +789,10 @@ def test_a_year_file_over_github_s_large_file_line_is_refused_and_its_months_kep
     with caplog.at_level(logging.ERROR):
         outcome = compact(root, TODAY, **PACKS)
 
-    assert (outcome.stopped_because, outcome.resume_from) == (StopReason.FAILED, "2026")
+    assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
+        StopReason.FAILED,
+        "2026",
+        GardenerFault.RAISED,
+    )
     assert "over GitHub's large-file line of 1000" in caplog.text
     assert files_under(root) == before

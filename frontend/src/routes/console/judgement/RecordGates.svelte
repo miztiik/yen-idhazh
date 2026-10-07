@@ -22,6 +22,7 @@
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { grouped } from '$lib/charts/series';
 	import { countedDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
+	import { countDays } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -192,7 +193,7 @@
 			{/if}
 			{#if fitted > 0}
 				<span data-counted-fitted={fitted}
-					>A line was fitted on {fitted} of these {windowDays} days.</span
+					>A line was fitted on {fitted} of {countDays(windowDays)}.</span
 				>
 			{/if}
 		</p>

@@ -1,10 +1,12 @@
-"""Does the report of a pass tell a dry run from a live one?
+"""Does the report of a pass tell a dry run from a live one, and say why a pass stopped?
 
 A dry run deletes nothing, so no line it prints may say a member is gone, and
 the switch it names has to exist. The gardener takes no `--no-dry-run`: a task
 runs live when its own declaration says `dry_run: false`, so that is the
-setting a dry run names. A live pass that failed part way still says the
-members above are gone, because they are.
+setting a dry run names. A live pass that stopped part way still says the
+members above are gone, because they are. A pass that stopped for a fault says
+which, in a sentence rendered from the word, and each fault it recorded instead
+of stopping is a line of its own.
 
 Every pass here is a real `Pass`, built whole the way a task hands one to the
 runner. The report reads nothing else, so nothing else is built.
@@ -14,8 +16,10 @@ from __future__ import annotations
 
 import pytest
 
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import Recovery, StopReason
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.gardener import report
+from idhazh.gardener.closed_day_fold import Folded
 from idhazh.gardener.one_at_a_time import Pass
 
 pytestmark = pytest.mark.contract
@@ -34,7 +38,14 @@ STOPS = (
     pytest.param(StopReason.EXHAUSTED, None, id="exhausted"),
     pytest.param(StopReason.FAILED, None, id="failed-before-naming-a-member"),
     pytest.param(StopReason.FAILED, NEXT, id="failed-at-a-member"),
+    pytest.param(StopReason.DEFERRED, NEXT, id="deferred-at-a-member"),
 )
+
+#: The fault each stop that has one carries, unless a case names another.
+NATURAL_FAULT = {
+    StopReason.FAILED: GardenerFault.RAISED,
+    StopReason.DEFERRED: GardenerFault.API_UNAVAILABLE,
+}
 
 
 def a_pass(
@@ -44,13 +55,14 @@ def a_pass(
     resume_from: str | None,
     taken: tuple[str, ...] = TAKEN,
     handled_through: str | None = None,
+    recovered: tuple[Recovery, ...] = (),
 ) -> Pass:
     """A pass over workflow runs that took `taken` and stopped where it says.
 
     The counts agree with each other the way `one_at_a_time.take` keeps them: a
     member the pass stopped at was selected and not taken, and only a pass that
     hit its ceiling has one. `handled_through` is set on a pass that walked from
-    a mark.
+    a mark. A stop for a fault carries the fault that stop is made of.
     """
     return Pass(
         collection="workflow-runs",
@@ -66,6 +78,8 @@ def a_pass(
         stopped_because=stopped_because,
         resume_from=resume_from,
         handled_through=handled_through,
+        fault=NATURAL_FAULT.get(stopped_because),
+        recovered=recovered,
     )
 
 
@@ -151,11 +165,75 @@ def test_a_live_walk_its_ceiling_stopped_says_it_stopped_there() -> None:
 def test_a_live_pass_that_failed_part_way_still_says_the_members_are_gone(
     resume_from: str | None, then: str
 ) -> None:
-    """The members above it were deleted, so the line says so, and where the next pass starts."""
+    """The members above it were deleted, so the line says so, where the next pass starts, and why."""
     said = report.lines(
         a_pass(dry_run=False, stopped_because=StopReason.FAILED, resume_from=resume_from)
     )
 
-    assert said[-1].endswith(f"the members above are gone, and {then}")
+    assert said[-2].endswith(f"the members above are gone, and {then}")
+    assert said[-1] == f"  raised: {report.WHY[GardenerFault.RAISED]}"
     assert not any("nothing was deleted" in line for line in said)
     assert not any(SETTING in line for line in said), "a live pass named the dry-run setting"
+
+
+def test_a_deferred_pass_says_where_it_stopped_and_why_and_never_that_it_is_exhausted() -> None:
+    """GitHub did not answer: the members before it are gone, and the next wake retries it."""
+    said = report.lines(a_pass(dry_run=False, stopped_because=StopReason.DEFERRED, resume_from=NEXT))
+
+    assert said[-2] == (
+        f"  the pass was deferred at {NEXT} - the members above are gone, and the next pass "
+        "retries that one"
+    )
+    assert said[-1] == "  api-unavailable: GitHub's API did not answer, so the next wake asks again"
+    assert not any("exhausted" in line for line in said)
+
+
+def test_each_fault_the_pass_recorded_is_a_line_naming_its_member_or_period() -> None:
+    """A note is said after why the pass ended, which it does not change."""
+    noted = (
+        Recovery(note=RecoveryNote.NOT_DELETABLE, subject=TAKEN[1]),
+        Recovery(note=RecoveryNote.SET_ASIDE, subject="2026-09-21"),
+    )
+    said = report.lines(
+        a_pass(
+            dry_run=False, stopped_because=StopReason.EXHAUSTED, resume_from=None, recovered=noted
+        )
+    )
+
+    assert said[-3] == "  the collection is exhausted: nothing else is inside the window"
+    assert said[-2:] == [
+        f"  not-deletable {TAKEN[1]}: GitHub would not delete it, so the pass went on",
+        "  set-aside 2026-09-21: a file it could not read moved to the set-aside folder",
+    ]
+
+
+def test_every_word_a_record_can_hold_has_a_sentence_a_person_reads() -> None:
+    """A word with no sentence would print a blank where the reason belongs."""
+    assert set(report.WHY) == set(GardenerFault)
+    assert set(report.NOTED) == set(RecoveryNote)
+
+
+@pytest.mark.parametrize(
+    ("folded", "ended"),
+    [
+        pytest.param(None, (StopReason.EXHAUSTED, None), id="no-fold"),
+        pytest.param(Folded(dry_run=False), (StopReason.EXHAUSTED, None), id="a-fold-that-finished"),
+        pytest.param(
+            Folded(dry_run=False, fault=GardenerFault.RAISED),
+            (StopReason.FAILED, GardenerFault.RAISED),
+            id="a-fold-a-defect-stopped",
+        ),
+        pytest.param(
+            Folded(dry_run=False, fault=GardenerFault.API_UNAVAILABLE),
+            (StopReason.DEFERRED, GardenerFault.API_UNAVAILABLE),
+            id="a-fold-an-outage-stopped",
+        ),
+    ],
+)
+def test_a_task_ends_as_its_fold_ends_when_the_fold_stopped(
+    folded: Folded | None, ended: tuple[StopReason, GardenerFault | None]
+) -> None:
+    """The window finished, so the task's row says what the fold met, defect or outage."""
+    window = a_pass(dry_run=False, stopped_because=StopReason.EXHAUSTED, resume_from=None)
+
+    assert report.ended(window, folded) == ended

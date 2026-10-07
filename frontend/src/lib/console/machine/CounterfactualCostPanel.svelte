@@ -20,6 +20,7 @@
 		DEFAULT_COST_SHAPE,
 		type CostShape
 	} from '$lib/charts/cost';
+	import { nameSpan, openWithSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -84,12 +85,15 @@
 		heading="h3"
 		id="counterfactual-cost"
 		title="What this would have cost somewhere else"
-		note="A counterfactual and never a bill: nothing bills us, so the wall clock alone cannot say whether the runner time was a good trade - four figures and one column a day, over the last {windowDays} days."
+		note="A counterfactual and never a bill: nothing bills us, so the wall clock alone cannot say whether the runner time was a good trade - {windowDays ===
+		1
+			? `four figures and one column for ${nameSpan(windowDays)}`
+			: `four figures and one column a day, over ${nameSpan(windowDays)}`}."
 		tone="info"
 	>
 		{#if runs.length === 0}
 			<p class="empty" data-machine-panel-empty="cost">
-				No run in these {days} days recorded a token count, so there is nothing to price.
+				No run in {nameSpan(days)} recorded a token count, so there is nothing to price.
 			</p>
 		{:else}
 			<RateControl {configured} bind:inputRate bind:outputRate bind:source={rateSource} />
@@ -104,7 +108,7 @@
 					<dd class="tabular-nums">{money(outputCost, rate.currency, 2)}</dd>
 				</div>
 				<div data-cost="total">
-					<dt>These {days} days</dt>
+					<dt>{openWithSpan(days)}</dt>
 					<dd class="tabular-nums">{money(totalCost, rate.currency, 2)}</dd>
 				</div>
 				<div data-cost="per-article">
@@ -136,7 +140,7 @@
 
 				{#if costShapes.days.length === 0}
 					<p class="empty" data-cost-absent="days">
-						No run in these {days} days carries a date, so there is nothing to lay on a
+						No run in {nameSpan(days)} carries a date, so there is nothing to lay on a
 						time axis. The four figures above still hold.
 					</p>
 				{:else}
