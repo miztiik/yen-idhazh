@@ -816,26 +816,17 @@
 									<!-- The dwell is the AREA, not a number in a chip. It underlines
 									     exactly the contiguous under-the-mark squares at the newest
 									     end, so the run length is read off the picture. -->
-									{#if row.daysUnder > 0}
+									{#if row.dwellFrom !== null}
 										<span
 											class="yield-dwell"
 											data-retiring-dwell-rule
-											style="grid-column: {strip.dates.length -
-												row.daysUnder +
-												1} / -1"
+											style="grid-column: {row.dwellFrom} / -1"
 										></span>
 									{/if}
 								</div>
 							{/if}
 
-							<p class="feed-result" data-retiring-readout>
-								{row.publications} published of {row.opportunities} offered, over {strip.completeDates}
-								complete {strip.completeDates === 1 ? 'day' : 'days'}.{#if row.daysUnder > 0}
-									Under the mark for {row.daysUnder}
-									{row.daysUnder === 1 ? 'day' : 'days'} running - {row.daysUnder} of {strip.dwellDays}.{#if row.retiresOn && !row.retired}
-										Retires on {row.retiresOn} if it stays there.{/if}
-								{/if}
-							</p>
+							<p class="feed-result" data-retiring-readout>{row.readout}</p>
 						</li>
 					{/each}
 				</ol>
@@ -936,10 +927,7 @@
 										{/each}
 									</div>
 								{/if}
-								<p class="feed-result" data-retiring-readout>
-									Decided {row.decisions} of the {row.opportunities}
-									{row.opportunities === 1 ? 'address' : 'addresses'} it was offered.
-								</p>
+								<p class="feed-result" data-retiring-readout>{row.readout}</p>
 							</li>
 						{/each}
 					</ol>

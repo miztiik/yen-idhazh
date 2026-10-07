@@ -103,6 +103,31 @@ export function targetMarks(
 	};
 }
 
+/** The bar for a share that is already bounded at 1.0.
+ *
+ * `targetMarks` sizes its own track to `max(value, target) * 1.15`, which is
+ * right for a measure with no ceiling - a failure count has no natural full -
+ * and wrong here. This factor cannot exceed 1.0, so the track IS 1.0: a full
+ * bar means a feed the ranker did not discount, and two feeds' bars can be read
+ * against each other because they are drawn to the same scale. An auto-sized
+ * track would give a feed at 1.0 and a feed at 0.5 the same 87 percent fill.
+ *
+ * The band and the sense come from `targetGeometry` rather than from a second
+ * rule written here, so the colour a bar takes and the colour a delta on the
+ * same figure takes cannot disagree.
+ */
+export function shareMarks(factor: number, floor: number): TargetMarks {
+	const geometry = targetGeometry(factor, floor, 'higher-is-better');
+	return {
+		...geometry,
+		track: 1,
+		valueFraction: factor,
+		markerFraction: floor,
+		valuePercent: percentOf(factor),
+		markerPercent: percentOf(floor)
+	};
+}
+
 export function targetBar(
 	value: number | null,
 	target: number,
