@@ -55,6 +55,7 @@ for (const view of [
 }
 
 for (const view of [
+	{ width: 1024, height: 768 },
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
@@ -74,12 +75,29 @@ for (const view of [
 	});
 }
 
+for (const view of [
+	{ width: 1024, height: 768 },
+	{ width: 1440, height: 900 },
+	{ width: 1920, height: 1080 }
+] as const) {
+	test(`rails and status reach the result region at ${view.width} x ${view.height}`, async ({ page }) => {
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		const at = await measure(page, ['ledgers', 'columns', 'status', 'answer']);
+		const top = at.regions.answer.top;
+		expect(at.regions.ledgers.bottom, 'ledger rail bottom').toBeCloseTo(top, 0);
+		expect(at.regions.columns.bottom, 'column rail bottom').toBeCloseTo(top, 0);
+		expect(at.regions.status.bottom, 'status bottom').toBeCloseTo(top, 0);
+	});
+}
+
 /** A question whose answer has `count` columns; the column rail still lists the selected ledger's own columns. */
 function prefixedColumns(count: number): string {
 	return `SELECT ${Array.from({ length: count }, (_, index) => `${index + 1} AS "published.c${String(index + 1).padStart(2, '0')}"`).join(', ')}`;
 }
 
 for (const view of [
+	{ width: 1024, height: 768 },
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
@@ -94,9 +112,27 @@ for (const view of [
 		await expect(page.locator('[data-explorer-columns] li code')).toHaveText(['published.covers', 'published.date', 'published.n']);
 		const at = await page.evaluate(() => {
 			const root = document.documentElement;
-			return { scrollHeight: root.scrollHeight };
+			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
+			const heading = document.querySelector<HTMLElement>('[data-explorer-columns] h3');
+			const box = document.querySelector<HTMLElement>('[data-explorer-column-box]');
+			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, 5);
+			if (rail === null || heading === null || box === null) throw new Error('column rail parts missing');
+			const railBox = rail.getBoundingClientRect();
+			const headingBox = heading.getBoundingClientRect();
+			const columnBox = box.getBoundingClientRect();
+			const inside = (inner: DOMRect, outer: DOMRect) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5;
+			const rowHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--workbench-row')) * parseFloat(getComputedStyle(document.documentElement).fontSize);
+			return {
+				scrollHeight: root.scrollHeight,
+				headingInside: inside(headingBox, railBox),
+				columnBoxRows: columnBox.height / rowHeight,
+				firstFiveInside: rows.length === 5 && rows.every((row) => inside(row.getBoundingClientRect(), columnBox))
+			};
 		});
 		expect(at.scrollHeight, 'the wide answer stretched the page').toBe(view.height);
+		expect(at.headingInside, 'the column rail heading is cut').toBe(true);
+		expect(at.columnBoxRows, 'the column box is shorter than five rows').toBeGreaterThanOrEqual(5);
+		expect(at.firstFiveInside, 'the first five column rows are not visible inside the scroll box').toBe(true);
 	});
 }
 
@@ -113,17 +149,26 @@ for (const view of [
 			const root = document.documentElement;
 			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
 			const list = document.querySelector<HTMLElement>('[data-explorer-columns]');
+			const box = document.querySelector<HTMLElement>('[data-explorer-column-box]');
+			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, 5);
+			const boxRect = box?.getBoundingClientRect();
+			const inside = (node: HTMLElement) => {
+				const rect = node.getBoundingClientRect();
+				return boxRect !== undefined && rect.left >= boxRect.left - 0.5 && rect.right <= boxRect.right + 0.5 && rect.top >= boxRect.top - 0.5 && rect.bottom <= boxRect.bottom + 0.5;
+			};
 			return {
 				columns: document.querySelectorAll('[data-explorer-columns] li code').length,
 				listScrolls: list !== null && list.scrollHeight > list.clientHeight,
 				pageScrollsSideways: root.scrollWidth > root.clientWidth,
-				railHeight: rail?.getBoundingClientRect().height ?? 0
+				railHeight: rail?.getBoundingClientRect().height ?? 0,
+				firstFiveInside: rows.length === 5 && rows.every(inside)
 			};
 		});
 		expect(reading.columns).toBe(128);
 		expect(reading.listScrolls, 'the column list did not scroll inside the rail').toBe(true);
 		expect(reading.pageScrollsSideways, 'the column list stretched the page').toBe(false);
 		expect(reading.railHeight, 'the column rail collapsed').toBeGreaterThan(0);
+		expect(reading.firstFiveInside, 'the first five column rows are not visible inside the scroll box').toBe(true);
 	});
 }
 
@@ -145,6 +190,21 @@ test('a selected ledger named in the link opens inside the visible ledger list, 
 	});
 	expect(reading.pageY).toBe(0);
 	expect(reading.inView, `published was not visible after list scrollTop ${reading.scrollTop}`).toBe(true);
+	const jumped = await page.evaluate(() => {
+		const list = document.querySelector<HTMLElement>('[data-workbench-region="ledgers"] .ledger-options');
+		if (list === null) throw new Error('ledger list missing');
+		list.scrollTop = Math.floor(list.scrollHeight / 2);
+		const before = list.scrollTop;
+		const candidate = [...list.querySelectorAll<HTMLInputElement>('[data-ledger-name] input:not(:checked)')]
+			.find((input) => {
+				const row = input.closest<HTMLElement>('[data-ledger-name]');
+				return row !== null && row.getBoundingClientRect().top >= list.getBoundingClientRect().top;
+			});
+		if (candidate === undefined) throw new Error('no lower ledger to tick');
+		candidate.click();
+		return new Promise<{ before: number; after: number }>((resolve) => requestAnimationFrame(() => resolve({ before, after: list.scrollTop })));
+	});
+	expect(jumped.after, `ticking a second ledger moved the list from ${jumped.before} to ${jumped.after}`).toBe(jumped.before);
 });
 
 /** Eight questions saved in this browser, each with a name the test wrote, near the 40-character cap. */

@@ -434,8 +434,8 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		return body.match(/data-date-series-marks="data-explorer-shape"[\s\S]*?<path d="([^"]*)"/)?.[1] ?? '';
 	}
 
-	/** The words of the panel's main figure or no-chart box, as the page prints them. */
-	function printed(body: string, part: 'shape-note' | 'shape-lede' | 'shape-none'): string | undefined {
+	/** The words of the panel's main figure, footnote or no-chart box, as the page prints them. */
+	function printed(body: string, part: 'shape-foot' | 'shape-lede' | 'shape-none'): string | undefined {
 		return body.match(new RegExp(`class="${part}[^"]*"[^>]*>([^<]*)<`))?.[1];
 	}
 
@@ -538,7 +538,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		expect(body).toContain('data-readout-columns="3"');
 		expect(dateLine(body).match(/M/g)?.length, 'the line did not run through the three days unbroken').toBe(1);
 		expect(printed(body, 'shape-lede')).toBe('8 rows on 2026-08-19');
-		expect(printed(body, 'shape-note')).toBeUndefined();
+		expect(printed(body, 'shape-foot')).toBe('1 row holds null in the column "day", so the chart does not draw it. It is in the table.');
 
 		expect(printed(draw(columns, [
 			{ day: null, rows: '1' },
@@ -547,7 +547,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 			{ day: '2026-08-18', rows: '5' },
 			{ day: null, rows: '6' },
 			{ day: '2026-08-19', rows: '8' }
-		], 'dateSeries'), 'shape-note')).toBeUndefined();
+		], 'dateSeries'), 'shape-foot')).toBe('3 rows hold null in the column "day", so the chart does not draw them. They are in the table.');
 
 		expect(draw(columns, [
 			{ day: '2026-08-17', rows: '3' },
@@ -569,7 +569,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		const body = draw(columns, rows, 'dateSeries');
 		expect(body).toContain('data-readout-columns="5"');
 		expect(dateLine(body).match(/M/g)?.length, 'the line joined the days either side of the NULL number').toBe(2);
-		expect(printed(body, 'shape-note')).toBeUndefined();
+		expect(printed(body, 'shape-foot')).toBe('1 row holds null in the column "day", so the chart does not draw it. It is in the table.');
 		// The spread needs no day, so it draws the row with no day, and the NULL number is still no reading.
 		expect(chooseExplorerShapes(columns, rows, bounds)).toMatchObject([{ type: 'dateSeries', days: 5, rowsWithNoDay: 1 }, { type: 'distribution', readings: 5 }]);
 	});

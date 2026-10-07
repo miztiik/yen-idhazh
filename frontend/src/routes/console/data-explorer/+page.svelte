@@ -1012,7 +1012,14 @@
 		}
 
 		.question-panel {
-			grid-template-rows: auto auto 1fr;
+			block-size: 100%;
+			grid-template-rows: auto minmax(0, 1fr);
+		}
+
+		[data-workbench-region='ledgers'] > :global(.ledger-list),
+		[data-workbench-region='columns'] > :global(.column-list) {
+			block-size: 100%;
+			min-block-size: 0;
 		}
 
 		.editor-stack {
@@ -1101,8 +1108,19 @@
 			inline-size: 100%;
 			flex-basis: 100%;
 		}
+		.question-links {
+			flex-wrap: nowrap;
+		}
+		:global([data-workbench-region='questions'] .question-strip summary),
+		:global([data-workbench-region='questions'] .history-list summary),
+		.how-to {
+			block-size: var(--workbench-control);
+			white-space: nowrap;
+		}
+		:global([data-workbench-region='questions'] .question-strip summary),
 		.how-to {
 			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 		.date-fields {
 			display: grid;

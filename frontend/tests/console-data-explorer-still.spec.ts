@@ -239,8 +239,7 @@ test('M8: editor head, questions and narrow rails keep their density heights', a
 		const oneControlRow = sizes.control + 2 * sizes.space1;
 		expect(await page.locator('[data-workbench-region="editor"] .editor-head').evaluate((node) => node.getBoundingClientRect().height), `${view.width} editor head`).toBeGreaterThanOrEqual(oneControlRow - 1);
 		if (view.width < 640) {
-			expect(sizes.regions.questions, `${view.width} questions lower bound`).toBeGreaterThanOrEqual(oneControlRow - 1);
-			expect(sizes.regions.questions, `${view.width} questions upper bound`).toBeLessThanOrEqual(2 * oneControlRow + sizes.space2);
+			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(2 * sizes.control + sizes.space1, 0);
 		} else {
 			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(oneControlRow, 0);
 		}
@@ -595,6 +594,10 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 					const style = getComputedStyle(node);
 					return style.overflowX !== 'visible' || style.overflowY !== 'visible';
 				};
+				const scrolls = (node: HTMLElement) => {
+					const style = getComputedStyle(node);
+					return style.overflowX === 'auto' || style.overflowX === 'scroll' || style.overflowY === 'auto' || style.overflowY === 'scroll';
+				};
 				const visible = (node: HTMLElement) => {
 					const rect = node.getBoundingClientRect();
 					return rect.width > 0 && rect.height > 0 && node.checkVisibility() && getComputedStyle(node).visibility !== 'hidden';
@@ -602,14 +605,14 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 				const label = (node: HTMLElement) => `${node.tagName.toLowerCase()} "${(node.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 50)}"`;
 				const fitsInside = (inner: DOMRect, outer: DOMRect, bothAxes: boolean) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && (!bothAxes || (inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5));
 				const intersects = (inner: DOMRect, outer: DOMRect) => inner.right > outer.left && inner.left < outer.right && inner.bottom > outer.top && inner.top < outer.bottom;
-				const isDrawnInsideOverflowAncestors = (control: HTMLElement, rect: DOMRect, bothAxes: boolean) => {
+				const canScrollIntoView = (control: HTMLElement, rect: DOMRect, bothAxes: boolean) => {
 					for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
 						if (!visible(ancestor) || !overflows(ancestor)) continue;
 						const ancestorBox = ancestor.getBoundingClientRect();
-						if (bothAxes && !intersects(rect, ancestorBox)) return false;
-						if (!bothAxes && (rect.right <= ancestorBox.left || rect.left >= ancestorBox.right)) return false;
+						if (fitsInside(rect, ancestorBox, bothAxes)) continue;
+						return scrolls(ancestor) && (bothAxes ? !intersects(rect, ancestorBox) : rect.right <= ancestorBox.left || rect.left >= ancestorBox.right || rect.bottom <= ancestorBox.top || rect.top >= ancestorBox.bottom);
 					}
-					return true;
+					return false;
 				};
 				for (const name of [...whole, ...sideways]) {
 					const region = document.querySelector<HTMLElement>(`[data-workbench-region="${name}"]`);
@@ -618,8 +621,7 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 						continue;
 					}
 					const both = whole.includes(name);
-					const regionClips = overflows(region);
-					if (both && regionClips && region.scrollHeight > region.clientHeight + 0.5) {
+					if (both && region.scrollHeight > region.clientHeight + 0.5) {
 						offenders.push(`${name}: ${region.scrollHeight - region.clientHeight}px of content is hidden`);
 					}
 					const box = region.getBoundingClientRect();
@@ -627,10 +629,10 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 						const rect = control.getBoundingClientRect();
 						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
 						if (!visible(control)) continue;
-						if (!isDrawnInsideOverflowAncestors(control, rect, both)) continue;
+						if (canScrollIntoView(control, rect, both)) continue;
 						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
 						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
-						if (!across || (both && regionClips && !down)) {
+						if (!across || (both && !down)) {
 							offenders.push(`${name}: ${label(control)} at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${Math.round(box.left)},${Math.round(box.top)}-${Math.round(box.right)},${Math.round(box.bottom)}`);
 						}
 						if ((control.matches('button, a[href], summary') || control.classList.contains('example')) && control.scrollWidth > control.clientWidth + 1) {

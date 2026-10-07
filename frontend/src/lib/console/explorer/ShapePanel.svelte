@@ -24,6 +24,7 @@
 	const shapes = $derived(chooseExplorerShapes(columns, rows, bounds));
 	const choices = $derived(shapes.filter((shape) => shape.kind === 'chart'));
 	const active = $derived(choices.find((shape) => shape.type === selectedType) ?? shapes[0]);
+	const footnote = $derived(footnoteFor(active));
 	const chartTokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 
 	function text(row: Row, column: string): string {
@@ -81,6 +82,17 @@
 		return { subject: next.valueColumn, facts: [{ label: 'middle', value: String(values[Math.floor(values.length / 2)]) }] };
 	}
 
+	/** The rows a date chart does not draw because their day is NULL, which the table prints as `null`. */
+	function rowsWithNoDaySentence(count: number, dateColumn: string): string {
+		return count === 1
+			? `1 row holds null in the column "${dateColumn}", so the chart does not draw it. It is in the table.`
+			: `${count} rows hold null in the column "${dateColumn}", so the chart does not draw them. They are in the table.`;
+	}
+
+	function footnoteFor(next: ExplorerShape): string {
+		return next.kind !== 'none' && next.type === 'dateSeries' && next.rowsWithNoDay > 0 ? rowsWithNoDaySentence(next.rowsWithNoDay, next.dateColumn) : '';
+	}
+
 	onMount(() => {
 		if (drawing === null) return;
 		const sync = () => {
@@ -129,6 +141,7 @@
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{/if}
 		</div>
+		{#if footnote}<p class="shape-foot" data-shape-foot>{footnote}</p>{/if}
 	{/if}
 </div>
 
@@ -153,6 +166,11 @@
 		color: var(--color-text);
 		font-size: var(--text-xl);
 		font-weight: 700;
+	}
+
+	.shape-foot {
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 	}
 
 	.shape-none,

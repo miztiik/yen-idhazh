@@ -19,18 +19,21 @@
 	} = $props();
 	const shown = $derived(ledgers.filter((ledger) => ledger.name.includes(filter.toLowerCase())));
 	let options = $state<HTMLDivElement | null>(null);
+	let initialSelectionShown = $state(false);
 
 	$effect(() => {
 		selected;
 		shown;
+		if (initialSelectionShown || selected.length === 0) return;
 		void tick().then(() => {
-			if (options === null) return;
+			if (options === null || initialSelectionShown) return;
 			const chosen = options.querySelector<HTMLElement>('[data-chosen="yes"]');
 			if (chosen === null) return;
 			const box = options.getBoundingClientRect();
 			const rect = chosen.getBoundingClientRect();
 			if (rect.top < box.top) options.scrollTop -= box.top - rect.top;
 			else if (rect.bottom > box.bottom) options.scrollTop += rect.bottom - box.bottom;
+			initialSelectionShown = true;
 		});
 	});
 </script>
