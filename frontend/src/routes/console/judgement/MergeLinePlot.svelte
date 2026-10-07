@@ -39,7 +39,7 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
-	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { daysBetween, windowOfDays, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import { dayMonth } from '$lib/format';
@@ -59,15 +59,22 @@
 	}: {
 		/** Every day the record fitted a row for, oldest first. */
 		days: LineDay[];
-		/** The band and the daily step, off `config/idhazh.json`. */
-		knobs: { band_low: number; band_high: number };
+		/** The band, and the switch and lookback a build reads a fitted line with,
+		 * off `config/idhazh.json`. */
+		knobs: {
+			band_low: number;
+			band_high: number;
+			enabled: boolean;
+			applied_lookback_days: number;
+		};
 		viewport: TimeWindow;
 		height: number;
 		width: number;
 		tickDensity: number;
 		readoutMaxShare: number;
-		/** The committed floor. What the newest day was built with when no fit has
-		 * ever run, so state K1 draws a rule rather than an empty box. */
+		/** The committed floor. What a build groups at while the switch is off, or
+		 * when no fit applied a line in its lookback, so state K1 draws a rule
+		 * rather than an empty box. */
 		configuredLine: number;
 		/** The lowest and highest score among the pairs a person marked as two
 		 * different stories, and how many there are. Null where nobody has marked
@@ -105,6 +112,21 @@
 	/** Which day the dashed rule is the line of, in words. At one day that day is
 	 * the whole window, so it is named as the window, not as the newest of several. */
 	const ruleDay = $derived(windowDays === 1 ? nameSpan(windowDays) : 'the newest day');
+	/** The line the window's last day was built with: where the dashed rule goes
+	 * when no fitted day is in the window. A build's own rule, `applied_line()` in
+	 * `backend/idhazh/similarity/applied.py`: with the switch on, the newest line a
+	 * fit applied on its own day or in the lookback before it, skipping a held day,
+	 * whose line was inherited rather than fitted; otherwise the committed floor.
+	 * It reads the newest run of each date, the run this panel draws. */
+	const ruleLine = $derived.by(() => {
+		if (!knobs.enabled) return configuredLine;
+		// The days a build reads end on its own day, wherever the console anchors it.
+		const read = windowOfDays(viewport.end, knobs.applied_lookback_days + 1, 'right');
+		const fitted = days.findLast(
+			(day) => day.heldReason === 'none' && day.date >= read.start && day.date <= read.end
+		);
+		return fitted?.applied ?? configuredLine;
+	});
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	/** `zero: false` and `nice: false`, and both are load-bearing. Anchoring at
@@ -216,7 +238,7 @@
 
 <Panel
 	title="Where the merge line sits"
-	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. The shaded band at each day is as far as the line was allowed to fall in one day.${holdoutZone === null || markedApart === null ? '' : ` The tinted strip across the plot is where the ${markedApart.count} pairs a person marked as two stories sit: they score ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}, the strip is the part of that inside this plot, and a line inside it merges one of them.`}`}
+	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. ${windowDays === 1 ? 'The shaded band is as far as the line was allowed to fall that day.' : 'The shaded band at each day is as far as the line was allowed to fall in one day.'}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip across the plot is where the ${markedApart.count} pairs a person marked as two stories sit: they score ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}, the strip is the part of that inside this plot, and a line inside it merges one of them.`}`}
 >
 	<div
 		data-windowed="merge-line"
@@ -237,7 +259,9 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label="The merge line a day, on the whole range a fitted line may take"
+				aria-label={windowDays === 1
+					? `The merge line for ${nameSpan(windowDays)}, on the whole range a fitted line may take`
+					: 'The merge line a day, on the whole range a fitted line may take'}
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
@@ -306,15 +330,15 @@
 					<line
 						x1={box.left}
 						x2={box.right}
-						y1={yAxis.scale(configuredLine)}
-						y2={yAxis.scale(configuredLine)}
+						y1={yAxis.scale(ruleLine)}
+						y2={yAxis.scale(ruleLine)}
 						stroke="var(--color-text-tertiary)"
 						stroke-dasharray="4 4"
-						data-line-rule={reads(configuredLine)}
+						data-line-rule={reads(ruleLine)}
 					/>
 					<text
 						x={box.left + 8}
-						y={yAxis.scale(configuredLine) - 8}
+						y={yAxis.scale(ruleLine) - 8}
 						fill="var(--color-text-tertiary)"
 						font-size="12"
 						data-line-rule-label

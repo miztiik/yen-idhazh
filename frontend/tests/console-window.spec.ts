@@ -12,7 +12,12 @@ import {
 	stepPreset,
 	windowOfDays
 } from '../src/lib/charts/viewport';
+import { readoutOf, type Readout } from '../src/lib/charts/readout';
+import type { DiskReadDay, DiskReads } from '../src/lib/console/machine/disk-reads';
+import { memoryHeld } from '../src/lib/console/machine/memory-held';
 import type { JudgeDay, LineDay } from '../src/lib/console/merge-line';
+import { shortDate } from '../src/lib/format';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -419,6 +424,10 @@ function lineDay(date: string): LineDay {
 	};
 }
 
+/** The band, the switch and the lookback the route hands the merge line. The
+ * switch is off unless a case turns it on. */
+const LINE_KNOBS = { band_low: 0.88, band_high: 1, enabled: false, applied_lookback_days: 7 };
+
 /** One panel in one state at one window, and every word it owes about its days. */
 type SpanCase =
 	| {
@@ -662,7 +671,7 @@ function propsOf(one: SpanCase): Record<string, unknown> {
 		case 'merge-line':
 			return {
 				days: one.days,
-				knobs: { band_low: 0.88, band_high: 1 },
+				knobs: LINE_KNOBS,
 				configuredLine: 0.94,
 				markedApart: null,
 				viewport,
@@ -677,6 +686,41 @@ async function said(page: Page, selector: string): Promise<string> {
 	await expect(node, `nothing on the panel matches ${selector}`).toHaveCount(1);
 	return ((await node.textContent()) ?? '').replace(/\s+/g, ' ').trim();
 }
+
+/** A day a fit applied `line` on, or a held day that kept `line`. */
+function appliedOn(date: string, line: number, heldReason = 'none'): LineDay {
+	return { ...lineDay(date), proposed: heldReason === 'none' ? line : null, applied: line, heldReason };
+}
+
+/** With no fitted day in its window, where the merge line draws its rule. Each
+ * case is the 1-day window on 15 Jun 2030 with a lookback of 7 days, so that
+ * day's build read the lines of 8 to 15 Jun. The committed floor is 0.94. */
+const RULE_CASES: { state: string; enabled: boolean; days: LineDay[]; rule: string }[] = [
+	{
+		state: 'the switch is on and a line was fitted 3 days before',
+		enabled: true,
+		days: [appliedOn('2030-06-12', 0.937)],
+		rule: '0.937'
+	},
+	{
+		state: 'the switch is on and a line was fitted 7 days before, the first day the build read',
+		enabled: true,
+		days: [appliedOn('2030-06-08', 0.937)],
+		rule: '0.937'
+	},
+	{
+		state: 'the switch is on, the one fitted line is 8 days before, and the day inside the lookback was held',
+		enabled: true,
+		days: [appliedOn('2030-06-07', 0.937), appliedOn('2030-06-13', 0.951, 'judge_unstable')],
+		rule: '0.940'
+	},
+	{
+		state: 'the switch is off, though a line was fitted 3 days before',
+		enabled: false,
+		days: [appliedOn('2030-06-12', 0.937)],
+		rule: '0.940'
+	}
+];
 
 test.describe('the Judgement panels name their span in every state, on days the test builds', () => {
 	/** Each panel rendered on the server with its real children, never a stub. */
@@ -726,6 +770,728 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			}
 		});
 	}
+
+	for (const one of RULE_CASES) {
+		test(`THE ORACLE: merge-line draws its rule at the line its day was built with when ${one.state}`, async ({
+			page
+		}) => {
+			const props = {
+				days: one.days,
+				knobs: { ...LINE_KNOBS, enabled: one.enabled },
+				configuredLine: 0.94,
+				markedApart: null,
+				viewport: windowOfDays(JUDGED_THROUGH, 1, 'right'),
+				...DRAWN_AT
+			};
+			await page.setContent(`<main>${drawn['merge-line'](props)}</main>`);
+
+			await expect(page.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', one.rule);
+			// Reader's words stand, and now name the line the rule is drawn at.
+			expect(await said(page, '[data-line-rule-label]')).toBe('The line this one day was built with');
+			expect(await said(page, '[data-line-state]')).toBe(
+				'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
+			);
+		});
+	}
+});
+
+/** A day strip's keys, where it holds more than one column. */
+const STEP_KEYS =
+	'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.';
+
+/** The keys the shared strip prints for a chart that names none of its own. */
+const DEFAULT_KEYS =
+	'Point at a column to read it. Left and Right step through them, Escape returns to the newest.';
+
+/** The days of a window that ends on the pinned day, oldest first. */
+function windowDates(preset: number): string[] {
+	return daysInWindow(windowOfDays(JUDGED_THROUGH, preset, 'right'));
+}
+
+/** A strip of one count a column, headed as the console heads a day. */
+function dayStrip(dates: readonly string[]): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: dates.map((date) => shortDate(date)),
+		series: [
+			{
+				label: 'Published',
+				swatch: null,
+				values: dates.map(() => 12),
+				format: (count: number) => String(count)
+			}
+		],
+		notMeasured: 'Nothing was published on this day',
+		resting: 'last'
+	});
+}
+
+/** One day of the disk-reads panel: counted, quiet, and its copies fell an eighth. */
+function diskDay(date: string): DiskReadDay {
+	return {
+		date,
+		reads: 0,
+		counted: 10,
+		excluded: 0,
+		copiesHigh: 4e9,
+		copiesLow: 3.5e9,
+		copiesFell: 0.125,
+		state: 'quiet'
+	};
+}
+
+/** The disk-reads panel's span, every day quiet. */
+function diskReads(days: DiskReadDay[]): DiskReads {
+	return {
+		days,
+		recorded: days.length,
+		fired: 0,
+		reads: 0,
+		worst: null,
+		pinning: { held: 0, loose: 0, silent: 0 }
+	};
+}
+
+const GIB = 1024 ** 3;
+
+/** One row of the item ledger carrying the machine's own reading, split by
+ * process where `split` says so, or carrying none at all. */
+function healthRow(date: string, reading: 'split' | 'whole' | 'none'): Record<string, string> {
+	const row: Record<string, string> = { date, item_id: `${date}-a` };
+	if (reading === 'none') return row;
+	row.os_mem_total_bytes = String(16 * GIB);
+	row.os_mem_available_bytes = String(6 * GIB);
+	if (reading === 'split') {
+		row.llama_rss_anon_bytes = String(4 * GIB);
+		row.python_rss_anon_bytes = String(GIB);
+	}
+	return row;
+}
+
+/** One run's tokens, priced at the rate below. */
+function runWork(date: string, input: number, output: number) {
+	return { runId: `${date}-1`, date, input, output, prefillMs: null, decodeMs: null, items: 40 };
+}
+
+/** What the cost panel is handed around its runs, as the Hardware route hands it. */
+function costProps(preset: number, runs: ReturnType<typeof runWork>[]): Record<string, unknown> {
+	return {
+		runs,
+		totals: {
+			input: runs.reduce((sum, run) => sum + run.input, 0),
+			output: runs.reduce((sum, run) => sum + run.output, 0),
+			items: runs.reduce((sum, run) => sum + run.items, 0)
+		},
+		configured: { currency: 'USD', inputPerMillion: 0.5, outputPerMillion: 1.5 },
+		svg: null,
+		grid: { left: 48, right: 12 },
+		chart: CHART,
+		windowDays: preset,
+		days: preset
+	};
+}
+
+/** One day of model speed: two runs, and the spread of their items. */
+function throughputDay(date: string) {
+	const spread = (median: number) => ({
+		min: median - 2,
+		p25: median - 1,
+		median,
+		p75: median + 1,
+		max: median + 2
+	});
+	return {
+		date,
+		items: 40,
+		read: spread(12.34),
+		write: spread(5.67),
+		readTps: 12.34,
+		writeTps: 5.67,
+		cacheHitPct: 38,
+		runs: [
+			{ runId: `${date}-1`, items: 20, read: 12, write: 5.5 },
+			{ runId: `${date}-2`, items: 20, read: 12.6, write: 5.8 }
+		],
+		model: 'model-a'
+	};
+}
+
+/** One run's per-item model time at the five percentiles the latency plots draw. */
+function latencyRun(date: string, run: number) {
+	return { runId: `${date}-${run}`, date, items: 120, ms: [1000, 1500, 2000, 2500, 4000] };
+}
+
+/** The chart knobs a Hardware panel reads, drawn at one size. */
+const CHART = { width_px: 760, height_px: 220, tick_density: 6, readout_max_share: 1 };
+
+/** The words of one attribute on the one node a selector names. */
+async function labelOf(page: Page, selector: string, name = 'aria-label'): Promise<string> {
+	const node = page.locator(selector);
+	await expect(node, `nothing on the panel matches ${selector}`).toHaveCount(1);
+	return (await node.getAttribute(name)) ?? '';
+}
+
+/** A strip's heading, and its hint line's words, or null where the line keeps
+ * its room blank. Every strip below prints one of the two, never both. */
+async function stripOf(page: Page, name: string): Promise<{ heading: string; hint: string | null }> {
+	const heading = await said(page, `[data-readout="${name}"] [data-readout-day]`);
+	const hints = await page.locator(`[data-readout-hint="${name}"]`).count();
+	const held = await page.locator(`[data-readout-hint-held="${name}"]`).count();
+	expect(hints + held, `the ${name} strip has no hint line, or two`).toBe(1);
+	return { heading, hint: hints === 0 ? null : await said(page, `[data-readout-hint="${name}"]`) };
+}
+
+test.describe('at one day no sentence needs a second day, on days the test builds', () => {
+	/** Each component rendered on the server with its real children, never a stub. */
+	const drawn = {} as Record<string, (props: Record<string, unknown>) => string>;
+	/** The strip's own styles, so the room it keeps can be measured. */
+	let stripStyles = '';
+
+	test.beforeAll(async ({}, testInfo) => {
+		// One directory a worker: a module rewritten while another worker imports
+		// it is read half-written.
+		const compiled = serverCompiler(
+			resolve(process.cwd(), 'test-results', 'one-day-words', String(testInfo.workerIndex))
+		);
+		// A compiled copy cannot follow a `.svelte` import or a relative one, so
+		// each points at its child's compiled copy, or at the module through `$lib`.
+		const rewrite: Rewrite[] = [
+			['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
+			['./ChartReadout.svelte', './ChartReadout.server.mjs'],
+			['../components/ChartReadout.svelte', './ChartReadout.server.mjs'],
+			['$lib/components/Panel.svelte', './Panel.server.mjs'],
+			['$lib/components/TargetBar.svelte', './TargetBar.server.mjs'],
+			['$lib/charts/Chart.svelte', './Chart.server.mjs'],
+			['$lib/components/RateControl.svelte', './RateControl.server.mjs'],
+			['$lib/components/ShapeSwitch.svelte', './ShapeSwitch.server.mjs'],
+			['./RankedList.svelte', './RankedList.server.mjs'],
+			['./Sparkline.svelte', './Sparkline.server.mjs'],
+			['./run-axis', '$lib/console/machine/run-axis'],
+			['./frame', '$lib/charts/frame'],
+			['./readout', '$lib/charts/readout'],
+			['./engine', '$lib/charts/engine']
+		];
+		const files = [
+			['src/lib/components/ChartReadout.svelte', 'ChartReadout'],
+			['src/lib/components/Panel.svelte', 'Panel'],
+			['src/lib/components/TargetBar.svelte', 'TargetBar'],
+			['src/lib/charts/Chart.svelte', 'Chart'],
+			['src/lib/components/RateControl.svelte', 'RateControl'],
+			['src/lib/components/ShapeSwitch.svelte', 'ShapeSwitch'],
+			['src/lib/components/RankedList.svelte', 'RankedList'],
+			['src/lib/components/Sparkline.svelte', 'Sparkline'],
+			['src/lib/console/machine/DiskReadsPanel.svelte', 'DiskReadsPanel'],
+			['src/lib/console/machine/TailTrendPanel.svelte', 'TailTrendPanel'],
+			['src/lib/console/machine/MemoryHeldPanel.svelte', 'MemoryHeldPanel'],
+			['src/lib/console/machine/CounterfactualCostPanel.svelte', 'CounterfactualCostPanel'],
+			['src/lib/components/ThroughputTrend.svelte', 'ThroughputTrend'],
+			['src/lib/components/FailureList.svelte', 'FailureList'],
+			['src/routes/console/judgement/MergedStoriesPanel.svelte', 'MergedStoriesPanel'],
+			['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement'],
+			['src/routes/console/judgement/MergeLinePlot.svelte', 'MergeLinePlot'],
+			['src/routes/console/judgement/RecordGates.svelte', 'RecordGates']
+		] as const;
+		// Every copy is written before any is imported, because a parent's
+		// import names its child's copy.
+		const modules: [string, string][] = [];
+		for (const [file, name] of files) modules.push([name, await compiled(file, name, rewrite)]);
+		for (const [name, module] of modules) {
+			const component = (await import(pathToFileURL(module).href)).default;
+			drawn[name] = (props) => render(component, { props }).body;
+		}
+		stripStyles = compiled.css.get('ChartReadout') ?? '';
+	});
+
+	/** One component, drawn from the props a case builds, on an empty page. */
+	async function draw(page: Page, name: string, props: Record<string, unknown>) {
+		await page.setContent(`<style>${stripStyles}</style><main>${drawn[name](props)}</main>`);
+	}
+
+	test('THE ORACLE: a strip of one column heads its day alone and keeps its hint line blank', async ({
+		page
+	}) => {
+		await draw(page, 'ChartReadout', {
+			readout: dayStrip([JUDGED_THROUGH]),
+			name: 'day',
+			maxShare: 1,
+			restingNote: ', the newest day',
+			hint: STEP_KEYS
+		});
+		expect(await said(page, '[data-readout="day"] [data-readout-day]')).toBe('15 Jun 2030');
+		await expect(page.locator('[data-readout-hint="day"]')).toHaveCount(0);
+		// Jony's ruling: the room stays, blank and unread, so no strip changes
+		// height with the window.
+		const held = page.locator('[data-readout-hint-held="day"]');
+		await expect(held).toHaveAttribute('aria-hidden', 'true');
+		await expect(held).toHaveCSS('visibility', 'hidden');
+		expect(((await held.textContent()) ?? '').trim(), 'the kept room carries words').toBe('');
+		expect((await held.boundingBox())?.height ?? 0, 'the kept room has no height').toBeGreaterThan(0);
+	});
+
+	test('a strip of seven columns rests on the newest and names its keys', async ({ page }) => {
+		await draw(page, 'ChartReadout', {
+			readout: dayStrip(windowDates(7)),
+			name: 'week',
+			maxShare: 1,
+			restingNote: ', the newest day',
+			hint: STEP_KEYS
+		});
+		expect(await stripOf(page, 'week')).toEqual({
+			heading: '15 Jun 2030, the newest day',
+			hint: STEP_KEYS
+		});
+	});
+
+	test('THE ORACLE: a strip of one column says only what it still offers, and a strip with no hint line grows none', async ({
+		page
+	}) => {
+		await draw(page, 'ChartReadout', {
+			readout: dayStrip([JUDGED_THROUGH]),
+			name: 'jobs',
+			maxShare: 1,
+			hint: STEP_KEYS,
+			hintOne: "Click or Enter lists this one day's jobs."
+		});
+		expect(await stripOf(page, 'jobs')).toEqual({
+			heading: '15 Jun 2030',
+			hint: "Click or Enter lists this one day's jobs."
+		});
+
+		await draw(page, 'ChartReadout', {
+			readout: dayStrip([JUDGED_THROUGH]),
+			name: 'card',
+			maxShare: 1,
+			hint: ''
+		});
+		await expect(page.locator('[data-readout-hint="card"], [data-readout-hint-held="card"]')).toHaveCount(0);
+	});
+
+	test('THE ORACLE: the disk-reads panel names one date and this one day, and no keys, at one day', async ({
+		page
+	}) => {
+		await draw(page, 'DiskReadsPanel', {
+			reads: diskReads([diskDay(JUDGED_THROUGH)]),
+			days: 1,
+			windowDays: 1,
+			readoutMaxShare: 1
+		});
+		expect(await said(page, '[data-disk-copies-track] + p')).toBe(
+			'How far the memory holding disk copies fell, 2030-06-15'
+		);
+		expect(await labelOf(page, '[data-windowed="machine-disk-reads"] [role="group"]')).toBe(
+			'Waits for the disk and disk copies, for this one day.'
+		);
+		expect(await labelOf(page, '[data-disk-read-track]')).toBe(
+			'Waits for the disk, one tile for this one day'
+		);
+		expect(await labelOf(page, '[data-disk-copies-track]')).toBe(
+			"How far the machine's disk copies fell, the same day"
+		);
+		expect(await stripOf(page, 'disk-reads')).toEqual({ heading: '15 Jun 2030', hint: null });
+	});
+
+	test('the disk-reads panel ranges over seven days and names its keys', async ({ page }) => {
+		await draw(page, 'DiskReadsPanel', {
+			reads: diskReads(windowDates(7).map(diskDay)),
+			days: 7,
+			windowDays: 7,
+			readoutMaxShare: 1
+		});
+		expect(await said(page, '[data-disk-copies-track] + p')).toBe(
+			'How far the memory holding disk copies fell, 2030-06-09 to 2030-06-15'
+		);
+		expect(await labelOf(page, '[data-windowed="machine-disk-reads"] [role="group"]')).toBe(
+			'Waits for the disk and disk copies, one day a column. Left and Right read a day, Escape returns to rest.'
+		);
+		expect(await labelOf(page, '[data-disk-read-track]')).toBe('Waits for the disk, one tile a day');
+		expect(await labelOf(page, '[data-disk-copies-track]')).toBe(
+			"How far the machine's disk copies fell, the same days"
+		);
+		expect(await stripOf(page, 'disk-reads')).toEqual({
+			heading: '15 Jun 2030, the newest day',
+			hint: 'Point at a day to read both tracks. Left and Right step through the days, Escape returns to the worst.'
+		});
+	});
+
+	/** The latency panel's props around its runs, at one window. */
+	function latencyProps(preset: number, rows: ReturnType<typeof latencyRun>[]): Record<string, unknown> {
+		const viewport = windowOfDays(JUDGED_THROUGH, preset, 'right');
+		return {
+			rows,
+			start: viewport.start,
+			end: viewport.end,
+			modelChanges: [],
+			moved: [],
+			chart: CHART,
+			windowDays: preset,
+			days: preset,
+			floor: 50,
+			tooFew: []
+		};
+	}
+
+	const LATENCY =
+		'Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run';
+
+	test('THE ORACLE: the latency plots name their one date once, with no count', async ({ page }) => {
+		await draw(
+			page,
+			'TailTrendPanel',
+			latencyProps(1, [latencyRun(JUDGED_THROUGH, 1), latencyRun(JUDGED_THROUGH, 2)])
+		);
+		expect(await labelOf(page, '[data-latency-runs]')).toBe(
+			`${LATENCY}, 15 Jun 2030. All five plots share one scale.`
+		);
+	});
+
+	test('the latency plots range over their dates and count seven days', async ({ page }) => {
+		await draw(page, 'TailTrendPanel', latencyProps(7, [latencyRun('2030-06-10', 1), latencyRun(JUDGED_THROUGH, 1)]));
+		expect(await labelOf(page, '[data-latency-runs]')).toBe(
+			`${LATENCY}, 10 Jun 2030 to 15 Jun 2030, over 7 days. All five plots share one scale.`
+		);
+	});
+
+	/** The memory panel's props around the rows a case builds, at one window. */
+	function memoryProps(preset: number, rows: Record<string, string>[]): Record<string, unknown> {
+		const viewport = windowOfDays(JUDGED_THROUGH, preset, 'right');
+		return { record: memoryHeld(rows), start: viewport.start, end: viewport.end, days: preset };
+	}
+
+	test('THE ORACLE: the memory panel speaks of this one day, counts 1 day, and says no reading began before it', async ({
+		page
+	}) => {
+		await draw(page, 'MemoryHeldPanel', memoryProps(1, [healthRow(JUDGED_THROUGH, 'whole')]));
+		expect(await said(page, '[data-memory-shapes]')).toBe(
+			'This one day draws one held part rather than splitting it, because no run that wrote the day recorded what each process holds on its own.'
+		);
+		// One day of ledger has no day before the reading began.
+		await expect(page.locator('[data-memory-begins]')).toHaveCount(0);
+
+		await draw(page, 'MemoryHeldPanel', memoryProps(1, [healthRow(JUDGED_THROUGH, 'split')]));
+		expect(await said(page, '[data-memory-shapes]')).toBe(
+			'This one day splits the held part into what each process holds on its own.'
+		);
+
+		await draw(page, 'MemoryHeldPanel', memoryProps(1, [healthRow(JUDGED_THROUGH, 'none')]));
+		expect(await said(page, '[data-machine-panel-empty="memory-held"]')).toBe(
+			'No day this ledger holds recorded what the machine itself had, so there is nothing to split up. Read over 1 day.'
+		);
+	});
+
+	test('the memory panel speaks of every day here, and counts the days it read', async ({ page }) => {
+		const two = ['2030-06-10', JUDGED_THROUGH];
+		await draw(page, 'MemoryHeldPanel', memoryProps(7, two.map((date) => healthRow(date, 'whole'))));
+		expect(await said(page, '[data-memory-shapes]')).toBe(
+			'Every day here draws one held part rather than splitting it, because no run that wrote these days recorded what each process holds on its own.'
+		);
+		expect(await said(page, '[data-memory-begins]')).toBe(
+			"The machine's own reading begins on 2030-06-10, over 2 days of ledger; a day before it draws no bar rather than an empty one."
+		);
+
+		await draw(page, 'MemoryHeldPanel', memoryProps(7, two.map((date) => healthRow(date, 'split'))));
+		expect(await said(page, '[data-memory-shapes]')).toBe(
+			'Every day here splits the held part into what each process holds on its own.'
+		);
+
+		await draw(page, 'MemoryHeldPanel', memoryProps(7, windowDates(7).map((date) => healthRow(date, 'none'))));
+		expect(await said(page, '[data-machine-panel-empty="memory-held"]')).toBe(
+			'No day this ledger holds recorded what the machine itself had, so there is nothing to split up. Read over 7 days.'
+		);
+	});
+
+	test('THE ORACLE: the cost panel measures its one column, and its empty chart names this one day', async ({
+		page
+	}) => {
+		// Reading 0.50 and writing 0.30: the smaller half is 37.5 percent of the column.
+		await draw(page, 'CounterfactualCostPanel', costProps(1, [runWork(JUDGED_THROUGH, 1_000_000, 200_000)]));
+		expect(await said(page, '[data-cost-measured]')).toBe(
+			'The smaller half measures 37.5 percent of the column, so both halves draw as bands rather than as a printed figure.'
+		);
+		expect(
+			((await page.locator('[data-chart-pending]').innerText()) ?? '').replace(/\s+/g, ' ').trim()
+		).toBe("This chart is loading. This one day's numbers are below.");
+		expect(await stripOf(page, 'counterfactual-cost')).toEqual({ heading: '15 Jun 2030', hint: null });
+
+		// Writing 1,339 tokens is 0.4 percent of the column, under a pixel.
+		await draw(page, 'CounterfactualCostPanel', costProps(1, [runWork(JUDGED_THROUGH, 1_000_000, 1_339)]));
+		expect(await said(page, '[data-cost-measured]')).toBe(
+			'Reading and writing are one column here. The smaller half measures 0.4 percent of the column, which draws under a pixel, and a band a browser paints nothing for teaches a reader the half is zero.'
+		);
+
+		await draw(page, 'CounterfactualCostPanel', costProps(1, [runWork(JUDGED_THROUGH, 0, 0)]));
+		expect(await said(page, '[data-cost-measured]')).toBe(
+			'Nothing split in this one day, so the column carries no bands.'
+		);
+	});
+
+	test('the cost panel measures against its busiest and tallest of several columns', async ({ page }) => {
+		// Bands of 0.50, 0.30, 1.00 and 0.75 under a tallest column of 1.75.
+		await draw(
+			page,
+			'CounterfactualCostPanel',
+			costProps(7, [runWork('2030-06-10', 1_000_000, 200_000), runWork(JUDGED_THROUGH, 2_000_000, 500_000)])
+		);
+		expect(await said(page, '[data-cost-measured]')).toBe(
+			'The smaller half of the busiest day measures 17.1 percent of the tallest column, so both halves draw as bands rather than as a printed figure.'
+		);
+		expect(
+			((await page.locator('[data-chart-pending]').innerText()) ?? '').replace(/\s+/g, ' ').trim()
+		).toBe("This chart is loading. The newest day's numbers are below.");
+		expect(await stripOf(page, 'counterfactual-cost')).toEqual({
+			heading: '15 Jun 2030, the newest day',
+			hint: 'Point at a day to read it. Left and Right step through them, Escape returns to the newest.'
+		});
+
+		await draw(
+			page,
+			'CounterfactualCostPanel',
+			costProps(7, [runWork('2030-06-10', 1_000_000, 1_339), runWork(JUDGED_THROUGH, 1_000_000, 1_339)])
+		);
+		expect(await said(page, '[data-cost-measured]')).toBe(
+			'Reading and writing are one column here. The smaller half measures 0.4 percent of the tallest day, which draws under a pixel, and a band a browser paints nothing for teaches a reader the half is zero.'
+		);
+
+		await draw(page, 'CounterfactualCostPanel', costProps(7, [runWork('2030-06-10', 0, 0), runWork(JUDGED_THROUGH, 0, 0)]));
+		expect(await said(page, '[data-cost-measured]')).toBe(
+			'Nothing split in this window, so the columns carry no bands.'
+		);
+	});
+
+	/** The speed chart's props around its days, at one window. */
+	function speedProps(preset: number, dates: readonly string[]): Record<string, unknown> {
+		return {
+			days: dates.map(throughputDay),
+			height: DRAWN_AT.height,
+			width: DRAWN_AT.width,
+			reference: '#',
+			tickDensity: DRAWN_AT.tickDensity,
+			readoutMaxShare: DRAWN_AT.readoutMaxShare,
+			windowDays: preset
+		};
+	}
+
+	const SPEED = '2030-06-15, over the whole day: read 12.34 tok/s, write 5.67 tok/s, from 40 items across 2 runs.';
+
+	test('THE ORACLE: the speed chart names its one day, and waits for no second day at one day', async ({
+		page
+	}) => {
+		await draw(page, 'ThroughputTrend', speedProps(1, [JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-throughput-days]')).toBe('Model tokens per second, 15 Jun 2030');
+		expect(await said(page, '[data-throughput="verdict"]')).toBe(SPEED);
+		expect(await stripOf(page, 'throughput')).toEqual({ heading: '15 Jun 2030', hint: null });
+	});
+
+	test('the speed chart waits for a second day only where the window can hold one', async ({ page }) => {
+		await draw(page, 'ThroughputTrend', speedProps(7, [JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-throughput-days]')).toBe('Model tokens per second, 15 Jun 2030');
+		expect(await said(page, '[data-throughput="verdict"]')).toBe(
+			`${SPEED} One day so far. A second day gives it something to move against.`
+		);
+
+		await draw(page, 'ThroughputTrend', speedProps(7, ['2030-06-10', JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-throughput-days]')).toBe(
+			'Model tokens per second per day, 10 Jun 2030 to 15 Jun 2030, oldest day on the left'
+		);
+		expect(await stripOf(page, 'throughput')).toEqual({
+			heading: '15 Jun 2030, the newest day',
+			hint: STEP_KEYS
+		});
+	});
+
+	/** The failure ledger's props around one failed fetch and one clean item, at one window. */
+	function failureProps(preset: number): Record<string, unknown> {
+		return {
+			rows: [
+				telemetryRow({
+					date: JUDGED_THROUGH,
+					item_id: 'a',
+					source_id: 'alpha',
+					stage: 'fetch',
+					outcome: 'failed',
+					code: 'timeout'
+				}),
+				telemetryRow({ date: JUDGED_THROUGH, item_id: 'b', source_id: 'beta', outcome: 'ok' })
+			],
+			window: windowOfDays(JUDGED_THROUGH, preset, 'right'),
+			selectedCode: null,
+			max: 10,
+			sourceMax: 10,
+			readoutMaxShare: 1
+		};
+	}
+
+	test('THE ORACLE: a failure cause, and a source that lost articles, say nothing about when at one day', async ({
+		page
+	}) => {
+		await draw(page, 'FailureList', failureProps(1));
+		expect(await said(page, '[data-ranked-row="fetch/timeout"] [data-ranked-cell="context"]')).toBe(
+			'sources hit: 1 of 2'
+		);
+		expect(await said(page, '[data-ranked-row="alpha"] [data-ranked-cell="context"]')).toBe(
+			'fetch/timeout'
+		);
+	});
+
+	test('a failure cause, and a source that lost articles, say they were last seen on the newest day in view', async ({
+		page
+	}) => {
+		await draw(page, 'FailureList', failureProps(7));
+		expect(await said(page, '[data-ranked-row="fetch/timeout"] [data-ranked-cell="context"]')).toBe(
+			'sources hit: 1 of 2 - last on the newest day in view'
+		);
+		expect(await said(page, '[data-ranked-row="alpha"] [data-ranked-cell="context"]')).toBe(
+			'fetch/timeout - last on the newest day in view'
+		);
+	});
+
+	/** The merged-stories panel's props around the days a case builds, at one window. */
+	function mergeProps(preset: number, dates: readonly string[]): Record<string, unknown> {
+		return {
+			days: dates.map((date) => ({ date, published: 10, merges: 2, groups: 1, largest: 3 })),
+			viewport: windowOfDays(JUDGED_THROUGH, preset, 'right'),
+			height: DRAWN_AT.height,
+			width: DRAWN_AT.width,
+			tickDensity: DRAWN_AT.tickDensity,
+			readoutMaxShare: DRAWN_AT.readoutMaxShare
+		};
+	}
+
+	test('THE ORACLE: the merged stories chart is of this one day, and its strip heads the day alone', async ({
+		page
+	}) => {
+		await draw(page, 'MergedStoriesPanel', mergeProps(1, [JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-windowed="merged-stories"] svg[aria-label]')).toBe(
+			'Stories folded into another in this one day'
+		);
+		expect(await stripOf(page, 'merged-stories')).toEqual({ heading: '15 Jun', hint: null });
+	});
+
+	test('the merged stories chart is a day over seven days, and its strip rests on the newest', async ({
+		page
+	}) => {
+		await draw(page, 'MergedStoriesPanel', mergeProps(7, ['2030-06-10', JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-windowed="merged-stories"] svg[aria-label]')).toBe(
+			'Stories folded into another a day, over 7 days'
+		);
+		expect(await stripOf(page, 'merged-stories')).toEqual({
+			heading: '15 Jun, the newest published day',
+			hint: DEFAULT_KEYS
+		});
+	});
+
+	/** The judge panel's props around the days a case builds, at one window. */
+	function judgeProps(preset: number, days: JudgeDay[]): Record<string, unknown> {
+		return {
+			days,
+			limits: LIMITS,
+			attemptsFloor: SHARE_FLOOR,
+			viewport: windowOfDays(JUDGED_THROUGH, preset, 'right'),
+			...DRAWN_AT
+		};
+	}
+
+	test('THE ORACLE: the judge chart is of this one day, and its strip heads the day alone', async ({
+		page
+	}) => {
+		await draw(page, 'JudgeAgreement', judgeProps(1, [judgeDay(JUDGED_THROUGH, { pairsJudged: 40, disagreementRate: 0.05 })]));
+		expect(await labelOf(page, '[data-windowed="judge-agreement"] svg[aria-label]')).toBe(
+			'How often the judge disagreed with its own second reading, in this one day'
+		);
+		expect(await stripOf(page, 'judge-agreement')).toEqual({ heading: '15 Jun', hint: null });
+	});
+
+	test('the judge chart is a day over seven days, and its strip rests on the newest', async ({ page }) => {
+		await draw(
+			page,
+			'JudgeAgreement',
+			judgeProps(7, [
+				judgeDay('2030-06-10', { pairsJudged: 40, disagreementRate: 0.05 }),
+				judgeDay(JUDGED_THROUGH, { pairsJudged: 40, disagreementRate: 0.05 })
+			])
+		);
+		expect(await labelOf(page, '[data-windowed="judge-agreement"] svg[aria-label]')).toBe(
+			'How often the judge disagreed with its own second reading, a day'
+		);
+		expect(await stripOf(page, 'judge-agreement')).toEqual({
+			heading: '15 Jun, the newest day',
+			hint: DEFAULT_KEYS
+		});
+	});
+
+	/** The merge line's props around the fitted days a case builds, at one window. */
+	function lineProps(preset: number, dates: readonly string[]): Record<string, unknown> {
+		return {
+			days: dates.map(lineDay),
+			knobs: LINE_KNOBS,
+			configuredLine: 0.94,
+			markedApart: null,
+			viewport: windowOfDays(JUDGED_THROUGH, preset, 'right'),
+			...DRAWN_AT
+		};
+	}
+
+	const LINE_NOTE =
+		'The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for.';
+
+	test('THE ORACLE: the merge line is for this one day, its band is that day, and its strip heads the day alone', async ({
+		page
+	}) => {
+		await draw(page, 'MergeLinePlot', lineProps(1, [JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-windowed="merge-line"] svg[aria-label]')).toBe(
+			'The merge line for this one day, on the whole range a fitted line may take'
+		);
+		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
+			`${LINE_NOTE} The shaded band is as far as the line was allowed to fall that day.`
+		);
+		expect(await stripOf(page, 'merge-line')).toEqual({ heading: '15 Jun', hint: null });
+	});
+
+	test('the merge line is a day over seven days, with a band at each day', async ({ page }) => {
+		await draw(page, 'MergeLinePlot', lineProps(7, ['2030-06-10', JUDGED_THROUGH]));
+		expect(await labelOf(page, '[data-windowed="merge-line"] svg[aria-label]')).toBe(
+			'The merge line a day, on the whole range a fitted line may take'
+		);
+		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
+			`${LINE_NOTE} The shaded band at each day is as far as the line was allowed to fall in one day.`
+		);
+		expect(await stripOf(page, 'merge-line')).toEqual({
+			heading: '15 Jun, the newest day',
+			hint: DEFAULT_KEYS
+		});
+	});
+
+	/** The record panel's props around the days a case builds, at one window. */
+	function gatesProps(preset: number, days: JudgeDay[]): Record<string, unknown> {
+		const viewport = windowOfDays(JUDGED_THROUGH, preset, 'right');
+		return { days, dates: daysInWindow(viewport), gates: GATES, viewport, readoutMaxShare: 1 };
+	}
+
+	const GATES_LEAD = 'Three counts have to be reached before the line may move at all.';
+
+	test('THE ORACLE: the record has one square, for this one day, and its strip heads the day alone', async ({
+		page
+	}) => {
+		await draw(page, 'RecordGates', gatesProps(1, [judgeDay(JUDGED_THROUGH, FILLING)]));
+		expect(await said(page, '[data-console-panel="What the record still needs"] .panel-note')).toBe(
+			`${GATES_LEAD} The square is what the record did with this one day.`
+		);
+		expect(await labelOf(page, '[data-counted-strip]')).toBe('What the record did with this one day.');
+		expect(await stripOf(page, 'record-gates')).toEqual({ heading: '15 Jun 2030', hint: null });
+	});
+
+	test('the record has a square a day over seven days, and its strip names its keys', async ({ page }) => {
+		await draw(page, 'RecordGates', gatesProps(7, [judgeDay(JUDGED_THROUGH, FILLING)]));
+		expect(await said(page, '[data-console-panel="What the record still needs"] .panel-note')).toBe(
+			`${GATES_LEAD} The squares are one a day: what the record did with that day.`
+		);
+		expect(await labelOf(page, '[data-counted-strip]')).toBe(
+			'What the record did with each day. Left and Right read a day, Escape returns to the newest.'
+		);
+		expect(await stripOf(page, 'record-gates')).toEqual({
+			heading: '15 Jun 2030, the newest day',
+			hint: 'Point at a square to read its day. Left and Right step through the days, Escape returns to the newest.'
+		});
+	});
 });
 
 /** The first day the Machine route says it is showing, at the open preset. */
@@ -965,8 +1731,12 @@ test('a daily table drawn under the control stays inside the control span', asyn
 			await setWindow(page, preset);
 			const [table] = await disclosures(page);
 			// The name is one string on both routes and it says the span out loud.
-			expect(table.summary, `${route} renamed its daily table`).toContain(
-				'Show these figures day by day'
+			// One day is not day by day, so at one day it names that day (Reader,
+			// 2026-10-07).
+			expect(table.summary, `${route} renamed its daily table`).toBe(
+				preset === 1
+					? 'Show these figures for this one day'
+					: `Show these figures day by day, over these ${preset} days`
 			);
 			expect(
 				table.summary,

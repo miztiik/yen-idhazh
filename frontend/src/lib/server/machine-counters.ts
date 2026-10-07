@@ -283,6 +283,18 @@ export interface MachineRun {
 	clocks: ClockCheck;
 }
 
+/** Whether a run carries the model server's own counters.
+ *
+ * Only the machine record holds the two cells the server itself wrote: the
+ * prompt tokens it read and the seconds it spent reading them. So a run made of
+ * article rows alone carries none, and nor does a run whose machine record
+ * holds the probe and the clocks and neither cell. One cell from one shard is
+ * enough: a run with one written server figure is not a run with none.
+ */
+export function carriesServerCounters(run: MachineRun): boolean {
+	return run.promptTokens.from > 0 || run.readSeconds.from > 0;
+}
+
 /** A run whose rows cannot be made into one run, and what stopped it.
  *
  * Never dropped silently. The machine record writes its row in two halves at

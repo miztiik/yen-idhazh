@@ -38,6 +38,7 @@ def test_selected_record_lists_leave_outer_records_expanded() -> None:
     [
         (DigestDay, "digest-day/two-runs.json", {"items", "runs", "leads", "verticals"}),
         (DigestRunFragment, "digest-run-fragment/one-block.json", {"items", "verticals"}),
+        (DayMetrics, "day-metrics/full.json", {"sources", "instruments", "stage_timing"}),
         (RunManifest, "run-manifest/two-runs.json", {"config_digests", "verticals"}),
         (ConsoleBand, "console-band/newest-day.json", {"routes"}),
         (PublicationInventory, "publication-inventory/published.json", {"entries", "changelog"}),
@@ -104,7 +105,20 @@ def test_month_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Pa
     fixture = CONTRACT_FIXTURES_DIR / "day-metrics"
     metrics = DayMetrics.read(fixture / "full.json")
     state = tmp_path / "state"
-    day_metrics.write(state, metrics)
+    state_path = day_metrics.write(state, metrics)
+    state_text = state_path.read_text(encoding="utf-8")
+    assert state_text.startswith("{\n")
+    assert '  "bands": {\n' in state_text
+    assert json.loads(state_text) == metrics.model_dump(mode="json")
+    assert DayMetrics.read(state_path) == metrics
+    assert state_text == metrics.to_json()
+    assert "\r" not in state_text and state_text.endswith("\n")
+    for records in (metrics.sources, metrics.instruments, metrics.stage_timing):
+        for record in records:
+            rendered = json.dumps(
+                record.model_dump(mode="json"), sort_keys=True, separators=(",", ": ")
+            )
+            assert any(line.strip().rstrip(",") == rendered for line in state_text.splitlines())
     digest = tmp_path / "public" / "digest"
     paths = day_metrics.publish_public(
         state_root=state,

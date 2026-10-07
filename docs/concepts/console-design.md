@@ -69,22 +69,26 @@ days after the eval ledger - so five days inside a thirty-day window have
 scores and no server figures at all. A console that only designed the loaded
 state would be mostly undesigned.
 
-Six states have fixed wording, held in
+Seven states have fixed wording, held in
 [../../frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts):
 measurement off, sampled below 1.0, days the machine was timed and nothing
 scored the summaries, days the server's own counters were not written down,
-recording started mid-window, and a day that published and lost what it
-measured. Only the dates and counts inside them are computed, and every one
+recording started mid-window, a day that published and lost what it
+measured, and a chart that cannot show a setup change because the score record
+did not read. Only the dates and counts inside them are computed, and every one
 is derived from the ledger that is missing - **a date that is not true is worse
 than no date**. None is apologetic, none is styled as an error, and none is a
 banner across the page: three panels can be in three different states on one
-day. On Hardware and Summaries they sit after the record notes and before the
-first section, in one order - off, sampled, started, then the days one
-instrument covered alone - so a page whose sections have nothing to draw still
-says what the recording was doing; Jony chose the place on 2026-10-07. Susan
-chose the words of the first five on 2026-08-30. On 2026-10-07 Reader and Jony
-chose new words for the measurement-off line and for the two lines about days
-one instrument covered alone, and Reader for the started line.
+day. On Hardware and Summaries the first six sit after the record notes and
+before the first section, in one order - off, sampled, started, then the days
+one instrument covered alone - so a page whose sections have nothing to draw
+still says what the recording was doing; Jony chose the place on 2026-10-07.
+The seventh sits on the two charts it is about. Susan chose the words of the
+first five on 2026-08-30. On 2026-10-07 Reader and Jony chose new words for the
+measurement-off line and for the two lines about days one instrument covered
+alone, and Reader for the started line. Later that day Reader and Jony chose the
+words that open the started line and the words of the seventh, and Jony its
+place.
 
 **A panel keeps its own line for a nothing the route's note also states.** It
 says it in the note's words and never points at the note. On Hardware the
@@ -108,12 +112,29 @@ record whose index names no row, in every window. Where the page has not read
 what would make a claim true - a record not packed or not loaded, a window that
 holds no packed day - it says only that measurement is off and how to turn it on.
 
+**On Hardware, a run has the server's figures only where a shard reported one
+of the two cells the server itself wrote** - the prompt tokens it read and the
+seconds it spent reading them. A run is formed from the machine record or the
+article record, so a run of article rows alone, or of a machine record that
+holds the probe and the clocks and neither cell, has none. The page's first line
+counts every run in the window, then how many of them have the server's
+figures: `127 runs in these 30 days, 75 of them with figures from the model
+server itself.` The started line, the line about days the server's counters
+were not written down and the measurement-off line read the same runs. Nothing
+samples those counters - the sampling rate is the scorer's, and only the
+machine record's own switch turns them off - so Hardware prints no sampled line
+about them. Reader chose the first line's words, and Jony agreed, on 2026-10-07;
+Fowler ruled which runs count.
+
 **The started line names only a start the open window shows, and only a true
-one.** It is worked out once for each window the control offers, from the whole
+one.** It opens on what started - `Server figures started on 20 Sep 2026.`,
+`The machine record started on 17 Sep 2026.` - so two started lines with two
+dates on one page read as two instruments, never as one fact with two answers.
+It is worked out once for each window the control offers, from the whole
 read. The instrument's first day is the first day it ran in what the route read -
 a day it recorded, or a day whose record was lost - and that is its true first
 day only when the read reaches back to the oldest named day of every record it
-draws on (the server's counters draw on the machine and the article records). A
+draws on (the server's counters live in the machine record alone). A
 record whose indexes name a day before the read may hold a day the instrument
 ran before anything the read holds, so the instrument gets no started line, and
 no day before the read is opened to learn it. The line prints in each window
@@ -137,7 +158,28 @@ days after the newest one recorded, so this line names only the gaps between.
 It names the days and never counts them - `There are no quality figures for
 1 Oct and 3 Oct 2026.` - and where every day on screen is one of them it uses
 the window's own words, `these 7 days` or `this one day`. Hardware's line claims
-no score: it says only where its speed figures came from.
+no score: it says only where its speed figures came from. While the sampled line
+prints, this line does not: below a rate of 1.0 most days have no row of the
+sampled instrument on purpose, and naming them would call the sample a gap.
+
+**A chart that cannot show a setup change says so, and never that nothing
+changed.** On Hardware two charts mark the days the pipeline that writes the
+summaries changed. A day's marker comes from the run record, which names what
+each run ran, and for the days before it did, from the score record's rows,
+which carry no digest after that. So when the score record has not been packed
+yet or did not load, a chart loses a marker only on a day the window shows that
+had a run, that no run record names, and that comes before the run record first
+named what ran: a later day that published nothing has no marker with the read
+or without it. Those two charts then say, after the sentence about the dashed
+rule,
+which days, why - in the record notes' own words for each fault - and that the
+chart shows every change on the other days: `This chart cannot show whether the
+setup changed on 8 Sep to 12 Sep 2026, because the score record has not been
+packed yet. That is a step not yet run. This chart shows every change on the
+other days.` Where the chart drew no rule, the line replaces `Nothing changed
+about how the summaries are written inside these 30 days.`, which would claim
+days the page cannot see. Reader chose the words, and Jony the place, on
+2026-10-07.
 
 ## A record that had not begun, a quiet day, and a record that was destroyed
 
@@ -254,6 +296,14 @@ Every windowed sentence takes its day words from one helper,
  sentence is written whole for one day, in the same tense: `No day in these 7
  days published a summary` is `This one day did not publish a summary`, and
  `one tile a day, over these 7 days` is `one tile for this one day`.
+- **The rule holds for a sentence that prints no day count.** A chart's label at
+ one day says what it draws for that day - `one point for this one day`,
+ `Stories folded into another in this one day` - a legend names one date, and a
+ line that waits for a second day is not printed. The strip under a chart heads
+ its one column alone and names no keys
+ ([console-design/the-rules-every-console-chart-obeys.md](console-design/the-rules-every-console-chart-obeys.md#a-chart-with-a-shared-column-prints-every-series-together-in-a-fixed-strip)).
+ Words that say `this one day` name the window, so they print only at the 1-day
+ window. Reader ruled the words on 2026-10-07.
 
 A sentence that counts something other than the window's days - runs, a rule's
 own span, the days a record read - keeps its own count.
@@ -311,7 +361,23 @@ it draws no quality figure, so the claim would buy one clause at the price of
 that record's read states, its lost days and a second sentence for a day with
 neither. The line says where the speed figures came from, which is what the page
 draws. Reader and Jony chose the words and Fowler ruled the score claim out, on
-2026-10-07.
+2026-10-07. Hardware's line names a day where no run had the server's own
+counters, not where no run was formed: a run of article rows alone has none, and
+counted as one that had them it hid the very day the line exists to name. Fowler
+ruled that the same day.
+
+**Hardware's first line keeps every run as its count.** Every panel below draws
+from all the runs the page read, so the first number is all of them, and the
+claim about the server's own counters is the second number, in the same sentence
+as the count it is out of. A first line that counted only the runs with those
+counters would not say how many runs the panels under it drew. Fowler ruled the
+two numbers, and Reader and Jony chose the words, on 2026-10-07.
+
+**A lost change marker is said on the chart that lost it.** Hardware uses the
+score record for nothing but the change markers on two charts, which sit in two
+groups far below the page's first line, so a note at the top would explain a
+gap the reader cannot yet see. Each chart says it where the rule would be. Jony
+chose the place on 2026-10-07.
 
 **One classification of a column's type.** The table, the chart and the colours
 each read type names with lists of their own, and they disagreed about the same

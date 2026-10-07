@@ -96,7 +96,7 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
         why="What each run of a day did, and how big the site was when it finished.",
     ),
     ConsolePayload(
-        reader="payload.ts publishedItems()",
+        reader="payload.ts publishedCharts()",
         published_to="frontend/public/run-days/<YYYY-MM>.json",
         contract=public_run_day.PublicRunDay,
         forbidden=public_run_day.FORBIDDEN_COLUMNS,
@@ -153,9 +153,9 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
 def payloads_by_stem() -> dict[str, ConsolePayload]:
     """One entry per schema file, so a caller can ask what a stem is for.
 
-    Datasets outnumber schemas - three console reads answer off the run-day row
-    and two off the telemetry shard - so the first entry for a stem wins and the
-    rest are the same shape under another reader.
+    Datasets outnumber schemas - three console datasets answer off the run-day
+    row and two off the telemetry shard - so the first entry for a stem wins and
+    the rest are the same shape read for another dataset.
     """
     found: dict[str, ConsolePayload] = {}
     for payload in CONSOLE_PAYLOADS:

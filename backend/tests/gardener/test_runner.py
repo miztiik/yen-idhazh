@@ -21,15 +21,19 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.contracts.ledger_index import CompactIndex
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import event_log, report, runner
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
@@ -174,6 +178,104 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
+def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
+    tmp_path: Path,
+) -> None:
+    settings = config.load_gardener()
+    repo_root = tmp_path
+    day = "2026-10-02"
+    row_template = ItemHealthRow.model_validate_json(
+        (CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    production_row = row_template.model_copy(
+        update={"date": day, "run_id": f"{day}-100", "item_id": "production-item-01"}
+    )
+    production_identity = WriterIdentity(
+        run_id="2026-10-03-100",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=0,
+        producer="work",
+        git_sha="a" * 40,
+    )
+    production_raw = ledger.persist(
+        repo_root / "state",
+        [production_row],
+        ledger=LedgerName.ITEM_HEALTH,
+        covers=day,
+        identity=production_identity,
+    )[0]
+    production_bytes = production_raw.read_bytes()
+    expected: dict[str, ItemHealthRow] = {}
+    for number, case in enumerate(("production-settings", "no-visual-plan"), start=1):
+        row = row_template.model_copy(
+            update={
+                "date": day,
+                "run_id": f"{day}-{number}",
+                "item_id": f"trial-item-{number}-01",
+            }
+        )
+        expected[case] = row
+        ledger.persist(
+            repo_root / "state" / "pipeline-tests" / case,
+            [row],
+            ledger=LedgerName.ITEM_HEALTH,
+            covers=day,
+            identity=WriterIdentity(
+                run_id=f"{day}-{number}",
+                attempt=1,
+                job=ServerJob.WORK,
+                shard=0,
+                producer="work",
+                git_sha="a" * 40,
+            ),
+        )
+
+    outcome = runner.run(
+        ["compact-trial-item-health"],
+        settings=settings,
+        repo_root=repo_root,
+        run_id="2026-10-04-9001",
+        attempt=1,
+        shard=0,
+        git_sha="b" * 40,
+        committed_folders=None,
+        cone_bytes=None,
+        listing=None,
+        clock=lambda: datetime(2026, 10, 4, tzinfo=UTC),
+    )
+
+    assert outcome.exit_code == EXIT_OK
+    task_row = rows_of(outcome.record)["compact-trial-item-health"]
+    assert task_row.selected > 0, task_row.model_dump_json()
+    for case, row in expected.items():
+        root = repo_root / "state" / "pipeline-tests" / case
+        daily_index = ledger.compact_index_path(
+            root, LedgerName.ITEM_HEALTH, Period.DAILY
+        )
+        assert daily_index.is_file()
+        assert day in {
+            entry.covers for entry in CompactIndex.read(daily_index).entries
+        }
+        assert ledger.load_days(root, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow) == [row]
+        compact = ledger.compact_file(root, LedgerName.ITEM_HEALTH, Period.DAILY, day)
+        assert compact is not None and compact.is_file()
+        envelope = ledger.read_envelope(compact)
+        assert envelope.identity.run_id == "2026-10-04-9001"
+        assert envelope.identity.job is ServerJob.RUN_TASKS
+        assert envelope.identity.git_sha == "b" * 40
+
+    assert production_raw.read_bytes() == production_bytes
+    assert not ledger.compact_index_path(
+        repo_root / "state", LedgerName.ITEM_HEALTH, Period.DAILY
+    ).exists()
+    assert outcome.record is not None
+    (recorded,) = ledger.load([outcome.record], model=CollectionPruneRow)
+    assert recorded.task == "compact-trial-item-health"
+
+
 def test_a_task_whose_service_is_down_is_deferred_and_the_shard_stays_green(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -258,6 +360,9 @@ def test_a_task_that_reaches_outside_what_it_owns_stops_the_shard_before_anythin
 
     assert outcome.exit_code == EXIT_INTEGRITY
     assert outcome.record is None, "a record was written for a shard that broke ownership"
+    assert [held.task for held in outcome.finished_tasks] == ["wanderer"], (
+        "a shard refused after its task ran forgot how that task ended"
+    )
     assert any(f"touched state/neighbour/{AGED}" in line for line in said)
     assert commits_on(origin) == before
     assert git(checkout, "status", "--porcelain", "--", "state") == ""

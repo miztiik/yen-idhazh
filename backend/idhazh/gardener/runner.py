@@ -55,7 +55,10 @@ caller that could not read it is refused before any task runs.
 word, what it took and wrote, and what happens next (`report.finished`). A
 later refusal of the whole shard cannot hide how a task ended. The exception
 that stopped a task is kept beside its row, so its event names the type and
-where it was raised, and never its text.
+where it was raised, and never its text. Each `TaskFinished` also goes back on
+the `Outcome`, with what the tasks downloaded and whether that passed the
+budget, so the publisher's summary of the shard reads the same events the log
+holds.
 
 **Every task is handed the listing of the files under its folders.** One
 listing a shard, of every folder its tasks own or read, handed in by whoever
@@ -94,7 +97,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
@@ -105,9 +108,11 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, WriterIdentity
-from idhazh.contracts.gardener_events import TaskOutcome, TaskPlanned
+from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
+    CollectionTaskPolicy,
+    CompactionPolicy,
     RetentionPolicy,
     TaskKind,
     TaskLifecycleStatus,
@@ -282,7 +287,12 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
     folded: closed_day_fold.Folded | None = None
     failure: BaseException | None = None
     try:
-        outcome = held.run(context)
+        outcome = (
+            _run_compaction_roots(held, context)
+            if isinstance(context.policy, CompactionPolicy)
+            and context.policy.state_roots != ["state"]
+            else held.run(context)
+        )
     except PruneInterruptedError as stop:
         outcome, failure = stop.so_far, stop.__cause__
     except Exception as caught:
@@ -311,6 +321,72 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
     )
 
 
+def _run_compaction_roots(held: registry.TaskModule, context: TaskContext) -> Pass:
+    """Run one pass per declared root, stopping when the first root needs another wake."""
+    from idhazh.contracts.gardener_events import PeriodsTaken
+
+    policy = context.policy
+    if not isinstance(policy, CompactionPolicy):
+        raise ValueError("a compaction root pass needs a compaction declaration")
+    outcomes: list[Pass] = []
+    for state_root in policy.state_roots:
+        root = context.repo_root.joinpath(*PurePosixPath(state_root).parts)
+        owns = tuple(
+            folder for folder in policy.owns if folder.startswith(f"{state_root}/")
+        )
+        if not owns:
+            raise ValueError(f"{state_root} has no owned folders for {policy.ledger.value}")
+        root_context = replace(
+            context,
+            state_dir=root,
+            owned_folders=tuple(folder for folder in context.owned_folders if folder in owns),
+            listing=context.listing.within(owns),
+        )
+        outcome = held.run(root_context)
+        outcomes.append(outcome)
+        if outcome.more_to_do:
+            break
+
+    first, last = outcomes[0], outcomes[-1]
+    period_data = first.periods.model_dump() if first.periods is not None else None
+    if period_data is not None:
+        for outcome in outcomes[1:]:
+            if outcome.periods is None:
+                continue
+            next_data = outcome.periods.model_dump()
+            for field in ("daily_mark", "monthly_mark", "yearly_mark"):
+                values = [value for value in (period_data[field], next_data[field]) if value]
+                period_data[field] = max(values, default=None)
+            for field, values in next_data.items():
+                if isinstance(values, list):
+                    period_data[field] = list(dict.fromkeys([*period_data[field], *values]))
+        periods = PeriodsTaken.model_validate(period_data)
+    else:
+        periods = None
+    return replace(
+        last,
+        since=first.since,
+        until=first.until,
+        seen=sum(outcome.seen for outcome in outcomes),
+        selected=sum(outcome.selected for outcome in outcomes),
+        taken=tuple(dict.fromkeys(path for outcome in outcomes for path in outcome.taken)),
+        written=tuple(dict.fromkeys(path for outcome in outcomes for path in outcome.written)),
+        bytes_freed=sum(outcome.bytes_freed for outcome in outcomes),
+        appended=tuple(dict.fromkeys(path for outcome in outcomes for path in outcome.appended)),
+        handled_through=next(
+            (outcome.handled_through for outcome in reversed(outcomes) if outcome.handled_through),
+            None,
+        ),
+        recovered=tuple(note for outcome in outcomes for note in outcome.recovered),
+        pages_read=(
+            None
+            if any(outcome.pages_read is None for outcome in outcomes)
+            else sum(outcome.pages_read or 0 for outcome in outcomes)
+        ),
+        periods=periods,
+    )
+
+
 def _planned(
     name: str, context: TaskContext, folders: Folders, operator_range: tuple[str, str] | None
 ) -> TaskPlanned:
@@ -333,8 +409,9 @@ def _planned(
     )
 
 
-def _said_finished(ran: _Ran) -> None:
-    """Log how one task ended, at the level its outcome asks for."""
+def _said_finished(ran: _Ran) -> TaskFinished:
+    """Log how one task ended, at the level its outcome asks for, and hand the event back."""
+    policy = ran.context.policy
     finished = report.finished(
         ran.outcome,
         task=ran.name,
@@ -342,8 +419,10 @@ def _said_finished(ran: _Ran) -> None:
         folded=ran.folded,
         settled=_fold_changes(ran)[0],
         failure=ran.failure,
+        collection=policy.collection if isinstance(policy, CollectionTaskPolicy) else None,
     )
     event_log.emit(finished, level=_LEVELS.get(finished.outcome, logging.INFO))
+    return finished
 
 
 def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -475,7 +554,7 @@ def _record(
             fmt=Format(record.suffix.removeprefix(".")),
         )
     except ValueError as error:
-        raise ShardRefusedError(f"{record.name} is not a record's name: {error}") from error
+        raise ShardRefusedError(f"{record.name} is not a record's name") from error
     if record != expected:
         raise ShardRefusedError(
             f"the record went to {record.name}, outside the gardener's own raw ledger"
@@ -584,7 +663,9 @@ def run(
         git_sha=git_sha,
     )
     ran: list[_Ran] = []
+    finished: list[TaskFinished] = []
     too_heavy: str | None = None
+    downloaded_bytes: int | None = None
     try:
         # Every task's folders before the first task runs, so a task the commit
         # cannot answer for stops the shard with nothing yet done.
@@ -633,7 +714,7 @@ def run(
             )
             event_log.emit(_planned(name, context, resolved[name], period_range))
             done = _run_one(name, bound[name], context)
-            _said_finished(done)
+            finished.append(_said_finished(done))
             _refuse_a_path_outside(done, settings.tasks)
             _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
@@ -641,6 +722,7 @@ def run(
             listing = listing.settled(written=written, deleted=taken)
         downloaded = listing.downloaded()
         if downloaded is not None:
+            downloaded_bytes = sum(downloaded.values())
             too_heavy = over_the_ceiling(
                 downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
             )
@@ -652,11 +734,17 @@ def run(
             identity=identity,
             ended=ended,
             cone_bytes=weighed,
-            downloaded_bytes=None if downloaded is None else sum(downloaded.values()),
+            downloaded_bytes=downloaded_bytes,
         )
     except ShardRefusedError as refusal:
         say(f"shard {shard}: {refusal}")
-        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+        return Outcome(
+            exit_code=EXIT_INTEGRITY,
+            record=None,
+            landing=None,
+            finished_tasks=tuple(finished),
+            downloaded_bytes=downloaded_bytes,
+        )
 
     if too_heavy is not None:
         say(too_heavy)
@@ -673,7 +761,14 @@ def run(
     )
     failed = any(each.failed for each in ran) or too_heavy is not None
     tasks_code = EXIT_TASK_FAILED if failed else EXIT_OK
-    return Outcome(exit_code=tasks_code, record=record, landing=landing)
+    return Outcome(
+        exit_code=tasks_code,
+        record=record,
+        landing=landing,
+        finished_tasks=tuple(finished),
+        downloaded_bytes=downloaded_bytes,
+        over_budget=too_heavy is not None,
+    )
 
 
 def tasks_of_shard(settings: GardenerSettings, index: int) -> tuple[str, ...]:

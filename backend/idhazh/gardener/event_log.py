@@ -30,6 +30,13 @@ compaction also run under commands that write their records as text -
 lines call it from `cli.settings_or_none`, at the level `config/` names. It is
 `logging.basicConfig`, so once the root logger has a handler a second call does
 nothing.
+
+**On GitHub, the handler also writes the workflow commands GitHub reads.**
+`GitHubLines` writes each record as `OneJsonLine` does, with the commands
+`workflow_commands` names before and after an event's line, on the same stream:
+a group around each task's lines, one error line for a task that failed, and a
+warning when nothing landed because main moved on. Whoever installs the handler
+says whether the run is on GitHub; this module reads no environment.
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ from typing import Any, Final, NamedTuple
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.gardener_events import LoggedText
+from idhazh.gardener import workflow_commands
 
 #: The record attribute an event travels on, from `emit` to the formatter.
 _ATTRIBUTE: Final = "gardener_event"
@@ -119,10 +127,29 @@ class OneJsonLine(logging.Formatter):
         return _dumped({**line, **said})
 
 
-def install(level: str) -> None:
-    """One `OneJsonLine` handler on stderr for the root logger, at `level`, unless it has one."""
+class GitHubLines(OneJsonLine):
+    """Each record as `OneJsonLine` writes it, with GitHub's workflow commands around an event.
+
+    A record some other module logged as text has no commands around it.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        line = super().format(record)
+        event = payload(record)
+        if event is None:
+            return line
+        before, after = workflow_commands.around(event)
+        return "\n".join((*before, line, *after))
+
+
+def install(level: str, *, github: bool = False) -> None:
+    """One handler on stderr for the root logger, at `level`, unless it has one.
+
+    `github` says the run is a step on GitHub, so the handler is `GitHubLines`;
+    otherwise it is `OneJsonLine`.
+    """
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(OneJsonLine())
+    handler.setFormatter(GitHubLines() if github else OneJsonLine())
     logging.basicConfig(level=level, handlers=[handler])
 
 
