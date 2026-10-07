@@ -30,7 +30,7 @@ from typing import Any, Final
 import pyarrow.parquet
 
 from idhazh.contracts.file_envelope import Compression
-from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalField, LogicalType
+from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalType
 
 #: The key prefix pyarrow uses for its own serialized schema beside our keys.
 #: Not part of the envelope, so it is dropped on the way back.
@@ -88,6 +88,11 @@ def _schema(columns: Sequence[Column], metadata: Mapping[bytes, bytes] | None) -
         ],
         metadata=None if metadata is None else dict(metadata),
     )
+
+
+def schema_of(columns: Sequence[Column]) -> Any:
+    """The arrow schema these columns make, without file metadata."""
+    return _schema(columns, None)
 
 
 def _codec(compression: Compression) -> str | None:
@@ -159,56 +164,7 @@ def read_footer(path: Path) -> tuple[dict[bytes, bytes], int]:
     return _envelope_of(footer.metadata), int(footer.num_rows)
 
 
-def _logical_from_arrow(name: str, data_type: Any) -> ColumnType | LogicalType:
-    """The project logical type represented by one Arrow footer field."""
-    if pyarrow.types.is_string(data_type):
-        return ColumnType.STRING
-    if pyarrow.types.is_int64(data_type):
-        return ColumnType.INT64
-    if pyarrow.types.is_float64(data_type):
-        return ColumnType.FLOAT64
-    if pyarrow.types.is_boolean(data_type):
-        return ColumnType.BOOL
-    if pyarrow.types.is_list(data_type):
-        field = data_type.value_field
-        return LogicalType(
-            kind="list",
-            item_type=_logical_tree_from_arrow(f"{name}[]", field.type),
-            item_nullable=field.nullable,
-        )
-    if pyarrow.types.is_struct(data_type):
-        return LogicalType(
-            kind="struct",
-            fields=tuple(
-                LogicalField(
-                    name=field.name,
-                    type=_logical_tree_from_arrow(f"{name}.{field.name}", field.type),
-                    nullable=field.nullable,
-                )
-                for field in data_type
-            ),
-        )
-    raise TypeError(f"{name} has parquet type {data_type}, which the ledger type map does not know")
-
-
-def _logical_tree_from_arrow(name: str, data_type: Any) -> LogicalType:
-    """The recursive spelling of one Arrow footer field."""
-    logical = _logical_from_arrow(name, data_type)
-    if isinstance(logical, LogicalType):
-        return logical
-    return LogicalType(kind="scalar", scalar=logical.value)
-
-
-def read_footer_columns(path: Path) -> tuple[dict[bytes, bytes], int, tuple[Column, ...]]:
-    """The envelope, row count and columns read from a parquet footer, with no row read."""
+def read_footer_schema(path: Path) -> tuple[dict[bytes, bytes], Any]:
+    """The envelope and arrow schema read from a parquet footer, with no row read."""
     footer = pyarrow.parquet.read_metadata(path)
-    schema = footer.schema.to_arrow_schema()
-    columns = tuple(
-        Column(
-            name=field.name,
-            type=_logical_from_arrow(field.name, field.type),
-            nullable=field.nullable,
-        )
-        for field in schema
-    )
-    return _envelope_of(footer.metadata), int(footer.num_rows), columns
+    return _envelope_of(footer.metadata), footer.schema.to_arrow_schema()

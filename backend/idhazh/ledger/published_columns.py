@@ -5,13 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths
-from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalType
 from idhazh.ledger.persist import file_columns
 
 _STATE_DIR: Final = "state"
@@ -20,6 +19,7 @@ _NO_COLUMN: Final = "<not declared>"
 _REPACK_FIX: Final = (
     "give the contract a new version, CLAUDE.md section 11, or re-pack the file"
 )
+_ZERO_FILE_FIX: Final = "is --site-tree the built site?"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,27 +50,6 @@ class _Fault:
     fix: str
 
 
-def _type_label(logical: ColumnType | LogicalType) -> str:
-    """A stable type name for build logs, not an engine type name."""
-    if isinstance(logical, ColumnType):
-        return logical.value
-    if logical.kind == "scalar":
-        return logical.scalar or "scalar<?>"
-    if logical.kind == "list":
-        item = "item<?>"
-        if logical.item_type is not None:
-            item = _type_label(logical.item_type)
-        suffix = "?" if logical.item_nullable else ""
-        return f"list<{item}{suffix}>"
-    if logical.kind == "struct":
-        fields = ", ".join(
-            f"{field.name}:{_type_label(field.type)}{'?' if field.nullable else ''}"
-            for field in logical.fields
-        )
-        return f"struct<{fields}>"
-    return logical.kind
-
-
 def _relative(site_tree: Path, path: Path | None) -> str:
     if path is None:
         return "<no file>"
@@ -89,6 +68,15 @@ def _fault_line(site_tree: Path, fault: _Fault) -> str:
     )
 
 
+def _zero_file_line(site_tree: Path) -> str:
+    return (
+        "published-columns FAIL F0 "
+        f"tree={site_tree.as_posix()} file_schema={_NO_COLUMN} "
+        f"contract_schema={_NO_COLUMN} column={_NO_COLUMN} "
+        f"file_type={_NO_COLUMN} contract_type={_NO_COLUMN}; fix: {_ZERO_FILE_FIX}"
+    )
+
+
 def _history_line(stamp: str, history: _History) -> str:
     missing = ", ".join(sorted(history.missing)) or "none"
     extra = ", ".join(sorted(history.extra)) or "none"
@@ -104,22 +92,6 @@ def _report_line(report: _Report) -> str:
     return (
         f"published-columns {report.ledger.value}: checked {report.files} file(s), "
         f"current {report.current}, history {history}"
-    )
-
-
-def _same_type(left: Column, right: Column) -> bool:
-    """Types must match, while nullability is history the rail does not colour."""
-    return _canonical_type(left.type) == _canonical_type(right.type)
-
-
-def _canonical_type(logical: ColumnType | LogicalType) -> ColumnType | LogicalType:
-    """The legacy string-list spelling and the recursive spelling are one Arrow type."""
-    if logical != ColumnType.STRING_LIST:
-        return logical
-    return LogicalType(
-        kind="list",
-        item_type=LogicalType(kind="scalar", scalar=ColumnType.STRING.value),
-        item_nullable=True,
     )
 
 
@@ -145,8 +117,10 @@ def _add_history(
     )
 
 
-def _contract_columns(model: type[Contract]) -> dict[str, Column]:
-    return {column.name: column for column in file_columns(model)}
+def _contract_schema(model: type[Contract]) -> Any:
+    from idhazh.ledger import parquet
+
+    return parquet.schema_of(file_columns(model))
 
 
 def _check_file(
@@ -155,13 +129,12 @@ def _check_file(
     path: Path,
     ledger: LedgerName,
     contract_stamp: str,
-    expected: dict[str, Column],
-) -> tuple[FileEnvelope, dict[str, Column], list[_Fault]]:
+    expected: Any,
+) -> tuple[FileEnvelope, Any, list[_Fault]]:
     from idhazh.ledger import parquet
 
-    metadata, _, columns = parquet.read_footer_columns(path)
+    metadata, actual = parquet.read_footer_schema(path)
     envelope = FileEnvelope.from_metadata(metadata)
-    actual = {column.name: column for column in columns}
     faults: list[_Fault] = []
     file_stamp = envelope.row_schema_version
     if file_stamp > contract_stamp:
@@ -180,8 +153,10 @@ def _check_file(
         )
         return envelope, actual, faults
 
-    missing = sorted(set(expected) - set(actual))
-    extra = sorted(set(actual) - set(expected))
+    expected_names = set(expected.names)
+    actual_names = set(actual.names)
+    missing = sorted(expected_names - actual_names)
+    extra = sorted(actual_names - expected_names)
     if file_stamp == contract_stamp:
         for name in missing:
             faults.append(
@@ -193,7 +168,7 @@ def _check_file(
                     contract_stamp=contract_stamp,
                     column=name,
                     file_type=_NO_COLUMN,
-                    contract_type=_type_label(expected[name].type),
+                    contract_type=str(expected.field(name).type),
                     fix=_REPACK_FIX,
                 )
             )
@@ -206,13 +181,13 @@ def _check_file(
                     file_stamp=file_stamp,
                     contract_stamp=contract_stamp,
                     column=name,
-                    file_type=_type_label(actual[name].type),
+                    file_type=str(actual.field(name).type),
                     contract_type=_NO_COLUMN,
                     fix=_REPACK_FIX,
                 )
             )
-    for name in sorted(set(expected) & set(actual)):
-        if not _same_type(expected[name], actual[name]):
+    for name in sorted(expected_names & actual_names):
+        if not expected.field(name).type.equals(actual.field(name).type):
             faults.append(
                 _Fault(
                     kind="F2",
@@ -221,8 +196,8 @@ def _check_file(
                     file_stamp=file_stamp,
                     contract_stamp=contract_stamp,
                     column=name,
-                    file_type=_type_label(actual[name].type),
-                    contract_type=_type_label(expected[name].type),
+                    file_type=str(actual.field(name).type),
+                    contract_type=str(expected.field(name).type),
                     fix=_REPACK_FIX,
                 )
             )
@@ -240,6 +215,8 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
     site_tree = site_tree.resolve()
     faults: list[_Fault] = []
     reports: list[_Report] = []
+    contracted_ledgers = 0
+    contracted_files = 0
     for ledger in published:
         try:
             model = keys.door_contract(ledger)
@@ -258,11 +235,13 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
                 )
             )
             continue
-        expected = _contract_columns(model)
+        contracted_ledgers += 1
+        expected = _contract_schema(model)
         contract_stamp = model.schema_version()
         current = 0
         history: dict[str, _History] = {}
         files = _parquet_files(site_tree, ledger)
+        contracted_files += len(files)
         for path in files:
             envelope, actual, file_faults = _check_file(
                 site_tree=site_tree,
@@ -272,8 +251,8 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
                 expected=expected,
             )
             faults.extend(file_faults)
-            missing = sorted(set(expected) - set(actual))
-            extra = sorted(set(actual) - set(expected))
+            missing = sorted(set(expected.names) - set(actual.names))
+            extra = sorted(set(actual.names) - set(expected.names))
             if envelope.row_schema_version == contract_stamp and not missing and not extra:
                 current += 1
             elif envelope.row_schema_version < contract_stamp:
@@ -282,7 +261,10 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
                 )
         reports.append(_Report(ledger=ledger, files=len(files), current=current, history=history))
 
-    if faults:
+    zero_file_fault = contracted_ledgers > 0 and contracted_files == 0
+    if faults or zero_file_fault:
+        if zero_file_fault:
+            print(_zero_file_line(site_tree))
         for fault in faults:
             print(_fault_line(site_tree, fault))
         return 1

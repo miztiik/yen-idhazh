@@ -196,3 +196,19 @@ def test_f4_published_ledger_without_door_contract_fails_and_prints(
         "column=<not declared> file_type=<not declared> contract_type=<not declared>; "
         "fix: add the ledger to the door table in idhazh/ledger/keys.py\n"
     )
+
+
+def test_a_site_tree_with_no_published_files_fails_and_prints(
+    tmp_path: Path, capsys: CaptureFixture[str]
+) -> None:
+    site_tree = tmp_path / "site"
+
+    assert published_columns.check(site_tree, [LedgerName.HOST_FINGERPRINT]) == 1
+
+    assert capsys.readouterr().out == (
+        "published-columns FAIL F0 "
+        f"tree={site_tree.resolve().as_posix()} file_schema=<not declared> "
+        "contract_schema=<not declared> column=<not declared> "
+        "file_type=<not declared> contract_type=<not declared>; "
+        "fix: is --site-tree the built site?\n"
+    )

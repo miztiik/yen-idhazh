@@ -16,7 +16,6 @@ keeps what it measured.
 
     idhazh backfill-vectors   re-encode named closed days whose vectors are short
     idhazh derived-paths      print the committed paths a rebuild owns
-    idhazh published-columns  check staged ledger files against their row contracts
 
 Neither is a stage. Nothing schedules the first; the second answers one question
 for the commit step that runs seconds later, and its answer comes from
