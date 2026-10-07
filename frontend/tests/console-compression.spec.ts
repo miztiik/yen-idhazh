@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
 	bandFor,
@@ -9,8 +9,11 @@ import {
 	bandSplit,
 	placeInBand,
 	type CompressionPoint,
-	type SummaryBand
+	type SummaryBand,
+	type TelemetryRow
 } from '../src/lib/charts/series';
+import { dayBefore, openServed } from './support/served-telemetry';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * How far each day's summaries landed from the length the prompt asked for.
@@ -22,13 +25,14 @@ import {
  * named underneath.
  *
  * THE ORACLE is the row's whole point: `inside + short + long` equals the day's
- * own count of summaries the page can place a band for, recomputed here from
- * the committed ladder and the canary's own projection. A split that does not
- * add up is mis-binning articles, and the picture would still look right.
+ * own count of summaries the page can place a band for. The page is served
+ * telemetry the test builds for the window it opened on, with summary lengths
+ * chosen against the committed ladder, so each day's split is written out here.
+ * A split that does not add up is mis-binning articles, and the picture would
+ * still look right.
  */
 
 const REPO = resolve(process.cwd(), '..');
-const CANARY = join(REPO, 'backend', 'var', 'canary');
 
 /** Open the console and wait until it holds the rows this section draws from.
  *
@@ -72,70 +76,6 @@ const OUTLIER_ROWS = (
 	}
 ).console?.band_outlier_rows ?? 10;
 
-interface Row {
-	date: string;
-	item_id: string;
-	stage: string;
-	outcome: string;
-	source_words: number | null;
-	summary_words: number | null;
-	source_words_before_cap: number | null;
-}
-
-function cell(value: string): number | null {
-	if (value === '') return null;
-	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : null;
-}
-
-/** The canary's own telemetry projection, parsed here rather than through the
- * page's reader. An oracle that shares a parser with the thing it checks agrees
- * with it about a column read out of the wrong place. */
-function projection(): Row[] {
-	const dir = join(CANARY, 'state', 'telemetry');
-	const rows: Row[] = [];
-	for (const name of readdirSync(dir).filter((file) => file.endsWith('.csv'))) {
-		const lines = readFileSync(join(dir, name), 'utf8').trim().split('\n');
-		const header = lines[0].split(',');
-		const at = (cells: string[], column: string) => cells[header.indexOf(column)] ?? '';
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			rows.push({
-				date: at(cells, 'date'),
-				item_id: at(cells, 'item_id'),
-				stage: at(cells, 'stage'),
-				outcome: at(cells, 'outcome'),
-				source_words: cell(at(cells, 'source_words')),
-				summary_words: cell(at(cells, 'summary_words')),
-				source_words_before_cap: cell(at(cells, 'source_words_before_cap'))
-			});
-		}
-	}
-	return rows;
-}
-
-/** The article's own length: before the cap where the run wrote one down, and
- * what survived where it did not. Recomputed here so a reading that changed in
- * the page does not change under the test with it. */
-function articleWords(row: Row): number {
-	return row.source_words_before_cap ?? row.source_words ?? 0;
-}
-
-/** One entry per article per day: a re-run writes a second row for an article
- * an earlier run already published, and one article is one item. */
-function placeable(): Row[] {
-	const perArticle = new Map<string, Row>();
-	for (const row of projection()) {
-		if (row.stage !== 'publish' || row.outcome !== 'ok') continue;
-		const key = `${row.date}-${row.item_id}`;
-		const held = perArticle.get(key);
-		if (held === undefined || articleWords(row) > articleWords(held)) perArticle.set(key, row);
-	}
-	return [...perArticle.values()].filter(
-		(row) => articleWords(row) > 0 && (row.summary_words ?? 0) > 0
-	);
-}
-
 /** The band a length asks for, read straight off the committed ladder. */
 function askedFor(sourceWords: number): SummaryBand {
 	let chosen = BANDS[0];
@@ -143,32 +83,22 @@ function askedFor(sourceWords: number): SummaryBand {
 	return chosen;
 }
 
+/** One published article of `sourceWords` words whose summary ran `summaryWords`. */
+function published(date: string, itemId: string, sourceWords: number, summaryWords: number | null, run = 1): TelemetryRow {
+	return telemetryRow({
+		date,
+		run_id: `${date}-${run}`,
+		item_id: itemId,
+		source_words: sourceWords,
+		summary_words: summaryWords
+	});
+}
+
 interface Split {
 	inside: number;
 	short: number;
 	long: number;
 	items: number;
-}
-
-/** What the page must draw, for every day of its own open window. */
-async function expected(page: Page): Promise<Record<string, Split>> {
-	const control = page.locator('[data-viewport-control]');
-	const start = (await control.getAttribute('data-window-start')) ?? '';
-	const end = (await control.getAttribute('data-window-end')) ?? '';
-	expect(start, 'the page published no window, so the filter below drops everything').not.toBe('');
-
-	const days: Record<string, Split> = {};
-	for (const row of placeable()) {
-		if (row.date < start || row.date > end) continue;
-		const band = askedFor(articleWords(row));
-		const summary = row.summary_words as number;
-		const day = (days[row.date] ??= { inside: 0, short: 0, long: 0, items: 0 });
-		if (summary < band.target_words_min) day.short += 1;
-		else if (summary > band.target_words_max) day.long += 1;
-		else day.inside += 1;
-		day.items += 1;
-	}
-	return days;
 }
 
 /** What the page did draw, one entry per column that carries a mark. */
@@ -192,55 +122,42 @@ async function drawn(page: Page): Promise<Record<string, Split>> {
 test('THE ORACLE: the three-way split adds up to the day, every day in the window', async ({
 	page
 }) => {
-	await open(page);
+	// Summary lengths are chosen against the rung each article reaches, so the split
+	// below holds whatever the ladder's numbers are. A bound is inside the band.
+	const rung = askedFor(400);
+	const longRung = askedFor(2500);
+	const { window } = await openServed(page, ({ end }) => {
+		const older = dayBefore(end, 2);
+		return [
+			published(end, 'inside-low', 400, rung.target_words_min),
+			published(end, 'inside-high', 400, rung.target_words_max),
+			published(end, 'short', 400, rung.target_words_min - 1),
+			published(end, 'long', 2500, longRung.target_words_max + 1),
+			// A second run's row for an article the first run published: one article is
+			// one item, kept at its longer reading, so this draws nothing of its own.
+			published(end, 'inside-low', 300, rung.target_words_max + 500, 2),
+			// Neither a failed item nor a summary with no length can be placed.
+			telemetryRow({ date: end, run_id: `${end}-1`, item_id: 'failed', stage: 'fetch', outcome: 'failed' }),
+			published(end, 'no-length', 400, null),
+			published(older, 'older-short', 400, rung.target_words_min - 1),
+			published(older, 'older-inside', 400, rung.target_words_min)
+		];
+	});
 
-	const want = await expected(page);
-	const got = await drawn(page);
-
-	expect(
-		Object.keys(want).length,
-		'the fixture puts no placeable article in the open window, so this asserts nothing'
-	).toBeGreaterThan(0);
 	// Every day, in both directions. A column the page invented and a day it
 	// dropped are the same defect read from opposite ends.
-	expect(got).toEqual(want);
+	expect(await drawn(page)).toEqual({
+		[window.end]: { inside: 2, short: 1, long: 1, items: 4 },
+		[dayBefore(window.end, 2)]: { inside: 1, short: 1, long: 0, items: 2 }
+	});
 
-	// And the parts of every drawn column reach its own total. The attribute is
-	// what the ranked list and the columns are both built from, so a total that
-	// is not the sum of its parts is the failure this row exists to prevent.
-	for (const [date, split] of Object.entries(got)) {
-		expect(split.inside + split.short + split.long, `${date} does not add up`).toBe(split.items);
+	// One rectangle per part that holds a summary, and never one per article: the
+	// newest day's three parts and the older day's two. The scatter this replaced
+	// drew 2,740 marks.
+	await expect(page.locator('[data-band-part]')).toHaveCount(5);
+	for (const part of ['inside', 'short', 'long']) {
+		await expect(page.locator(`[data-band-part="${part}"]`), `no ${part} part was drawn`).not.toHaveCount(0);
 	}
-});
-
-test('the fixture reaches all three states, so none of them can pass by never firing', async ({
-	page
-}) => {
-	await open(page);
-
-	const totals = Object.values(await drawn(page)).reduce(
-		(sum, day) => ({
-			inside: sum.inside + day.inside,
-			short: sum.short + day.short,
-			long: sum.long + day.long,
-			items: sum.items + day.items
-		}),
-		{ inside: 0, short: 0, long: 0, items: 0 }
-	);
-
-	// An absence test passes on a run that did nothing. Each of these is positive
-	// evidence that the bin was reached and drawn.
-	expect(totals.inside, 'no summary landed inside its band').toBeGreaterThan(0);
-	expect(totals.short, 'no summary came in short of its band').toBeGreaterThan(0);
-	expect(totals.long, 'no summary ran past its band').toBeGreaterThan(0);
-
-	// One rectangle per non-empty part, and never one per article. The scatter
-	// this replaces drew 2,740 marks; 90 columns is the whole point.
-	const rects = await page.locator('[data-band-part]').count();
-	expect(rects, 'a part was drawn for a bin that holds nothing').toBeLessThanOrEqual(
-		Object.keys(await drawn(page)).length * 3
-	);
-	expect(rects, 'the columns drew one mark an article again').toBeLessThan(totals.items);
 });
 
 test('the scatter is gone, and nothing draws a point an article', async ({ page }) => {
@@ -320,29 +237,32 @@ test('the outlier list ranks by distance, prints its divisor, and caps itself', 
 });
 
 test('the tail says how many rows are hidden, and never sums the distances', async ({ page }) => {
-	await open(page);
-
-	// Recomputed from the fixture, so a canary that grows a row moves this with
-	// it rather than going stale on a number typed here.
-	const outliers = Object.values(await expected(page)).reduce(
-		(sum, day) => sum + day.short + day.long,
-		0
-	);
-	const hidden = Math.max(0, outliers - OUTLIER_ROWS);
+	// As many summaries past their band on the newest day as the list prints, each a
+	// word further out than the last, and three more nine days earlier. Over fourteen
+	// days three rows are hidden; over seven, none.
+	const rung = askedFor(400);
+	const pastTheBand = (date: string, prefix: string, count: number) =>
+		Array.from({ length: count }, (_, at) =>
+			published(date, `${prefix}-${at + 1}`, 400, rung.target_words_max + 1 + at)
+		);
+	await openServed(page, ({ end }) => [
+		...pastTheBand(end, 'newest', OUTLIER_ROWS),
+		...pastTheBand(dayBefore(end, 9), 'older', 3)
+	]);
 	const tail = page.locator('[data-band-outliers] [data-ranked="tail"]');
 
-	if (hidden === 0) {
-		// A sentence saying zero rows are hidden is a line the operator reads and
-		// learns nothing from.
-		await expect(tail).toHaveCount(0);
-		return;
-	}
+	await page.locator('[data-window-preset="14"]').click();
+	await expect(page.locator('[data-windowed="band-distance"]')).toHaveAttribute('data-window-days', '14');
 	// Counts add and distances do not: two summaries 40 words out are not one
 	// summary 80 words out, so the tail reports rows and no total.
-	await expect(tail).toHaveText(
-		hidden === 1 ? '1 more article is not shown.' : `${hidden} more articles are not shown.`
-	);
+	await expect(tail).toHaveText('3 more articles are not shown.');
 	expect(await tail.innerText()).not.toMatch(/words/);
+
+	// A sentence saying zero rows are hidden is a line the operator reads and
+	// learns nothing from.
+	await page.locator('[data-window-preset="7"]').click();
+	await expect(page.locator('[data-windowed="band-distance"]')).toHaveAttribute('data-window-days', '7');
+	await expect(tail).toHaveCount(0);
 });
 
 test('a window with nothing in it says so, rather than drawing an empty chart', async ({ page }) => {

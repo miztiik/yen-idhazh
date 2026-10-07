@@ -1,4 +1,3 @@
-import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow } from '$lib/charts/chart-flow';
 import type { ExtractionDay } from '$lib/charts/extraction-trend';
@@ -7,10 +6,13 @@ import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { recordNotesByWindow, type OfferedWindow } from '$lib/console/recording';
 import { extraction, type Extraction } from '$lib/console/extraction';
 import { health, runOutcome, squareLabel, type DayColumn } from '$lib/console/run-square';
-import { pipelineChanges, wasCut } from '$lib/server/model-work';
+import { chartDays } from '$lib/server/chart-days';
+import { cutsByRun } from '$lib/server/cuts-by-run';
+import { pipelineChanges } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
+import { stageTimingDays } from '$lib/server/stage-timing-days';
 import { windowDay } from '$lib/server/window-day';
 import {
 	dayMetrics,
@@ -19,139 +21,13 @@ import {
 	publishedCharts,
 	publishedItems,
 	telemetryRows,
-	TELEMETRY_ROOT,
-	type DayVisuals,
-	type RunRecord,
-	type RunSummary
+	TELEMETRY_ROOT
 } from '$lib/server/payload';
 
 export const prerender = true;
 
-type TimingStats = StageTimingDay;
-
 export type { ItemCost } from '$lib/console/item-cost';
 export type { Extraction } from '$lib/console/extraction';
-
-/** What one day's chart drawing cost and what it produced.
- *
- * Four counts and one division. Two gaps carry the whole story: reached against
- * asked is the check that runs before the model, drafted against published is
- * the pair of checks that run after it.
- *
- * `plannerMinutes` and `minutesPerChart` are null rather than zero wherever the
- * number does not exist - a day whose visuals job never ran measured no time, and
- * a day with no chart has no per-chart cost. Zero would read as free.
- */
-export interface ChartDay {
-	date: string;
-	reached: number;
-	asked: number;
-	drafted: number;
-	published: number;
-	/** Items the day published, chart or no chart. Chart drawing's second threshold is
-	 * a share of this, and a share needs its denominator on the page. */
-	items: number;
-	plannerMinutes: number | null;
-	minutesPerChart: number | null;
-}
-
-/** One row per published day, from the day's own manifest and payload.
- *
- * Nothing here is stored as a rate. The manifest carries counts and one
- * millisecond total; the division happens at read time, so a ratio can never
- * disagree with the counts printed beside it.
- */
-function chartDays(days: RunSummary[], charts: Map<string, DayVisuals>): ChartDay[] {
-	return days.map((day) => {
-		const sum = (of: (run: RunRecord) => number) =>
-			day.records.reduce((total, run) => total + of(run), 0);
-		const timed = day.records.map((run) => run.decisionMs).filter((ms): ms is number => ms !== null);
-		const plannerMinutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
-		const seen = charts.get(day.date);
-		const published = seen?.charts ?? 0;
-		return {
-			date: day.date,
-			reached: sum((run) => run.decided + run.prefiltered),
-			asked: sum((run) => run.decided),
-			drafted: sum((run) => run.chartsDrafted),
-			published,
-			items: seen?.items ?? 0,
-			plannerMinutes,
-			minutesPerChart: plannerMinutes === null || published === 0 ? null : plannerMinutes / published
-		};
-	});
-}
-
-/** Null when nothing was timed. Zero is a measurement - a cheap stage really
- * does finish inside a millisecond clock's own resolution - so it can never
- * stand in for the absence of one.
- *
- * It takes a `Sample` rather than an array so that a hand-built list of
- * numbers, and any zero invented to fill an empty cell, has nowhere to land. */
-function median(of: Sample): number | null {
-	if (of.values.length === 0) return null;
-	const sorted = [...of.values].sort((a, b) => a - b);
-	const middle = Math.floor(sorted.length / 2);
-	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-function measured(row: Record<string, string>, name: string): number | null {
-	const raw = row[name];
-	if (raw === undefined || raw === '') return null;
-	const value = Number(raw);
-	return Number.isFinite(value) ? value : null;
-}
-
-/** One column of one group of rows, and how many rows could have filled it.
- *
- * `timed` against `total` is the fact a bare array cannot carry: eight items
- * timed out of ten and ten out of ten arrive as the same list of numbers.
- */
-interface Sample {
-	values: number[];
-	timed: number;
-	total: number;
-}
-
-function sample(rows: Record<string, string>[], name: string): Sample {
-	const values = rows
-		.map((row) => measured(row, name))
-		.filter((value): value is number => value !== null);
-	return { values, timed: values.length, total: rows.length };
-}
-
-/** A sample reduced to what the chart draws: one median, and the two counts
- * that say whether the day was timed in full, in part, or not at all. */
-function timing(of: Sample): StageTiming {
-	return { ms: median(of), timed: of.timed, total: of.total };
-}
-
-function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
-	const grouped = new Map<string, Record<string, string>[]>();
-	for (const row of rows) {
-		const date = row.date ?? '';
-		if (!date) continue;
-		grouped.set(date, [...(grouped.get(date) ?? []), row]);
-	}
-	return grouped;
-}
-
-/** Articles each run read only the start of, keyed by the run that read them.
- *
- * Counted per address, not per row: a run writes one row per planned item, and
- * the same article coming round on a later run is the same article.
- */
-function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
-	const seen = new Map<string, Set<string>>();
-	for (const row of rows) {
-		if (!wasCut(row)) continue;
-		const runId = row.run_id ?? '';
-		const found = seen.get(runId) ?? new Set<string>();
-		found.add(row.url_key ?? row.item_id ?? '');
-		seen.set(runId, found);
-	}
-	return new Map([...seen].map(([runId, keys]) => [runId, keys.size]));
-}
 
 /** Every section this route draws, as the ids `console.panel_groups` orders.
  *
@@ -209,27 +85,9 @@ export async function load() {
 	const siteBudgetMb = retentionConfig().site_budget_mb;
 	const summarize = summarizeConfig();
 
-	const itemHealthByDate = byDate(itemRows);
-
-	// A day is kept when something on it was timed. Judging it by its medians
-	// would drop a day whose only measurement was a zero, which is the same
-	// mistake one level up.
-	//
-	// The three stages an item waits on. `score_ms` was a fourth entry here until
-	// 2026-08-31: the scorer runs after the summary is written, so nothing waits
-	// on it, and a fourth line on a critical-path chart read as a fourth thing the
-	// run is held up by. It is on the Model route now, beside the cost of writing
-	// the summary it checks.
-	const timingDays: TimingStats[] = [...itemHealthByDate.entries()]
-		.map(([date, group]) => ({
-			date,
-			items: group.length,
-			fetch: timing(sample(group, 'fetch_ms')),
-			extract: timing(sample(group, 'extract_ms')),
-			summarize: timing(sample(group, 'summarize_ms'))
-		}))
-		.filter((day) => [day.fetch, day.extract, day.summarize].some((stage) => stage.timed > 0))
-		.sort((a, b) => b.date.localeCompare(a.date));
+	// Each day's median time per item at the three stages an item waits on, and
+	// how many items each stage timed.
+	const timingDays = stageTimingDays(itemRows);
 
 	const manifests = loadManifests(undefined, widest);
 	const readInPartByRun = cutsByRun(itemRows);

@@ -196,9 +196,9 @@ on it is something an item waits on - and the scorer reads a summary the model
 has already finished, so nothing waits on it. A fourth line there would read as a
 fourth constraint on the run. It is on the Summaries route instead, under `What
 one summary cost`, beside the cost of writing the summary it checks. An empty
-cell is one fewer item timed, never a zero; a zero is the value the column
-defaulted to before it was written, and it is counted as untimed for the same
-reason.
+cell is one fewer item timed, never a zero. A zero is a reading: the stage
+finished inside the clock's own resolution, so it counts as timed and draws as
+an open dot on the baseline.
 
 The axis, the three marks a missing number can take and the model-change rule
 are [console-charts.md](console-charts.md)'s, because the throughput chart beside
@@ -282,6 +282,17 @@ moves almost entirely because the denominator moves. Drawn as a line over time i
 would fall on a week of long articles and read as a cache regression, which is
 the one wrong thing an operator could act on. That sentence is the reason a
 figure is missing, which is the kind of sentence this console keeps.
+
+**The held part stepped once, on 2026-09-13, and a window that spans that day
+disproves the note.** Read again on 2026-10-07 by this section's own rule, over
+the 16,449 items of the 90 days ending 2026-10-06: the middle item held **922**
+tokens on every day up to 2026-09-12, the day after was mixed, and from
+2026-09-14 the middle item held about **1,800 to 1,940** tokens, with the largest
+at **2,219**. On either side of the step the held part still hardly changes, so a
+window of 30 days or fewer ending on 2026-10-06 bears the note out. The 90-day
+window spans the step: its middle item held 922 tokens and its largest 2,219, so
+its note says the held part hardly changes beside two figures that say it moved.
+The note stays false on such a window until it checks its own two figures.
 
 Measured over the committed projection the per-item share has a middle of
 **0.518**, a 5th percentile of **0.000** and a 95th of **0.820** - and **667 of

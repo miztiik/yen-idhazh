@@ -1,28 +1,36 @@
 import { expect, test, type Page } from './support/browser';
+import type { TestInfo } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { grouped, telemetryCsv } from '../src/lib/charts/series';
-import { monthsInWindow, panWindow } from '../src/lib/charts/viewport';
+import { pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
+import { grouped, telemetryCsv, type StageTimingDay, type ThroughputDay } from '../src/lib/charts/series';
+import { daysInWindow, monthsInWindow, panWindow } from '../src/lib/charts/viewport';
 import { shortDate } from '../src/lib/format';
+import { throughputWithin } from '../src/lib/server/model-work';
 import { publishedCharts, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
-import { reliability, type FeedRecord } from '../src/lib/feed-health';
+import { reliability, resultLabel, type FeedRecord } from '../src/lib/feed-health';
 import { days } from './support/consecutive-days';
 import { publishedSite } from './support/published-site';
+import { openServed } from './support/served-telemetry';
+import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
  *
- * It runs against the canary build, whose fixtures carry one run of each colour
- * and one feed of each kind the page has to tell apart. A case that once worked
- * out its answer from the canary's own files now checks what the page draws
- * against what the page itself publishes - its window, its counts and its
- * sentences - or serves the rows it counts. The figures behind those drawings
- * are pinned where they are computed, over rows a test writes: the feed record
- * here, the run square in `console-run-health.spec.ts` and the model table in
- * `console-model-work.spec.ts`. The failed-item list is the section with nothing
- * to show, which proves the page keeps rendering when one of its sources holds
- * nothing.
+ * It runs against the canary build, and no case reads a figure the canary
+ * holds. A case on the built page checks what the page draws against what the
+ * page itself publishes - its window, its counts and its sentences - or serves
+ * the rows it counts. The figures behind those drawings are pinned where they
+ * are computed, over rows a test writes: the feed record and the day's token
+ * rates here, the stage medians in `console-stage-timing-days.spec.ts`, the run
+ * square in `console-run-health.spec.ts` and the model table in
+ * `console-model-work.spec.ts`. The stage-timing and token-rate charts are
+ * drawn here from days a test writes, so their axes, gaps, zeros and sentences
+ * are written out, and the telemetry a pan reaches is served by the test. The
+ * failed-item list is the section with nothing to show, which proves the page
+ * keeps rendering when one of its sources holds nothing.
  *
  * The band section has its own file, `console-compression.spec.ts`.
  *
@@ -506,54 +514,61 @@ test('the run that read only the start of an article says so on its own square',
 	expect(labels.length).toBeGreaterThan(carried.length);
 });
 
-test('a feed that answered with nothing is named, and a polite refusal is not', async ({ page }) => {
+test('a listed feed failed at least once, and a feed the pipeline never read is not listed', async ({
+	page
+}) => {
+	// Which reads count as failures is the quarantine rule's, pinned over rows written in
+	// `console-voices-feeds.spec.ts`: an answer that carried nothing is one, and a polite
+	// refusal is not. What the page owes is to list only feeds that failed, and never one it
+	// names as unread.
 	await page.goto('/console/voices/');
 
-	// Answered with zero items. It cost the digest the same articles a refusal would.
-	await expect(page.locator('[data-feed="canary-empty"]')).toHaveCount(1);
-	// Permanently gone.
-	await expect(page.locator('[data-feed="canary-gone"]')).toHaveCount(1);
-
-	// Said no in robots.txt, every single run. Honouring it is the pipeline
-	// working, so it is not a failure and the operator is not asked to look.
-	await expect(page.locator('[data-feed="canary-polite"]')).toHaveCount(0);
-	// Answered every run. A healthy feed is never listed.
-	await expect(page.locator('[data-feed="canary-steady"]')).toHaveCount(0);
-	// Never asked, so it can neither pass nor fail.
-	await expect(page.locator('[data-feed="canary-quiet"]')).toHaveCount(0);
-});
-
-test('a feed that answered with nothing does not report its last result as ok', async ({ page }) => {
-	await page.goto('/console/voices/');
-
-	// The ledger's own word for this read is `ok` - the fetch returned 200. Printed
-	// raw it sits on the same row as the failure count and contradicts it, which is
-	// how a dead feed reads as a healthy one.
-	const result = page.locator('[data-feed="canary-empty"] [data-feed-result]');
-	await expect(result).toHaveCount(1);
-	await expect(result).toContainText('answered with nothing');
-
-	// A feed that really did fail still reports the reason the ledger recorded.
-	await expect(page.locator('[data-feed="canary-gone"] [data-feed-result]')).not.toContainText(
-		'answered with nothing'
+	const listed = await page.locator('[data-feed]').evaluateAll((rows) =>
+		rows.map((row) => ({
+			id: row.getAttribute('data-feed') ?? '',
+			failures: Number(row.getAttribute('data-feed-failures'))
+		}))
 	);
+	expect(listed.length, 'the page lists no failing feed, so this asserts nothing').toBeGreaterThan(0);
+	for (const feed of listed) expect(feed.failures, `${feed.id} is listed and never failed`).toBeGreaterThan(0);
+	const unread = await page
+		.locator('[data-feed-ineligible-name]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-ineligible-name') ?? ''));
+	expect(
+		listed.map((feed) => feed.id).filter((id) => unread.includes(id)),
+		'a feed the pipeline never read is listed as failing'
+	).toEqual([]);
 });
 
-test('a feed past the quarantine count is marked rested', async ({ page }) => {
+test('an answer that carried nothing is labelled as such, and never as ok', () => {
+	// The ledger's own word for this read is `ok` - the fetch returned 200. Printed raw it sits on
+	// the same row as the failure count and contradicts it, which is how a dead feed reads as a
+	// healthy one.
+	const read = (outcome: string, items: number) => ({ date: '2030-06-15', runId: '2030-06-15-1', outcome, items });
+	expect(resultLabel(read('ok', 0))).toBe('answered with nothing');
+	expect(resultLabel(read('ok', 4))).toBe('ok');
+	// A feed that really did fail still reports the reason the ledger recorded.
+	expect(resultLabel(read('permanent', 0))).toBe('permanent');
+});
+
+test('a feed still failing never reports its last result as ok', async ({ page }) => {
+	// A streak runs to the newest read, so a feed that has one has not answered since: its last
+	// result is a failure or a read that did not ask, never the word ok.
 	await page.goto('/console/voices/');
 
-	const flaky = page.locator('[data-feed="canary-flaky"]');
-	await expect(flaky.locator('[data-rested]')).toHaveCount(1);
-	await expect(page.locator('[data-feed="canary-gone"] [data-rested]')).toHaveCount(0);
-
-	// Nearest to a rest first. `canary-flaky` has failed every run it was asked,
-	// `canary-empty` answered once before its two blank runs, and `canary-gone`
-	// has one failure. The full ordering rule is held in console-voices-feeds.spec.ts,
-	// against the page's own published streaks rather than against this list.
-	const named = await page
-		.locator('[data-feed]')
-		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-feed')));
-	expect(named).toEqual(['canary-flaky', 'canary-empty', 'canary-gone']);
+	const rows = await page.locator('[data-feed]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			id: node.getAttribute('data-feed') ?? '',
+			streak: Number(node.getAttribute('data-feed-streak')),
+			result: (node.querySelector('[data-feed-result]')?.textContent ?? '').replace(/\s+/g, ' ').trim()
+		}))
+	);
+	expect(rows.length, 'the page lists no failing feed, so this asserts nothing').toBeGreaterThan(0);
+	for (const row of rows) {
+		const label = row.result.split(' - ')[0];
+		expect(label, `${row.id} prints no last result`).not.toBe('');
+		if (row.streak > 0) expect(label, `${row.id} is still failing and reports ok`).not.toBe('ok');
+	}
 });
 
 /** The cap the feed list draws with, from the file the page reads it from. */
@@ -742,204 +757,194 @@ test('a record with more failing feeds than the list draws is counted whole', ()
 	expect(measured.ineligible).toEqual(['refused', 'rested']);
 });
 
-test('stage medians come from item health, not the score ledger', async ({ page }) => {
-	await page.goto('/console/');
+/** Four timed days in a window of fifteen, written here and handed to the stage-timing chart.
+ *
+ * Newest first, as the route hands them over. Nothing timed 1 to 10 June or
+ * 13 June, so those days have no entry, and with fewer than half the days
+ * timed the chart tints them and says so in one sentence. On 14 June fetch
+ * timed nothing and extract was measured at zero; on 15 June summarize timed 2
+ * of the day's 3 items. The smallest reading is 20 ms and the largest 900 ms,
+ * so the axis runs from the 10 ms decade to the 1 s one, and no reading sits on
+ * a decade line.
+ */
+const TIMING_SPAN = { start: '2030-06-01', end: '2030-06-15' };
 
-	await expect(page.getByText('Time per item, by stage')).toBeVisible();
-	// The legend, not the axis: the largest median is printed in both places, so
-	// an unscoped match is ambiguous the moment one stage is the slowest.
-	await expect(page.locator('[data-readout="timings"] [data-readout-row="fetch"]')).toContainText(
-		'200 ms'
+function timedStage(ms: number | null, count: number, total: number) {
+	return { ms, timed: count, total };
+}
+
+const TIMING_DAYS: StageTimingDay[] = [
+	{ date: '2030-06-15', items: 3, fetch: timedStage(200, 3, 3), extract: timedStage(30, 3, 3), summarize: timedStage(700, 2, 3) },
+	{ date: '2030-06-14', items: 2, fetch: timedStage(null, 0, 2), extract: timedStage(0, 2, 2), summarize: timedStage(900, 2, 2) },
+	{ date: '2030-06-12', items: 2, fetch: timedStage(150, 2, 2), extract: timedStage(20, 2, 2), summarize: timedStage(800, 2, 2) },
+	{ date: '2030-06-11', items: 2, fetch: timedStage(120, 2, 2), extract: timedStage(25, 2, 2), summarize: timedStage(850, 2, 2) }
+];
+
+/** A console chart drawn in a real browser page from the days a test hands it.
+ *
+ * The chart's geometry and its words are worked out inside the component, so
+ * the component is what a test has to draw. It is compiled with its real
+ * readout child, never a stub (`tests/support/server-render.ts`), at the size
+ * and tick density the console draws it with.
+ */
+async function drawnChart(page: Page, testInfo: TestInfo, name: string, props: Record<string, unknown>) {
+	const appearance = JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as {
+		chart: { tick_density: number; readout_max_share: number };
+		console: { chart_height: number; chart_width: number };
+	};
+	const compiled = serverCompiler(testInfo.outputPath(name));
+	const readout = await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
+	const module = await compiled(`src/lib/components/${name}.svelte`, name, [
+		['./ChartReadout.svelte', pathToFileURL(readout).href]
+	]);
+	const component = (await import(pathToFileURL(module).href)).default;
+	const markup = render(component, {
+		props: {
+			...props,
+			height: appearance.console.chart_height,
+			width: appearance.console.chart_width,
+			tickDensity: appearance.chart.tick_density,
+			readoutMaxShare: appearance.chart.readout_max_share
+		}
+	}).body;
+	await page.setContent(
+		`<style>${[...compiled.css.values()].join('\n')}</style>` +
+			`<main style="width: ${appearance.console.chart_width}px">${markup}</main>`
 	);
-	await expect(page.locator('[data-readout="timings"] [data-readout-row="extract"]')).toContainText(
-		'30 ms'
-	);
-	await expect(
-		page.locator('[data-readout="timings"] [data-readout-row="summarize"]')
-	).toContainText('700 ms');
-});
+}
 
-test('the timing y axis is decades, and it crosses milliseconds to seconds', async ({ page }) => {
-	await page.goto('/console/');
+/** The stage-timing chart, drawn from `TIMING_DAYS`, and its plot. */
+async function drawnTimings(page: Page, testInfo: TestInfo) {
+	await drawnChart(page, testInfo, 'StageTimings', { days: TIMING_DAYS, span: TIMING_SPAN });
+	return page.locator('[data-timing="plot"]');
+}
 
-	const labels = await page
-		.locator('[data-timing="plot"] [data-decade]')
+test('the timing y axis is decades, and it crosses milliseconds to seconds', async ({ page }, testInfo) => {
+	const plot = await drawnTimings(page, testInfo);
+
+	// Readings from 20 ms to 900 ms span the 10 ms decade to the 1 s one. Stages
+	// that far apart cannot share a linear axis: the slowest would set the domain
+	// and the others would draw on the baseline.
+	const labels = await plot
+		.locator('[data-decade]')
 		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''));
+	expect(labels).toEqual(['10 ms', '100 ms', '1 s']);
 
-	// Four stages spanning three decades cannot share a linear axis: the slowest
-	// sets the domain and the other three draw on the baseline.
-	expect(labels.length).toBeGreaterThanOrEqual(3);
-	expect(labels).toContain('10 ms');
-	expect(labels).toContain('100 ms');
-	expect(labels).toContain('1 s');
-	// One label in each unit, so the reader is told where the crossing is.
-	expect(labels.some((text) => text.endsWith(' ms'))).toBe(true);
-	expect(labels.some((text) => /\d s$/.test(text))).toBe(true);
-
-	// Zero has no position on a log axis, so the old baseline label is gone.
-	const printed = await page
-		.locator('[data-timing="plot"] text')
+	// Zero has no position on a log axis, so no label prints it.
+	const printed = await plot
+		.locator('text')
 		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''));
 	expect(printed).not.toContain('0');
 
-	// The eight steps inside each decade, unlabelled. Without them the axis
-	// reads as linear with odd numbers on it.
-	const stubs = await page.locator('[data-timing="plot"] [data-minor-tick]').count();
-	expect(stubs).toBeGreaterThanOrEqual(8 * (labels.length - 1));
-	for (const text of printed) expect(text).not.toBe('20');
+	// The eight steps inside each of the two decades, unlabelled. Without them
+	// the axis reads as linear with odd numbers on it.
+	await expect(plot.locator('[data-minor-tick]')).toHaveCount(16);
+	expect(printed).not.toContain('20');
 });
 
-test('the timing legend is sorted by the newest day, tallest first', async ({ page }) => {
-	await page.goto('/console/');
+test('the timing legend is sorted by the newest day, tallest first', async ({ page }, testInfo) => {
+	await drawnTimings(page, testInfo);
 
 	// Colour is one signal and never the only one. Matching the legend order to
-	// the plot's vertical order makes position the second signal, for free.
-	const entries = await page
-		.locator('[data-timing="chart"] [data-readout-row]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				stage: node.getAttribute('data-readout-row') ?? '',
-				text: node.textContent?.trim() ?? ''
-			}))
-		);
-	expect(entries.length).toBeGreaterThan(1);
-
-	const asMs = (text: string): number => {
-		const match = text.match(/([\d.]+)\s(ms|s)$/);
-		if (!match) return -1;
-		return Number(match[1]) * (match[2] === 's' ? 1000 : 1);
-	};
-	const values = entries.map((entry) => asMs(entry.text));
-	for (let index = 1; index < values.length; index += 1) {
-		expect(values[index]).toBeLessThanOrEqual(values[index - 1]);
-	}
-	expect(entries[0].stage).toBe('summarize');
+	// the plot's vertical order makes position the second signal, for free. On the
+	// newest day summarize took 700 ms, fetch 200 ms and extract 30 ms.
+	const entries = await page.locator('[data-timing="chart"] [data-readout-row]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			stage: node.getAttribute('data-readout-row') ?? '',
+			text: (node.textContent ?? '').replace(/\s+/g, ' ').trim()
+		}))
+	);
+	expect(entries.map((entry) => entry.stage)).toEqual(['summarize', 'fetch', 'extract']);
+	expect(entries[0].text).toContain('700 ms');
+	expect(entries[1].text).toContain('200 ms');
+	expect(entries[2].text).toContain('30 ms');
 });
 
-/** What the timing chart drew for one stage, read off the chart itself.
- *
- * The chart draws the window the page is set to rather than the days that
- * happen to carry a row. So a count typed into a test here would have to be
- * re-typed every time a preset moved or the fixture grew, and it would go stale
- * silently. The plot publishes the span it drew, and it draws one mark for every
- * day it has a number for - a filled dot for a measured time, an open dot for a
- * measured zero - so the days it timed nothing on are the difference between
- * the two.
- */
-async function drewFor(
-	page: Page,
-	stage: string
-): Promise<{ days: number; filled: number; zeros: number; blank: number }> {
-	const plot = page.locator('[data-timing="plot"]');
-	const days = Number(await plot.getAttribute('data-timing-days'));
-	expect(days, 'the chart must publish the span it drew').toBeGreaterThan(0);
-	const { filled, zeros } = await plot.evaluate(
-		(svg, key) => ({
-			filled: svg.querySelectorAll(`circle[data-stage-mark="${key}"]`).length,
-			zeros: svg.querySelectorAll(`circle[data-stage-zero="${key}"]`).length
-		}),
-		stage
+test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }, testInfo) => {
+	const plot = await drawnTimings(page, testInfo);
+
+	// Fetch timed 11, 12 and 15 June and nothing on 13 or 14 June. A missing
+	// reading clamped onto a log axis would draw the line falling to the bottom of
+	// the plot, which says the stage got a thousand times faster; the chart breaks
+	// the line instead. So fetch draws one line, over 11 and 12 June, and three
+	// points, and none on 14 June, where extract's measured zero sits.
+	await expect(plot.locator('polyline[data-stage-mark="fetch"]')).toHaveCount(1);
+	const fetchX = await plot
+		.locator('circle[data-stage-mark="fetch"]')
+		.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('cx'))));
+	expect(fetchX).toHaveLength(3);
+	const zeroX = Number(await plot.locator('[data-stage-zero="extract"]').getAttribute('cx'));
+	expect(fetchX, 'fetch drew a point on a day it timed nothing').not.toContain(zeroX);
+
+	// No reading here sits on a decade line, so every filled point is above the floor rule.
+	const geometry = await plot.evaluate((svg) => ({
+		floor: Math.max(
+			...[...svg.querySelectorAll('[data-decade-line]')].map((line) => Number(line.getAttribute('y1')))
+		),
+		lowest: Math.max(
+			...[...svg.querySelectorAll('circle[data-stage-mark]')].map((mark) => Number(mark.getAttribute('cy')))
+		)
+	}));
+	expect(geometry.floor - geometry.lowest, 'a filled point sits on the axis floor').toBeGreaterThan(4);
+
+	// The days nothing timed are tinted, each unbroken run once, and the one
+	// sentence for the chart names the days timed.
+	await expect(plot.locator('[data-coverage-empty="2030-06-01"]')).toHaveAttribute(
+		'data-coverage-empty-to',
+		'2030-06-10'
 	);
-	return { days, filled, zeros, blank: days - filled - zeros };
-}
-
-test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
-	await page.goto('/console/');
-
-	// This read `score` until 2026-08-31, when that stage left this chart for the
-	// Model route - it runs after the summary is written, so nothing waits on it.
-	// `fetch` carries the same shape: the canary times it on some days of the
-	// window and not on others. A zero clamped onto a log axis would draw the
-	// line falling to the bottom of the plot, which says the stage got a thousand
-	// times faster. The chart breaks the line and names the loss.
-	await expect(page.locator('[data-stage-mark="fetch"]')).not.toHaveCount(0);
-	const fetched = await drewFor(page, 'fetch');
-	expect(fetched.blank, 'the fixture leaves fetch no gap to name').toBeGreaterThan(0);
-	// One sentence for the whole chart, not one per stage. It was three notes
-	// saying one window-level fact three times until 2026-09-01.
-	const note = page.locator('[data-timing-coverage]');
-	await expect(note, 'the window is part-timed, so it owes one sentence').toHaveCount(1);
-	await expect(note).toContainText(`of these ${fetched.days} days`);
-
-	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
-		const floor = Math.max(
-			...[...svg.querySelectorAll('[data-decade-line]')].map((line) =>
-				Number(line.getAttribute('y1'))
-			)
-		);
-		const drawn = [...svg.querySelectorAll('[data-stage-mark]')].flatMap((mark) =>
-			mark.tagName === 'circle'
-				? [Number(mark.getAttribute('cy'))]
-				: (mark.getAttribute('points') ?? '')
-						.split(' ')
-						.filter(Boolean)
-						.map((pair) => Number(pair.split(',')[1]))
-		);
-		return { floor, lowest: Math.max(...drawn), marks: drawn.length };
-	});
-
-	expect(geometry.marks).toBeGreaterThan(0);
-	// Every stage is legible: no line sits flat on the floor of the plot.
-	expect(geometry.floor - geometry.lowest).toBeGreaterThan(4);
+	await expect(plot.locator('[data-coverage-empty="2030-06-13"]')).toHaveAttribute(
+		'data-coverage-empty-to',
+		'2030-06-13'
+	);
+	await expect(plot.locator('[data-coverage-empty]')).toHaveCount(2);
+	await expect(page.locator('[data-timing-coverage]')).toContainText('We timed 4 of these 15 days');
 });
 
 test('a timing nobody took, a timing of zero and a partly timed day read apart', async ({
 	page
-}) => {
-	await page.goto('/console/');
+}, testInfo) => {
+	const plot = await drawnTimings(page, testInfo);
 
-	// The three facts that used to arrive at this chart as the number 0. The
-	// fixture carries one of each: 2026-08-18 timed no summarize work, timed
-	// extract at 0 ms on all three items, and 2026-08-20 timed four of its five
-	// items for summarize. Counts are asserted before text, so renaming an
-	// attribute fails here instead of quietly matching nothing.
-	const zero = page.locator('[data-stage-zero="extract"]');
-	await expect(zero, 'the day extract measured 0 ms draws one open dot').toHaveCount(1);
-	await expect(zero, 'an open dot, so it is not read as a point on the scale').toHaveAttribute(
-		'fill',
-		'none'
-	);
-
+	// The three facts that used to arrive at this chart as the number 0: 13 June
+	// timed nothing, extract was measured at 0 ms on 14 June, and 15 June timed
+	// summarize on 2 of its 3 items.
+	const zero = plot.locator('[data-stage-zero]');
+	await expect(zero, 'the one measured zero draws one open dot').toHaveCount(1);
+	await expect(zero).toHaveAttribute('data-stage-zero', 'extract');
+	await expect(zero, 'an open dot, so it is not read as a point on the scale').toHaveAttribute('fill', 'none');
 	// Centred on the baseline rule. Clamped into the bottom decade instead, it
 	// would draw a plunge that says the stage got a thousand times faster.
-	const offBaseline = await page.locator('[data-timing="plot"]').evaluate((svg) => {
+	const offFloor = await plot.evaluate((svg) => {
 		const dot = svg.querySelector('[data-stage-zero]');
 		const floor = Math.max(
-			...[...svg.querySelectorAll('[data-decade-line]')].map((line) =>
-				Number(line.getAttribute('y1'))
-			)
+			...[...svg.querySelectorAll('[data-decade-line]')].map((line) => Number(line.getAttribute('y1')))
 		);
 		return Math.abs(Number(dot?.getAttribute('cy')) - floor);
 	});
-	expect(offBaseline).toBeLessThanOrEqual(1);
-
-	// The measured zero is named in type, once for the chart rather than once for
-	// the stage that happened to have one.
-	const drewExtract = await drewFor(page, 'extract');
-	expect(drewExtract.zeros, 'the fixture has no measured zero to name').toBeGreaterThan(0);
+	expect(offFloor, 'the open dot is not on the baseline').toBeLessThanOrEqual(1);
 	await expect(page.locator('[data-timing-zero-key]')).toHaveText(
 		'An open dot on the baseline is a day a stage took under 1 ms an item, which is faster than we can time.'
 	);
 
-	// The partly timed day is in the one coverage sentence, as the items it
-	// reached against the items the days held. The denominator is the day's own
-	// item count and never the sum of the stages' totals.
+	// The partly timed days are in the one coverage sentence, as the items the
+	// stages reached against the items the timed days held: fetch reached 7 of the
+	// 9, summarize 8 and extract all 9. The denominator is the days' own item
+	// count, never the sum of the stages' totals.
 	const note = page.locator('[data-timing-coverage]');
-	const low = Number(await note.getAttribute('data-coverage-timed-low'));
-	const high = Number(await note.getAttribute('data-coverage-timed-high'));
-	const items = Number(await note.getAttribute('data-coverage-items'));
-	expect(items, 'the chart publishes no item denominator').toBeGreaterThan(0);
-	expect(low, 'the fixture times every item, so the numerator says nothing').toBeLessThan(items);
-	// The stages reached different amounts of the same days here, so the
-	// numerator is a range rather than one stage's count passed off as the whole.
-	expect(high, 'the fixture leaves the stages agreeing, so the range is untested').toBeGreaterThan(
-		low
+	await expect(note).toHaveAttribute('data-coverage-days', '15');
+	await expect(note).toHaveAttribute('data-coverage-measured', '4');
+	await expect(note).toHaveAttribute('data-coverage-items', '9');
+	await expect(note).toHaveAttribute('data-coverage-timed-low', '7');
+	await expect(note).toHaveAttribute('data-coverage-timed-high', '9');
+	await expect(note).toHaveText(
+		'We timed 4 of these 15 days, and 7 to 9 of the 9 items on them. The tinted span is days nothing recorded, not quiet days.'
 	);
-	await expect(note).toContainText(`${low} to ${high} of the ${items} items on them`);
 
 	// One note for the chart, and the count no longer scales with the series.
 	await expect(page.locator('[data-timing-note]')).toHaveCount(0);
-
 	// One place, not two. The legend used to print `no data` for the same
 	// absence a paragraph under it also named.
 	const chart = await page.locator('[data-timing="chart"]').innerText();
@@ -1001,27 +1006,127 @@ test('a stage colour is categorical, never a health band', () => {
 	);
 });
 
-test('reading and writing are drawn as separate candles per day', async ({ page }) => {
-	await page.goto('/console/model/');
+test("a day's two rates are its whole tokens over its whole seconds, and each run keeps its own", () => {
+	// Three items over two runs, written here. Pooled, the day read 3,000 tokens in
+	// 5 s and wrote 250 in 4 s. A mean of the items' own rates would say 666.67 and
+	// 66.67, which weighs a short article like a long one.
+	const item = (runId: string, prefillMs: number, input: number, decodeMs: number, output: number) => ({
+		date: '2030-06-15',
+		run_id: runId,
+		prefill_ms: String(prefillMs),
+		decode_ms: String(decodeMs),
+		input_tokens: String(input),
+		cached_tokens: '100',
+		output_tokens: String(output)
+	});
+	const [day] = throughputWithin(
+		new Map([
+			[
+				'2030-06-15',
+				[
+					item('2030-06-15-1', 1000, 1100, 2000, 100),
+					item('2030-06-15-1', 3000, 1600, 1000, 100),
+					item('2030-06-15-2', 1000, 600, 1000, 50)
+				]
+			]
+		]),
+		new Map(),
+		{ start: '2030-06-15', end: '2030-06-15' }
+	);
+	// Cached tokens are out of the read count: 3,300 asked less the 300 held.
+	expect(day.readTps).toBe(600);
+	expect(day.writeTps).toBe(62.5);
+	expect(day.items).toBe(3);
+	// The candle is the spread of the items' own rates, and each run keeps its median.
+	expect(day.read).toEqual({ min: 500, p25: 500, median: 500, p75: 750, max: 1000 });
+	expect(day.write).toEqual({ min: 50, p25: 50, median: 50, p75: 75, max: 100 });
+	expect(day.runs).toEqual([
+		{ runId: '2030-06-15-1', items: 2, read: 750, write: 75 },
+		{ runId: '2030-06-15-2', items: 1, read: 500, write: 50 }
+	]);
+});
+
+/** Three days of the token-rate chart, written here and handed to the chart itself.
+ *
+ * Reading ran at 40 to 60 tokens a second and writing at 10 to 14, so an axis
+ * drawn from zero would spend a sixth of its height on rates nothing ran at.
+ * 2030-06-13 ran nothing, and all three days ran on one model, so the line
+ * under the chart sets the newest day against the one before it.
+ */
+function rateSpread(min: number, p25: number, median: number, p75: number, max: number) {
+	return { min, p25, median, p75, max };
+}
+
+const THROUGHPUT_DAYS: ThroughputDay[] = [
+	{
+		date: '2030-06-12',
+		items: 1,
+		read: rateSpread(42, 42, 42, 42, 42),
+		write: rateSpread(12, 12, 12, 12, 12),
+		readTps: 42,
+		writeTps: 12,
+		cacheHitPct: 20,
+		runs: [{ runId: '2030-06-12-1', items: 1, read: 42, write: 12 }],
+		model: 'model-a'
+	},
+	{
+		date: '2030-06-14',
+		items: 2,
+		read: rateSpread(40, 45, 50, 55, 58),
+		write: rateSpread(11, 11.5, 12, 12.5, 13),
+		readTps: 50,
+		writeTps: 12,
+		cacheHitPct: 30,
+		runs: [{ runId: '2030-06-14-1', items: 2, read: 50, write: 12 }],
+		model: 'model-a'
+	},
+	{
+		date: '2030-06-15',
+		items: 3,
+		read: rateSpread(45, 50, 55, 58, 60),
+		write: rateSpread(10, 10.5, 11, 12, 14),
+		readTps: 55,
+		writeTps: 11.4,
+		cacheHitPct: 38.4,
+		runs: [
+			{ runId: '2030-06-15-1', items: 2, read: 56, write: 11.5 },
+			{ runId: '2030-06-15-2', items: 1, read: 52, write: 11 }
+		],
+		model: 'model-a'
+	}
+];
+
+/** The token-rate chart, drawn from `THROUGHPUT_DAYS`. */
+async function drawnThroughput(page: Page, testInfo: TestInfo) {
+	await drawnChart(page, testInfo, 'ThroughputTrend', { days: THROUGHPUT_DAYS, reference: '#throughput' });
+}
+
+test('reading and writing are drawn as separate candles per day', async ({ page }, testInfo) => {
+	await drawnThroughput(page, testInfo);
 
 	await expect(page.getByText('Model tokens per second')).toBeVisible();
 
-	// Two days on record, two series each. A day with no census draws nothing
-	// rather than a candle sitting on zero.
-	await expect(page.locator('[data-candle="read"]')).toHaveCount(2);
-	await expect(page.locator('[data-candle="write"]')).toHaveCount(2);
+	// Two series, one candle each on every day that ran. 13 June ran nothing: it
+	// keeps its column and draws no candle, rather than a candle sitting on zero.
+	const datesOf = (series: string) =>
+		page
+			.locator(`[data-candle="${series}"]`)
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-date')));
+	expect(await datesOf('read')).toEqual(['2030-06-12', '2030-06-14', '2030-06-15']);
+	expect(await datesOf('write')).toEqual(['2030-06-12', '2030-06-14', '2030-06-15']);
+	await expect(page.locator('[data-day-tick="2030-06-13"]')).toHaveCount(1);
 
-	// The whole day over the whole day: 5953 prompt tokens less the 2283 the
-	// cache carried is 3670 read in 241.249 s, and 715 written in 123.308 s.
-	const verdict = page.locator('[data-throughput="verdict"]');
-	await expect(verdict).toContainText('read 15.21 tok/s');
-	await expect(verdict).toContainText('write 5.80 tok/s');
-	await expect(verdict).toContainText('5 items across 2 runs');
-	await expect(verdict).toContainText('Read is up 36% and write is up 9%');
+	// The line under the chart is the newest day's whole day, set against the day
+	// before it that ran: 55 against 50 tokens a second is up 10%, and 11.4
+	// against 12 is down 5%.
+	await expect(page.locator('[data-throughput="verdict"]')).toHaveText(
+		'2030-06-15, over the whole day: read 55.00 tok/s, write 11.40 tok/s, from 3 items across 2 runs. ' +
+			'Read is up 10% and write is down 5% on 2030-06-14.'
+	);
 
 	// Milliseconds per token is 1000 / tokens per second, so drawing it too
 	// would be the same fact mirrored. It must not come back.
-	await expect(verdict).not.toContainText('ms per token');
+	expect(await page.locator('main').innerText()).not.toContain('ms per token');
 });
 
 /** The newest day the throughput chart draws a candle for. The readout under it rests on that day. */
@@ -1115,25 +1220,22 @@ test('the throughput chart draws in the pixels it occupies', async ({ page }) =>
 	}
 });
 
-test('the throughput axis covers the rates drawn, not zero to the fastest', async ({ page }) => {
-	await page.goto('/console/model/');
+test('the throughput axis covers the rates drawn, not zero to the fastest', async ({ page }, testInfo) => {
+	await drawnThroughput(page, testInfo);
 
+	// The slowest item wrote at 10 tokens a second and the fastest read at 60.
+	// The axis runs from the one to the other and prints both ends. It does not
+	// spend a sixth of its height on rates nothing ran at - a candle says where a
+	// rate is, and only a mark whose length carries the number needs zero on the axis.
 	const ticks = await page
 		.locator('[data-throughput-tick]')
 		.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-throughput-tick'))));
-
-	// The fixture's slowest item writes at 5.30 tok/s and its fastest reads at
-	// 25.00. Both ends are printed, and the axis does not spend most of its
-	// height on rates nothing ran at - a candle says where a rate is, and only a
-	// mark whose length carries the number needs zero on the axis.
-	expect(ticks.length).toBeGreaterThanOrEqual(2);
-	expect(Math.min(...ticks)).toBeGreaterThan(0);
-	expect(Math.min(...ticks)).toBeLessThanOrEqual(5.3);
-	expect(Math.max(...ticks)).toBeGreaterThanOrEqual(25);
+	expect(ticks).toEqual([10, 20, 30, 40, 50, 60]);
 
 	// The prompt-reuse line and its right-hand 0-100% axis are gone. Reuse is a
-	// cache statistic, so the number stays in the legend and nothing draws a
-	// second y scale a reader could correlate against tokens per second.
+	// cache statistic, so the newest day's 38.4 stays in the legend as a whole
+	// percent, and nothing draws a second y scale a reader could correlate against
+	// tokens per second.
 	await expect(page.locator('[data-throughput="chart"] polyline')).toHaveCount(0);
 	await expect(page.locator('[data-series="reused"]')).toContainText('38%');
 });
@@ -1273,18 +1375,29 @@ test('keyboard alone pans the viewport and steps its window through the presets'
 });
 
 test('panning to a month with no rows leaves a visible gap', async ({ page }) => {
-	await page.goto('/console/');
-
+	// One row on every day of the window the page opens on, and none before it.
+	const { window } = await openServed(page, (opened) =>
+		daysInWindow(opened).map((date) => telemetryRow({ date, run_id: `${date}-1`, item_id: 'served' }))
+	);
 	const viewport = page.locator('[data-viewport-control]');
+	await expect(viewport).toContainText(new RegExp(`(^|\\D)${DEFAULT_WINDOW_DAYS}\\s+rows in view`));
+	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
+
+	// Back, one pan at a time, until the window ends before the first day served.
 	await viewport.focus();
-	for (let index = 0; index < 8; index += 1) {
+	for (let press = 0; press < 60; press += 1) {
+		const end = (await viewport.getAttribute('data-window-end')) ?? '';
+		if (end < window.start) break;
 		await page.keyboard.press('ArrowLeft');
+		await expect(viewport).not.toHaveAttribute('data-window-end', end);
 	}
+	const end = (await viewport.getAttribute('data-window-end')) ?? '';
+	expect(end < window.start, `the window still ends on ${end}, on or after ${window.start}`).toBe(true);
 
 	// The failure surface says the window holds nothing rather than drawing a
 	// column of zeroes, which would read as a run that went badly.
 	await expect(page.locator('[data-failure-empty]')).toBeVisible();
-	await expect(viewport).toContainText('0 rows in view');
+	await expect(viewport).toContainText(/(^|\D)0\s+rows in view/);
 });
 
 test('an empty section costs the page that section, never the page', async ({ page }) => {

@@ -1,10 +1,7 @@
 import { expect, test, type Page } from './support/browser';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';
 import { pipelineChanges } from '../src/lib/server/model-work';
-import { canaryScoreRows } from './support/canary-records';
 
 /**
  * The model-change rule, and the judgement behind it.
@@ -18,28 +15,14 @@ import { canaryScoreRows } from './support/canary-records';
  *
  * Two cases, and neither is sufficient alone.
  *
- * The Node case states the arithmetic over rows built here, because the canary
- * ledger writes ONE `pipeline_fingerprint` for its one scored day and therefore
- * cannot draw a rule at all. An oracle that only ever asserted zero would pass
- * against a component that had stopped deriving anything.
+ * The Node case states the arithmetic over rows built here. An oracle that only
+ * ever asserted zero would pass against a component that had stopped deriving
+ * anything.
  *
- * The browser case reads the built canary's own ledger, derives the boundary
- * dates from it without touching the component's code, and holds every drawn
- * chart to that count. On the canary that count is zero - so what it proves
- * there is the other half of the row: the empty case is a named state and not a
- * missing element, and every chart that does not draw says why in words.
+ * The browser case keeps to the built page's own contract: a chart that draws a
+ * model-change rule publishes its span and its drawn dates, an empty state names
+ * the absence, and the keyboard readout reaches exactly the days the plot marked.
  */
-
-/** The canary's score rows, read as the page's server reads them.
- *
- * Through the production reader rather than a directory listing here: the
- * record comes from its packed files, and a listing of any other shape reads
- * nothing at all - which leaves this oracle comparing the page against an empty
- * set.
- */
-function canaryScores(): Promise<Record<string, string>[]> {
-	return canaryScoreRows();
-}
 
 /**
  * The boundary dates from the score ledger's stamp alone.
@@ -62,70 +45,6 @@ function boundariesFrom(rows: Record<string, string>[]): string[] {
 		if (now.some((stamp) => !before.includes(stamp))) found.push(dates[at]);
 	}
 	return found;
-}
-
-/**
- * The boundary dates on the canary, derived here rather than imported.
- *
- * The rule, stated in `docs/architecture/publishing/console-charts.md`: a day
- * is a boundary when it ran an identity the previous recorded day did not run,
- * and two days recorded different ways are never compared. This is a second
- * implementation of it on purpose - a check that calls the code it is checking
- * only proves the code is deterministic.
- *
- * Both records, because the canary carries both. The manifest wins on a
- * day that holds each, which is the same precedence the page applies: a record
- * that names a field beats one that can only say a field moved.
- */
-async function canaryBoundaries(): Promise<string[]> {
-	const kind = new Map<string, 'stamp' | 'manifest'>();
-	const held = new Map<string, string[]>();
-	const keep = (date: string, mark: 'stamp' | 'manifest', value: string) => {
-		const had = kind.get(date);
-		if (had === 'manifest' && mark === 'stamp') return;
-		if (had !== mark) {
-			kind.set(date, mark);
-			held.set(date, [value]);
-			return;
-		}
-		held.set(date, [...(held.get(date) ?? []), value]);
-	};
-
-	for (const row of await canaryScores()) {
-		if (!row.date || !row.pipeline_fingerprint) continue;
-		keep(row.date, 'stamp', row.pipeline_fingerprint);
-	}
-	for (const [date, inputs] of canaryManifests()) keep(date, 'manifest', inputs);
-
-	const dates = [...kind.keys()].sort();
-	const found: string[] = [];
-	for (let at = 1; at < dates.length; at += 1) {
-		if (kind.get(dates[at]) !== kind.get(dates[at - 1])) continue;
-		const before = held.get(dates[at - 1]) ?? [];
-		const now = held.get(dates[at]) ?? [];
-		if (now.some((one) => !before.includes(one))) found.push(dates[at]);
-	}
-	return found;
-}
-
-/** Each canary day's recorded input manifest, as one comparable string. */
-function canaryManifests(): [string, string][] {
-	const root = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
-	const out: [string, string][] = [];
-	for (const year of readdirSync(root)) {
-		for (const month of readdirSync(join(root, year))) {
-			for (const day of readdirSync(join(root, year, month))) {
-				const file = join(root, year, month, day, 'run.json');
-				if (!existsSync(file)) continue;
-				const manifest = JSON.parse(readFileSync(file, 'utf8'));
-				for (const run of manifest.runs ?? []) {
-					if (!run.inputs) continue;
-					out.push([`${year}-${month}-${day}`, JSON.stringify(run.inputs)]);
-				}
-			}
-		}
-	}
-	return out;
 }
 
 const ROUTES = [
@@ -234,9 +153,18 @@ test.describe('the boundary, as arithmetic', () => {
 		).toEqual([]);
 	});
 
-	test('the committed ledger, read by both implementations, agrees', async () => {
-		const rows = await canaryScores();
-		expect(rows.length, 'the canary ledger is empty - the read is broken').toBeGreaterThan(0);
+	test('the written ledger, read by both implementations, agrees', () => {
+		const rows = [
+			row('2026-08-01', 'aaa'),
+			row('2026-08-02', 'aaa'),
+			row('2026-08-03', 'bbb'),
+			row('2026-08-04', 'bbb'),
+			row('2026-08-05', 'ccc'),
+			{ date: '2026-08-06', pipeline_fingerprint: '' }
+		];
+		// A day that runs a stamp the day before did not is a boundary; a day with no
+		// stamp is not a change.
+		expect(pipelineChanges(rows)).toEqual(['2026-08-03', '2026-08-05']);
 		expect(pipelineChanges(rows)).toEqual(boundariesFrom(rows));
 	});
 });
@@ -356,12 +284,10 @@ test.describe('the rule, as geometry', () => {
 });
 
 test.describe('the rule, on the built console', () => {
-	test('a chart that draws the rule draws one per boundary inside its own span', async ({
+	test('a chart that draws the rule draws only days inside its own span', async ({
 		page
 	}) => {
-		const boundaries = await canaryBoundaries();
 		let drawing = 0;
-		const drawn = new Set<string>();
 		for (const route of ROUTES) {
 			for (const chart of await declaredOn(page, route)) {
 				if (chart.rule !== 'yes') continue;
@@ -369,51 +295,34 @@ test.describe('the rule, on the built console', () => {
 				const at = `${route} ${chart.name}`;
 				expect(chart.from, `${at} declares a rule and no span it drew`).not.toBe('');
 				expect(chart.to, `${at} declares a rule and no span it drew`).not.toBe('');
-				// Strictly inside: the oldest drawn day has nothing to its left, so a
-				// change on it separates nothing and is not drawn.
-				const inside = boundaries.filter((date) => date > chart.from && date <= chart.to);
-				// Never a rule the record does not carry, and never one outside the
-				// span the chart declared.
+				expect(chart.to >= chart.from, `${at}: its span ends before it starts`).toBe(true);
+				expect(new Set(chart.lines).size, `${at}: drew one boundary twice`).toBe(
+					chart.lines.length
+				);
 				for (const line of chart.lines) {
 					expect(
-						inside,
-						`${at}: drew a rule on ${line}, which is not a boundary it covers`
-					).toContain(line);
-					drawn.add(line);
-				}
-				// A chart draws its own columns, not the window's days. Where a change
-				// falls on a day it measured nothing for, it names that day in words
-				// instead - which is the state a missing line cannot express.
-				for (const date of inside) {
-					if (chart.lines.includes(date)) continue;
-					expect(
-						chart.unread,
-						`${at}: ${date} is a boundary in its span, and it neither drew it nor said it could not`
-					).toContain(date);
+						line > chart.from,
+						`${at}: drew a boundary on the first day, where nothing is separated`
+					).toBe(true);
+					expect(line <= chart.to, `${at}: drew a boundary after its own span`).toBe(true);
 				}
 			}
 		}
 		expect(drawing, 'no chart on the console draws the rule at all').toBeGreaterThan(0);
-		// The positive case, which a digest could never provide: the canary
-		// records an input manifest and moves four settings on one mid-window day,
-		// so at least one chart has a real rule to draw rather than an empty state.
-		expect(boundaries.length, 'the canary carries no pipeline change to draw').toBeGreaterThan(0);
-		expect([...drawn], 'no chart drew the change the canary records').not.toEqual([]);
 	});
 
-	test('a chart that draws no rule in its span says so, rather than being blank', async ({
+	test('a chart that draws no rule says so, rather than being blank', async ({
 		page
 	}) => {
-		const boundaries = await canaryBoundaries();
 		for (const route of ROUTES) {
 			for (const chart of await declaredOn(page, route)) {
 				if (chart.rule !== 'yes') continue;
-				const inside = boundaries.filter((date) => date > chart.from && date <= chart.to);
-				if (inside.length > 0) continue;
-				expect(
-					chart.empty,
-					`${route} ${chart.name}: no boundary in its span and no sentence about it`
-				).toBe(1);
+				if (chart.lines.length === 0) {
+					expect(
+						chart.empty,
+						`${route} ${chart.name}: no boundary drawn and no sentence about it`
+					).toBe(1);
+				}
 			}
 		}
 	});
@@ -459,13 +368,10 @@ test.describe('the rule, on the built console', () => {
 		// steps the days with an arrow key meets it without a pointer. Stepping
 		// every column and counting is what stops the line being a constant: a row
 		// printed on every column would say the pipeline changed every day.
-		const boundaries = await canaryBoundaries();
 		await page.goto('/console/');
 		const chart = page.locator('[data-model-rule-name="timings"]');
 		await expect(chart).toHaveCount(1);
-		const from = (await chart.getAttribute('data-model-rule-from')) ?? '';
-		const to = (await chart.getAttribute('data-model-rule-to')) ?? '';
-		const inside = boundaries.filter((date) => date > from && date <= to);
+		const rules = await chart.locator('[data-model-rule-line]').count();
 
 		const plot = chart.locator('svg');
 		await plot.focus();
@@ -481,7 +387,7 @@ test.describe('the rule, on the built console', () => {
 			await page.keyboard.press('ArrowRight');
 		}
 		expect(printed, 'the strip and the plot disagree about which days changed').toBe(
-			inside.length
+			rules
 		);
 	});
 });

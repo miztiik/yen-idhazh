@@ -65,9 +65,11 @@ export interface ItemCost {
 	itemReusedPct: number | null;
 	/** The middle item's reused count, and the largest any item got.
 	 *
-	 * These two are the reason the share is not drawn as a trend. Measured
-	 * 2026-09-05 the middle item reused 922 tokens and the widest 941, over a
-	 * spread of 6,104 items - so the share moves because the prompt moves.
+	 * These two are the reason the share is not drawn as a trend: the part of a
+	 * prompt the server holds hardly changes while the prompt does, so the share
+	 * moves because the prompt moves. The readings behind that, and the day the
+	 * held part stepped, are in
+	 * `docs/architecture/publishing/what-the-pipelines-route-draws.md`.
 	 */
 	reusedMedian: number | null;
 	reusedWidest: number | null;
