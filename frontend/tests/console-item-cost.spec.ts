@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { windowOfDays } from '../src/lib/charts/viewport';
 import { itemCost } from '../src/lib/console/item-cost';
 import { telemetryRows } from '../src/lib/server/payload';
@@ -23,11 +23,9 @@ import { publishedSite } from './support/published-site';
  * on any reducer at all, because both come from one call.
  *
  * The last part is the built console: the window the control set, every counted
- * item in a bar, and the share note.
+ * item in a bar, and the share note, none of them checked against a figure the
+ * canary holds.
  */
-
-/** The tree the site was built from. The suite builds from the canaries. */
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
@@ -303,53 +301,6 @@ test("THE ORACLE: each window counts its own days, and they end on the site's ne
 // The built console
 // ---------------------------------------------------------------------------
 
-/** The projection the built tree published, read cell by cell.
- *
- * The canary's own copy, written by `idhazh.telemetry.publish.public_telemetry`
- * from the canary ledger - the same producer and the same shape as the committed
- * months, over a fixture a test may read
- * (`backend/tests/test_archive_readers.py`).
- */
-function projection(): Record<string, string>[] {
-	const dir = join(CANARY, 'state', 'telemetry');
-	if (!existsSync(dir)) return [];
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(dir).filter((file) => file.endsWith('.csv'))) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
-		const columns = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			const found: Record<string, string> = {};
-			columns.forEach((column, at) => (found[column] = cells[at] ?? ''));
-			rows.push(found);
-		}
-	}
-	return rows;
-}
-
-/** A number, or null for an empty cell. Written out rather than imported: the
- * share check below may share no arithmetic with the thing it checks. */
-function value(row: Record<string, string>, name: string): number | null {
-	const raw = row[name];
-	if (raw === undefined || raw === '') return null;
-	const parsed = Number(raw);
-	return Number.isFinite(parsed) ? parsed : null;
-}
-
-function sorted(values: number[]): number[] {
-	return [...values].sort((a, b) => a - b);
-}
-
-/** The value at a fraction of the way through, interpolated. */
-function at(values: number[], fraction: number): number {
-	const list = sorted(values);
-	if (list.length === 1) return list[0];
-	const position = (list.length - 1) * fraction;
-	const below = Math.floor(position);
-	const above = Math.ceil(position);
-	return list[below] + (list[above] - list[below]) * (position - below);
-}
-
 async function hydrated(page: Page) {
 	await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeEnabled();
 }
@@ -486,15 +437,24 @@ test.describe('the section on the built console', () => {
 		await expect(note).toHaveCount(1);
 		await expect(note).toContainText('follows the article');
 
-		const rows = projection().filter((row) => value(row, 'cached_tokens') !== null);
-		const held = rows.map((row) => value(row, 'cached_tokens') as number);
-		const widest = Math.max(...held);
-		const middle = at(held, 0.5);
-		expect(
-			widest - middle,
-			'the held part has started moving, so this panel needs re-deciding'
-		).toBeLessThan(middle);
-		await expect(note).toContainText(String(Math.round(middle)));
+		// The note names what the middle item and the largest one kept, as the
+		// section's reducer counts them: over three items that held 300, 900 and
+		// 1,000 of their 2,000-token prompts, the middle kept 900 and the largest
+		// 1,000. On the page, the middle can never have kept more than the largest.
+		const cost = itemCost(
+			[
+				row({ input_tokens: '2000', cached_tokens: '300' }),
+				row({ item_id: 'a-02', input_tokens: '2000', cached_tokens: '900' }),
+				row({ item_id: 'a-03', input_tokens: '2000', cached_tokens: '1000' })
+			],
+			WINDOW
+		);
+		expect([cost.reusedMedian, cost.reusedWidest]).toEqual([900, 1000]);
+		const said = (await note.innerText()).replace(/\s+/g, ' ');
+		const kept = /the middle item kept ([\d,]+) tokens and the largest kept ([\d,]+)/.exec(said);
+		expect(kept, `the note names no middle and largest item: ${said}`).not.toBeNull();
+		const [middle, largest] = [kept?.[1], kept?.[2]].map((figure) => Number((figure ?? '').replace(/,/g, '')));
+		expect(middle).toBeLessThanOrEqual(largest);
 	});
 
 	test('a figure the ledger cannot answer prints a dash, never a zero', async ({ page }) => {

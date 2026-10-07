@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -14,7 +14,7 @@ import {
 	type RecordRead,
 	type RouteRecord
 } from '../src/lib/console/recording';
-import { checkedRequest, type Row } from '../src/lib/data/slice-shapes';
+import { checkedRequest } from '../src/lib/data/slice-shapes';
 import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-fingerprint';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
@@ -27,77 +27,19 @@ import { serverCompiler } from './support/server-render';
  * How a console route reads a packed record at build time, and what it says
  * about the read.
  *
- * Most readers are driven over the query door's own fixture under
- * `tests/fixtures/ledger-door/`, through the machine record: the article and
- * score records take the same path with other columns. Each case reads inside
- * the test that asks, and a case that needs a tree the fixture does not hold
- * builds it in a temporary directory from the fixture's own files, so nothing
- * here grows with the archive (`CLAUDE.md` section 13). The window cases build
- * their own site and ledger with the lifecycle builder, with days counted back
- * from a day the test pins. Nothing touches the network but the engine, whose
- * first query on a machine downloads its parquet add-on (owner ruling,
- * 2026-09-28).
- *
- * The fixture holds daily files for 2026-08-31, 09-01, 09-02 and 09-05, a
- * zero-row day on 09-03, a hole on 09-04, and a monthly file for 2026-08. A
- * tree that needs a period the packing could not fill records the zero-row day
- * `empty` and the hole `lost`, as the packing now does.
+ * Each reader case builds the record it reads with the lifecycle builder, in the
+ * test's own output folder, with days counted back from a UTC day the test pins,
+ * through the machine record: the article and score records take the same path
+ * with other columns. The window cases build their own site and ledger the same
+ * way. Nothing here grows with the archive (`CLAUDE.md` section 13), and nothing
+ * touches the network but the engine, whose first query on a machine downloads
+ * its parquet add-on (owner ruling, 2026-09-28).
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE = path.resolve(here, '..', '..', 'tests', 'fixtures', 'ledger-door', 'state');
 const PACKED = path.join('compact', 'host-fingerprint');
-
-/** One daily index entry, as the packing writes it. */
-type DayEntry = { covers: string; rows: number; bytes: number; state?: 'packed' | 'empty' | 'lost'; set_aside?: number };
-
-/** The fixture's daily entries, as its index names them. */
-function fixtureDays(): DayEntry[] {
-	return (JSON.parse(readFileSync(path.join(FIXTURE, PACKED, 'index', 'daily.json'), 'utf8')) as { entries: DayEntry[] })
-		.entries;
-}
-
-/** A state tree whose daily index names `entries`, each one that has a file copied from the
- *  fixture, and a month and a year index that name nothing, as the packing writes them. */
-function packedTree(entries: readonly DayEntry[]): string {
-	const root = mkdtempSync(path.join(tmpdir(), 'idhazh-packed-'));
-	for (const entry of entries) {
-		if (entry.state !== undefined && entry.state !== 'packed') continue;
-		const [year, month, day] = entry.covers.split('-');
-		const at = path.join(root, PACKED, 'daily', year, month);
-		mkdirSync(at, { recursive: true });
-		copyFileSync(path.join(FIXTURE, PACKED, 'daily', year, month, `${day}.parquet`), path.join(at, `${day}.parquet`));
-	}
-	const daily = JSON.parse(readFileSync(path.join(FIXTURE, PACKED, 'index', 'daily.json'), 'utf8')) as object;
-	mkdirSync(path.join(root, PACKED, 'index'), { recursive: true });
-	writeFileSync(path.join(root, PACKED, 'index', 'daily.json'), JSON.stringify({ ...daily, entries }));
-	for (const period of ['monthly', 'yearly']) {
-		const coarser = JSON.parse(readFileSync(path.join(FIXTURE, PACKED, 'index', `${period}.json`), 'utf8')) as object;
-		writeFileSync(path.join(root, PACKED, 'index', `${period}.json`), JSON.stringify({ ...coarser, entries: [] }));
-	}
-	return root;
-}
-
-/** A state tree holding only the fixture's packed days up to and including `through`. */
-function packedUpTo(through: string): string {
-	return packedTree(fixtureDays().filter((entry) => entry.covers <= through));
-}
-
-/** The fixture's day `covers`, as its index names it. */
-function fixtureDay(covers: string): DayEntry {
-	const entry = fixtureDays().find((one) => one.covers === covers);
-	if (entry === undefined) throw new Error(`the fixture packs no ${covers}`);
-	return entry;
-}
-
-/** A day the packing recorded `empty` or `lost`: an entry with no file. */
-const noFile = (covers: string, state: 'empty' | 'lost', setAside = 0): DayEntry => ({
-	covers,
-	rows: 0,
-	bytes: 0,
-	state,
-	set_aside: setAside
-});
+/** The UTC day every built record counts its days back from. */
+const PINNED = '2030-06-15';
 
 /** The RecordNotes component, compiled and imported for a server render. */
 async function recordNotesComponent() {
@@ -143,149 +85,167 @@ test.describe('reading a packed record', () => {
 	});
 
 	test('a packed day missing from the middle makes the whole read unreadable, at that day, named day-missing', async () => {
-		// Every packed day from the first, and 2026-09-04 is named by neither index.
-		// Drawing the days either side of it would draw a gap as a quiet day.
-		const table = await machineRecord(days('2026-08-31', '2026-09-05'), FIXTURE);
-		expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-04', fault: 'day-missing' });
+		// Packed on 10, 11, 12 and 15 Jun 2030, quiet on the 13th, and the 14th named by no
+		// index. Drawing the days either side of it would draw a gap as a quiet day.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 5, rows: 1 }, { ago: 4, rows: 3 }, { ago: 3, rows: 2 }, { ago: 2, state: 'empty' }, { ago: 0, rows: 2 }]
+		});
+		const table = await machineRecord(days('2030-06-10', '2030-06-15'), state);
+		expect(table.read).toEqual({ state: 'unreadable', at: '2030-06-14', fault: 'day-missing' });
 		expect(table.rows).toEqual([]);
 	});
 
 	test('a packed file the list names and the disk lacks makes the read unreadable, named file-missing', async () => {
-		const root = packedUpTo('2026-09-03');
-		try {
-			rmSync(path.join(root, PACKED, 'daily', '2026', '09', '02.parquet'));
-			const table = await machineRecord(days('2026-09-02', '2026-09-03'), root);
-			expect(table.read).toEqual({ state: 'unreadable', at: '2026-09-02', fault: 'file-missing' });
-			expect(table.rows).toEqual([]);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+		// Packed on 12 and 13 Jun 2030 and quiet on the 14th; the 13th's file is then removed.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 2 }, { ago: 1, state: 'empty' }]
+		});
+		rmSync(path.join(state, PACKED, 'daily', '2030', '06', '13.parquet'));
+		const table = await machineRecord(days('2030-06-13', '2030-06-14'), state);
+		expect(table.read).toEqual({ state: 'unreadable', at: '2030-06-13', fault: 'file-missing' });
+		expect(table.rows).toEqual([]);
 	});
 
 	test('one day reads on its own, and every cell comes back as the day files spelled it', async () => {
-		const table = await machineRecord(days('2026-09-05', '2026-09-05'), FIXTURE);
+		// Packed with one row on 14 Jun 2030 and two on the 15th, each holding a text,
+		// a whole number and a fraction the machine record reads. The rule, stated
+		// here rather than borrowed: nothing is '', a number is its decimal, and text
+		// is itself.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 1, rows: 1 }, { ago: 0, rows: 2 }],
+			columns: { run_id: '2030-06-15-1', job: 'work', cpu_model: 'AMD EPYC 7763 64-Core Processor', cores: 4, job_seconds: 612.5 }
+		});
+		const table = await machineRecord(days('2030-06-15', '2030-06-15'), state);
 		expect(table.read).toEqual({
 			state: 'read',
-			through: '2026-09-05',
-			lastRows: { period: 'daily', covers: '2026-09-05' },
+			through: '2030-06-15',
+			lastRows: { period: 'daily', covers: '2030-06-15' },
 			lostDays: [],
 			setAside: {}
 		});
-		expect(table.rows.map((row) => row.date)).toEqual(['2026-09-05', '2026-09-05']);
-
-		// The rule, stated here rather than borrowed: nothing is '', a number is its
-		// decimal, and text is itself. Checked against the door's own answer for
-		// the same day, so a cell the reader dropped or respelled fails by name.
-		const raw = await sliceFromDisk(FIXTURE, 'host-fingerprint', {
-			columns: [...datedFirst(HOST_FINGERPRINT_COLUMNS)],
-			from: '2026-09-05',
-			to: '2026-09-05'
-		});
-		expect(raw.state).toBe('ok');
-		const spelled = (value: Row[string] | undefined) =>
-			value === null || value === undefined ? '' : typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value);
-		expect(table.rows).toEqual(
-			raw.rows.map((row) => Object.fromEntries(Object.entries(row).map(([name, value]) => [name, spelled(value)])))
-		);
-		for (const row of table.rows) {
-			expect(Object.keys(row).sort()).toEqual([...HOST_FINGERPRINT_COLUMNS].sort());
-			for (const [name, cell] of Object.entries(row)) expect(typeof cell, name).toBe('string');
-		}
+		const nothing = Object.fromEntries(HOST_FINGERPRINT_COLUMNS.map((name) => [name, '']));
+		const spelled = {
+			...nothing,
+			date: '2030-06-15',
+			run_id: '2030-06-15-1',
+			job: 'work',
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cores: '4',
+			job_seconds: '612.5'
+		};
+		expect(table.rows).toEqual([spelled, spelled]);
 	});
 
 	test('a window whose packed days hold no row reads no row, and names where the rows stop instead of reaching back', async () => {
-		// Packed through 2026-09-03, a day that holds no row. The reader used to read
-		// back to 2026-09-02 to fill the window; now the window is the read.
-		const root = packedUpTo('2026-09-03');
-		try {
-			const table = await machineRecord(days('2026-09-03', '2026-09-03'), root);
-			expect(table.read).toEqual({
-				state: 'read',
-				through: '2026-09-03',
-				lastRows: { period: 'daily', covers: '2026-09-02' },
-				lostDays: [],
-				setAside: {}
-			});
-			expect(table.rows).toEqual([]);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+		// Packed on 12 and 13 Jun 2030, and quiet on the 14th. The reader used to read back to
+		// the 13th to fill the window; now the window is the read.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 2 }, { ago: 1, state: 'empty' }]
+		});
+		const table = await machineRecord(days('2030-06-14', '2030-06-14'), state);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-14',
+			lastRows: { period: 'daily', covers: '2030-06-13' },
+			lostDays: [],
+			setAside: {}
+		});
+		expect(table.rows).toEqual([]);
 	});
 
 	test('a window that starts before the first packed day is read from that day', async () => {
-		// Ninety days to 2026-09-03 starts in June, and the door cuts the days before
-		// the first packed day: they are before the record began.
-		const root = packedUpTo('2026-09-03');
-		try {
-			const table = await machineRecord(days('2026-06-06', '2026-09-03'), root);
-			expect(table.read).toEqual({
-				state: 'read',
-				through: '2026-09-03',
-				lastRows: { period: 'daily', covers: '2026-09-02' },
-				lostDays: [],
-				setAside: {}
-			});
-			expect([...new Set(table.rows.map((row) => row.date))]).toEqual([
-				'2026-08-31',
-				'2026-09-01',
-				'2026-09-02'
-			]);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+		// Ninety days to 15 Jun 2030 start on 18 Mar, and the door cuts the days before the
+		// first packed day, the 12th: they are before the record began.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 3, rows: 1 }, { ago: 2, rows: 3 }, { ago: 1, rows: 2 }, { ago: 0, state: 'empty' }]
+		});
+		const table = await machineRecord(days('2030-03-18', '2030-06-15'), state);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-15',
+			lastRows: { period: 'daily', covers: '2030-06-14' },
+			lostDays: [],
+			setAside: {}
+		});
+		expect(table.rows.map((row) => row.date)).toEqual([
+			'2030-06-12',
+			'2030-06-13',
+			'2030-06-13',
+			'2030-06-13',
+			'2030-06-14',
+			'2030-06-14'
+		]);
 	});
 
 	test('a day the packing recorded lost comes back named, beside the files each day set aside', async () => {
-		// The fixture's zero-row day recorded empty and its hole recorded lost with two
-		// files set aside, and the newest day kept its rows but set one file aside.
-		const root = packedTree([
-			...fixtureDays().filter((entry) => entry.covers <= '2026-09-02'),
-			noFile('2026-09-03', 'empty'),
-			noFile('2026-09-04', 'lost', 2),
-			{ ...fixtureDay('2026-09-05'), set_aside: 1 }
+		// Packed on 10, 11 and 12 Jun 2030 and quiet on the 13th. The 14th is lost with
+		// two files set aside, and the 15th kept its rows but set one file aside.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [
+				{ ago: 5, rows: 1 },
+				{ ago: 4, rows: 3 },
+				{ ago: 3, rows: 2 },
+				{ ago: 2, state: 'empty' },
+				{ ago: 1, state: 'lost', setAside: 2 },
+				{ ago: 0, rows: 2, setAside: 1 }
+			]
+		});
+		const table = await machineRecord(days('2030-06-10', '2030-06-15'), state);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-15',
+			lastRows: { period: 'daily', covers: '2030-06-15' },
+			lostDays: ['2030-06-14'],
+			setAside: { '2030-06-14': 2, '2030-06-15': 1 }
+		});
+		expect(table.rows.map((row) => row.date)).toEqual([
+			'2030-06-10',
+			'2030-06-11',
+			'2030-06-11',
+			'2030-06-11',
+			'2030-06-12',
+			'2030-06-12',
+			'2030-06-15',
+			'2030-06-15'
 		]);
-		try {
-			const table = await machineRecord(days('2026-08-31', '2026-09-05'), root);
-			expect(table.read).toEqual({
-				state: 'read',
-				through: '2026-09-05',
-				lastRows: { period: 'daily', covers: '2026-09-05' },
-				lostDays: ['2026-09-04'],
-				setAside: { '2026-09-04': 2, '2026-09-05': 1 }
-			});
-			expect([...new Set(table.rows.map((row) => row.date))]).toEqual([
-				'2026-08-31',
-				'2026-09-01',
-				'2026-09-02',
-				'2026-09-05'
-			]);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
 	});
 
 	test('a day lost before the window is not named, because nothing before the window is read', async () => {
-		// 2026-09-01 is lost with a file set aside, and the window is 2026-09-02 to
-		// 2026-09-03: the reader used to reach back over it, and named it.
-		const root = packedTree([
-			fixtureDay('2026-08-31'),
-			noFile('2026-09-01', 'lost', 1),
-			fixtureDay('2026-09-02'),
-			noFile('2026-09-03', 'empty')
-		]);
-		try {
-			const table = await machineRecord(days('2026-09-02', '2026-09-03'), root);
-			expect(table.read).toEqual({
-				state: 'read',
-				through: '2026-09-03',
-				lastRows: { period: 'daily', covers: '2026-09-02' },
-				lostDays: [],
-				setAside: {}
-			});
-			expect([...new Set(table.rows.map((row) => row.date))]).toEqual(['2026-09-02']);
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+		// 11 Jun 2030 set a file aside and the 12th is lost, both before the window of the 13th
+		// and 14th: the reader used to reach back over them, and named them.
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 4, rows: 1, setAside: 1 }, { ago: 3, state: 'lost' }, { ago: 2, rows: 2 }, { ago: 1, state: 'empty' }]
+		});
+		const table = await machineRecord(days('2030-06-13', '2030-06-14'), state);
+		expect(table.read).toEqual({
+			state: 'read',
+			through: '2030-06-14',
+			lastRows: { period: 'daily', covers: '2030-06-13' },
+			lostDays: [],
+			setAside: {}
+		});
+		expect(table.rows.map((row) => row.date)).toEqual(['2030-06-13', '2030-06-13']);
 	});
 });
 test.describe('what a read asks the door for', () => {
@@ -602,39 +562,40 @@ test.describe('what a route says about the records it read', () => {
 
 test.describe('THE ORACLE for the Hardware note: a day the machine record lost reads as a day with no record', () => {
 	test('it is printed once as a plain note, and the recording note never dates the start after it', async () => {
-		// An empty day, then a lost day, then the first day with rows: read the old way,
+		// A quiet day, then a lost day, then the first day with rows: read the old way,
 		// the lost day was a day before the record started, and the start the day after it.
-		const root = packedTree([noFile('2026-09-03', 'empty'), noFile('2026-09-04', 'lost'), fixtureDay('2026-09-05')]);
-		try {
-			const machine = await machineRecord(days('2026-09-03', '2026-09-05'), root);
-			expect(machine.read).toEqual({
-				state: 'read',
-				through: '2026-09-05',
-				lastRows: { period: 'daily', covers: '2026-09-05' },
-				lostDays: ['2026-09-04'],
-				setAside: {}
-			});
-			const printed = await printedNotes(notesFor([{ record: 'machine', read: machine.read }], '2026-09-05'));
-			expect(printed).toEqual([
-				{
-					kind: 'lost',
-					records: 'machine',
-					fault: false,
-					quiet: false,
-					text: 'There is no machine record for 4 Sep 2026, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.'
-				}
-			]);
-			const recording = recordingNotes({
-				enabled: true,
-				recorded: [...new Set(machine.rows.map((row) => row.date))],
-				window: ['2026-09-04', '2026-09-05'],
-				daysWithNoRecord: machine.read.state === 'read' ? machine.read.lostDays : [],
-				figures: 'machine record'
-			});
-			expect(recording.startedMidWindow).toBeNull();
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
+		const state = test.info().outputPath('state');
+		await buildLedger(state, {
+			ledger: 'host-fingerprint',
+			pinned: PINNED,
+			days: [{ ago: 2, state: 'empty' }, { ago: 1, state: 'lost' }, { ago: 0, rows: 2 }]
+		});
+		const machine = await machineRecord(days('2030-06-13', '2030-06-15'), state);
+		expect(machine.read).toEqual({
+			state: 'read',
+			through: '2030-06-15',
+			lastRows: { period: 'daily', covers: '2030-06-15' },
+			lostDays: ['2030-06-14'],
+			setAside: {}
+		});
+		const printed = await printedNotes(notesFor([{ record: 'machine', read: machine.read }], '2030-06-15'));
+		expect(printed).toEqual([
+			{
+				kind: 'lost',
+				records: 'machine',
+				fault: false,
+				quiet: false,
+				text: 'There is no machine record for 14 Jun 2030, so nothing below that uses this record shows that day. The record for that day was lost and could not be recovered; it was not a quiet day.'
+			}
+		]);
+		const recording = recordingNotes({
+			enabled: true,
+			recorded: [...new Set(machine.rows.map((row) => row.date))],
+			window: ['2030-06-14', '2030-06-15'],
+			daysWithNoRecord: machine.read.state === 'read' ? machine.read.lostDays : [],
+			figures: 'machine record'
+		});
+		expect(recording.startedMidWindow).toBeNull();
 	});
 });
 

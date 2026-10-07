@@ -685,6 +685,24 @@ test.describe('the column rail lists a ledger\'s columns from the file its empty
 		}
 	});
 
+	test('a ledger whose newest file was packed with no row, as older packings left some: its columns come from that file, the only data file asked for', async () => {
+		// One row a day on 12 and 13 Jun 2030, then 14 Jun packed with no row and 15 Jun empty.
+		const { page, asked } = await builtSite([...everyDay(3, 2), { ago: 1, rows: 0 }, { ago: 0, state: 'empty' }]);
+		try {
+			expect(columnNames(await readColumns(page, LEDGER, ROOMY_CEILING, {}))).toEqual(BUILT_COLUMNS);
+			expect(parquetAsked(asked)).toEqual([dayFile('2030-06-14')]);
+			// And that file holds no row: a question over the four days counts only the two days that do.
+			const answer = await readAsk(page, null, question('2030-06-12', PINNED, ROWS_PER_DAY), {});
+			expect(answer.state).toBe('ok');
+			expect(answer.state === 'ok' ? answer.rows : []).toEqual([
+				{ covers: '2030-06-12', rows: '1' },
+				{ covers: '2030-06-13', rows: '1' }
+			]);
+		} finally {
+			await page.release();
+		}
+	});
+
 	test('a ledger that has never held a row lists no column, and asks for no data file', async () => {
 		const { page, asked } = await builtSite(emptyDays(3, 0));
 		try {
