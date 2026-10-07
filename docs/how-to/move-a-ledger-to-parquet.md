@@ -4,7 +4,7 @@
 
 How do I move one ledger from CSV to the ledger door without losing a row?
 
-This procedure is project-specific because it names this repository's ledger contract and migration command. A move has an online copy phase and a later retirement phase. The code change lands first. The online copy keeps the CSV source and old writer available while raw ledger files are written, packed and proved. Final retirement deletes the CSV only after no old writer can return and fresh proof passes.
+This procedure is project-specific because it names this repository's ledger contract and migration command. A move has an online copy phase and a later retirement phase. The code change lands first. The online copy keeps the CSV source and old writer available while raw ledger files are written, packed and proved. Final retirement needs fresh proof and either evidence that no old writer can return or a named owner ruling on that risk.
 
 ## Complete the code change
 
@@ -16,7 +16,7 @@ A move is complete only when every applicable part below holds.
 | --- | --- | --- |
 | Registry | The ledger has the intended entry in `config/ledgers.json`. | `backend/tests/contracts/test_ledger_registry.py` |
 | Door table | `backend/idhazh/ledger/keys.py` declares the ledger, and neither legacy tree table names it. | The registry and door-shape tests in `backend/tests/ledger/` |
-| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<ledger>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` naming its old day-tree or shared-day-file layout, retention window and `old_headings` map from old headings to current columns. Reuse the contract's rename map. Family-nested prefixes, month files and all other layouts are refused by name for now. | `backend/tests/ledger_migration/test_csv_layouts.py` |
+| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<ledger>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` naming its old day-tree or shared-day-file layout, retention window and `old_headings` map from old headings to current columns. Reuse the contract's rename map. Declared prefixes may contain more than one folder. Month files and all other layouts are refused by name for now. | `backend/tests/ledger_migration/test_csv_layouts.py` |
 | Writers | Every writer uses `ledger.persist` with its writer identity. Each workflow command that writes passes `--commit`. | `backend/tests/workflows/test_ledger_door_jobs.py` |
 | Backend readers | Each reader uses the door and keeps its existing answer. | The ledger's row tests |
 | Console readers | Every declared ledger is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it. | `backend/tests/contracts/test_frontend_index_shapes.py` |
@@ -82,16 +82,14 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the nine layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the eight layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
 `counterfactual-scores`, `candidate-models`, `feed-health`, `seen` and
-`published`, plus `council-run-records` (old CSV folders
-`llm-council/shard-outcomes`). This tool does not migrate `span-rollup` or an
+`published`. This tool does not migrate `council-run-records`, `span-rollup` or an
 undeclared CSV layout. Moving another shape requires its own contract and
-reader design first. The council's declared layout is one shared day file under
-two folders. Other family-nested prefixes such as
-`content-similarity-judge/scored-pairs` are supported by the door, but this
-migrator still does not move committed files at that depth. `item-health-summary`
+reader design first. The reader supports a declared day tree or shared day file
+under a multi-folder prefix. It does not infer an undeclared layout such as
+`content-similarity-judge/scored-pairs`. `item-health-summary`
 moved without a migrator entry because no committed file existed.
 
 Both CSV layouts refuse a filled cell under an unknown heading, a value with
@@ -133,11 +131,13 @@ The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, or a
 ## Retire CSV after the old writer is retired
 
 The online copy does not authorize deletion. First satisfy the ledger's
-retirement gate: no old-code writer can still run or return, captured output
-has been accounted for, and the current source has been imported, packed and
-proved. Keep the CSV, family and old-row reader until that evidence is complete.
+retirement gate: old-code writers have finished, captured output has been
+accounted for, and the current source has been imported, packed and proved.
+Also establish that an old writer cannot return, or record the owner's explicit
+approval to retire without that wait. Keep the CSV, family and old-row reader
+until the evidence and any required ruling are complete.
 
-Keep writers stopped throughout retirement. The proof does not lock a tree
+Keep obsolete CSV writers stopped throughout retirement; current door writers may continue. The proof does not lock a tree
 against another process, and filesystem deletion is not a transaction. A
 deletion error can stop cleanup after earlier proven files have been removed.
 A header-only CSV day needs no stored output when both the CSV and the door
@@ -152,7 +152,10 @@ have no period left to pack. Stage only the intended CSV deletions and new
 `state/raw/` and `state/compact/` files. Do not add trial-root compact files.
 Push the data commit and wait for its selected CI checks to pass.
 
-After the merge, run `--check` again over `state/` and every trial root in the next quiet window. A CSV file found then belongs in a follow-up migration commit under the same row and run id.
+After the merge, inspect the same explicit source paths again. Use `--check`
+while the converter remains available, not a default list that omits a retired
+entry. A CSV file found then needs recovery with the proved converter from
+history under the same row and run id; do not silently delete it.
 
 ## See also
 

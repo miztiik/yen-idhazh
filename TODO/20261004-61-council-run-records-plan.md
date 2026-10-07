@@ -4,7 +4,7 @@
 
 **Level**: 5 (CLAUDE.md section 6): the plan replaces a persisted row contract and moves a committed ledger. The owner approved the shapes and the names on 2026-10-04 and set rows 1, 2 and 3 at Levels 2, 3 and 4; row 4 is Level 2.
 
-**Status**: rows 1 and 2 have shipped. On 2026-10-07 the owner approved replacing the repository-wide quiet window with Fowler's online migration design. Rows 5 and 6 fix migration ownership and historical packing first. Row 3 copies and proves the old records while workflows continue; row 4 deletes sources and compatibility only after old writers are retired. This approval does not cancel runs, disable workflows, delete run history or prohibit old reruns.
+**Status**: all six rows are DONE. Row 4 re-proved and retired the named CSV sources and removed the old family and compatibility. Owner @kumarsnaveen_microsoft ruled on 2026-10-07 that legacy run `37402604801` will not be rerun ("it wont be run just do your job deliver"), waived the rerun-window wait in section 2.5/Table J, and authorized delivery while pipelines continue. Obsolete branch and open-PR writers are recorded as information, not blockers. No run was cancelled, workflow disabled, history deleted or execution prohibited. Keep this plan for the requested retirement evidence; closure deletion remains with the coordinator.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
@@ -47,7 +47,7 @@ Table C - when to stop and ask
 | C4 | A persisted shape that section 2 does not declare, or a change to a name in Table D | Stop and surface ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)). The names are the owner's |
 | C5 | A committed council row that Table F cannot read: a `shard` below -2, a filled `host_model`, or a row whose `date` is not its file's day | Row 3 stops. No row is dropped, edited or mapped by hand |
 | C6 | Two personas still disagree after one debate | Stop and surface |
-| C7 | Row 4 cannot prove that old-code writers have finished and cannot return, or a failed save has unaccounted records | Keep CSV, the family and compatibility. Do not cancel runs, disable workflows, delete history or discard captured output without a separate owner decision |
+| C7 | A failed save has unaccounted records, or fresh source-cell proof fails | Recover captured output or re-import and prove changed sources. The owner's 2026-10-07 ruling waives the rerun wait and makes obsolete refs informational; it does not waive source-cell proof or authorize cancellation, disablement or history deletion |
 
 ## 1. Status Reckoner
 
@@ -56,7 +56,7 @@ Table C - when to stop and ask
 | 1 | The council's run record has its own contract, and it reads every old row | - | A | DONE #1294 | cautious-adventure | #1294 | Plan 61 row 1: council run record contra |
 | 2 | The council saves its run records through the ledger door | 1; Plan 60 "Which months may close", shipped in #1303 | B | DONE | plan-row-status | #1323 | Council ledger writer |
 | 3 | The committed council records are copied and proved while workflows continue | 2, 5, 6 | E | DONE | probable-giggle | - | owner |
-| 4 | The old-row reader and the migrator's council entry are deleted | 3; section 2.5 retirement gate | F | PENDING | - | - | - |
+| 4 | The old-row reader and the migrator's council entry are deleted | 3; section 2.5 retirement gate as ruled 2026-10-07 | F | DONE | retire-legacy-council-records | - | owner |
 | 5 | Migration preserves writer ownership and can write raw files without packing | 2 | C | DONE | - | - | - |
 | 6 | Explicit historical packing reaches imported records outside the rerun window | 5 | D | DONE | supreme-pancake | - | owner |
 
@@ -318,7 +318,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Oracle:** independent CSV source-cell proof through the normal ledger reader, plus the row 5 attempt-replacement test. It cannot prove records an obsolete run has not yet saved; late sources stay covered by this row until row 4 retires them.
 - **Completion evidence (2026-10-07 UTC):** source/code `c4c242a99b8c0ffc7b44e75085a4571559f5d7eb`; additive copy merged at `9cb9b704c5ccafc9f4697be8021f764613ba7d38`. Run identity `2026-10-07-1`, production root `state`, ledger `council-run-records`, months `2026-09` and `2026-10`. The fresh recount found 16 CSV days, 9,414 bytes and 56 reader records. Raw-only writing imported 50 migration-owned records; six native records already held on October 5 retained their original rows and writer identities.
 - **Packing and proof:** the guarded publisher's forced depth-one fetch hid ancestry from the local privacy hook. The separate structural correction merged at `abf57d20a4c5d23729ac99c6633ef76a2497caac`, without changing the hook or cutoff. Explicit historical passes landed at `e9ae324125c8b61b71ba4a0fef7b3b37ac00612b` and `09486008783a9210c561375f9b5ea2fc2ff216b5`; the second exhausted the selected inputs. On the latter committed state, `--verify` exited 0 with source-cell parity proven and `--plan` reported every selected day's rows already held. October 6's six native raw records remained byte-identical and readable. CSV, `.gitkeep` and legacy-family references remain unchanged.
-- **Retirement still pending:** legacy run `37402604801`, created `2026-10-06T02:07:30Z`, remains eligible for rerun until `2026-11-05T02:07:30Z`. Its collection succeeded even though selection failed. Row 4 also requires the old-ref and captured-output evidence in Table J; this copy and proof authorize no retirement or workflow restriction.
+- **Retirement ruling:** legacy run `37402604801`, created `2026-10-06T02:07:30Z`, is technically eligible for rerun until `2026-11-05T02:07:30Z`. Its collection succeeded even though selection failed. Owner @kumarsnaveen_microsoft waived waiting for that date on 2026-10-07 and authorized row 4 now, without workflow restrictions. Table J holds the current evidence.
 
 **Decisions**
 
@@ -358,7 +358,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `docs/reference/repository-layout.md`
   - `TODO/20261004-61-council-run-records-plan.md`
 - **Acceptance gates:** first satisfy section 2.5. With the converter still present, repeat row 3 for changed source inputs, run `--verify`, then `--retire`, then `--check` with its explicit ledger/root/month arguments; all exit 0 and check reports no CSV. Only then remove the converter and family. Before merge, inspect those same old paths on the current merge candidate; do not use a default ledger list which now omits the removed entry. Relevant source changes invalidate retirement evidence. Local: selector-listed checks plus council contract, migration layout, persist, registry and frontend vocabulary tests; `doc_load.py` on changed Markdown. CI: full suite on the cleanup candidate.
-- **Oracle:** fresh source-cell parity before retirement, zero CSV on explicitly named paths after retirement, and the migrated old-stamp fixture round-trip through raw and compact formats. These checks cannot forbid a later dispatch of obsolete code; section 2.5 must settle that before deletion.
+- **Oracle:** fresh source-cell parity before retirement, zero CSV on explicitly named paths after retirement, and the migrated old-stamp fixture round-trip through raw and compact formats. These checks cannot forbid a later dispatch of obsolete code; the owner's 2026-10-07 ruling accepts that risk without prohibiting execution.
+- **Retirement evidence (2026-10-07 UTC):** executing code/source commit `23254f4ff1c72c66e055cf0ff9fa242f3758d761`; explicit root `state`, ledger `council-run-records`, months `2026-09` and `2026-10`, stable migration run `2026-10-07-1`. `--verify` exited 0: 16 CSV days, 9,414 source bytes, 56 reader records and source-cell parity proven. `--retire` re-proved those inputs and deleted the 16 CSV files; `--check` then exited 0 with `0 CSV file(s) left`, before converter removal. `.gitkeep` was removed with the family. Retirement changed no raw or compact bytes.
 
 **Decisions**
 
@@ -378,15 +379,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### 2.5 Retirement gate for row 4
 
-Table J - finite evidence, not an idle repository
+Table J - retirement evidence under owner @kumarsnaveen_microsoft's 2026-10-07 ruling
 
-| # | Required evidence | Failure action |
+| # | Evidence | Action |
 | --- | --- | --- |
-| J1 | Writer cutover is #1323, commit `a348e004e0109b493e58d7961cacee78c2b14782`. Read council runs in bounded UTC date windows and name those whose checkout lacks the cutover; include their attempts and queued jobs | Keep compatibility until every admitted obsolete attempt finishes and its completed output is saved or recovered |
-| J2 | Default: each obsolete run is past GitHub's 30-day rerun eligibility, measured from that run's creation instant, and no surviving attempt can write. A shorter route needs separate owner approval to retire those reruns | Do not cancel runs or delete run history to manufacture this evidence |
-| J3 | Dispatchable old branches/tags and pending writer changes cannot reintroduce the obsolete CSV writer. Record the evidence and the owner's operating decision for any obsolete ref still executable | Waiting 30 days alone is not sufficient. Surface the old-ref decision; no agent may silently disable workflow execution |
-| J4 | For each failed legacy save, completed output has been accounted for before artifact expiry. A failure in selection is distinguished from a failure after evaluation | Recover captured records; unavailable output is an explicit blocker, never a zero-row success |
-| J5 | Fresh import, named packing, source-cell proof and retirement complete on current state; the cleanup merge candidate contains no CSV on the named source paths | Re-import and prove relevant changes; retain family and converter until all checks pass |
+| J1 | Cutover is #1323, `a348e004e0109b493e58d7961cacee78c2b14782`. Bounded UTC window 2026-10-04 through 2026-10-07 names legacy runs `37164837568`, `37248064576`, `37402604801`, each attempt 1, completed: draw failed, judge skipped, collect succeeded. Current-writer run `37556313016`, attempt 1, completed successfully. No queued job in these attempts | Finished attempts; no cancellation or workflow change |
+| J2 | Run `37402604801` remains eligible until `2026-11-05T02:07:30Z`. Owner says it will not be rerun and waives the wait, quoted in Status above | Deliver now; do not retain the waived wait as a blocker |
+| J3 | Remote branch snapshot names obsolete `append_council_shard_outcomes` in `console-chart-freshness`, `pipeline-tests-row-2-nested-trial-readers` (open #1350), and `plan-59-row-6-holdout-score-door` (open #1352). Other open PRs #1357, #1381 and #1382 have no obsolete writer. The only remote tag, `pre-msg-rewrite-2026-08-29`, predates the council module | Information only under the owner's ruling. Do not delete refs or prohibit execution |
+| J4 | Run `37402604801` logs show selection failed on a pair with identical address keys, upload skipped, judge skipped, collect settled both judged dates and committed five files with seven inserted lines. Artifact list is empty; no captured evaluation output is available. All three named legacy saves succeeded; a failed draw is not evidence of lost saved rows | No failed legacy save in the named window; fresh CSV source proof remains mandatory |
+| J5 | At `23254f4ff1c72c66e055cf0ff9fa242f3758d761`, explicit September/October verify, retire and check passed: 16 CSV days, 9,414 bytes, 56 reader records; zero CSV remained before converter removal | Inspect the same explicit source paths on the candidate and after merge. Re-prove any relevant source change; preserve native rows and identities |
 
 ### Row #5 - Migration preserves writer ownership and can write raw files without packing
 
