@@ -20,6 +20,11 @@ the whole collection.
 default is `RestApi`. A test hands in a reader over a recorded page instead, the
 way `idhazh.fetch` takes its connection class.
 
+**A refused DELETE is read by `error_cause`, never here.** A member already
+gone counts as deleted; every other answer goes to the pass that asked, which
+records a member GitHub will not delete and stops for anything else. So the
+one table of what GitHub's answers mean is the classifier's.
+
 **Standard library HTTP, deliberately** (Guardrail #8). `idhazh.fetch` already
 reads the open web with `urllib.request`, so the house pattern exists and this
 adds no dependency for the two gardener tasks that call it once a wake. The
@@ -48,6 +53,8 @@ from typing import Any, Final, Protocol
 from urllib.parse import quote
 
 from idhazh.contracts.knobs.gardener import PrunableCollection
+from idhazh.gardener import error_cause
+from idhazh.gardener.error_cause import ErrorCause
 from idhazh.gardener.one_at_a_time import Collection, Member
 
 logger = logging.getLogger(__name__)
@@ -138,16 +145,28 @@ class RestApi:
 
     def remove(self, path: str) -> None:
         request = urllib.request.Request(self._url(path), headers=self._headers, method="DELETE")
-        try:
-            with urllib.request.urlopen(request, timeout=30):
-                return
-        except urllib.error.HTTPError as refusal:
-            # 404 is success arriving late: somebody else deleted it, or a
-            # previous pass did and its record was lost. Anything else is a
-            # failure the core has to stop on.
-            if refusal.code == 404:
-                return
-            raise
+        with urllib.request.urlopen(request, timeout=30):
+            return
+
+
+def _remove_member(api: Api, path: str) -> None:
+    """One DELETE, where a member already gone counts as deleted.
+
+    A 404 or 410 is success arriving late: somebody else deleted it, or an
+    earlier pass did and its record was lost. Which answers mean that is
+    `error_cause.classify`'s, the rule every other caller reads, and every other
+    answer goes to the pass that asked, which reads it the same way. Absorbed
+    here rather than in the pass, so a walk that counts its own deletes counts
+    this one too.
+    """
+    try:
+        api.remove(path)
+    except Exception as failure:
+        if error_cause.classify(failure) is ErrorCause.GONE:
+            if isinstance(failure, urllib.error.HTTPError):
+                failure.close()
+            return
+        raise
 
 
 def api_of_this_repository() -> RestApi:
@@ -359,7 +378,7 @@ class _ArtifactWalk:
 
     def delete(self, raw: dict[str, Any]) -> None:
         """One DELETE, counted, so a page read after it is held to the count it left."""
-        self._api.remove(f"actions/artifacts/{raw['id']}")
+        _remove_member(self._api, f"actions/artifacts/{raw['id']}")
         self._deleted += 1
 
     def _checked_pages(self) -> Iterator[list[dict[str, Any]]]:
@@ -482,5 +501,5 @@ def runs(api: Api, *, after: str, through: str) -> Collection[dict[str, Any]]:
             size_bytes=0,
             label=str(raw.get("name", "")),
         ),
-        delete=lambda raw: api.remove(f"actions/runs/{raw['id']}"),
+        delete=lambda raw: _remove_member(api, f"actions/runs/{raw['id']}"),
     )

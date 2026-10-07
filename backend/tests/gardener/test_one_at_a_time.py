@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.gardener import one_at_a_time
 from idhazh.gardener.one_at_a_time import Collection, Member, PruneInterruptedError, Window
 
@@ -257,6 +258,7 @@ def test_an_interrupted_pass_keeps_what_it_already_deleted(tmp_path: Path) -> No
     so_far = stop.value.so_far
     assert so_far.taken == (DAYS[0], DAYS[1]), "the pass did not keep what it had deleted"
     assert so_far.stopped_because is StopReason.FAILED
+    assert so_far.fault is GardenerFault.RAISED, "a refusal from the file system is no outage"
     assert so_far.resume_from == DAYS[2], "the next pass has to retry the one that failed"
     assert (root / f"{DAYS[2]}.txt").is_dir(), "the delete that failed removed something"
     assert on_disk(root) == [DAYS[3], DAYS[4], DAYS[5], DAYS[6]], (
@@ -292,7 +294,7 @@ def test_a_member_the_pass_cannot_read_still_carries_what_went(tmp_path: Path) -
 
     so_far = stop.value.so_far
     assert so_far.taken == (DAYS[0], DAYS[1])
-    assert so_far.stopped_because is StopReason.FAILED
+    assert (so_far.stopped_because, so_far.fault) == (StopReason.FAILED, GardenerFault.RAISED)
     assert so_far.resume_from is None, "the pass failed before it could name the member"
     assert so_far.more_to_do, "a failed pass has more to do even with no resume point"
     assert "starts again from the oldest member" in str(stop.value)
