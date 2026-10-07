@@ -514,6 +514,7 @@ npm run check
 npm run build
 npm run bundle-gate
 python -m idhazh site-weight --site-tree build
+python -m idhazh published-columns --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: it compiles
@@ -553,6 +554,14 @@ can only ever make this step fail sooner. **Point it at anything else and the
 suite fails**, because the tree is read back off `pages.yml`'s own upload step.
 It measures nothing until the site is built, so run it after `npm run build`, and
 a run that reports zero files fails rather than passes.
+
+`published-columns` runs on the same built tree, immediately after `site-weight`.
+It reads only the parquet footers under the staged `state/` copy and checks that
+each published ledger file carries the columns its row contract declares. An
+older file that lacks a newer column is reported as history and still passes; a
+current-stamped file with different columns, a shared column with a different
+type, a newer file, or a published ledger without a door contract fails the
+build.
 
 It prints three more lines and none of them fails anything. `by directory` is the
 top-level children of `build/` largest first, so a directory that grew can be
