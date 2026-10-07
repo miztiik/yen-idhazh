@@ -64,7 +64,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | #1358 | Plan 62 row l8 |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | #1361 | Plan 62 row l9 |
 | L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | #1360 | Plan 62 row l10 |
-| L11 | The "Measurement is off" line names only a day that is on screen | L5 | D | PENDING | - | - | - |
+| L11 | The "Measurement is off" line names only a day that is on screen | L5 | D | DONE | reimagined-happiness | - | Plan 62 row l11 |
 | L12 | The data explorer's span sentences say what each ledger read | L10 | D | DONE | miniature-journey | - | Plan 62 row l12 |
 | L13 | The remaining console specs check data they build | L9 | D | PENDING | - | - | - |
 
