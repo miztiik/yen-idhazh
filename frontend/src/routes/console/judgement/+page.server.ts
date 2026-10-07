@@ -47,7 +47,10 @@ export function load() {
 		});
 	// One read, three panels. The fitted row carries the line, both judge rates
 	// and all three gate counts, so asking the ledger twice would be two reads of
-	// one file that could disagree about which run of a date they took.
+	// one file that could disagree about which run of a date they took. It also
+	// holds the days the merge line's rule looks back over while
+	// `applied_lookback_days` is under the widest preset, because no row is dated
+	// after the newest published day.
 	const rows = fittedLines(widestDays);
 	// The record is cumulative and the counts are per day, so the newest row is
 	// what both the split and the figures strip are about.
@@ -109,6 +112,8 @@ export function load() {
 		span: daysInWindow(windowOfDays(day, widestDays, console.today_anchor)),
 		// The band and the daily step the chart draws against, read off config so
 		// the axis is the range a line MAY take rather than the range it has taken.
+		// The switch and the lookback come with them, so a window with no fitted
+		// day draws its rule at the line a build used.
 		similarity: similarityConfig(),
 		// 120 slots, a fixed size whatever the archive grows to, so this read costs
 		// the same on the thousandth day as on the third. The page draws no 120-slot
@@ -122,7 +127,8 @@ export function load() {
 			judged: newest?.pairsJudged ?? null,
 			usable: newest?.pairsUsable ?? null
 		},
-		// What the newest day was built with when no fit has ever run.
+		// The committed floor: what a build groups at while the switch is off, or
+		// when no fit applied a line in its lookback.
 		configuredLine: committedFloor(),
 		// Only the pairs marked as two different stories reach the document whole.
 		// They are the load-bearing ones - the line has to stay above every one of

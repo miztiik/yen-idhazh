@@ -186,9 +186,9 @@ export interface VisualsConfig {
 
 /** The band the merge line may move in, and the clamps that shape how it moves.
  *
- * Only the keys a console panel draws. The block carries sixteen more - the
- * gates, the judge's own limits, the pair budget, the daily caps - and none of
- * them is a number a chart puts on screen, so none of them is declared here.
+ * Only the keys a console panel reads. The block carries more - the pair
+ * budget, the damping weights, the guard's own window - and no panel reads
+ * them, so none of them is declared here.
  * `band_low` and `band_high` are the score axis; `step_change_multiple` is what
  * the guard fires against. The envelope behind the applied line is drawn from
  * the fitted ROW rather than from config, because it is the cap the run used
@@ -221,6 +221,13 @@ export interface SimilarityConfig {
 	minimum_negatives: number;
 	minimum_above_line: number;
 	minimum_days: number;
+	/** Whether a build groups at a fitted line. Off, every build groups at
+	 * `floor_min`, the committed floor. */
+	enabled: boolean;
+	/** How many days before its own a build looks back for a fitted line. It
+	 * reads its own day too, so 7 is 8 days. With no line there, it groups at the
+	 * committed floor. */
+	applied_lookback_days: number;
 }
 
 export interface ConsoleConfig {
@@ -503,8 +510,8 @@ const RUN_DEFAULTS: RunConfig = {
 	shard_timeout_minutes: 200
 };
 const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
-// The same four values `SimilarityThresholdConfig` declares in the contract, so
-// a checkout with no config file draws the axis the pipeline would have fitted
+// The same values `SimilarityThresholdConfig` declares in the contract, so a
+// checkout with no config file draws the axis the pipeline would have fitted
 // against rather than an axis this file invented.
 const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	band_low: 0.88,
@@ -517,7 +524,9 @@ const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	unclear_max: 0.35,
 	minimum_negatives: 200,
 	minimum_above_line: 30,
-	minimum_days: 10
+	minimum_days: 10,
+	enabled: false,
+	applied_lookback_days: 7
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
