@@ -61,12 +61,12 @@ def declarations(config_root: Path) -> dict[str, dict[str, Any]]:
         not isinstance(name, str) or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None
         for name in names
     ):
-        raise ValueError("config/idhazh_gardener.json task_names must be a list of task slugs")
+        raise SystemExit("config/idhazh_gardener.json task_names must be a list of task slugs")
     if len(names) != len(set(names)):
-        raise ValueError("config/idhazh_gardener.json task_names repeats a task")
+        raise SystemExit("config/idhazh_gardener.json task_names repeats a task")
     for name in names:
         if not (folder / f"{name}{DECLARATION_SUFFIX}").is_file():
-            raise ValueError(f"config/{TASKS_DIR}/{name}{DECLARATION_SUFFIX} is missing")
+            raise SystemExit(f"config/{TASKS_DIR}/{name}{DECLARATION_SUFFIX} is missing")
     return {
         name: json.loads((folder / f"{name}{DECLARATION_SUFFIX}").read_text(encoding="utf-8"))
         for name in sorted(names)
