@@ -1039,9 +1039,9 @@ point to exactly one line. The printer reads each name only when it is a plain
 string, because a printer that raised would make Python print its own trace,
 text included. It sits beside the programs in `backend/utilities/` and is the
 standard library alone, because the plan job checks out only `config` and that
-folder and installs nothing, and each program imports it inside its `__main__`
-block, so what the programs import as modules stays the standard library
-(Fowler, 2026-10-07, on the owner's ruling of the same day).
+folder and installs nothing. Each program imports it inside its `__main__`
+block, so the three programs held to standard-library imports at the top of the
+file stay that way (Fowler, 2026-10-07, on the owner's ruling of the same day).
 
 ## See also
 

@@ -62,10 +62,10 @@ that code means - and, when the run is a step on GitHub, adds the shard's
 summary to the job's page (`idhazh.gardener.run_summary`). An exception that
 escapes is said the same way, by its type and place, before it goes on, and the
 trace printed as the program ends names each chained exception's type and
-frames, never its text (`utilities.crash_trace`). On
-GitHub the event log also writes the warning a `stale` or `lost` shard shows on
-the run's page (`idhazh.gardener.workflow_commands`). Only `main` reads the
-environment: whether the run is a step on GitHub, and where its summary goes.
+frames, never its text (`utilities.crash_trace`). On GitHub the event log also
+writes the warning a `stale` or `lost` shard shows on the run's page
+(`idhazh.gardener.workflow_commands`). Only `main` reads the environment:
+whether the run is a step on GitHub, and where its summary goes.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
