@@ -85,7 +85,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L29 | Hardware's refused-runs box says what reads a refused run | L22 | I | PENDING | - | - | - |
 | L30 | The merge line's no-fit rule names the line a build used | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | H | PENDING | - | - | - |
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | PENDING | - | - | - |
-| L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | PENDING | - | - | - |
+| L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | DONE | cuddly-sniffle | - | Plan 62 row l32 |
 | L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | PENDING | - | - | - |
 
 ## 2. Shared declarations
@@ -1436,8 +1436,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Scope:** On Judgement's agreement panel, the strip prints no share for a day that read fewer pairs than `console.min_attempts_for_rate` (5), the floor under which the sentence below it already prints no share. Level 1.
 - **The fault** (row L27's third follow-up, Reader's, 2026-10-07): in the state "too few to report a share", the strip above the sentence prints a share of fewer than 5 pairs, such as "25% of 4 pairs". The strip's two series in `JudgeAgreement.svelte` print each day that read a pair as "{share} of {n} pairs", while `rateWithDenominator` in `frontend/src/lib/console/merge-line.ts`, which the sentence uses, gives no share under the floor, because a share over four pairs is not a measurement.
 - **Files touched** (found by a search on `main` at 6861bbd21 for "too few to report a share", `rateWithDenominator` and the strip's `format`; search again at dispatch):
-  - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (the strip's two `format` functions; `attemptsFloor`, which is `console.min_attempts_for_rate`)
-  - `frontend/tests/console-window.spec.ts` (row L27's built `judge-agreement` cases; held by L26 while it runs)
+  - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (the strip's two `format` functions; `attemptsFloor`, which is `console.min_attempts_for_rate`; and, found during execution, `daySentence`, the accessible name of each day's dots, which printed the same share. One function, `readingsOf`, now writes the strip's words and the dots' name together)
+  - `frontend/tests/console-window.spec.ts` (row L27's built `judge-agreement` cases; held by L26 while it runs; six new cases beside them, decision 8)
   - Left as it is: `frontend/src/lib/console/merge-line.ts`, whose `rateWithDenominator` holds the floor's rule
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-window.spec.ts`, on days the test builds (Table D, D3): a day that read 4 pairs prints no share in the strip, in Reader's words, and a day that read 5 prints its share; the sentence under the strip does not change. On `main` the 4-pair day prints "25% of 4 pairs", which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 2).
@@ -1447,10 +1447,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The fault is Reader's own follow-up in row L27 | Reader, 2026-10-07 (row L27's report) |
-| 2 | Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | Reader chooses the words (CLAUDE.md section 14) | Reader, 2026-10-07, in one ruling with nothing left split. A day of fewer than 5 pairs prints its counts and no share, in the same words at every window. "Disagreed with the second reading" reads "1 of 4 pairs", and "1 of 1 pair" for one pair. "Could not tell" reads "0 of the 3 that agreed", counted against the pairs whose two readings agreed, the pairs its share is taken over; where every pair disagreed it reads "not counted, no pair agreed", because a 0 there may be false. The dots' accessible name: "15 Jun: 1 of 4 pairs disagreed with the second reading, and 0 of the 3 that agreed could not tell."; where no pair agreed, "15 Jun: 1 of 1 pair disagreed with the second reading. Could not tell: not counted, no pair agreed." A day of 5 pairs or more keeps its share, "5% of 40 pairs". Reader's reason: under 5 pairs a percent claims more than a few pairs can show, and the counts make the sentence's "so the counts are above" true. Every value is written out whole in `console-window.spec.ts` |
 | 3 | The strip's floor is `console.min_attempts_for_rate`, the one the sentence under it uses, so the two never disagree about when a share is a measurement | Plan author, 2026-10-07 |
 | 4 | L32 waits for L27 (#1388), which wrote the sentence and built the `judge-agreement` cases in `console-window.spec.ts`, and for L26, which holds that spec | The owner, 2026-10-07 |
 | 5 | Level 1: the words of one strip on one panel; a wrong version is obvious and local | The owner, 2026-10-07 |
+| 6 | The dots' accessible name follows the strip under the floor. The panel's own comment says the strip and the dots carry the same words, and a screen reader would otherwise still hear "25% of 4 pairs". One function writes both | Found during execution; Reader, 2026-10-07 |
+| 7 | The counts come from the day's own row, with no field added to `JudgeDay`: disagreed is its share times the pairs read twice; agreed is the pairs read twice less those that disagreed, because a pair agrees exactly when its two readings match (`usable` in `backend/idhazh/contracts/story_similarity_pair.py`, and the shares in `backend/idhazh/stages/set_merge_line.py`); could not tell is its share times agreed | Found during execution |
 
 **Rejected alternatives**
 
