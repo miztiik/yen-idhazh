@@ -424,6 +424,10 @@ function lineDay(date: string): LineDay {
 	};
 }
 
+/** The band, the switch and the lookback the route hands the merge line. The
+ * switch is off unless a case turns it on. */
+const LINE_KNOBS = { band_low: 0.88, band_high: 1, enabled: false, applied_lookback_days: 7 };
+
 /** One panel in one state at one window, and every word it owes about its days. */
 type SpanCase =
 	| {
@@ -675,7 +679,7 @@ function propsOf(one: SpanCase): Record<string, unknown> {
 		case 'merge-line':
 			return {
 				days: one.days,
-				knobs: { band_low: 0.88, band_high: 1 },
+				knobs: LINE_KNOBS,
 				configuredLine: 0.94,
 				markedApart: null,
 				viewport,
@@ -690,6 +694,41 @@ async function said(page: Page, selector: string): Promise<string> {
 	await expect(node, `nothing on the panel matches ${selector}`).toHaveCount(1);
 	return ((await node.textContent()) ?? '').replace(/\s+/g, ' ').trim();
 }
+
+/** A day a fit applied `line` on, or a held day that kept `line`. */
+function appliedOn(date: string, line: number, heldReason = 'none'): LineDay {
+	return { ...lineDay(date), proposed: heldReason === 'none' ? line : null, applied: line, heldReason };
+}
+
+/** With no fitted day in its window, where the merge line draws its rule. Each
+ * case is the 1-day window on 15 Jun 2030 with a lookback of 7 days, so that
+ * day's build read the lines of 8 to 15 Jun. The committed floor is 0.94. */
+const RULE_CASES: { state: string; enabled: boolean; days: LineDay[]; rule: string }[] = [
+	{
+		state: 'the switch is on and a line was fitted 3 days before',
+		enabled: true,
+		days: [appliedOn('2030-06-12', 0.937)],
+		rule: '0.937'
+	},
+	{
+		state: 'the switch is on and a line was fitted 7 days before, the first day the build read',
+		enabled: true,
+		days: [appliedOn('2030-06-08', 0.937)],
+		rule: '0.937'
+	},
+	{
+		state: 'the switch is on, the one fitted line is 8 days before, and the day inside the lookback was held',
+		enabled: true,
+		days: [appliedOn('2030-06-07', 0.937), appliedOn('2030-06-13', 0.951, 'judge_unstable')],
+		rule: '0.940'
+	},
+	{
+		state: 'the switch is off, though a line was fitted 3 days before',
+		enabled: false,
+		days: [appliedOn('2030-06-12', 0.937)],
+		rule: '0.940'
+	}
+];
 
 test.describe('the Judgement panels name their span in every state, on days the test builds', () => {
 	/** Each panel rendered on the server with its real children, never a stub. */
@@ -737,6 +776,29 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			if (one.surface === 'merge-line') {
 				expect(await said(page, '[data-line-rule-label]')).toBe(one.label);
 			}
+		});
+	}
+
+	for (const one of RULE_CASES) {
+		test(`THE ORACLE: merge-line draws its rule at the line its day was built with when ${one.state}`, async ({
+			page
+		}) => {
+			const props = {
+				days: one.days,
+				knobs: { ...LINE_KNOBS, enabled: one.enabled },
+				configuredLine: 0.94,
+				markedApart: null,
+				viewport: windowOfDays(JUDGED_THROUGH, 1, 'right'),
+				...DRAWN_AT
+			};
+			await page.setContent(`<main>${drawn['merge-line'](props)}</main>`);
+
+			await expect(page.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', one.rule);
+			// Reader's words stand, and now name the line the rule is drawn at.
+			expect(await said(page, '[data-line-rule-label]')).toBe('The line this one day was built with');
+			expect(await said(page, '[data-line-state]')).toBe(
+				'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
+			);
 		});
 	}
 });
@@ -1368,7 +1430,7 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	function lineProps(preset: number, dates: readonly string[]): Record<string, unknown> {
 		return {
 			days: dates.map(lineDay),
-			knobs: { band_low: 0.88, band_high: 1 },
+			knobs: LINE_KNOBS,
 			configuredLine: 0.94,
 			markedApart: null,
 			viewport: windowOfDays(JUDGED_THROUGH, preset, 'right'),

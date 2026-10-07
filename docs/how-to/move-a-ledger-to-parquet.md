@@ -122,7 +122,15 @@ uses the same migration work identity and is folded into existing rows. Raw
 file ids use the write clock, so this is a row and work-identity guarantee,
 not a promise of identical file ids or bytes after a new write.
 
-List only trial roots that hold this ledger. A root other than the repository's `state/` is written raw and is never packed. The state root runs the declared compaction task over only the named months, with packing live and its monthly deletion window in report-only mode. The migrator repeats that task until a pass writes and deletes no selected period. Year packing requires all twelve months of that year to be named. Include a ledger with no CSV in the selected months when it still needs those months' existing raw or compact files packed.
+List only trial roots that hold this ledger. `state/` uses the production
+`compact-<ledger>` declaration; another root is packed only when
+`compact-trial-<ledger>` names it in `state_roots`. A root with no matching
+trial declaration is written raw. Each declared compaction runs over only the
+named months, with packing live and its monthly deletion window in report-only
+mode. The migrator repeats that task until a pass writes and deletes no selected
+period. Year packing requires all twelve months of that year to be named.
+Include a ledger with no CSV in the selected months when it still needs those
+months' existing raw or compact files packed.
 
 The listing names the selected months' raw and daily folders, their monthly and yearly files, and the three index files, whether each is there or not, and weighs what it finds under them. It never discovers other years or months, and a question about a path it did not name stops the pass. A gap after the daily mark, the newest day the indexes give, is refused: include the intervening months instead of moving the mark past unprocessed days. The monthly and yearly marks cannot skip older periods that still need packing either. Name those months too; a completed indexed period outside the selection remains untouched.
 
@@ -153,7 +161,7 @@ all named sources in one process before deleting any CSV. Then run the same
 roots, months and ledger list with `--check`. It must print `0 CSV file(s) left`
 and exit 0. Run a dry compaction pass for each ledger moved in `state/`; it must
 have no period left to pack. Stage only the intended CSV deletions and new
-`state/raw/` and `state/compact/` files. Do not add trial-root compact files.
+raw and compact files under the named roots.
 Push the data commit and wait for its selected CI checks to pass.
 
 After the merge, inspect the same explicit source paths again. Use `--check`
