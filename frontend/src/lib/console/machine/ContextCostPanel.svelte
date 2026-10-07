@@ -35,6 +35,7 @@
 		type SettingsMoved
 	} from '$lib/console/settings-moved';
 	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -168,11 +169,11 @@
 		heading="h3"
 		id="context-headroom"
 		title="How much of the model's reading limit an article actually takes"
-		note="A limit far above every article ever read is room a setting could give back - one mark a run, over the last {windowDays} days."
+		note="A limit far above every article ever read is room a setting could give back - one mark a run, over {nameSpan(windowDays)}."
 	>
 		{#if contextRuns.length === 0}
 			<p class="empty" data-machine-panel-empty="context">
-				No run in these {days} days recorded both the limit it ran under and an article's own
+				No run in {nameSpan(days)} recorded both the limit it ran under and an article's own
 				tokens, so nothing here can say what the limit cost.
 			</p>
 			{#if contextUnread.length > 0}
@@ -194,7 +195,7 @@
 						tabindex="0"
 						aria-label="The longest article and {highName} of each of {contextRuns.length} runs, against the {grouped(
 							limit
-						)}-token limit, over {days} days. One column is one run, oldest on the left."
+						)}-token limit, over {countDays(days)}. One column is one run, oldest on the left."
 						use:pointerReadout={{
 							marks: contextMarks,
 							width: contextBox.width,
@@ -388,15 +389,15 @@
 			     (`frontend/tests/console-window-claims.spec.ts`). -->
 			<p class="reads" data-context-cost data-context-unused-pct={cost.unusedPct ?? ''}>
 				{#if cost.unusedPct === null || cost.largest === null}
-					{cost.items} of the {cost.rowsRead} item rows these {days} days recorded carried both the
+					{cost.items} of the {cost.rowsRead} item rows {nameSpan(days)} recorded carried both the
 					limit they ran under and an article's own tokens, which is too few to say what the limit
 					cost.
 				{:else}
-					The longest article of these {days} days held
+					The longest article of {nameSpan(days)} held
 					<strong>{grouped(cost.largest)}</strong>
 					tokens, which is {cost.largestPct}% of the {grouped(limit)} the server allows -
 					<strong
-						>not one article in these {days} days went past {cost.largestPct}%, so {cost.unusedPct}%
+						>not one article in {nameSpan(days)} went past {cost.largestPct}%, so {cost.unusedPct}%
 						of the limit went spare every time</strong
 					>. A middle article held {grouped(cost.median ?? 0)}, so the limit is
 					<strong>{cost.timesMedian}</strong> times the article it usually reads. Measured over
@@ -408,10 +409,10 @@
 
 			<p class="reads" data-context-cutoff data-context-cutoff-calls={cost.cutOff}>
 				{#if cost.calls === 0}
-					No call in these {days} days recorded why its reply stopped, so nothing here can say
+					No call in {nameSpan(days)} recorded why its reply stopped, so nothing here can say
 					whether anything ran out of room.
 				{:else if cost.cutOff === 0}
-					Nothing was cut short in these {days} days: across {grouped(cost.calls)} model calls the
+					Nothing was cut short in {nameSpan(days)}: across {grouped(cost.calls)} model calls the
 					server did not once say a reply stopped because it ran out of room. It said
 					{cost.reasons.map((one) => `${one.reason} ${grouped(one.calls)} times`).join(', ')}.
 				{:else}
@@ -422,7 +423,7 @@
 
 			{#if cost.limits.length > 1}
 				<p class="reads" data-context-limits-moved>
-					The limit moved inside these {days} days - it was set to
+					The limit moved inside {nameSpan(days)} - it was set to
 					{cost.limits.map((one) => grouped(one)).join(' and ')} tokens - so the shares above are
 					each article against its own limit and the rule is drawn at the configured
 					{grouped(contextWindow)}.

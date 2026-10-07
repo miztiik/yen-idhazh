@@ -81,7 +81,13 @@ class ConsoleConfig(Model):
     )
     today_anchor: TodayAnchor = Field(
         default=TodayAnchor.RIGHT,
-        description="Where today sits in the initial viewport when enough history exists.",
+        description=(
+            "Where every console window places the site's newest published day, "
+            "the day the console treats as today: `right` makes it the window's "
+            "last day, and `centre` puts it in the middle, leaving room for days "
+            "not yet published. Neither the build clock nor the newest day a "
+            "record holds places a window."
+        ),
     )
     completeness_grace_days: int = Field(
         default=1,
@@ -531,6 +537,16 @@ class ConsoleConfig(Model):
             "measured GitHub Pages request target with every ledger selected."
         ),
     )
+    explorer_link_max_bytes: int = Field(
+        default=8192,
+        ge=1,
+        description=(
+            "Most bytes a Data explorer link may hold, its path and query together, and "
+            "still carry the question; a longer link carries the ledgers and the days "
+            "only. The value comes from docs/reference/benchmarks/address-length-on-pages.md: "
+            "GitHub Pages answered a request target of 8,192 bytes and refused 8,193."
+        ),
+    )
     explorer_reach_days: int = Field(
         default=365,
         ge=1,
@@ -579,11 +595,6 @@ class ConsoleConfig(Model):
             "against the largest series before it is drawn."
         ),
     )
-    explorer_rail_rem: float = Field(
-        default=14.0,
-        gt=0.0,
-        description="Side rail width on the Data explorer question panel, in rem.",
-    )
     explorer_readout_lines: tuple[int, int, int, int] = Field(
         default=(7, 3, 4, 3),
         description=(
@@ -600,21 +611,16 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_editor_lines_shown: tuple[int, int] = Field(
-        default=(8, 10),
+        default=(8, 4),
         description=(
-            "Fixed visible lines for the Data explorer SQL editor, below 1024 px "
-            "and from 1024 px."
+            "Fewest lines the Data explorer SQL editor shows, below 1024 px and from "
+            "1024 px. Below 1024 px the editor is exactly this tall; from 1024 px it "
+            "fills its share of the window and never drops under this."
         ),
     )
     explorer_strip_shown: tuple[int, int] = Field(
         default=(3, 6),
         description="Example chips shown before the rest fold at phone and wider widths.",
-    )
-    explorer_answer_svh: int = Field(
-        default=60,
-        ge=10,
-        le=100,
-        description="Fixed Data explorer answer region height, in svh percent.",
     )
     explorer_cell_max_ch: int = Field(
         default=40,
@@ -876,11 +882,8 @@ class ConsoleConfig(Model):
     def _explorer_editor_bounds(self) -> Self:
         if any(lines < 1 for lines in self.explorer_readout_lines):
             raise ValueError("console.explorer_readout_lines must hold four positive values")
-        if (
-            self.explorer_editor_lines_shown[0] < 1
-            or self.explorer_editor_lines_shown[0] > self.explorer_editor_lines_shown[1]
-        ):
-            raise ValueError("console.explorer_editor_lines_shown must be ascending and positive")
+        if any(lines < 1 for lines in self.explorer_editor_lines_shown):
+            raise ValueError("console.explorer_editor_lines_shown must hold two positive values")
         if (
             self.explorer_strip_shown[0] < 1
             or self.explorer_strip_shown[0] > self.explorer_strip_shown[1]

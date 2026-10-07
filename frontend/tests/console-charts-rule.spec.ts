@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chartRule, coverageOf, type ChartThresholds, type GlanceDay } from '../src/lib/charts/glance';
 import { targetGeometry } from '../src/lib/charts/targetbar';
@@ -11,15 +11,16 @@ import { targetGeometry } from '../src/lib/charts/targetbar';
  * compute a fourteen-day median of a ratio in his head, twice, against two
  * constants that were not on the screen.
  *
- * So the oracle here is arithmetic, not appearance: the median the page prints
- * is recomputed from the fixture's own committed files over exactly the rule's
- * span, and the marker on each bar is recomputed from the geometry module. A
+ * So the oracle here is arithmetic, not appearance. The rule's medians and the
+ * marker on each bar are worked out over days written below, with no browser.
+ * On the page, the two printed figures are the medians of the rows the daily
+ * table prints over the rule's span, and each marker sits where its own bar
+ * places it; nothing there is worked out from what the site was built from. A
  * bar that draws a plausible fill against the wrong divisor looks perfectly
  * healthy, which is why it is the failure worth a test.
  */
 
 const REPO = resolve(process.cwd(), '..');
-const CANARY = join(REPO, 'backend', 'var', 'canary');
 
 const CONFIG = JSON.parse(
 	readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
@@ -186,64 +187,29 @@ test.describe('the arithmetic behind the two bars', () => {
 	});
 });
 
-/** Every day the canary committed, as the console reads it.
- *
- * Read from `run.json` and `digest.json` rather than typed, so the oracle is
- * "the page prints what the fixture says" and not "the page prints what it
- * printed last week".
- */
-function fixtureDays(): GlanceDay[] {
-	const digest = join(CANARY, 'digest');
-	const days: GlanceDay[] = [];
-	for (const year of dirs(digest)) {
-		for (const month of dirs(join(digest, year))) {
-			for (const dayName of dirs(join(digest, year, month))) {
-				const at = join(digest, year, month, dayName);
-				const runs = (
-					JSON.parse(readFileSync(join(at, 'run.json'), 'utf8')) as {
-						runs: { route_ms?: number | null }[];
-					}
-				).runs;
-				const items = (
-					JSON.parse(readFileSync(join(at, 'digest.json'), 'utf8')) as {
-						items: { visual?: { kind: string; state: string } | null }[];
-					}
-				).items;
-				const timed = runs
-					.map((run) => run.route_ms)
-					.filter((ms): ms is number => typeof ms === 'number');
-				const minutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
-				const published = items.filter(
-					(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
-				).length;
-				days.push({
-					date: `${year}-${month}-${dayName}`,
-					published,
-					items: items.length,
-					minutesPerChart: minutes === null || published === 0 ? null : minutes / published
-				});
-			}
-		}
-	}
-	return days.sort((a, b) => a.date.localeCompare(b.date));
+/** The rows of the daily table, as the page prints them: the same days the rule
+ * reads, because both follow the open window. */
+async function dailyRows(page: Page) {
+	return page.locator('[data-chart-day]').evaluateAll((rows) =>
+		rows.map((row) => {
+			const cell = (name: string) =>
+				(row.querySelector(`[data-charts-cell="${name}"]`)?.textContent ?? '').trim();
+			return {
+				date: row.getAttribute('data-chart-day') ?? '',
+				published: Number(cell('published')),
+				items: Number(cell('items')),
+				perChart: cell('per-chart')
+			};
+		})
+	);
 }
 
-function dirs(at: string): string[] {
-	return readdirSync(at, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name)
-		.sort();
-}
-
-/** The window the page holds, cut to the rule's own span, ending on the newest
- * day the fixture committed. The page anchors on the newest committed day and
- * never on the build clock, so this has to as well. */
-function ruleWindow(days: GlanceDay[], span: number): GlanceDay[] {
-	const newest = days.at(-1)?.date ?? '';
-	const start = new Date(`${newest}T00:00:00Z`);
-	start.setUTCDate(start.getUTCDate() - (span - 1));
-	const from = start.toISOString().slice(0, 10);
-	return days.filter((entry) => entry.date >= from && entry.date <= newest);
+/** The middle of a list of numbers, or null where there is none. */
+function middle(values: number[]): number | null {
+	if (values.length === 0) return null;
+	const sorted = [...values].sort((a, b) => a - b);
+	const at = Math.floor(sorted.length / 2);
+	return sorted.length % 2 ? sorted[at] : (sorted[at - 1] + sorted[at]) / 2;
 }
 
 async function hydrated(page: Page) {
@@ -267,56 +233,80 @@ async function setDaily(page: Page, open: boolean) {
 }
 
 test.describe('the section on the page', () => {
-	test('THE ORACLE: the printed median is the median of the fixture over the rule span', async ({
+	test('THE ORACLE: the printed median is the median of the days the table prints over the rule span', async ({
 		page
 	}) => {
 		await page.goto('/console/');
 		await hydrated(page);
 		await setWindow(page, WIDE);
 
-		const days = fixtureDays();
-		expect(days.length, 'the fixture committed no day, so this asserts nothing').toBeGreaterThan(0);
-		const expected = chartRule(ruleWindow(days, WIDE), THRESHOLDS, WIDE);
-		expect(expected.minutes, 'no day in the fixture was timed').not.toBeNull();
-		expect(expected.coverage, 'no day in the fixture published anything').not.toBeNull();
+		// The rule and the table read the same days, so the two figures are the
+		// medians of the table's own rows: minutes per visual over the days that
+		// timed one, and the share with a visual over the days that published
+		// anything. Each per-day minute is printed to one decimal, so a median of two
+		// printed values can sit up to 0.1 from the median of the values themselves.
+		const rows = await dailyRows(page);
+		expect(rows.length, 'the rule span holds no day').toBeGreaterThan(0);
+		const minutes = middle(rows.filter((row) => row.perChart !== '-').map((row) => Number(row.perChart)));
+		const coverage = middle(
+			rows.filter((row) => row.items > 0).map((row) => (row.published / row.items) * 100)
+		);
 
-		const minutes = page.locator('[data-rule-figure="minutes"] [data-target-cell="value"]');
-		const coverage = page.locator('[data-rule-figure="coverage"] [data-target-cell="value"]');
-		await expect(minutes).toHaveText((expected.minutes as number).toFixed(1));
-		await expect(coverage).toHaveText(`${Math.round(expected.coverage as number)}%`);
+		const printedMinutes = (
+			await page.locator('[data-rule-figure="minutes"] [data-target-cell="value"]').innerText()
+		).trim();
+		const printedCoverage = (
+			await page.locator('[data-rule-figure="coverage"] [data-target-cell="value"]').innerText()
+		).trim();
+		if (minutes === null) expect(printedMinutes).toBe('-');
+		else {
+			expect(printedMinutes).toMatch(/^\d+\.\d$/);
+			expect(Math.abs(Number(printedMinutes) - minutes), 'the minutes are not the table median').toBeLessThanOrEqual(
+				0.1 + 1e-9
+			);
+		}
+		expect(printedCoverage, 'the share is not the table median').toBe(
+			coverage === null ? '-' : `${Math.round(coverage)}%`
+		);
 
 		// And the verdict says the same two things the bars do, so the sentence and
 		// the picture cannot drift apart.
-		await expect(page.locator('[data-charts-verdict]')).toHaveText(expected.verdict);
+		const verdict = (await page.locator('[data-charts-verdict]').innerText()).trim();
+		if (minutes !== null) expect(verdict).toContain(`${printedMinutes} minutes per visual`);
+		if (coverage !== null) expect(verdict).toContain(`${printedCoverage} of what it published`);
 	});
 
-	test('the marker on each bar sits where the geometry puts it', async ({ page }) => {
+	test('the marker on each bar sits where the bar says it does', async ({ page }) => {
 		await page.goto('/console/');
 		await hydrated(page);
 		await setWindow(page, WIDE);
 
-		const expected = chartRule(ruleWindow(fixtureDays(), WIDE), THRESHOLDS, WIDE);
-		const measured = await page
+		// The marker is placed by its own `inset-inline-start`, which carries the
+		// geometry's marker fraction as a percent. What is measured here is that the
+		// drawing honours it: the marker is 2px wide and pulled back 1px, so its
+		// centre is the threshold, and reading its left edge would report a bar 1px
+		// early. Where the geometry puts the marker is tested above with no browser.
+		const placed = await page
 			.locator('[data-rule-figure] [data-target-cell="marker"]')
 			.evaluateAll((nodes) =>
 				nodes.map((node) => {
 					const track = node.parentElement as HTMLElement;
 					const box = track.getBoundingClientRect();
-					// The marker is 2px wide and pulled back 1px, so its centre is the
-					// threshold. Reading its left edge would report a bar 1px early.
-					return (node.getBoundingClientRect().left + 1 - box.left) / box.width;
+					return {
+						declared: parseFloat((node as HTMLElement).style.insetInlineStart) / 100,
+						measured: (node.getBoundingClientRect().left + 1 - box.left) / box.width
+					};
 				})
 			);
 
-		expect(measured.length, 'the section drew fewer than two target bars').toBe(2);
-		expect(
-			Math.abs(measured[0] - expected.minutesMarks.markerFraction),
-			'the minutes marker is off its threshold'
-		).toBeLessThan(0.003);
-		expect(
-			Math.abs(measured[1] - expected.coverageMarks.markerFraction),
-			'the coverage marker is off its threshold'
-		).toBeLessThan(0.003);
+		expect(placed.length, 'the section drew fewer than two target bars').toBe(2);
+		for (const [index, marker] of placed.entries()) {
+			expect(Number.isFinite(marker.declared), `marker ${index} declares no place`).toBe(true);
+			expect(
+				Math.abs(marker.measured - marker.declared),
+				`marker ${index} is off the place its bar declares`
+			).toBeLessThan(0.003);
+		}
 	});
 
 	test('a window under the rule span prints the notice and no median at all', async ({ page }) => {

@@ -22,6 +22,7 @@
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { grouped } from '$lib/charts/series';
 	import { countedDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -167,32 +168,33 @@
 			{/if}
 		</div>
 
-		<p class="gates-note">
+		<p class="gates-note" data-gates-note>
 			{#if newest === null}
 				<span data-gates-state="empty"
-					>Nothing has been judged yet. The three bars are what the record needs before a
-					line may be fitted at all.</span
-				>
-			{:else if !met}
-				<span data-gates-state="filling"
-					>The record has {grouped(needs[0].value)} of the {grouped(needs[0].target)} readings
-					it needs, {needs[1].value} of {needs[1].target} days, and {grouped(needs[2].value)} of
-					{grouped(needs[2].target)} pairs above the line.</span
-				>
-			{:else if silent > 0}
-				<span data-gates-state="stale"
-					>Nothing has been counted for {silent}
-					{silent === 1 ? 'day' : 'days'}.</span
+					>Nothing was judged in {nameSpan(windowDays)}. The three bars are what the record needs
+					before a line may be fitted at all.</span
 				>
 			{:else}
-				<span data-gates-state="met"
-					>The record has what it needs. These three bars stay so a record that empties is
-					visible.</span
-				>
-			{/if}
-			{#if fitted > 0}
+				{#if !met}
+					<span data-gates-state="filling"
+						>The record has {grouped(needs[0].value)} of the {grouped(needs[0].target)} readings
+						it needs, {needs[1].value} of {needs[1].target} days, and {grouped(needs[2].value)} of
+						{grouped(needs[2].target)} pairs above the line.</span
+					>
+				{:else if silent > 0}
+					<span data-gates-state="stale">Nothing has been counted for {countDays(silent)}.</span>
+				{:else}
+					<span data-gates-state="met"
+						>The record has what it needs. These three bars stay so a record that empties is
+						visible.</span
+					>
+				{/if}
+				<!-- Printed in every state with a row, so the window's days are named
+				     whether or not a line was fitted on one of them. -->
 				<span data-counted-fitted={fitted}
-					>A line was fitted on {fitted} of these {windowDays} days.</span
+					>{fitted > 0
+						? `A line was fitted on ${fitted} of ${countDays(windowDays)}.`
+						: `No line was fitted in ${nameSpan(windowDays)}.`}</span
 				>
 			{/if}
 		</p>

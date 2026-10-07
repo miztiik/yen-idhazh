@@ -160,6 +160,7 @@ class ServerJob(StrEnum):
     MIGRATE = "migrate"
     RUN_TASKS = "run-tasks"
     HISTORY = "history"
+    SAVE_COUNCIL_RESULTS = "save_council_results"
 
 
 #: The jobs whose writes file rows again rather than record new ones. The

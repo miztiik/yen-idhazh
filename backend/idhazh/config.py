@@ -227,7 +227,7 @@ PUBLIC_COPY: Final = "public-copy"
 class _Series:
     """One series a task may keep, and the ledger under `state/` whose files it deletes."""
 
-    #: The published copy covers a tree outside `state/`, so it names none.
+    #: Only an input series sets a source-ledger floor. Outputs name none.
     ledger: LedgerName | None
 
 
@@ -239,7 +239,7 @@ _SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
             {
                 FULL_GRAIN: _Series(LedgerName.ITEM_HEALTH),
                 PUBLIC_COPY: _Series(None),
-                "aggregate": _Series(LedgerName.ITEM_HEALTH_SUMMARY),
+                "aggregate": _Series(None),
             }
         ),
     }
@@ -479,23 +479,29 @@ def _spelled(window: Window) -> str:
 
 
 def _reach(policy: CompactionPolicy) -> int | None:
-    """The fewest days a compaction's two periods reach back, or None when it keeps for ever.
+    """A conservative day-count reach, or None when the compaction retains all history.
 
     A month file lives `monthly_window` after its month is absorbed, and a month
     is absorbed `daily_keep_days` after it ends, so no pair of the two can leave a
-    day in no period. The months are counted at the fewest days they can hold.
+    day in no period. Enabled yearly expiry bounds it instead, using at least
+    28 days per calendar month; month-count readers compare months directly.
     """
     monthly = _days_kept(policy.monthly_window)
+    if policy.yearly_prune_enable and policy.yearly_keep_months is not None:
+        return policy.yearly_keep_months * 28
     return None if monthly is None else policy.daily_keep_days + monthly
 
 
 def compaction_reaches(policy: CompactionPolicy, needed: Window) -> bool:
     """Whether this compaction keeps every day `needed` asks for.
 
-    A `monthly_window` of forever reaches anything, and nothing shorter reaches a
-    floor of forever. Otherwise the pair's reach is set against the most days
+    Forever monthly retention reaches anything unless yearly expiry is enabled.
+    No finite expiry reaches a forever reader. Otherwise the reach is set against the most days
     `needed` can ask for, so the answer never depends on the day the build ran.
     """
+    if policy.yearly_prune_enable and isinstance(needed, MonthsWindow):
+        assert policy.yearly_keep_months is not None
+        return policy.yearly_keep_months >= needed.value
     reach = _reach(policy)
     if reach is None:
         return True
@@ -542,6 +548,11 @@ def _kept_by(policy: RetentionPolicy | CompactionPolicy) -> str:
     reach = _reach(policy)
     if reach is None:
         return "keeps every month file for ever"
+    if policy.yearly_prune_enable:
+        return (
+            f"reaches back at least {reach} days with yearly_keep_months "
+            f"{policy.yearly_keep_months}"
+        )
     return (
         f"reaches back {reach} days with daily_keep_days {policy.daily_keep_days} and "
         f"monthly_window {_spelled(policy.monthly_window)}"
@@ -781,13 +792,13 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
     grow with the archive, unless the ledger packs each finished year into one
     file: its month files then last until their year is packed, and the yearly
     index grows by one entry a year. A ledger that packs years keeps every month
-    until its year is packed and every year for ever, so it reaches back past any
-    span the console offers, and it waits as long as its own declaration says. A
+    until its year is packed. Finite yearly expiry must cover the console's
+    widest span too. A
     ledger that deletes its month files reaches back at least the widest span the
     console offers.
     """
     ledger = policy.ledger.value
-    if policy.monthly_keep_days is not None:
+    if policy.monthly_keep_days is not None and reach is None:
         return
     if reach is None:
         raise ValueError(

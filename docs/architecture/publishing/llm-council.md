@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-04
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -421,8 +421,8 @@ executed it.
 
 | Layer | Owns | Stored |
 | --- | --- | --- |
-| Council pipeline observability | Did the pipeline work - which units started, which finished, which stopped on their own clock, what each cost | `state/llm-council/` |
-| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the ledger paths it commits, the nights it is behind on, and three units of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
+| Council pipeline observability | Did the pipeline work - which steps started, which finished, which stopped on their own clock, what each cost | `state/raw/council-run-records/`, later packed under `state/compact/council-run-records/` |
+| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the ledger paths it commits, the nights it is behind on, and its three steps of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
 | The shipping capability | The plumbing only. Takes a validated row a judge hands it and gets it committed. Declares nothing about what is in it | code, not data |
 | Judge metrics | Entirely the judge's - its units, its funnel, its own contract | under that judge's own slug |
 
@@ -537,20 +537,19 @@ the three nights these uploads keep.
 
 ## The venue keeps its own record of every unit it ran
 
-The council starts a clock, calls the tenant, and files one row of its own on
-the way out - into
-[../../../backend/idhazh/ledger/rows.py](../../../backend/idhazh/ledger/rows.py)'s
-`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`, through the same
-shipping path a tenant's own row travels on. The row says which unit ran, for
-which tenant, under which name, how it ended, how long it took, and what the
-work inside it cost the model. It says nothing that needs a name for the unit of
-work, so it reads the same whether the tenant made four hundred model calls or
-none.
+The council starts a clock and calls the tenant. On the way out, it ships a row
+for that step to `council-settle`, which files the date's rows through
+`ledger.persist` under `state/raw/council-run-records/` and later compacts them
+under `state/compact/council-run-records/`. The row says which step ran, for
+which tenant, how it ended, how long it took, and what the work inside it cost
+the model. It says nothing that needs a name for the unit of work, so it reads
+the same whether the tenant made four hundred model calls or none.
 
-**Five units a tenant, not four.** Picking the work and counting what came back
-are units too, and both can die. They file at reserved numbers below zero, `-1`
-and `-2`, carrying the run's real width - so a night whose count died leaves a
-row saying so instead of leaving the venue blind.
+Each tenant has two steps that run once a date and one evaluation step for each
+part of the split. The row names one of `select_judge_work`,
+`evaluate_work_part` or `combine_judge_results`. Only an evaluation row carries
+`work_part_index`; every row carries `work_part_count`, so a missing part row
+shows which report did not arrive.
 
 **The cost cells come off what the tenant handed back, and out of nothing else.**
 The council opens no ledger of a tenant's and reads no field of a tenant's own
@@ -558,20 +557,19 @@ contract. A tenant with no model hands back empty cells, and empty is not zero:
 zero would read as a model that answered nothing, which is a different fact and
 only one of the two is a defect.
 
-**A unit that died files nothing, and that is the record.** The outcome
-vocabulary is three words - `completed`, `stopped_on_deadline`, `nothing_to_do` -
-and none of them says "this died". A unit the platform killed could not write
-one anyway. What says it is the missing row read against the `shards` cell its
-siblings carry: three rows that each say the work was split four ways is a night
-with one unit missing, and an operator needs nothing else to see it. A unit that
-ran out of its own clock is the opposite case and does file a row, because it
-stopped itself and had something to report.
+**A step that died before returning files no row, and that is the record.** The
+outcome vocabulary is three words - `completed`, `stopped_on_deadline`,
+`nothing_to_do` - and none says "this died". A step the platform killed could
+not write one anyway. For evaluation, a missing row against `work_part_count`
+shows which part did not report. A step that ran out of its own clock is the
+opposite case and does file a row, because it stopped itself and had something
+to report.
 
-**The ledger is seeded with a `.gitkeep` and never with a header-only day file.**
-A header with no rows under it is a real day to the partition walker, so one
+**The raw ledger is not seeded with a `.gitkeep` or a header-only file.** A
+header with no rows under it is a real day to the partition walker, so one
 would put a permanent day in the prune target and the day inventory that no
-council run ever had. A night with nothing to record therefore writes no file at
-all, and the commit step still finds its directory.
+council run ever had. A night with no hosted tenant therefore writes no file;
+the commit step skips the absent path.
 
 ### Design rationale: the venue files the row, not the tenant
 

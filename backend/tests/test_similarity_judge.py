@@ -37,7 +37,7 @@ from conftest import (
 
 from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair

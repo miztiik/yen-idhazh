@@ -1,6 +1,6 @@
 # Plan 55 - One page queries every ledger
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-07
 
 **Level**: 5 (CLAUDE.md section 6). It adds a member to a persisted vocabulary (`RouteId` on the console band). It widens one persisted contract: `RawDayIndex` gains an optional `bytes` list, one size per listed file, so a browser can price a writer file and check its length before it fetches it (row 2). It adds an entry point to the query door, it publishes more of `state/` and the registry that names it, and it opens a surface where an operator's own text reaches a query engine. The site build writes listings in `RawDayIndex`'s shape into the staged site only, never into `state/` (row 7).
 
@@ -62,9 +62,22 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 7 | The days not packed yet reach the site, each file listed with its size | 2, 3 | C | DONE | p55r7 | #1229 | p55-r7-worker |
 | 8 | The Data explorer draws the workbench chrome | 6 | G | DONE | p55r8 | #1298 | p55-n1-worker |
 | 9 | Run moves nothing on the Data explorer | 8 | H | DONE | p55r9 | #1310 | p55-n2-worker |
-| 10 | The Data explorer reaches the reference's density | 9 | I | PENDING | - | - | - |
+| 10 | The Data explorer reaches the reference's density | 9, 11, 12 | M | PENDING | - | - | - |
+| 11 | The column rail stops overlapping, and types and the chosen ledger show in colour | 9 | I | DONE | automatic-giggle | #1326 | Data explorer phase 1 colours |
+| 12 | The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line | 9, 11 | J | DONE | special-parakeet | #1336 | Data explorer phase 2 layout |
+| 13 | The explorer reads a column's type one way, and a NULL is no value in any chart | 11 | K | DONE | super-waddle | #1332 | Explorer types and nulls one way |
+| 14 | The answer table sorts a timestamp by its UTC instant, to the nanosecond | 13 | L | DONE | studious-tribble | #1334 | Explorer timestamps sort in UTC |
+| 15 | A date prints whole, inf sorts in its place, and a timestamp with a time zone charts on its UTC day | 14 | M | DONE | fantastic-enigma | #1338 | Explorer edge values print right |
+| 16 | The History list opens in view and closes itself, Forget on the line keeps focus, the link limit is a knob, and a day the chart cannot place says so | 12, 15 | N | DONE | friendly-winner | #1340 | Data explorer small fixes |
+| 17 | The date chart leaves out a row whose day is NULL and says how many it left out | 16 | O | DONE | musical-umbrella | #1341 | Explorer chart skips a null day |
+| 18 | The Data explorer's panel pictures pass again at every width and theme | 12 | P | DONE | urban-goggles | - | Explorer captures fit again |
+| 19 | The reader chooses the chart and the columns it draws | 10 | Q | PENDING | - | - | - |
+| 20 | The explorer draws Side by side, Which days and Flow | 19; plan 52 row 2 | R | BLOCKED | - | - | - |
+| 21 | The site build checks that each published file carries its contract's columns | - | Q | PENDING | - | - | - |
+| 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | BLOCKED | - | - | - |
+| 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | PENDING | - | - | - |
 
-**Ten rows, ten pull requests.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. No row waits for an owner's answer (section 0, "Decided 2026-10-02").
+**One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. **Rows 19 and 20 were added on 2026-10-07 on the owner's A1+A2 ruling, specified by Susan and Jony.** **Rows 21 to 23 were added on 2026-10-07 at plan 62's request, designed by Fowler.** Rows 19 and 21 share no file and may run together. Row 23 never runs while row 19 or row 20 is in flight, because all three edit `frontend/src/routes/console/data-explorer/+page.svelte`. Row 20 is BLOCKED on the owner deciding whether this plan carries the small slice of plan 52 row 2 that its charts need. Row 22 is BLOCKED on the owner clearing trigger 3 for `CONTRACT_COLUMNS`.
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The table below is the proof, recomputed on 2026-10-02 from the final `Files touched` lists of the third review cycle. Rows 2 and 3 are the only pair that runs at once, and no path appears under both. Every other wave holds one row.
 
@@ -608,6 +621,8 @@ The owner's reference is a query workbench screenshot and its HTML: `code.html`,
 
 **2026-10-04 redesign amendment.** Rows 8 to 10 rebuild this panel as a workbench. Row 8 moves the span control, the dates and Run into a toolbar at the top of the panel, in place of the route-level span sentence. Row 9 replaces the growing editor with a fixed one, the action line with a fixed status bar, the flow history with a floating disclosure, and the 70svh table box with fixed answer and chart regions, each with the knob that sizes it. The column rail keeps option B2 throughout: after an answered or quiet run it shows the answer's columns, and choosing or clearing a ledger brings the ledgers' columns back.
 
+**2026-10-05 amendment (row 12).** The owner asked for a page that fills the window with no fixed size, Run beside Save and Copy link, and the copy buttons placed where they overlap nothing. Row 12 amends rules 2, 3, 5, 6 and 10 and row 9's fixed regions. The workbench fills the window below the strip, and its regions share it through `fr` tracks with usable minimums instead of fixed sizes. From 1024 px the side columns are `minmax(12rem, 1fr)` beside a `minmax(0, 4fr)` editor, not `console.explorer_rail_rem` wide (rule 2). Run stands in one group with Save and Copy link at the right end of the editor's heading line, not under the editor and not in the toolbar (rules 5 and 6). `Copy link` stands in that group, not on the panel's heading line, and `Copy as JSON` and `Copy as table` stand on the answer's own visible heading line, one control tall (rule 10). From 640 px the question strip is one line, and the chips that do not fit fold into `{n} more`, so saving a question never makes it taller (rule 3). Row 12's decisions say how.
+
 `data-explorer-ask`, titled `Your question`. The places are Jony's and the words Susan's, both 2026-10-02; where their reviews disagreed, the rule names who decided. Row 4 builds every rule below unless the rule names a later row.
 
 | # | Part | Rule |
@@ -618,9 +633,9 @@ The owner's reference is a query workbench screenshot and its HTML: `code.html`,
 | 4 | The editor | Visible label `Your question, in DuckDB SQL`. A `textarea` with a highlighted layer behind it (row 4 decision 5), filling the width of its column, in `--font-data` at `--workbench-field-text` and `--workbench-field-leading`. It is exactly `console.explorer_editor_lines_shown[0]` lines below 1024 px and `[1]` lines from 1024 px, then scrolls inside. **Long lines wrap** (Jony; Susan had proposed `wrap="off"`), and the highlighted layer is drawn one row per statement line, with that line's number in the same row, so a number sits on the first row of its line and cannot drift from it. The numbers earn their place because the engine's errors name a line (`LINE 3:`). They are in the tertiary colour, tabular and `aria-hidden`; the colour layer is `aria-hidden` and scrolls with the box. Background `--code-ground`, a 1 px `--color-rule-strong` border, `--radius-md`. Spellcheck, autocorrect, autocapitalize and autocomplete are off. Focus: a 2 px `--color-focus` outline, offset 2 px, on the frame, through `:focus-within`. Tab and Shift+Tab move focus out of the box; it does not trap Tab. Placeholder: `Write one DuckDB question, or pick an example above.` The fixed status bar carries the hint and counter when needed. **The code colours**, each at least 4.5:1 against its ground: dark, on `#0f131b` - text `#e6edf5` 15.8:1, keyword `#a5a5ff` 8.4:1, string `#4fc7dd` 9.3:1, number `#f08cc4` 8.2:1, comment `#78859a` 5.0:1; light, on `#ffffff`, where the border marks the box - text `#101828` 17.8:1, keyword `#3f37c9` 8.1:1, string `#0e7c8e` 4.9:1, number `#b03a86` 5.5:1, comment `#667085` 5.0:1. The palette's own colours do not serve here: on the light sunken ground the tertiary text measures 4.40:1 and `--chart-3` 4.33:1 |
 | 5 | The action line | **Directly under the editor at every width.** At its start, one sentence about the next run, whose words follow the moment: before a run, `Run fetches {f} files, {mb} for {k} ledgers over {d} days.`, with `It also starts the query engine.` before the first run; while a chosen ledger's columns are fetched, `Choosing a ledger fetches one day of it to list its columns.`; during a run, `Starting the query engine.`, then `Fetching {f} files, {mb}.`, then `Running the question.`; after it, `Answered in {t}. Fetched {f} files, {mb}; {h} more files were already in this page.`, with `See the answer`, a link to the answer panel drawn only while the top of that panel is off screen - the page never scrolls by itself. Once the page holds a fetched file, the line goes on: `This page holds {mb} of fetched files; a reload empties it.` These replace one another in one place and never stack. At every width the action line is two rows. The first is the sentence, in `--text-sm`, across the full width of its column, wrapping as it needs. The second has `From (UTC)` and `To (UTC)` at its start, with labels above them (row 6), and at its right end `Save` (row 5) and then `Run`, aligned to the bottom of the row. A sentence measures up to 871 px at `--text-sm` (a reading, 2026-10-02), so it cannot share a row with the buttons in a 414 px or an 830 px column (Jony, 2026-10-02). The sentence is `aria-live="polite"`, and focus stays where it was. MB means 1,048,576 bytes, to one decimal place, as `megabytes()` in `frontend/src/lib/assist/session.ts` prints it; KB below 0.1 MB; milliseconds below 1 s, otherwise seconds to one decimal. While Run is disabled the sentence gives the reason instead: `Pick at least one ledger to ask.` or `Write a question to run.` A link's notices stand here too, before the price, until the first run (row 5's address rules). The date inputs sit in the second row because they change what the sentence prices and what Run reads (section 2.8) |
 | 6 | Run | Filled `--color-accent` with `--color-on-accent` text (6.5:1 dark, 6.3:1 light), the `query-run` icon and the word `Run`, 2.75rem tall, with `aria-keyshortcuts="Control+Enter Meta+Enter"`. Ctrl+Enter, or Cmd+Enter on a Mac, in the editor presses it. It is disabled until a published ledger is chosen and the editor holds text. While a run is in progress it reads `Running` and is disabled, and the answer and chart panels show the shimmer box with no words. Run stands under the editor, not at the top right as in the reference, because the price belongs beside the button it prices |
-| 7 | The column list | `ColumnList.svelte` - not `SchemaPanel`, because on this console a "panel" is the framed section. Heading `Columns`. Before a run: `Columns of {ledgers}, read from {shortDate(day)}.` After a run: `Columns of this answer.` With no ledger chosen: `Choose a ledger and its columns are listed here.` While its one day is fetched: six shimmer rows and no words, as the ledger list. If that day does not arrive: warn tint, `The columns of {ledger} did not arrive.`, with the button `Fetch the columns again`. A chosen ledger with no days on this site: `{ledger} has no days on this site yet, so it has no columns to list.` Choosing or clearing a ledger after a run brings the ledgers' columns back (section 2.4). Names in `--font-data`, types in the tertiary colour. When a ledger is chosen, its family's description prints once, above its columns |
+| 7 | The column list | `ColumnList.svelte` - not `SchemaPanel`, because on this console a "panel" is the framed section. Heading `Columns`. Before a run: `Columns of {ledgers}, read from {shortDate(day)}.` After a run: `Columns of this answer.` With no ledger chosen: `Choose a ledger and its columns are listed here.` While its one day is fetched: six shimmer rows and no words, as the ledger list. If that day does not arrive: warn tint, `The columns of {ledger} did not arrive.`, with the button `Fetch the columns again`. A chosen ledger with no days on this site: `{ledger} has no days on this site yet, so it has no columns to list.` Choosing or clearing a ledger after a run brings the ledgers' columns back (section 2.4). Names in `--font-data`; from row 11 each ledger's columns stand under one heading naming the ledger, and each type is in its family's colour, which replaced the tertiary colour on the owner's ruling of 2026-10-05. When a ledger is chosen, its family's description prints once, above its columns |
 | 8 | Recent runs | A closed `<details>` directly under the action line at every width, summarised `Asked in this browser`, with the `history` icon (row 5). One line per run, newest first: `{dayMonth} {HH:MM} UTC - {rows} rows in {t} - {ledgers}`. With none: `Nothing asked in this browser yet.` Pressing an entry puts it in the editor exactly as a chip does, and runs nothing |
-| 9 | The ledger list | Heading `Ledgers`, with `Refresh` and the `list-refresh` icon at its right end. Under the heading, one line: `Each ledger is one table the pipeline writes as it runs.` A Refresh's report replaces that line until the next refresh: `Refreshed. {ledger} now reaches {date}, {rows} more rows.` or `Refreshed. Nothing has moved since this page opened.` Then the filter: label `Filter ledgers`, placeholder `Name or family`, the `search` icon, `--text-base`; with no match, `No ledger matches "{text}".` Then `{k} of {n} ledgers chosen`, where `n` counts the ledgers that can be chosen. Then the published ledgers, in name order, each on one line where it fits - the name in `--text-sm`, the rest in `--text-xs`; a line breaks only between the name and `through {date}`, never inside either, and the wrapped part stands under the name, not under the checkbox, so in the 224 px side column most rows take two lines: a checkbox; the name exactly as a statement quotes it, in `--font-data`; in the tertiary colour, `through {shortDate(through)}`, from `SpanCost.through`; and the family's name only where it differs from the ledger's, as in `archive - content-similarity-judge`, because 16 of the 18 families hold one ledger named as the family. Then a closed `<details>`, `Not on this site ({n})`, holding the rest in the same one-line form with no checkbox. Loading: six shimmer rows, no words. The registry absent: `The list of ledgers is not on this site, so there is nothing to pick yet.` The registry failing to arrive: warn tint, `The list of ledgers did not arrive.`, with the button `Fetch the list again`. Jony's one-line row and disclosure replace Susan's two-line row and disabled checkbox; the words are hers |
+| 9 | The ledger list | Heading `Ledgers`, with `Refresh` and the `list-refresh` icon at its right end. Under the heading, one line: `Each ledger is one table the pipeline writes as it runs.` A Refresh's report replaces that line until the next refresh: `Refreshed. {ledger} now reaches {date}, {rows} more rows.` or `Refreshed. Nothing has moved since this page opened.` Then the filter: label `Filter ledgers`, placeholder `Name or family`, the `search` icon, `--text-base`; with no match, `No ledger matches "{text}".` Then `{k} of {n} ledgers chosen`, where `n` counts the ledgers that can be chosen. Then the published ledgers, in name order, each on one line where it fits - the name in `--text-sm`, the rest in `--text-xs`; a line breaks only between the name and `through {date}`, never inside either, and the wrapped part stands under the name, not under the checkbox, so in the 224 px side column most rows take two lines: a checkbox; the name exactly as a statement quotes it, in `--font-data`; in the tertiary colour, `through {shortDate(through)}`, from `SpanCost.through`; and the family's name only where it differs from the ledger's, as in `archive - content-similarity-judge`, because 16 of the 18 families hold one ledger named as the family. Then a closed `<details>`, `Not on this site ({n})`, holding the rest in the same one-line form with no checkbox. Loading: six shimmer rows, no words. The registry absent: `The list of ledgers is not on this site, so there is nothing to pick yet.` The registry failing to arrive: warn tint, `The list of ledgers did not arrive.`, with the button `Fetch the list again`. Jony's one-line row and disclosure replace Susan's two-line row and disabled checkbox; the words are hers. From row 11 a chosen ledger's row is tinted `--tint-accent` with a 3 px `--color-accent` edge at its start (owner, 2026-10-05) |
 | 10 | Save, and what storage allows | `Save`, with the `saved` icon, turns the action line into a field labelled `Name`, filled with the statement's first line, at most `console.explorer_save_name_max_chars` (40) characters, with `Keep` and `Cancel`; there is no dialog (row 5). When the browser blocks storage: `This browser is not letting the page keep anything, so Save and the history are off.` `Copy link` stands at the right end of this panel's heading line, as the answer panel's copy buttons stand on theirs, and below 1024 px under the note (row 5) |
 | 11 | Before anything has run | With no address, the span is the one this browser last used on the console. The editor holds this browser's most recent run with its ledgers chosen (row 5); with no recent run, it holds the first example whose ledgers are all published. Nothing runs. The page fetches only one day of each chosen ledger, to list its columns. The answer and chart panels hold the no-answer boxes in section 2.12, which carry `data-explorer-idle`. The captures picture this state at rest, and the "ready" pictures are taken after pressing Run on that default question. At 390 px the question panel starts at or below the bottom of an 844 px screen - an estimate from the measured 390 px rows less the 81 px price row that row 1 removes - so nothing that can grow long stands above the editor |
 | 12 | The span sentence on this route | On this page the shared sentence under the band describes the next run. `WindowSource` in `frontend/src/lib/console/window-slot.ts` gains an optional `statusLine`, which `WindowStatus.svelte` prints instead of its own sentence, and this route sets `Run reads {d} UTC days, {dayMonth(from)} to {shortDate(to)}.` Its `monthsFor` returns 0, so no span tile is priced here; the action line prices the run in bytes. Otherwise the shared sentence would say `Every windowed section below is showing 14 days.` on a page that shows nothing until Run, and again after the reader changes the span without running. Susan's words; Jony asked for the same mechanism |
@@ -1069,8 +1084,692 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 ### Row #10 - The Data explorer reaches the reference's density
 
 - **Scope:** The workbench adopts the density tokens and region-specific type from Susan's table, finishes the rails and table rows, makes the chart use its measured width, and refreshes the judged-panel sufficiency drivers and captures after the layout is stable.
-- **M checks:** M7, M14, M18 and M19, and M8's D2 and D3. Measured on row 9 at 1440 x 900: the editor frame's top is at 315 px, 15 px past M7's 300. Above it stand the site header (88 px), the strip (33 px), the toolbar (53 px), the question row (97 px, its chips on two lines) and the editor head (44 px). Folding the chips onto one line with K6 brings the question row to D3's one row, about 52 px, which puts the frame's top near 270 px. Table D's D6 below 1024 px, where each rail is a 2.75rem summary, also lands here: row 9 keeps the rails as fixed scroll boxes at every width. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
+- **M checks:** M7, M14, M18 and M19, and M8's D2 and D3. Measured on row 9 at 1440 x 900: the editor frame's top is at 315 px, 15 px past M7's 300. Above it stand the site header (88 px), the strip (33 px), the toolbar (53 px), the question row (97 px, its chips on two lines) and the editor head (44 px). Folding the chips onto one line with K6 brings the question row to D3's one row, about 52 px, which puts the frame's top near 270 px. **K6 is done by row 12.** Table D's D6 below 1024 px, where each rail is a 2.75rem summary, also lands here: row 9 keeps the rails as fixed scroll boxes at every width. The chart matches its region width, the judged answer and chart panels pass the sufficiency gates or carry rationale, and every font size inside `.workbench` stays on the declared scale.
+- **Made obsolete by #1336:** K6; the sentence that the rails are fixed scroll boxes at every width; and M7 at 1440 x 900, now met with the editor frame's top at 275 px.
 - **Specified in:** Jony's and Susan's redesign files, 2026-10-04; owner ruling 2026-10-04.
+
+### Row #11 - The column rail stops overlapping, and types and the chosen ledger show in colour
+
+- **Scope:** phase 1 of the owner's ruling of 2026-10-05. The column rail's list becomes ordinary block flow, so each row is as tall as its content: it was a grid inside a fixed scroll box, where every row stayed at its 24 px minimum and a wrapped name printed over the rows below (127 of item-health's 128 rows at 1440 px). Each ledger's columns stand under one sticky heading naming the ledger, and a row prints the column's own name, with the full name kept for a screen reader and a hover. Every type in the column rail and under the answer table's headers takes its family's colour from one pure function, `typeColour()`, which returns the token the label is painted with. A chosen ledger's row is tinted with an accent edge, and an unpublished row is quieter by a text colour step instead of opacity. Phase 2 - filling the screen, moving Run and placing the Copy buttons - is not in this row.
+- **Files touched:** `frontend/src/lib/console/explorer/ColumnList.svelte`, `LedgerList.svelte`, `AnswerTable.svelte`, `ColumnType.svelte` (new), `type-colour.ts` (new), `column-groups.ts` (new); `frontend/src/styles/tokens.css` (four `--type-*` colours in both themes); `frontend/tests/explorer-type-colour.spec.ts`, `explorer-column-groups.spec.ts` and `console-explorer-rails.spec.ts` (new), `tokens.spec.ts`, `frontend/scripts/test-groups.ts`; `docs/concepts/console-design.md`, `docs/concepts/design-system.md`.
+- **Checks:** every expected value is a literal. The unit test pins type names the engine prints to token names; the grouping test pins names to groups; `tokens.spec.ts` holds every type colour at 4.5:1 or more on the surface in both themes, through the aliases. The browser spec draws the real `ColumnList`, `LedgerList` and `AnswerTable` from columns and ledgers it writes itself, under the shipped stylesheet: a long name wraps inside its row and never reaches the next one at two rail widths, the whole name reaches a screen reader and a hover, the ledger heading stays at the top, each type label is painted with its literal token in both themes, a chosen row has the tint, the edge, the weight and readable words, and its focus ring shows. The canary page is pictured in the smoke and asserted on nowhere.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **No column name overlaps another row, both column lists show each type in colour, and a chosen ledger is highlighted in colour.** This replaces section 2.16 rule 7's tertiary type colour | Owner, 2026-10-05 |
+  | 2 | **Four type colours, two of them the editor's.** `--type-text` is `--code-string` and `--type-number` is `--code-number`, so a kind of value has one colour on the page; `--type-time` is `#53b0ff` dark (7.57:1) and `#0770cc` light (5.00:1), and `--type-truth` is `#dd99fe` dark (8.44:1) and `#754ca5` light (6.30:1), on `--color-surface`. The chart ramp's blue and purple were not used: they sit too close to the accent, the console's link colour (S1) | Susan, 2026-10-05 |
+  | 3 | **Five families.** Text (`varchar`, `uuid`, `enum`), numbers, times (`date`, `time`, every `timestamp`, `interval`), true/false, and everything else in the tertiary colour - a list or a struct counts as everything else whatever it holds, so the test for one comes first (S2). Whole numbers and decimals share a colour, as the editor paints `42` and `3.14` (S3) | Susan, 2026-10-05 |
+  | 4 | **The type label is the data font at `--text-xs`, weight 400, lower case, with no pill**, and a type too long to sit beside its name moves to its own line at the row's end (S4, S5). Jony's capped type column (J7) split `decimal(18,4)` beside a short name, and he withdrew it for S5 | Susan; Jony, 2026-10-05 |
+  | 5 | **In the answer header only the type word takes the colour**; the bar note after it stays tertiary, and there is no legend because the type is printed in words (S6) | Susan, 2026-10-05 |
+  | 6 | **`tokens.spec.ts` checks every type colour at 4.5:1 or more in both themes, following the aliases; the `--type-*` names have no utility; the light block repeats the aliases** (S8) | Susan, 2026-10-05 |
+  | 7 | **A chosen ledger's row:** `--tint-accent` from a `data-chosen` attribute (S9); a 3 px `border-inline-start`, transparent on every row and `--color-accent` when chosen (S10); its name at weight 600 (S11); its second line secondary, with `.late` keeping `--color-text` as the last rule (S12); rows touch with square corners (S13); hover changes only the cursor (S14) | Susan, 2026-10-05 |
+  | 8 | **An unpublished ledger's row is quieter by a text colour step, not opacity**: opacity 0.72 put its second line at 3.08:1 dark and 2.90:1 light (S15) | Susan, 2026-10-05 |
+  | 9 | **The column rail groups by ledger** under a sticky `h4` in the data font at weight 600 (J1, J2); one scroll box in block flow, neighbours only, never sorted (J3); names wrap after each `_` with a 2ch hanging indent and are never cut (J4); the type sits on the name's first baseline (J5); the 24 px minimum stays (J6); the ledger prefix stays in an `sr-only` span and the full name in the row's `title` (J8) | Jony, 2026-10-05 |
+  | 10 | **Tests test what the page does, never what the data holds.** No expected value is computed from the canary or committed state; the type-to-token mapping is pinned in the pure function's unit test with literal names, so the function returns the token itself; the browser spec asserts on components it feeds itself | Owner, 2026-10-05 |
+
+- **Not in this row:** `shape.ts` and `answer.ts` still decide types with checks of their own, which disagree with each other and with `typeColour()` - `shape.ts` does not count `timestamp_ns` as a time. Sharing one type classification among the three changes what the table prints and what the chart chooses, so it is its own pull request (Susan, S7).
+
+### Row #12 - The Data explorer fills the window, Run stands with Save and Copy link, and the copy buttons stand on the answer's heading line
+
+- **Scope:** phase 2 of the owner's request of 2026-10-05. The workbench fills the browser window below the site header and the strip, at every width, and no region has a fixed px, rem or svh size: the regions share the window and each scrolls inside itself. Workbench chrome lifts the console's 1,600 px width cap and leaves out the site footer on this route only. Run moves out of the toolbar into one group with Save and Copy link at the right end of the editor's heading line. `Copy as JSON` and `Copy as table` stand on the answer's own heading line, one control tall, where they overlap no other region; they were 2.75rem buttons in a 2rem row, so they spilled over the ledger rail above and the note below. Two knobs die with the fixed sizes: `console.explorer_rail_rem` and `console.explorer_answer_svh`. From 640 px the question strip is one line and folds what does not fit into `{n} more`, whose list now opens in view, and the chart's heading line holds still while the drawing scrolls in its own box beneath it.
+- **Files touched:** `frontend/src/routes/console/data-explorer/+page.svelte`, `frontend/src/routes/console/+layout.svelte`, `frontend/src/styles/app.css`, `frontend/src/lib/components/Panel.svelte`, `frontend/src/lib/console/explorer/CopyAnswer.svelte`, `QueryEditor.svelte`, `QuestionStrip.svelte`, `strip-fit.ts` (new), `ColumnList.svelte`; `frontend/src/lib/server/config.ts`, `backend/idhazh/contracts/knobs/console.py`, `config/appearance.json`, `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`; `frontend/tests/console-data-explorer-window.spec.ts` (new), `explorer-strip-fit.spec.ts` (new), `console-data-explorer.spec.ts`, `console-data-explorer-still.spec.ts`, `frontend/scripts/test-groups.ts`; `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md` (new; the workbench's layout moved there from `docs/concepts/console-design.md`, which now answers only how the console words, colours and draws a figure), `docs/concepts/config/appearance.md`, `docs/architecture/publishing/what-sits-above-every-console-route.md`, `docs/how-to/query-a-ledger-from-the-console.md`.
+- **Checks:** every expected value is a literal edge, a literal order or a literal the test typed. At 1024 x 768, 1440 x 900 and 1920 x 1080 the workbench's box reaches the window's left, right and bottom edges; at 1440 x 900 and 1920 x 1080 the page does not scroll and the rails, the answer and the chart reach the window's edges. A 1,200-row answer and a 40-line question scroll inside their regions and the page does not grow. Below 1024 px the workbench runs edge to edge and the answer is one window tall. The Pipelines route keeps its width cap and its footer. Save, Copy link and Run are the children of one group, in that order, on one line, and Name, Keep, Cancel and Run while a question is named. At 1440 and 390 px Run's box does not move when Save is pressed, after Cancel or Keep, or when `Copy question` appears for a question of 5,000 CJK characters the test builds; below 640 px Keep, Cancel and Run share one line with the name field beneath at the group's full width, and from 640 px the naming state is one line. Save puts focus in the name field with the typed `SELECT 1 AS one` selected, and Cancel and Keep put it back on Save. Ctrl+Enter runs. At 390, 1024, 1440 and 1920 px both copy buttons sit inside the answer's heading line and overlap no other region. A question whose 80 answer columns the test names `published.c01` to `published.c80` scrolls inside the column rail, and the page stays the window's height. With eight saved questions the test writes, the strip stays one line at 768, 1440 and 1920 px, `{n} more` counts the chips its list holds, every title is whole on the line and in the opened list, and saving a ninth keeps the strip's height. At 1440 px the opened list closes on a press outside it, and History, the control pressed, still opens; on Escape, with focus back on `{n} more`; and after a pick, with focus on `{n} more` and the picked question's own SQL in the editor. Forget leaves the list open and moves focus to the nearest Forget left in it. The chart's shape tiles stay on its heading line, uncovered, while the drawing scrolls beneath it. The unit test pins how many chips fit from literal widths. Row 9's fixed-size check (M8) is gone; its stillness checks stand, M10 passes at 1440 x 900 again and presses Escape after opening `{n} more`, as a person would, and M15 accepts a panel joined beside the one before it.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **The page fills the screen and is not bound to a hard size; the copy buttons stop overlapping; Run stands next to Save and Copy link.** This amends section 2.16 rules 2, 5, 6 and 10 and row 9's fixed regions | Owner, 2026-10-05 |
+  | 2 | **From 1024 px the workbench is two equal halves of the window's height** (`1fr 1fr`): the question across the top, and the answer and the chart side by side below, each half the width; a rule above them and one between them (J1, J3). Inside the top half the rows are `auto auto 1fr`, and the rails run the band's full height beside the editor, `minmax(12rem, 1fr) minmax(0, 4fr) minmax(12rem, 1fr)` (J2) | Jony, 2026-10-05 |
+  | 3 | **Content never sets a region's size** (`contain: size` on the rails, the editor frame, the answer and the chart), each half keeps the minimum its parts need, and a window too short for both makes the page scroll; nothing is clipped (J4). Below 1024 px one column, edge to edge, the page scrolls, the answer is `100svh` tall and the rails, the status bar and the chart keep their row 9 sizes (J5) | Jony, 2026-10-05 |
+  | 4 | **Run is the last child of the editor's heading group**: Save, Copy link, Copy question when the link is too long, then Run; while a question is named, Name, Keep, Cancel, Run. The toolbar becomes `auto minmax(0, 1fr)`. The `Ctrl+Enter` hint shows from 1024 px. The words `DuckDB SQL` are cut first so the line never wraps from 640 px; below 640 px the group takes its own line (J6, J7) | Jony, 2026-10-05 |
+  | 5 | **The answer's heading line** shows `Answer`, `aria-hidden` because the hidden panel heading names it, with the copy buttons at its end; it is one control tall and the buttons take the control's height. The chart's line shows `Chart`, and its `Draw it as` legend is screen-reader only - the reader loses the visible words, and the tiles' own words carry the meaning. A copy's message goes to the floating notice (J8, J9) | Jony, 2026-10-05 |
+  | 6 | **The editor fills its region**, and `console.explorer_editor_lines_shown` becomes its floor; the status bar keeps its reserved lines, so a longer sentence never moves the editor (J10) | Jony, 2026-10-05 |
+  | 7 | **The window's edges:** for workbench chrome only, no width cap and no site footer, the frame the window's height from 1024 px, the section stepping out of the gutter while the header keeps it, and no card edge on the workbench. The reader loses the footer's Archive and Source code links on this route; the wordmark leads to the home page, which has both (J11) | Jony, 2026-10-05 |
+  | 8 | **`console.explorer_rail_rem` and `console.explorer_answer_svh` are deleted; `explorer_editor_lines_shown` is the editor's floor, `[8, 4]`, with its ascending check dropped.** The shares stay numbers in the stylesheet: a share means something only beside the others in its track list, so a setting for one would quietly change the rest (J12) | Jony, 2026-10-05 |
+  | 9 | **The frame's flex chain sets `min-block-size: 0`** so the two `1fr` rows decide the split. Left to its content the workbench asked for twice its larger half, because two equal rows size to their larger minimum: at 1024 x 768 the page scrolled 160 px. With it, the page scrolls only when both halves' minimums together pass the window - 8 px at 1024 x 768 on the canary, whose question chips wrap to two lines | Measured on the canary build, 2026-10-05 |
+  | 10 | **Tests test what the page does, never what the data holds.** Layout checks assert literal edges and orders; the canary page is pictured in the smoke and asserted on nowhere | Owner, 2026-10-05 |
+  | 11 | **K6, the question chips on one line, moved here from row 10.** Without it, saving a question moved the editor, the rails and the status bar by 40 px at 1440 x 900, and main has the same fault from about 1,446 px. A hidden ruler measures every chip, `chipsThatFit()` in `strip-fit.ts` decides how many stand on the line, saved questions first, and the rest fold into `{n} more`, whose list now hangs from the strip so it opens in view | Executing owner, 2026-10-06 |
+  | 12 | **Found during execution: hidden screen-reader spans escaped the column list's scroll box.** Nothing above them was positioned, so a long column list stretched the page; `.column-box` in `ColumnList.svelte` is now `position: relative` | Executing owner, 2026-10-06 |
+  | 13 | **The chart's shape tiles are fixed by placement, not by a ground.** The heading line is its own row and the drawing scrolls in a box beneath it, so nothing passes under the tiles; the tiles also drop the line's capitals, as its buttons do, so they read as written. Found by row 13's worker at 1440 px | Executing owner, 2026-10-06 |
+  | 14 | **Found during execution: the SQL editor's box was named `.frame`, the site frame's class**, so the frame's 1,280 px width cap and its gutter landed on the editor too, and on a screen wider than about 1,950 px the editor would stop growing. It is `.editor-frame` now | Found during execution, 2026-10-06 |
+  | 15 | **Below 640 px Run and the two buttons beside it hold the group's first line, and the name field or `Copy question` takes a whole line beneath them**, so Run never moves and a name has the phone's full width with any face. Save puts focus in the name field with the suggestion selected; Keep and Cancel put it back on Save. This refines decision 4's own line below 640 px (J13) | Jony, 2026-10-06 |
+  | 16 | **The folded list closes on a press or a focus outside it, on Escape and after a pick**, and the closing press still does what it pressed. After a pick or Escape, focus is on `{n} more`, never in the editor, where a phone's keyboard would cover the loaded question. Forget leaves the list open and moves focus to the nearest Forget left in it, then to `{n} more`, then to the last chip on the line. A test closes the list as a person would, before pressing what it covers (J14) | Jony, 2026-10-06 |
+  | 17 | **Found on CI: the page's text uses the system face, and Linux's is wider than Windows'.** On the Linux runner the strip folded a saved chip that fitted locally, the naming state wrapped Run onto a second line at 390 px, and M10's open list lay over Copy link. The strip now measures its chips again whenever its hidden ruler changes width, not once when the fonts load, and the tests assert outcomes that hold with any face | Found on CI, 2026-10-06 |
+
+- **Not in this row:** row 10's density pass - the density tokens and region type sizes, the chart drawn at its region's measured width, and the rails as 2.75rem summaries below 1024 px (Table D's D6). This row makes two parts of row 10 obsolete: its sentence that the rails are fixed scroll boxes at every width (from 1024 px they now fill the band), and M7 at 1440 x 900, which this row meets - the editor frame's top is at 275 px, under M7's 300, because the wider page fits the chips on one line. Row 10's measured heights above the editor (a 97 px question row, a 44 px editor head) are stale at that size.
+
+### Row #13 - The explorer reads a column's type one way, and a NULL is no value in any chart
+
+- **Scope:** row 11's S7, and the NULL fix Jony asked for in plan 60 row 32's review. One pure function, `classifyType()` in `frontend/src/lib/console/explorer/type-family.ts`, puts an engine type name into a family: whole number, decimal, date, timestamp, time, interval, true/false, text (`uuid` and `enum` too), bytes, a list or a struct whatever it holds, and other. `answer.ts` prints and sorts a cell by it, `shape.ts` picks the chart's columns by it, and `type-colour.ts` maps each family to the token row 11 chose; none of the three keeps a type list or pattern of its own. `ShapePanel.svelte` reads every number through `shape.ts`'s `numericValue()`, which it exports, so a NULL is no value in any chart, and every count that decides or describes a chart counts only rows with a number.
+- **What a reader sees change:** a `timestamp_s`, `timestamp_ms` or `timestamp_ns` day column gets the date chart; an `enum` names a ranked row; `uhugeint` and `bignum` are numbers to the chart, and a list of decimals no longer is. In the table, `hugeint`, `uhugeint`, `utinyint`, `usmallint` and `bignum` print as grouped numbers, every list, struct, map and union prints its JSON text in the data font, an interval or a list sorts A to Z on the first press and a `bignum` high to low, and a text column of digits no longer claims a full bar. A NULL breaks the date chart's line on its day, as a lost day does, and the ranked, paired and spread charts leave its row out instead of drawing a zero. The spread and paired floors count readings, the too-few sentence names the floor it missed, the paired main figure counts the points drawn, and the ranked list's last line counts every row it did not draw, `1 more row is in the table.` for one. No colour moves.
+- **Files touched:** `frontend/src/lib/console/explorer/type-family.ts` (new), `type-colour.ts`, `answer.ts`, `shape.ts`, `ShapePanel.svelte`; `frontend/tests/explorer-type-family.spec.ts` (new), `console-data-explorer-shape.spec.ts`, `console-data-explorer-cells.spec.ts`, `frontend/scripts/test-groups.ts`; `docs/concepts/console-design.md`, `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`.
+- **Checks:** every expected value is a literal on inputs the test writes. The classifier spec pins type names to families. `explorer-type-colour.spec.ts` is unchanged and passes, which shows no colour moved. The shape spec gives a `timestamp_ns` day column and gets a date series, and renders the real `ShapePanel` on the server with a NULL in each chart type. The cells spec pins how a family prints, which way it sorts first, and that only a number column draws bars. The twelve new reader cases fail on 951f41c1b, each for the reason it names: the paired chart drew the NULL row as a dot at zero, and the spread chart put it in its lowest bin.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **One family union and two shared tests, `isNumber()` and `isDay()`, in `type-family.ts`; the function is `classifyType()`**, a verb, and `typeColour()` keeps its name, so its unchanged test shows the colours did not move | Fowler, 2026-10-05 |
+  | 2 | **An interval is its own family**, a length of time rather than a time of day, and shares `--type-time` with the times. **Only a blob is bytes**; a bit string stays other | Fowler, 2026-10-05 |
+  | 3 | **Only names the engine prints are listed.** DuckDB prints an alias by its own name, `INT` as `INTEGER` and `TIMESTAMPTZ` as `TIMESTAMP WITH TIME ZONE` (checked on DuckDB 1.5.5), so the aliases the old lists carried are gone | Fowler, 2026-10-05 |
+  | 4 | **A column draws in-cell bars only when its family is a number**, so the header's `full bar` note and the cells agree | Fowler, 2026-10-05 |
+  | 5 | **The counts follow what is drawn.** The spread and paired floors count readings, the paired subjects count only rows with both numbers, and the too-few sentence prints the count the floor checked | Fowler, 2026-10-05 |
+  | 6 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
+
+- **Not in this row:** the table sorted a timestamp by `Date.parse()` of its text, which read a timestamp with no zone in the browser's own time zone and kept only milliseconds. The order held except around a daylight-saving change, and two `timestamp_ns` values less than a millisecond apart kept the engine's order. Row 14 fixed it: the table sorts by the UTC instant it reads from the engine's own text, to the nanosecond.
+
+### Row #14 - The answer table sorts a timestamp by its UTC instant, to the nanosecond
+
+- **Scope:** row 13's "Not in this row". `answer.ts` sorts a date or a timestamp by the instant its text names, read from the engine's own text as nanoseconds from 1970-01-01 00:00 UTC, in place of `Date.parse()`. A timestamp with no zone is UTC, and a timestamp with a time zone moves to UTC by the offset it prints. The column's family still comes from `classifyType()` and `isDay()`, and no cell prints differently. `sortedRows()` reads each row's key once, not on every comparison.
+- **What a reader sees change:** in a browser outside UTC, two timestamps on either side of a daylight-saving change sort in time order. Two `timestamp_ns` values less than a millisecond apart sort in time order, not in the engine's order. A timestamp in a year below 1000 sorts as that year; `Date.parse()` read `0044` as 2044. Text that names no instant, such as `infinity`, sorts last with the NULLs. A date column sorts as before.
+- **Files touched:** `frontend/src/lib/console/explorer/answer.ts`; `frontend/tests/console-data-explorer-cells.spec.ts`, `frontend/scripts/test-groups.ts`; `docs/concepts/console-design.md`.
+- **Checks:** every expected value is a literal on rows the test writes. One case sets the run's zone to `America/New_York` through `process.env.TZ`, checks that the zone took, and sorts `2026-03-08 02:30:00` and `2026-03-08 03:30:00` both ways: New York's clocks skip from 02:00 to 03:00 that night, so `Date.parse()` gave the two one number. The others sort three `timestamp_ns` values one to three nanoseconds apart; timestamps with a time zone across New York's November change and a half-hour offset; the years 44, 1066 and 2026; `infinity`, `-infinity` and a year past what a JavaScript `Date` holds, among a NULL; and a date column with a NULL. The New York, nanosecond, year and `infinity` cases fail on e8b0eefe9, each for the reason it names; the time-zone and date cases pass there and hold the new code to the old order. The cells spec opens no page, so it moves from the console group to the logic group and runs with no build.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **A day's key is nanoseconds from 1970-01-01 UTC as a `bigint`, not a padded text.** It is exact for every year a JavaScript `Date` holds and needs no width rule; a text key is right only while six padding widths stay right | Fowler, 2026-10-06 |
+  | 2 | **Text that names no instant sorts with the NULLs**: `infinity`, `-infinity`, a date the engine prints with `(BC)`, and a year past what a `Date` holds. A `bigint` and a text do not compare in a stable order, so such a value cannot keep its text as its key. Fixed keys for `infinity` and `-infinity` wait until an operator meets one | Fowler, 2026-10-06 |
+  | 3 | **The cells spec runs in the logic group**, moved in its own commit before the fix, because it opens no page | Fowler, 2026-10-06 |
+  | 4 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
+
+- **Not in this row:** three faults found while writing it. `printCell()` cut a date to ten characters, so `12345-01-01` printed as `12345-01-0` and `0044-03-15 (BC)` printed as a year AD. The engine prints an infinite or undefined double as `inf`, `-inf` or `nan`; a number column kept that text as its key beside number keys, the two compare false both ways, and that column's order was not defined. `shape.ts`'s `dayValue()` took a timestamp's first ten characters as its day, so a timestamp with a time zone printed with an offset other than `+00` fell on its printed day, not its UTC day. DuckDB-Wasm printed such a value in the machine's own zone in Node (`TimeZone` was `Etc/GMT-1`, 2026-10-06). Row 15 fixed all three, and checked the zone the engine uses in a browser.
+
+### Row #15 - A date prints whole, inf sorts in its place, and a timestamp with a time zone charts on its UTC day
+
+- **Scope:** row 14's "Not in this row". `printCell()` in `answer.ts` prints a date as the engine's own text. In a number column `comparable()` reads `inf` and `-inf` as JavaScript's own infinities, and gives every other text that `Number()` cannot read, `nan` and `-nan` among them, the NULLs' key. `dayValue()` in `shape.ts` reads a row's UTC day through `readUtcDay()`, which sits beside `readUtcNanoseconds()` in `utc-instant.ts`; the reader moved there unchanged from `answer.ts`, because the table's sort and the chart's day both read it. The column's family still comes from `classifyType()`, `isDay()` and `isNumber()`.
+- **What a reader sees change:** a date in a year past 9999 prints every digit, and a date before year 1 keeps its ` (BC)`. In a number column the first press puts `inf` first and `-inf` after every number, and `nan` and `-nan` sort with the NULLs; before, that column's order was not defined. The date chart puts a timestamp with a time zone on its UTC day: on a page in Berlin, once the engine has loaded its time-zone add-on, it prints 23:30 UTC as `00:30:00+01` on the next day, and the chart drew it on that next day. Two rows printed on one day that fall on two UTC days draw as two days, where the chart refused them as several rows a UTC day. A date, and a timestamp with no zone, print, sort and chart as before.
+- **Files touched:** `frontend/src/lib/console/explorer/answer.ts`, `shape.ts`, `utc-instant.ts` (new); `frontend/tests/console-data-explorer-cells.spec.ts`, `console-data-explorer-shape.spec.ts`, `frontend/tests/support/in-zone.ts` (new, moved from the cells spec); `docs/concepts/console-design.md`, `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`, `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`.
+- **Checks:** every expected value is a literal on inputs the test writes. The cells spec's oracle prints `0044-03-15 (BC)` and `12345-01-01` whole, and a new case sorts `inf`, `-inf`, `nan`, `-nan`, a NULL and three numbers both ways. A new shape case sets the run's zone to `Asia/Kolkata` and checks that it took. It gives two rows the engine printed on 17 Aug with `+05`, at 23:30 and 01:00 UTC, and they land on 16 and 17 Aug; an instant an hour before 1970 lands on 31 Dec 1969. On 943b74afa the three cases fail, each for the reason it names, and the other 29 pass. Checked first, through the door in Chromium with DuckDB-Wasm 1.5.4: a page prints a timestamp with a time zone as `+00` until a statement makes the engine download its time-zone add-on, ICU. After that, a page in New York got `Etc/GMT+5`, Berlin `Etc/GMT-1`, India `Etc/GMT-5` and UTC `+00`, each the zone's standard-time offset cut to whole hours. On the canary build with the page in Berlin, the table printed both dates whole, the first press on a double column gave `inf, 10, 2, -inf, -nan`, and three rows printed on 17, 17 and 18 Aug drew on 16, 17 and 18 Aug, with no console error and no 404.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **`inf` sorts above every number and `-inf` below, where the engine's own `ORDER BY` puts them; `nan`, `-nan` and any other text `Number()` cannot read sort with the NULLs.** The engine prints `1/0` as `inf`, so an operator will meet one, and the key is JavaScript's own infinity rather than one invented for it | Fowler, 2026-10-06 |
+  | 2 | **The instant reader moves to its own file, `utc-instant.ts`, in a commit of its own before the fix**, and `readUtcDay()` sits beside it, so the chart's choice does not import the table's module | Fowler, 2026-10-06 |
+  | 3 | **A date prints the engine's text, with no rule of its own.** The oracle's `2026-10-03T00:00:00.000Z` row is how JavaScript writes a date, and the door casts every column to text, so the row now holds `0044-03-15 (BC)` | Fowler, 2026-10-06 |
+  | 4 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
+
+- **Not in this row:** two faults found while writing it. A date column holding a day the chart cannot place - `infinity`, a year past 9999, or a date `(BC)` - draws nothing and says "several rows a UTC day", which is not the reason. `chart-vocabulary.spec.ts` puts the run's zone back by deleting `TZ` when it started unset; on Windows, Node 24 then stays in India time for the rest of that worker. Row 16 fixed both.
+
+### Row #16 - The History list opens in view and closes itself, Forget on the line keeps focus, the link limit is a knob, and a day the chart cannot place says so
+
+- **Scope:** six faults that the workers on row 12 (#1336) and row 15 (#1338) found on 2026-10-06 and did not fix. One: `.question-links { overflow: hidden }` clipped History's list, so it opened hidden. Two: the line that says the ledger registry did not arrive had no side padding, unlike the editor and the status bar beside it. Three: Forget on a saved chip that stands on the strip's own line, not in `{n} more`, dropped focus to the page. Four: the link limit `maxBytes: 8192` was a literal in the page (CLAUDE.md Guardrail #6). Five: a date column holding a day the chart cannot place said "several rows a UTC day", which is not the reason. Six: `chart-vocabulary.spec.ts` put the run's zone back by deleting `TZ`, which on Windows with Node 24.12 left the worker in India time for the tests after it.
+- **What a reader sees change:** History opens its list under the links and inside the window at every width, and the list closes as `{n} more` does: on a press or a focus outside it, on Escape with focus back on History, and after a pick with focus on History. The ledger-list failure line starts where the editor's heading starts. Forget on a chip on the line moves focus to the nearest Forget left on the line, then to `{n} more`, then to the last chip on the line. A date column holding `infinity`, a year past 9999, a date `(BC)` or a NULL says `Nothing here to draw: the column "day" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.` The link limit stays 8,192 bytes; it is now `console.explorer_link_max_bytes`.
+- **Files touched:** `frontend/src/lib/console/explorer/floating-list.ts` (new), `HistoryList.svelte`, `QuestionStrip.svelte`, `shape.ts`; `frontend/src/routes/console/data-explorer/+page.svelte`; `frontend/src/lib/server/config.ts`, `backend/idhazh/contracts/knobs/console.py`, `config/appearance.json`, `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`; `frontend/tests/console-data-explorer-window.spec.ts`, `console-data-explorer.spec.ts`, `console-data-explorer-shape.spec.ts`, `chart-vocabulary.spec.ts`; `docs/concepts/config/appearance.md`, `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md`, `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`, `docs/how-to/query-a-ledger-from-the-console.md`.
+- **Checks:** every expected value is a literal on inputs the test builds. With two runs the test writes, every line of History's list is inside the window and takes a press at its middle at 390, 640 and 1440 px; at 1440 px the list closes on Escape with focus on History, on a press in the editor with focus in the editor, and after a pick with focus on History and the picked run's SQL in the editor. With the registry answered 404, the failure line's words start at the `DuckDB SQL` label's left edge. With three short saved names at 1440 px, Forget on the first puts focus on the second's Forget, and Forget on the last on the line puts it back on the one before; with a short name and forty `W`s at 768 px, Forget on the short one puts focus on `{n} more`. The link case finds, with the page's own link writer, the longest CJK question whose link fits `console.explorer_link_max_bytes` and the one a character longer: the page links the first with the same `q`, and leaves the second out and offers `Copy question`. The shape spec pins the sentence for `infinity`, `-infinity`, `12345-01-01`, `0044-03-15 (BC)`, a NULL, and a timestamp column. The vocabulary spec checks that the zone the run started in comes back. On 9b63fac77, in a copy outside the checkout, each of the ten new cases fails for the reason it names: focus `inactive` after both Forgets; the list clipped at 390, 640 and 1440 px, and still open after Escape; the line's words at 240 px against the label's 252; the knob `undefined`; the `infinity` day given the several-rows sentence; and main's own time-scale test, with only the zone check added, leaving the worker in `Asia/Calcutta` against `Europe/Amsterdam`.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **History's list hangs from the end of the links group, not from History, and the group clips nothing.** Hung from either edge of History it ran past the window somewhere from 640 px up, because the links stand at the line's end | Row 16's worker, 2026-10-06 |
+  | 2 | **History's list follows J14 whole: it closes on a press or a focus outside it, on Escape, and after a pick, with focus on History.** Once it showed, an open list covered Save, Copy link and Run until a person found History again, and the window spec's folded-list test failed on it: the open list covered the Forget it pressed. J14's code moved out of `QuestionStrip.svelte` into `floating-list.ts`, in a commit of its own, and both lists use it | Jony, 2026-10-06 |
+  | 3 | **Forget on the line follows J14's chain:** the nearest Forget left on the line, then `{n} more`, then the last chip on the line, through the one handler the folded list uses. Jony was not asked: J14 already names the placements, and the line's case needs no other code | Row 16's worker, 2026-10-06 |
+  | 4 | **The sentence names the column and the first value the chart cannot place, as the table prints it, and says what to change.** A NULL takes the same sentence, because it takes the same path | Reader, 2026-10-06 |
+  | 5 | **`console.explorer_link_max_bytes` is 8192 by default and at least 1.** `console-data-explorer-address.spec.ts` keeps its own 8,192 as the measured GitHub Pages limit the knob was set from | Row 16's worker, 2026-10-06 |
+  | 6 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
+
+- **Not in this row:** a NULL in a date column still stops the whole date chart, where a NULL in a number column is only left out of it. Drawing the other days instead is a change of behaviour, so it is its own pull request. Row 17 fixed it: the date chart draws the other days and says how many rows it left out.
+
+### Row #17 - The date chart leaves out a row whose day is NULL and says how many it left out
+
+- **Scope:** row 16's "Not in this row". A NULL in a date column stopped the whole date chart with row 16's sentence, where a NULL in a number column is only left out of it (row 13). `firstUnplaceableDay()` in `shape.ts` now passes over a NULL, and the date chart is built from the rows with a day, read through `dayValue()` and so through `readUtcDay()`. Its floor, its main figure and the columns it calls too flat to draw count only those rows. `DateSeriesShape` carries `days`, the UTC days the answer has a row for, and `rowsWithNoDay`, the rows it left out, and `ShapePanel.svelte` reads both: the note names the rows it did not draw, and the too-few sentence and the main figure count days. A date column that holds only NULL gets the code `no-day` and a sentence of its own. A value the chart cannot place that is not a NULL - `infinity`, a year past 9999, a date `(BC)` - still stops the chart, as row 16 made it.
+- **What a reader sees change:** an answer whose day column holds a NULL draws a date chart through every other day, and the line above the chart reads `Drawn over time because the answer has a date column. 1 row holds null in the column "day", so the chart does not draw it. It is in the table.`, or for three, `3 rows hold null in the column "day", so the chart does not draw them. They are in the table.` The floor counts the days drawn, so two days and a NULL day are too few for a floor of three, and the too-few sentence says `Only 2 of the 3 UTC days`. Spread, on the same answer, still draws those rows. A day column that holds only NULL says `Nothing here to draw: the column "day" holds only null. Give "day" a date in the question to draw it over time.` A NULL above an `infinity` no longer hides it: the sentence names `infinity`.
+- **Files touched:** `frontend/src/lib/console/explorer/shape.ts`, `ShapePanel.svelte`; `frontend/tests/console-data-explorer-shape.spec.ts`; `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`, `docs/reference/agent-notes/gates-and-builds.md`.
+- **Checks:** every expected value is a literal on inputs the test writes. The shape spec gives a date answer with one NULL day and gets a date chart over its other three days, with the newest of them as the main figure; two days and a NULL day fall under a floor of three; two NULL days are not two rows on one UTC day; and a large number on the NULL day makes no other column too flat to draw. A column of NULL days returns `no-day` and its sentence, and no other chart. On the real `ShapePanel`, rendered on the server, the line runs unbroken through the three days and the note names one row, then three. Beside a NULL day, a NULL number still breaks the line on its own day, and the spread still counts five readings. On aac1b23eb, in a copy outside the checkout, the six new or changed cases fail, each for the reason it names, and the other 19 pass.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **The note gives the count, the column and `null` as the table prints them, uses the panel's own verb `draw`, and ends like the ranked chart's last line**, so the operator knows the rows are in the table. `holds only null` is true for one row or many, so one row needs no other form | Reader, 2026-10-06 |
+  | 2 | **The note joins the chart's first line, after `Drawn over time because the answer has a date column.`**, so the panel gains no element and the layout does not move. Jony was not asked | Row 17's worker, 2026-10-06 |
+  | 3 | **A column that holds only NULL offers no other chart**, as a day the chart cannot place and several rows a UTC day offer none, so `Nothing here to draw` stays true | Row 17's worker, 2026-10-06 |
+  | 4 | **Tests test what the page does, never what the data holds** | Owner, 2026-10-05 |
+
+- **Not in this row:** every no-chart sentence prints twice, in the chart's first line and again in the box under it, because `noteFor()` returns the reason that the box also prints. Which of the two keeps the sentence changes what the panel says, so it is its own pull request.
+
+### Row #18 - The Data explorer's panel pictures pass again at every width and theme
+
+- **Scope:** three panel pictures had failed since #1336 (row 12): `data-explorer-rows` at 768 px in light and at 390 px in both themes, each with `does not fit inside its own picture`. Routine CI skips the pictures, so nobody saw. Row 12 made the answer one window tall below 1024 px and took the site footer off this page, and two faults met it. The question's text lines are 20.8 and 25.6 px tall, so the question ended between two pixels - 1,100.375 px tall at 768 px - and so did the answer under it and the page's foot. The browser scrolls and sizes the page in whole pixels, so no scroll put the answer exactly in the window, and at 768 px the chart's last 0.375 px lay past the page's rounded height of 2,433 px, where no scroll and no picture reaches. And to fit a panel taller than the window, the capture grew the window, which grew the window-tall answer with it. Below 1024 px the question's height is now rounded up to a whole pixel with `calc-size()`, in the page's layout section. The capture measures every panel on the page and takes its picture past the window's edges, at the window it opened, and never grows the window.
+- **What a reader sees change:** nothing; below 1024 px the question gains less than one pixel at its foot. The pictures change: the answer at 390 and 768 px is one window tall, 900 px, where a window grown for the question would have made it 1,606 and 1,103 px; the question's status bar shows `See the answer`, which the grown window hid; and 37 machine pictures gain the one row of band above the panel that the window's top cut off, and are otherwise the same pixel for pixel.
+- **Files touched:** `frontend/src/routes/console/data-explorer/+page.svelte`; `frontend/tests/panel-captures.spec.ts`, `console-data-explorer-window.spec.ts`, `frontend/tests/support/console-widths.ts`; `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md`, `docs/how-to/run-the-gates.md`.
+- **Checks:** every expected value is a literal. The window spec's below-breakpoint case now also holds the answer's top and the page's foot to whole pixels at 390 x 844 and 768 x 1024; on ea1878cdc's page both fail for the reason they name, with the answer at 1,720.984 px and 1,217.375 px. The capture spec ran whole on the canary before and after: 3 failed and 8 passed on ea1878cdc, and 11 passed after. With the capture change alone, the chart failed at 768 px, 0.375 px past the page's rounded height, which is why the page rounds the question. Of the 81 pictures both runs took, 41 are identical, 37 differ only by the band row, and the 3 question pictures differ only by `See the answer`. `run-the-gates.md` gave the local capture command as `--project panels`, which Playwright reads as two project names, so it ran nothing; it is `--project=panels` now.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **Below 1024 px the question's height is rounded up to a whole pixel, `calc-size(auto, round(up, size, 1px))`.** No picture can hold a panel that ends past the page's rounded height without a tolerance in the check, which the request refused, and rounding each part the fraction comes from - the editor, the status bar, the rails, the wrapped heading line - breaks again at the next line of text. A browser without `calc-size()` keeps the content's height. J5 stands, so Jony was not asked: the answer is one window tall, and the workbench has no fixed size | Row 18's worker, 2026-10-06 |
+  | 2 | **The capture measures every panel on the page and never grows the window.** A grown window grew the window-tall answer and hid `See the answer`, so its pictures showed a page at a window the capture had not opened. With the page's foot on a whole pixel, the page holds every panel the window held, so one frame does | Row 18's worker, 2026-10-06 |
+  | 3 | **Tests test what the page does, never what the data holds.** The window spec asserts literal whole pixels; the pictures show the canary on purpose | Owner, 2026-10-05 |
+
+- **Not in this row:** the command in `run-the-gates.md` that prints this checkout's preview port calls `process.cwd` and `digest` without their parentheses, so it throws instead of printing a port.
+
+### Row #19 - The reader chooses the chart and the columns it draws
+
+- **Scope:** The Chart tab implements the owner's A1 ruling of 2026-10-07 for the four chart types already drawn: `Over time`, `Ranked`, `Paired` and `Spread`. The switch stays `Draw it as` radio tiles, but every chart tile is present on every answer, in one order, and every tile can be pressed. The row writes Susan's replacement for section 2.11 chart rule 5: **Every type the explorer draws is a tile on every answer, in one order, and every tile can be pressed**: `Over time`, `Ranked`, `Paired`, `Spread`, and from row 20 `Side by side`, `Which days` and `Flow`. No tile is hidden, greyed or disabled. A type the answer cannot draw draws nothing, and the chart box says what it needs in one sentence. Before any answer and any press, no tile is checked. A checked tile is exactly as wide as an unchecked one. The row also writes Susan's replacement sentence for the mark-shapes page: `It opens on the shape the columns choose, in this order. Every chart type the explorer draws is offered on every answer, in one order, and the operator may press any of them and choose the columns for each of its roles. A type these columns cannot support draws nothing, and its box says what it needs, so the page still never draws a story the columns do not tell.` The row makes each role a pill that opens a filtered floating list. The list reuses `frontend/src/lib/console/explorer/floating-list.ts` and `ColumnType.svelte`, lists columns in answer order, and colours types through the existing type family. `ChoiceTiles.svelte` accepts an empty `selected` value so the page can show no checked tile before an answer or press. `tooFewSentence()` takes the place words; the explorer passes `in the answer`, and every other caller keeps `in this window`. Choices stay only on the page: they are not saved with a question and not carried in a link. The `DAYS_NOTICE` one-day text in `address.ts` uses `countDays()` from plan 62 row L17, so it prints one day correctly instead of `reads 1 days`. The role row holds one slot for each role of the type with the most roles, empty slots included, and puts the smaller of that count and the band's cap on one line. The cap is `console.explorer_role_slots_per_line`, four numbers by the same four bands as `console.explorer_readout_lines`: 1, 2, 3 and 4, cut at `frame.breakpoints_px` 640, 1024 and 1400 px. The most roles is read from the explorer's role table, never written as 3. In row 19 it is 3, so nothing on screen differs from three slots a line. Row 20's Flow makes it 4 with no layout edit.
+- **Specification:**
+
+  Susan, 2026-10-07:
+
+  **Susan's section 1.2 - A column is chosen with a pill, which is a select**
+
+  **A select is allowed, and the one to build is Jony's pill with its floating list (his D1).** My first answer named a native `<select>`; section 6 says why it yields. A select is allowed for three reasons:
+
+  1. The drop-down refusal protects the chart switch: a few pictures that a reader compares, so all of them must be visible at once. A role chooses among the answer's own columns, up to 128 (V2). Radio tiles for 128 names would push the chart out of its fixed-height region (R2).
+  2. The reader picks a name that they typed in the question. The task is to find a known name in a list, and a closed pill shows the current choice on one line.
+  3. The list needs a filter, because the 88 number names share a few starts (`label_`, `summary_`, `os_mem_`), and a native picker has no filter. Jony's list is the page's own floating list (`floating-list.ts`), which `{n} more` and History already use, so most of it is built.
+
+  Rules for every pill. The words and what each list holds are mine; its look, size and keys are Jony's.
+
+  - Its list holds only the columns whose family fits the role (Table A), in the order the engine returned them, each printed exactly as the engine names it. A pick that cannot fit is never offered, so it needs no sentence.
+  - The role word (Table A) stands in the pill, before the chosen name. Every role word is at most eight characters, the room Jony's pill gives it.
+  - A role with nothing chosen shows `None`. Paired's `Name` offers `Row number` first: each row is then its own point, as today.
+  - `Lines`, `Bars` and `Dropped` each take several columns in one pill, as checkboxes. The checked columns draw in answer order, the first in the first series colour. The closed pill shows the name for one checked column, `{first}, {k} more` for several, and `None` for none.
+  - At most four in each. When four are checked, every unchecked box takes `aria-disabled="true"`, never `disabled`, and the list's foot says `Four at most. Uncheck one to choose another.`
+  - A checkbox holds a column once, so one column draws one line, and `dateSeries` never meets two series with one name.
+  - The filter's label is `Find a column`. When nothing matches, the list says `No column here has "{text}" in its name.`
+  - A choice redraws from the rows in memory and fetches nothing (the rules page: one builder call, never a second fetch).
+
+  Table A - the closed face of `Lines`, `Bars` and `Dropped`, by columns checked, with ids prefixed `pill` so they do not clash with the role Table A.
+
+  | # | Checked | The face | With `summary_ms` checked first |
+  | --- | --- | --- | --- |
+  | pill A1 | none | `None` | `None` |
+  | pill A2 | one | `{name}` | `summary_ms` |
+  | pill A3 | two | `{first}, 1 more` | `summary_ms, 1 more` |
+  | pill A4 | three | `{first}, 2 more` | `summary_ms, 2 more` |
+  | pill A5 | four | `{first}, 3 more` | `summary_ms, 3 more` |
+
+  `{name}` and `{first}` are printed exactly as the engine names the column. `{first}` is the first checked column in answer order. The role word is never cut. `, {k} more` is never cut. The column's name is cut at its end, and an ellipsis takes the place of what is cut. Nothing else on a closed pill is ever cut.
+
+  **Table A - The roles of the four drawn charts**
+
+  | # | Chart | Role | Takes | Default | Limit |
+  | --- | --- | --- | --- | --- | --- |
+  | A1 | Over time | `Date` | a date, or a timestamp of any precision, with or without a time zone | the only date column (today); with several, the first | one |
+  | A2 | Over time | `Lines` | whole numbers or decimals | today's: the number columns whose largest value is at least `console.explorer_series_floor_share` (0.05) of the largest column's, the first four in answer order | one to four, the explorer's four series colours |
+  | A3 | Ranked | `Name` | any column, printed as the table prints it | the only text column (today); with several, the first; with none, the first column that is not a number; with none of those, the first column | one |
+  | A4 | Ranked | `Rank by` | a number | the only number column (today); with several, the first that is not `Name` | `console.explorer_rank_max` (30) rows drawn; the tail line counts the rest |
+  | A5 | Paired | `Across` | a number | the first number column (today) | one |
+  | A6 | Paired | `Up` | a number | the second number column (today) | one |
+  | A7 | Paired | `Name` | any column, or `Row number` | the only text column (today); with several, the first; with none, `Row number` | floors: `console.fleet_min_rows` (160) points and `console.bandwidth_min_kinds` (3) names |
+  | A8 | Spread | `Values` | a number | the only number column (today); with several, the first | floor: `console.fleet_min_rows` (160) readings |
+
+  - A family is the one `classifyType()` gives. A date stored as text is text, a time of day is not a date, and a list of numbers is not a number (unchanged).
+  - A NULL name is the name `null`, as the table prints it. A NULL number is no value: it breaks a line, and its row is left out of a ranked list, a scatter and a spread (unchanged).
+  - The four-line cap is the length of one list, the explorer's four series colours. `shape.ts` and `ShapePanel.svelte` both read that list instead of each writing 4.
+
+  **Table B - What the Chart tab opens on**
+
+  Until the reader presses a tile or picks a column, each run opens by today's automatic rule. What that rule picks does not change.
+
+  | # | Today's rule gives | The switch opens on | The box says |
+  | --- | --- | --- | --- |
+  | B1 | a chart | that chart, its roles holding today's columns | the chart |
+  | B2 | a refused date chart: a day it cannot place, a date column of only null, or several rows a UTC day | `Over time`, holding that date column | that refusal's sentence (C2, C3 or C4) |
+  | B3 | no chart, and at least one chart can be filled from these columns | no tile checked | `The page does not pick a chart for these columns. Choose one under Draw it as.` |
+  | B4 | no chart, and no chart can be filled | no tile checked | `Nothing here to draw: the answer has no number in it.` (today's words) |
+
+  - B3 replaces today's three sentences for too many number columns, too many text columns and no fit. Their advice, "Keep one or two in the question", is wrong once the reader can choose.
+  - B4 holds only when no chart can be filled, so its sentence stays true. In row 19 that means no number column. In row 20 it means no number column and no date with a true/false column. When it holds, the box says B4's sentence whichever tile is checked, because it tells the reader that no other tile will help either (Jony's H3, section 6).
+  - Once the reader chooses, the chart and each role keep their column across runs on the page, while the new answer still holds that column in a family that fits. A role whose column is gone takes its default. A chosen chart stays chosen when it cannot draw the new answer, and its box says why.
+  - Choices are not saved with a question and not carried in a link (P2).
+
+  **Table C - Sentences for a pick that cannot draw (row 19)**
+
+  Each is one sentence in the chart box, said once, in the neutral tone (R4). Each value prints as the table prints it.
+
+  | # | Chart | When | The box says |
+  | --- | --- | --- | --- |
+  | C1 | any of the four | the answer cannot fill the chart's roles | that chart's sentence in Table M |
+  | C2 | Over time | the date column holds a day the chart cannot place | today's: `Nothing here to draw: the column "{date}" holds {value}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.` |
+  | C3 | Over time | the date column holds only null | today's: `Nothing here to draw: the column "{date}" holds only null. Give "{date}" a date in the question to draw it over time.` |
+  | C4 | Over time | two rows fall on one UTC day | `Nothing here to draw: the answer has several rows a UTC day in "{date}". Group by day in the question to draw it over time.` - today's words plus the column, because the reader can now choose among several |
+  | C5 | Over time | every checked line is null on every day drawn | `Nothing here to draw: every line you checked is null on every day.` |
+  | C6 | Over time | no column is checked under `Lines` | `Nothing here to draw: Over time needs a column checked under Lines.` |
+  | C7 | Over time | fewer UTC days than `console.explorer_chart_min_rows` (3) | `Only {n} of the {floor} UTC days this chart needs are in the answer, so it is not drawn.` |
+  | C8 | Ranked | one name is in more than one row | `Nothing here to draw: "{value}" is in more than one row of "{name}", and each row here needs its own name. Group by "{name}" in the question to draw it.` |
+  | C9 | Ranked | `Rank by` holds a value below zero | `Nothing here to draw: "{column}" holds {value}, below zero, and this chart measures from zero.` |
+  | C10 | Ranked | `Rank by` is 0 or null on every row | `Nothing here to draw: every value in "{column}" is 0 or null.` |
+  | C11 | Paired | fewer points than `console.fleet_min_rows` (160) | `Only {n} of the {floor} readings this chart needs are in the answer, so it is not drawn.` |
+  | C12 | Paired | fewer names than `console.bandwidth_min_kinds` (3) | `Only {n} of the {floor} names this chart needs are in the answer, so it is not drawn.` |
+  | C13 | Spread | fewer readings than `console.fleet_min_rows` (160) | the C11 sentence |
+
+  - C7, C11, C12 and C13 come from `tooFewSentence()`, given the place words `in the answer` (V5). Each says `is` for one, as today. C12 says `names`, after the role `Name`, instead of today's `subjects`.
+  - C8 is new. Today a text column that repeats a name ranks every row under that name. Once plan 52 row 2 sends the list through `rankedList()`, the repeat is refused anyway (V8), so the sentence must exist.
+
+  **Table D - The Chart tab's other sentences**
+
+  | # | Sentence | Ruling | Why |
+  | --- | --- | --- | --- |
+  | D1 | `Drawn over time because the answer has a date column.`, and the three like it for ranked, paired and spread | go | The reader chooses now, so "because the answer has" is no longer the reason. The tiles and the pills show the choice. R4 also removes text above the chart |
+  | D2 | `Drawn: the first four number columns; {names} are in the table.` | goes | The `Lines` pill shows what is drawn, and its list holds the rest |
+  | D3 | `{name} is under {share}% of {largest}, so it would draw flat; it is in the table.` | changes to `"{name}" is left out: it is under {share}% of "{largest}", so it would draw flat.` for one, and `{n} number columns are left out: each is under {share}% of "{largest}", so each would draw flat.` for several | It explains a default the reader did not make. It shows only while the lines are the page's default. Once the reader changes a line, it goes |
+  | D4 | `1 row holds null in the column "{date}", so the chart does not draw it. It is in the table.`, and its plural | stays, words unchanged | A fact about what the chart left out |
+  | D5 | `Drawn from the first {max} rows.` | stays | On the Chart tab the table's status line (R6) is out of sight, and a chart of a capped answer is a partial chart |
+  | D6 | the main figure and the comparison (plan 55 section 2.11, chart rule 7) | stay, words unchanged | They read the chosen roles. Over time reads the first checked line |
+  | D7 | the accessible name `{option}: {columns}` | stays | It lists the chosen columns |
+
+  Where D3, D4 and D5 sit is Jony's. R4 rules out the space above the chart.
+
+  **Table M - What the chart box says when the answer cannot fill a chart's roles**
+
+  One sentence for each chart, the same whichever of its roles is empty; the empty pill shows which one (Jony's H1). Neutral tone, said once, inside the box (R4). When no chart at all can be filled, the box says B4's sentence instead, whichever tile is checked (Jony's H3).
+
+  | # | Chart | The box says |
+  | --- | --- | --- |
+  | M1 | Over time | `Nothing here to draw: Over time needs a date or timestamp column for Date, and a number column for Lines.` |
+  | M2 | Ranked | `Nothing here to draw: Ranked needs a number column to rank by, and one more column for Name.` |
+  | M3 | Paired | `Nothing here to draw: Paired needs two number columns, one for Across and one for Up.` |
+  | M4 | Spread | `Nothing here to draw: Spread needs a number column for Values.` |
+  | M8 | Over time or Which days, when the answer has no date or timestamp column | its own sentence, then `The ledgers keep their dates as text: CAST(date AS DATE) in the question makes a date column.` |
+
+  Jony, 2026-10-07:
+
+  **Jony's section 1 - Sizes**
+
+  Every size is a token, a knob or a share of the row. Nothing adds a literal. Token values on `origin/main`: `--workbench-control` is 2rem (32 px) with a mouse and 2.75rem (44 px) with touch; `--space-1` 4 px; `--space-2` 8 px; `--space-3` 12 px; `--leading-sm` 1.3rem (20.8 px).
+
+  - **A pill** is `--workbench-control` tall and fills its slot. Inside it, in order: the role word in the region-label style (Susan's Q3: `--text-xs`, upper case, `--tracking-label`, tertiary); the column name in the data face at `--text-xs` and `--color-text`, as the column rail and the table header print names; and a 16 px chevron at the end. Edge 1 px `--color-rule-strong`, corner `--radius-md`, side padding `--space-2`. The role word is inside the pill, not before it. Then a type whose role words are longer does not resize a pill, and the whole pill is the target.
+  - **Slots** are `repeat(n, minmax(0, 1fr))`, with a column gap of `--space-3`, a row gap of `--space-1`, and the region's own side padding of `--space-3`. n is 3 from 1024 px, 2 from 640 px and 1 below 640 px.
+  - **The role row's height** is lines x `--workbench-control` + (lines - 1) x `--space-1` + 2 x `--space-1`. Lines are 1 from 1024 px, 2 from 640 px and 3 below. It depends on the band and the pointer, and on nothing else.
+  - **The strip** is one line from 640 px: `--workbench-control` + 2 x `--space-1`. Below 640 px it is two lines in both tabs - the tabs, then the open tab's own controls - at 2 x `--workbench-control` + 3 x `--space-1`. At 390 px the two tabs and four tiles need about 530 px of a 366 px line (estimate), and the two copy buttons need the second line too.
+
+  **Jony's section 2 - How a pill holds 88 columns and still fits a phone**
+
+  `SELECT * FROM "item-health"` returns 128 columns, and 88 of them are numbers (the newest packed file, August 2026). So a role that takes a number can offer 88 names, and a role that takes any column can offer 128.
+
+  **Table D - the control behind a pill**
+
+  | # | Control | What it gives | What it costs |
+  | --- | --- | --- | --- |
+  | D1 | **A floating list under the pill, with a filter at its head. Its lines are radio inputs, or checkboxes for a role that takes several columns** | It holds any count. The filter finds a name by any part of it. One look and one behaviour for every role, built from parts the page already has | One new component, `ColumnPicker.svelte`, and one new icon |
+  | D2 | A native `<select>` | No new code, and the phone's own picker | A phone's wheel or list has no filter, so 88 names that share three starts are scrolled one by one. `<select multiple>` is a box several lines tall on a computer, which breaks the one-line row |
+  | D3 | Radio tiles, as `Draw it as` | The page's own switch | Radio tiles exist so that a reader sees every choice without opening anything (`ChoiceTiles.svelte`'s first sentence). 88 tiles cannot be seen at once, so that reason does not reach a column |
+
+  **Recommended: D1.** It is the only control that finds one name among 88 on a phone.
+
+  The mark-shapes page says "radio buttons between types over the same query result, never a drop-down". That binds the type switch, and the type switch stays radio tiles. D1's lines are radio inputs too, so the rule's form stays where its reason holds.
+
+  **The open list, part by part:**
+
+  - It is the page's floating list: `floating-list.ts`, which `{n} more` and History already use. It closes on a press or a focus outside it, on Escape and after a pick, and puts focus back on its pill. It floats (`position: absolute`), so opening it moves nothing.
+  - It lists only the answer's columns that the role can take (Susan's rule), in the order the question's `SELECT` wrote them. It never sorts them, as the column rail never does.
+  - Its first line is a filter field. It keeps the names that contain the typed text anywhere. The 88 names share a few starts (`label_`, `summary_`, `os_mem_`), so a match on the start would not narrow them; `decode` finds the five decode columns at once. The field takes `--workbench-field-text`, so a phone does not zoom, as the ledger rail's filter does.
+  - Each line holds the input, the name in the data face at `--text-xs`, and the type in its family's colour from `ColumnType.svelte`, as the column rail prints it. A line is `--workbench-control` tall, because it holds an input (Susan's S17). A long name wraps after `_` with the rail's hanging indent (row 11, J4). The list never cuts a name.
+  - Width: its pill's slot at least, the region's content box at most. At 390 px that is 366 px.
+  - Height: at most the room from the pill's bottom edge to the window's bottom edge, less `--space-3`. It scrolls inside, with `overscroll-behavior: contain` so the page never scrolls with it, and a thin scroll bar (S22).
+  - Ground `--color-surface-raised`, `--shadow-md` and `--radius-md`, as the other floating lists.
+  - Focus on open: with a mouse, in the filter, so typing filters at once; with touch, on the checked line, so the phone's keyboard rises only when the reader taps the filter. This is the pointer split of Susan's S4.
+  - A one-column role closes on a pick and redraws. A several-column role stays open: each check redraws the chart at once behind the list, and Escape or a press outside closes it.
+
+  At 390 x 844 with touch, with the pill near the region's top, the list has about 680 px (estimate). The filter and about 14 names show; the other 74 of 88 scroll.
+
+  **The closed pill** is one line and never wraps. A name longer than its room ends in an ellipsis on the pill alone; no published name is that long at any of the four widths. The reader then loses that name's end on the pill. The open list, the pill's accessible name, the chart's accessible name and the readout print it whole. A several-column pill shows a short summary in the same room; the words are Susan's.
+
+  **Jony's section 3 - A change of type or role moves nothing outside the drawing**
+
+  The region keeps one height (R2). Inside it, room is reserved by the width band and the pointer. It is never reserved by the type, by the number of its roles, or by a chosen value.
+
+  **Table E - what reserves each part's room**
+
+  | # | Part | Its box comes from | What a type or role change does to it |
+  | --- | --- | --- | --- |
+  | E1 | The region | R2's one height, and `contain: size` (row 19) | Nothing |
+  | E2 | The strip | One line from 640 px and two below, in both tabs | Nothing |
+  | E3 | The type tiles | Every type is always drawn, in one order (Table F). Each tile reserves the width its word takes at weight 600 | Two tiles change their border, tint and weight; no box changes |
+  | E4 | The role row | Lines per band (Table C). Slots are fixed tracks, a pill fills its slot, and the role word is inside the pill. A type with fewer roles leaves its other slots empty, never collapsed | The pills' words change; no box changes |
+  | E5 | The drawing | `minmax(0, 1fr)` with `contain: size`, drawn at its measured width and height, floored. The row 10 branch already measures the width | Redrawn inside the same box |
+  | E6 | The foot | `explorer_readout_lines[band]` lines; more text scrolls inside | Its text changes |
+  | E7 | A pill's list | It floats over the drawing | Nothing, open or closed |
+
+  **A fault to fix first.** `ChoiceTiles.svelte` sets the checked tile's word to weight 600 and the others to weight 400. So pressing a tile widens it and moves its neighbours: `Over time` grows by about 4 px (estimate). In the strip that breaks the stillness rule. The fix belongs in the component, for every caller: each tile stacks a hidden weight-600 copy of its word in the same cell (`visibility: hidden`), as Run holds `Run` and `Running` (S11). In the strip the tiles also take `--workbench-control` as their height, as the row 10 branch already does for the toolbar's tiles. The component's own 2.75rem would put a 44 px tile in a 32 px line.
+
+  **When the tiles are wider than their line**, the group scrolls sideways inside itself, as the route strip does, and keeps the checked tile whole in view. Align it with `justify-content: safe end`, or an automatic start margin, so that an overflowing group scrolls from its first tile. Move the group's own `scrollLeft`; never call `scrollIntoView()`, which can scroll the page. At 390 px four tiles need about 364 of 366 px (estimate): one more type, or a face 5 percent wider, and the group scrolls.
+
+  **What the reservation costs.** On a phone, a type with one role leaves two empty lines in the role row: 96 px with touch that the drawing does not get. In return, the drawing's top edge stands in one place for every type.
+
+  **Jony - Which types the switch shows**
+
+  **Table F - which types `Draw it as` offers**
+
+  | # | Rule | What it gives | What it costs |
+  | --- | --- | --- | --- |
+  | F1 | Only the types that can draw this answer (plan 55 section 2.11, chart rule 5, today) | No choice that draws nothing | Tiles appear, vanish and shift on every Run, so a reader cannot learn where a type stands. With one fitting type no switch is drawn, which A1 cannot accept |
+  | F2 | Every type, and the ones that cannot draw this answer disabled | One set, in one place | The arrow keys skip a disabled radio, and it gives no reason, so a reader cannot find out what a type needs |
+  | F3 | **Every type, always, and every one pressable. A type that cannot draw this answer says why inside the drawing box** | One set in one order, learned once. Every press answers at once with a drawing or a reason, and fetches nothing. The pills show which role is empty | A reader may press a type that draws nothing. Pressing back costs nothing |
+
+  **Recommended: F3.** A choice that never moves and always answers is the one a reader can learn.
+
+  **What a choice keeps across runs.** Until the reader presses a tile on this page, each answer gets the page's own type and columns. After that, the reader's type stays across runs, as R2 keeps the reader's tab. A picked column stays while the new answer has a column of that name that fits its role; otherwise that role takes the page's own pick. The reader loses one thing: after choosing a type, a new answer that cannot fill it shows that type's reason, not the chart the page would have chosen. One press fixes it.
+
+  **Jony's section 4 - The keyboard order**
+
+  The order in the page's markup is the order on screen. Each group of controls is one Tab stop.
+
+  **Table G - Tab order with the Chart tab open**
+
+  | # | Stop | Keys inside it |
+  | --- | --- | --- |
+  | G1 | The selected tab, `Chart` | Left and Right move between the two tabs and show the one they reach (R2). The other tab is not a Tab stop |
+  | G2 | `Draw it as`: the checked tile, or the first tile while none is checked | The arrow keys choose the previous or the next type and redraw at once. Focus stays on the tile |
+  | G3 | Role pill 1 | Enter, Space or Down opens its list |
+  | G4 | Role pill 2 | As G3 |
+  | G5 | Role pill 3 | As G3 |
+  | G6 | The chart's readout, where the type has one | Left and Right step, Home and End jump, Escape returns to rest (the readout rule) |
+
+  Inside an open list, Up and Down move between lines, Space checks a line, and Enter picks a line and closes a one-column list. Escape closes the list and puts focus on its pill. Tab leaves the list, which closes it, and lands on the next pill.
+
+  A pill with no column for its role (section 5) stays a Tab stop, with `aria-disabled="true"` and never `disabled`. A disabled control is skipped, so a keyboard reader would never reach the reason the chart is empty. This is the reason Susan's S11 gives for Run.
+
+  With the Table tab open, the order is the tab, `Copy as JSON`, `Copy as table`, then the table. Focus never moves by itself: after a type change it stays on the tile, and after a pick it is on the pill.
+
+  **Jony's section 5 - When the answer has no column a role can take**
+
+  **Table H - what the reader sees**
+
+  | # | Case | The pill | The drawing box | The tiles |
+  | --- | --- | --- | --- | --- |
+  | H1 | A role the type needs has no column in the answer | It stays in its slot. Susan's word for "none" stands in place of a name. No chevron; edge `--color-rule`, not `--color-rule-strong`; `aria-disabled="true"`; it opens nothing | One sentence in Susan's words, naming the role and the kind of column it takes: centred, `--text-sm`, secondary colour, no hue, `data-shape-none` | All stay; the chosen tile stays chosen |
+  | H2 | A role the type can do without has no column (for example, a text column to name the points) | As H1 | The chart draws without it, as today. No sentence | All stay |
+  | H3 | No type can draw the answer | The chosen type's pills, as H1 | The answer-level reason that `shape.ts` gives today | All stay |
+  | H4 | No answer yet, or none arrived: idle, running, missing, unreachable, refused | Every pill as H1 | That state's own sentence or shimmer (Susan's T1-T8) | All stay pressable. A type chosen now is the type the next answer draws. Before any answer and any press, no tile is checked |
+
+  The pill says "no column here" three ways: the missing chevron (a shape), the word (Susan's) and the quieter edge (a colour). Colour is never the only signal.
+
+  Nothing hides. No tile disappears or turns grey, no slot collapses, and no text appears above the drawing (R4: the chart says why once, inside its box).
+
+  **Table I - checks**
+
+  | # | Check |
+  | --- | --- |
+  | I1 | **Placement.** At 390 x 844, 768 x 1024, 1024 x 768 and 1440 x 900, with the Chart tab open and an answer that gives the chosen type three roles: `[data-chart-roles]` is the Chart panel's first row. Its top equals the strip's bottom and its bottom equals the drawing box's top, within 0.5 px. Its pills' tops take 3, 2, 1 and 1 different values at those four widths. Its height equals section 1's formula, computed from the page's own `--workbench-control`, never from a constant (S23) |
+  | I2 | **The strip.** At the four widths the strip's box is the same with either tab open, within 0.5 px. It holds two lines at 390 px and one at the others. The `[data-shape-choice]` tiles stand in it only while Chart is open, and the copy buttons only while Table is open |
+  | I3 | **A type change moves nothing.** From every tile to every other, by a press and by an arrow key: the shift sum is exactly 0; the boxes of the region, the strip, both tabs, every tile, every slot, every pill, the drawing box and the foot equal their first reading within 0.5 px; `scrollY` does not change; focus is on the tile |
+  | I4 | **A role change moves nothing.** For each pill: open it, pick another column, and in a several-column list check one column and uncheck it; then close it. The same assertions as I3, with focus back on the pill. Only the pills' words, the drawing and the foot's text differ |
+  | I5 | **A tab switch moves nothing** in every state - idle, running, answered, quiet, missing, unreachable, refused and H1 - by R2's stillness test, with the role row in place |
+  | I6 | **The tiles hold.** Across Runs of four answers the test builds, each fitting a different type, the tiles' count, order and boxes are equal within 0.5 px. Each tile's box is the same checked and unchecked |
+  | I7 | **128 columns on a phone.** An answer with 128 columns, 88 of them numbers, at 390 x 844 with touch. The number role's open list lies wholly inside the window and inside the region's side edges; `document.documentElement.scrollWidth <= clientWidth`. It lists exactly the 88 number columns, in the answer's order. Each line is at least `--workbench-control` tall. Scrolling the list to its end leaves `scrollY` unchanged. Focus is on the checked line, not in the filter |
+  | I8 | **The filter.** At 1440 x 900 with a mouse, the list opens with focus in the filter. Typing `decode` leaves exactly the lines whose names contain `decode`, in their order. Clearing the field shows all 88 again |
+  | I9 | **Names.** With Susan's longest role word and a 28-character name, the pill's name is whole (`scrollWidth <= clientWidth`) at the four widths. A 60-character alias ends in an ellipsis on the pill, and the open list, the pill's accessible name and the chart's accessible name each hold all 60 characters |
+  | I10 | **The keyboard.** With Chart open, Tab from the element before the region reaches, in order: the selected tab, the checked tile, pill 1, pill 2, pill 3, the readout. Shift+Tab goes back the same way. Left and Right on the tab never reach a tile. Escape in a list closes it with focus on its pill. Tab out of a list closes it and lands on the next pill |
+  | I11 | **A needed role with no column (H1).** An answer with no date column, and the date type chosen: the date role's pill keeps its box, has `aria-disabled="true"`, is in the Tab order, opens nothing on Enter and shows no chevron. The drawing box holds exactly one `[data-shape-none]`. The role row holds no text but its pills' words. The shift sum is 0 from a drawable type to this one and back |
+  | I12 | **A role the type can do without (H2).** Two number columns and no text column, with the paired type: the naming pill has `aria-disabled="true"`, the chart draws, and there is no `[data-shape-none]` |
+  | I13 | **The lists float.** Opening and closing each pill's list gives a shift sum of 0. Each list closes on a press outside it, on Escape and after a one-column pick, with focus on its pill |
+  | I14 | **Borrowed, not copied.** `ColumnPicker.svelte` imports `floating-list.ts` and `ColumnType.svelte`. No other explorer file handles a list's outside press or Escape. Every type the switch offers draws through its module in `frontend/src/lib/charts/d3/`, or the component the type table names; `chart-vocabulary.spec.ts` already holds that table and that folder in step |
+  | I15 | **Gate 1 still passes** for `data-explorer-shape` at 390, 768 and 1440 px with the role row in place, because the row takes height, not width |
+
+- **What a reader sees change:** The reader can choose the chart and the columns that fill each role without another fetch. The first view still opens on today's automatic choice. A chart that cannot draw the answer keeps its tile and explains what role is missing inside the chart box.
+- **Files touched:**
+  - `frontend/src/lib/console/explorer/ShapePanel.svelte`
+  - `frontend/src/lib/console/explorer/ColumnPicker.svelte` (new)
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/src/lib/components/ChoiceTiles.svelte`
+  - `frontend/src/lib/console/waiting.ts`
+  - `frontend/src/lib/console/explorer/shape.ts`
+  - `frontend/src/lib/console/explorer/address.ts`
+  - `frontend/src/lib/icons/PROVENANCE.md`, `frontend/src/lib/icons/manifest.json`, `frontend/src/lib/icons/generated.ts` (Lucide `chevron-down`, unmodified, with its provenance line)
+  - `frontend/tests/console-data-explorer-shape.spec.ts`, `frontend/tests/console-data-explorer.spec.ts`, `frontend/tests/console-data-explorer-still.spec.ts`, `frontend/tests/panel-sufficiency.spec.ts`, `frontend/tests/icons.spec.ts`
+  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`, `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md`, `docs/concepts/console-design.md`
+  - plan 55 section 2.11, chart rules 1, 5, 6 and 10
+  - `config/appearance.json`, `backend/idhazh/contracts/knobs/console.py`, `frontend/src/lib/server/config.ts`, `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `docs/concepts/config/appearance.md` (`console.explorer_role_slots_per_line`)
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected frontend checks named above; `pytest backend/tests/test_appearance_config.py` for the new role-slot knob; `python backend/utilities/doc_load.py docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md docs/concepts/console-design/how-the-data-explorer-shares-the-window.md docs/concepts/console-design.md docs/concepts/config/appearance.md` before and after; CLAUDE.md section 12 browser check for `/console/data-explorer/` at 390, 768 and 1440 px, light and dark, with zero new console errors and zero new 404s. CI runs the full suite.
+- **Checks:** `console-data-explorer-shape.spec.ts` asserts T1 to T5: every answer the existing cases draw opens on the same chart with the same columns; each role lists exactly its family's columns in answer order; `Lines` holds at most four checked columns and the foot says `Four at most. Uncheck one to choose another.`; every sentence in Susan's Tables B, C, D and M1 to M4 and M8 is literal; every too-few sentence says `in the answer`; no file under `frontend/src/lib/console/explorer/` imports a `d3-` package; and `frontend/tests/chart-vocabulary.spec.ts` stays green unchanged. `console-data-explorer.spec.ts` asserts the switch is `input[type=radio]` under `Draw it as`, every chart is present and none disabled, no tile is checked before an answer or press, Tab lands on the first tile, and choosing a chart or column makes no network request. Choices survive a second run of the same question, but a role whose column has gone takes its default. `console-data-explorer-still.spec.ts` asserts choosing a chart or column moves no box outside the drawing and Jony's I1, I3, I4 and I7 to I15 hold at 390 x 844, 768 x 1024, 1024 x 768 and 1440 x 900. `panel-sufficiency.spec.ts` asserts gates 1, 3, 4, 5 and 9 pass on each of the four charts after a non-default choice at 390, 768 and 1440 px in both themes. `icons.spec.ts` asserts `chevron-down` resolves to the unmodified Lucide source recorded in `PROVENANCE.md`. A unit check asserts the row-count function with literals: most roles 4 gives 4, 2, 2 and 1 lines by band, and most roles 3 gives 3, 2, 1 and 1. A one-day span prints `1 day`, never `1 days`.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | A1 is implemented as a reader choice over chart type and role columns; the default view stays today's automatic pick | Owner, 2026-10-07 |
+  | 2 | Every type is always offered and pressable; an unsupported type draws nothing and says what it needs inside the box | Susan and Jony, 2026-10-07 |
+  | 3 | A role is a pill with a floating filtered list, not native select and not radio tiles | Jony, 2026-10-07 |
+  | 4 | The picker borrows `floating-list.ts` and `ColumnType.svelte` and adds no second list behaviour or second type classifier | Owner and Jony, 2026-10-07 |
+  | 5 | Choices are page state only, not saved with a question and not carried in a link | Susan, 2026-10-07 |
+  | 6 | `d3.js` stays the standard charting library; no Vega-Lite or second charting library is added | Owner, 2026-10-07 |
+  | 7 | The role-row cap is one config knob with four band values, and the most-role count comes from the role table, so Flow adds no layout code | Jony, 2026-10-07 |
+  | 8 | From 640 to about 661 px, the closed pill may ellipsize a 28-character name; the open list, both accessible names and the readout print it whole, and I9 does not measure that gap | Jony, 2026-10-07 |
+  | 9 | A several-column pill's closed face reads `None`, `{name}`, `{first}, 1 more`, `{first}, 2 more` or `{first}, 3 more`; the role word and `, {k} more` are never cut, and only the end of the first column name is cut | Susan, 2026-10-07 |
+  | 10 | The reader loses the other checked names on the closed face, and a cut name may read like another with the same start, such as `os_mem_available_bytes` and `os_mem_available_min_bytes` at 640 px; the open list and both accessible names carry every name whole | Susan, 2026-10-07 |
+
+- **Not in this row:** The three new chart kinds from A2, saved or shared chart choices, a new chart type, a generator for chart roles, a split role on Over time (`One line for each`), `Before and after` (`paired`), and a lower explorer floor for Paired and Spread. The priced items wait for a real question that needs them.
+
+---
+
+### Row #20 - The explorer draws Side by side, Which days and Flow
+
+- **Scope:** The Chart tab implements the owner's A2 ruling of 2026-10-07 by adding three chart choices after row 19: `Side by side` through `PartsOfOne.svelte` and `partsOfOne()`, `Which days` through `TileStrip.svelte` and `tileStrip()`, and `Flow` through `Flow.svelte` and `flow()`. The layout does not change from row 19. `Side by side` always draws bars from zero with `overlapping: true`, prints no total, and gives the k-th checked bar the k-th series colour. `Which days` maps true to filled, false to outlined and NULL to not recorded; it uses `chooseDateSeriesDays()`, passes no reading, prints `true`, `false` and `null`, and carries `data-model-rule="no"` with the explorer's reason. `Flow` passes `narrow` from the measured width against `frame.breakpoints_px[0]`. The row changes the idle chart sentence in section 2.12 from `If the answer holds a number, it is drawn here.` to `Run a question, and its answer can be drawn here.` The row adds the three icons Susan named: `shape-side-by-side` from Lucide `align-start-vertical`, `shape-days` from Lucide `calendar-check`, and `shape-flow` from Lucide `split`, each unmodified with a provenance line. No layout edit: Flow's four roles make the most-role count 4 under row 19's rule, so the role row takes 4, 2, 2 and 1 lines by band. With the tokens on main, that is 196, 100, 76 and 40 px at 390 x 844 touch, 768 x 1024 touch, 1024 x 768 mouse and 1440 x 900 mouse.
+- **Specification:**
+
+  Susan, 2026-10-07:
+
+  **Susan's section 2 - A2 by reuse (row 20)**
+
+  **Table E - The five charts the explorer does not draw today**
+
+  | # | Type | Offered | Option | Drawn by, unchanged | Why |
+  | --- | --- | --- | --- | --- | --- |
+  | E1 | `partsOfOne` | yes | `Side by side` | `PartsOfOne.svelte`, from `partsOfOne()` | A named row with three or more numbers has no chart today: one text column and three numbers draw nothing |
+  | E2 | `tileStrip` | yes | `Which days` | `TileStrip.svelte`, from `tileStrip()` | A yes-or-no a day drawn as a line of counts is the flat line on the floor that the tile strip exists to replace |
+  | E3 | `flow` | yes | `Flow` | `Flow.svelte`, from `flow()` | It cannot lie: counts that are not one flow, or a narrow panel, get the stepped list and its own sentence from the same call |
+  | E4 | `paired` | no | - | - | Its drawing, `SwapDots.svelte`, takes the model route's own `ModelSwap` type and not the paired geometry, so offering it means changing a component inside a route that plan 52 is rebuilding; and its floor needs an attempt count on each side, which an answer seldom carries (P3) |
+  | E5 | `overlapTimeline` | no | - | - | Its drawing, `RunTimelinePanel.svelte`, is a route panel that reads the run-timeline projection plan 52 row 10 removes and never calls `overlapTimeline()`, so there is no component to use unchanged |
+
+  **Table F - The roles of the three charts the explorer gains**
+
+  | # | Chart | Role | Takes | Default | Limit |
+  | --- | --- | --- | --- | --- | --- |
+  | F1 | Side by side | `Name` | any column | as A3 | one |
+  | F2 | Side by side | `Bars` | numbers | the first four number columns that are not `Name`, in answer order | two to four; rows in answer order, at most `console.explorer_rank_max` (30), with the tail line |
+  | F3 | Which days | `Date` | as A1 | the first date column | one |
+  | F4 | Which days | `Mark if` | true/false | the first true/false column | one |
+  | F5 | Flow | `Stage` | any column | as A3 | one stage a row, in answer order; no cap, because the module lists the stages that do not fit |
+  | F6 | Flow | `Arrived` | a number | the first number column that is not `Stage` | one |
+  | F7 | Flow | `Went on` | a number | the next number column | one |
+  | F8 | Flow | `Dropped` | numbers | the next number columns, up to four | none to four; each column's name is the name of that way out |
+
+  Three rules make these true on any answer.
+
+  - **Side by side always draws bars from zero** (`overlapping: true`), and no row prints a total. The page cannot know whether the chosen columns add up to a whole, and a bar from zero is true either way. What the reader loses: the stacked total. A reader who knows the parts add up writes `a + b + c AS total` in the question and ranks it. The k-th checked bar takes the colour of the k-th checked line, so one colour means one place in the order everywhere on the explorer.
+  - **Which days maps the engine's three values onto the strip's three states.** True fills a tile, false outlines it, and NULL is a day not recorded. Its days come from `chooseDateSeriesDays()`, as the date chart's do, so a day a chosen ledger lost between the first and the last day is also not recorded. No reading is passed, so no threshold is invented (K3). The strip prints `true`, `false` and `null`, the engine's words (K4). It has no floor: each tile is a fact, not a trend. It carries `data-model-rule="no"` with the explorer's one reason, as the date chart does.
+  - **Flow passes `narrow`** from the chart's measured width against `frame.breakpoints_px[0]`, and the module chooses between the diagram and the list.
+
+  Main figure and comparison (sufficiency gates 3 and 5):
+
+  - Side by side: `{name}: {value} {bar column}` for the longest bar, and `each bar against the longest bar`.
+  - Which days: `"{column}" was true on {n} of {d} UTC days`, and `each UTC day against the other days in the span`.
+  - Flow: `{went on at the last stage} of {arrived at the first stage} went through every stage`, and `what each stage let through against what arrived at it`.
+
+  Icons, each an unmodified source from `lucide-static` 0.544.0, the version `PROVENANCE.md` pins: `shape-side-by-side` from `align-start-vertical`, which draws bars of different lengths from one edge, as this chart does; `shape-days` from `calendar-check`; `shape-flow` from `split`. `icons.spec.ts` fails an id with no source, and a name absent from 0.544.0 is replaced by the nearest drawing of the same idea.
+
+  **Table G - Sentences for a pick that cannot draw (row 20)**
+
+  | # | Chart | When | The box says |
+  | --- | --- | --- | --- |
+  | G1 | any of the three | the answer cannot fill the chart's roles | that chart's sentence in Table M |
+  | G2 | Side by side | fewer than two columns checked under `Bars` | `Nothing here to draw: Side by side needs two columns checked under Bars.` |
+  | G3 | Side by side, Flow | one name is in more than one row | the C8 sentence |
+  | G4 | Side by side, Flow | a chosen number holds a value below zero | the C9 sentence |
+  | G5 | Side by side | every bar is 0 or null on every row | `Nothing here to draw: every bar you checked is 0 or null on every row.` A NULL bar is left off its own row only |
+  | G6 | Which days | the day checks | C2, C3 and C4, ending `to mark it day by day.` instead of `to draw it over time.` |
+  | G7 | Which days | the column is null on every day | `Nothing here to draw: "{column}" is null on every day.` |
+  | G8 | Flow | a count is null | `Nothing here to draw: "{column}" is null at the stage "{stage}", and a flow needs every count.` |
+  | G9 | Flow | nothing arrived at the first stage | `Nothing here to draw: nothing arrived at the first stage, "{stage}".` |
+  | G10 | Flow | the counts are not one flow | the module's stepped list and its own sentence, unchanged |
+
+  Row 20 also changes the idle chart box (plan 55 section 2.12, row 1) from `If the answer holds a number, it is drawn here.` to `Run a question, and its answer can be drawn here.`, because Which days draws an answer that holds no number.
+
+  **Table H - The explorer's fit table, in the mark-shapes page's style**
+
+  This table joins the one under "When nobody wrote the panel, the columns choose the shape". That table stays, as the opening rule (Table B). The page's sentence about switching changes too; section 6.1 has the words.
+
+  | # | Chart | The answer must hold | Roles |
+  | --- | --- | --- | --- |
+  | H1 | `dateSeries`, `Over time` | a date or timestamp column and a number column | `Date`, `Lines` |
+  | H2 | `rankedList`, `Ranked` | a number column and one more column | `Name`, `Rank by` |
+  | H3 | `pairedScatter`, `Paired` | two number columns | `Across`, `Up`, `Name` |
+  | H4 | `distribution`, `Spread` | a number column | `Values` |
+  | H5 | `partsOfOne`, `Side by side` | two number columns and one more column | `Name`, `Bars` |
+  | H6 | `tileStrip`, `Which days` | a date or timestamp column and a true/false column | `Date`, `Mark if` |
+  | H7 | `flow`, `Flow` | two number columns and one more column | `Stage`, `Arrived`, `Went on`, `Dropped` |
+
+  **Table M - What the chart box says when the answer cannot fill a chart's roles**
+
+  One sentence for each chart, the same whichever of its roles is empty; the empty pill shows which one (Jony's H1). Neutral tone, said once, inside the box (R4). When no chart at all can be filled, the box says B4's sentence instead, whichever tile is checked (Jony's H3).
+
+  | # | Chart | The box says |
+  | --- | --- | --- |
+  | M5 | Side by side (row 20) | `Nothing here to draw: Side by side needs two number columns for Bars, and one more column for Name.` |
+  | M6 | Which days (row 20) | `Nothing here to draw: Which days needs a date or timestamp column for Date, and a true/false column to mark the days.` |
+  | M7 | Flow (row 20) | `Nothing here to draw: Flow needs two number columns, one for Arrived and one for Went on, and one more column for Stage.` |
+
+  **Table K - What plan 52 row 2 needs to carry**
+
+  | # | Change | Why it belongs to plan 52 row 2 |
+  | --- | --- | --- |
+  | K2 | Each `partsOfOne` part carries its colour from the caller, as `dateSeries` series and the row's new `rankedList` segments already do. A route reads that colour from `series-tokens.ts` by name; the explorer gives the k-th checked bar the colour of the k-th checked line | A lookup by name inside the module cannot colour a column the reader named. The row already rewrites this rule |
+  | K3 | `tileStrip`'s `thresholds` are required only when a tile carries a reading | A true/false column carries no reading, and an invented threshold is a number nobody ruled. The row already edits this module |
+  | K4 | `TileStrip.svelte` takes its three state words from the caller, for its label and for the readout the row adds. A route passes `fired`, `quiet`, `not recorded`; the explorer passes `true`, `false`, `null` | The explorer prints the engine's words. The row already writes this readout |
+
+- **What a reader sees change:** The reader can draw answers as bars side by side, true-or-false days, or a flow, using the same role row and pill behaviour as row 19.
+- **Files touched:**
+  - `frontend/src/lib/console/explorer/ShapePanel.svelte`
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/src/lib/components/ChoiceTiles.svelte`
+  - `frontend/src/lib/console/explorer/shape.ts`
+  - `frontend/src/lib/charts/d3/partsOfOne.ts`, `frontend/src/lib/charts/d3/PartsOfOne.svelte` (only under option 2 below; otherwise plan 52 row 2 changes them)
+  - `frontend/src/lib/charts/d3/tileStrip.ts`, `frontend/src/lib/charts/d3/TileStrip.svelte` (only under option 2 below; otherwise plan 52 row 2 changes them)
+  - `frontend/src/lib/charts/d3/flow.ts`, `frontend/src/lib/charts/d3/Flow.svelte` (only under option 2 below; otherwise plan 52 row 2 changes them)
+  - `frontend/src/lib/icons/PROVENANCE.md`, `frontend/src/lib/icons/manifest.json`, `frontend/src/lib/icons/generated.ts`
+  - `frontend/tests/console-data-explorer-shape.spec.ts`, `frontend/tests/console-data-explorer-still.spec.ts`, `frontend/tests/panel-sufficiency.spec.ts`, `frontend/tests/icons.spec.ts`, `frontend/tests/chart-vocabulary.spec.ts`
+  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`
+  - plan 55 sections 2.12 (the idle sentence) and 2.15 (the icons)
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected frontend checks named above; `python backend/utilities/doc_load.py docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` before and after; CLAUDE.md section 12 browser check for `/console/data-explorer/` at 390, 768 and 1440 px, light and dark, with zero new console errors and zero new 404s. CI runs the full suite.
+- **Checks:** `console-data-explorer-shape.spec.ts` asserts Susan's Tables F, G and M5 to M7 word for word. `Which days` maps true, false and null to its three states, treats a lost day inside the span as not recorded, and never draws null as false. `Side by side` always draws `data-parts-overlapping="yes"` and prints no total. An answer whose counts are not one flow returns the module's own list and sentence. One derivation asserts each drawing's numbers equal the shared module output for the same chosen columns. `chart-vocabulary.spec.ts` stays green unchanged; no chart type and no module is added. `panel-sufficiency.spec.ts` asserts gates 1, 3, 4, 5 and 9 pass on each new chart, and gate 6 passes on `Which days`, at 390, 768 and 1440 px in both themes. The explorer's panel pictures gain the three charts. `icons.spec.ts` asserts all three icon ids resolve to unmodified Lucide sources recorded in `PROVENANCE.md`. Jony's L3 holds: adding each type changes no layout box from row 19. Jony's Flow checks add four literal expectations. `I1 with Flow`: I1 placement, with Flow chosen, has pill tops at 4, 2, 2 and 1 different values at 390 x 844, 768 x 1024, 1024 x 768 and 1440 x 900; the row's height is 196, 100, 76 and 40 px from the page's `--workbench-control`; with Spread chosen, the row's box equals Flow's within 0.5 px at each window; at 1399 x 900 the row has 2 lines, and at 1400 x 900 it has 1. `I7 with Flow`: I7 at 390 x 844 touch, with the region's top at the window's top, opens Flow's `Dropped` list wholly inside the window and leaves `scrollY` unchanged. `I9 with Flow`: I9, `Arrived` holding `summary_prefill_tokens_per_s` is whole at 390, 768, 1024, 1400 and 1440 px; at 1400 x 900, `Lines` with four checked and `summary_prefill_tokens_per_s` first, the face ends `, 3 more`, whole, and only the name ends in an ellipsis. `I10 with Flow`: I10, Flow tabs through the selected tab, checked tile, `Stage`, `Arrived`, `Went on`, `Dropped` and readout; Spread tabs through selected tab, checked tile, `Values` and readout; an empty slot is never a Tab stop.
+- **Waits for the owner:** Situation: the three charts need plan 52 row 2's shared changes: the readout each type carries for sufficiency gate 9, removing `title=` from `PartsOfOne` and `TileStrip` for gate 4, and Susan's K1 to K4. Problem: plan 52 has not started, every row is PENDING on 2026-10-07, and its row 2 depends on its row 1. Impact: row 20 stays blocked if it must wait for a row of about 40 files nobody is running, so the new chart work cannot ship. Options:
+
+  | # | Option | Benefit | Cost, and what it gives up |
+  | --- | --- | --- | --- |
+  | 1 | Wait for plan 52 rows 1 and 2 | No shared chart slice moves here | A2 waits for an unstarted dependency chain |
+  | 2 | **Recommended**: row 20 carries only the slice of plan 52 row 2 its three charts need, as optional props so no other route moves a pixel, and plan 52 row 2 keeps the rest | A2 ships without waiting, and nothing is built twice | Row 20 touches a small slice of shared chart code |
+  | 3 | Ship with gates 4 and 9 failing under a design rationale | Fastest merge | Susan refused it, so the page is known not good enough |
+
+  Recommendation: 2, because it ships the owner's A2 ruling without waiting for a broad row, keeps plan 52 row 2's own decision 3 rule, and duplicates nothing.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The three new choices reuse existing d3 modules and components; no new type or charting library is added | Susan, 2026-10-07 |
+  | 2 | Side by side draws bars from zero and never prints a total | Susan, 2026-10-07 |
+  | 3 | Which days prints the engine words `true`, `false` and `null`, and no threshold is invented | Susan, 2026-10-07 |
+  | 4 | Flow chooses diagram or list from the shared module and the measured width | Susan, 2026-10-07 |
+  | 5 | The row waits for the owner on whether to carry the small plan 52 slice | Executing owner, 2026-10-07 |
+  | 6 | No layout edit: Flow only raises the role table's most-role count to 4, and row 19's rule supplies the lines and height | Jony, 2026-10-07 |
+  | 7 | From 1024 to 1399 px, every chart's role row gains a second line: 36 px with a mouse, so 1024 x 768 scrolls 36 px more | Jony, 2026-10-07 |
+  | 8 | Below 640 px, every chart's role row gains a fourth line: 48 px with touch, so the drawing at 390 x 844 falls from about 442 to 394 px | Jony, 2026-10-07 |
+  | 9 | From 1400 px up, height stays the same, but each pill is about 120 px narrower; a name past about 32 characters ends in an ellipsis on the closed pill | Jony, 2026-10-07 |
+  | 10 | Refused: three slots at most because the drawing at 1440 x 900 falls under its floor; `Dropped` outside a slot because it makes a second arrangement for one type; lines by chosen type because a type change moves the drawing and fails I3; a sideways-scrolling role row because it hides a control; Flow waiting because the reader loses where the items left | Jony, 2026-10-07 |
+  | 11 | Flow's role order stays `Stage`, `Arrived`, `Went on`, `Dropped`, so from 1024 to 1399 px the pill alone on the second line is `Dropped`, the one role Flow draws without, and the row keeps the diagram's order | Susan, 2026-10-07 |
+
+- **Not in this row:** Plan 52 row 2's unrelated shared chart work, `paired`, `overlapTimeline`, saved chart choices, a new chart type, and any layout code or layout knob edit.
+
+---
+
+### Row #21 - The site build checks that each published file carries its contract's columns
+
+- **Scope:** A structural commit first renames `persist._columns` to `persist.file_columns`, then the row adds the build check `python -m idhazh published-columns --site-tree <dir>`. The check runs one step after `site-weight` in `.github/workflows/ci.yml`, `.github/workflows/digest.yml` and `.github/workflows/backfill.yml`. It reads the staged site tree only. For each ledger in `ledger.published`, it reads every parquet file the build staged, including compact files and writer files, by footer only. It compares the file's stamp and Arrow columns with `file_columns(door_contract(ledger))` through the same Arrow mapping the packer uses. Guardrail 12 is bounded: the check reads only the site tree, whose ledger copy is capped at the widest span by section 2.8, so its cost grows with that window and not with repository history. The check must pass on the real published data before merge. If real data fails, the row stops for the owner instead of weakening the check.
+- **What a reader sees change:** Nothing on the page yet. A bad published file now blocks the build before the rail can describe it wrongly.
+- **Files touched:**
+  - `backend/idhazh/ledger/persist.py`
+  - `backend/idhazh/ledger/published_columns.py` (new)
+  - `backend/idhazh/ledger/parquet.py`
+  - `backend/idhazh/cli.py`
+  - `.github/workflows/ci.yml`, `.github/workflows/digest.yml`, `.github/workflows/backfill.yml`
+  - `backend/tests/ledger/test_published_columns.py` (new)
+  - `docs/how-to/run-the-gates.md`
+  - `docs/reference/site-weight.md`
+- **Acceptance gates:** `ruff check .`; `mypy backend`; `pytest -n 0 backend/tests/ledger/test_published_columns.py`; the three workflow snippets are checked for the `published-columns` step after `site-weight`; the command is run against a real `build` tree before merge; CI runs the full suite.
+- **Checks:** `backend/tests/ledger/test_published_columns.py` packs real files in `tmp_path` through `persist` from a fixture row and adds files that `parquet.render` writes with an older stamp or with one column removed or retyped. Six cases are literal: the current shape passes; an older shape lacking a newer column passes and prints that history; F1 fails when a current-stamped file's column names differ from the contract; F2 fails when a contract column has a different Arrow type; F3 fails when a file is stamped newer than the contract; and F4 fails when a published ledger has no row contract in `idhazh/ledger/keys.py`. On success the command prints one line per ledger with the count of checked files, the count at the current shape, and older-shape missing and extra columns. On failure it prints the ledger, site-relative path, file stamp, contract stamp, column, both types and the fix.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | `persist._columns` becomes public as `persist.file_columns` in a structural commit before behaviour moves | Fowler, 2026-10-07 |
+  | 2 | The build check runs beside `site-weight`, not in the packer, because it must see files already staged for the site | Fowler, 2026-10-07 |
+  | 3 | History passes: an older stamped file missing a newer column is printed, not failed | Fowler, 2026-10-07 |
+  | 4 | A failure on real published data stops the row for the owner rather than weakening the check | Executing owner, 2026-10-07 |
+  | 5 | The check reads the capped site tree, so the read is bounded by the widest span and not by repository history | Fowler, 2026-10-07 |
+
+- **Not in this row:** `CONTRACT_COLUMNS`, changing the query view, deleting `askColumns()`, starting the engine later, plan 62 stamping, and the plan 59 PR #1352 merge-line holdout call. Plan 59 edits `backend/idhazh/cli.py` in another function, so this row does not wait for #1352.
+
+---
+
+### Row #22 - The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has
+
+- **Scope:** After row 21, this row adds `frontend/src/lib/data/contract-columns.ts`, a hand-written copy of every published ledger's file columns and engine type names. `ask-reader.ts` uses the copy to put a typed zero-row contract part first in each `viewStatement`, joined to the file reads with `UNION ALL BY NAME`. A contract column that no file in the span has therefore resolves as NULL instead of failing. Once row 23 lists the copy, the rail lists exactly the names a question can use. The copy stores engine type names from one Python binding-test mapper; `classifyType()` remains the one place that maps engine type names to type colours. There is no TypeScript type mapper and no second classifier. Whether published files carry the contract's columns stays row 21's build check, not a frontend test, under the owner's 2026-10-05 testing ruling.
+- **What a reader sees change:** A question can name a new contract column in an old span. If no file in that span has the column, the answer returns NULLs instead of a missing-column error.
+- **Files touched:**
+  - `frontend/src/lib/data/contract-columns.ts` (new)
+  - `frontend/src/lib/data/ask-reader.ts`
+  - `backend/tests/contracts/test_frontend_contract_columns.py` (new)
+  - `frontend/tests/contract-columns.spec.ts` (new)
+  - `frontend/scripts/test-groups.ts`
+  - `frontend/tests/ledger-lifecycle.spec.ts`
+  - `docs/architecture/contracts/schemas.md`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - plan 55 section 2.4 rules 1 and 4, and trigger 3, after the owner answers
+- **Acceptance gates:** `ruff check .`; `pytest -n 0 backend/tests/contracts/test_frontend_contract_columns.py`; `npm --prefix frontend run test:changed -- --list`, then `frontend/tests/contract-columns.spec.ts` and the selected ledger lifecycle cases; docs load for the touched architecture pages; CI runs the full suite.
+- **Checks:** `test_frontend_contract_columns.py` reads the TypeScript copy as text and asserts three literals: keys equal `ledger.published`; each list equals `[(c.name, engine_type(c.type)) for c in persist.file_columns(door_contract(ledger))]` in order; and every name matches `^[a-z][a-z0-9_]*$` while every type is a mapper output. The mapper accepts only string -> `VARCHAR`, int64 -> `BIGINT`, float64 -> `DOUBLE` and bool -> `BOOLEAN` until a published fixture proves another type. `contract-columns.spec.ts` uses the real engine through `nodeEngine` to `DESCRIBE` producer-packed fixtures under `tests/fixtures/ledger-door/state/compact/host-fingerprint/` and `tests/fixtures/ledger-door/state/compact/item-health/`; each copied type equals the engine type for fixture columns, and each copied type appears in fixture data. Door integration asserts `SELECT count("fingerprint") AS f FROM "host-fingerprint"` answers `ok` with `f = 0`, and the answer types `fingerprint` as `VARCHAR`; before the contract part this question is refused. A second case selects two ledgers, one with only empty days, and the question answers. Unit checks assert `viewStatement` puts the contract part first, quotes names, uses the copy's types, and includes `WHERE false`.
+- **Waits for the owner:** Situation: row 22 needs the view to name every contract column, so `viewStatement` builds identifiers from `CONTRACT_COLUMNS`. Problem: plan 55 trigger 3 currently says the door builds identifiers only from `LEDGER_NAMES`. Impact: building this fires ESCALATE trigger 3 and this row cannot start until the owner clears it; the page keeps downloading 9.2 MB on every open if it stays blocked. Options:
+
+  | # | Option | Benefit | Cost, and what it gives up |
+  | --- | --- | --- | --- |
+  | 1 | **Recommended**: clear trigger 3 for `CONTRACT_COLUMNS`, and change rule 1 to match | Every rail name resolves in every span, with no fetch. Condition a is met | A second closed list of identifiers. Its names are committed and checked by a test, never typed or fetched |
+  | 2 | Refuse, and ship the answer explaining the error | No trigger change | The rail does not warn. The reader learns after paying for a Run. The code depends on the engine's error wording. Condition a is met only loosely |
+  | 3 | Refuse, and make the row 21 check fail when the newest file lacks a contract column | The rail never lists a name that no published file has | Every contract change to a rarely written ledger blocks deploy until that ledger writes again. Older spans still fail, as under plan 62 L10 |
+
+  Recommendation: 1, because it is the only option that meets condition a for every span without fetching anything or blocking deploys.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | A hand-written `contract-columns.ts` copy, bound by tests, replaces engine DESCRIBE for the rail source | Fowler, 2026-10-07 |
+  | 2 | The view adds a typed zero-row contract part first so missing-in-span contract columns read NULL | Fowler, 2026-10-07 |
+  | 3 | Contract types map to type colours only through `classifyType()`; the copy stores engine names, and no second classifier exists | Plan 62 owner, 2026-10-07 |
+  | 4 | Published-file coverage is a producer or site-build check, not a test over production data | Owner, 2026-10-05 |
+  | 5 | Trigger 3 must be cleared by the owner before this row starts | Fowler, 2026-10-07 |
+
+- **Not in this row:** Adding `ledgerColumns()`, deleting `askColumns()`, changing the rail to read the copy, plan 62 stamping, projecting away retired columns, `ITEM_HEALTH_COLUMNS` consolidation, and changing application code before the owner clears trigger 3.
+
+---
+
+### Row #23 - The column rail reads the copy, and the query engine starts on the first Run
+
+- **Scope:** After rows 19 and 22, row 23 changes the column rail to read the committed copy through `ledgerColumns(ledger)` and stops loading the query engine on page open. `ledger.ts` adds `ledgerColumns(ledger)`, deletes `askColumns()` and its `readColumns` import. `frontend/src/lib/data/ledger-columns.ts` is deleted. `+page.svelte` splits `updateCostAndColumns` into an async cost update and a rail derived immediately from `ledgerColumns()` for `selectedPublished`. The engine starts on the first Run that needs it, never on focus, never on a keystroke and never while the page is idle. A refused statement, a span above the fetch ceiling, or a span with no file can still answer without starting it. The row stamps plan 62's L10 line with `Plan 55 rows 21 to 23 replaced its source: the rail reads contract-columns.ts, and askColumns() and ledger-columns.ts are deleted.` and B10 with `The rail half is answered by plan 55 rows 22 and 23: the copy lists the columns of a ledger that has no file.` The plan 62 owner is told this row's PR number. The words the action line shows while the engine loads are not ruled yet: Reader and Jony rule them before this row starts.
+- **What a reader sees change:** Opening the page shows the rail without downloading the query engine or any parquet file. The first Run that needs the engine pays that download once.
+- **Files touched:**
+  - `frontend/src/lib/data/ledger.ts`
+  - `frontend/src/lib/data/ledger-columns.ts` (delete)
+  - `frontend/src/lib/data/ask-reader.ts` (drop `export` from each function only `ledger-columns.ts` imported, checked with `git grep`)
+  - `frontend/src/routes/console/data-explorer/+page.svelte`
+  - `frontend/tests/ledger-lifecycle.spec.ts`
+  - `TODO/20261005-62-ledger-lifecycle-plan.md`
+  - `TODO/20260823-known-defects-plan.md`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md`
+  - plan 55 section 2.4 paragraph and rule 8, section 2.5 rule 5, section 2.16 rule 5, and the row 23 Reckoner line
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected E2E browser checks and ledger lifecycle checks; docs load for touched docs; CLAUDE.md section 12 browser check for `/console/data-explorer/` in a fresh browser at 390, 768 and 1440 px, light and dark, with zero new console errors and zero new 404s. CI runs the full suite.
+- **Checks:** E2E opens `/console/data-explorer/` with two published ledgers selected. The rail lists the copied columns in type colours. Before Run, no request goes out for the engine files and no request goes out for any `.parquet` file. After Run, the engine files are requested once. A third case checks that a published ledger with no file on the site still lists its columns. The deleted block in `ledger-lifecycle.spec.ts` is gone: `BUILT_COLUMNS`, `ROOMY_CEILING`, `columnNames`, `warnings`, the `readColumns` import, and the five-case block named `the column rail lists a ledger's columns from the file its empty view reads, whatever window is selected`. `ask-reader.ts` exports only what callers outside `ledger-columns.ts` still use after `git grep`. Section 12 smoke measures page-open transfer in a fresh browser and records it in the PR: the live site measured 9.2 MB on 2026-10-06, of which 8.9 MB was the query engine; after this row the estimate is at most 0.3 MB, labelled an estimate.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The engine starts on the first Run that needs it, not on focus, a keystroke or idle | Fowler, 2026-10-07 |
+  | 2 | `askColumns()` and `ledger-columns.ts` are deleted once the rail reads the copy | Plan 62 owner, 2026-10-07 |
+  | 3 | Plan 62 L10 and B10 are stamped through this row's PR, and plan 62's owner gets the PR number | Fowler, 2026-10-07 |
+  | 4 | The action-line words while the engine loads wait for Reader and Jony before the row starts | Fowler, 2026-10-07 |
+  | 5 | The transfer target is a measured page-open smoke, with 9.2 MB before and at most 0.3 MB after as an estimate | Fowler, 2026-10-07 |
+
+- **Not in this row:** Trigger 3 clearance, adding `CONTRACT_COLUMNS`, build-time published-column checks, starting the engine early, and changing row 20 chart layout.
+
+---
 
 ## Dependent plans
 
@@ -1079,7 +1778,9 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 - [`20260930-58-five-ledgers-leave-csv-plan.md`](20260930-58-five-ledgers-leave-csv-plan.md). **Open, and it edits files these rows edit.** Its row titled **Feed health moves to the door, and the Voices page reads it packed** edits `frontend/src/lib/data/slice-shapes.ts` (it adds `feed-health` to `LEDGER_NAMES` "unless plan 55 has already widened it"), `backend/tests/contracts/test_frontend_index_shapes.py`, `backend/utilities/build_canary_day.py`, `backend/idhazh/telemetry/publish/console_band.py`, `backend/tests/test_console_payloads_producer.py`, `frontend/tests/console-window-claims.spec.ts`, `config/ledgers.json`, `docs/reference/data-growth.md`, `docs/architecture/publishing/console-payloads.md` and `docs/reference/repository-layout.md`, and its other pending rows touch the same ledger layer. **Before dispatching any row here, the owner diffs its `Files touched` against every plan 58 row in flight and holds a row that shares a file** - rows 1, 2, 3, 4, 6 and 7 each name at least one file a plan 58 row edits - as execute-a-plan.md requires within one plan. Each ledger plan 58 moves to the door becomes publishable here by the rule in row 3 decision 11.
 - [`20260930-57-upkeep-tasks-switch-on-plan.md`](20260930-57-upkeep-tasks-switch-on-plan.md). Its first row waits on how the gardener's loader treats a published ledger's month window; row 3 here adds ledgers to `ledger.published`, which that loader reads, and widens `counterfactual-scores`' month window to two months (row 3 decision 12). Its first row is also what switches `summary-quality-evals`' packing from report-only to live; until then that ledger gains a day not packed yet every day, which row 7's walk lists up to its cap (section 2.7, listing rule 1).
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md). Delivered (#613, #614, #645, #649). Its ruling keeps the prerendered routes - six when it was written, eight today - and its section 6 is the executable price of reversing that. **This plan neither reverses it nor depends on it**: the new route simply never prerenders, the way the two dated routes already do. **It also inherits one contradiction and does not repair it** - telemetry-intent N4 says the existing prerendered routes come off, and plan 26 ruled they stay. That disagreement is older than this plan and belongs to whichever of the two moves next.
-- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **Row 2 here changes nothing it uses**: `engine.ts` and `filesFor()` are untouched, and `ask()` is a second entry point beside the `slice()` its panels call. The two can run beside each other. A panel it adds that names a ledger must still find that ledger in `ledger.published`, which `test_every_ledger_a_panel_asks_the_door_for_is_published` keeps holding. **Row 5 here shares files with its row titled "The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout"** (PENDING on 2026-10-02): both edit `Distribution.svelte` and `RankedList.svelte`, and both give the spread chart a readout strip. Whichever lands first does that work and the other reuses it; the owner never has both in flight at once.
+- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **Row 2 here changes nothing it uses**: `engine.ts` and `filesFor()` are untouched, and `ask()` is a second entry point beside the `slice()` its panels call. The two can run beside each other. A panel it adds that names a ledger must still find that ledger in `ledger.published`, which `test_every_ledger_a_panel_asks_the_door_for_is_published` keeps holding. **Row 5 here shares files with its row titled "The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout"** (PENDING on 2026-10-02): both edit `Distribution.svelte` and `RankedList.svelte`, and both give the spread chart a readout strip. Whichever lands first does that work and the other reuses it; the owner never has both in flight at once. **Row 20 now needs plan 52 row 2 or the owner-approved slice of it; #1380 added `ShapePanel.svelte` to plan 52 row 2's Files touched (Susan, 2026-10-07).**
+- [`20261005-62-ledger-lifecycle-plan.md`](20261005-62-ledger-lifecycle-plan.md). Plan 62 row L10 asked plan 55 to replace the rail's source. Rows 21 to 23 do that: row 21 checks published columns, row 22 makes every copied contract column resolve, and row 23 deletes `askColumns()` and `ledger-columns.ts`. Row 23 stamps plan 62's L10 and B10 lines and tells plan 62's owner its PR number.
+- [20261003-59-csv-ledgers-left-plan.md](20261003-59-csv-ledgers-left-plan.md). Open PR #1352 edits `backend/idhazh/cli.py` at the merge-line holdout stage call, `commit_sha=args.commit`. Row 21 adds a new CLI stage beside `site-weight`; the edits do not overlap, so row 21 does not wait for #1352.
 
 ## See also
 

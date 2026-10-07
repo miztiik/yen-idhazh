@@ -339,13 +339,28 @@
 		text-decoration: underline;
 	}
 
+	/* Workbench chrome runs to the window's edges: the section steps out of the
+	   frame's gutter, the header keeps it, and the strip pads its own sides.
+	   From the wide breakpoint the section is the column the route's workbench
+	   fills, under a frame held to the window's height (`app.css`). */
 	:global([data-console-chrome='workbench']) {
-		padding-top: 0;
+		padding-block: 0;
+		margin-inline: calc(-1 * var(--gutter));
+	}
+
+	@media (min-width: 1024px) {
+		:global([data-console-chrome='workbench']) {
+			display: flex;
+			flex-direction: column;
+			flex: 1 1 0;
+			min-block-size: 0;
+		}
 	}
 
 	:global([data-console-chrome='workbench']) .console-strip {
 		flex-wrap: nowrap;
 		min-block-size: calc(var(--workbench-control) + 1px);
+		padding-inline: var(--space-3);
 		border-block-end: 1px solid var(--item-edge);
 		background: var(--color-bg);
 	}

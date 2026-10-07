@@ -76,7 +76,7 @@ def require_layout(which: LedgerName) -> LedgerEntry:
     if which not in CSV_LEDGERS:
         raise RefusedError(f"{which.value}: no supported CSV layout in CSV_LEDGERS")
     entry = CSV_LEDGERS[which].old_entry
-    if len(entry.prefix) != 1 or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
+    if not entry.prefix or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
         raise RefusedError(
             f"{which.value}: unsupported CSV layout {entry.grain.value} "
             f"under {'/'.join(entry.prefix)}"

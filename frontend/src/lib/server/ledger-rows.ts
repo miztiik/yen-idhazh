@@ -1,11 +1,13 @@
 /** Which rows of the article, score and feed records does a console route read?
  *
- * All three come from their packed files under `state/compact/`, through the
+ * The rows of exactly the window the route hands over, which ends on the site's
+ * newest published day, and no day before it. All three come from their packed
+ * files under `state/compact/`, through the
  * query door's build-time entry, `sliceFromDisk()` in `ledger-disk.ts`, so a
  * build and a browser panel asking for one span get one answer from one set of
  * files. The raw files a run appends are never read here: a day reaches these
- * routes once it is packed, so they stop at the newest packed day rather than
- * at today, and each table says which day that is.
+ * routes once it is packed, so the rows stop at the newest packed day even where
+ * the window runs on past it, and each table says which day that is.
  *
  * **The rows come back as text cells**, the way the day files used to hand them
  * over: a reading nobody took is '', a flag is 'True' or 'False' as Python
@@ -25,12 +27,12 @@
  */
 
 // Relative, not `$lib`, for the reason in the module docstring.
-import { daysBetween, dayKey, toDay } from '../charts/viewport';
+import type { TimeWindow } from '../charts/viewport';
 import { DRAWN_BY, NOT_A_MEASUREMENT } from '../console/eval-instruments';
 import type { RecordRead } from '../console/recording';
 import type { DateStamp, LedgerName, Row, SliceResult } from '../data/slice-shapes';
 import { reachFromDisk, sliceFromDisk } from './ledger-disk';
-import { LEDGER_WINDOW_DAYS, STATE_ROOT, type CsvTable } from './payload';
+import { STATE_ROOT, type CsvTable } from './payload';
 
 /** Every column `ItemHealthRow` declares, in the contract's own order.
  *
@@ -82,7 +84,7 @@ export const SCORE_COLUMNS: readonly string[] = [
 	...Object.keys(DRAWN_BY)
 ];
 
-/** A packed record's newest days, as the text cells the console's panels read. */
+/** A packed record's rows in one window, as the text cells the console's panels read. */
 export interface LedgerTable extends CsvTable {
 	/** How the read went, so a route can say which kind of empty an empty panel is. */
 	read: RecordRead;
@@ -98,15 +100,6 @@ export function datedFirst(columns: readonly string[]): string[] {
 	return ['date', 'run_id', ...columns.filter((name) => name !== 'date' && name !== 'run_id')];
 }
 
-/** `day` moved by `days` whole UTC days. */
-function shiftDay(day: DateStamp, days: number): DateStamp {
-	return dayKey(new Date(toDay(day).getTime() + days * 86_400_000));
-}
-
-function later(one: DateStamp, other: DateStamp): DateStamp {
-	return one > other ? one : other;
-}
-
 /** One cell as the day files spelled it: nothing is '', a flag is 'True' or
  * 'False' as Python writes one, and a number is its decimal. */
 function cellText(value: Row[string] | undefined): string {
@@ -119,30 +112,27 @@ function textCells(row: Row): Record<string, string> {
 	return Object.fromEntries(Object.entries(row).map(([name, value]) => [name, cellText(value)]));
 }
 
-/** The newest `days` days one packed record holds, as text cells, and how the read went.
+/** The rows one packed record holds in `window`, as text cells, and how the read went.
  *
- * Counted back from the newest day that holds a row, never from today, so a
- * record that stopped a week ago still answers with its last `days` days - the
- * same anchor every console window takes. That costs a second read only when the
- * newest packed days hold no row: the span is counted back from the newest
- * packed day first, and when the days at its end were packed empty, the days
- * that make up for them are read at its start. `-1` reads every packed day, and
- * a caller says beside the call why (`docs/concepts/growing-reads.md`).
+ * Exactly the window, and no day before it. Every console window ends on the
+ * site's newest published day, so a record whose rows stop before the window
+ * answers with no rows rather than with its last ones, which would move its
+ * window into the past. Where its rows stop is read from the record's indexes
+ * instead, as `lastRows`, and where the record begins, as `first`, so the route
+ * can say both without reading a day it does not draw. A window that starts
+ * before the record began is cut there by the door, and a day after the newest
+ * packed day is not packed yet, so the door clamps it away.
  *
- * The span never starts before the record's first packed day, because a day
- * before it is a day no index names, and the door answers one as a hole.
- *
- * The read names the days in it the record's index records lost, and the files
- * its periods set aside unread, from both reads when there are two; keyed by
- * period, a month the two reads both meet counts its files once.
+ * The read names the days in the window the record's index records lost, and
+ * the files the packing of its periods set aside unread.
  *
  * `ask` makes the door call, so each reader names its own columns where the call
  * is written, which is where `chart-vocabulary.spec.ts` reads them.
  */
-export async function newestRows(
+export async function windowRows(
 	root: string,
 	ledger: LedgerName,
-	days: number,
+	window: TimeWindow,
 	columns: readonly string[],
 	ask: (from: DateStamp, to: DateStamp) => Promise<SliceResult>
 ): Promise<LedgerTable> {
@@ -152,45 +142,28 @@ export async function newestRows(
 	if (reach.state === 'missing' || reach.state === 'quiet') return empty({ state: 'not-packed' });
 	if (reach.state === 'unreachable') return empty({ state: 'unreadable', at: null, fault: null });
 
-	const every = days < 1;
-	const from = every ? reach.first : later(reach.first, shiftDay(reach.through, 1 - days));
-	const found = await ask(from, reach.through);
+	const found = await ask(window.start, window.end);
 	if (found.state === 'missing') return empty({ state: 'not-packed' });
 	if (found.state === 'unreachable') return empty({ state: 'unreadable', at: found.at, fault: found.fault });
-	const through = found.through ?? reach.through;
-	if (found.state === 'quiet') {
-		return empty({ state: 'read', through, lostDays: found.lostDays, setAside: found.setAside });
-	}
-
-	let rows = found.rows;
-	let { lostDays, setAside } = found;
-	const newest = rows.reduce((top, row) => later(top, cellText(row.date)), '');
-	const lag = daysBetween(newest, reach.through) - 1;
-	if (!every && lag > 0 && from > reach.first) {
-		const before = await ask(later(reach.first, shiftDay(from, -lag)), shiftDay(from, -1));
-		if (before.state === 'unreachable') {
-			return empty({ state: 'unreadable', at: before.at, fault: before.fault });
-		}
-		if (before.state === 'ok' || before.state === 'quiet') {
-			lostDays = [...before.lostDays, ...lostDays];
-			setAside = { ...before.setAside, ...setAside };
-		}
-		if (before.state === 'ok') rows = [...before.rows, ...rows];
-	}
-	return { rows: rows.map(textCells), columns: [...columns], read: { state: 'read', through, lostDays, setAside } };
+	const read: RecordRead = {
+		state: 'read',
+		through: found.through ?? reach.through,
+		first: reach.first,
+		lastRows: reach.lastRows,
+		lostDays: found.lostDays,
+		setAside: found.setAside
+	};
+	return { rows: found.state === 'ok' ? found.rows.map(textCells) : [], columns: [...columns], read };
 }
 
-/** One row per scored measurement, over the newest `days` days the score record holds.
+/** One row per scored measurement in `window`, from the score record.
  *
  * Read from the `summary-quality-evals` ledger, packed, and never recomputed.
  * There is no published mirror of this ledger: `frontend/public/scores/` was one
  * until 2026-09-16 and no route ever fetched it, so it went with its producer.
  */
-export async function evalRows(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): Promise<LedgerTable> {
-	return newestRows(root, 'summary-quality-evals', days, SCORE_COLUMNS, (start, end) =>
+export async function evalRows(window: TimeWindow, root: string = STATE_ROOT): Promise<LedgerTable> {
+	return windowRows(root, 'summary-quality-evals', window, SCORE_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'summary-quality-evals', {
 			columns: [...datedFirst(SCORE_COLUMNS)],
 			from: start,
@@ -199,18 +172,15 @@ export async function evalRows(
 	);
 }
 
-/** One row per planned item per run, over the newest `days` days the article record holds.
+/** One row per planned item per run in `window`, from the article record.
  *
  * Read from `state/item-health/`, packed. The machine a row's readings were
  * taken on is `machine_job` and `machine_shard`; the ledger's own writer cells
  * are never asked for, so a panel reading a shard cannot pick up the writer's
  * by mistake.
  */
-export async function itemHealthRows(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): Promise<LedgerTable> {
-	return newestRows(root, 'item-health', days, ITEM_HEALTH_COLUMNS, (start, end) =>
+export async function itemHealthRows(window: TimeWindow, root: string = STATE_ROOT): Promise<LedgerTable> {
+	return windowRows(root, 'item-health', window, ITEM_HEALTH_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'item-health', {
 			columns: [...datedFirst(ITEM_HEALTH_COLUMNS)],
 			from: start,
@@ -230,16 +200,13 @@ export const FEED_HEALTH_COLUMNS = [
 	'run_id', 'date', 'feed_id', 'checked_at', 'outcome', 'status', 'items', 'detail'
 ] as const;
 
-/** One row per feed per run, over the newest `days` days the feed record holds.
+/** One row per feed per run in `window`, from the feed record.
  *
  * Read from `state/compact/feed-health/`, packed, so it stops at the newest
  * packed day as the article and score records do.
  */
-export async function feedHealthRows(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): Promise<LedgerTable> {
-	return newestRows(root, 'feed-health', days, FEED_HEALTH_COLUMNS, (start, end) =>
+export async function feedHealthRows(window: TimeWindow, root: string = STATE_ROOT): Promise<LedgerTable> {
+	return windowRows(root, 'feed-health', window, FEED_HEALTH_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'feed-health', {
 			columns: [...datedFirst(FEED_HEALTH_COLUMNS)],
 			from: start,

@@ -1,6 +1,6 @@
 # Plan 60 - The gardener chooses its own work and recovers on its own
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 
 **Level**: 5 (CLAUDE.md section 6). Rows 8, 10, 19 and 20 change persisted contracts (section 2.4). The owner approved each shape on 2026-10-04.
 
@@ -16,6 +16,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Hard scope - in | - Each compaction step chooses its own periods (section 2.1).<br>- An empty day, month or year is an index entry with no file, and nothing is filled in before a ledger's first day (section 2.1, Table D row D1).<br>- Every fault in Table C is designed out or recovered, and the record says which (sections 2.3 and 2.4).<br>- Months close 16 days after they end on every compaction ledger; a late re-run file re-opens its month; `seen` and `counterfactual-scores` keep 3 months.<br>- Each old month is dropped once, and the monthly index is the record of what is left to drop.<br>- workflow-runs and workflow-artifacts read only what is past their line, starting from a mark on their own record.<br>- One run id per workflow run, and job names that list each shard's tasks.<br>- Every gardener log line is one JSON event, each shard writes a summary, and a dry run never says that anything is gone.<br>- `compact-gardener` packs live, and `monthly_window_dry_run` is renamed `month_deletes_dry_run`.<br>- A shard whose paths main changed after its commit lands nothing, and a push that runs out of tries says whether main kept moving (row 27).<br>- The gardener ledger is published, so the console can read it (row 28) |
 | Hard scope - out | Table A below |
 | ESCALATE triggers | 1. A persisted shape that section 2.4 does not declare.<br>2. A row that would delete a row of `published`, `seen` or `summary-quality-evals`, other than settling a re-opened month by its record key (Table C, C3). Their declarations refuse deletion in `prune_refusal`.<br>3. Fetched text in a log line, a record field, a file path or a URL (Guardrail #11).<br>4. A shard that would run past the 6 h job, or a row whose cost is over 3x its estimate.<br>5. The `dry_run` of workflow-runs or workflow-artifacts moving to `false` (Table A, A1).<br>6. Fowler's answer to the design brief of 2026-10-04 changes a decision in this plan. For a row not yet dispatched, the owner edits the row first. For a row already merged, STOP-AND-SURFACE ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)).<br>7. Two personas still disagree after one debate |
+| Waiting on the owner | Two decisions sent 2026-10-07, both pointing to row 20's Found during execution.<br>A. Whether a 403 that carries `x-ratelimit-remaining: 0` or `retry-after` reads `api-unavailable` instead of `raised`, changing the approved 403 mapping. Recommended: yes, one small new row (Fowler). Rejected so far: keep the approved mapping. No row until the owner rules.<br>B. What word records the seven refusals that a person, not a code change, must settle; today they end `raised`/`failed` with no word of their own in Table D, D3 (ESCALATE trigger 1). Since row 21 (#1387), a refused period's sentence, such as a year file's size, is no longer logged: its `period-refused` line keeps the step, the period, the fault words, the error type and the code place, and B's word would say why (row 21 report). Recommended: a new word paired with `failed`, so the run still turns red and the record says why. Other options: keep `raised`; a new word paired with `deferred`, so the run stays green. No row until the owner rules |
 | Chosen strategy | Each step reads the ledger's own indexes and chooses its own periods. A fault the gardener can record is recorded on the period, and the pass moves on. Only a code defect turns a run red. The owner ruled on 2026-10-04, on Fowler's design of the same day |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 12 to 20 share the compaction step modules, so they run one at a time. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
 
@@ -27,12 +28,13 @@ Table A - what is out
 | --- | --- | --- | --- |
 | A1 | Switching workflow-runs and workflow-artifacts to live deletes | Old runs and artifacts stay, as today. GitHub keeps a run's logs and artifacts for 90 days, this repository's setting and the most a public repository allows (read 2026-10-05). So the runs task, whose window is also 90 days, would delete only runs whose logs are already gone: a live pass shortens the Actions history and frees no log. A dry run deletes nothing, so the artifacts walk reads again from the last page to its line on every wake. The dry list may pass 2,500 artifacts within weeks (an estimate, row 11's report, 2026-10-05). The end-of-list check that row 11 added logs a count that stops short | An owner decision. First size `max_deletes_per_run` from a 7-day arrival count: `gh api "repos/miztiik/yen-idhazh/actions/runs?created=>=<today-7>&per_page=1" --jq .total_count`. On 2026-10-04 that read 1,226 runs, about 175 a day, and the declared ceiling is 50 deletes a wake. A day held between 32 and 401 runs from 2026-08-22 to 2026-10-04, and a live pass that its ceiling stops inside a day reads that day again at the next wake (row 10), so a ceiling below a busy day's count takes several wakes to pass it. A count from a search by date stops at 2,500, so a span longer than about two weeks is counted a day at a time |
 | A2 | A keep line for years | The yearly index of a ledger that keeps every row gains one entry a year (row 14, decision 3) | A ledger whose declaration lets it forget whole years. `published` and `summary-quality-evals` refuse that in `prune_refusal` |
-| A3 | Keying the rules in `backend/idhazh/gardener/period_inputs.py` on a declaration's kind instead of task names | One list of task names stays written in code (Guardrail #6) | A Level 2 row after row 16 |
+| A3 | Keying the rules in `backend/idhazh/gardener/period_inputs.py` on a declaration's kind instead of task names | One list of task names stays written in code (Guardrail #6). Since #1330 the name checks left in `period_inputs.py` are `trials` and `visual-prune` in `paths_for_task` (row 16 report), and `digest-fragments` with `visual-prune` in `_day_window` | A Level 2 row after row 16 |
 | A4 | Event logging in `backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py` | Those two commands keep free-text logs (CLAUDE.md section 1b) | A Level 2 row each after row 21, reusing `event_log` |
 | A5 | Listing switched-off declarations in the plan job | A paused task does not appear in the run log | A request for it |
 | A6 | A console panel for the recovery notes | The notes reach the record and the shard summary (row 22), but not the console | Row 28 publishes the gardener ledger; then Jony and Susan rule on the panel |
 | A7 | Backend folds telling a lost day from a quiet day | A count over a lost day reads as zero activity, not as unknown | `LedgerFiles` in `backend/idhazh/ledger/ledger_files.py` carries the gaps to each fold: a Level 3 row |
-| A8 | Rule L looking further back than its named places (section 2.2) | A ledger whose daily mark stalled for longer than B7's look-back keeps its older day files out of a rebuilt index | Looking back to `first_ledger_year` on every rebuild. That read grows with time (Guardrail #12), so it needs the owner's exception |
+| A8 | Rule L looking further back than its named places (section 2.2) | A ledger whose daily mark stalled for longer than B7's look-back keeps its older day files out of a rebuilt index | Starting a daily rebuild with no monthly mark at January of `first_ledger_year`. Rule L names one folder a year (row 19, decision 7), so that adds one folder a year, inside decision 3's bound, and needs no exception: a Level 2 row |
+| A9 | The gardener's other tasks choosing by the download budget | `telemetry_aggregate`, `closed_day_fold` and `collection_mark` still fetch through `FileListing.fetch`, so two fetch paths stay: `fetch`, and the compaction's `fetch_within_budget` | A row after row 18 that makes those three choose by the budget, then makes `fetch` itself refuse past the budget and deletes `fetch_within_budget` (Fowler, row 18 report) |
 
 ## 1. Status Reckoner
 
@@ -51,14 +53,14 @@ Table A - what is out
 | 11 | workflow-artifacts reads from the oldest end and resumes from its mark | 10 | C | DONE | psychic-potato | #1317 | Plan 60 row 11 |
 | 12 | Which months may close | 3, 5, 7, 8, 27, 30 | D | DONE | fuzzy-dollop | #1303 | Plan 60 row 12: which months may close |
 | 13 | Which days may be packed | 12 | D | DONE | silver-enigma | #1309 | Plan 60 row 13: which days may be packed |
-| 14 | Which years may be packed | 13 | D | DONE | scaling-train | - | Plan 60 row 14 |
-| 15 | Each old month is dropped once | 14 | D | DONE | redesigned-spoon | - | Plan 60 row 15 |
-| 16 | The shared window is gone | 15 | D | PENDING | - | - | - |
-| 17 | A late file re-opens its month | 16 | D | PENDING | - | - | - |
-| 18 | An unreadable file is set aside, and extra files wait | 17 | D | PENDING | - | - | - |
-| 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | PENDING | - | - | - |
-| 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | PENDING | - | - | - |
-| 21 | Every gardener log line is one JSON event | 2, 20 | E | PENDING | - | - | - |
+| 14 | Which years may be packed | 13 | D | DONE | scaling-train | #1316 | Plan 60 row 14 |
+| 15 | Each old month is dropped once | 14 | D | DONE | redesigned-spoon | #1322 | Plan 60 row 15 |
+| 16 | The shared window is gone | 15 | D | DONE | jubilant-waffle | #1330 | Plan 60 row 16 |
+| 17 | A late file re-opens its month | 16 | D | DONE | curly-fiesta | #1331 | Plan 60 row 17 |
+| 18 | An unreadable file is set aside, and extra files wait | 17 | D | DONE | special-succotash | #1335 | Plan 60 row 18 |
+| 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | DONE | legendary-fortnight | #1339 | Plan 60 row 19 |
+| 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | DONE | shiny-system | #1373 | Plan 60 row 20 |
+| 21 | Every gardener log line is one JSON event | 2, 20 | E | DONE | reimagined-winner | #1387 | Plan 60 row 21 |
 | 22 | A person reads a shard at a glance | 21 | E | PENDING | - | - | - |
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
 | 24 | Months close 16 days after they end | 7, 17, 23 | F | PENDING | - | - | - |
@@ -69,7 +71,8 @@ Table A - what is out
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | #1289 | Plan 60 row 29: doc_load every page |
 | 30 | Every reader and rewriter of a compact index keeps an entry's state | 8 | D | DONE | psychic-guide | #1293 | Plan 60 row 30: index readers keep state |
 | 31 | Panels say which days have no record | 8 | E | DONE | congenial-waddle | #1301 | Plan 60 row 31: panels show lost days |
-| 32 | The explorer's date chart breaks its line at a lost day | 31 | E | PENDING | - | - | - |
+| 32 | The explorer's date chart breaks its line at a lost day | 31 | E | DONE | symmetrical-parakeet | #1318 | Plan 60 row 32 |
+| 33 | A log line never quotes a ledger row's values | 21 | E | DONE | fictional-telegram | - | Plan 60 row 33 |
 
 ## 2. Shared declarations
 
@@ -84,13 +87,13 @@ Table B - each step
 | # | Step | Starts at | Takes | Adds to the listing |
 | --- | --- | --- | --- | --- |
 | B1 | Drop month files | The oldest monthly entry | Entries older than the keep line, oldest first, up to the cap. Live: delete the month file when the entry has one, delete its raw month folder, then remove the entry. Report-only: keep both and report them | Each month file and its `state/raw/<ledger>/YYYY/MM` folder |
-| B2 | Drop raw days | - | Raw day folders older than the keep line, inside the months B1 names. They are deleted by listed path and never parsed | Nothing more |
+| B2 | Drop raw days | - | Raw day folders older than the keep line, inside the months B1 names or a first run looked back over (Fowler, row 15 report). They are deleted by listed path and never parsed | Nothing more |
 | B4 | Pack years, only with `monthly_keep_days` | The year after the yearly mark; with none, the year of the oldest monthly entry | Consecutive years whose age line has passed and whose December the monthly mark is strictly past, up to the cap. A ledger that began after January packs its first year from its first month. A year with no row is an entry `empty` with no file. Its months' `lost_days` carry into the year entry | That year's month files, named from the monthly index |
 | B5 | Absorb months | The month after the monthly mark; with none, the oldest month the daily index names; with an empty daily index, nothing | Consecutive months at least `daily_keep_days` past their end that the daily mark has passed, up to the cap. A month with a raw day still waiting is held for B6. Completeness counts days from the month's 1st, or from the ledger's first day when the ledger began inside that month. A missing day inside that span is recovered (Table C, C2). A month with no row is an entry `empty` with no file | Each month's daily files and its raw month folder |
-| B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A day with no row is an entry `empty` with no file | The raw folders and the packed day files of the new days and of the re-run span. Rule R and the re-take read the day files (Fowler, 2026-10-04) |
+| B6 | Pack days | The day after the daily mark | New days up to the earlier of the mark plus the cap and the newest eligible day. Also packed days inside the 30-day re-run span that hold new raw files; they count against the cap. A raw file in a closed month re-opens it (Table C, C3). A re-opened month counts once against the cap, and the step re-opens months before it takes any day (Fowler, row 17 report). A day with no row is an entry `empty` with no file | The raw folders and the packed day files of the new days and of the re-run span. Rule R and the re-take read the day files (Fowler, 2026-10-04) |
 | B7 | First run: no daily mark | The oldest raw day in the raw month folders from the newest eligible month minus `lookback` months to the newest eligible month, or in the operator range. Never before the keep line when month deletes are live. A daily index with no mark beside it, which a pass cut before its mark landed leaves, starts it at the index's oldest day when that is older; row 19 deletes this case (Fowler, 2026-10-04) | As B6. An indexed day with no raw file keeps its entry, and the mark moves past it. With no raw day, nothing; the outcome is `empty` | Those raw month folders |
 
-Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; for each step, the cap times that step's periods; and, only when an index file is absent, the paths Rule L names (section 2.2). Each count comes from config or the calendar. Rule L's yearly paths grow by one a year, as the yearly index does (row 14, decision 3). Step B3, which dropped the retired raw listings, went with #1267 (row 25).
+Every read has a fixed size (Guardrail #12). A pass names at most: the three indexes, plus the three watermarks until row 19; for each step, the cap times that step's periods; and, only when an index file is absent, the paths Rule L names (section 2.2). Each count comes from config or the calendar. Rule L names one folder a year for each index it rebuilds, so its count grows by at most one a year, and it names nothing for a ledger with no compact folder (row 19, decisions 7 and 12). Step B3, which dropped the retired raw listings, went with #1267 (row 25).
 
 ### 2.2 The marks
 
@@ -107,12 +110,12 @@ An entry can be gone while its packed file is still there, for example after an 
 - **Rule R (row 12).** Before a pass records a period `empty` or `lost`, it looks for that period's own packed file at its named path (`FileListing.name`). If the file is there, the pass adopts it as `packed`: its bytes from the listing, and its rows from the Parquet footer, inside the download budget left. It adds the recovery note `index-rebuilt` for that period. The rule lives in `backend/idhazh/gardener/ledger_marks.py`, whose first sentence already covers which packed files exist.
 - **Rule L (row 19).** When an index file is absent, the pass looks only at named places, coarsest period first, and adopts each file it finds as Rule R does. A place with no file writes nothing.
   - Yearly: each year from `first_ledger_year` (Table D, D5) to the newest year old enough to pack.
-  - Monthly: the months of a finite window. For a forever window, each month from the January after the newest yearly entry, or from January of `first_ledger_year` when there is none.
-  - Daily: each day from the month after the monthly mark to the newest eligible day, or, with no monthly entry, from the first month step B7 starts from. At most 31 paths a month.
+  - Monthly: the months of a finite window. For a window that keeps every month - a forever window, one whose deletes only report, or a dry run - each month from the January after the newest yearly entry, or from January of `first_ledger_year` when there is none.
+  - Daily: each day from the month after the monthly mark to the newest eligible day, or, with no monthly entry, from the first month step B7 starts from. Each index is searched in one folder a year.
 
 ### 2.3 Recovery instead of failure
 
-A pass never stops for something it can record. Each fault below is designed out, or recovered on this wake or the next. Only `failed` turns a job red, and it means a code defect, the one case a person must act on.
+A pass never stops for something it can record. Each fault below is designed out, or recovered on this wake or the next. Only `failed` turns a job red, and it means a code defect; a period that waits for a person ends `deferred` and says so in its fault word (row 20).
 
 Table C - each fault
 
@@ -122,14 +125,14 @@ Table C - each fault
 | C2 | A day inside history with no entry (a hole) | Re-packed from its raw files when any are left, or else adopted when its packed file is there (C14). Otherwise it gets an entry `lost`, and the day goes into its month's `lost_days` when the month closes | `repacked-from-raw` or `recorded-lost`, with the day | `done` | 12 |
 | C3 | A raw file in a closed month (a late re-run) | The month re-opens. Its rows and the late rows are settled by the ledger's record key, the month file and its entry are rewritten, and the late raw files are deleted | `reopened-month`, with the month | `done` | 17 |
 | C4 | More raw files in one day than `max_raw_files_per_period` | The first files by name are packed. The rest stay where they are, and B6's re-run span takes them on the next wake | `carried-over`, with the day | `ceiling` | 18 |
-| C5 | A raw file that cannot be read, or is larger than the size ceiling | Moved to `state/raw/<ledger>/set-aside/`, under its path relative to `state/`, and counted in its entry's `set_aside`. The rest of the day packs | `set-aside`, with the day | `done` | 18 |
+| C5 | A raw file that cannot be read | Moved to `state/raw/<ledger>/set-aside/`, under its path relative to `state/`, and counted in its entry's `set_aside`. The rest of the day packs. The size ceiling is the shard's download budget (C8), so no file is set aside for its size. A period larger than the whole budget fails by name, with its bytes and `max_downloaded_mb` (Fowler, row 18 report) | `set-aside`, with the day | `done` | 18 |
 | C6 | A packed day or month file that cannot be read when its month or year closes | Moved to set-aside as in C5. Its days go into `lost_days`, and the period closes | `set-aside` and `recorded-lost` | `done` | 18 |
 | C7 | A raw day past the keep line whose files cannot be parsed | Designed out. B2 deletes by listed path and parses nothing | - | - | 15 |
 | C8 | The shard's download ceiling (`over_the_ceiling` in `runner.py`) | Designed out. A step chooses a period only while its listed size fits what is left of the shard's budget | - | `ceiling` | 18 |
 | C9 | A watermark without its index (`index-missing`) | Designed out. Each mark is worked out from the indexes (section 2.2), and the watermark files go | - | - | 19 |
 | C10 | The job is killed part way through a pass, by a timeout or a cancelled run | Designed out. A shard lands only through its one commit, so a killed pass lands nothing, and the next wake starts from the same marks | - | - | 20 |
 | C11 | GitHub's API is unavailable to a collection pass: a 429 or 5xx answer, or a connection that fails or times out, as row 20's error classifier names them. Nothing inside a wake retries | The mark stays, and the next wake resumes from it | fault `api-unavailable` | `deferred` | 20 |
-| C12 | An exception that no other row of this table names, including a 4xx answer other than 404, 409, 410, 422 and 429 (row 20) | The task stops at that period. The shard's other tasks still run, and the next wake retries | fault `raised`, the exception's type only and never its text | `failed` | 20 |
+| C12 | An exception that no other row of this table names, including a 4xx answer other than 404, 409, 410, 422 and 429 (row 20) | The task stops at that period. The shard's other tasks still run, and the next wake retries | fault `raised`; the exception's type goes to the log line, and its text never to the record | `failed` | 20 |
 | C13 | A packed day or month file that its index names and the tree lacks, when its month or year closes | Treated as unreadable (C6): its days go into `lost_days`, and the period closes. There is no file to set aside | `recorded-lost` | `done` | 18 |
 | C14 | An index file that is absent while its period was packed (`index-missing`), or a packed file at its named path that no entry names, which would otherwise be recorded `lost` | Adopted from named paths: an absent index by Rule L, and a file that no entry names by Rule R (section 2.2). Nothing is deleted | `index-rebuilt`, with the period | `done` | 12, 19 |
 | C15 | A member GitHub will not delete (collections: a 409 or 422 answer). Today the refused delete stops the pass, and every later pass meets that member first | Recorded with its id. It counts against the delete ceiling, the pass goes on, and the mark may pass it | `not-deletable`, with the member id | `done` | 20 |
@@ -146,33 +149,42 @@ Table D - contract changes
 | --- | --- | --- | --- | --- |
 | D1 | `CompactEntry` in `CompactIndex`, `backend/idhazh/contracts/ledger_index.py` | `state`: `packed` (the default), `empty` or `lost`. `lost` is a daily state only: a monthly or yearly entry is `packed` or `empty` and lists its lost days in `lost_days`, so no reader handles a lost month or year. An `empty` or `lost` entry holds no file, and its `bytes` and `rows` are 0. `lost_days`: ascending UTC days inside a monthly or yearly entry's period that were recorded lost; empty by default; never on a daily entry. `set_aside`: how many files were moved aside while packing the period; default 0 | The defaults read every committed index as all `packed`, so nothing is rewritten. A zero-row file written before this row stays a valid `packed` entry until its month closes | 8 |
 | D2 | `CollectionPruneRow` in `backend/idhazh/contracts/collection_prune.py` | `handled_through`: a UTC day. Every member created on or before that day was handled by a pass with the same `dry_run` value: deleted, recorded as not deletable, or reported. Null when the pass handled nothing | The null default reads every older row | 10 |
-| D3 | `CollectionPruneRow`, and new `backend/idhazh/contracts/gardener_fault.py` | `fault`: `raised` or `api-unavailable`, allowed only beside `stopped_because` `failed` or `deferred`. `recovered`: a list of `{note, subject}`. `note` is `repacked-from-raw`, `recorded-lost`, `reopened-month`, `set-aside`, `carried-over`, `index-rebuilt` or `not-deletable`. `subject` is the period or the member id the note is about, typed as `MemberId` in `collection_prune.py`: `MEMBER_ID_PATTERN`, at most 512 characters, which every period string also matches. Each note names one period or member the pass took or adopted, so the list is bounded by the cap, the delete ceiling and Rule L's named paths (section 2.2). `stopped_because` gains `deferred` | Null and empty defaults read every older row | 20 |
+| D3 | `CollectionPruneRow`, and new `backend/idhazh/contracts/gardener_fault.py` | `fault`: `raised` or `api-unavailable`, allowed only beside `stopped_because` `failed` or `deferred`; row 20's follow-ups add `range-starts-late`, `no-month-to-reopen` and `packed-file-unreadable` (words by Fowler, 2026-10-07). `raised` pairs with `failed` and every other word with `deferred`, and a `deferred` row names one. `recovered`: a list of `{note, subject}`. `note` is `repacked-from-raw`, `recorded-lost`, `reopened-month`, `set-aside`, `carried-over`, `index-rebuilt` or `not-deletable`. `subject` is the period or the member id the note is about, typed as `MemberId` in `collection_prune.py`: `MEMBER_ID_PATTERN`, at most 512 characters, which every period string also matches. Each note names one period or member the pass took or adopted, so the list is bounded by the cap, the delete ceiling and Rule L's named paths (section 2.2). `stopped_because` gains `deferred` | Null and empty defaults read every older row | 20 |
 | D4 | `Watermark` in `backend/idhazh/contracts/ledger_index.py` | Retired, together with every committed `state/compact/<ledger>/<period>/watermark.json` | Nothing reads them after row 19; section 2.2 replaces them | 19 |
 | D5 | `GardenerConfig` in `backend/idhazh/contracts/knobs/gardener.py`, read from `config/idhazh_gardener.json` | `first_ledger_year`: the UTC year from which Rule L looks for yearly and monthly files (section 2.2). The value is 2026: the repository was created on 2026-08-20, so no ledger holds an earlier year | Not a persisted payload. The committed file gains the value in the same change | 19 |
 
 ### 2.5 Events and outcome words
 
-Each event is a `Model` in `backend/idhazh/contracts/gardener_events.py` (not persisted; section 11 does not apply). The owner approved the event list on 2026-10-04.
+Each event is a `Model` in `backend/idhazh/contracts/gardener_events.py` (not persisted; section 11 does not apply), and `backend/idhazh/gardener/event_log.py` writes it as one line. The owner approved E1 to E6 on 2026-10-04. Fowler added E7 to E15 on 2026-10-07, one small model for each fact (row 21, decision 4). What each line tells a person is in [idhazh-gardener.md](../docs/architecture/publishing/idhazh-gardener.md#what-a-shard-logs).
 
-Table E - events
+Table E - events. Beside each model is the name its line carries, the model's name in kebab case. E4 is never a line of its own, and E6 is row 22's. After where an event is emitted comes its line's `level`.
 
 | # | Event | Emitted by | Fields |
 | --- | --- | --- | --- |
-| E1 | TaskPlanned | The runner, before the task | task, kind, shard, run_id, attempt, today, operator_range, declared: every knob of the declaration as text (thresholds, windows, ceilings, switches), leaving out `owns`, `reads` and prose |
-| E2 | WindowChosen | `one_at_a_time.take`, before the first member | collection, since, until, ceiling, dry_run, mark (the `handled_through` it starts from), pages read |
-| E3 | PeriodsChosen | Compaction, after it chooses | ledger; marks before; age lines (newest eligible day, newest closable month, keep line, year line); for each step, the span or none, the resume point and the start reason (mark, oldest-indexed, oldest-raw-day, operator-range, keep-line, none); cap; operator range; month deletes live or report-only |
-| E4 | PeriodsTaken | Compaction, nested inside E5 | Packed and re-taken days; closed months; packed years; dropped months and raw days; entries written `empty` or `lost`; files set aside; marks after |
-| E5 | TaskFinished | The runner, after the task | task, outcome (Table F), dry_run, seen, selected, taken, written, bytes_freed, stopped_because, resume_from, fault, recovered, next (the advice sentence), duration_ms, periods (E4) |
+| E1 | TaskPlanned, `task-planned` | The runner, before the task; `info` | task, kind, shard, run_id, attempt, today, operator_range (the range a person named, never the scheduled window), declared: the declaration as it dumps, leaving out `kind`, `owns`, `reads`, `appends_to` and the prose of `prune_refusal`, with a null knob kept null; absent: the declared folders the commit does not hold yet |
+| E2 | WindowChosen, `window-chosen` | `one_at_a_time.take`, at its top, before the listing is read, so a walk that fails at once has already said its window; `info` | collection, since, until, ceiling, dry_run, mark (the `handled_through` it starts from). The pages read are known only at the end, so the pass counts them and E5 reports them |
+| E3 | PeriodsChosen, `periods-chosen` | Compaction, after it chooses and before the steps run; `info` | ledger; marks before; age lines (newest eligible day, newest closable month, keep line, year line); for each step, the span or none, where it stops and resumes when the cap or a late range stops it, and the start reason (mark, oldest-indexed, oldest-raw-day, operator-range, keep-line, none); cap; operator range; month deletes live or report-only; the re-run span |
+| E4 | PeriodsTaken | Compaction. It travels on `Pass.periods` and is nested inside E5 as `periods` | Packed and re-taken days; closed months; packed years; dropped months and raw days; periods written `empty`; days recorded lost; files set aside, by path; marks after. Built from the indexes the pass read compared with the end, plus the lists the drop steps and `set_aside` keep |
+| E5 | TaskFinished, `task-finished` | The runner, after the task; `error` for `failed`, `warning` for `deferred`, `info` otherwise | task, outcome (Table F), dry_run, seen, selected, taken, written, bytes_freed, stopped_because, resume_from, handled_through, fault, error, where, recovered, next (one fixed sentence for each outcome word, or the fault's own sentence; none carries a value or says a member is gone), pages_read, duration_ms, fold (what the task's fold settled), periods (E4) |
 | E6 | ShardPublished | The publisher, after its push loop | shard, run_id, attempt, tasks, failed tasks, landing (the words in `backend/idhazh/contracts/shard_landing.py`, row 27: landed, already-on-main, stale, lost, refused), push try ("n of 6"), exit code and its meaning |
+| E7 | MemberOutOfOrder, `member-out-of-order` | `one_at_a_time.take`, when a walk from a mark meets a member from an earlier day than one before it; `warning` | collection, day, after. The mark stays |
+| E8 | PageOutOfOrder, `page-out-of-order` | `_ArtifactWalk` in `github_collections.py`, when a page holds a member from a day before one on a page read earlier; `warning` | collection, page. Every page is read |
+| E9 | PageCountChanged, `page-count-changed` | `_ArtifactWalk`, when a page counts other than the first page less the walk's deletes; `warning` | collection, page, counted, expected. The mark stays |
+| E10 | ListEndMissing, `list-end-missing` | `_ArtifactWalk`, when the list does not end where the first page's count says; `warning` | collection, page, first_count. The mark stays |
+| E11 | PeriodRefused, `period-refused` | A compaction step, through `CompactTree.refuse`, when it will not take a period; `error` when `fault` is `raised`, `warning` otherwise | ledger, step, period, fault (the record's `GardenerFault` word), ledger_fault (the ledger's own `LedgerFault` word, when a file is missing), error, where. Two keys, so the record's word and the ledger's word never share one |
+| E12 | DownloadOverBudget, `download-over-budget` | A compaction step, through `stop_over_budget`, where what it would download no longer fits the shard's budget; `error` when the period is larger than the whole budget (`failed`), `info` when a later wake has room (`ceiling`) | ledger, resume_from, needed_bytes, room_bytes, max_downloaded_mb, stopped_because |
+| E13 | LedgerFaultMet, `ledger-fault-met` | The drop step, when a dropped month's file is already gone; `warning` | ledger, step, period, ledger_fault |
+| E14 | RawFileSkipped, `raw-file-skipped` | `named_trees.raw_days`, for a file under a ledger's raw folder that sits in no UTC day folder, so no step reads it; `warning` | path |
+| E15 | LoggedText, `logged-text` | `OneJsonLine` in `event_log.py`, for a record another module logs as text while a task runs; the record's own level | logger, message (as that module said it), error, where |
 
-Each event is one line of JSON: `event` first (the kebab-case event name), then the model's fields in order, with `None` left out. It is ASCII only and goes to stderr through the standard `logging` module (CLAUDE.md section 1b). GitHub's runner reads workflow commands from stderr as well as stdout (`actions/runner`, `src/Runner.Worker/Handlers/ScriptHandler.cs`, read 2026-10-04), so nothing moves to stdout. Tests read the payload on the log record, never the text.
+Each event is one line of JSON: `event` (the name beside its model above), then `at` (the instant the record was made, in UTC, ISO-8601 to the millisecond with `Z`), then `level` (`info`, `warning` or `error`), then the model's fields in the order it declares them, with `None` left out and a nested model kept nested. No event declares a field named `event`, `at` or `level`. The record's message is the same JSON, so a command that writes its records as text still prints the event, and `install` is `logging.basicConfig`, so a second call adds no second handler. No field holds an exception's text, because the text can carry a ledger row fetched from the open web (Guardrail #11): `error` is the exception's type and `where` the deepest `module:line` of this package it passed through, both checked by pattern. A `logged-text` line keeps another module's message as that module said it; row 21's Found during execution names the two places in `idhazh.ledger` whose message carries an exception's text (ESCALATE trigger 3). A task's ending is said once, in `task-finished`: the runner's printed per-task report was a second rendering of it (decision T3) and is gone, and the shard's own printed lines stay for row 22. The line is ASCII only and goes to stderr through the standard `logging` module (CLAUDE.md section 1b). GitHub's runner reads workflow commands from stderr as well as stdout (`actions/runner`, `src/Runner.Worker/Handlers/ScriptHandler.cs`, read 2026-10-04), so nothing moves to stdout, and JSON escapes every line break, so no text inside an event can start a line GitHub reads as a workflow command. Tests read the payload on the log record, never the text. Fowler, 2026-10-07 (row 21).
 
-Table F - outcome words. `report.classify` picks the first that holds, in this order, and otherwise the pass's idle outcome.
+Table F - outcome words. `report.classify` picks the first that holds, in this order, and otherwise the pass's idle outcome. A pass found work when its window held a member, it wrote or would write a file, or its fold found a closed day or month; it carried the work out when a live pass took, wrote or recovered something, or a live fold settled one; work found and not carried out is `dry-run`. The compaction's idle word is `outside-range` whenever a person named a range, `empty` when every step starts at `none`, and `not-due` otherwise; every other task's is `not-due` (known defect 65). Fowler, 2026-10-07 (row 21).
 
 | # | Word | Means |
 | --- | --- | --- |
 | F1 | `failed` | A code defect stopped the task (`fault: raised`). The only outcome that turns the job red |
-| F2 | `deferred` | Stopped because GitHub's API was unavailable (`api-unavailable`), a cause outside the code. The next wake resumes |
+| F2 | `deferred` | Stopped for a cause outside the code: GitHub's API was unavailable (`api-unavailable`), or a period waits for a range that starts earlier or for a person (`range-starts-late`, `no-month-to-reopen`, `packed-file-unreadable`, row 20). The job stays green, and the next wake resumes |
 | F3 | `dry-run` | Found work and only reported it |
 | F4 | `ceiling` | Did work, and more is left; `resume_from` says where the next wake starts |
 | F5 | `done` | Did work, and nothing is left. Recovered notes do not change this |
@@ -571,6 +583,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #13 - Which days may be packed
 
 - **Scope:** Day packing follows Table B, B6 and B7: it starts after the daily mark, re-takes packed days in the re-run span, starts a first run at the oldest raw day, and records a day with no row as an entry with no file. Level 3.
+- **Fixed after merge:** #1309 exposed a Data explorer fault on the canary: a window that began before a ledger's first day sent those days to the archive, which called them missing, and ten console tests went red on `main`. The owner ruled A1 on 2026-10-05: days before a ledger began are cut from the selected window, and the archive is asked only for days the site copy trimmed. #1327 is Fowler's phase L1.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_compaction_periods.py`
   - `backend/idhazh/gardener/tasks/_daily_period.py`
@@ -681,13 +694,19 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/idhazh/gardener/tasks/_compact_tree.py`
   - `backend/idhazh/gardener/runner.py`
-  - `backend/idhazh/gardener/context.py` (`TaskContext.period_range` and `operator_range`; found during execution (row 12 report), owner 2026-10-04)
+  - `backend/idhazh/gardener/context.py` (`TaskContext.period_range` and `operator_range`; found during execution (row 12 report), owner 2026-10-04. `operator_range` is deleted, and a compaction reads `period_range` as its range; Fowler's ruling, 2026-10-05)
   - `backend/utilities/ledger_migration/packing.py` (`pack` passes `months` to `compaction.run`)
   - `backend/idhazh/contracts/knobs/gardener.py` (the `lookback` description)
   - `backend/tests/gardener/test_period_inputs.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
-  - `backend/tests/gardener/test_publish.py`
-  - `backend/tests/ledger_migration/test_packing_scope.py` (its cases that pack only named months)
+  - `backend/tests/gardener/test_publish.py` (not changed: no case there names what a compaction's listing holds; found during execution)
+  - `backend/tests/ledger_migration/test_packing_scope.py` (its cases that pack only named months; not changed: they pass as they stand, with the months passed as the range; found during execution)
+  - `backend/tests/gardener/tasks/test_compaction_periods.py` (the seven ledgers of 2026-10-04 run over a wake's listing, Fowler's ruling; the `lookback` case moves here from `test_period_inputs.py`, because a first run is now the only reader of a compaction's `lookback`; found during execution)
+  - `backend/tests/gardener/tasks/test_compaction_years.py`, `backend/tests/gardener/test_sparse_shard.py` and `backend/tests/gardener/tasks/_task.py` (docstrings that described the planner's window; found during execution)
+  - `backend/idhazh/gardener/file_listing.py` and `backend/tests/gardener/test_file_listing.py` (`saw_any_of`, which `_refuse_unnamed` reuses: a wake names no raw folder of a compaction, so `CompactTree.read` takes in only the raw days the listing already names, and none when it names none; found during execution, Fowler's ruling)
+  - `tests/fixtures/gardener/task_packages/garden_tasks_ok/compaction.py` (it fetched its owned folder without naming it, which only the planner's window had made work; it names the folder first, as a compaction step does; found during execution)
+  - `docs/how-to/run-the-gates.md` (what a canary build in a base-commit copy needs beyond a test run: `frontend`, the root `.gitignore`, a commit, `node_modules`, and which two fields are clocks; found during execution, the user's instruction of 2026-10-05 that what a session learns goes to `docs/`)
+  - `docs/architecture/publishing/ledger-compaction.md`, `docs/architecture/publishing/idhazh-gardener.md` and `docs/concepts/config/idhazh-gardener.md` (sentences that described the planner's window, and `lookback` for a compaction; found during execution)
 - **Acceptance gates:** local: pytest on the four test files and the gardener tests the selector lists; ruff; mypy. CI: the full suite.
 - **Oracle:** this row removes code, and the property that could break is what each task names: `test_period_inputs.py` requires exactly the marks for every compaction task. The cases in `test_packing_scope.py` that pack only named months still pass, with the months passed as the operator range. It cannot settle anything the earlier rows did not already test.
 
@@ -707,10 +726,14 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - The day step's refusal "raw files sit in a month already absorbed" compares a raw day's month with the monthly mark alone, so it also catches a raw day in a month before the ledger's first packed month, which no month entry names and which never closed. A first run that looks back `lookback` months (B7) can leave such a day behind. It is not a late re-run, so re-opening never treats its month as closed; found during execution (row 13 report), owner 2026-10-05.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_daily_period.py`
-  - `backend/idhazh/gardener/tasks/_monthly_period.py`
+  - `backend/idhazh/gardener/tasks/_monthly_period.py` (not changed: the re-open went to `_reopened_month.py`, because this module already answers two questions, absorb and drop; found during execution, Fowler's ruling)
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `docs/architecture/publishing/ledger-compaction.md`
+  - `backend/idhazh/contracts/gardener_fault.py` (`RecoveryNote` gains `reopened-month`; log-only until row 20 persists the words; found at dispatch by the owner)
+  - `backend/idhazh/gardener/tasks/_reopened_month.py` (new; first sentence "How a closed month takes in raw files that land after it closed"; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`raw_files`, the raw-day read the day step and the re-open share, so row 18 changes one place; `name_months` says "a step"; found during execution, Fowler's ruling)
+  - `backend/tests/gardener/tasks/test_compaction_batch.py` (its direct call to the day step passes the keep line; found during execution)
 - **Acceptance gates:** local: pytest on `backend/tests/gardener/tasks/test_compaction.py` and the gardener tests the selector lists; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a month closed with rows for two work units, then a late raw file from one unit's re-run with the same record keys. After the pass, the month file holds each key once, with the value the ledger's settle rule picks. The late file is gone, the outcome is `done`, and the note is `reopened-month`. Other days of the pass still pack. It cannot settle a re-run more than 30 days late; GitHub does not allow one.
 
@@ -750,6 +773,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/test_ledger_marks.py` (found during execution (row 12 report), owner 2026-10-04)
   - `docs/architecture/publishing/ledger-compaction.md`
   - `docs/reference/repository-layout.md` (the set-aside folder)
+  - `backend/idhazh/gardener/tasks/_reopened_month.py` (a late raw file that cannot be read is set aside, and a late day's extra files wait; found during execution)
+  - `backend/idhazh/gardener/file_listing.py` (`budget`, `room`, `cost`, `fetch_within_budget` and `OverBudgetError`, with `cost` and `fetch` sharing one helper; found during execution, Fowler's ruling)
+  - `backend/utilities/gardener_publish.py` (passes `max_downloaded_mb` into the listing; found during execution, Fowler's ruling)
+  - `backend/idhazh/ledger/raw_files.py` (`read_day_folder`, which names each unreadable file beside the rest; found during execution)
+  - `backend/idhazh/ledger/paths.py` and `backend/idhazh/ledger/__init__.py` (`set_aside_path`; found during execution)
+  - `backend/idhazh/contracts/gardener_fault.py` (`RecoveryNote` gains `set-aside` and `carried-over`, log-only until row 20 persists the words; found at dispatch by the owner)
+  - `backend/idhazh/contracts/knobs/gardener.py` (the descriptions of `max_raw_files_per_period` and `max_downloaded_mb`; found during execution)
+  - `backend/tests/gardener/test_file_listing.py` and `backend/tests/ledger/test_raw_files.py` (found during execution)
+  - `docs/architecture/publishing/idhazh-gardener.md` and `docs/concepts/config/idhazh-gardener.md` (what the download ceiling now means, and how it is reset; found during execution, Fowler's ruling)
 - **Acceptance gates:** local: pytest on the test files above; ruff; mypy; `doc_load.py` on both pages. CI: the full suite.
 - **Oracle:**
   - A day with one unreadable raw file packs its other files. The bad file is under `set-aside/` at its old path, and the entry says `set_aside: 1`.
@@ -757,12 +789,20 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - A day with cap + 3 raw files packs the cap and ends `ceiling`; the next pass packs the 3, and the outcome is `done`.
   - A shard budget smaller than the chosen periods stops the choice early with `ceiling`, and `over_the_ceiling` is never reached.
   - It cannot settle real corruption, which has not been seen.
+- **Not in this row:** the description of `CompactEntry.set_aside` in `backend/idhazh/contracts/ledger_index.py` still says the files "could not be read or were too large", though no file is set aside for its size (decision 4). Rewording a persisted field's description changes the `CompactIndex` version stamp and the console's `COMPACT_INDEX_STAMP`, so "or were too large" goes at the next change to the `CompactIndex` shape (row 18 report).
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | A set-aside file is moved, never deleted, under the raw tier, because the site copies only `state/compact/` | Plan author, 2026-10-04 |
 | 2 | Extra files are carried by the re-run span of row 13; there is no second mechanism | Plan author, 2026-10-04 |
 | 3 | The ceiling is applied when periods are chosen, from sizes the listing already holds | Plan author, 2026-10-04 |
+| 4 | C5's "larger than the size ceiling" is the shard's download budget, which is C8's case: nothing is set aside for its size, and no knob is added. A period larger than the whole budget is refused by name as `failed`, naming its bytes and `max_downloaded_mb`, because no wake could take it | Fowler, 2026-10-06 |
+| 5 | The compaction steps, Rule R and the marks take every download through one listing method that refuses past the budget; `fetch` stays as it is for the three other tasks that download, so the runner's check after the tasks stays, and its message now calls a shard over it a code defect. The publisher passes the budget into the listing | Fowler, 2026-10-06 |
+| 6 | The year step adopts its own unindexed file before it reads, or records lost, any month (follow-ups 4 and 5) | Fowler, 2026-10-06 |
+| 7 | A month no entry names in a ready year adopts its own file; with none, its days are recorded lost when nothing of it is left, and the year is refused as `day-missing` while a day file, a raw file or a daily entry of it remains (follow-up 6) | Fowler, 2026-10-06 |
+| 8 | A note names the period whose file was lost or moved. A month file costs its year every day of its month. Rule R comes before C13 at a month close too. Every month and year entry carries the `set_aside` of the periods it replaces | Fowler, 2026-10-06 |
+| 9 | A move is a delete of size 0 at the old path, so `bytes_freed` stays what the deletes free | Fowler, 2026-10-06 |
+| 10 | A day's extra raw files are the newest by the order settling uses (day, write instant, file id), so a carried file is newer than every packed one and the next wake settles the day as one pass would have; a file's name is not its write order | Worker, 2026-10-06, from `settle_rows` in `backend/idhazh/ledger/raw_files.py` |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
@@ -774,6 +814,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Scope:** Each mark is worked out from the three indexes (section 2.2), and an absent index is rebuilt from named paths by Rule L. The `Watermark` contract and every committed `state/compact/<ledger>/<period>/watermark.json` are deleted (Table D, D4), so a watermark without its index can no longer happen (Table C, C9), and `index-missing` can no longer stop a pass (C14). Level 5.
 - **Follow-ups:**
   - Delete the first-run case in `_compaction_periods._days` that starts at the oldest day a daily index names when no daily mark is beside it (Table B, B7). Once the daily mark is worked out from the indexes, an index that names a day always gives a mark, so the case can no longer happen; found during execution (row 13 report, Fowler 2026-10-04), owner 2026-10-05.
+  - A ledger with monthly entries and no monthly watermark made the month step start at its oldest entry, and that step then adopted again a month the drop step had removed in the same pass. A monthly mark worked out from the index removes the case, and a test pins it; found during execution (row 15 report, Fowler), owner 2026-10-06.
+  - `backend/tests/gardener/test_period_inputs.py` named the three watermark files for each compaction task; they go there; found during execution (row 16 report), owner 2026-10-06.
 - **Files touched** (from a search for `watermark` in any case, `daily_through`, `monthly_through` and `yearly_through`, 2026-10-04, after #1267 merged; search again at dispatch, `TODO/` and `state/compact/` included. The benchmark record of what a compaction pass costs describes the pass it measured, and it stays as it is, as do the matches that mean another thing, such as a stream's `highWaterMark`):
   - `.gitattributes` (its `-merge` line for `state/compact/*/*/watermark.json`)
   - `config/idhazh_gardener.json` (`first_ledger_year`, Table D, D5)
@@ -783,7 +825,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/idhazh/ledger/paths.py`
   - `backend/idhazh/ledger/__init__.py`
   - `backend/idhazh/ledger/day_removal.py` (its docstring names the watermark)
-  - `backend/idhazh/gardener/ledger_marks.py` (Rule L)
+  - `backend/idhazh/gardener/ledger_marks.py` (`work_out_marks`, and `adopt`, which Rule L calls; Rule L's places and order are in `_absent_indexes.py` below; found during execution, Fowler's ruling)
   - `backend/idhazh/gardener/tasks/_compact_tree.py`
   - `backend/idhazh/gardener/tasks/_compaction_periods.py` (the first-run case that starts at the oldest indexed day; found during execution (row 13 report), owner 2026-10-05)
   - `backend/idhazh/gardener/tasks/_daily_period.py`
@@ -826,19 +868,36 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `TODO/20260930-57-upkeep-tasks-switch-on-plan.md` (its row "The eval ledger is packed live, and every scores window stays forever" reads its oracle from a watermark file)
   - `TODO/20261004-pipeline-tests-migration-plan.md` (its lines C2, C13 and I2, and its row "Readers understand nested trial roots", name the watermark builders, paths and files)
   - every committed `state/compact/<ledger>/<period>/watermark.json`
+  - `backend/idhazh/gardener/tasks/_absent_indexes.py` (new: Rule L names the places, fetches each index's files in one download and adopts what it finds; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/context.py` and `backend/idhazh/gardener/runner.py` (`TaskContext.first_ledger_year`, filled from the gardener config; found during execution, Fowler's ruling)
+  - `backend/utilities/ledger_migration/packing.py`, `backend/utilities/ledger_migration/phases.py`, `backend/utilities/build_canary_day.py` and `backend/utilities/corpus_history.py` (each builds a `TaskContext`, so each passes `first_ledger_year`; found during execution)
+  - `backend/tests/gardener/tasks/_task.py` (its context carries `first_ledger_year`; found during execution)
+  - `backend/tests/gardener/tasks/_marks.py` and `backend/tests/gardener/tasks/test_absent_indexes.py` (new; found during execution)
+  - `backend/tests/gardener/test_sparse_shard.py` and `docs/how-to/run-the-gates.md` (found by the search at dispatch)
+  - Left as they are: `TODO/20260928-55-one-page-queries-every-ledger-plan.md` names a closed plan's row title, and `TODO/20261003-59-csv-ledgers-left-plan.md` names the watermark builder in its row 11, which is `DONE`, and in its declaration D11; both record what was done and decided then (found by the search at dispatch)
 - **Acceptance gates:** local: pytest on the test files above that the selector lists, `-m contract` included, and the specs it lists; ruff; mypy; `doc_load.py`. CI: the full suite.
-- **Oracle:** for the committed indexes of every compaction ledger, read once at dispatch and written into the test as literals, the marks worked out from the indexes equal the `through` of each committed watermark file. A ledger with an index and no watermark resumes where its index ends. Integration under `tmp_path`, built with the helpers in `backend/tests/gardener/tasks/_task.py`: with `index/daily.json` removed and the day files kept, the pass rebuilds the index from named paths, notes `index-rebuilt` and deletes nothing. It cannot settle a watermark that was already wrong; this oracle would show it as a mismatch, and that mismatch is reported, not forced to agree.
+- **Oracle:** once at dispatch, before the files were deleted, a one-off script compared the marks worked out from the committed indexes of every compaction ledger with the `through` of each committed watermark file: all 9 were equal on 2026-10-06. It is not a test, because a test never computes its answer from committed data (the owner's testing ruling, 2026-10-05). The tests are built under `tmp_path` with the helpers in `backend/tests/gardener/tasks/_task.py`, with literal expected values. A ledger with an index and no watermark resumes where its index ends. With `index/daily.json` removed and the day files kept, the pass rebuilds the index from named paths, notes `index-rebuilt` and deletes nothing. It cannot settle a watermark that was already wrong; the comparison would show it as a mismatch, and that mismatch is reported, not forced to agree.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Design the fault out instead of recovering from it: the indexes already say what each watermark says, once every empty period has an entry (rows 12 to 14) | The owner, 2026-10-04 (recovery theme); shape by plan author |
 | 2 | Reader before writer: steps read marks from the indexes, then the files and the contract go, in this one row, because nothing outside the gardener reads a watermark (the site works out `through` from `daily.json`) | Plan author, 2026-10-04 |
 | 3 | Rules R and L (section 2.2): an absent index is rebuilt from named paths, so `index-missing` can no longer stop a pass and the watermarks can go. Every read stays bounded: at most 31 named paths a month, and the yearly part grows by one a year (row 14, decision 3). A ledger whose daily mark stalled for longer than B7's look-back keeps older day files out of a rebuilt index (Table A, A8) | Fowler review, 2026-10-04 (ESCALATE trigger 6) |
+| 4 | `first_ledger_year` is a `YYYY` string with no default, so the loader refuses a config that leaves it out, and every `TaskContext` carries it from the loader | Fowler, 2026-10-06 |
+| 5 | Rule L is its own module, `tasks/_absent_indexes.py`. It rebuilds every absent index, coarsest first, before any step runs, and fetches each index's files in one download inside the shard's budget, so a rebuild larger than the whole budget fails by name. `ledger_marks` keeps `adopt` and gains `work_out_marks` | Fowler, 2026-10-06 |
+| 6 | The tree works out its marks when it is read and again after each rebuilt index; within a pass the steps only move them forward, so a month the drop step removes never moves the monthly mark back | Fowler, 2026-10-06 |
+| 7 | Rule L names one folder a year for each index it rebuilds: `daily/<YYYY>`, `monthly/<YYYY>` or `yearly/<YYYY>` under the ledger's compact folder, once for each year the periods it looks for fall in. Git lists every file inside, and the pass adopts only the files of those periods. So a rebuild names at most one more folder each year, inside decision 3's bound, and needs no exception. A window that keeps every month - kept for ever, deletes that only report, or a task that is a dry run - is searched from the January after the newest yearly entry, or January of `first_ledger_year`, so no month a person has not approved deleting is hidden. Its rebuild downloads up to twelve more month files each year, the rows one packed year file holds. An operator range never narrows where the rebuild looks, because a rebuilt index is written whole and no later pass looks again. A pass reads these folders only when an index is absent | Fowler, 2026-10-07, replacing Fowler, 2026-10-06 |
+| 8 | A file at a Rule L place whose envelope names another ledger or period fails the task by name; nothing is guessed | Fowler, 2026-10-06 |
+| 9 | A pass on a person's machine cut between its indexes and its deletes is no longer finished by the next pass: `_finish` goes from the month and year steps, and the page says to restore `state/compact/` and `state/raw/` from git. A runner lands a whole shard in one commit, so `main` never holds that state. The owner may overturn this | Fowler, 2026-10-06 |
+| 10 | `compact_root(state_dir, ledger, period)` names a period's folder and `compact_path` is built from it; `watermark_path` goes. The compaction reads no wall clock once the watermark's stamp is gone, and the benchmark stops counting `write_watermark` | Fowler, 2026-10-06 |
+| 11 | `LedgerFault.INDEX_MISSING` stays: the console and the ledger reader still name a missing index; only the compaction no longer stops on it | Fowler, 2026-10-06 |
+| 12 | A ledger whose compact folder the commit does not hold has packed nothing, so the rebuild looks nowhere and reads nothing. The answer is `TaskContext.owned_folders`, which the runner reads from the commit before any task runs. A builder that hands a task every declared folder looks as before and loses only the saving | Fowler, 2026-10-07 |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the watermarks, and rebuild a missing index from the files the marks name | Two records that can disagree, plus a repair path for that | A bounded rebuild per ledger | Plan author, 2026-10-04 |
 | 2 | Keep failing with `index-missing` | Manual work | Nothing to build | The owner, 2026-10-04 (recovery theme) |
+| 3 | Each pass also lists the newest closed periods' folders for the files a cut local pass left | Every wake pays a listing for a fault only a local run can cause | A bounded listing every wake, and code that deletes what it finds | Fowler, 2026-10-06 |
 
 ### Row #20 - The record says what was recovered and why a pass stopped
 
@@ -848,32 +907,49 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - The day step writes the note `repacked-from-raw` when it packs a day inside history that had no entry (Table C, C2). Row 12 wired only `index-rebuilt` and `recorded-lost`; found during execution (row 12 report), owner 2026-10-04.
   - The outcome `outside-range` follows Table F, F8, whose meaning row 12 narrowed: a range that a ready period before it blocks is the refusal above, never `outside-range`; found during execution (row 12 report), owner 2026-10-04.
   - `RecordedApi` is gone since row 11 (#1317): it answered every request with the same page, which a walk from the last page cannot read. The oracle names `RecordedAnswers`, whose `fails_at` makes a delete refuse; corrected from row 11's report, owner 2026-10-05.
+  - The day step still refuses, by name, a raw day in a month that the monthly mark is past and no monthly entry names. Row 17 (#1331) changed that refusal's message from "raw files sit in a month already absorbed" to one that begins "no monthly entry names its month". It is not a code defect, so it gets a fault word of its own in Table D, D3; found during execution (row 17 report, Fowler), owner 2026-10-06.
+  - Two cases still refuse their period by name, and Table C names no recovery for either: a day file that cannot be read when a re-run is taken into it, and a month file that cannot be read when a late file re-opens it. Row 20 gives each a fault word, or adds a recovery for it to Table C; found during execution (row 18 report), owner 2026-10-06.
 - **Files touched:**
-  - `backend/idhazh/contracts/collection_prune.py`
-  - `backend/idhazh/contracts/gardener_fault.py` (new; first sentence "Why a gardener pass stopped, and what it recovered instead of stopping")
-  - `backend/idhazh/contracts/gardener_events.py` (`StepChoice` records the operator-range refusal as `failed`; found during execution (row 12 report), owner 2026-10-04)
-  - `backend/idhazh/gardener/one_at_a_time.py` (`Stop` and `Pass` gain `fault` and `recovered`; `PruneInterruptedError` carries the classified cause)
-  - `backend/idhazh/gardener/closed_day_fold.py` (`FoldInterruptedError` carries the classified cause)
-  - `backend/idhazh/gardener/report.py`
-  - `backend/idhazh/gardener/runner.py` (each task's fault comes from the classifier; only `failed` sets the shard's failed exit code)
-  - `backend/idhazh/gardener/github_collections.py` (the error classifier)
+  - `backend/idhazh/contracts/collection_prune.py` (`StopReason.DEFERRED`, `stop_for`, `Recovery`, `fault`, `recovered`)
+  - `backend/idhazh/contracts/gardener_fault.py` (not new: row 12 made it for the recovery notes. Its first sentence becomes "Why a gardener pass stopped, and what it recovered instead of stopping"; it gains `GardenerFault`, and `RecoveryNote` gains `repacked-from-raw` and `not-deletable`; found during execution)
+  - `backend/idhazh/contracts/gardener_events.py` (`StepChoice` records the operator-range refusal as `deferred`, no longer `failed`; found during execution (row 12 report), owner 2026-10-04; the stop by Fowler, 2026-10-07)
+  - `backend/idhazh/gardener/one_at_a_time.py` (`Pass` gains `fault` and `recovered`; `take` classifies every error it catches and records a member its collection will not delete; `PruneInterruptedError` carries the classified cause. `Stop` lives in `tasks/_compact_tree.py`, below; found during execution)
+  - `backend/idhazh/gardener/closed_day_fold.py` (`Folded.fault` replaces `failed`; `FoldInterruptedError` carries the classified cause)
+  - `backend/idhazh/gardener/report.py` (`ended`; the row's `fault` and `recovered`; the sentence for each word, rendered and never stored)
+  - `backend/idhazh/gardener/runner.py` (each task's fault comes from the classifier; only a failed row, or a shard over its download budget, sets the shard's failed exit code)
+  - `backend/idhazh/gardener/github_collections.py` (`_remove_member`: a member already gone counts as deleted, and `RestApi.remove` stops swallowing 404 itself. The classifier went to `error_cause.py`, below; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/error_cause.py` (new; first sentence "What does an error a gardener pass meets mean: a member already gone, one GitHub will not delete, an API that is down, a download budget spent, or a code defect?"; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/__init__.py` (names `error_cause`; found during execution)
   - `backend/idhazh/telemetry/door_prune.py` (it also raises `PruneInterruptedError`)
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
   - `backend/idhazh/gardener/tasks/_yearly_period.py`
   - `backend/idhazh/gardener/tasks/_compaction_periods.py` (the operator-range refusal; found during execution (row 12 report), owner 2026-10-04)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`Stop.fault`, `CompactTree.recovered`, and `stop_over_budget` asks the classifier; found during execution)
+  - `backend/idhazh/gardener/tasks/_reopened_month.py` (its refusals take a fault word; found during execution)
+  - `backend/idhazh/gardener/tasks/_absent_indexes.py` (not changed: its `index-rebuilt` notes reach the record through `CompactTree.note_recovery`; found during execution)
+  - `backend/utilities/ledger_migration/packing.py` (the migrator reads any stop that names a fault as a refusal, so a deferred range refusal still stops it; found during execution)
   - `backend/tests/contracts/test_collection_prune_row.py`
-  - `tests/fixtures/contracts/collection-prune-row/` (new: a `deferred` row with a fault, and a `done` row with recovered notes, one of them `not-deletable` with a member id)
+  - `backend/tests/contracts/_fixtures.py` and `backend/tests/ledger/_fixtures.py` (they name the new rows; found during execution)
+  - `backend/tests/council/_imports.py` (the council's named import list names `gardener_fault`, which `collection_prune` now imports; found during execution, by CI)
+  - `tests/fixtures/contracts/collection-prune-row/` (new: a `deferred` row with a fault, and two `done` rows with recovered notes - one `not-deletable` with a member id, and one of three periods - because no one pass meets both. The four rows already there gain an empty `fault` and `recovered`; found during execution)
+  - `tests/fixtures/gardener/breaks/defect.json` and `tests/fixtures/gardener/task_packages/garden_tasks_breaks/` (`defect.py`, a task whose code is wrong, beside `broken.py`, whose service is down; found during execution)
+  - `backend/tests/gardener/test_error_cause.py` (new; found during execution)
   - `backend/tests/gardener/test_github_collections.py`
   - `backend/tests/gardener/test_runner.py`
+  - `backend/tests/gardener/_garden.py` (the breaks set names `defect.json`; found during execution)
   - `backend/tests/gardener/test_one_at_a_time.py`
+  - `backend/tests/gardener/test_report.py` and `backend/tests/gardener/test_download_ceiling.py` (found during execution)
   - `backend/tests/retention/test_prune_range.py`
+  - `backend/tests/gardener/tasks/test_collection_task.py` (the oracle's 503 and 422 cases on the task's own record; found during execution)
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_periods.py` (found during execution (row 12 report), owner 2026-10-04)
+  - `backend/tests/gardener/tasks/test_compaction_years.py` and `backend/tests/gardener/tasks/test_absent_indexes.py` (their notes are read from the record; found during execution)
   - `docs/architecture/publishing/idhazh-gardener.md` (the record)
   - `docs/architecture/publishing/ledger-compaction.md` (the recovery notes)
-- **How it works:** one pure function in `github_collections.py` maps an error to a result. It tests `HTTPError` first, because `HTTPError` is a kind of `URLError`, which is a kind of `OSError`.
+  - `docs/architecture/contracts/state-ledgers.md` and `docs/how-to/prune-a-collection.md` (what a row holds, and the lines a pass prints; found during execution)
+- **How it works:** one pure function, `classify` in `error_cause.py` (in `github_collections.py` as first written; moved by Fowler's ruling, decision 7), maps an error to a result. It tests `HTTPError` first, because `HTTPError` is a kind of `URLError`, which is a kind of `OSError`.
   - 404 or 410: the member is already gone, and counts as deleted.
   - 409 or 422: the member is recorded `not-deletable` with its id (Table C, C15). It counts against the delete ceiling, and the pass goes on.
   - 429, any 5xx, `URLError`, `TimeoutError` or `ConnectionError`: fault `api-unavailable`, outcome `deferred` (C11). The mark stays, and the next wake retries.
@@ -881,6 +957,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `PruneInterruptedError` and `FoldInterruptedError` carry the classified cause, and never relabel a code defect.
 - **Acceptance gates:** local: `-m contract backend/tests/contracts/test_collection_prune_row.py`, and pytest on the other test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** the new fixtures round-trip. A `fault` beside `stopped_because: exhausted` is refused. `ceiling-reached.json`, which has no `fault`, still reads. Each recovery in Table C writes its note, and each stop writes its fault. The classifier maps each case above, built from real `HTTPError` and `URLError` objects. With `RecordedAnswers` answering 503, the outcome is `deferred`, the mark does not move, and the shard's other tasks run. With member 2 of 3 answering 422, members 1 and 3 are deleted, and the record holds one `not-deletable` note naming member 2. A shard whose only non-green task is `deferred` exits 0. It cannot settle wording; the sentence is rendered and can change with no migration. Nor can it settle what GitHub answers for a member it will not delete (decision 6).
+- **Found during execution:** the oracle's 503 and 422 cases run through the real collection task and its own record row (`test_collection_task.py`), and the shard's other tasks through `broken.py`, whose service is down, beside a new `defect.py`, whose code is wrong: the first is `deferred` and leaves the shard at exit 0, the second is `failed` and exits 1. `ceiling-reached.json` gains the two empty cells, because every committed fixture round-trips byte for byte; the older row is read with both removed, which is what a row written before this change is. The 404 rule was not new: `RestApi.remove` held it, and it moved to `_remove_member` so `classify` holds it once; a 410 counts as deleted for the first time. Run on the base commit 606a53e10, in a copy outside this checkout, the 13 changed test modules fail to import (`GardenerFault`, `Recovery`, `stop_for` and `error_cause` are absent), and the base code refuses the three new rows, ends a 503 `failed` with no fault, stops at the 422 member and never deletes member 3, ends a 410 `failed`, and records the range refusal `failed`. The migrator read a refusal as `failed` only, and three of its tests went red until it read any stop that names a fault. Seven refusals still end `failed` with `raised` though a person, not a code change, settles them: a year with a month that never closed (`day-missing`), a year file over GitHub's large-file line, a month's own unindexed file holding other rows than its days, a Rule R or L file whose envelope names another ledger or period, an index this build cannot trust, a raw-folder entry that is not a file, and a period larger than the whole download budget. Each would need a word of its own in Table D, D3 to end `deferred` (ESCALATE trigger 1), so they are reported to the owner rather than given one. A 403 is `raised` as the mapping says, but GitHub answers a spent rate limit with 403 or 429; reading a 403 that carries `x-ratelimit-remaining: 0` or `retry-after` as `api-unavailable` is one header test and changes the approved mapping, so it is the owner's call (Fowler, 2026-10-07).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -890,6 +967,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 4 | No fault word for an interruption. A killed process lands nothing (Table C, C10), and both wrappers caught every exception, so a code defect would have been recorded as an interruption, ended `deferred` and left the job green | Fowler review, 2026-10-04 |
 | 5 | A member GitHub will not delete is recorded `not-deletable` with its id, and the mark may pass it. Before, one refused member stopped every later pass, so nothing behind it was ever deleted | Fowler review, 2026-10-04 |
 | 6 | 409 and 422 mean a member GitHub will not delete. That is a reading of GitHub's documentation, not a measurement: when a pass first meets such an answer, its response is recorded as a test fixture | Fowler review, 2026-10-04 |
+| 7 | The classifier is a module of its own, `error_cause.py`, not part of `github_collections.py`: `take` must call it and the driver imports `take`, and the runner, the fold, the ledger prune and the compaction's budget ask it too. It gives `GONE`, `NOT_DELETABLE`, `API_UNAVAILABLE`, `BUDGET_SPENT` or `RAISED`; a stop records `api-unavailable`, or else `raised`, so a 404 on a read is a defect. A member already gone is absorbed by `github_collections._remove_member`, so the artifacts walk still counts the delete | Fowler, 2026-10-07 (row 20 worker's consult) |
+| 8 | The four refusals the follow-ups name end `deferred`: `range-starts-late`, `no-month-to-reopen`, and `packed-file-unreadable` for a day file a re-run is taken into or a month file a late file re-opens that cannot be read or is not there, because C13 already treats a packed file the tree lacks as unreadable. A fault word, not a set-aside, because the entry would then call the period whole while it holds only the rows that ran again. `StepChoice` records the range refusal `deferred` with no new field. A step a fault stopped holds the daily mark below its day either way | Fowler, 2026-10-07 (row 20 worker's consult); the follow-ups, owner 2026-10-04 and 2026-10-06 |
+| 9 | `error_cause.classify` decides both download-budget cases by one rule, that more than the whole budget is a defect: an `OverBudgetError` for a period larger than the budget ends its step `failed` with `raised` and a smaller one ends it at `ceiling` for a wake with room, and a shard whose downloads passed the budget exits 1 with no task row marked, because no row can say which task downloaded past it | Fowler, 2026-10-07, on the owner's note of 2026-10-07 |
+| 10 | `repacked-from-raw` is noted only when the day is at or below the mark, no entry named it, nothing was adopted for it, and raw files packed it, so the note never depends on which step adopted a file first | Fowler, 2026-10-07 (row 20 worker's consult) |
+| 11 | `raised` pairs with `failed` and every other word with `deferred` (`stop_for`); a `deferred` row names its fault, and a `failed` row written before 2026-10-07 reads with none. Only a failed row, or a shard over its download budget, sets the failed exit code. A fold's fault decides the row when the fold stopped, and the fold is skipped after any stop. The changelog drops its 2026-09-30 entry to stay at five | Fowler, 2026-10-07 (row 20 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
@@ -903,37 +985,65 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Scope:** The events of Table E become models, `event_log.py` writes each one as one JSON line (section 2.5), and the free-text log lines of the gardener are deleted. Level 3.
 - **Follow-ups:**
   - Row 11 (#1317) added three warning lines that become events here: the order check failed, a page's count differs from the first page's, and the list does not end where the count says. E2's pages read is filled from the walk; found during execution (row 11 report), owner 2026-10-05.
+  - `PruneInterruptedError` said "Those are gone" on a dry run as well as a live one; that is the oracle's dry-run case. A dry run's message now says it deleted none, and `FoldInterruptedError` says the same of a dry-run fold (found by Fowler). Source: row 20's report, owner, 2026-10-07.
+  - The compaction's refusal lines (`_refused`, `_kept`) logged the ledger's own fault word under `fault=` at error level, while the record's fault is a `GardenerFault` word. The `period-refused` event gives the two words two keys, `fault` and `ledger_fault`, and a refusal that ends `deferred` is a warning, not an error. Source: row 20's report, owner, 2026-10-07.
+  - `CompactTree.note_recovery` logged one warning line for each note. The line is gone: the notes are on the record and in `task-finished`. Source: row 20's report, owner, 2026-10-07.
+  - `report.WHY` and `report.NOTED` hold one sentence for each fault word and each note word. `task-finished`'s `next` takes `WHY` when a fault stopped the task; `NOTED` stays for row 22's summary. Source: row 20's report, owner, 2026-10-07.
+  - Fewer tests read `caplog` since row 20, because the notes are read from the record; every test left that read gardener log text now reads the event on the record. Source: row 20's report, owner, 2026-10-07.
+  - Known defect 61: `cli.py` formatted records with `%(asctime)s` on the local clock. Every line the new handler writes carries `at`, the record's instant in UTC with `Z`, and `test_event_log.py` pins it under a zone that is not UTC. Defect 61's entry says the gardener's part is fixed; the other two command lines stay open. Source: `TODO/20260823-known-defects-plan.md`, owner, 2026-10-07.
+  - A line that starts with a workflow command stays raw and unwrapped; row 22 owns its words. The gardener's only such lines are the publisher's `::warning::` for a `stale` or `lost` landing, printed on stdout. `.github/workflows/idhazh-gardener.yml`, the one workflow that runs the gardener, reads no gardener log text: its `run-tasks` step pipes nothing, and the two steps that write `$GITHUB_OUTPUT` read `gardener_shards.py` and `corpus_squash_due.py`, which install no gardener handler. Source: the owner's brief, owner, 2026-10-07.
 - **Files touched:**
   - `backend/idhazh/contracts/gardener_events.py`
   - `backend/idhazh/gardener/event_log.py` (new; first sentence "How a gardener event becomes one log line")
-  - `backend/idhazh/gardener/report.py` (`classify`)
-  - `backend/idhazh/gardener/one_at_a_time.py` (`Pass.idle_outcome`; WindowChosen in `take`; the message of `PruneInterruptedError`)
+  - `backend/idhazh/gardener/report.py` (`classify`; `next_step` and `finished` beside `row`; `lines`, `_span`, `_what_next` and `fold_lines` deleted; found during execution, Fowler)
+  - `backend/idhazh/gardener/one_at_a_time.py` (`Pass.idle_outcome`; WindowChosen in `take`; the message of `PruneInterruptedError`; `Pass.pages_read` and `Pass.periods`, `Collection.pages_read`, and `MemberOutOfOrder`; found during execution, Fowler)
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/idhazh/gardener/runner.py`
   - `backend/idhazh/gardener/cli.py` (`settings_or_none` installs the handler once)
+  - `backend/idhazh/gardener/__init__.py`, `closed_day_fold.py` (the dry-run fold's message), `github_collections.py` (row 11's three warnings become events; both walks count their pages) and `named_trees.py` (`RawFileSkipped`) (found during execution)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py`, `_daily_period.py`, `_monthly_period.py`, `_yearly_period.py`, `_reopened_month.py` and `_compaction_periods.py` (refusals, the budget stop, E4 and the idle word; the unused `why` text and the module loggers deleted; found during execution)
+  - `backend/idhazh/gardener/tasks/telemetry_aggregate.py` and `visual_prune.py` (their summary lines deleted; found during execution)
   - `backend/tests/gardener/test_event_log.py` (new)
+  - `backend/tests/gardener/_events.py` (new: reads events off records; found during execution)
   - `backend/tests/gardener/test_runner.py`
   - `backend/tests/gardener/test_one_at_a_time.py`
+  - `backend/tests/gardener/test_report.py` (`report.lines` is gone; found during execution)
   - `backend/tests/gardener/tasks/test_visual_prune_task.py`
   - `backend/tests/gardener/tasks/test_names_only_shard.py`
-  - every test that reads gardener log text with `caplog`, from a search for `caplog` under `backend/tests/gardener/` at dispatch
+  - every test that reads gardener log text with `caplog`, from a search for `caplog` under `backend/tests/gardener/` at dispatch: `test_download_ceiling.py`, `test_github_collections.py`, `tasks/test_compaction.py` (with `test_compaction_periods.py` through its `chosen_on`) and `tasks/test_compaction_years.py`
   - `docs/architecture/publishing/idhazh-gardener.md` (logging)
+  - `docs/architecture/publishing/ledger-compaction.md`, `docs/how-to/prune-a-collection.md` and `docs/how-to/run-the-pipeline.md` (each described a line that is gone; found during execution)
+  - `TODO/20260823-known-defects-plan.md` (defect 61; the owner's fold)
 - **Acceptance gates:** local: pytest on the listed test files; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** unit: each event renders as one line of valid ASCII JSON with `event` first, `None` left out and nested models kept nested. Integration in `tmp_path`: one ledger for each outcome word in Table F. TaskPlanned comes before TaskFinished, and each carries its fields; tests read the payload on the record, not the text. A dry run whose listing fails part way never logs that anything is gone: today `one_at_a_time.PruneInterruptedError` says "Those are gone" for a dry run too, and `runner._run_one` logs it. It cannot settle how readable JSON is in GitHub's log viewer; row 22's summary is the view for a person.
+- **Found during execution:** the line carries `at` and `level` after `event` and before the event's fields, so section 2.5's sentence on the line format, and Table E, which names none of the events this row added (decision 4), are the owner's to update; this row edits only its own section. Run on the base commit 0bde65e46, in a copy outside this checkout, 9 of the 10 changed test modules fail at import (`TaskOutcome`, `TaskFinished`, `CompactionStep` and the other new events are absent); the tenth reads the visual-prune report row, which the base already writes. A probe drove the base code for each case of the oracle: a dry run whose listing fails part way says "Those are gone"; the runner's records carry no event, its lines are free text ("periods chosen {...}", "compaction of visual-prunes: 4 files written, ..."), and the report goes to stdout as printed lines; and the line for 09:46:00.500 UTC reads "2026-10-07 15:16:00,500 WARNING ..." under a zone five and a half hours east. On this branch each case gives the opposite. The canary, built on the base and then on this branch through the gate lock, holds the same 45 files: 28 identical, and 17 packed files whose 155 rows and 89 index entries are identical and whose only differing keys are the write clocks `file_id` and `written_at_ms`. A refused period's sentence is gone with its line, so a person reading a `raised` refusal sees its step, period, words, and the exception's type and code place, but not the numbers the sentence held, such as a year file's size; the fault words row 20 sent to the owner are the fix. Known gap: a retention task run with `--from` and `--to` that finds nothing ends `not-due`, because `TaskContext` holds the person's range and the scheduled window in one field; `task-planned` shows the range all the same (Fowler, 2026-10-07). `idhazh.ledger` logs an exception's text in two places, `raw_files._skip` and the "skipped a ledger file" warning in `ledger_files.py`, and the compaction calls both; a pydantic error there prints row values, so this is ESCALATE trigger 3 from before this row, reported to the owner with a proposed Level 2 row that logs the exception's type instead. This row does not widen it: a `logged-text` line keeps that message as it was, and three gardener sources of the same kind are gone.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | JSON lines (decision T2) | The owner, 2026-10-04 |
 | 2 | One handler on stderr, its level from config (CLAUDE.md section 1b) | Fowler, 2026-10-04 |
+| 3 | A line is `event`, then `at` (the record's own instant, UTC, to the millisecond, with `Z`), then `level`, then the fields; the record's message is the event's JSON too, so a command that formats records as text still prints it; `install` is `logging.basicConfig`, so a second call adds nothing; no event declares a field named `event`, `at` or `level` | Fowler, 2026-10-07 (row 21 worker's consult); `at` from the owner's fold on defect 61 |
+| 4 | Events beyond Table E, one small model for each fact: `member-out-of-order`, `page-out-of-order`, `page-count-changed` and `list-end-missing` for the walk checks; `period-refused` (step, period, `fault`, `ledger_fault`, error type, code place), `download-over-budget`, `ledger-fault-met` and `raw-file-skipped` for the compaction; `logged-text` wraps a record another module logs as text | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 5 | No field holds an exception's text: `error` is its type and `where` the deepest `module:line` of this package it passed through, both checked by pattern | Fowler, 2026-10-07 (row 21 worker's consult); row 20, decision 3 |
+| 6 | The runner's printed per-task report (`report.lines`, `fold_lines`) is a second rendering of `task-finished`, rejected as T3, so it is deleted; the shard's own printed lines stay for row 22 | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 7 | E2 is said at the top of `take`, before the listing is read, so a walk that fails at once has already said its window; the total pages read moves to the pass and to `task-finished`, because it is only known at the end | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 8 | `next` is one fixed sentence for each outcome word, or the fault's own sentence; no sentence carries a value or says a member is gone | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 9 | `classify`: work is found when the window held a member, a file was or would be written, or the fold found a day or month; carried out when a live pass took, wrote or recovered something, or a live fold found something; `dry-run` is found and not carried out. The compaction's idle word is `outside-range` whenever a person named a range, `empty` when every step starts at `none`, else `not-due` | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 10 | E4 is built from the indexes the pass read compared with the end, plus the lists the drop steps and `set_aside` keep, and travels on `Pass.periods`; `task-finished` also carries `handled_through`, the fold, and the exception's type and place | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 11 | `declared` is the declaration as it dumps, without `kind`, `owns`, `reads`, `appends_to` and the prose of `prune_refusal`; a null knob stays null | Fowler, 2026-10-07 (row 21 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | One `key=value` line per event (decision T1) | The owner chose JSON | Nothing | The owner, 2026-10-04 |
 | 2 | JSON plus a readable line for each event (decision T3) | Two renderings to keep in step | Twice the lines | Fowler, 2026-10-04 |
+| 3 | Keep a refusal's sentence in its event | The large-file sentence and a pydantic error that prints a row arrive through one `except ValueError`, so keeping one keeps the other | A new exception type every refusal site must use | Fowler, 2026-10-07 (row 21 worker's consult) |
+| 4 | Refusals as a list inside E4 | A refusal happens at a moment and has its own level; a task that crashed after it would lose it | Nothing to build | Fowler, 2026-10-07 (row 21 worker's consult) |
 
 ### Row #22 - A person reads a shard at a glance
 
 - **Scope:** When it runs on GitHub, each task's lines fold into one group, a `failed` task adds one error line, and each shard writes a summary to its job page whether it passes or fails. The summary says where the record went, what the exit code means, and one line per task. Level 2.
+- **Follow-ups:**
+  - A deferred row is green, so the summary lists it with its word. The `::error` line can use the GardenerFault word `raised` and the sentence in `report.WHY`. A shard over its download budget exits 1 with no failed row, so the summary needs its own line for that case; found during execution (row 20 report), owner 2026-10-07.
 - **Files touched:**
   - `backend/idhazh/gardener/event_log.py` (GitHub mode)
   - `backend/idhazh/gardener/run_summary.py` (new; first sentence "What one shard did, as Markdown for the job's summary page")
@@ -962,6 +1072,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Follow-ups:**
   - A first run looks back `lookback` months (default 2) before the month that holds the newest eligible day (Table B, B7). The gardener ledger's oldest raw day was 2026-09-30 on 2026-10-05, and from the wake of 2026-12-03 it falls outside that look-back, so a first live pass from then on would leave its older raw days raw. Before switching on, check the oldest raw day against the look-back and, when it falls outside, raise `lookback` in the same change so the first live pass reaches it. `compact-visual-prunes` (oldest raw day 2026-09-06, outside from 2026-12-03) and `compact-run-plan` (2026-10-04, outside from 2027-01-03) have never packed either and need the same check when they switch on; found during execution (row 13 report), owner 2026-10-05.
   - Since #1309 a first run starts at its oldest raw day and writes no zero-row file, so the cost named in rejected option 1 below no longer holds; Fowler's order for readable first-pass logs still does; found during execution (row 13 report), owner 2026-10-05.
+  - The gardener ledger's days written before 2026-10-07 read with no fault and no notes and pack under today's columns, so its first live pass needs nothing from row 20; found during execution (row 20 report), owner 2026-10-07.
 - **Files touched:**
   - `config/gardener/compact-gardener.json`
   - `backend/tests/contracts/test_gardener_config.py` (both of its switches in `LIVE_BY_DECISION`, with the owner's decision as the reason)
@@ -982,6 +1093,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #24 - Months close 16 days after they end
 
 - **Scope:** `daily_keep_days` becomes 16 in every compaction declaration, and its floor becomes 1. `seen` and `counterfactual-scores` keep a 3-month window so their readers keep 90 days. A late re-run file is handled by row 17. `docs/concepts/config/idhazh-gardener.md` gains a `compact-run-plan` row (#1284) in its table of compactions that ship, and names that task in its sentence on the month-delete switch; found during execution (row 7 report), owner 2026-10-04. Level 4: months closed at 16 days are not re-opened by going back.
+- **Follow-ups:**
+  - The re-run span starts 30 days before the wake. Two kinds of re-run fall outside it at the next wake: one made on the 30th day after its run that lands after that day's wake, and one that writes rows dated before its run's own day. At a 16-day keep, the file of either would sit unseen in a closed month. A span one day longer, or one counted from each day's own run, closes the gap; found during execution (row 17 report, Fowler), owner 2026-10-06.
+  - `docs/concepts/config/idhazh-gardener.md` and the field description of `month_deletes_dry_run` in `backend/idhazh/contracts/knobs/gardener.py` say that `true` keeps a raw day in a month past the window "and packs those days and months like the rest". Both should say instead that a raw day in a closed month past the line stays where it is. Row 24 already edits both files; found during execution (row 17 report), owner 2026-10-06.
+  - Two items in row 24's scope landed early in #1321 and leave it: the `compact-run-plan` row in the config page's table of compactions that ship, and that page's sentence on the month-delete switch, which now names `compact-run-plan`; corrected from #1321's report, owner 2026-10-06.
+  - At a 16-day keep, a late file is likely to meet a closed month more often (an estimate). Each such refusal now ends `deferred` with `no-month-to-reopen` or `packed-file-unreadable`, so it is green and named on the record. The span gap in row 24's own follow-up still writes nothing, because no pass sees that file; found during execution (row 20 report), owner 2026-10-07.
 - **Files touched:**
   - every `config/gardener/compact-*.json` that `task_names` in `config/idhazh_gardener.json` names, read at dispatch (12 on 2026-10-04)
   - `backend/idhazh/contracts/knobs/gardener.py` (the `GITHUB_RERUN_DAYS` comment, the `daily_keep_days` floor and its description)
@@ -1219,6 +1335,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/data/slice-shapes.ts` (read, no change: `isDay()`, which the explorer's address reads a day with since row 31)
   - `frontend/tests/console-data-explorer.spec.ts` (the lost-day answer, the chart cases and the questions kept in browser storage)
   - `frontend/tests/console-data-explorer-shape.spec.ts`
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md` (found during execution: it owns what the explorer shows for a lost day and how it reads a kept question)
+  - `docs/how-to/query-a-ledger-from-the-console.md` (found during execution: how an operator reads a result)
 - **Acceptance gates:** local: the two specs above, as `npm --prefix frontend run test:changed -- --list` selects them; `npm --prefix frontend run check` (svelte-check); the browser smoke in [run-the-gates.md](../docs/how-to/run-the-gates.md) on the data explorer, with a count by day across a lost day (CLAUDE.md section 12). CI: the full suite.
 - **Oracle:** in the browser, a count by day across a lost day draws its line in two segments, not one, and a saved question or recent run stored with the day `2026-08-32` is refused when the page reads browser storage. Each case fails on today's main. It cannot settle how the gap looks; Jony and Susan rule on that only if two layouts lead to different code.
 
@@ -1229,3 +1347,33 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Draw the lost day as zero | It would show a lost day as a quiet day | Nothing to build | The owner, 2026-10-04 (row 8, decision 3) |
+
+### Row #33 - A log line never quotes a ledger row's values
+
+- **Scope:** `backend/idhazh/ledger/ledger_files.py` (lines 377 and 453) and `backend/idhazh/ledger/raw_files.py`'s `_skip` (called at lines 173 and 308 in row 21's report) all log a malformed file's refusal reason as `logger.warning("... reason=%s", ..., reason)`. The one place that reason is built is `backend/idhazh/ledger/persist.py`'s `load_stored`, whose `except ValidationError` wrap embedded pydantic's `ValidationError.__str__()` whole - which quotes each failing field's `input_value`, so a corrupted cell holding fetched text (an article's title or address) reached a log line through any of the three call sites. Row 21 removed three gardener sources of the same kind; this leak predates it and row 21 did not touch the ledger package. The fix is at the one raise site: `load_stored` now builds its `ValueError` from a new `_refusal_facts` helper that keeps only each failing field's dotted `loc` (filtered to a name `RowIdentity` or the contract model declares, else `?`) and its pydantic error `type`, capped at the first 5 with the total shown only when truncated - never `msg`, `input`, `ctx` or `url`. The three existing catch sites need no code change: the `ValueError` they already log is sanitized before they see it. Level 2 (log content changes for the gardener and the daily run, which share the ledger package).
+- **Files touched:**
+  - `backend/idhazh/ledger/persist.py` (`_refusal_facts`, `_REFUSAL_FIELDS_SHOWN`, `load_stored`'s except-block and docstring invariant)
+  - `backend/tests/ledger/test_persist.py` (`_row_rewritten`; the row's own value never reaching the message, the 5-field cap with a total shown, an unlisted nested-model key shown as `?`)
+  - `backend/tests/ledger/test_ledger_files.py` (`_row_rewritten`; the raw-file warning at line 377 and the compact-file warning at line 453, each end to end through `load_visual_prunes` / `load_days`)
+  - `backend/tests/ledger/test_raw_files.py` (`_row_rewritten`; `_skip`'s risky caller, `load_current_rows`, end to end)
+- **Follow-ups:**
+  - `backend/idhazh/ledger/headers.py`'s `_refile()` helper (inside `migrate_header`, around line 99) builds `f"line {number} has {len(cells)} cells and cannot be read: {exc}"`, the same unsanitized pattern. Reachable only through the operator CLI `backend/utilities/widen_ledger_header.py`, which `print()`s rather than logs, on operator-typed input - out of this row's scope (a log line, not an operator's own prompt), but the same fix shape applies: keep `"line N has K cells"`, replace `{exc}` with `type(exc).__name__`. Found during execution, Fowler's ruling, 2026-10-07.
+  - `backend/idhazh/ledger/persist.py`'s `render_renamed` (around line 622) carries an identical unsanitized `{refusal}` pattern. It has no caller anywhere in the repository and no test coverage, so it is not a log line today - nothing calls it and nothing logs what it would raise. The same fix is needed before any future caller wires it up. Found during execution, not fixed here (untested, unreachable code with no oracle), 2026-10-07.
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe backend\utilities\gate_lock.py -- python -m pytest -n 0 backend/tests/ledger/` (191 passed); `.\.venv\Scripts\python.exe -m ruff check backend/idhazh/ledger/persist.py backend/tests/ledger/test_persist.py backend/tests/ledger/test_ledger_files.py backend/tests/ledger/test_raw_files.py`; `.\.venv\Scripts\python.exe -m mypy` on the same four files. `npm --prefix frontend run test:changed -- --list` selects nothing (no frontend file touched). CI: the full suite.
+- **Oracle:** a ledger file whose one row carries a marker string in a field the contract refuses (`payload_bytes_before` set to a non-numeric string) fails to load, read through each of the four call sites above (`load_stored` directly, the raw-day and compact-day paths in `ledger_files.py`, and `raw_files.py`'s `_skip`); the marker appears nowhere in the raised message or the captured log, and the failing field's name with its error kind does appear. Run in a copy of the base commit (`b421b0e4b`, `git archive` into `%TEMP%\plan60row33-base-commit`, this branch's four new test files copied in), all four new tests fail - the marker is quoted inside the pydantic `ValidationError` text each one captures. On this branch, the same four tests pass.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | This row exists: a malformed ledger file's fetched text can reach a log line through the ledger package's three skip/refusal warnings, the leak predates row 21 and row 21 did not touch it, so it is ESCALATE trigger 3 work needing its own row | Plan owner, 2026-10-07 (ESCALATE trigger 3, row 21 report) |
+| 2 | Keep the file path plus, per failing field, its dotted `loc` (filtered to a declared name or a list index, else `?`) and its pydantic error `type`; cap at 5 entries with the total shown only when truncated; drop `input`, `msg`, `ctx` and `url` entirely - `msg` is not closed, since a custom validator's message can echo the input | Fowler, 2026-10-07 |
+| 3 | Fix the one raise site, `persist.load_stored`'s `except ValidationError` wrap, with an Extract Function helper; the three existing `logger.warning` call sites need zero code changes, and `load_stored`'s docstring gains the invariant that every `ValueError` it raises names closed facts only | Fowler, 2026-10-07 |
+| 4 | Do not duplicate or move row 21's `cause_of` into `idhazh.ledger`: the ledger package owns exactly one raise site, not a traceback-walking problem like the gardener's, and "two consumers do not earn a shared module; three would" | Fowler, 2026-10-07 |
+| 5 | Defer `headers.py`'s `_refile()` leak to a Follow-up rather than fixing it here; it is reachable only through an operator CLI that `print()`s, not `logging`, on operator-typed input | Fowler, 2026-10-07 |
+| 6 | Raise `load_stored`'s `ValueError` `from None` instead of `from refusal`: raised `from refusal`, the original `ValidationError` survives as `__cause__` and `traceback.format_exception` prints it whole, so an uncaught crash or a future `logger.exception` call would still quote the row's value even though the three warnings that format with `%s` never saw it; no caller reads `__cause__`/`__context__` on this exception, so suppressing it costs nothing | Plan owner, 2026-10-07 (pre-merge review of #1393) |
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Fix each of the three `logger.warning` call sites to sanitize `reason` before logging it | The leak is in what `reason` already is by the time any of the three sees it; fixing three call sites for one root cause is three places to keep in step instead of one | Three call-site edits instead of one helper | Fowler, 2026-10-07 |
+| 2 | Keep the exception's type name in the outer message, beside the per-field facts | Redundant: a reader asking what kind of file problem this is already gets it per field, and the file name plus "a row this build refuses" already says it is a validation refusal | Nothing to build; a slightly longer line that repeats itself | Fowler, 2026-10-07 |
+| 3 | Reuse row 21's `Cause` / `cause_of` / `LoggedText` shapes from `idhazh.gardener.event_log` | `idhazh.gardener` depends on `idhazh.ledger`, never the reverse (CLAUDE.md section 4); importing gardener code from ledger code would invert the dependency | A layering violation the gates would catch | Fowler, 2026-10-07 |
+| 4 | Fix `render_renamed`'s identical pattern in this row | It is dead code: no caller anywhere in the repository and no test exercises it, so there is no oracle to prove a fix correct or to prove the leak exists today | Removing or fixing untested code with nothing to validate the change | Fowler, 2026-10-07 |

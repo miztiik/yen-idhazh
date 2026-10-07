@@ -44,6 +44,7 @@
 		widerNote
 	} from '$lib/console/eval-instruments';
 	import { buildCardTrends, type CardTrend } from '$lib/console/model-cards';
+	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 	import Chart from '$lib/charts/Chart.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -61,11 +62,6 @@
 
 	let { data } = $props();
 
-	/** A record this build could not read at all. Its note above already says why
-	 * the page is empty, so the sentence that reads an empty page as a model that
-	 * has written nothing yet would be false beside it. */
-	const recordUnread = $derived(data.recordNotes.some((note) => note.kind !== 'behind'));
-
 	/** The same key the other two routes read, so the operator's choice of span
 	 * follows him between them rather than resetting on every click. */
 	const WINDOW_KEY = 'idhazh:console-window';
@@ -76,6 +72,20 @@
 	let windowDays = $state(data.console.default_window_days);
 	/** False until a browser has run this page. */
 	let ready = $state(false);
+
+	/** What the page says about the records it read, for the window in force. The
+	 * server wrote one set for each preset, so changing the window recomputes
+	 * nothing. */
+	const notes = $derived(
+		data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []
+	);
+	/** A note above already says why this window is empty: a record this build
+	 * could not read, one not packed yet or not packed this far, or one whose rows
+	 * stop before the window. The sentence that reads an empty page as a model that
+	 * has written nothing yet would be false beside it. Decided by what each note
+	 * says about the window, not by its kind, because the line for a day packing
+	 * has not reached prints every day and empties only a window that day fills. */
+	const emptyExplained = $derived(notes.some((note) => note.emptiesWindow));
 
 	onMount(() => {
 		ready = true;
@@ -268,15 +278,9 @@
 	 * cannot disagree about when the ground moved. */
 	const modelSwaps = $derived(data.modelWork.flatMap((row) => (row.kind === 'swap' ? [row] : [])));
 
-	/** The days the cards' lines cover, oldest first. */
-	const modelSpan = $derived(
-		windowOfDays(
-			modelDays.map((day) => day.date),
-			data.today,
-			windowDays,
-			data.console.today_anchor
-		)
-	);
+	/** The days the cards' lines cover, oldest first: the window in force, which
+	 * ends on the site's newest published day like every other on this page. */
+	const modelSpan = $derived(windowOfDays(data.windowDay, windowDays, data.console.today_anchor));
 	const modelWindow = $derived(
 		[...modelDays.filter((day) => day.date >= modelSpan.start && day.date <= modelSpan.end)].reverse()
 	);
@@ -345,6 +349,12 @@
 	const span = $derived(data.windows[windowKey] ?? null);
 	const writeTimes = $derived(data.writeTimes[windowKey] ?? null);
 	const scoreCost = $derived(data.scoreCost[windowKey] ?? null);
+	/** The "Measurement is off" line for the open window, null while the scorer is
+	 * on. The server worded it for each preset, so it names only a day this window shows. */
+	const switchedOff = $derived(data.measurementOff[windowKey] ?? null);
+	/** What the scorer was doing over the open window. The server worked it out for
+	 * each preset, so a day a line names is one this window shows. */
+	const recording = $derived(data.recording[windowKey] ?? null);
 
 	/** Which sources the checker doubted, over the open window.
 	 *
@@ -474,7 +484,7 @@
 	 * because it has to name the rules the plot actually drew, and a rule under
 	 * the axis floor is not one of them. */
 	const matchChartLabel = $derived(
-		`Summary faithfulness per day over ${windowDays} days, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.` +
+		`Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.` +
 			(matchRulesDrawn.length === 0
 				? ''
 				: ` A line crosses the plot at ${matchRulesDrawn.map((rule) => `${rule.at}`).join(' and ')} percent, the scores a published story is banded on.`)
@@ -524,11 +534,39 @@
 	<!-- Above every panel, because every panel here is built on the article and
 	     score records, and a record that is late or unread empties all of them for
 	     one reason. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes {notes} />
+
+	<!-- What the recording was doing, before anything says what it recorded, and
+	     whether or not the sections below have anything to draw: a scorer that is
+	     switched off is a reason they may not. None of these is an error and none
+	     is styled as one: each states a fact about the scorer, at body size, in the
+	     route it governs. -->
+	<div data-recording-lines>
+		{#if switchedOff}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
+				{switchedOff}
+			</p>
+		{/if}
+		{#if recording?.sampled}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
+				{recording.sampled}
+			</p>
+		{/if}
+		{#if recording?.startedMidWindow}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
+				{recording.startedMidWindow}
+			</p>
+		{/if}
+		{#if recording?.coveredElsewhere}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="covered-elsewhere">
+				{recording.coveredElsewhere}
+			</p>
+		{/if}
+	</div>
 
 	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
 		<h2 class="console-h2">What the model did</h2>
-		{#if !recordUnread}
+		{#if !emptyExplained}
 			<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model="empty">
 				The model has not summarised anything yet. This fills as days publish.
 			</p>
@@ -544,30 +582,6 @@
 					>measurements write-up</a
 				>.
 			</p>
-
-			<!-- What the recording was doing, in the panel it governs rather than as
-			     a banner: three panels can be in three different states on one day.
-			     None of these is an error and none is styled as one. -->
-			{#if data.recording.off}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-					{data.recording.off}
-				</p>
-			{/if}
-			{#if data.recording.sampled}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
-					{data.recording.sampled}
-				</p>
-			{/if}
-			{#if data.recording.countersOnly}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="counters-only">
-					{data.recording.countersOnly}
-				</p>
-			{/if}
-			{#if data.recording.startedMidWindow}
-				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
-					{data.recording.startedMidWindow}
-				</p>
-			{/if}
 
 			<!-- Always rendered, empty window included. The chart owns its own empty
 			     state, so a window with nothing in it says so instead of taking the
@@ -594,12 +608,17 @@
 					data-windowed="model-cards"
 					data-window-days={windowDays}
 				>
-					Every figure is {newestModelDay.date}, the newest day either ledger holds. Each line is
-					the {windowDays} days ending there, and a dashed rule across one is a day the model
-					changed. The percentage beside it is the change from the start of that line to its
-					end, coloured green where the measure went the way we want and red where it did not;
-					a measure nobody has agreed a direction for says "no target" instead. Point at a card's
-					line to read a day. Left and Right step days, Escape returns to the newest.
+					Every figure is {newestModelDay.date}, the newest day either ledger holds.
+					{#if windowDays === 1}
+						<!-- A line needs two days, so at one day no card draws one, nor a change along it. -->
+						One day is too short for a line, so each card shows its figure alone.
+					{:else}
+						Each line is the {countDays(windowDays)} ending there, and a dashed rule across one is a
+						day the model changed. The percentage beside it is the change from the start of that line
+						to its end, coloured green where the measure went the way we want and red where it did
+						not; a measure nobody has agreed a direction for says "no target" instead. Point at a
+						card's line to read a day. Left and Right step days, Escape returns to the newest.
+					{/if}
 				</p>
 
 				<div class="auto-grid mt-4" style="--auto-grid-min: {CARD_MIN_PX}px" data-model-cards>
@@ -627,7 +646,7 @@
 									}}
 									width={SPARK_WIDTH_PX}
 									height={data.chart.sparkline_height_px}
-									label="{card.label}, over the {windowDays} days ending {newestModelDay?.date}"
+									label="{card.label}, over the {countDays(windowDays)} ending {newestModelDay?.date}"
 								/>
 							{/snippet}
 						</KpiCard>
@@ -650,7 +669,7 @@
 					data-window-days={windowDays}
 				>
 					<summary class="console-summary"
-						>Show these figures day by day, over these {windowDays} days</summary
+						>Show these figures day by day, over {nameSpan(windowDays)}</summary
 					>
 					<div class="console-table mt-3" data-model="table">
 						<table class="w-full text-[0.8125rem]">
@@ -711,9 +730,10 @@
 		>
 			<h2 class="console-h2">Why a summary was doubted</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-reasons-intro>
-				One column is one day over these {windowDays} days, and its height is how many of that day's
-				summaries the checker wrote a reason on. A summary gets one reason, the first that applied,
-				so no summary is counted twice.
+				{windowDays === 1
+					? `The single column is ${nameSpan(windowDays)}, and its height is how many of the day's summaries the checker wrote a reason on.`
+					: `One column is one day over ${nameSpan(windowDays)}, and its height is how many of that day's summaries the checker wrote a reason on.`}
+				A summary gets one reason, the first that applied, so no summary is counted twice.
 				<strong class="font-semibold text-text-secondary" data-model-reasons-rule
 					>The five reasons are drawn apart and never added into one doubt count</strong
 				>: a single number says how often the checker stopped and never says which fault to go and
@@ -741,12 +761,15 @@
 
 			{#if reasonWindow.length === 0}
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-reasons="empty">
-					No day in these {windowDays} days published a summary, so there is nothing to explain.
+					{windowDays === 1
+						? `${openWithSpan(windowDays)} did not publish a summary, so there is nothing to explain.`
+						: `No day in ${nameSpan(windowDays)} published a summary, so there is nothing to explain.`}
 				</p>
 			{:else if reasonSum.explained === 0}
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-reasons="none">
-					The checker wrote no reason on any of the {grouped(reasonSum.items)} summaries in these {windowDays}
-					days.
+					The checker wrote no reason on any of the {grouped(reasonSum.items)} summaries in {nameSpan(
+						windowDays
+					)}.
 				</p>
 			{:else}
 				<Chart
@@ -754,7 +777,7 @@
 					option={reasonPlot.option}
 					width={data.console.chart_width}
 					height={data.console.chart_height}
-					label="Why summaries were doubted, per day, over {windowDays} days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
+					label="Why summaries were doubted, per day, over {countDays(windowDays)}. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
 					readout={reasonStrip}
 					readoutName="doubt-reasons"
 					readoutMaxShare={data.chart.readout_max_share}
@@ -826,8 +849,10 @@
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-match-intro>
 				Faithfulness is how much of a summary its own article supports. The checker reads each
 				summary back against the article it came from and scores it out of a hundred, and
-				<strong class="font-semibold text-text-secondary">higher is better</strong>. One point is
-				one day over these {windowDays} days.
+				<strong class="font-semibold text-text-secondary">higher is better</strong>.
+				{windowDays === 1
+					? `The single point is ${nameSpan(windowDays)}.`
+					: `One point is one day over ${nameSpan(windowDays)}.`}
 				<strong class="font-semibold text-text-secondary" data-model-match-rule
 					>A published story is banded on two of these scores</strong
 				>: {data.matchThresholds.high}% and up is published as matching its source, and under {data
@@ -847,7 +872,9 @@
 
 			{#if matchWindow.length === 0}
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-match="empty">
-					No day in these {windowDays} days carries a checked summary, so there is nothing to draw.
+					{windowDays === 1
+						? `${openWithSpan(windowDays)} does not carry a checked summary, so there is nothing to draw.`
+						: `No day in ${nameSpan(windowDays)} carries a checked summary, so there is nothing to draw.`}
 				</p>
 			{:else}
 				<Chart
@@ -896,16 +923,28 @@
 			<h2 class="console-h2">Measured, and nothing acts on it</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-recorded-intro>
 				Eight more instruments run on every summary. None of them changes a band, a card or a rule.
-				<strong class="font-semibold text-text-secondary" data-model-recorded-rule
-					>Every figure here is one day's middle summary: half of that day's summaries scored
-					higher, half lower</strong
-				>, and the two columns beside it are the quietest and loudest day in these {windowDays} days
-				- not the quietest and loudest summary, which would need every reading on the page.
+				{#if windowDays === 1}
+					<!-- One day has no quietest or loudest day, so the line says why both columns repeat it. -->
+					<strong class="font-semibold text-text-secondary" data-model-recorded-rule
+						>Every figure here is {nameSpan(windowDays)}'s middle summary: half of its summaries
+						scored higher, half lower</strong
+					>. The two columns beside it are the quietest and loudest day, and with one day on screen
+					both repeat that figure. They are not the quietest and loudest summary, which would need
+					every reading on the page.
+				{:else}
+					<strong class="font-semibold text-text-secondary" data-model-recorded-rule
+						>Every figure here is one day's middle summary: half of that day's summaries scored
+						higher, half lower</strong
+					>, and the two columns beside it are the quietest and loudest day in {nameSpan(windowDays)}
+					- not the quietest and loudest summary, which would need every reading on the page.
+				{/if}
 			</p>
 
 			{#if evalWindow.length === 0}
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-recorded="empty">
-					No day in these {windowDays} days carries a checked summary, so there is nothing to report.
+					{windowDays === 1
+						? `${openWithSpan(windowDays)} does not carry a checked summary, so there is nothing to report.`
+						: `No day in ${nameSpan(windowDays)} carries a checked summary, so there is nothing to report.`}
 				</p>
 			{:else}
 				<div class="console-scroll mt-3">
@@ -970,7 +1009,7 @@
 			>
 				<h2 class="console-h2">Which sources the checker doubts</h2>
 				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-doubt-intro>
-					One row per source over these {windowDays} days, most doubted summaries first. A summary is
+					One row per source over {nameSpan(windowDays)}, most doubted summaries first. A summary is
 					doubted when the checker marked it "not sure", when it carried a figure the article did
 					not, or when it told a "maybe" as fact. The three are counted apart - they have different
 					causes, and one summary can carry more than one.
@@ -984,14 +1023,14 @@
 
 				<div class="mt-3" data-model-doubt-list>
 					<RankedList
-						caption="Sources in these {windowDays} days, most doubted summaries first"
+						caption="Sources in {nameSpan(windowDays)}, most doubted summaries first"
 						ranked={doubtRanked}
 						maxText="{grouped(doubtRanked.max)} doubted {doubtRanked.max === 1
 							? 'summary'
 							: 'summaries'}"
 						measured={doubts.summaries > 0}
-						unmeasuredNote="Nothing scored a summary in these {windowDays} days."
-						emptyNote="The checker doubted nothing in these {windowDays} days."
+						unmeasuredNote="Nothing scored a summary in {nameSpan(windowDays)}."
+						emptyNote="The checker doubted nothing in {nameSpan(windowDays)}."
 						tail={doubtTail}
 					>
 						{#snippet trend(row)}
@@ -1017,7 +1056,7 @@
 					     were written before that ledger carried them. -->
 					<p class="mt-2 text-[0.75rem] text-text-tertiary" data-model-doubt-unattributed>
 						{grouped(doubts.unattributed)} of {grouped(doubts.summaries)}
-						{doubts.summaries === 1 ? 'summary' : 'summaries'} in these {windowDays} days could not
+						{doubts.summaries === 1 ? 'summary' : 'summaries'} in {nameSpan(windowDays)} could not
 						be traced to a source, so they are counted in neither list.
 					</p>
 				{/if}
@@ -1036,7 +1075,7 @@
 
 			{#if writeTimes === null}
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-write-times="empty">
-					Nothing was timed in these {windowDays} days.
+					Nothing was timed in {nameSpan(windowDays)}.
 				</p>
 			{:else if writeTimes.n < data.console.min_attempts_for_rate}
 				<!-- A median over three summaries is the second summary, and a one in
@@ -1044,7 +1083,7 @@
 				     answer until there are enough of them to divide. -->
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-write-times="thin">
 					{grouped(writeTimes.n)}
-					{writeTimes.n === 1 ? 'summary was' : 'summaries were'} timed in these {windowDays} days.
+					{writeTimes.n === 1 ? 'summary was' : 'summaries were'} timed in {nameSpan(windowDays)}.
 					Too few to give a middle or a slowest one in twenty - {data.console
 						.min_attempts_for_rate} needed. The fastest took {asSeconds(writeTimes.fastest)} and the
 					slowest {asSeconds(writeTimes.slowest)}.
@@ -1061,7 +1100,7 @@
 					readoutMaxShare={data.chart.readout_max_share}
 				/>
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-write-times="readout">
-					Over {grouped(writeTimes.n)} summaries on {writeTimes.timedDays} of these {windowDays} days.
+					Over {grouped(writeTimes.n)} summaries on {writeTimes.timedDays} of {countDays(windowDays)}.
 					The fastest took {asSeconds(writeTimes.fastest)} and the slowest {asSeconds(
 						writeTimes.slowest
 					)}.
@@ -1082,12 +1121,12 @@
 
 			{#if scoreCost === null}
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="empty">
-					Nothing scored a summary in these {windowDays} days.
+					Nothing scored a summary in {nameSpan(windowDays)}.
 				</p>
 			{:else if scoreCost.n < data.console.min_attempts_for_rate}
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="thin">
 					{grouped(scoreCost.n)}
-					{scoreCost.n === 1 ? 'summary was' : 'summaries were'} checked in these {windowDays} days.
+					{scoreCost.n === 1 ? 'summary was' : 'summaries were'} checked in {nameSpan(windowDays)}.
 					Too few to give a middle or a slowest one in twenty - {data.console
 						.min_attempts_for_rate} needed. It runs after the model has finished, so the run never
 					waits on it.
@@ -1107,7 +1146,7 @@
 					Checking a summary afterwards took a middle of
 					<span data-score-cost="median">{asSeconds(scoreCost.median)}</span>, and
 					<span data-score-cost="p95">{asSeconds(scoreCost.p95)}</span> at the slowest one in
-					twenty, over {grouped(scoreCost.n)} summaries in these {windowDays} days. It runs after
+					twenty, over {grouped(scoreCost.n)} summaries in {nameSpan(windowDays)}. It runs after
 					the model has finished, so the run never waits on it.
 				</p>
 			{/if}
@@ -1123,7 +1162,7 @@
 
 			{#if runsInWindow.length === 0}
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-run-lengths="empty">
-					No run wrote a summary in these {windowDays} days.
+					No run wrote a summary in {nameSpan(windowDays)}.
 				</p>
 			{:else}
 				<RunLengths

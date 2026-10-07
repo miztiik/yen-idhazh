@@ -29,7 +29,6 @@ from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.council_run_record import CouncilRunRecord
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.digest_day import (
@@ -59,7 +58,7 @@ from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.label_row import LabelRow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.machine_shard import MachineShardRow
@@ -136,7 +135,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CorpusMeta,
     CorpusRow,
     CouncilRunRecord,
-    CouncilShardOutcome,
     CounterfactualScoreRow,
     DayMetrics,
     DigestDay,
@@ -193,7 +191,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     VisualPlan,
     VisualPruneRow,
     Watchlist,
-    Watermark,
 )
 
 __all__ = [
@@ -256,7 +253,6 @@ __all__ = [
     "VisualKind",
     "VisualState",
     "Watchlist",
-    "Watermark",
     "canonical_json",
     "derive_output_digest",
     "derive_url_key",

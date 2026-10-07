@@ -82,7 +82,6 @@ DERIVED: Final[tuple[str, ...]] = (
 #: no driver before it moved. Nothing under `state/raw/` takes one: every file
 #: there has one writer, so a union would have nothing to settle.
 UNION_SAFE: Final[tuple[str, ...]] = (
-    "state/llm-council/shard-outcomes",
     "state/content-similarity-judge/metrics",
     "state/content-similarity-judge/merge-line-holdout-scores",
     "state/content-similarity-judge/scored-pairs",

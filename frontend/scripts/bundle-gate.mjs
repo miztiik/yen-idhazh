@@ -58,12 +58,11 @@ import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import ts from 'typescript';
 import { assetBaseUrl } from '../asset-base.js';
+import { LEDGERS, weighPayloads } from './payload-ceilings.mjs';
+import { publishedLedgers } from './published-ledgers.mjs';
 
 const BUILD = 'build';
 const ROOT = 'build/_app/immutable';
-// Where the published ledgers sit in the build: `copy-visuals.mjs` copies each
-// file to the path it has under the repository's `state/`.
-const LEDGERS = 'state/';
 const REGISTRY = 'config/ledgers.json';
 
 // Directories whose modules a browser loads before any reader gesture: the
@@ -284,22 +283,9 @@ if (uncapped.length > 0) {
 /**
  * The files a reader's browser fetches, against page_weight.payload_ceilings_bytes.
  *
- * A key is a build-relative POSIX path, and its shape says what it bounds. A
- * key naming a file bounds that file. A key ending in `/` bounds every file
- * under that directory, each on its own - a month series takes one number
- * rather than one a month, so a shard landing in October needs no config edit
- * and gets no free pass either.
- *
- * A key that matches nothing fails, for the same reason an unmatched route
- * ceiling does: a bound over nothing still reads as a bound somebody checked.
- *
- * The walk is over the named keys and not over the build, so what this costs is
- * set by how many ceilings are written rather than by how much the pipeline has
- * accumulated (Guardrail #12). A directory key does read every file under itself,
- * and that read grows - a month a run appends is a file this opens. It is
- * bounded where it matters by retention: the gardener's telemetry-aggregate task
- * keeps the public-copy series of config/gardener/telemetry-aggregate.json, 14
- * months, so the directory holds fourteen shards however long the project runs.
+ * `payload-ceilings.mjs` weighs them and says which keys fail, which keys are
+ * not weighed and why, so a test can ask it of a build tree it wrote. This
+ * prints that answer and fails on it.
  */
 const payloadCeilings = config.page_weight?.payload_ceilings_bytes ?? {};
 if (payloadCeilings === null || typeof payloadCeilings !== 'object' || Array.isArray(payloadCeilings)) {
@@ -307,57 +293,36 @@ if (payloadCeilings === null || typeof payloadCeilings !== 'object' || Array.isA
 	process.exit(1);
 }
 
-/** Every build file a payload key covers, heaviest first. */
-function payloadsFor(key) {
-	const target = join(BUILD, ...key.split('/').filter(Boolean));
-	let stat;
-	try {
-		stat = statSync(target);
-	} catch {
-		return [];
-	}
-	if (!stat.isDirectory()) return [{ path: key, bytes: gzipBytes(target) }];
-	return readdirSync(target)
-		.filter((name) => !statSync(join(target, name)).isDirectory())
-		.map((name) => ({ path: `${key}${name}`, bytes: gzipBytes(join(target, name)) }))
-		.sort((left, right) => right.bytes - left.bytes);
+let published;
+try {
+	published = publishedLedgers(CONFIG);
+} catch (error) {
+	console.error(`bundle gate: ${error.message}`);
+	process.exit(1);
 }
-
+const payloads = weighPayloads(BUILD, payloadCeilings, published, assetBaseUrl(), gzipBytes);
 const payloadKeys = Object.keys(payloadCeilings).sort();
-const heaviestPayload = new Map();
-// With `visuals.asset_base_url` set, the build copies no ledger, because the
-// browser asks that host for them - so a ledger key here would name nothing.
-const ledgersElsewhere = assetBaseUrl() !== '';
 if (payloadKeys.length > 0) {
 	console.log(
 		'\nfetched payloads, gzip -5, against page_weight.payload_ceilings_bytes in config/idhazh.json:'
 	);
 }
-for (const key of payloadKeys) {
-	const ceiling = payloadCeilings[key];
-	if (ledgersElsewhere && key.startsWith(LEDGERS)) {
-		console.log(
-			`  ${key} is not weighed: visuals.asset_base_url serves the published ledgers from ${assetBaseUrl()}`
-		);
-		continue;
-	}
-	const found = payloadsFor(key);
-	if (found.length === 0) {
-		namesNothing.push(
-			`${key} is capped at ${kb(ceiling)}, and no file in the build is at that path`
-		);
-		continue;
-	}
-	heaviestPayload.set(key, found[0].bytes);
-	for (const { path, bytes } of found) {
-		const headroom = ceiling - bytes;
-		const verdict = headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`;
-		console.log(
-			`  ${path.padEnd(26)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}` +
-				`  (guardrail ${commas(ceiling)}, ${verdict})`
-		);
-		if (headroom < 0) over.push({ name: path, bytes, ceiling });
-	}
+for (const { path, bytes, ceiling } of payloads.weighed) {
+	const headroom = ceiling - bytes;
+	const verdict = headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`;
+	console.log(
+		`  ${path.padEnd(26)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}` +
+			`  (guardrail ${commas(ceiling)}, ${verdict})`
+	);
+}
+for (const { key, reason } of payloads.notWeighed) console.log(`  ${key} is not weighed: ${reason}`);
+for (const { key, ceiling } of payloads.namesNothing) {
+	namesNothing.push(`${key} is capped at ${kb(ceiling)}, and no file in the build is at that path`);
+}
+for (const { path, bytes, ceiling } of payloads.over) over.push({ name: path, bytes, ceiling });
+const heaviestPayload = new Map();
+for (const { key, bytes } of payloads.weighed) {
+	heaviestPayload.set(key, Math.max(heaviestPayload.get(key) ?? 0, bytes));
 }
 
 /**

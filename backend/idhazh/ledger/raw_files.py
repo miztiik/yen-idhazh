@@ -25,13 +25,15 @@ been compacted yet, and a parquet file's envelope is read from its footer
 without its rows. `docs/concepts/growing-reads.md` lists the reads.
 
 **A reader skips a file this build cannot read, with one warning that names it;
-the compaction stops that day instead.** A file under a newer row shape, a row
+the compaction moves it aside instead.** A file under a newer row shape, a row
 today's model refuses, a file that is not a ledger file at all, or one filed in
 the wrong folder is a `ValueError`. A reader that stopped on it would cost the
 run its day to protect one row. The compaction must never delete a file it
-could not read, so `read_day_files` raises rather than skips. Only `ValueError`
-is caught. A missing parquet engine raises `ImportError`, and that must stop the
-run: skipping every file for it would read as a ledger with no history.
+could not read, so `read_day_folder` names each such file beside the rest of the
+day, for the compaction to move aside, and `read_day_files` raises on the first,
+for a reader that deletes what it read. Only `ValueError` is caught. A missing
+parquet engine raises `ImportError`, and that must stop the run: skipping every
+file for it would read as a ledger with no history.
 """
 
 from __future__ import annotations
@@ -59,14 +61,18 @@ class RawFile(NamedTuple):
     envelope: FileEnvelope
 
 
-def _shown(state_dir: Path, path: Path) -> str:
-    """A path as it may leave the process: under `state/`, POSIX (CLAUDE.md section 2)."""
-    return f"{paths.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
+class DayFolder(NamedTuple):
+    """One raw day folder as a reader finds it: the files it can read, and those it cannot."""
+
+    #: Every file whose envelope this build reads, oldest first.
+    files: list[RawFile]
+    #: Every other entry of the folder, in name order, beside why it cannot be read.
+    unreadable: list[tuple[Path, str]]
 
 
 def _skip(state_dir: Path, path: Path, reason: object) -> None:
     """Say which file a read left out, and why, in the one line a person will look for."""
-    logger.warning("skipped a raw file path=%s reason=%s", _shown(state_dir, path), reason)
+    logger.warning("skipped a raw file path=%s reason=%s", paths.shown(state_dir, path), reason)
 
 
 def _day_folders(state_dir: Path, root: Path) -> list[tuple[str, Path]]:
@@ -83,8 +89,7 @@ def _day_folders(state_dir: Path, root: Path) -> list[tuple[str, Path]]:
             continue
         for month in sorted(year.iterdir()):
             if not (
-                month.is_dir()
-                and day_partition.is_segment(month.name, day_partition.SEGMENT_WIDTH)
+                month.is_dir() and day_partition.is_segment(month.name, day_partition.SEGMENT_WIDTH)
             ):
                 _skip(state_dir, month, "not an MM folder")
                 continue
@@ -103,7 +108,9 @@ def _order(held: RawFile) -> tuple[str, int, str]:
     return (held.envelope.covers, held.envelope.written_at_ms, str(held.envelope.file_id))
 
 
-def raw_days(state_dir: Path, ledger: LedgerName) -> list[str]:
+def raw_days(
+    state_dir: Path, ledger: LedgerName, *, registry: paths.DoorRegistry | None = None
+) -> list[str]:
     """Every UTC day this ledger has a raw folder with something in it for, oldest first.
 
     Folder names only: one entry is read from each day folder to see that it
@@ -113,7 +120,9 @@ def raw_days(state_dir: Path, ledger: LedgerName) -> list[str]:
     """
     return [
         day
-        for day, folder in _day_folders(state_dir, paths.raw_root(state_dir, ledger))
+        for day, folder in _day_folders(
+            state_dir, paths.raw_root(state_dir, ledger, registry=registry)
+        )
         if next(folder.iterdir(), None) is not None
     ]
 
@@ -132,7 +141,11 @@ def _held(ledger: LedgerName, covers: str, path: Path) -> RawFile:
 
 
 def list_raw_files(
-    state_dir: Path, ledger: LedgerName, *, days: Collection[str] | None = None
+    state_dir: Path,
+    ledger: LedgerName,
+    *,
+    days: Collection[str] | None = None,
+    registry: paths.DoorRegistry | None = None,
 ) -> list[RawFile]:
     """Every raw file of this ledger whose envelope this build can read, oldest first.
 
@@ -143,7 +156,9 @@ def list_raw_files(
     was filed by something other than the door, and is skipped as unreadable.
     """
     found: list[RawFile] = []
-    for covers, folder in _day_folders(state_dir, paths.raw_root(state_dir, ledger)):
+    for covers, folder in _day_folders(
+        state_dir, paths.raw_root(state_dir, ledger, registry=registry)
+    ):
         if days is not None and covers not in days:
             continue
         for path in sorted(folder.iterdir()):
@@ -154,23 +169,44 @@ def list_raw_files(
     return sorted(found, key=_order)
 
 
-def read_day_files(state_dir: Path, ledger: LedgerName, day: str) -> list[RawFile]:
-    """One day's raw files, oldest first, or a refusal naming the first one that cannot be read.
+def read_day_folder(
+    state_dir: Path, ledger: LedgerName, day: str, *, registry: paths.DoorRegistry | None = None
+) -> DayFolder:
+    """One day's raw files oldest first, and each entry of its folder this build cannot read.
 
-    For the compaction, which deletes what it read and so may not skip a file:
-    a file it cannot read would be deleted unread. A day with no folder holds
-    nothing, which is an empty list.
+    For the compaction, which moves a file it cannot read aside rather than
+    delete it unread, and packs the rest of the day. A day with no folder holds
+    nothing.
     """
-    folder = paths.raw_root(state_dir, ledger).joinpath(day[:4], day[5:7], day[8:10])
+    folder = paths.raw_root(state_dir, ledger, registry=registry).joinpath(
+        day[:4], day[5:7], day[8:10]
+    )
     if not folder.is_dir():
-        return []
+        return DayFolder(files=[], unreadable=[])
     found: list[RawFile] = []
+    unreadable: list[tuple[Path, str]] = []
     for path in sorted(folder.iterdir()):
         try:
             found.append(_held(ledger, day, path))
         except ValueError as refusal:
-            raise ValueError(f"{_shown(state_dir, path)} cannot be read: {refusal}") from refusal
-    return sorted(found, key=_order)
+            unreadable.append((path, str(refusal)))
+    return DayFolder(files=sorted(found, key=_order), unreadable=unreadable)
+
+
+def read_day_files(
+    state_dir: Path, ledger: LedgerName, day: str, *, registry: paths.DoorRegistry | None = None
+) -> list[RawFile]:
+    """One day's raw files, oldest first, or a refusal naming the first one that cannot be read.
+
+    For a reader that deletes what it read and so may not skip a file: a file it
+    cannot read would be deleted unread. A day with no folder holds nothing,
+    which is an empty list.
+    """
+    found = read_day_folder(state_dir, ledger, day, registry=registry)
+    if found.unreadable:
+        path, why = found.unreadable[0]
+        raise ValueError(f"{paths.shown(state_dir, path)} cannot be read: {why}")
+    return found.files
 
 
 def _cells(row: Contract) -> dict[str, str]:
@@ -184,9 +220,7 @@ def _cells(row: Contract) -> dict[str, str]:
     }
 
 
-def _say_what_was_dropped(
-    record: tuple[str, ...], kept: Contract, dropped: Contract
-) -> None:
+def _say_what_was_dropped(record: tuple[str, ...], kept: Contract, dropped: Contract) -> None:
     """Name each cell the dropped row filled and the kept row left empty.
 
     A settlement keeps whole rows, so a cell only the dropped row carried goes
