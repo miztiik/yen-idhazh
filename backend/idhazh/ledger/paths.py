@@ -339,6 +339,27 @@ def set_aside_path(
     return _under_the_two_roots(state_dir, built)
 
 
+def _compact_folder_path(
+    state_dir: Path, ledger: LedgerName, *, registry: DoorRegistry | None = None
+) -> Path:
+    """`compact/<folders>/` under the state root, unchecked: each builder checks its own result."""
+    return state_dir.joinpath(COMPACT_DIRNAME, *door_folders(ledger, registry=registry))
+
+
+def compact_folder(
+    state_dir: Path, ledger: LedgerName, *, registry: DoorRegistry | None = None
+) -> Path:
+    """The folder that holds everything one ledger packed: `compact/<folders>/`.
+
+    Its period folders and its index folder sit in it. `compact_root` and
+    `compact_index_path` are built from the same spelling, so where a ledger's
+    packed files sit is spelled once.
+    """
+    return _under_the_two_roots(
+        state_dir, _compact_folder_path(state_dir, ledger, registry=registry)
+    )
+
+
 def compact_root(
     state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
 ) -> Path:
@@ -349,8 +370,7 @@ def compact_root(
     file a compaction writes in it cannot disagree about where the period sits.
     """
     return _under_the_two_roots(
-        state_dir,
-        state_dir.joinpath(COMPACT_DIRNAME, *door_folders(ledger, registry=registry), period.value),
+        state_dir, _compact_folder_path(state_dir, ledger, registry=registry) / period.value
     )
 
 
@@ -387,10 +407,7 @@ def compact_index_path(
     state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
 ) -> Path:
     """Where the listing of one compact period sits: `compact/<folders>/index/<period>.json`."""
-    built = state_dir.joinpath(
-        COMPACT_DIRNAME,
-        *door_folders(ledger, registry=registry),
-        INDEX_DIRNAME,
-        f"{period.value}{_JSON_SUFFIX}",
+    built = _compact_folder_path(state_dir, ledger, registry=registry).joinpath(
+        INDEX_DIRNAME, f"{period.value}{_JSON_SUFFIX}"
     )
     return _under_the_two_roots(state_dir, built)

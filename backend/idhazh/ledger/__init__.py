@@ -77,6 +77,7 @@ from idhazh.ledger.lifecycle import accepts_new_rows
 from idhazh.ledger.paths import (
     STATE_DIRNAME,
     claimed_roots,
+    compact_folder,
     compact_index_path,
     compact_path,
     compact_root,
@@ -152,6 +153,7 @@ __all__ = [  # noqa: RUF022
     # under the two roots the door files into.
     "STATE_DIRNAME",
     "claimed_roots",
+    "compact_folder",
     "compact_index_path",
     "compact_path",
     "compact_root",

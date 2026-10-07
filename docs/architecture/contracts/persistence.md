@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -20,7 +20,7 @@ state/compact/<folders>/index/<period>.json
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
-Five builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root` and `compact_root` for the folders a reader walks, and `raw_path`, `compact_path` and `compact_index_path` for the files. `raw_path` is built from `raw_root` and `compact_path` from `compact_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the gardener's `trials` task never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
+Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root`, `compact_folder` and `compact_root` for the folders, and `raw_path`, `compact_path` and `compact_index_path` for the files. `compact_folder` is the folder that holds everything one ledger packed, and `compact_root` and `compact_index_path` are built from the same spelling of it. `raw_path` is built from `raw_root` and `compact_path` from `compact_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the gardener's `trials` task never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
 
 `.gitattributes` gives every data file and index under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
 
