@@ -376,6 +376,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `docs/architecture/contracts/ledger-lifecycle.md` (new)
   - `docs/architecture/contracts/ledger-registry.md`
   - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/publishing/ledger-compaction.md` (found during execution (owner fold from row L7's report): row 1 of its fault table, and the paragraph on a ledger with no compact folder, said a first pass writes all three indexes; a first pass writes them only when it packs a day, and a pass with no raw day writes nothing)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/tasks/test_compaction_lifecycle.py backend/tests/gardener/tasks/test_compaction.py`; ruff; mypy; `npm --prefix frontend run test:changed -- --spec ledger-copy.spec.ts`; `doc_load.py` on the three pages. CI: what `ciAnswer` selects, then every group on the merge push.
 - **Oracle:** G2's "begins mid-month" test passes on the branch. With #1309's start rule reverted in a scratch copy, so that a first run fills from the 1st of its month, the same test fails. It cannot settle a real paused or retired ledger, because no family and no task is paused or retired today.
 
