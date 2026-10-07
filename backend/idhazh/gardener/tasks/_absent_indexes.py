@@ -12,13 +12,18 @@ period. A period with no file adds nothing. The marks are worked out again
 after each period, because the next one's periods start where the coarser
 rebuild left them.
 
-**The periods it looks for.** For the yearly index, each year from
+**Finite yearly expiry cannot recover a missing yearly index from files.**
+Its expired_through value would be lost. An established compact tree with
+yearly pruning enabled refuses that index by name so it can be restored.
+
+**The periods it looks for otherwise.** For the yearly index, each year from
 `first_ledger_year` to the newest year old enough to pack, and none when the
 declaration packs no year. For the monthly index, each month from the keep line
 of a monthly window whose deletes are live to the newest month old enough to
 close. A window that keeps every month, or whose deletes only report, or a task
 that is a dry run, keeps months older than any line, so its months start at the
-January after the newest yearly entry, or at January of `first_ledger_year`.
+January after the yearly mark, including expired_through, or at January of
+`first_ledger_year`.
 For the daily index,
 each day from the month after the monthly mark to the newest due day; with no
 monthly mark, from the month a first day run looks back to, or the first month
@@ -97,8 +102,15 @@ def rebuild(
     """
     folder = ledger.compact_folder(tree.state_dir, tree.ledger)
     if folder.relative_to(tree.state_dir.parent).as_posix() not in owned_folders:
+        if policy.yearly_prune_enable:
+            tree.mark_index(Period.YEARLY)
         return
     if Period.YEARLY not in tree.indexed:
+        if policy.yearly_prune_enable:
+            raise ValueError(
+                f"{tree.ledger.value} index/yearly.json is missing in an established compact "
+                "tree with yearly_prune_enable; restore it before running compaction"
+            )
         _adopt(
             tree,
             Period.YEARLY,
@@ -150,7 +162,11 @@ def pick_months(
         )
     )
     if keep_line is None:
-        first = f"{int(max(tree.yearly)) + 1:04d}-01" if tree.yearly else f"{first_ledger_year}-01"
+        first = (
+            f"{int(tree.yearly_through) + 1:04d}-01"
+            if tree.yearly_through is not None
+            else f"{first_ledger_year}-01"
+        )
     else:
         first = keep_line
     first = max(first, f"{first_ledger_year}-01")

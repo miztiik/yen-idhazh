@@ -48,6 +48,7 @@ from idhazh.contracts.base import (
     PeriodStamp,
     Sha256,
     Timestamp,
+    YearStamp,
     records_json,
 )
 from idhazh.contracts.file_envelope import Period, Tier, covers_fits
@@ -257,6 +258,11 @@ class CompactIndex(Contract):
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-07",
+            change="Yearly indexes gain nullable expired_through; older indexes read as null.",
+            why="Expiry progress must survive deletion of every yearly entry.",
+        ),
+        ChangelogEntry(
             version="2026-10-04",
             change="Entries gain state, lost_days and set_aside; absent ones read as packed.",
             why="An empty or lost period is an entry with no file, and the index says which.",
@@ -270,11 +276,6 @@ class CompactIndex(Contract):
             version="2026-10-01",
             change="ledger may name summary-quality-evals, and scores is refused.",
             why="The eval ledger is named for what it holds; its files were rewritten.",
-        ),
-        ChangelogEntry(
-            version="2026-09-30",
-            change="period may be yearly, and each of its entries covers a UTC year.",
-            why="A finished year's month files may be packed into one year file.",
         ),
         ChangelogEntry(
             version="2026-09-27",
@@ -296,6 +297,10 @@ class CompactIndex(Contract):
             "covers and none twice. Every entry covers one period of the kind `period` names."
         )
     )
+    expired_through: YearStamp | None = Field(
+        default=None,
+        description="The newest UTC year permanently expired, only on a yearly index.",
+    )
 
     def to_json(self) -> str:
         """One entry a line - see `records_json`.
@@ -310,6 +315,11 @@ class CompactIndex(Contract):
     def _the_entries_ascend_once_each_at_the_period_s_grain(self) -> Self:
         """A daily index lists days, a monthly one months and a yearly one years, in order."""
         where = f"the {self.ledger.value} {self.period.value} index"
+        if self.expired_through is not None:
+            if self.period is not Period.YEARLY:
+                raise ValueError(f"{where} may not set expired_through")
+            if any(entry.covers <= self.expired_through for entry in self.entries):
+                raise ValueError(f"{where} lists entries at or before expired_through")
         for entry in self.entries:
             if not covers_fits(entry.covers, tier=Tier.COMPACT, period=self.period):
                 raise ValueError(

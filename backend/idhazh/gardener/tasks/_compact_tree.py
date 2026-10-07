@@ -179,6 +179,7 @@ class CompactTree:
     listed: int = 0
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
+    expired_through: str | None = None
     changes: list[Change] = field(default_factory=list)
     #: Every file the pass read or weighed.
     looked: set[Path] = field(default_factory=set)
@@ -216,6 +217,7 @@ class CompactTree:
             raw_days=raw_days,
             listed=len(raw_days),
             indexed=marks.indexed,
+            expired_through=marks.expired_through,
         )
 
     def work_out_marks(self) -> None:
@@ -225,7 +227,8 @@ class CompactTree:
         before any step runs; after that only the steps move a mark.
         """
         through = ledger_marks.work_out_marks(
-            {Period.DAILY: self.daily, Period.MONTHLY: self.monthly, Period.YEARLY: self.yearly}
+            {Period.DAILY: self.daily, Period.MONTHLY: self.monthly, Period.YEARLY: self.yearly},
+            expired_through=self.expired_through,
         )
         self.daily_through = through[Period.DAILY]
         self.monthly_through = through[Period.MONTHLY]
@@ -536,6 +539,7 @@ class CompactTree:
             ledger=self.ledger,
             period=period,
             entries=[held[covers] for covers in sorted(held)],
+            expired_through=self.expired_through if period is Period.YEARLY else None,
         )
         path = ledger.compact_index_path(self.state_dir, self.ledger, period)
         self.write(path, index.to_json().encode("ascii"))

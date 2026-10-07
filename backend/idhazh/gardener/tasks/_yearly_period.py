@@ -55,7 +55,7 @@ over twice that line would make every later push fail.
 download budget**, read off the listing's sizes before anything is downloaded,
 and stops at the first that does not.
 
-Year files are kept for ever. Every year here is a UTC year (CLAUDE.md
+Year files follow the declaration's yearly expiry policy. Every year here is a UTC year (CLAUDE.md
 section 2).
 """
 

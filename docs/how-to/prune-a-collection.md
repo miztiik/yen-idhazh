@@ -124,7 +124,9 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 - Whether the command may take a ledger's days is that ledger's compaction
   declaration's `prune_refusal`, in `config/gardener/compact-<ledger>.json`.
   `null` lets it; a sentence refuses the ledger and is the reason printed.
-  `summary-quality-evals` carries one, because every eval row is kept for ever.
+  `summary-quality-evals` carries one to protect retained quality evidence from
+  manual deletion. Its configured yearly policy may expire old evidence
+  36 calendar months after UTC year-end.
 - A pass that stopped, on its ceiling or on a failure, is finished by running
   the same command again. It takes only what is left.
 

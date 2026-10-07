@@ -16,7 +16,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR
+from conftest import CONFIG_DIR, FIXTURES_DIR
 from pydantic import TypeAdapter
 
 from idhazh import ledger
@@ -40,10 +40,25 @@ _POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
 def declared() -> dict[str, TaskPolicy]:
     """The named committed declarations the integration fixtures exercise."""
     folder = CONFIG_DIR / "gardener"
-    return {
+    held = {
         path.stem: _POLICY.validate_json(path.read_text(encoding="utf-8"))
         for path in (folder / name for name in COMMITTED_DECLARATIONS)
     }
+    # Packing tests need a stable non-yearly policy; deployment choices have
+    # their own config tests.
+    visual = json.loads(
+        (FIXTURES_DIR / "gardener" / "garden" / "compact-gardener.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    visual.update(
+        ledger="visual-prunes",
+        owns=["state/raw/visual-prunes", "state/compact/visual-prunes"],
+        yearly_keep_months=None,
+        yearly_prune_enable=False,
+    )
+    held["compact-visual-prunes"] = _POLICY.validate_python(visual)
+    return held
 
 
 def first_ledger_year() -> str:

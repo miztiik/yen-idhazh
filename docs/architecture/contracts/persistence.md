@@ -96,7 +96,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 ## What an index entry says
 
-`state/compact/<folders>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields. The indexes are also the only record of how far a compaction has packed: it works out where the next pass starts from their newest entries ([ledger-compaction.md](../publishing/ledger-compaction.md#one-pass-in-order)).
+`state/compact/<folders>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields. The nullable `expired_through` field records the newest deleted UTC year on a yearly index only; older payloads read it as null, and entries at or before it are refused. The indexes are also the only record of how far a compaction has packed: it works out where the next pass starts from their newest entries and this expiry mark ([ledger-compaction.md](../publishing/ledger-compaction.md#yearly-expiry)).
 
 | Field | What it says |
 | --- | --- |
