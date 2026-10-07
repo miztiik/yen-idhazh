@@ -208,7 +208,7 @@ test('status text never overlaps the reserved answer link box', async ({ page, c
 test('M8: toolbar, questions and narrow rails keep their density heights', async ({ page }) => {
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const sizes = await page.evaluate(() => {
 			const css = getComputedStyle(document.documentElement);
 			const rem = parseFloat(css.fontSize);
@@ -241,7 +241,7 @@ test('M8: toolbar, questions and narrow rails keep their density heights', async
 test('M7: the editor frame starts in the top third on desktop and tablet', async ({ page }) => {
 	for (const view of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }] as const) {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const top = await page.locator('[data-workbench-region="editor"] .editor-frame').evaluate((node) => node.getBoundingClientRect().top);
 		expect(top, `${view.width} editor frame top`).toBeLessThanOrEqual(300);
 	}
@@ -249,7 +249,7 @@ test('M7: the editor frame starts in the top third on desktop and tablet', async
 
 test('M14: the chart draws at the region content width and keeps its height on resize', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT DATE '2026-08-18' AS day, 3 AS rows UNION ALL SELECT DATE '2026-08-19', 5 UNION ALL SELECT DATE '2026-08-20', 8");
 	await runExplorer(page);
 	const reading = async () => page.evaluate(() => {
@@ -272,7 +272,7 @@ test('M14: the chart draws at the region content width and keeps its height on r
 
 test('M19: workbench text stays on the declared type scale', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const offScale = await page.locator('.workbench').evaluate((root) => {
 		const css = getComputedStyle(document.documentElement);
 		const rem = parseFloat(css.fontSize);
