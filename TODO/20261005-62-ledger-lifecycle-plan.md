@@ -60,7 +60,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | #1353 | Plan 62 row l5 |
-| L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
+| L7 | A published ledger that has not started | L1 | B | DONE | expert-pancake | - | Plan 62 row l7 |
 | L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | #1358 | Plan 62 row l8 |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | #1361 | Plan 62 row l9 |
 | L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | #1360 | Plan 62 row l10 |
