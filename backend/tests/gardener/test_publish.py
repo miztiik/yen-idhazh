@@ -24,6 +24,7 @@ import pyarrow.parquet as parquet
 import pytest
 from pydantic import ValidationError
 
+from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
@@ -33,6 +34,7 @@ from idhazh.gardener.outcome import (
     worst,
 )
 from utilities import commit_and_push, gardener_publish
+from utilities.gardener_publish import PushOutcome
 
 from ._garden import (
     OriginBlobs,
@@ -84,10 +86,11 @@ def a_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, P
     return origin, checkout
 
 
-def landed(shard: Shard, checkout: Path, *, attempts: int = 6) -> tuple[int, list[str]]:
+def landed(shard: Shard, checkout: Path, *, attempts: int = 6) -> tuple[PushOutcome, list[str]]:
+    """What the push loop came to, and every line it printed."""
     said: list[str] = []
-    code = gardener_publish.publish(shard, attempts=attempts, repo=checkout, say=said.append)
-    return code, said
+    pushed = gardener_publish.publish(shard, attempts=attempts, repo=checkout, say=said.append)
+    return pushed, said
 
 
 def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
@@ -96,9 +99,10 @@ def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     (checkout / AGED).unlink()
 
-    code, _ = landed(a_shard(deleted={AGED}), checkout)
+    pushed, said = landed(a_shard(deleted={AGED}), checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LANDED, 1)
+    assert said == [], "a landing is the shard's event to say, not a printed line"
     assert on_origin(origin, RECORD) == '{"task": "old"}\n'
     assert on_origin(origin, AGED) is None
     assert on_origin(origin, KEPT) == "kept\n", "a file the shard did not delete went"
@@ -117,13 +121,13 @@ def test_running_it_twice_leaves_the_tree_running_it_once_left(
     (checkout / AGED).unlink()
     shard = a_shard(deleted={AGED})
 
-    assert landed(shard, checkout)[0] == EXIT_OK
+    assert landed(shard, checkout)[0].exit_code == EXIT_OK
     once = git(origin, "rev-parse", "main^{tree}"), len(commits_on(origin))
-    code, said = landed(shard, checkout)
+    pushed, said = landed(shard, checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.ALREADY_ON_MAIN, 1)
+    assert said == []
     assert (git(origin, "rev-parse", "main^{tree}"), len(commits_on(origin))) == once
-    assert any(line == "shard 0: already-on-main, try 1" for line in said)
 
 
 def test_fetch_preserves_a_deep_checkouts_ancestry_for_its_push_hook(
@@ -150,7 +154,7 @@ def test_fetch_preserves_a_deep_checkouts_ancestry_for_its_push_hook(
 
     git(checkout, "merge-base", "--is-ancestor", root, fetched)
     assert git(checkout, "rev-parse", "--is-shallow-repository").strip() == "false"
-    assert landed(a_shard(), checkout)[0] == EXIT_OK
+    assert landed(a_shard(), checkout)[0].exit_code == EXIT_OK
     git(origin, "merge-base", "--is-ancestor", root, "main")
 
 
@@ -196,9 +200,9 @@ def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
     (checkout / AGED).unlink()
 
-    code, _ = landed(a_shard(deleted={AGED}), checkout)
+    pushed, _ = landed(a_shard(deleted={AGED}), checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LANDED, 1)
     assert on_origin(origin, "docs/moved.md") == "the other shard\n"
     assert on_origin(origin, RECORD) is not None
     assert on_origin(origin, AGED) is None
@@ -225,9 +229,9 @@ def test_a_raw_arrival_survives_an_older_compactors_publication(
     (checkout / packed).parent.mkdir(parents=True, exist_ok=True)
     parquet.write_table(pa.table({"writer": ["older"]}), checkout / packed)
 
-    code, _ = landed(a_shard(written={packed}), checkout)
+    pushed, _ = landed(a_shard(written={packed}), checkout)
 
-    assert code == EXIT_OK
+    assert pushed.exit_code == EXIT_OK
     landed_checkout = tmp_path / "landed"
     git(tmp_path, "clone", "--quiet", str(origin), str(landed_checkout))
     assert (landed_checkout / raw).read_bytes() == raw_bytes
@@ -243,10 +247,10 @@ def test_a_push_that_lost_is_tried_again_on_the_new_tip(
         'if [ -f "$GIT_DIR/lost-once" ]; then exit 0; fi\ntouch "$GIT_DIR/lost-once"\nexit 1',
     )
 
-    code, said = landed(a_shard(), checkout, attempts=2)
+    pushed, said = landed(a_shard(), checkout, attempts=2)
 
-    assert code == EXIT_OK
-    assert said == ["shard 0: try 1 of 2, the push failed", "shard 0: landed on main, try 2 of 2"]
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LANDED, 2), "a try that lost was not retried"
+    assert said == []
     assert on_origin(origin, RECORD) is not None
 
 
@@ -258,16 +262,12 @@ def test_a_push_main_refuses_at_every_try_is_exit_3_and_lands_nothing(
     a_hook(origin, "exit 1")
     tip = git(origin, "rev-parse", "main")
 
-    code, said = landed(a_shard(), checkout, attempts=2)
+    pushed, said = landed(a_shard(), checkout, attempts=2)
 
-    assert code == EXIT_PUSH_REFUSED
+    assert pushed == PushOutcome(EXIT_PUSH_REFUSED, ShardLanding.REFUSED, 2)
+    assert said == []
     assert git(origin, "rev-parse", "main") == tip
     assert on_origin(origin, RECORD) is None
-    assert said[-1] == (
-        "shard 0: refused - main did not move after try 2 of 2, so main refused the push. "
-        "Nothing landed"
-    )
-    assert sum("the push failed" in line for line in said) == 2
 
 
 def test_a_push_that_loses_to_other_writers_at_every_try_lands_nothing_and_exits_0(
@@ -284,15 +284,12 @@ def test_a_push_that_loses_to_other_writers_at_every_try_lands_nothing_and_exits
         git(racer, "push", "--quiet", "origin", f"HEAD:refs/race/{race}")
     a_hook(origin, MOVE_MAIN_THEN_REFUSE)
 
-    code, said = landed(a_shard(), checkout, attempts=2)
+    pushed, said = landed(a_shard(), checkout, attempts=2)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LOST, 2)
+    assert said == []
     assert git(origin, "rev-parse", "main") == git(origin, "rev-parse", "refs/race/2")
     assert on_origin(origin, RECORD) is None
-    assert said[-1] == (
-        "::warning::shard 0: lost - main moved after try 2 of 2, so other writers are "
-        "landing. Nothing landed; the next wake does the work again"
-    )
 
 
 def test_a_shard_whose_path_main_changed_after_its_commit_lands_nothing(
@@ -314,17 +311,14 @@ def test_a_shard_whose_path_main_changed_after_its_commit_lands_nothing(
     write(checkout / KEPT, "older, from the shard\n")
     (checkout / AGED).unlink()
 
-    code, said = landed(a_shard(written={KEPT}, deleted={AGED}), checkout)
+    pushed, said = landed(a_shard(written={KEPT}, deleted={AGED}), checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.STALE, 1, (KEPT,))
+    assert said == []
     assert git(origin, "rev-parse", "main") == tip, "a stale shard landed a commit"
     assert on_origin(origin, KEPT) == "newer, on main\n"
     assert on_origin(origin, AGED) == "aged\n"
     assert on_origin(origin, RECORD) is None
-    assert said == [
-        f"::warning::shard 0: stale - main changed {KEPT} after the commit this shard ran "
-        "on, so nothing landed. The next wake does the work again on the new main"
-    ]
 
 
 def test_every_group_of_names_is_compared_and_the_warning_counts_the_rest(
@@ -346,27 +340,23 @@ def test_every_group_of_names_is_compared_and_the_warning_counts_the_rest(
     git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
     write(checkout / KEPT, "older, from the shard\n")
 
-    code, said = landed(a_shard(written={KEPT}, deleted=set(many)), checkout)
+    pushed, said = landed(a_shard(written={KEPT}, deleted=set(many)), checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.STALE, 1, (many[0], KEPT))
+    assert said == []
     assert on_origin(origin, RECORD) is None
-    assert said == [
-        f"::warning::shard 0: stale - main changed {many[0]} and 1 more after the commit "
-        "this shard ran on, so nothing landed. The next wake does the work again on the "
-        "new main"
-    ]
 
 
 def test_one_record_with_two_identities_is_exit_2(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     origin, checkout = a_checkout(tmp_path, monkeypatch)
-    assert landed(a_shard(), checkout)[0] == EXIT_OK
+    assert landed(a_shard(), checkout)[0].exit_code == EXIT_OK
     write(checkout / RECORD, '{"task": "somebody else"}\n')
 
-    code, said = landed(a_shard(), checkout)
+    pushed, said = landed(a_shard(), checkout)
 
-    assert code == EXIT_INTEGRITY
+    assert pushed == PushOutcome(EXIT_INTEGRITY)
     assert any("two runs claimed one record" in line for line in said)
     assert on_origin(origin, RECORD) == '{"task": "old"}\n'
 
@@ -378,9 +368,9 @@ def test_a_folder_named_as_a_write_is_refused_before_anything_stages(
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     write(checkout / "state/newdir/x.txt", "x\n")
 
-    code, said = landed(a_shard(written={"state/newdir"}), checkout)
+    pushed, said = landed(a_shard(written={"state/newdir"}), checkout)
 
-    assert code == EXIT_INTEGRITY
+    assert pushed == PushOutcome(EXIT_INTEGRITY)
     assert said == [
         "shard 0: state/newdir is a folder, and a shard writes and deletes files one at a time"
     ]
@@ -394,9 +384,9 @@ def test_a_write_that_did_not_stage_is_exit_2(
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     write(checkout / "state/old/note.skip", "ignored\n")
 
-    code, said = landed(a_shard(written={"state/old/note.skip"}), checkout)
+    pushed, said = landed(a_shard(written={"state/old/note.skip"}), checkout)
 
-    assert code == EXIT_INTEGRITY
+    assert pushed == PushOutcome(EXIT_INTEGRITY)
     assert any("state/old/note.skip was written and did not stage" in line for line in said)
     assert on_origin(origin, RECORD) is None
 
@@ -407,9 +397,9 @@ def test_a_write_already_on_main_counts_as_landed(
     """Same bytes as main stage nothing, and that is a write somebody already finished."""
     origin, checkout = a_checkout(tmp_path, monkeypatch)
 
-    code, _ = landed(a_shard(written={KEPT}), checkout)
+    pushed, _ = landed(a_shard(written={KEPT}), checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LANDED, 1)
     assert git(origin, "show", "--name-only", "--format=", "main").split() == [RECORD]
 
 
@@ -418,9 +408,9 @@ def test_a_deletion_already_gone_from_main_is_not_an_error(
 ) -> None:
     origin, checkout = a_checkout(tmp_path, monkeypatch)
 
-    code, _ = landed(a_shard(deleted={"state/old/never-there.txt"}), checkout)
+    pushed, _ = landed(a_shard(deleted={"state/old/never-there.txt"}), checkout)
 
-    assert code == EXIT_OK
+    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LANDED, 1)
     assert on_origin(origin, RECORD) is not None
 
 
@@ -431,9 +421,9 @@ def test_a_deletion_that_staged_nothing_while_main_holds_it_is_exit_2(
     origin, checkout = a_checkout(tmp_path, monkeypatch)
     shutil.rmtree(checkout / "state/dir")
 
-    code, said = landed(a_shard(deleted={"state/dir"}), checkout)
+    pushed, said = landed(a_shard(deleted={"state/dir"}), checkout)
 
-    assert code == EXIT_INTEGRITY
+    assert pushed == PushOutcome(EXIT_INTEGRITY)
     assert any("state/dir was deleted, did not stage" in line for line in said)
     assert on_origin(origin, "state/dir/a.txt") == "a\n"
 
@@ -443,9 +433,9 @@ def test_a_folder_named_for_deletion_is_refused_before_anything_stages(
 ) -> None:
     _, checkout = a_checkout(tmp_path, monkeypatch)
 
-    code, said = landed(a_shard(deleted={"state/dir"}), checkout)
+    pushed, said = landed(a_shard(deleted={"state/dir"}), checkout)
 
-    assert code == EXIT_INTEGRITY
+    assert pushed == PushOutcome(EXIT_INTEGRITY)
     assert said == [
         "shard 0: state/dir is a folder, and a shard writes and deletes files one at a time"
     ]
