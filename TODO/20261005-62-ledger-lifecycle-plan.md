@@ -83,7 +83,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L27 | Judgement's windowed surfaces name their span | L17 | G | DONE | vigilant-sniffle | #1388 | Plan 62 row l27 |
 | L28 | Hardware's notes say only what its records hold | L22 | H | DONE | studious-carnival | - | Plan 62 row l28 |
 | L29 | Hardware's refused-runs box says what reads a refused run | L22 | I | PENDING | - | - | - |
-| L30 | The merge line's no-fit rule names the line a build used | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | H | PENDING | - | - | - |
+| L30 | The merge line's no-fit rule names the line a build used | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | H | DONE | fluffy-dollop | - | Plan 62 row l30 |
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | PENDING | - | - | - |
 | L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | PENDING | - | - | - |
 | L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | PENDING | - | - | - |
@@ -1391,12 +1391,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **The fault** (row L27's first follow-up, 2026-10-07): with no fitted day in the window, `MergeLinePlot.svelte` draws the dashed rule at `configuredLine`, the committed floor, `floor_min` in `config/idhazh.json`, and labels it the line the newest day was built with. A build uses the newest line a fit applied in the `applied_lookback_days` days before it, skipping a held day, and the committed floor only when there is none (`applied_line()` in `backend/idhazh/similarity/applied.py`). So at the 1-day window, after a line was fitted in those days, the rule and its sentence name the wrong line. While `adaptive_dedup_threshold.enabled` is false, every build uses the committed floor, so today the rule shows nothing wrong.
 - **Files touched** (found by a search on `main` at 6861bbd21 for `configuredLine`, `ruleDay`, `committedFloor` and `applied_line`; search again at dispatch):
   - `frontend/src/routes/console/judgement/MergeLinePlot.svelte` (the dashed rule at `configuredLine`, its label "The line {ruleDay} was built with", and the sentence "No line was fitted in {span}. The rule is the line {ruleDay} was built ...")
-  - `frontend/src/routes/console/judgement/+page.svelte` (hands `MergeLinePlot` `configuredLine={data.configuredLine}`)
+  - `frontend/src/routes/console/judgement/+page.svelte` (hands `MergeLinePlot` `configuredLine={data.configuredLine}`; unchanged, found during execution: it already hands `knobs={data.similarity}`, which carries the switch and the lookback)
   - `frontend/src/routes/console/judgement/+page.server.ts` (`configuredLine` is `committedFloor()`; `lines` carry each fitted day's `applied` and `heldReason` over the widest preset; `similarity` is `similarityConfig()`, which reads the committed `adaptive_dedup_threshold` block, `enabled` and `applied_lookback_days` with it)
+  - `frontend/src/lib/server/config.ts` (found during execution: `SimilarityConfig` now declares `enabled` and `applied_lookback_days`, which `similarityConfig()` already carried, so the panel can read them typed; their defaults are the contract's, off and 7)
   - `frontend/tests/console-window.spec.ts` (row L27's built `merge-line` cases; held by L26 while it runs)
   - Left as they are: `backend/idhazh/similarity/applied.py`, whose `applied_line()` is the rule a build follows; `config/idhazh.json`
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-window.spec.ts`, on days the test builds (Table D, D3): with the flag on, a 1-day window with no fitted day, 3 days after a day that fitted a line it did not hold, draws the rule at that day's applied line; with no fitted line in the lookback, at the committed floor; and with the flag off, at the committed floor whatever the record holds. On `main` the first case draws the rule at the committed floor, which is what lets this check fail. It cannot settle what a build did on a given day; the rule follows `applied_line()`'s rule, not a build's own record.
+- **Follow-ups** (found during execution):
+  - `VerdictSplit.svelte` and `HoldoutMargin.svelte` call their `applied` "The line the newest day was built with", and the route hands them `data.lines.at(-1)?.applied`, the newest row's line, whatever the switch says. With the switch off, every build uses the committed floor; with it on, a held newest row, or one older than the lookback, is not the line a build used. Latent while every row applies the floor, as every committed row does today. A Level 1 row: hand both the line `applied_line()` gives the newest published day.
 
 **Decisions**
 
@@ -1407,6 +1410,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 3 | The label and the sentence keep row L27's words (row L27, decision 1), which this row makes true; a sentence that must change goes to Reader (CLAUDE.md section 14) | Plan author, 2026-10-07 |
 | 4 | L30 waits for L27 (#1388), which wrote the label and the sentence and built the `merge-line` cases in `console-window.spec.ts`, and for L26, which holds that spec | The owner, 2026-10-07 |
 | 5 | Level 1: one rule on one panel, and it shows nothing wrong while the merge flag is off, because every build then uses the committed floor. Row L27's report proposed Level 2 | The owner, 2026-10-07 |
+| 6 | The panel works the line out itself, from the rows, the switch and the lookback it is handed and the window's last day. A build reads its own day and the `applied_lookback_days` before it, as `days_in_window` names both ends, so 7 is 8 days | Found during execution |
+| 7 | The Oracle is four cases in `console-window.spec.ts`, each the 1-day window on 15 Jun 2030 with a lookback of 7, a floor of 0.94 and written-out lines: the switch on and a line fitted 3 days before (the rule at 0.937); a line fitted 7 days before, the first day the build read (0.937); the one fitted line 8 days before and a held day inside the lookback (0.940); the switch off and a line fitted 3 days before (0.940). Each also checks the label and the sentence word for word. On `main` at 28893944f the first two fail with the rule at 0.940; on this branch all four pass | Found during execution (Table D, D3) |
+| 8 | No persona was asked: no word changed, and each fork in Rejected alternatives 4 and 5 changes nothing while every committed row applies the floor | Found during execution |
 
 **Rejected alternatives**
 
@@ -1414,6 +1420,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | As today | Once the flag is on, a window with no fitted day names the committed floor as the line a build used, while the build used a fitted one | Nothing to build, and a wrong line named on Judgement from the day the flag is switched on | Row L27's report; the owner, 2026-10-07 |
 | 2 | Draw the rule at the line the route hands `VerdictSplit` and `HoldoutMargin`, `data.lines.at(-1)?.applied` | It is the newest fitted row over the widest preset, which can be older than the `applied_lookback_days` a build reads, so it can name a line no build used | One expression, and three panels that name one line | Plan author, 2026-10-07 |
+| 3 | Work the line out on the route and hand the panel one number | The window is chosen in the browser, so its last day is the panel's to know, and the Oracle reaches the rule only through the props it builds | One number on the route, and a rule no built case can drive | Found during execution |
+| 4 | Read every run of each date, as `applied_line()` does | The route keeps the newest run of each date, the run the panel draws, and the two differ only when a date fitted, then was held on a re-run. A re-run writes the same row unless the record's inputs changed between the two nights (`set_merge_line.py`) | One field on `fittedLines` and one prop on the panel | Found during execution |
+| 5 | Widen the route's read of the fitted rows to `applied_lookback_days + 1` days where the widest preset is shorter | The read of the widest preset holds every row the lookback reads while `applied_lookback_days` is under that preset, 7 under 90 today, because no row is dated after the newest published day | `Math.max` on one read, and two panels, `VerdictSplit` and `HoldoutMargin`, then reading rows older than the widest preset | Found during execution |
 
 ### Row #L31 - The record's bars say when a window holds no row
 

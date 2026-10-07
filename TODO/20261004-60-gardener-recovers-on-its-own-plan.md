@@ -75,7 +75,7 @@ Table A - what is out
 | 33 | A log line never quotes a ledger row's values | 21 | E | DONE | fictional-telegram | #1393 | Plan 60 row 33 |
 | 34 | A gardener crash prints where it broke, never the error's text | 22 | E | DONE | upgraded-meme | #1404 | Plan 60 row 34 |
 | 35 | The yearly expiry logs an event of its own | 21 | G | PENDING | - | - | - |
-| 36 | The plan job's config refusals keep their sentence | 34 | G | PENDING | - | - | - |
+| 36 | The plan job's config refusals keep their sentence | 34 | G | DONE | turbo-guide | - | Plan 60 row 36 |
 | 37 | Operator gardener commands print where they broke, never the error's text | 34 | H | PENDING | - | - | - |
 
 ## 2. Shared declarations
