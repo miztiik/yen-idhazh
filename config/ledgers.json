@@ -223,21 +223,6 @@
       ]
     },
     {
-      "name": "llm-council",
-      "lifecycle_status": "active",
-      "description": "How each unit of the nightly judging workflow ended, and what it cost.",
-      "onboarded": "2026-09-21",
-      "ledgers": [
-        {
-          "name": "shard-outcomes",
-          "grain": "day",
-          "prefix": ["llm-council", "shard-outcomes"],
-          "stem": null,
-          "suffix": ".csv"
-        }
-      ]
-    },
-    {
       "name": "traces",
       "lifecycle_status": "active",
       "description": "Raw step timings of recent runs, kept a short while so an operator can open one.",

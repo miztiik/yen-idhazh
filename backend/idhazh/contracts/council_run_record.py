@@ -16,19 +16,12 @@ every row it files, meaning the shard of the job that filed it, and a row field
 of that name would take that cell's place. So a step is a word and a part is an
 index, and neither can be read as the job that saved them.
 
-**The first shape of this record is still read, and never written.** It filed
-a step under one number, `shard` - -1 for picking the work, -2 for combining
-the results, and a part's own number from 0 - and the count of parts as
-`shards`. `from_csv_row` reads every such row into a step and a part, and
-refuses a row it cannot place rather than guess.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import StrEnum
-from types import MappingProxyType
-from typing import Any, ClassVar, Final, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -62,51 +55,6 @@ class EvaluationStep(StrEnum):
 
     #: Combine what the parts sent back for one date. It runs once a date.
     COMBINE_JUDGE_RESULTS = "combine_judge_results"
-
-
-#: The first shape's two headings, and the field each is read into. `shard` also
-#: named the step, which `from_csv_row` reads off the same cell.
-OLD_HEADINGS: Final[Mapping[str, str]] = MappingProxyType(
-    {"shard": "work_part_index", "shards": "work_part_count"}
-)
-
-#: The two numbers the first shape filed the once-a-date steps under: below zero,
-#: so that neither could be taken for a part.
-_ONCE_A_DATE_STEPS: Final[Mapping[str, EvaluationStep]] = MappingProxyType(
-    {"-1": EvaluationStep.SELECT_JUDGE_WORK, "-2": EvaluationStep.COMBINE_JUDGE_RESULTS}
-)
-
-
-def _in_the_current_shape(row: Mapping[str, str]) -> dict[str, str]:
-    """A row's cells, with a first-shape row's step and part read off its `shard` cell.
-
-    -1 picked the work and -2 combined the results, so neither has a part, and a
-    number from 0 up was the part itself. Any other value, an empty one included,
-    names no step and is refused naming the cell. An old heading beside a filled
-    cell of the current shape is one row in two shapes, refused rather than read
-    either way. A row in the current shape comes back as it arrived.
-    """
-    old = [name for name in OLD_HEADINGS if name in row]
-    if not old:
-        return dict(row)
-    beside = [name for name in ("evaluation_step", *OLD_HEADINGS.values()) if row.get(name)]
-    if beside:
-        raise ValueError(f"one row in two shapes: {old} beside a filled {beside}")
-    number = row.get("shard", "")
-    if number in _ONCE_A_DATE_STEPS:
-        step, part = _ONCE_A_DATE_STEPS[number], ""
-    elif number.isascii() and number.isdigit():
-        step, part = EvaluationStep.EVALUATE_WORK_PART, number
-    else:
-        raise ValueError(
-            f"shard {number!r} names no step: the first shape filed -1, -2 or a part from 0"
-        )
-    cells = {name: value for name, value in row.items() if name not in OLD_HEADINGS}
-    return cells | {
-        "evaluation_step": step.value,
-        "work_part_index": part,
-        "work_part_count": row.get("shards", ""),
-    }
 
 
 class CouncilRunRecord(Contract):
@@ -233,13 +181,13 @@ class CouncilRunRecord(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        """The inverse, and the reader of every row the first shape filed.
+        """The inverse of the council's current shipped CSV row.
 
         An empty cell is an absent value, never a zero, and a column the row does
         not carry reads as an empty cell. Every other heading reaches the model as
         it arrived, so a heading no field declares is refused rather than dropped.
         """
-        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | _in_the_current_shape(row)
+        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | row
         for name, field in cls.model_fields.items():
             if payload[name] == "" and field.default is None:
                 payload[name] = None

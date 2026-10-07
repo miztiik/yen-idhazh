@@ -28,13 +28,14 @@
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { dayMonth } from '$lib/format';
+	import { dayMonth, plural } from '$lib/format';
 	import {
 		agreementCorridor,
 		rateWithDenominator,
 		type AgreementLimits,
 		type JudgeDay
 	} from '$lib/console/merge-line';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -280,23 +281,24 @@
 		<p class="agreement-note">
 			{#if read.length === 0}
 				<span data-agreement-state="none"
-					>No pair has been read twice yet, so there is nothing to compare.</span
+					>No pair was read twice in {nameSpan(windowDays)}, so there is nothing to compare.</span
 				>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
-					>{judged} pairs have been read twice. That is too few to report a share, so the
-					counts are below.</span
+					>{plural(judged, 'pair', 'pairs')}
+					{judged === 1 ? 'was' : 'were'} read twice in {nameSpan(windowDays)}. That is too few
+					to report a share, so the counts are above.</span
 				>
 			{:else if heldByJudge > 0}
 				<span data-agreement-state="past-mark"
-					>The two readings disagreed on {disagreeShare}, which is past the mark. No line
-					was fitted on {heldByJudge}
-					{heldByJudge === 1 ? 'day' : 'days'} because of it.</span
+					>The two readings disagreed on {disagreeShare} in {nameSpan(windowDays)}. No line was
+					fitted on {heldByJudge} of {countDays(windowDays)}, because a rate was past its mark on
+					{heldByJudge === 1 ? 'that day' : 'those days'}.</span
 				>
 			{:else}
 				<span data-agreement-state="inside"
-					>{disagreeShare} disagreed with their own second reading, and {unclearShare} could
-					not tell. Both rates are inside the marks.</span
+					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
+					{unclearShare} could not tell. Both rates are inside the marks.</span
 				>
 			{/if}
 		</p>
