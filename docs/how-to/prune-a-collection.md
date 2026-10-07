@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -53,16 +53,18 @@ python -m idhazh gardener run-task workflow-artifacts --run-id <YYYY-MM-DD-N> --
 The age is `window.value` in `config/gardener/workflow-artifacts.json` and the
 ceiling is `max_deletes_per_run` beside it.
 
-### 2. Read the last line before you read the list
+### 2. Read the lines under the list before you read the list
 
-| Last line says | What it means | What to do |
+| A line under the list says | What it means | What to do |
 | --- | --- | --- |
-| `nothing was deleted - a live run would delete the members above` | the pass was a dry run; the line above it says why it stopped | to delete them, follow step 3 |
+| `nothing was deleted - a live run would delete the members above` | the pass was a dry run; the lines above it say why it stopped | to delete them, follow step 3 |
 | `the collection is exhausted` | nothing else is inside the window | one live pass finishes the job |
 | `the ceiling of N stopped this pass at <id>` | there is more | each later wake takes the next batch, until the line changes |
 | `the ceiling of N would stop a live pass at <id>; the rest of that day was counted, not listed` | a dry run listed the ceiling's worth of one day's members and counted the rest | nothing; the next dry run starts on the day after the one it names |
-| `the pass failed at <id>` | the members above it are gone | fix the cause; the next wake retries that member |
-| `the pass failed after N members, before it could name the next one` | the listing itself failed, or a member could not be read | fix the cause; the next wake starts from the oldest member the window holds |
+| `the pass failed at <id>`, then `raised: ...` | a code defect stopped it; the members above it are gone | fix the cause; the next wake retries that member |
+| `the pass failed after N members, before it could name the next one`, then `raised: ...` | the listing itself failed, or a member could not be read | fix the cause; the next wake starts from the oldest member the window holds |
+| `the pass was deferred at <id>`, then `api-unavailable: ...` | GitHub's API answered 429 or 5xx, or did not answer; the members above it are gone | nothing; the next wake retries that member, and the job stays green |
+| `not-deletable <id>: GitHub would not delete it, so the pass went on` | GitHub answered 409 or 422 for that member; it counted against the ceiling | nothing for the task; the member stays on GitHub until a person removes it |
 
 ### 3. Delete
 
@@ -74,8 +76,9 @@ batch until the last line says the collection is exhausted. Each wake is the
 same shape and the same cost whatever the backlog is - that is what the ceiling
 is for.
 
-What a wake's exit code means is on the gardener's page: a task that fails part
-way is exit 1, and its row says where the next pass starts.
+What a wake's exit code means is on the gardener's page: a task a code defect
+stops part way is exit 1, a task GitHub's API did not answer is deferred and
+leaves the exit code at 0, and either row says where the next pass starts.
 
 ## Prune a range of days out of a ledger
 

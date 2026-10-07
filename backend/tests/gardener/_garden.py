@@ -89,7 +89,7 @@ FIXTURE_DECLARATIONS: Final = {
         "workflow-artifacts.json",
     ),
     "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
-    "breaks": ("broken.json", "old-days.json"),
+    "breaks": ("broken.json", "defect.json", "old-days.json"),
 }
 
 #: Who the seed commits are by. Not the repository's identity, on purpose: a

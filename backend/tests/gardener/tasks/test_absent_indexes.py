@@ -12,7 +12,6 @@ committed `state/` or a clock the test did not set (CLAUDE.md sections 2 and 13)
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
 from pathlib import Path
@@ -391,7 +390,7 @@ def test_a_ledger_whose_compact_folder_the_commit_holds_is_searched(tmp_path: Pa
 
 @pytest.mark.parametrize("wake", [False, True], ids=["whole-listing", "wake-listing"])
 def test_an_absent_daily_index_is_rebuilt_from_its_day_files_and_nothing_is_deleted(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, wake: bool
+    tmp_path: Path, wake: bool
 ) -> None:
     """THE ORACLE for an absent index: each day file at its path is adopted, and the pass deletes nothing.
 
@@ -412,8 +411,7 @@ def test_an_absent_daily_index_is_rebuilt_from_its_day_files_and_nothing_is_dele
     }
     daily.unlink()
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31, wake=wake)
+    outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31, wake=wake)
 
     rebuilt = CompactIndex.read(daily).entries
     assert [(entry.covers, entry.state, entry.rows) for entry in rebuilt] == [
@@ -422,16 +420,14 @@ def test_an_absent_daily_index_is_rebuilt_from_its_day_files_and_nothing_is_dele
     ]
     assert daily.read_bytes() == before
     for day in ("2026-09-20", "2026-09-21"):
-        assert recovered(caplog, day) == [f"note={RecoveryNote.INDEX_REBUILT}"]
+        assert recovered(outcome, day) == [RecoveryNote.INDEX_REBUILT]
     assert outcome.taken == ()
     assert outcome.written == (daily.relative_to(root).as_posix(),)
     assert len(packed) == 2 and all(path.read_bytes() == held for path, held in packed.items())
     assert outcome.stopped_because is StopReason.EXHAUSTED
 
 
-def test_an_absent_monthly_index_is_rebuilt_from_its_month_files(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_an_absent_monthly_index_is_rebuilt_from_its_month_files(tmp_path: Path) -> None:
     """August's file is adopted, so the month step starts at September and nothing is lost.
 
     On 20 October August is 45 whole days past its end, so a 13-month window
@@ -445,18 +441,17 @@ def test_an_absent_monthly_index_is_rebuilt_from_its_month_files(
     before = monthly.read_bytes()
     monthly.unlink()
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, date(2026, 10, 20), wake=True)
+    outcome = compact(root, date(2026, 10, 20), wake=True)
 
     assert monthly.read_bytes() == before
-    assert recovered(caplog, "2026-08") == [f"note={RecoveryNote.INDEX_REBUILT}"]
+    assert recovered(outcome, "2026-08") == [RecoveryNote.INDEX_REBUILT]
     assert august.is_file()
     assert (outcome.written, outcome.taken) == ((monthly.relative_to(root).as_posix(),), ())
     assert outcome.stopped_because is StopReason.EXHAUSTED
 
 
 def test_an_absent_monthly_index_of_a_window_that_only_reports_is_rebuilt_with_every_month_it_keeps(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path
 ) -> None:
     """January 2026 is past the 13-month window, but nobody approved deleting it, so it is found too.
 
@@ -470,14 +465,13 @@ def test_an_absent_monthly_index_of_a_window_that_only_reports_is_rebuilt_with_e
     an_index(root, Period.YEARLY, [])
     monthly = index_of(root, Period.MONTHLY)
 
-    with caplog.at_level(logging.WARNING):
-        outcome = compact(root, date(2027, 12, 16), wake=True, month_deletes_dry_run=True)
+    outcome = compact(root, date(2027, 12, 16), wake=True, month_deletes_dry_run=True)
 
     assert [
         (entry.covers, entry.state, entry.rows) for entry in CompactIndex.read(monthly).entries
     ] == [("2026-01", EntryState.PACKED, 1), ("2027-10", EntryState.PACKED, 1)]
     for month in kept:
-        assert recovered(caplog, month) == [f"note={RecoveryNote.INDEX_REBUILT}"]
+        assert recovered(outcome, month) == [RecoveryNote.INDEX_REBUILT]
     assert outcome.taken == ()
     assert outcome.written == (monthly.relative_to(root).as_posix(),)
     assert {month: path.read_bytes() for month, path in kept.items()} == held

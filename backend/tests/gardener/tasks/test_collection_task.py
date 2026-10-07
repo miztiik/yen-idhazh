@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, timedelta
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Final
 
@@ -20,11 +21,14 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.collection_prune import CollectionPruneRow, Recovery, StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CollectionTaskPolicy, PrunableCollection
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import github_collections, registry, report
+from idhazh.gardener.context import TaskContext
+from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.tasks import collection
 
 from .._garden import named_task_modules
@@ -170,6 +174,50 @@ def test_a_live_pass_its_ceiling_stops_inside_a_day_of_artifacts_keeps_the_day_b
     assert outcome.handled_through == "2026-08-22"
 
 
+def a_row_of(outcome: Pass, context: TaskContext) -> CollectionPruneRow:
+    """The row the runner would file for this pass."""
+    assert isinstance(context.policy, CollectionTaskPolicy)
+    return report.row(
+        outcome,
+        task=context.policy.collection.value,
+        context=context,
+        duration_ms=0,
+        work_ended_at=f"{context.today.isoformat()}T00:41:00Z",
+        cone_bytes=None,
+        downloaded_bytes=None,
+    )
+
+
+def test_a_member_github_will_not_delete_is_on_the_record_and_its_neighbours_are_gone(
+    tmp_path: Path,
+) -> None:
+    """THE ORACLE for a refused delete, on the record: member 2 of 3 answers 422.
+
+    Members 1 and 3 are deleted, and the row holds one `not-deletable` note
+    naming member 2, which counted against the ceiling of three.
+    """
+    one, two, three = the_oldest(3)
+    api = RecordedAnswers(
+        fixture(ARTIFACT_PAGES),
+        repository=fixture(REPOSITORY),
+        refusing={f"actions/artifacts/{two}": HTTPStatus.UNPROCESSABLE_ENTITY},
+    )
+    context = context_for(
+        "workflow-artifacts", tmp_path, today=ARTIFACT_WAKE, dry_run=False, max_deletes_per_run=3
+    )
+
+    row = a_row_of(collection.run(context, api=api), context)
+
+    assert api.removed == [f"actions/artifacts/{one}", f"actions/artifacts/{three}"]
+    assert row.recovered == [Recovery(note=RecoveryNote.NOT_DELETABLE, subject=two)]
+    assert (row.deleted, row.selected, row.stopped_because, row.fault) == (
+        2,
+        4,
+        StopReason.CEILING,
+        None,
+    )
+
+
 def test_a_page_out_of_order_sends_the_pass_through_every_page_and_keeps_its_mark(
     tmp_path: Path,
 ) -> None:
@@ -232,6 +280,30 @@ def test_a_pass_from_a_mark_searches_the_day_after_it_first(tmp_path: Path) -> N
         StopReason.EXHAUSTED,
         "2026-07-06",
     )
+
+
+def test_with_github_answering_503_the_pass_is_deferred_and_its_mark_does_not_move(
+    tmp_path: Path,
+) -> None:
+    """THE ORACLE for an outage, on the record: the first search after the mark answers 503.
+
+    Nothing inside the wake asks again. The row says `deferred` and why, and it
+    carries forward the mark the pass started from, so the next wake searches
+    2026-07-01 first again.
+    """
+    file_a_record(tmp_path / "state", on="2026-10-03", handled_through="2026-06-30")
+    api = RecordedAnswers(
+        fixture(RUNS_BY_DAY), refusing={day_search("2026-07-01"): HTTPStatus.SERVICE_UNAVAILABLE}
+    )
+    context = context_for("workflow-runs", tmp_path, today=ORACLE_WAKE)
+
+    with pytest.raises(PruneInterruptedError) as stop:
+        collection.run(context, api=api)
+    row = a_row_of(stop.value.so_far, context)
+
+    assert api.read_paths == [day_search("2026-07-01")], "nothing inside the wake asked again"
+    assert (row.stopped_because, row.fault) == (StopReason.DEFERRED, GardenerFault.API_UNAVAILABLE)
+    assert (row.handled_through, row.resume_from, row.deleted) == ("2026-06-30", None, 0)
 
 
 def test_a_day_counted_over_a_thousand_is_searched_by_the_hour_and_passed_after_the_last(

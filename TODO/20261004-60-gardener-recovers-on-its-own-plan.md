@@ -58,7 +58,7 @@ Table A - what is out
 | 17 | A late file re-opens its month | 16 | D | DONE | curly-fiesta | #1331 | Plan 60 row 17 |
 | 18 | An unreadable file is set aside, and extra files wait | 17 | D | DONE | special-succotash | - | Plan 60 row 18 |
 | 19 | The marks are worked out from the indexes, and the watermark files go | 8, 18 | D | DONE | legendary-fortnight | - | Plan 60 row 19 |
-| 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | PENDING | - | - | - |
+| 20 | The record says what was recovered and why a pass stopped | 4, 11, 19 | E | DONE | shiny-system | - | Plan 60 row 20 |
 | 21 | Every gardener log line is one JSON event | 2, 20 | E | PENDING | - | - | - |
 | 22 | A person reads a shard at a glance | 21 | E | PENDING | - | - | - |
 | 23 | The gardener ledger is packed live | 16, 22 | F | PENDING | - | - | - |
@@ -113,7 +113,7 @@ An entry can be gone while its packed file is still there, for example after an 
 
 ### 2.3 Recovery instead of failure
 
-A pass never stops for something it can record. Each fault below is designed out, or recovered on this wake or the next. Only `failed` turns a job red, and it means a code defect, the one case a person must act on.
+A pass never stops for something it can record. Each fault below is designed out, or recovered on this wake or the next. Only `failed` turns a job red, and it means a code defect; a period that waits for a person ends `deferred` and says so in its fault word (row 20).
 
 Table C - each fault
 
@@ -130,7 +130,7 @@ Table C - each fault
 | C9 | A watermark without its index (`index-missing`) | Designed out. Each mark is worked out from the indexes (section 2.2), and the watermark files go | - | - | 19 |
 | C10 | The job is killed part way through a pass, by a timeout or a cancelled run | Designed out. A shard lands only through its one commit, so a killed pass lands nothing, and the next wake starts from the same marks | - | - | 20 |
 | C11 | GitHub's API is unavailable to a collection pass: a 429 or 5xx answer, or a connection that fails or times out, as row 20's error classifier names them. Nothing inside a wake retries | The mark stays, and the next wake resumes from it | fault `api-unavailable` | `deferred` | 20 |
-| C12 | An exception that no other row of this table names, including a 4xx answer other than 404, 409, 410, 422 and 429 (row 20) | The task stops at that period. The shard's other tasks still run, and the next wake retries | fault `raised`, the exception's type only and never its text | `failed` | 20 |
+| C12 | An exception that no other row of this table names, including a 4xx answer other than 404, 409, 410, 422 and 429 (row 20) | The task stops at that period. The shard's other tasks still run, and the next wake retries | fault `raised`; the exception's type goes to the log line, and its text never to the record | `failed` | 20 |
 | C13 | A packed day or month file that its index names and the tree lacks, when its month or year closes | Treated as unreadable (C6): its days go into `lost_days`, and the period closes. There is no file to set aside | `recorded-lost` | `done` | 18 |
 | C14 | An index file that is absent while its period was packed (`index-missing`), or a packed file at its named path that no entry names, which would otherwise be recorded `lost` | Adopted from named paths: an absent index by Rule L, and a file that no entry names by Rule R (section 2.2). Nothing is deleted | `index-rebuilt`, with the period | `done` | 12, 19 |
 | C15 | A member GitHub will not delete (collections: a 409 or 422 answer). Today the refused delete stops the pass, and every later pass meets that member first | Recorded with its id. It counts against the delete ceiling, the pass goes on, and the mark may pass it | `not-deletable`, with the member id | `done` | 20 |
@@ -147,7 +147,7 @@ Table D - contract changes
 | --- | --- | --- | --- | --- |
 | D1 | `CompactEntry` in `CompactIndex`, `backend/idhazh/contracts/ledger_index.py` | `state`: `packed` (the default), `empty` or `lost`. `lost` is a daily state only: a monthly or yearly entry is `packed` or `empty` and lists its lost days in `lost_days`, so no reader handles a lost month or year. An `empty` or `lost` entry holds no file, and its `bytes` and `rows` are 0. `lost_days`: ascending UTC days inside a monthly or yearly entry's period that were recorded lost; empty by default; never on a daily entry. `set_aside`: how many files were moved aside while packing the period; default 0 | The defaults read every committed index as all `packed`, so nothing is rewritten. A zero-row file written before this row stays a valid `packed` entry until its month closes | 8 |
 | D2 | `CollectionPruneRow` in `backend/idhazh/contracts/collection_prune.py` | `handled_through`: a UTC day. Every member created on or before that day was handled by a pass with the same `dry_run` value: deleted, recorded as not deletable, or reported. Null when the pass handled nothing | The null default reads every older row | 10 |
-| D3 | `CollectionPruneRow`, and new `backend/idhazh/contracts/gardener_fault.py` | `fault`: `raised` or `api-unavailable`, allowed only beside `stopped_because` `failed` or `deferred`. `recovered`: a list of `{note, subject}`. `note` is `repacked-from-raw`, `recorded-lost`, `reopened-month`, `set-aside`, `carried-over`, `index-rebuilt` or `not-deletable`. `subject` is the period or the member id the note is about, typed as `MemberId` in `collection_prune.py`: `MEMBER_ID_PATTERN`, at most 512 characters, which every period string also matches. Each note names one period or member the pass took or adopted, so the list is bounded by the cap, the delete ceiling and Rule L's named paths (section 2.2). `stopped_because` gains `deferred` | Null and empty defaults read every older row | 20 |
+| D3 | `CollectionPruneRow`, and new `backend/idhazh/contracts/gardener_fault.py` | `fault`: `raised` or `api-unavailable`, allowed only beside `stopped_because` `failed` or `deferred`; row 20's follow-ups add `range-starts-late`, `no-month-to-reopen` and `packed-file-unreadable` (words by Fowler, 2026-10-07). `raised` pairs with `failed` and every other word with `deferred`, and a `deferred` row names one. `recovered`: a list of `{note, subject}`. `note` is `repacked-from-raw`, `recorded-lost`, `reopened-month`, `set-aside`, `carried-over`, `index-rebuilt` or `not-deletable`. `subject` is the period or the member id the note is about, typed as `MemberId` in `collection_prune.py`: `MEMBER_ID_PATTERN`, at most 512 characters, which every period string also matches. Each note names one period or member the pass took or adopted, so the list is bounded by the cap, the delete ceiling and Rule L's named paths (section 2.2). `stopped_because` gains `deferred` | Null and empty defaults read every older row | 20 |
 | D4 | `Watermark` in `backend/idhazh/contracts/ledger_index.py` | Retired, together with every committed `state/compact/<ledger>/<period>/watermark.json` | Nothing reads them after row 19; section 2.2 replaces them | 19 |
 | D5 | `GardenerConfig` in `backend/idhazh/contracts/knobs/gardener.py`, read from `config/idhazh_gardener.json` | `first_ledger_year`: the UTC year from which Rule L looks for yearly and monthly files (section 2.2). The value is 2026: the repository was created on 2026-08-20, so no ledger holds an earlier year | Not a persisted payload. The committed file gains the value in the same change | 19 |
 
@@ -173,7 +173,7 @@ Table F - outcome words. `report.classify` picks the first that holds, in this o
 | # | Word | Means |
 | --- | --- | --- |
 | F1 | `failed` | A code defect stopped the task (`fault: raised`). The only outcome that turns the job red |
-| F2 | `deferred` | Stopped because GitHub's API was unavailable (`api-unavailable`), a cause outside the code. The next wake resumes |
+| F2 | `deferred` | Stopped for a cause outside the code: GitHub's API was unavailable (`api-unavailable`), or a period waits for a range that starts earlier or for a person (`range-starts-late`, `no-month-to-reopen`, `packed-file-unreadable`, row 20). The job stays green, and the next wake resumes |
 | F3 | `dry-run` | Found work and only reported it |
 | F4 | `ceiling` | Did work, and more is left; `resume_from` says where the next wake starts |
 | F5 | `done` | Did work, and nothing is left. Recovered notes do not change this |
@@ -899,31 +899,46 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - The day step still refuses, by name, a raw day in a month that the monthly mark is past and no monthly entry names. Row 17 (#1331) changed that refusal's message from "raw files sit in a month already absorbed" to one that begins "no monthly entry names its month". It is not a code defect, so it gets a fault word of its own in Table D, D3; found during execution (row 17 report, Fowler), owner 2026-10-06.
   - Two cases still refuse their period by name, and Table C names no recovery for either: a day file that cannot be read when a re-run is taken into it, and a month file that cannot be read when a late file re-opens it. Row 20 gives each a fault word, or adds a recovery for it to Table C; found during execution (row 18 report), owner 2026-10-06.
 - **Files touched:**
-  - `backend/idhazh/contracts/collection_prune.py`
-  - `backend/idhazh/contracts/gardener_fault.py` (new; first sentence "Why a gardener pass stopped, and what it recovered instead of stopping")
-  - `backend/idhazh/contracts/gardener_events.py` (`StepChoice` records the operator-range refusal as `failed`; found during execution (row 12 report), owner 2026-10-04)
-  - `backend/idhazh/gardener/one_at_a_time.py` (`Stop` and `Pass` gain `fault` and `recovered`; `PruneInterruptedError` carries the classified cause)
-  - `backend/idhazh/gardener/closed_day_fold.py` (`FoldInterruptedError` carries the classified cause)
-  - `backend/idhazh/gardener/report.py`
-  - `backend/idhazh/gardener/runner.py` (each task's fault comes from the classifier; only `failed` sets the shard's failed exit code)
-  - `backend/idhazh/gardener/github_collections.py` (the error classifier)
+  - `backend/idhazh/contracts/collection_prune.py` (`StopReason.DEFERRED`, `stop_for`, `Recovery`, `fault`, `recovered`)
+  - `backend/idhazh/contracts/gardener_fault.py` (not new: row 12 made it for the recovery notes. Its first sentence becomes "Why a gardener pass stopped, and what it recovered instead of stopping"; it gains `GardenerFault`, and `RecoveryNote` gains `repacked-from-raw` and `not-deletable`; found during execution)
+  - `backend/idhazh/contracts/gardener_events.py` (`StepChoice` records the operator-range refusal as `deferred`, no longer `failed`; found during execution (row 12 report), owner 2026-10-04; the stop by Fowler, 2026-10-07)
+  - `backend/idhazh/gardener/one_at_a_time.py` (`Pass` gains `fault` and `recovered`; `take` classifies every error it catches and records a member its collection will not delete; `PruneInterruptedError` carries the classified cause. `Stop` lives in `tasks/_compact_tree.py`, below; found during execution)
+  - `backend/idhazh/gardener/closed_day_fold.py` (`Folded.fault` replaces `failed`; `FoldInterruptedError` carries the classified cause)
+  - `backend/idhazh/gardener/report.py` (`ended`; the row's `fault` and `recovered`; the sentence for each word, rendered and never stored)
+  - `backend/idhazh/gardener/runner.py` (each task's fault comes from the classifier; only a failed row, or a shard over its download budget, sets the shard's failed exit code)
+  - `backend/idhazh/gardener/github_collections.py` (`_remove_member`: a member already gone counts as deleted, and `RestApi.remove` stops swallowing 404 itself. The classifier went to `error_cause.py`, below; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/error_cause.py` (new; first sentence "What does an error a gardener pass meets mean: a member already gone, one GitHub will not delete, an API that is down, a download budget spent, or a code defect?"; found during execution, Fowler's ruling)
+  - `backend/idhazh/gardener/__init__.py` (names `error_cause`; found during execution)
   - `backend/idhazh/telemetry/door_prune.py` (it also raises `PruneInterruptedError`)
   - `backend/idhazh/gardener/tasks/compaction.py`
   - `backend/idhazh/gardener/tasks/_daily_period.py`
   - `backend/idhazh/gardener/tasks/_monthly_period.py`
   - `backend/idhazh/gardener/tasks/_yearly_period.py`
   - `backend/idhazh/gardener/tasks/_compaction_periods.py` (the operator-range refusal; found during execution (row 12 report), owner 2026-10-04)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`Stop.fault`, `CompactTree.recovered`, and `stop_over_budget` asks the classifier; found during execution)
+  - `backend/idhazh/gardener/tasks/_reopened_month.py` (its refusals take a fault word; found during execution)
+  - `backend/idhazh/gardener/tasks/_absent_indexes.py` (not changed: its `index-rebuilt` notes reach the record through `CompactTree.note_recovery`; found during execution)
+  - `backend/utilities/ledger_migration/packing.py` (the migrator reads any stop that names a fault as a refusal, so a deferred range refusal still stops it; found during execution)
   - `backend/tests/contracts/test_collection_prune_row.py`
-  - `tests/fixtures/contracts/collection-prune-row/` (new: a `deferred` row with a fault, and a `done` row with recovered notes, one of them `not-deletable` with a member id)
+  - `backend/tests/contracts/_fixtures.py` and `backend/tests/ledger/_fixtures.py` (they name the new rows; found during execution)
+  - `backend/tests/council/_imports.py` (the council's named import list names `gardener_fault`, which `collection_prune` now imports; found during execution, by CI)
+  - `tests/fixtures/contracts/collection-prune-row/` (new: a `deferred` row with a fault, and two `done` rows with recovered notes - one `not-deletable` with a member id, and one of three periods - because no one pass meets both. The four rows already there gain an empty `fault` and `recovered`; found during execution)
+  - `tests/fixtures/gardener/breaks/defect.json` and `tests/fixtures/gardener/task_packages/garden_tasks_breaks/` (`defect.py`, a task whose code is wrong, beside `broken.py`, whose service is down; found during execution)
+  - `backend/tests/gardener/test_error_cause.py` (new; found during execution)
   - `backend/tests/gardener/test_github_collections.py`
   - `backend/tests/gardener/test_runner.py`
+  - `backend/tests/gardener/_garden.py` (the breaks set names `defect.json`; found during execution)
   - `backend/tests/gardener/test_one_at_a_time.py`
+  - `backend/tests/gardener/test_report.py` and `backend/tests/gardener/test_download_ceiling.py` (found during execution)
   - `backend/tests/retention/test_prune_range.py`
+  - `backend/tests/gardener/tasks/test_collection_task.py` (the oracle's 503 and 422 cases on the task's own record; found during execution)
   - `backend/tests/gardener/tasks/test_compaction.py`
   - `backend/tests/gardener/tasks/test_compaction_periods.py` (found during execution (row 12 report), owner 2026-10-04)
+  - `backend/tests/gardener/tasks/test_compaction_years.py` and `backend/tests/gardener/tasks/test_absent_indexes.py` (their notes are read from the record; found during execution)
   - `docs/architecture/publishing/idhazh-gardener.md` (the record)
   - `docs/architecture/publishing/ledger-compaction.md` (the recovery notes)
-- **How it works:** one pure function in `github_collections.py` maps an error to a result. It tests `HTTPError` first, because `HTTPError` is a kind of `URLError`, which is a kind of `OSError`.
+  - `docs/architecture/contracts/state-ledgers.md` and `docs/how-to/prune-a-collection.md` (what a row holds, and the lines a pass prints; found during execution)
+- **How it works:** one pure function, `classify` in `error_cause.py` (in `github_collections.py` as first written; moved by Fowler's ruling, decision 7), maps an error to a result. It tests `HTTPError` first, because `HTTPError` is a kind of `URLError`, which is a kind of `OSError`.
   - 404 or 410: the member is already gone, and counts as deleted.
   - 409 or 422: the member is recorded `not-deletable` with its id (Table C, C15). It counts against the delete ceiling, and the pass goes on.
   - 429, any 5xx, `URLError`, `TimeoutError` or `ConnectionError`: fault `api-unavailable`, outcome `deferred` (C11). The mark stays, and the next wake retries.
@@ -931,6 +946,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `PruneInterruptedError` and `FoldInterruptedError` carry the classified cause, and never relabel a code defect.
 - **Acceptance gates:** local: `-m contract backend/tests/contracts/test_collection_prune_row.py`, and pytest on the other test files above; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** the new fixtures round-trip. A `fault` beside `stopped_because: exhausted` is refused. `ceiling-reached.json`, which has no `fault`, still reads. Each recovery in Table C writes its note, and each stop writes its fault. The classifier maps each case above, built from real `HTTPError` and `URLError` objects. With `RecordedAnswers` answering 503, the outcome is `deferred`, the mark does not move, and the shard's other tasks run. With member 2 of 3 answering 422, members 1 and 3 are deleted, and the record holds one `not-deletable` note naming member 2. A shard whose only non-green task is `deferred` exits 0. It cannot settle wording; the sentence is rendered and can change with no migration. Nor can it settle what GitHub answers for a member it will not delete (decision 6).
+- **Found during execution:** the oracle's 503 and 422 cases run through the real collection task and its own record row (`test_collection_task.py`), and the shard's other tasks through `broken.py`, whose service is down, beside a new `defect.py`, whose code is wrong: the first is `deferred` and leaves the shard at exit 0, the second is `failed` and exits 1. `ceiling-reached.json` gains the two empty cells, because every committed fixture round-trips byte for byte; the older row is read with both removed, which is what a row written before this change is. The 404 rule was not new: `RestApi.remove` held it, and it moved to `_remove_member` so `classify` holds it once; a 410 counts as deleted for the first time. Run on the base commit 606a53e10, in a copy outside this checkout, the 13 changed test modules fail to import (`GardenerFault`, `Recovery`, `stop_for` and `error_cause` are absent), and the base code refuses the three new rows, ends a 503 `failed` with no fault, stops at the 422 member and never deletes member 3, ends a 410 `failed`, and records the range refusal `failed`. The migrator read a refusal as `failed` only, and three of its tests went red until it read any stop that names a fault. Seven refusals still end `failed` with `raised` though a person, not a code change, settles them: a year with a month that never closed (`day-missing`), a year file over GitHub's large-file line, a month's own unindexed file holding other rows than its days, a Rule R or L file whose envelope names another ledger or period, an index this build cannot trust, a raw-folder entry that is not a file, and a period larger than the whole download budget. Each would need a word of its own in Table D, D3 to end `deferred` (ESCALATE trigger 1), so they are reported to the owner rather than given one. A 403 is `raised` as the mapping says, but GitHub answers a spent rate limit with 403 or 429; reading a 403 that carries `x-ratelimit-remaining: 0` or `retry-after` as `api-unavailable` is one header test and changes the approved mapping, so it is the owner's call (Fowler, 2026-10-07).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -940,6 +956,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 4 | No fault word for an interruption. A killed process lands nothing (Table C, C10), and both wrappers caught every exception, so a code defect would have been recorded as an interruption, ended `deferred` and left the job green | Fowler review, 2026-10-04 |
 | 5 | A member GitHub will not delete is recorded `not-deletable` with its id, and the mark may pass it. Before, one refused member stopped every later pass, so nothing behind it was ever deleted | Fowler review, 2026-10-04 |
 | 6 | 409 and 422 mean a member GitHub will not delete. That is a reading of GitHub's documentation, not a measurement: when a pass first meets such an answer, its response is recorded as a test fixture | Fowler review, 2026-10-04 |
+| 7 | The classifier is a module of its own, `error_cause.py`, not part of `github_collections.py`: `take` must call it and the driver imports `take`, and the runner, the fold, the ledger prune and the compaction's budget ask it too. It gives `GONE`, `NOT_DELETABLE`, `API_UNAVAILABLE`, `BUDGET_SPENT` or `RAISED`; a stop records `api-unavailable`, or else `raised`, so a 404 on a read is a defect. A member already gone is absorbed by `github_collections._remove_member`, so the artifacts walk still counts the delete | Fowler, 2026-10-07 (row 20 worker's consult) |
+| 8 | The four refusals the follow-ups name end `deferred`: `range-starts-late`, `no-month-to-reopen`, and `packed-file-unreadable` for a day file a re-run is taken into or a month file a late file re-opens that cannot be read or is not there, because C13 already treats a packed file the tree lacks as unreadable. A fault word, not a set-aside, because the entry would then call the period whole while it holds only the rows that ran again. `StepChoice` records the range refusal `deferred` with no new field. A step a fault stopped holds the daily mark below its day either way | Fowler, 2026-10-07 (row 20 worker's consult); the follow-ups, owner 2026-10-04 and 2026-10-06 |
+| 9 | `error_cause.classify` decides both download-budget cases by one rule, that more than the whole budget is a defect: an `OverBudgetError` for a period larger than the budget ends its step `failed` with `raised` and a smaller one ends it at `ceiling` for a wake with room, and a shard whose downloads passed the budget exits 1 with no task row marked, because no row can say which task downloaded past it | Fowler, 2026-10-07, on the owner's note of 2026-10-07 |
+| 10 | `repacked-from-raw` is noted only when the day is at or below the mark, no entry named it, nothing was adopted for it, and raw files packed it, so the note never depends on which step adopted a file first | Fowler, 2026-10-07 (row 20 worker's consult) |
+| 11 | `raised` pairs with `failed` and every other word with `deferred` (`stop_for`); a `deferred` row names its fault, and a `failed` row written before 2026-10-07 reads with none. Only a failed row, or a shard over its download budget, sets the failed exit code. A fold's fault decides the row when the fold stopped, and the fold is skipped after any stop. The changelog drops its 2026-09-30 entry to stay at five | Fowler, 2026-10-07 (row 20 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |

@@ -13,6 +13,8 @@ a wake's tasks into shards, and lands one record per shard on main.
 - `context` is what a task is handed; `report` turns what a pass did into its row.
 - `one_at_a_time` deletes a collection's members one at a time, under a ceiling.
 - `github_collections` lists and deletes what GitHub holds for this repository.
+- `error_cause` says what an error a pass meets means: a member gone, one GitHub
+  will not delete, an API that is down, a download budget spent, or a code defect.
 
 Landing a shard's commit on main runs git, and nothing in this package starts a
 process, so the commit loop is `backend/utilities/gardener_publish.py`.

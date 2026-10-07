@@ -23,7 +23,10 @@ raw files alone. The mark stays where it is.
 **A day whose entry says `packed` while its file is not there is refused**, as
 `file-missing`, and its raw files are kept: rebuilt from the re-run's files
 alone it would hold only the shards that ran again, and its index entry would
-call that smaller day complete.
+call that smaller day complete. So is a day whose packed file cannot be read.
+Either way a person restores the file from git history, and the pass ends
+`deferred` with the fault `packed-file-unreadable` rather than turning the job
+red.
 
 **A raw day in a month the monthly index names landed after its month closed,
 and the month re-opens** (`_reopened_month`): the month's rows and the late
@@ -31,7 +34,8 @@ rows are settled the way a day taken again is. It counts once against the cap.
 One in a month past the keep line is the drop steps' instead (below). A raw day
 in a month the monthly mark is past that no monthly entry names is refused by
 name and kept, for a person: that month never closed, was dropped, or sits in a
-packed year, so there is no month to re-open.
+packed year, so there is no month to re-open. The pass ends `deferred` with the
+fault `no-month-to-reopen`.
 
 **A day with no row is an entry `empty` with no file.** The entry keeps the
 newest day the daily index names equal to the mark, so a reader tells a quiet
@@ -39,7 +43,10 @@ day from a hole without a file to open, and the next pass works the mark out
 from the index again. **A day no entry names that has a file
 at its path is adopted first** (`ledger_marks.adopt`): an index restored from
 an older commit can lose a day whose file is still there, and recording the
-day empty, or writing over the file, would lose its rows.
+day empty, or writing over the file, would lose its rows. **A day at or below
+the mark that no entry names, with raw files and no file to adopt, is a hole
+in the ledger's history, and it is packed again from its raw files**, noted
+`repacked-from-raw`.
 
 **A file that cannot be read is moved aside, and the rest of its day packs.**
 Its envelope or a row this build refuses moves it to the ledger's set-aside
@@ -79,10 +86,10 @@ from pathlib import Path
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import StepChoice
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees
@@ -142,17 +149,26 @@ def _days_from(first: str, last: str) -> list[str]:
 
 
 def _refused(
-    tree: CompactTree, day: str, why: str, fault: ledger.LedgerFault | None = None
+    tree: CompactTree,
+    day: str,
+    why: str,
+    ledger_fault: ledger.LedgerFault | None = None,
+    *,
+    fault: GardenerFault = GardenerFault.RAISED,
 ) -> Stop:
-    """A raw day the step does not take, said once by name. Its files are kept."""
+    """A raw day the step does not take, said once by name. Its files are kept.
+
+    `fault` is the record's word for it: `raised`, a defect, unless the caller
+    names a cause outside the code, which defers the pass instead.
+    """
     logger.error(
         "a raw day is not compacted, and its files are kept ledger=%s day=%s fault=%s reason=%s",
         tree.ledger.value,
         day,
-        fault or "none",
+        ledger_fault or "none",
         why,
     )
-    return Stop(StopReason.FAILED, day)
+    return Stop(stop_for(fault), day, fault)
 
 
 def _take[C: Contract](
@@ -167,11 +183,14 @@ def _take[C: Contract](
     """Pack one day; None when it is packed whole.
 
     A `ceiling` stop at the day when it is packed from its oldest files and the
-    rest wait in its folder for the next wake. A `failed` stop when the day is
-    refused: nothing is decided for it, and the refusal is all that is said of
-    it. A fetch past the shard's budget raises `OverBudgetError`, with nothing
-    decided either.
+    rest wait in its folder for the next wake. A `failed` or `deferred` stop
+    when the day is refused: nothing is decided for it, and the refusal is all
+    that is said of it. A fetch past the shard's budget raises
+    `OverBudgetError`, with nothing decided either. A day at or below the mark
+    that no entry names, packed from raw files with no file of its own to
+    adopt, is a hole in the ledger's history filled again: `repacked-from-raw`.
     """
+    history = tree.daily_through is not None and day <= tree.daily_through
     try:
         raw = tree.read_raw_day(day, most=policy.max_raw_files_per_period, model=model)
     except ValueError as refusal:
@@ -190,6 +209,7 @@ def _take[C: Contract](
                 f"{where.name} names the day and its file is not there. Restore the file from "
                 "git history, and the next wake takes the re-run in",
                 ledger.LedgerFault.FILE_MISSING,
+                fault=GardenerFault.PACKED_FILE_UNREADABLE,
             )
     else:
         try:
@@ -202,7 +222,7 @@ def _take[C: Contract](
     try:
         kept = [tree.load(existing, model=model)] if existing is not None and raw.taken else []
     except ValueError as refusal:
-        return _refused(tree, day, str(refusal))
+        return _refused(tree, day, str(refusal), fault=GardenerFault.PACKED_FILE_UNREADABLE)
     for path, why in raw.unreadable:
         tree.set_aside(path, day, why)
     set_aside = (0 if entry is None else entry.set_aside) + len(raw.unreadable)
@@ -231,6 +251,8 @@ def _take[C: Contract](
         tree.note_recovery(RecoveryNote.SET_ASIDE, day)
     if adopted is not None:
         tree.note_recovery(RecoveryNote.INDEX_REBUILT, day)
+    elif history and entry is None and raw.taken:
+        tree.note_recovery(RecoveryNote.REPACKED_FROM_RAW, day)
     tree.mark_index(Period.DAILY)
     _advance(tree, day)
     if raw.carried:
@@ -322,18 +344,20 @@ def compact(
 
     `first_kept` is the keep line, the oldest month the monthly window keeps,
     or None when it keeps every month. A re-opened month counts once against
-    the cap, as a day does. A choice an operator range refused stops here, at
-    the day the range left out, with nothing taken. The step takes only the
-    days whose fetch fits what is left of the shard's download budget, and
-    stops at the first that does not.
+    the cap, as a day does. A choice an operator range refused stops here,
+    deferred at the day the range left out, with nothing taken. The step takes
+    only the days whose fetch fits what is left of the shard's download budget,
+    and stops at the first that does not. A day refused for a fault holds the
+    mark below it, whether the fault fails the pass or defers it.
     """
-    if choice.stopped_because is StopReason.FAILED and choice.resume_from is not None:
+    if choice.stopped_because is StopReason.DEFERRED and choice.resume_from is not None:
         return (
             _refused(
                 tree,
                 choice.resume_from,
                 "the operator range leaves it out, and it is due before any day the range "
                 "names. Widen the range to include it",
+                fault=GardenerFault.RANGE_STARTS_LATE,
             ),
         )
     new = (
@@ -360,6 +384,7 @@ def compact(
                     "no monthly entry names its month and the monthly mark is past it: the "
                     "month never closed, was dropped, or sits in a packed year, so there is "
                     "no month to re-open",
+                    fault=GardenerFault.NO_MONTH_TO_REOPEN,
                 )
             )
         else:
@@ -380,7 +405,7 @@ def compact(
         except OverBudgetError as spent:
             return (*stops, tree.stop_spent(month, spent))
         stops.extend(reopened)
-        if not any(stop.because is StopReason.FAILED for stop in reopened):
+        if not any(stop.fault is not None for stop in reopened):
             taken += 1
     days = again + new
     # Every day the cap and the budget can reach, fetched in one call before the
@@ -402,7 +427,7 @@ def compact(
         except OverBudgetError as spent:
             stops.append(tree.stop_spent(day, spent))
             break
-        if stop is not None and stop.because is StopReason.FAILED:
+        if stop is not None and stop.fault is not None:
             stops.append(stop)
             if fresh:
                 break
