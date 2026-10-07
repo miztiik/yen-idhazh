@@ -73,7 +73,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | PENDING | - | - | - |
 | L18 | The console home reads each day payload once | L13 | F | PENDING | - | - | - |
 | L19 | console-mark-parity's skipped test checks data it builds | L13 | F | PENDING | - | - | - |
-| L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | PENDING | - | - | - |
+| L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | - | Plan 62 row l20 |
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | PENDING | - | - | - |
 | L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | PENDING | - | - | - |
