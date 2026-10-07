@@ -51,6 +51,18 @@ Five rules hold for every number the console prints:
  articles is not a measurement, and a column that hides its denominator
  invites a trend that is not there.
 
+**A count that leaves a run out says so, and says what still counts the run.**
+On Hardware, a run whose rows cannot be made into one run is left out of the
+first line's run count - for example, a run where one shard filed two machine
+records that disagree. A box under that line names each such run, its row count
+and the reason, under this head: `1 run has records that do not fit together.
+The run count above does not include it. Figures that pick articles by date
+still include the articles of this run.` The head claims no more than that:
+every figure built from the window's article rows picks them by date, so each
+one counts the refused run's articles. The box stays directly under the run
+count, because its words point up at it. Reader chose the words, and kept the
+place, on 2026-10-07.
+
 **A fixed benchmark figure never appears on the console.** It was taken on
 another machine against another workload, so a gap between it and a run reads as
 a regression nobody measured. Those numbers stay in
