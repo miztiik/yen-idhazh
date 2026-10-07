@@ -80,7 +80,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | #1376 | Plan 62 row l24 |
 | L25 | Hardware's platform-mix panel says the machine record is not packed yet | L7, L17 | G | DONE | fantastic-giggle | - | Plan 62 row l25 |
 | L26 | Every console sentence reads right at the one-day window | L17, L23 | G | PENDING | - | - | - |
-| L27 | Judgement's windowed surfaces name their span | L17 | G | PENDING | - | - | - |
+| L27 | Judgement's windowed surfaces name their span | L17 | G | DONE | vigilant-sniffle | - | Plan 62 row l27 |
 
 ## 2. Shared declarations
 
@@ -1244,20 +1244,27 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/console-window.spec.ts` (the window oracle row L17 built gains the Judgement route's four windowed surfaces)
   - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (prints no day count; gains the span, Reader's words)
   - `frontend/src/routes/console/judgement/RecordGates.svelte` (prints no span when no line was fitted; gains one for that case)
-  - `frontend/src/lib/console/merge-line.ts` (prints no span when no fitted day is in the window; gains one for that case)
-  - `frontend/src/lib/console/span-words.ts` (the helper reused, `nameSpan`/`countDays`)
+  - `frontend/src/routes/console/judgement/MergeLinePlot.svelte` (found during execution: the sentence for no fitted day in the window is in its template, and so is the dashed rule's label; both take Reader's words)
+  - `frontend/tests/console-judgement-agreement.spec.ts`, `frontend/tests/console-judgement-line.spec.ts` (found during execution: they pinned the old sentences, each with an all-time "yet", on the canary)
+  - Unchanged, found during execution: `frontend/src/lib/console/merge-line.ts` (its sentences already name the span; the one this row names is in `MergeLinePlot.svelte`) and `frontend/src/lib/console/span-words.ts` (reused: `nameSpan` and `countDays`)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the specs it selects for the changed files; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-window.spec.ts`, on data the test builds (Table D, D3): at the 1- and 7-day presets each of `judge-agreement`, `record-gates` (no line fitted) and `merge-line` (no fitted day in the window) names its span in words. On the canary all three print no day count at 1 and at 7 days today, which is what lets this check fail. It cannot settle the words; Reader rules.
+- **Follow-ups** (found during execution):
+  - With no fitted day in the window, the merge line's dashed rule is drawn at the committed floor, `floor_min` in `config/idhazh.json`, and labelled the line the newest day was built with. A build uses the newest fitted line of the 7 days before it (`applied_line()` in `backend/idhazh/similarity/applied.py`), so at the 1-day window, after a line was fitted in those days, the rule and its sentence name the wrong line. The route already hands `VerdictSplit` and `HoldoutMargin` the newest applied line it read. Latent while `adaptive_dedup_threshold.enabled` is false. A Level 2 row.
+  - The record's three bars read the newest row inside the window, so a window with no row on its days draws all three at zero while the running record still holds what earlier rows counted. The panel's own header says falling bars mean a record that emptied. A Level 2 row.
+  - Reader's: in the state "too few to report a share", the strip above the sentence prints a share of fewer than 5 pairs, such as "25% of 4 pairs". A Level 1 row with Reader's words.
+  - One-day sentences on Judgement that print no day count, the kind row L26 takes, are not in L26's Files touched: the resting heading ", the newest day" on three panels' strips and ", the newest published day" on the merged stories; the record strip's hint "Left and Right step through the days, Escape returns to the newest." and its label "What the record did with each day. ..."; the strips' default hint "Left and Right step through them" in `ChartReadout.svelte`; the agreement chart's label "..., a day"; the merge line's label "The merge line a day, ..." and its panel note "The shaded band at each day ...". Add them to L26, or give them a row of their own.
 
 **Decisions**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Reader chooses the words (CLAUDE.md section 14) | Reader, 2026-10-07, in one ruling with nothing left split. Every all-time "yet" goes, and each sentence names the days on screen through `span-words.ts`: "No pair was read twice in these 7 days, so there is nothing to compare."; "1 pair was read twice in this one day. That is too few to report a share, so the counts are above." (the strip with the counts sits above the sentence); "The two readings disagreed on {share} in these 7 days. No line was fitted on 2 of 7 days, because a rate was past its mark on those days." (the share over all the days need not be past the mark, and a day can be held because too many readings could not tell); "In these 7 days, {share} disagreed with their own second reading, and {share} could not tell. Both rates are inside the marks."; "Nothing was judged in this one day. The three bars are what the record needs before a line may be fitted at all."; the record's other three states end "No line was fitted in these 7 days.", where "A line was fitted on {k} of 7 days." stands when one was; the merge line says "No line was fitted in these 7 days.", the same words, and at one day its sentence and its dashed rule's label say "the line this one day was built with", not "the newest day" |
 | 2 | Level 1: a wrong version is obvious and local, one surface at a time | Plan owner, 2026-10-07 |
+| 3 | The Oracle is twenty-one cases in `console-window.spec.ts`, one a state and a window, that render each of the three panels with its real children from days the test builds and check Reader's sentences written out whole. A twenty-second holds the record's fitted-line sentence, whose words did not change but whose branch this row rewrote. The Judgement route also joins the loop the other four routes run, which holds for any data and reaches only the states the canary draws | Found during execution (Table D, D3) |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Leave the three surfaces silent on their span | On the canary all three print no day count at 1 and at 7 days; found during execution (row 20 report) | Nothing to build, and no window oracle for the Judgement route | Plan owner, 2026-10-07 |
+| 1 | Leave the three surfaces silent on their span | On the canary all three print no day count at 1 and at 7 days; found during execution (row L17 report) | Nothing to build, and no window oracle for the Judgement route | Plan owner, 2026-10-07 |

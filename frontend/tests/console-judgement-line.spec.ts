@@ -182,7 +182,7 @@ test.describe('the sentences count what the chart drew', () => {
 		expect(Number(await page.locator(`${PANEL} [data-line-rule]`).getAttribute('data-line-rule')))
 			.toBeCloseTo(FLOOR, 3);
 		await expect(page.locator('[data-line-state="no-days"]')).toContainText(
-			'No day has fitted a line yet'
+			'No line was fitted in'
 		);
 
 		const box = await page.locator(`${PANEL} svg`).boundingBox();
