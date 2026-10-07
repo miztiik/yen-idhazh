@@ -1,0 +1,17 @@
+{
+  "collection": "workflow-artifacts",
+  "dry_run": true,
+  "kind": "collection",
+  "lifecycle_status": "active",
+  "mark_lookback_days": 7,
+  "max_deletes_per_run": 50,
+  "owns": [],
+  "reads": [
+    "state/compact/gardener",
+    "state/raw/gardener"
+  ],
+  "window": {
+    "unit": "days",
+    "value": 30
+  }
+}

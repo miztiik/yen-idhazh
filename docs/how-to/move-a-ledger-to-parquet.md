@@ -137,6 +137,10 @@ Also establish that an old writer cannot return, or record the owner's explicit
 approval to retire without that wait. Keep the CSV, family and old-row reader
 until the evidence and any required ruling are complete.
 
+When a council run fails, inspect the failed stage and recover any completed
+output before its artifacts expire. A failed run does not prove that its results
+were saved; report parity as unavailable if the output cannot be recovered.
+
 Keep obsolete CSV writers stopped throughout retirement; current door writers may continue. The proof does not lock a tree
 against another process, and filesystem deletion is not a transaction. A
 deletion error can stop cleanup after earlier proven files have been removed.

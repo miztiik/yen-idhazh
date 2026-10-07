@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
@@ -166,7 +166,7 @@ def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
     return knobs.compression_raw if tier is Tier.RAW else knobs.compression_compact
 
 
-def _columns(model: type[Contract]) -> tuple[Column, ...]:
+def file_columns(model: type[Contract]) -> tuple[Column, ...]:
     """The contract's own columns, then every identity column it does not declare itself."""
     own = arrow_schema.columns_of(model)
     return own + tuple(
@@ -269,7 +269,7 @@ def _rendered(
         from idhazh.ledger import parquet
 
         return name, parquet.render(
-            _columns(model), stored, envelope=envelope, compression=compression
+            file_columns(model), stored, envelope=envelope, compression=compression
         )
     return name, json_lines.render(stored, envelope=envelope)
 
@@ -526,7 +526,7 @@ def render_grouped_period[C: Contract](
         from idhazh.ledger import parquet
 
         data = parquet.render_groups(
-            _columns(model), checked(), envelope=envelope, compression=compression
+            file_columns(model), checked(), envelope=envelope, compression=compression
         )
     else:
         whole = [cells for stored in checked() for cells in stored]
@@ -604,7 +604,7 @@ def render_renamed[C: Contract](
             f"{where}: rows written under {model.__name__} {envelope.row_schema_version}, and "
             f"this build reads {model.schema_version()}. Rename it with a build at least as new"
         )
-    known = {column.name: column for column in _columns(model)}
+    known = {column.name: column for column in file_columns(model)}
     cells = [{**row, "ledger": ledger.value} for row in stored]
     held = list(cells[0]) if cells else list(known)
     strangers = sorted(set(held) - set(known))
@@ -703,6 +703,34 @@ def read_footer(path: Path) -> FileFooter:
     return FileFooter(envelope=envelope, rows=len(stored))
 
 
+#: How many of a `ValidationError`'s failing fields a refusal names, oldest first.
+_REFUSAL_FIELDS_SHOWN: Final = 5
+
+
+def _refusal_facts(refusal: ValidationError, *, declared: Collection[str]) -> str:
+    """The failing fields and each one's pydantic error kind, never the row's own values.
+
+    Never the exception's text: `str(ValidationError)` quotes the cell beside
+    each error, and a cell can hold text fetched from the open web (Guardrail
+    #11). `loc` is shown only where it is a list index or a name `declared`
+    names; anything else - an extra key read off a tampered file's header - is
+    not a closed fact either, and is shown as `?`. Capped at the first
+    `_REFUSAL_FIELDS_SHOWN` entries, with the total count when there are more.
+    """
+    errors = refusal.errors()
+    shown = []
+    for error in errors[:_REFUSAL_FIELDS_SHOWN]:
+        where = ".".join(
+            str(part) if isinstance(part, int) or part in declared else "?"
+            for part in error["loc"]
+        )
+        shown.append(f"{where}: {error['type']}")
+    facts = "; ".join(shown)
+    if len(errors) > _REFUSAL_FIELDS_SHOWN:
+        facts += f" ({len(errors)} total)"
+    return facts
+
+
 def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[StoredRow[C]]:
     """Read these files back as rows of one contract, each beside its identity cells.
 
@@ -711,9 +739,17 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
     naming the file, the stamp it holds and the stamp this build reads: only a
     build at least that new knows what those rows mean. A row whose cells either
     shape refuses is refused naming its file.
+
+    **Every `ValueError` this raises names closed facts only: a path, a field
+    name declared by `RowIdentity` or `model`, and a pydantic error kind - never
+    a row's own value** (Guardrail #11: a cell can hold text fetched from the
+    open web). A caller may log it whole, and its traceback carries no chained
+    cause: the refusal it was raised from is suppressed, so an uncaught crash
+    never prints the row's value either.
     """
     wanted = model.schema_version()
     added = {column.name for column in _IDENTITY_COLUMNS} - set(model.model_fields)
+    declared = {column.name for column in _IDENTITY_COLUMNS} | set(model.model_fields)
     held: list[StoredRow[C]] = []
     for path in paths:
         envelope, stored = _opened(path)
@@ -736,7 +772,8 @@ def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[S
                 for cells in stored
             )
         except ValidationError as refusal:
-            raise ValueError(f"{path.name} holds a row this build refuses: {refusal}") from refusal
+            facts = _refusal_facts(refusal, declared=declared)
+            raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from None
     return held
 
 

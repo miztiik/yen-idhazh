@@ -82,11 +82,6 @@ class _Change:
     freed: int
 
 
-def _shown(state_dir: Path, path: Path) -> str:
-    """`state/...`, POSIX, whatever root a caller handed in (CLAUDE.md section 2)."""
-    return f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
-
-
 def _days(since: str, until: str) -> list[str]:
     """Every UTC day from `since` to `until`, both named."""
     first, last = date.fromisoformat(since), date.fromisoformat(until)
@@ -116,6 +111,7 @@ def _changes(
         )
     rebuilt: list[_Change] = []
     entries: dict[Period, dict[str, CompactEntry]] = {}
+    expired_through: dict[Period, str | None] = {}
     for found in held:
         days = tuple(day for day in found.days if day in taken)
         if not days or found.period is None:
@@ -127,6 +123,7 @@ def _changes(
         if found.period not in entries:
             index = CompactIndex.read(ledger.compact_index_path(state_dir, name, found.period))
             entries[found.period] = {entry.covers: entry for entry in index.entries}
+            expired_through[found.period] = index.expired_through
         named = entries[found.period]
         named[found.covers] = named[found.covers].model_copy(
             update={"rows": built.rows, "bytes": len(built.data)}
@@ -139,6 +136,7 @@ def _changes(
             ledger=name,
             period=period,
             entries=[named[covers] for covers in sorted(named)],
+            expired_through=expired_through[period],
         )
         data = index.to_json().encode("ascii")
         indexes.append(_Change(path, data, _shrank(path, data)))
@@ -196,10 +194,12 @@ def take_days(
             seen=outside + len(members),
             selected=len(members),
             taken=tuple(
-                _shown(state_dir, change.path) for change in done if change.data is None
+                ledger.paths.shown(state_dir, change.path) for change in done if change.data is None
             ),
             written=tuple(
-                _shown(state_dir, change.path) for change in done if change.data is not None
+                ledger.paths.shown(state_dir, change.path)
+                for change in done
+                if change.data is not None
             ),
             bytes_freed=sum(change.freed for change in done),
             stopped_because=because,

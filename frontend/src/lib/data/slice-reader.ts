@@ -9,8 +9,10 @@
  * (`page-keeper.ts`), asks the engine one query over them (`slice-query.ts`),
  * and returns one of four states:
  *
- * - `missing`: there is no `daily.json`, so the ledger is not published. Its
- *   fault is `not-packed`.
+ * - `missing`: there is no `daily.json`. A panel reads only published ledgers,
+ *   and a build-time read finds every ledger the state tree holds, so this is a
+ *   ledger with no compact folder: one that is not packed yet, never one left
+ *   unpublished. Its fault is `not-packed`.
  * - `quiet`: every day asked for is covered and no row matched, or the span lies
  *   wholly after the newest day compacted, or wholly before the ledger began. A
  *   file whose entry says `rows: 0` is never fetched, and neither is a period

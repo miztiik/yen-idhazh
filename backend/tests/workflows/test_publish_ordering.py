@@ -276,6 +276,7 @@ SITE_WEIGHT_JOBS: Final = (
 )
 
 SITE_WEIGHT_CALL: Final = ("python", "-m", "idhazh", "site-weight")
+PUBLISHED_COLUMNS_CALL: Final = ("python", "-m", "idhazh", "published-columns")
 
 
 def _published_tree() -> str:
@@ -299,6 +300,16 @@ def _site_weight_step(workflow: dict[str, object], job_name: str) -> tuple[int, 
             directory = str(step.get("working-directory", "")).strip("/")
             return index, [directory, *argv]
     raise AssertionError(f"{job_name} builds the site and never measures it")
+
+
+def _published_columns_step(workflow: dict[str, object], job_name: str) -> tuple[int, list[str]]:
+    """Where the published-columns call sits in a job, and the argv it runs."""
+    for index, step in enumerate(_steps(workflow, job_name)):
+        argv = shlex.split(str(step.get("run", "")))
+        if tuple(argv[:4]) == PUBLISHED_COLUMNS_CALL:
+            directory = str(step.get("working-directory", "")).strip("/")
+            return index, [directory, *argv]
+    raise AssertionError(f"{job_name} builds the site and never checks its ledger columns")
 
 
 @pytest.mark.parametrize(("filename", "job_name"), SITE_WEIGHT_JOBS)
@@ -336,6 +347,18 @@ def test_the_site_gate_measures_the_tree_the_deploy_uploads(filename: str, job_n
         if "npm run build" in str(step.get("run", ""))
     )
     assert built < index, "the tree does not exist until the site is built"
+
+
+@pytest.mark.parametrize(("filename", "job_name"), SITE_WEIGHT_JOBS)
+def test_the_published_columns_gate_checks_the_same_tree(filename: str, job_name: str) -> None:
+    """The column check is a fact about the same built tree as the size check."""
+    workflow = _load_workflows()[filename]
+    weight_index, weight_argv = _site_weight_step(workflow, job_name)
+    columns_index, columns_argv = _published_columns_step(workflow, job_name)
+
+    assert columns_index == weight_index + 1
+    assert columns_argv[:4] == weight_argv[:4]
+    assert columns_argv[5:] == weight_argv[5:]
 
 
 def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None:

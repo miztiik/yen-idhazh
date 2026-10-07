@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-07
 
-**Thirty-four defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-six defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -43,7 +43,11 @@ lines stamp log records in local time, and in a worktree with no `.venv` the
 test launcher hands its inner run a Python it then refuses. Defect 63 was
 filed the same day by plan 62's text update after row L7: the plan status
 utility's docstring shows a usage that does not work and a no-install claim
-that is not true.
+that is not true. Defects 64 and 65 were filed the same day by the plan text
+update after plan 60's row 21: the canary's telemetry step refuses a
+repository path spelled with a short name, which plan 62's row L25 met, and a
+retention task run over a person's range that finds nothing ends `not-due`,
+which plan 60's row 21 found.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -76,7 +80,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
-| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - owner ruled to drop the column; Plan 61 Row 2 removed it |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - the council record rationale ([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant)) keeps machine details out of each row |
 | 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed ledger is exposed** |
 | 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
 | 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
@@ -115,6 +119,61 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
+| 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
+| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+
+## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
+
+**A retention task that a person runs with `--from` and `--to`, and that finds
+nothing, ends `not-due` instead of `outside-range`.** `TaskContext.period_range`
+in `backend/idhazh/gardener/context.py` holds either the range a person named
+or, on a scheduled wake, the window the runner built: `runner.run` fills it
+from `scheduled_range` when no range was named. A retention task reads that one
+field, so it cannot tell the two apart, and its pass keeps the idle word
+`not-due` that `Pass` in `backend/idhazh/gardener/one_at_a_time.py` starts
+with. Only the compaction chooses its own idle word, and it is `outside-range`
+whenever a person named a range. `task-planned` still shows the range a person
+named, because the runner hands that event the range itself, not the field.
+Plan 60's row 21 found it on 2026-10-07.
+
+**Doing nothing costs a person who named a range the wrong advice about it.**
+`task-finished` says "nothing has reached its line yet", the sentence for a
+scheduled wake. The one that helps is the sentence for `outside-range`:
+"nothing that may be taken is inside the range named; widen it, or run the
+task without one".
+
+**The next move is a worker's: keep the person's range apart from the scheduled
+window on `TaskContext`, and let a retention pass that finds nothing inside a
+person's range end `outside-range`, as the compaction's does.** Level 1 - the
+idle word of a retention task run by hand; a wrong version shows on the first
+such run.
+
+Found by plan 60's row 21 (#1387), and filed on 2026-10-07.
+
+## 64 - The canary's telemetry step refuses a repository path spelled with a short name (OPEN)
+
+**Where `TEMP` is a short 8.3 name, with a `~1` in it, a canary build in a copy
+under it stops in its telemetry step with `ValueError: ... is not in the
+subpath of ...`.** `main()` in
+`backend/idhazh/telemetry/publish/public_telemetry.py` prints each shard it
+writes as `path.relative_to(config.REPO_ROOT)` (lines 237 and 248).
+`config.REPO_ROOT` is resolved (`backend/idhazh/config.py` line 61), so it
+spells the long name. The shard's path comes from `--public`, which
+`frontend/scripts/build-canary.mjs` passes as it spelled the copy's path, and
+`main()` does not resolve it, so the two spellings of one folder do not
+compare. Plan 62's row L25 met it on 2026-10-07 (Windows, Python 3.14.2).
+
+**Doing nothing costs a canary build in any copy named by a short `TEMP`,
+after the build's earlier steps have run.**
+[run-the-gates.md](../docs/how-to/run-the-gates.md#run-a-new-test-against-the-base-commit)
+now names the base-commit copy by the long form of `TEMP` (row L25, #1384),
+which steers around it; a copy named any other way still stops.
+
+**The next move is a worker's: resolve the path before `relative_to`, in both
+places `main()` prints one.** Level 1 - two lines of one command's output; a
+wrong version stops the first canary build that meets a short name.
+
+Found by plan 62's row L25 (#1384), and filed on 2026-10-07.
 
 ## 63 - The plan status utility does not do what its docstring says (OPEN)
 
@@ -958,8 +1017,10 @@ rejected recording the machine per shard, on the grounds that the digest
 pipeline already characterises the same runner pool and the probe wants 1.9 GiB
 on a job whose two processes already hold up to 9.02 GiB in 16 GB.
 
-The owner ruled on 2026-10-04 to drop the column. Plan 61 Row 2 removes it from
-the replacement contract and refuses a filled legacy cell during migration.
+The council record rationale
+([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant))
+keeps machine details out of each row. The replacement contract refuses a
+filled legacy cell during migration.
 
 Found 2026-09-21, while the council's own record was being built.
 

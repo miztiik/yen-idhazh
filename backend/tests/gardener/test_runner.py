@@ -258,6 +258,9 @@ def test_a_task_that_reaches_outside_what_it_owns_stops_the_shard_before_anythin
 
     assert outcome.exit_code == EXIT_INTEGRITY
     assert outcome.record is None, "a record was written for a shard that broke ownership"
+    assert [held.task for held in outcome.finished_tasks] == ["wanderer"], (
+        "a shard refused after its task ran forgot how that task ended"
+    )
     assert any(f"touched state/neighbour/{AGED}" in line for line in said)
     assert commits_on(origin) == before
     assert git(checkout, "status", "--porcelain", "--", "state") == ""
@@ -528,7 +531,8 @@ def a_ledger_ending(
     """A ledger under `root` whose next pass ends on `word`, the wake it runs at, and its range.
 
     Each starts from one raw day of the cleanup report, filed through the ledger
-    door, except the ledger with nothing in it.
+    door, except the ledger with nothing in it. Idle cases disable yearly pruning
+    so a new expiry index does not turn initialization into completed work.
     """
     if word is not TaskOutcome.EMPTY:
         filed(root, a_pass("2026-09-22" if word is TaskOutcome.NOT_DUE else "2026-09-20"))
@@ -547,7 +551,13 @@ def a_ledger_ending(
         case TaskOutcome.CEILING:
             return a_compaction(root, max_periods_per_run=1), FIRST_WAKE, None
         case TaskOutcome.OUTSIDE_RANGE:
-            return a_compaction(root), FIRST_WAKE, ("2026-08", "2026-08")
+            return (
+                a_compaction(root, yearly_prune_enable=False),
+                FIRST_WAKE,
+                ("2026-08", "2026-08"),
+            )
+        case TaskOutcome.EMPTY | TaskOutcome.NOT_DUE:
+            return a_compaction(root, yearly_prune_enable=False), FIRST_WAKE, None
         case _:
             return a_compaction(root), FIRST_WAKE, None
 

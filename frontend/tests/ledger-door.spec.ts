@@ -198,6 +198,36 @@ function contractEntries(name: string, ledger: LedgerName, period: Period): Comp
 	return reading.index.entries;
 }
 
+test.describe('yearly expiry metadata', () => {
+	test('older indexes read a null expiry mark and an empty yearly index keeps its mark', () => {
+		const older = readIndex({ version: '2026-10-04', ledger: LEDGER, period: 'yearly', entries: [] }, LEDGER, 'yearly');
+		expect(older).toMatchObject({ index: { expired_through: null } });
+		const expired = readIndex({ ledger: LEDGER, period: 'yearly', entries: [], expired_through: '2026' }, LEDGER, 'yearly');
+		expect(expired).toMatchObject({ index: { entries: [], expired_through: '2026' } });
+	});
+
+	test('only a yearly index may carry a UTC year expiry mark', () => {
+		for (const expired_through of ['2026-12', 2026, {}, false]) {
+			const reading = readIndex({ ledger: LEDGER, period: 'yearly', entries: [], expired_through }, LEDGER, 'yearly');
+			expect(reading).toHaveProperty('refused.reason', 'unreadable');
+		}
+		for (const period of ['daily', 'monthly'] as const) {
+			const reading = readIndex({ ledger: LEDGER, period, entries: [], expired_through: '2026' }, LEDGER, period);
+			expect(reading).toHaveProperty('refused.reason', 'unreadable');
+		}
+	});
+
+	test('an expired entry cannot be read again, but a later entry can', () => {
+		for (const covers of ['2025', '2026', '2027']) {
+			const reading = readIndex({
+				ledger: LEDGER, period: 'yearly', expired_through: '2026',
+				entries: [{ covers, rows: 1, bytes: 1 }]
+			}, LEDGER, 'yearly');
+			expect('index' in reading).toBe(covers === '2027');
+		}
+	});
+});
+
 const columns = ['date', 'run_id', 'job', 'shard', 'cores'] as const;
 const ask = (from: string, to: string, extra: Partial<SliceOptions> = {}): SliceOptions => ({
 	columns,

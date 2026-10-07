@@ -9,11 +9,10 @@ from typing import cast
 
 import pytest
 from conftest import SEED_COMMIT
+from gardener._historical_config import PRE_YEARLY_CONFIG
 from gardener.tasks._marks import marks_on_disk
-from gardener.tasks._task import declared as task_declarations
-from gardener.tasks._task import first_ledger_year
 
-from idhazh import day_shards, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period
@@ -92,7 +91,8 @@ def _packed(state: Path, which: LedgerName) -> _Packed:
 
 def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
     """What the gardener hands this ledger's declared compaction over `root`, turned live."""
-    declared = task_declarations()[f"compact-{which.value}"]
+    settings = config.load_gardener(PRE_YEARLY_CONFIG)
+    declared = settings.tasks[f"compact-{which.value}"]
     assert isinstance(declared, CompactionPolicy)
     return TaskContext(
         state_dir=root / ledger.STATE_DIRNAME,
@@ -104,13 +104,13 @@ def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
         job=ServerJob.RUN_TASKS,
         shard=0,
         git_sha=SEED_COMMIT,
-        owned_folders=tuple(declared.owns),
+        owned_folders=tuple(folder for folder in declared.owns if (root / folder).is_dir()),
         listing=FileListing.from_disk(
             root,
             declared.owns,
             paths=(root / folder for folder in declared.owns),
         ),
-        first_ledger_year=first_ledger_year(),
+        first_ledger_year=settings.config.first_ledger_year,
     )
 
 
