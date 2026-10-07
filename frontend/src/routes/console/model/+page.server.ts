@@ -276,7 +276,7 @@ export async function load() {
 						rate: observability.sample_rate,
 						recorded: scoredDays,
 						window: answeredDays,
-						read: scores.read,
+						reads: [scores.read],
 						from: readSpan.start,
 						open: window,
 						figures: 'quality figures'

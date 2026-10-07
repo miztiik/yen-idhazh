@@ -617,7 +617,7 @@ test.describe('THE ORACLE for the Hardware note: a day the machine record lost r
 			enabled: true,
 			recorded: [...new Set(machine.rows.map((row) => row.date))],
 			window: ['2030-06-14', '2030-06-15'],
-			read: machine.read,
+			reads: [machine.read],
 			from: '2030-06-13',
 			open: { days: 3, start: '2030-06-13', end: '2030-06-15' },
 			figures: 'machine record'
@@ -739,7 +739,7 @@ test.describe('THE ORACLE: a "Recording started" line names a start the open win
 					enabled: true,
 					recorded: recorded.filter((date) => date >= span.start && date <= span.end),
 					window: daysBetween(span.start, span.end),
-					read: machine.read,
+					reads: [machine.read],
 					from: span.start,
 					open
 				}).startedMidWindow

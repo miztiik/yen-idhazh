@@ -291,7 +291,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			rate: 1,
 			recorded: ['2026-08-27', '2026-08-28'],
 			window: ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28'],
-			read: begun('2026-08-27', '2026-08-28'),
+			reads: [begun('2026-08-27', '2026-08-28')],
 			from: '2026-08-25',
 			open: over('2026-08-25', '2026-08-28')
 		});
@@ -312,9 +312,9 @@ test.describe('what the recording was doing, in fixed words', () => {
 			from: '2026-08-25',
 			open: over('2026-08-25', '2026-08-28')
 		};
-		expect(recordingNotes({ ...facts, read: begun('2026-08-01', '2026-08-28') }).startedMidWindow).toBeNull();
+		expect(recordingNotes({ ...facts, reads: [begun('2026-08-01', '2026-08-28')] }).startedMidWindow).toBeNull();
 		// Begun on the first day handed: the record's whole history is in hand.
-		expect(recordingNotes({ ...facts, read: begun('2026-08-25', '2026-08-28') }).startedMidWindow).toBe(
+		expect(recordingNotes({ ...facts, reads: [begun('2026-08-25', '2026-08-28')] }).startedMidWindow).toBe(
 			'Recording started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.'
 		);
 	});
@@ -327,7 +327,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: daysBetween('2026-08-10', '2026-08-20'),
 			window: daysBetween('2026-07-25', '2026-08-20'),
-			read: begun('2026-08-01', '2026-08-20'),
+			reads: [begun('2026-08-01', '2026-08-20')],
 			from: '2026-07-25'
 		};
 		expect(recordingNotes({ ...facts, open: over('2026-08-05', '2026-08-20') }).startedMidWindow).toBe(
@@ -341,6 +341,29 @@ test.describe('what the recording was doing, in fixed words', () => {
 		).toBeNull();
 	});
 
+	test('an instrument drawn from two records dates its start only where both reach back to their first days', () => {
+		// The server's counters are formed from the machine record and the article record. Here
+		// the machine record began on 1 Sep 2026, inside the read from 25 Aug, and the counters'
+		// first day in the read is 30 Aug.
+		const facts = {
+			enabled: true,
+			recorded: daysBetween('2026-08-30', '2026-09-10'),
+			window: daysBetween('2026-08-25', '2026-09-10'),
+			from: '2026-08-25',
+			open: over('2026-08-25', '2026-09-10')
+		};
+		const machine = begun('2026-09-01', '2026-09-10');
+		expect(recordingNotes({ ...facts, reads: [machine, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe(
+			'Recording started on 30 Aug 2026. Earlier in this window, 5 days had a run but no server figures.'
+		);
+		// The article record began on 1 Aug, before the read, so it may hold counters from before it.
+		expect(recordingNotes({ ...facts, reads: [machine, begun('2026-08-01', '2026-09-10')] }).startedMidWindow).toBeNull();
+		// A day either record lost is a day the instrument ran.
+		expect(
+			recordingNotes({ ...facts, reads: [machine, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow
+		).toBe('Recording started on 28 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
+	});
+
 	test('a window\'s lines name only what it shows, though the route hands it every day it read', () => {
 		// The route read 29 days, 31 Jul to 28 Aug 2026, and hands every window all of them. The
 		// record began on 3 Aug, before the 7-day window of 22 to 28 Aug, so only the wider window
@@ -350,7 +373,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 				enabled: true,
 				recorded: daysBetween('2026-08-03', '2026-08-28'),
 				window: daysBetween('2026-07-31', '2026-08-28'),
-				read: begun('2026-08-03', '2026-08-28'),
+				reads: [begun('2026-08-03', '2026-08-28')],
 				from: '2026-07-31',
 				open
 			});
@@ -366,7 +389,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			rate: 0.25,
 			recorded: ['2030-06-12'],
 			window: ['2030-06-12'],
-			read: begun('2030-06-12', '2030-06-14'),
+			reads: [begun('2030-06-12', '2030-06-14')],
 			from: OFFERED[2]!.start,
 			open: OFFERED[2]!
 		});
@@ -384,7 +407,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			rate: 1,
 			recorded: ['2026-08-29'],
 			window: ['2026-08-28', '2026-08-29'],
-			read: begun('2026-08-01', '2026-08-29'),
+			reads: [begun('2026-08-01', '2026-08-29')],
 			from: '2026-08-28',
 			coveredElsewhere: ['2026-08-28', '2026-08-29']
 		};
@@ -405,7 +428,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: ['2026-09-17'],
 			window: ['2026-09-16', '2026-09-17'],
-			read: begun('2026-09-16', '2026-09-17'),
+			reads: [begun('2026-09-16', '2026-09-17')],
 			from: '2026-09-16',
 			open: over('2026-09-16', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }],
@@ -427,7 +450,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: ['2026-09-17'],
 			window: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17'],
-			read: begun('2026-09-16', '2026-09-17'),
+			reads: [begun('2026-09-16', '2026-09-17')],
 			from: '2026-09-14',
 			open: over('2026-09-14', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }],
@@ -449,7 +472,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: ['2026-08-20'],
 			window: ['2026-08-17', '2026-08-19', '2026-08-20'],
-			read: begun('2026-08-17', '2026-08-20', ['2026-08-19']),
+			reads: [begun('2026-08-17', '2026-08-20', ['2026-08-19'])],
 			from: '2026-08-17',
 			open: over('2026-08-17', '2026-08-20'),
 			figures: 'machine record'
@@ -461,7 +484,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: ['2026-08-20'],
 			window: ['2026-08-19', '2026-08-20'],
-			read: begun('2026-08-19', '2026-08-20', ['2026-08-19']),
+			reads: [begun('2026-08-19', '2026-08-20', ['2026-08-19'])],
 			from: '2026-08-19',
 			open: over('2026-08-19', '2026-08-20')
 		});
@@ -475,7 +498,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: ['2026-09-16', '2026-09-17'],
 			window: ['2026-09-16', '2026-09-17'],
-			read: begun('2026-09-16', '2026-09-17'),
+			reads: [begun('2026-09-16', '2026-09-17')],
 			from: '2026-09-16',
 			open: over('2026-09-16', '2026-09-17'),
 			lost: [{ date: '2026-09-16', articles: 431 }]
@@ -503,7 +526,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 			enabled: true,
 			recorded: ['2026-09-17'],
 			window: ['2026-09-17'],
-			read: begun('2026-09-17', '2026-09-17'),
+			reads: [begun('2026-09-17', '2026-09-17')],
 			from: '2026-09-17',
 			open: over('2026-09-17', '2026-09-17')
 		});

@@ -361,15 +361,16 @@ export async function load() {
 			// look identical on a chart unless the page says which one it is. The
 			// item ledger is the other instrument: a day it covers and the counters
 			// do not is the state most committed days are in. Each note is handed
-			// the whole read and the machine record's read, so it names only what
-			// this span shows and dates a start only where the read reaches back to
-			// the record's first day.
+			// the whole read and the reads of the records its instrument draws on, so
+			// it names only what this span shows and dates a start only where the
+			// read reaches back to each record's first day. A run is formed from
+			// either record, so the counters draw on both.
 			recording: recordingNotes({
 				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
 				recorded: counterDays,
 				window: dates,
-				read: machine.read,
+				reads: [machine.read, healthTable.read],
 				from: readSpan.start,
 				open,
 				coveredElsewhere: healthDays
@@ -381,7 +382,7 @@ export async function load() {
 				enabled: observability.host_fingerprint,
 				recorded: machineDays,
 				window: dates,
-				read: machine.read,
+				reads: [machine.read],
 				from: readSpan.start,
 				open,
 				lost: lostDays,

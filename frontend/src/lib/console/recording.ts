@@ -195,10 +195,10 @@ export interface RecordingFacts {
 	/** The days the route has a run on, from `from` on. Those inside `open` and
 	 * before the first day this instrument ran had a run and none of its figures. */
 	window: readonly string[];
-	/** How the read of this instrument's record went. Its indexes say where the
-	 * record begins and which of its days in the read were lost, and a lost day
-	 * is a day the instrument ran. */
-	read: RecordRead;
+	/** How the reads of the records this instrument draws on went. Their indexes
+	 * say where each record begins and which of its days in the read were lost,
+	 * and a lost day is a day the instrument ran. */
+	reads: readonly RecordRead[];
 	/** The first day the facts here cover: the first day the route read, or the
 	 * open window's first day where only that window's days are handed. */
 	from: string;
@@ -217,14 +217,14 @@ export interface RecordingFacts {
  * Every line names only what the open window shows, as `measurementOff` does.
  * **A start is dated only where it is known.** The instrument's first day is
  * the first day it ran in the facts, and that is its true first day only when
- * the facts reach back to the record's oldest named day: a record whose indexes
- * name a day before `from` may have run before anything the facts hold, so no
- * line is better than a false one. The line then prints only in a window that
- * shows that day. The day a record began comes from its indexes, so no day
- * before the read is opened to learn it.
+ * the facts reach back to the oldest named day of every record it draws on: a
+ * record whose indexes name a day before `from` may hold a day the instrument
+ * ran before anything the facts hold, so no line is better than a false one.
+ * The line then prints only in a window that shows that day. The day a record
+ * began comes from its indexes, so no day before the read is opened to learn it.
  */
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
-	const { read, open } = facts;
+	const { reads, open } = facts;
 	const shown = (day: string): boolean => day >= open.start && day <= open.end;
 	const recorded = [...facts.recorded].sort();
 	const lost = (facts.lost ?? []).filter((day) => !recorded.includes(day.date));
@@ -233,9 +233,10 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	// Dated from the recorded days alone, a loss before them would date the
 	// instrument's start to the day after the loss and count the loss as a day
 	// before it, which is the lie these states exist to stop.
-	const noRecord = read.state === 'read' ? read.lostDays : [];
+	const noRecord = reads.flatMap((read) => (read.state === 'read' ? read.lostDays : []));
 	const ran = [...recorded, ...lost.map((day) => day.date), ...noRecord].sort();
-	const known = read.state === 'read' && read.first >= facts.from ? (ran[0] ?? null) : null;
+	const whole = reads.length > 0 && reads.every((read) => read.state === 'read' && read.first >= facts.from);
+	const known = whole ? (ran[0] ?? null) : null;
 	const first = known !== null && shown(known) ? known : null;
 	const before = first === null ? 0 : facts.window.filter((date) => shown(date) && date < first).length;
 	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => shown(date) && !recorded.includes(date));
