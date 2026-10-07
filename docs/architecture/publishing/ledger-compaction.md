@@ -667,6 +667,18 @@ note the pass made instead of stopping, one a period, in the order it met them.
 
 ## Design rationale
 
+**Council CSV retirement while current writers continue.** CSV retirement needs
+a fresh source-cell proof through the normal reader, not only successful
+packing. An owner may explicitly accept the risk of an obsolete writer
+returning; this does not authorize cancelling runs or disabling workflows.
+On 2026-10-07, owner @kumarsnaveen_microsoft ruled that the legacy council run
+would not be rerun ("it wont be run just do your job deliver") and waived the
+rerun-window wait for council CSV retirement. Old branch and open-PR writers
+are information, not blockers under that ruling. The council converter and CSV
+family are removed; historical schema stamps and native writer identities
+remain readable. The command sequence is
+[the migration runbook](../../how-to/move-a-ledger-to-parquet.md#retire-csv-after-the-old-writer-is-retired).
+
 **2026-09-28: a compaction pass drops, then absorbs months, then takes days.**
 The first design took the days and then the months. A shard refuses a path it
 both wrote and deleted, and in that order a catch-up pass takes a day and
