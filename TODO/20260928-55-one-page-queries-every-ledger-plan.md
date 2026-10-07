@@ -1251,7 +1251,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   Susan, 2026-10-07:
 
-  ### 1.2 A column is chosen with a pill, which is a select
+  **Susan's section 1.2 - A column is chosen with a pill, which is a select**
 
   **A select is allowed, and the one to build is Jony's pill with its floating list (his D1).** My first answer named a native `<select>`; section 6 says why it yields. A select is allowed for three reasons:
 
@@ -1282,7 +1282,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   `{name}` and `{first}` are printed exactly as the engine names the column. `{first}` is the first checked column in answer order. The role word is never cut. `, {k} more` is never cut. The column's name is cut at its end, and an ellipsis takes the place of what is cut. Nothing else on a closed pill is ever cut.
 
-  ### Table A - The roles of the four drawn charts
+  **Table A - The roles of the four drawn charts**
 
   | # | Chart | Role | Takes | Default | Limit |
   | --- | --- | --- | --- | --- | --- |
@@ -1299,7 +1299,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   - A NULL name is the name `null`, as the table prints it. A NULL number is no value: it breaks a line, and its row is left out of a ranked list, a scatter and a spread (unchanged).
   - The four-line cap is the length of one list, the explorer's four series colours. `shape.ts` and `ShapePanel.svelte` both read that list instead of each writing 4.
 
-  ### Table B - What the Chart tab opens on
+  **Table B - What the Chart tab opens on**
 
   Until the reader presses a tile or picks a column, each run opens by today's automatic rule. What that rule picks does not change.
 
@@ -1315,7 +1315,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   - Once the reader chooses, the chart and each role keep their column across runs on the page, while the new answer still holds that column in a family that fits. A role whose column is gone takes its default. A chosen chart stays chosen when it cannot draw the new answer, and its box says why.
   - Choices are not saved with a question and not carried in a link (P2).
 
-  ### Table C - Sentences for a pick that cannot draw (row 19)
+  **Table C - Sentences for a pick that cannot draw (row 19)**
 
   Each is one sentence in the chart box, said once, in the neutral tone (R4). Each value prints as the table prints it.
 
@@ -1338,7 +1338,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   - C7, C11, C12 and C13 come from `tooFewSentence()`, given the place words `in the answer` (V5). Each says `is` for one, as today. C12 says `names`, after the role `Name`, instead of today's `subjects`.
   - C8 is new. Today a text column that repeats a name ranks every row under that name. Once plan 52 row 2 sends the list through `rankedList()`, the repeat is refused anyway (V8), so the sentence must exist.
 
-  ### Table D - The Chart tab's other sentences
+  **Table D - The Chart tab's other sentences**
 
   | # | Sentence | Ruling | Why |
   | --- | --- | --- | --- |
@@ -1352,7 +1352,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   Where D3, D4 and D5 sit is Jony's. R4 rules out the space above the chart.
 
-  ### Table M - What the chart box says when the answer cannot fill a chart's roles
+  **Table M - What the chart box says when the answer cannot fill a chart's roles**
 
   One sentence for each chart, the same whichever of its roles is empty; the empty pill shows which one (Jony's H1). Neutral tone, said once, inside the box (R4). When no chart at all can be filled, the box says B4's sentence instead, whichever tile is checked (Jony's H3).
 
@@ -1366,7 +1366,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   Jony, 2026-10-07:
 
-  ### Sizes
+  **Jony's section 1 - Sizes**
 
   Every size is a token, a knob or a share of the row. Nothing adds a literal. Token values on `origin/main`: `--workbench-control` is 2rem (32 px) with a mouse and 2.75rem (44 px) with touch; `--space-1` 4 px; `--space-2` 8 px; `--space-3` 12 px; `--leading-sm` 1.3rem (20.8 px).
 
@@ -1375,7 +1375,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   - **The role row's height** is lines x `--workbench-control` + (lines - 1) x `--space-1` + 2 x `--space-1`. Lines are 1 from 1024 px, 2 from 640 px and 3 below. It depends on the band and the pointer, and on nothing else.
   - **The strip** is one line from 640 px: `--workbench-control` + 2 x `--space-1`. Below 640 px it is two lines in both tabs - the tabs, then the open tab's own controls - at 2 x `--workbench-control` + 3 x `--space-1`. At 390 px the two tabs and four tiles need about 530 px of a 366 px line (estimate), and the two copy buttons need the second line too.
 
-  ## 2. How a pill holds 88 columns and still fits a phone
+  **Jony's section 2 - How a pill holds 88 columns and still fits a phone**
 
   `SELECT * FROM "item-health"` returns 128 columns, and 88 of them are numbers (the newest packed file, August 2026). So a role that takes a number can offer 88 names, and a role that takes any column can offer 128.
 
@@ -1407,7 +1407,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   **The closed pill** is one line and never wraps. A name longer than its room ends in an ellipsis on the pill alone; no published name is that long at any of the four widths. The reader then loses that name's end on the pill. The open list, the pill's accessible name, the chart's accessible name and the readout print it whole. A several-column pill shows a short summary in the same room; the words are Susan's.
 
-  ## 3. A change of type or role moves nothing outside the drawing
+  **Jony's section 3 - A change of type or role moves nothing outside the drawing**
 
   The region keeps one height (R2). Inside it, room is reserved by the width band and the pointer. It is never reserved by the type, by the number of its roles, or by a chosen value.
 
@@ -1429,7 +1429,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   **What the reservation costs.** On a phone, a type with one role leaves two empty lines in the role row: 96 px with touch that the drawing does not get. In return, the drawing's top edge stands in one place for every type.
 
-  ## Which types the switch shows
+  **Jony - Which types the switch shows**
 
   **Table F - which types `Draw it as` offers**
 
@@ -1443,7 +1443,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   **What a choice keeps across runs.** Until the reader presses a tile on this page, each answer gets the page's own type and columns. After that, the reader's type stays across runs, as R2 keeps the reader's tab. A picked column stays while the new answer has a column of that name that fits its role; otherwise that role takes the page's own pick. The reader loses one thing: after choosing a type, a new answer that cannot fill it shows that type's reason, not the chart the page would have chosen. One press fixes it.
 
-  ## 4. The keyboard order
+  **Jony's section 4 - The keyboard order**
 
   The order in the page's markup is the order on screen. Each group of controls is one Tab stop.
 
@@ -1464,7 +1464,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   With the Table tab open, the order is the tab, `Copy as JSON`, `Copy as table`, then the table. Focus never moves by itself: after a type change it stays on the tile, and after a pick it is on the pill.
 
-  ## 5. When the answer has no column a role can take
+  **Jony's section 5 - When the answer has no column a role can take**
 
   **Table H - what the reader sees**
 
@@ -1498,6 +1498,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | I13 | **The lists float.** Opening and closing each pill's list gives a shift sum of 0. Each list closes on a press outside it, on Escape and after a one-column pick, with focus on its pill |
   | I14 | **Borrowed, not copied.** `ColumnPicker.svelte` imports `floating-list.ts` and `ColumnType.svelte`. No other explorer file handles a list's outside press or Escape. Every type the switch offers draws through its module in `frontend/src/lib/charts/d3/`, or the component the type table names; `chart-vocabulary.spec.ts` already holds that table and that folder in step |
   | I15 | **Gate 1 still passes** for `data-explorer-shape` at 390, 768 and 1440 px with the role row in place, because the row takes height, not width |
+
 - **What a reader sees change:** The reader can choose the chart and the columns that fill each role without another fetch. The first view still opens on today's automatic choice. A chart that cannot draw the answer keeps its tile and explains what role is missing inside the chart box.
 - **Files touched:**
   - `frontend/src/lib/console/explorer/ShapePanel.svelte`
@@ -1540,9 +1541,9 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   Susan, 2026-10-07:
 
-  ## 2. A2 by reuse (row 20)
+  **Susan's section 2 - A2 by reuse (row 20)**
 
-  ### Table E - The five charts the explorer does not draw today
+  **Table E - The five charts the explorer does not draw today**
 
   | # | Type | Offered | Option | Drawn by, unchanged | Why |
   | --- | --- | --- | --- | --- | --- |
@@ -1552,7 +1553,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | E4 | `paired` | no | - | - | Its drawing, `SwapDots.svelte`, takes the model route's own `ModelSwap` type and not the paired geometry, so offering it means changing a component inside a route that plan 52 is rebuilding; and its floor needs an attempt count on each side, which an answer seldom carries (P3) |
   | E5 | `overlapTimeline` | no | - | - | Its drawing, `RunTimelinePanel.svelte`, is a route panel that reads the run-timeline projection plan 52 row 10 removes and never calls `overlapTimeline()`, so there is no component to use unchanged |
 
-  ### Table F - The roles of the three charts the explorer gains
+  **Table F - The roles of the three charts the explorer gains**
 
   | # | Chart | Role | Takes | Default | Limit |
   | --- | --- | --- | --- | --- | --- |
@@ -1579,7 +1580,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   Icons, each an unmodified source from `lucide-static` 0.544.0, the version `PROVENANCE.md` pins: `shape-side-by-side` from `align-start-vertical`, which draws bars of different lengths from one edge, as this chart does; `shape-days` from `calendar-check`; `shape-flow` from `split`. `icons.spec.ts` fails an id with no source, and a name absent from 0.544.0 is replaced by the nearest drawing of the same idea.
 
-  ### Table G - Sentences for a pick that cannot draw (row 20)
+  **Table G - Sentences for a pick that cannot draw (row 20)**
 
   | # | Chart | When | The box says |
   | --- | --- | --- | --- |
@@ -1596,7 +1597,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
   Row 20 also changes the idle chart box (plan 55 section 2.12, row 1) from `If the answer holds a number, it is drawn here.` to `Run a question, and its answer can be drawn here.`, because Which days draws an answer that holds no number.
 
-  ### Table H - The explorer's fit table, in the mark-shapes page's style
+  **Table H - The explorer's fit table, in the mark-shapes page's style**
 
   This table joins the one under "When nobody wrote the panel, the columns choose the shape". That table stays, as the opening rule (Table B). The page's sentence about switching changes too; section 6.1 has the words.
 
@@ -1610,7 +1611,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | H6 | `tileStrip`, `Which days` | a date or timestamp column and a true/false column | `Date`, `Mark if` |
   | H7 | `flow`, `Flow` | two number columns and one more column | `Stage`, `Arrived`, `Went on`, `Dropped` |
 
-  ### Table M - What the chart box says when the answer cannot fill a chart's roles
+  **Table M - What the chart box says when the answer cannot fill a chart's roles**
 
   One sentence for each chart, the same whichever of its roles is empty; the empty pill shows which one (Jony's H1). Neutral tone, said once, inside the box (R4). When no chart at all can be filled, the box says B4's sentence instead, whichever tile is checked (Jony's H3).
 
@@ -1620,13 +1621,14 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | M6 | Which days (row 20) | `Nothing here to draw: Which days needs a date or timestamp column for Date, and a true/false column to mark the days.` |
   | M7 | Flow (row 20) | `Nothing here to draw: Flow needs two number columns, one for Arrived and one for Went on, and one more column for Stage.` |
 
-  ### Table K - What plan 52 row 2 needs to carry
+  **Table K - What plan 52 row 2 needs to carry**
 
   | # | Change | Why it belongs to plan 52 row 2 |
   | --- | --- | --- |
   | K2 | Each `partsOfOne` part carries its colour from the caller, as `dateSeries` series and the row's new `rankedList` segments already do. A route reads that colour from `series-tokens.ts` by name; the explorer gives the k-th checked bar the colour of the k-th checked line | A lookup by name inside the module cannot colour a column the reader named. The row already rewrites this rule |
   | K3 | `tileStrip`'s `thresholds` are required only when a tile carries a reading | A true/false column carries no reading, and an invented threshold is a number nobody ruled. The row already edits this module |
   | K4 | `TileStrip.svelte` takes its three state words from the caller, for its label and for the readout the row adds. A route passes `fired`, `quiet`, `not recorded`; the explorer passes `true`, `false`, `null` | The explorer prints the engine's words. The row already writes this readout |
+
 - **What a reader sees change:** The reader can draw answers as bars side by side, true-or-false days, or a flow, using the same role row and pill behaviour as row 19.
 - **Files touched:**
   - `frontend/src/lib/console/explorer/ShapePanel.svelte`
@@ -1741,7 +1743,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
 
 ### Row #23 - The column rail reads the copy, and the query engine starts on the first Run
 
-- **Scope:** After rows 19 and 22, row 23 changes the column rail to read the committed copy through `ledgerColumns(ledger)` and stops loading the query engine on page open. `ledger.ts` adds `ledgerColumns(ledger)`, deletes `askColumns()` and its `readColumns` import. `frontend/src/lib/data/ledger-columns.ts` is deleted. `+page.svelte` splits `updateCostAndColumns` into an async cost update and a rail derived immediately from `ledgerColumns()` for `selectedPublished`. The engine starts on the first Run that needs it, never on focus, never on a keystroke and never while the page is idle. A refused statement, a span above the fetch ceiling, or a span with no file can still answer without starting it. The row stamps plan 62's L10 line with `Plan 55 row 21 replaced its source: the rail reads contract-columns.ts, and askColumns() and ledger-columns.ts are deleted.` and B10 with `The rail half is answered by plan 55 row 21: the copy lists the columns of a ledger that has no file.` The plan 62 owner is told this row's PR number. Words: Reader and Jony rule them before this row starts.
+- **Scope:** After rows 19 and 22, row 23 changes the column rail to read the committed copy through `ledgerColumns(ledger)` and stops loading the query engine on page open. `ledger.ts` adds `ledgerColumns(ledger)`, deletes `askColumns()` and its `readColumns` import. `frontend/src/lib/data/ledger-columns.ts` is deleted. `+page.svelte` splits `updateCostAndColumns` into an async cost update and a rail derived immediately from `ledgerColumns()` for `selectedPublished`. The engine starts on the first Run that needs it, never on focus, never on a keystroke and never while the page is idle. A refused statement, a span above the fetch ceiling, or a span with no file can still answer without starting it. The row stamps plan 62's L10 line with `Plan 55 rows 21 to 23 replaced its source: the rail reads contract-columns.ts, and askColumns() and ledger-columns.ts are deleted.` and B10 with `The rail half is answered by plan 55 rows 22 and 23: the copy lists the columns of a ledger that has no file.` The plan 62 owner is told this row's PR number. The words the action line shows while the engine loads are not ruled yet: Reader and Jony rule them before this row starts.
 - **What a reader sees change:** Opening the page shows the rail without downloading the query engine or any parquet file. The first Run that needs the engine pays that download once.
 - **Files touched:**
   - `frontend/src/lib/data/ledger.ts`
