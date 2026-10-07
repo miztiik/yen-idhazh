@@ -271,7 +271,7 @@ def test_a_build_leaves_no_file_an_earlier_build_wrote(
     The earlier build's newest day stayed in the digest tree, and the site build
     dated its fixture rows from that day. So each folder the builder writes holds
     one file the earlier build left, and the build must remove each of them. The
-    builder never writes the inventory, so it must leave that file alone.
+    builder never writes `publication.json`, so it must leave that file alone.
     """
     root = tmp_path / "canary"
     left = [
