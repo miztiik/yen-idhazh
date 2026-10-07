@@ -61,13 +61,12 @@ class RunConfig(Model):
         ),
     )
     max_parallel: int = Field(
-        default=4,
+        default=8,
         ge=1,
         description=(
-            "The most workers a run may derive for itself. It is four rather than the "
-            "eight digest.yml lets an operator dispatch, because eight has never "
-            "published a day; the three conditions that would move it are in "
-            "docs/reference/pipeline-cost.md."
+            "The most workers a run may derive for itself. Eight uses the full "
+            "worker count supported by digest.yml; a manual dispatch may choose "
+            "any count from one through eight."
         ),
     )
     shard_timeout_minutes: int = Field(

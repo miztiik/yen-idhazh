@@ -192,12 +192,11 @@ UNPUBLISHABLE_DATES: Final = (
     "yesterday",
 )
 
-# The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
-# held the fan-out at four. The empty-input default below stays at four, because
-# that is what every scheduled run gets and no eight-shard run is measured yet.
+# The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs;
+# digest runs now use the full eight-worker width for automatic and manual runs.
 CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4", "5", "6", "7", "8"})
 
-CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
+CONTENT_REFRESH_SHARD_DEFAULT: Final = "8"
 
 # How long a worker may run and how many run at once. Both were literals in the
 # work job while `config/idhazh.json` declared different numbers that nothing

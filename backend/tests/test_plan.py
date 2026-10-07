@@ -1871,9 +1871,9 @@ def test_the_worst_case_day_still_fits_the_configured_fan_out() -> None:
     """The ceiling is what sizes a worker's worst shard, so the two are read together."""
     run = config.load().app.run
     shards = cli.shard_count(run.safety_ceiling_per_run, run=run)
-    assert shards == run.max_parallel
+    assert shards == run.max_parallel == 8
     worst_shard = -(-run.safety_ceiling_per_run // shards)
-    assert worst_shard == 20, "a worker's worst shard at the 80-item ceiling across four workers"
+    assert worst_shard == 10, "a worker's worst shard at the 80-item ceiling across eight workers"
 
 
 def test_the_manifest_records_the_count_it_was_handed_and_never_a_derived_one() -> None:

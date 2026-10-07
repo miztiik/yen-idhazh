@@ -65,9 +65,8 @@ def test_the_work_job_reads_its_bound_and_its_width_from_the_plan() -> None:
     assert work.get("timeout-minutes") == _expression(
         "fromJSON(needs.plan.outputs.shard_timeout_minutes)"
     )
-    # The run's own worker count, never a fixed one. Held at four it would queue
-    # half of an eight-shard dispatch and hand back the wall-clock the fan-out
-    # buys; held at eight it says nothing true about a four-worker day.
+    # The run's own worker count, never a fixed one. The matrix and concurrency
+    # cap must agree for both automatic and manual runs.
     assert strategy.get("max-parallel") == _expression("fromJSON(needs.plan.outputs.shards)")
 
     for key, value in _values_keyed(work, WORK_BOUND_KEYS):

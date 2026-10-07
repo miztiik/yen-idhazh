@@ -304,7 +304,7 @@
     "site_budget_mb": 800
   },
   "run": {
-    "max_parallel": 4,
+    "max_parallel": 8,
     "qualification_repeats": 3,
     "qualify_on_the_production_path": true,
     "safety_ceiling_per_day": 400,
