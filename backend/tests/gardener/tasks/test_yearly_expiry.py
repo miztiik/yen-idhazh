@@ -222,6 +222,11 @@ def test_old_indexes_migrate_and_expiry_only_belongs_to_yearly() -> None:
         {"version": "2026-10-04", "ledger": VISUALS, "period": "yearly", "entries": []}
     )
     assert held.expired_through is None
+    assert "expired_through" not in held.model_dump(mode="json")
+    marked = CompactIndex.model_validate(
+        {**held.model_dump(mode="json"), "expired_through": "2026"}
+    )
+    assert CompactIndex.from_json(marked.to_json()).expired_through == "2026"
     for period in (Period.DAILY, Period.MONTHLY):
         with pytest.raises(ValueError, match="may not set expired_through"):
             CompactIndex(

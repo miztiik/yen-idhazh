@@ -491,10 +491,19 @@ on the last day of 2029 and not 36 months after packing ran.
 paths and changes nothing, regardless of the expiry switch.
 
 `expired_through` records the newest year deleted. It is nullable and belongs
-only to the yearly index. Older payloads read it as null. Entries at or before
+only to the yearly index. Writers omit it when no year has expired; absent
+fields and explicit null both read as null. Entries at or before
 it are invalid. The packing marks include this value, so deleting the last
 year cannot reset progress. Recovery of a monthly or daily index starts after
 this mark and cannot adopt, or pack again, an expired year.
+
+The 45-day daily window can hold 76 entries before a whole month closes.
+The published ceilings stay at 2200 bytes: the bundle gate's Node gzip
+implementation confirms that they cover twice each generated index's size.
+Omitting an absent expiry mark avoids charging daily and monthly indexes for
+metadata they never use. Windows Python's different gzip implementation can
+report a larger size; that known tool difference is not a reason to raise the
+production ceiling ([gate notes](../../reference/agent-notes/gates-and-builds.md)).
 
 An established compact tree with yearly pruning enabled must have
 `index/yearly.json`. If it is missing, the pass refuses it by name. Restore
@@ -513,6 +522,12 @@ Do not use this onboarding path after expiry ran; restore that yearly index
 instead. The canary builder reports only folders that actually exist, so new
 fixture ledgers initialize normally without bypassing the established-tree
 refusal.
+
+CSV migration uses the same existing-folder check as the runner and the
+canary builder. It does not relax retention checks: a current finite policy
+cannot perform a lossless migration from a forever CSV reader. Historical
+migration tests use the recorded pre-expiry config, not the current policy,
+and a separate test proves that the current policy refuses that reader.
 
 An operator range may expire only whole years and cannot skip an older indexed
 year. Otherwise its progress mark could hide retained entries.

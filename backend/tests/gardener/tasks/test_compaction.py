@@ -253,7 +253,7 @@ def chosen_on(caplog: pytest.LogCaptureFixture) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("wake", [False, True], ids=["whole-listing", "wake-listing"])
-def test_an_empty_ledger_writes_nothing_and_ends_empty(
+def test_an_empty_ledger_initializes_indexes_and_ends_empty(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, wake: bool
 ) -> None:
     """The gardener's own ledger, live, before any run has filed a row: there is nothing to work on."""
@@ -263,9 +263,14 @@ def test_an_empty_ledger_writes_nothing_and_ends_empty(
     with caplog.at_level(logging.INFO):
         outcome = compact(root, date(2026, 10, 4), task="compact-gardener", wake=wake)
 
-    assert files_under(root) == {}
+    indexes = tuple(ledger.compact_index_path(state(root), GARDENER, period) for period in Period)
+    assert set(files_under(root)) == {path.relative_to(root).as_posix() for path in indexes}
+    for path in indexes:
+        held = CompactIndex.read(path)
+        assert held.entries == []
+        assert held.expired_through is None
     assert (outcome.written, outcome.taken, outcome.stopped_because) == (
-        (),
+        tuple(path.relative_to(root).as_posix() for path in reversed(indexes)),
         (),
         StopReason.EXHAUSTED,
     )

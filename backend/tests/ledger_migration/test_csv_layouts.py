@@ -1,9 +1,7 @@
 """Does the table of old CSV layouts agree with the registry and the declarations?
 
-The table is held against the committed `config/ledgers.json` and compaction
-declarations, which these cases read rather than build, so a pull request that
-changes either is checked against it. A ledger the table does not declare is
-refused by name.
+The table is held against the committed registry and recorded pre-expiry
+compaction declarations. A ledger the table does not declare is refused by name.
 """
 
 from __future__ import annotations
@@ -11,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from gardener.tasks._task import declared as task_declarations
+from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
@@ -121,13 +119,9 @@ def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
     }
 
 
-def test_every_moved_ledger_keeps_its_old_window() -> None:
-    """A moved ledger's committed compaction keeps every day a task kept of its CSV.
-
-    Read off the committed declarations, so a change that shortens one fails
-    here rather than at the first live pass that deletes those days.
-    """
-    tasks = task_declarations()
+def test_every_moved_ledger_kept_its_old_window_before_yearly_expiry() -> None:
+    """Recorded migration declarations preserve the windows held by the old CSV readers."""
+    tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
     moved = csv_layouts.door_ledgers()
     short: list[str] = []
     for name in moved:

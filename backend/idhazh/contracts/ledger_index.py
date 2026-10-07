@@ -259,7 +259,7 @@ class CompactIndex(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-07",
-            change="Yearly indexes gain nullable expired_through; older indexes read as null.",
+            change="Yearly indexes gain expired_through; omitted marks read as null.",
             why="Expiry progress must survive deletion of every yearly entry.",
         ),
         ChangelogEntry(
@@ -299,7 +299,10 @@ class CompactIndex(Contract):
     )
     expired_through: YearStamp | None = Field(
         default=None,
-        description="The newest UTC year permanently expired, only on a yearly index.",
+        exclude_if=lambda value: value is None,
+        description=(
+            "The newest UTC year permanently expired, only on a yearly index; omitted when absent."
+        ),
     )
 
     def to_json(self) -> str:
