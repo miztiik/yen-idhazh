@@ -10,6 +10,8 @@ program keeps its push and the refusal in front of it drivable by a test with
 nothing of this project loaded. The gardener's plan job splits the tasks into
 shards on a checkout of two folders, and installs nothing at all. The Pages
 workflow decides whether to publish on a bare checkout, before any install.
+The gardener's programs import one module of ours as they start, to print a
+crash without its text, so that module is held to the same.
 
 Module scope only. A name imported inside a function is resolved when that
 function runs, and the squash program imports `idhazh` in the one function that
@@ -27,6 +29,7 @@ import pytest
 from conftest import read_text
 
 from ._harness import (
+    CRASH_TRACE_MODULE,
     GARDENER_PLAN_MODULE,
     PRUNE_PUSH_MODULE,
     PUBLISH_DECISION_MODULE,
@@ -36,14 +39,16 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
-#: Every program held to this, named one by one. A sixth program a broken job
-#: reaches for is declared here or it is held to nothing.
+#: Every program held to this, and the one module the gardener's programs import
+#: as they start, named one by one. A sixth program a broken job reaches for is
+#: declared here or it is held to nothing.
 STANDALONE_PROGRAMS: Final = (
     TAKE_STATE_MODULE,
     SQUASH_DUE_MODULE,
     PRUNE_PUSH_MODULE,
     GARDENER_PLAN_MODULE,
     PUBLISH_DECISION_MODULE,
+    CRASH_TRACE_MODULE,
 )
 
 

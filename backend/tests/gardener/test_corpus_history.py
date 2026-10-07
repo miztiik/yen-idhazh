@@ -35,6 +35,11 @@ TODAY: Final = "2026-06-15"
 AT_THE_CUT: Final = "2026-04-16T00:00:00Z"
 JUST_AFTER_THE_CUT: Final = "2026-04-16T00:00:01Z"
 
+#: What a fetched page might say, planted in a stamp the contract refuses; and
+#: the part of it no line the squash prints may hold.
+FETCHED: Final = "Breaking: click https://example.invalid/now"
+PLANTED: Final = "example.invalid"
+
 
 def a_declaration(**changes: Any) -> dict[str, Any]:
     """The squash's declaration, keeping 60 days, live, with some keys changed.
@@ -577,6 +582,34 @@ def test_a_checkout_it_cannot_rewrite_is_refused_before_anything_moves(
 
     assert "nothing was rewritten" in capsys.readouterr().err
     assert git(checkout, "rev-parse", "HEAD").strip() == tip
+    assert history.on_origin("rev-parse", "main").strip() == tip
+
+
+def test_a_run_it_cannot_record_names_where_it_broke_and_never_what_the_stamp_holds(
+    history: History, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The stamp holds a prompt digest that is not one, so recording the run fails.
+
+    The contract's error quotes the value, which stands in for fetched text.
+    The due check reads only `last_run`, so a stamp like this one reaches the squash.
+    """
+    stamp = json.loads(CorpusMeta(version=CorpusMeta.schema_version()).to_json())
+    history.add(
+        "2026-06-02T09:00:00Z",
+        "a stamp the contract refuses",
+        {"corpus/corpus.meta.json": json.dumps(stamp | {"prompt_digest": FETCHED})},
+    )
+    checkout = history.publish()
+    tip = history.on_origin("rev-parse", "main").strip()
+
+    assert squash(checkout) == corpus_history.EXIT_CANNOT_REWRITE
+
+    err = capsys.readouterr().err
+    assert PLANTED not in err, err
+    said = err.splitlines()
+    assert "pydantic_core._pydantic_core.ValidationError" in said, err
+    assert any(line.startswith("  idhazh.corpus:") for line in said), err
+    assert said[-1] == "nothing was pushed: the run could not be recorded"
     assert history.on_origin("rev-parse", "main").strip() == tip
 
 

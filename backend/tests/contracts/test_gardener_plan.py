@@ -7,8 +7,9 @@ held to the same bytes for the same fixture config, and the payload is held to
 the model that declares it.
 
 The script is also run the way the plan job runs it - a fresh interpreter with
-no site packages, in a folder holding only `config/` and the script - so an
-import of anything outside the standard library fails here first.
+no site packages, in a folder holding only `config/`, the script and the module
+it prints a crash with - so an import of anything outside the standard library
+fails here first.
 """
 
 from __future__ import annotations
@@ -56,12 +57,18 @@ def test_both_writers_emit_one_payload_and_it_validates(tmp_path: Path, garden: 
 
 
 def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None:
-    """A fresh interpreter, no site packages, a folder holding only `config/` and the script."""
+    """A fresh interpreter, no site packages, and `config/` with the script and what it reaches.
+
+    Beside the script are the two files of its folder that the plan job's
+    checkout holds and the script imports as it starts: the package file and the
+    crash trace.
+    """
     bare = tmp_path / "bare"
     config_dir = a_fixture_config(bare, "garden")
     script = bare / "backend" / "utilities" / SCRIPT.name
     script.parent.mkdir(parents=True)
-    shutil.copyfile(SCRIPT, script)
+    for name in ("__init__.py", "crash_trace.py", SCRIPT.name):
+        shutil.copyfile(SCRIPT.parent / name, script.parent / name)
     expected = shards.payload(shards.plan(config.load_gardener(config_dir)))
 
     def ran(*flags: str) -> str:
