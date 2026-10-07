@@ -161,7 +161,7 @@ test('days before a ledger began are cut from the selected window, the page name
 	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2030-06-02');
 	await runExplorer(page);
 	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
-	await expect(panel.locator('.answer-note')).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
+	await expect(panel.locator('.answer-note')).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. All 1 rows shown. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
 	await expect(panel.locator('.warn')).toHaveCount(0);
 	expect(await tableRows(page)).toEqual([['2030-06-10']]);
 	expect(archiveAsked).toEqual([]);
