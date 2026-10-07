@@ -299,8 +299,8 @@ staged tree.
   in the build log that names it. The door then finds no `daily.json` and
   answers `missing`: the route's note says the record is not packed yet, and
   the Data explorer says the ledger has no days on this site yet. A compact
-  folder deleted by accident reads the same way, and that log line is the only
-  sign of it.
+  folder deleted by accident reads the same way, and that log line and the
+  bundle gate's report, which names the ledger, are the only signs of it.
 - **A published ledger with some of its indexes but not all three stops the
   build**, which names the ledger and each missing index. A browser asks for a
   ledger's indexes before anything else, so a 404 there would be the only sign
@@ -352,9 +352,13 @@ its longest bounded day or month index. The copied registry has its own
 the 1,469 bytes measured at gzip -5 on 2026-10-02. The bundle gate weighs all
 three indexes and the registry; `backend/tests/contracts/test_page_ceilings.py`
 also fails when a day or month keep window grows past its bound. A ledger not
-packed yet has no index in the build, so its key names nothing and the bundle
-gate fails: until that ledger is packed, CI fails and a push to `main` does not
-publish, though the daily run still does. Size a key from
+packed yet has no file in the build, so the bundle gate reports its key as not
+weighed and names the ledger. That key fails nothing, so CI and the publish
+after a push to `main` go on while the ledger waits for its first packing. The
+gate looks for the ledger's files in the two folders the site copy stages for
+it, `state/compact/<ledger>/` and `state/raw/<ledger>/`, so a published ledger
+with some of its files in the build and no index still fails the gate
+(`frontend/scripts/payload-ceilings.mjs`). Size a key from
 the runner's reading, because zlib-ng, which some local Python builds use, reads
 the same index about 4 percent smaller. **The data files carry no ceiling, and no
 gate yet weighs what one span reads.**

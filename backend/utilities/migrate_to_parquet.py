@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+from idhazh import config
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
 from idhazh.contracts.ledger_name import LedgerName
 from utilities.ledger_migration import phases, report_lines
@@ -90,16 +91,26 @@ def _parser() -> argparse.ArgumentParser:
     modes.add_argument(
         "--plan", action="store_true", help="Preview validated inputs; write nothing."
     )
-    modes.add_argument("--write", action="store_true", help="Write and pack; keep every CSV.")
+    modes.add_argument(
+        "--write", action="store_true", help="Write raw rows and eligible packing; keep every CSV."
+    )
     modes.add_argument("--verify", action="store_true", help="Prove CSV parity; write nothing.")
     modes.add_argument(
         "--retire", action="store_true", help="Re-plan and prove all, then delete CSV."
+    )
+    parser.add_argument(
+        "--raw-only",
+        action="store_true",
+        help="With explicit --write, file raw rows but leave compact files unchanged.",
     )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if args.raw_only and not args.write:
+        parser.error("--raw-only requires explicit --write")
     state_dirs: list[Path] = list(dict.fromkeys(path.resolve() for path in args.state_dir))
     which = (
         list(dict.fromkeys(LedgerName(value) for value in args.ledger))
@@ -127,15 +138,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_id=args.run_id,
         git_sha=args.git_sha,
         today=datetime.now(UTC).date(),
+        config_dir=config.DEFAULT_CONFIG_DIR,
         months=args.month,
     )
     for root in inputs.state_dirs:
-        print(report_lines.root_line(root, packs=packs_here(root, inputs.config_dir)))
+        print(
+            report_lines.root_line(
+                root, packs=packs_here(root, inputs.config_dir), raw_only=args.raw_only
+            )
+        )
     try:
         if args.plan or args.write or args.verify:
             plans = plan_roots(inputs)
             if args.write:
-                moved = phases.write_roots(plans)
+                moved = phases.write_roots(plans, raw_only=args.raw_only)
             elif args.verify:
                 moved = phases.verify_roots(plans)
             else:
@@ -153,7 +169,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_NOT_PROVEN
     csv_kept = args.plan or args.write or args.verify
     for root, each in moved:
-        print(report_lines.moved_line(root, each, csv_kept=csv_kept, proven=args.verify))
+        print(
+            report_lines.moved_line(
+                root,
+                each,
+                csv_kept=csv_kept,
+                proven=args.verify,
+                raw_only=args.raw_only,
+            )
+        )
     return EXIT_MIGRATED
 
 

@@ -111,5 +111,19 @@
     "site_bytes": 39093335,
     "site_files": 92,
     "version": "2026-09-09"
+  },
+  {
+    "date": "2026-10-07",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 67,
+    "runs": [
+      {"charts_drafted": 13,"decided": 67,"decision_ms": 1,"failed": 13,"n": 1,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37595977217","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T08:46:39Z","status": "partial","succeeded": 67}
+    ],
+    "site_bytes": 39227903,
+    "site_files": 93,
+    "version": "2026-09-09"
   }
 ]
