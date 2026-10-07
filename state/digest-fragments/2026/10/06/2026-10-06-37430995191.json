@@ -1,0 +1,30 @@
+{
+  "completed_at": "2026-10-06T08:07:12Z",
+  "date": "2026-10-06",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-j2qb2ma6ck13nf97": "8fYFBP/2/wL8+PUD9vv7BhD3/P4F9/3yAwMD+wn8AwgC+v0C+fv59wH8AQEG/QX+B//+8wX9AwgB+AL/DvsGAw0F/AAA+gkBA///AwX8BQAHAP8LAwT/CAz//fwAAvn9+fj0CP4HDAfw/wAOBAUCBgAC/vn5/gEABfv9AgAH9gD/CgPu//4GBvj9/gwCDgf3/AwFAw8BAvf/Afr9BQICAAX/AgD4+/wDAw8E9QL//Pr9AQIB8/sK+gIFCvb5+fwE/BEA//oL+wX0AQT89PkCCPUB//4DBv4B9Pn4BfwH/AD1+v4DCfz7//wJAwUADgH4Bf769QwI/f/+AQv6BAH8A/sLBhMD/P76BQb9APMD/gn/9gH+AgP2AA4JCf4DBP/y+gIFBvj5/foBBPcAA/0A/P71CwUM/P35AQ72BfoC+QAC/gkF/fz8//77B/T4BgQDAQL4/AH5AP38/P/7AgP8CQsAAQYA/Qj+CAQB/wr+++sBBQL7/gkDBAH5/AoP9wUH",
+      "ai-n4jcz2yz3cxrnfc9": "+f8G/v719QT9APz+/fn8CQP+9fr3+v31AQEH/AD+/wb+AQIQ9fz//Qv8AwP/AfwDAv4B9gMH/P8C/v4HAvz//QUBAgEF/gsCA/r5CwcFE+0I///4AAMABP37Af4BAf0I9fruAgYD//T6/wL+CQL4AAYB/QT+AQX79vv59Pz+9wD4Bfn4/vkKBe79/P72DQLtBwwF/gb9/PsGAAkDAgLzBAkC+gT4/gL+BAbx9/v+AP0A+P0B8PwF+AH9C/79/fgQ/A0KA/0H+/oD/vwC/fsGDAUMAwn/CwIG/wX8+P4C/wD6BvoDBP4BA/8EAwUN+v/9/v8J9AX6AAUD/vcD+gEB9/UJBQMI/P36CPv/Avz7+/7++AMBAwn6CwcKAP74/gP/+gYDDfz6DwUFCvoHAf8BBAQE/fwO/AYB/Qb0/PYEAwD+BAQAB/X9EAcHDPb5BfYECAMD/QQGBPIE//sH9AUBAP/+Cg74BAUDAQQEAvr18fUFAwMCA/8KA/kB9wgB8QQF"
+    }
+  },
+  "failed_item_ids": [],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["anthropic","deepseek","huawei","nvidia","openai"],"events": ["capex","deal","funding","release"],"introduced_by_run": 1,"item_id": "ai-n4jcz2yz3cxrnfc9","lenses": ["china","chips","markets"],"on_front_page": false,"published_at": "2026-10-06T06:02:39Z","rank_score": 2.063726,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "straitstimes-business","source_kind": "reporting","source_name": "The Straits Times","source_url": "https://straitstimes.com/business/deepseek-set-to-raise-at-least-15-billion-in-tencent-backed-funding","summary": "DeepSeek is nearing the closing of a funding round valued at least $15 billion, backed by Tencent and Contemporary Amperex Technology. Sources indicate the final amount could reach 100 billion yuan, exceeding the initial target of 50 billion yuan. The capital will support a planned IPO in early 2027 and the deployment of 160,000 Huawei accelerators in a new data center.","time_source": "feed","title": "DeepSeek Secures Major Tencent-Backed Funding for AI Expansion","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": true},
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["anthropic","deepseek","google","nvidia","openai","tesla"],"events": ["funding","release","research"],"introduced_by_run": 1,"item_id": "ai-j2qb2ma6ck13nf97","lenses": ["china","markets"],"on_front_page": false,"published_at": "2026-10-06T06:01:00Z","rank_score": 2.063129,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "straitstimes-business","source_kind": "reporting","source_name": "The Straits Times","source_url": "https://straitstimes.com/business/nvidia-backed-start-up-reflection-unveils-open-ai-model-to-rival-china-offerings","summary": "Nvidia-backed startup Reflection AI unveiled Beam, an open-weight model designed for business and coding tasks, claiming it rivals leading US and Chinese options. The company, founded by former Google DeepMind researchers, aims to boost US AI exports. Backed by Nvidia and investors, Reflection secured billion-dollar deals with SpaceX and Nebius Group for computing power and plans to raise $2.5 billion at a $25 billion valuation.","time_source": "feed","title": "Nvidia-backed Reflection AI unveils open model to rival Chinese options","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": true}
+  ],
+  "items_planned": 2,
+  "run_id": "2026-10-06-37430995191",
+  "version": "2026-09-22",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 5872,"eligible_feeds": 51,"feed_floor": 35,"id": "ai","planned": 2,"too_old": 5775},
+    {"below_feed_floor": false,"considered": 589,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 525},
+    {"below_feed_floor": false,"considered": 629,"eligible_feeds": 24,"feed_floor": 21,"id": "business-economy","planned": 0,"too_old": 398},
+    {"below_feed_floor": false,"considered": 722,"eligible_feeds": 30,"feed_floor": 21,"id": "world","planned": 0,"too_old": 410},
+    {"below_feed_floor": false,"considered": 1311,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 0,"too_old": 471},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}

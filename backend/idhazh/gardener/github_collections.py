@@ -20,6 +20,11 @@ the whole collection.
 default is `RestApi`. A test hands in a reader over a recorded page instead, the
 way `idhazh.fetch` takes its connection class.
 
+**A refused DELETE is read by `error_cause`, never here.** A member already
+gone counts as deleted; every other answer goes to the pass that asked, which
+records a member GitHub will not delete and stops for anything else. So the
+one table of what GitHub's answers mean is the classifier's.
+
 **Standard library HTTP, deliberately** (Guardrail #8). `idhazh.fetch` already
 reads the open web with `urllib.request`, so the house pattern exists and this
 adds no dependency for the two gardener tasks that call it once a wake. The
@@ -47,10 +52,11 @@ from datetime import date, timedelta
 from typing import Any, Final, Protocol
 from urllib.parse import quote
 
+from idhazh.contracts.gardener_events import ListEndMissing, PageCountChanged, PageOutOfOrder
 from idhazh.contracts.knobs.gardener import PrunableCollection
+from idhazh.gardener import error_cause, event_log
+from idhazh.gardener.error_cause import ErrorCause
 from idhazh.gardener.one_at_a_time import Collection, Member
-
-logger = logging.getLogger(__name__)
 
 #: The environment variable the token arrives in. Actions sets it on the step
 #: that runs the collection tasks; an operator running one by hand exports it.
@@ -138,16 +144,47 @@ class RestApi:
 
     def remove(self, path: str) -> None:
         request = urllib.request.Request(self._url(path), headers=self._headers, method="DELETE")
-        try:
-            with urllib.request.urlopen(request, timeout=30):
-                return
-        except urllib.error.HTTPError as refusal:
-            # 404 is success arriving late: somebody else deleted it, or a
-            # previous pass did and its record was lost. Anything else is a
-            # failure the core has to stop on.
-            if refusal.code == 404:
-                return
-            raise
+        with urllib.request.urlopen(request, timeout=30):
+            return
+
+
+class _Counted:
+    """An `Api` that counts the pages read through it: what one walk of a collection read."""
+
+    def __init__(self, api: Api) -> None:
+        self._api = api
+        self._reads = 0
+
+    def pages(self) -> int:
+        """How many pages have been read through this so far."""
+        return self._reads
+
+    def read(self, path: str) -> dict[str, Any]:
+        self._reads += 1
+        return self._api.read(path)
+
+    def remove(self, path: str) -> None:
+        self._api.remove(path)
+
+
+def _remove_member(api: Api, path: str) -> None:
+    """One DELETE, where a member already gone counts as deleted.
+
+    A 404 or 410 is success arriving late: somebody else deleted it, or an
+    earlier pass did and its record was lost. Which answers mean that is
+    `error_cause.classify`'s, the rule every other caller reads, and every other
+    answer goes to the pass that asked, which reads it the same way. Absorbed
+    here rather than in the pass, so a walk that counts its own deletes counts
+    this one too.
+    """
+    try:
+        api.remove(path)
+    except Exception as failure:
+        if error_cause.classify(failure) is ErrorCause.GONE:
+            if isinstance(failure, urllib.error.HTTPError):
+                failure.close()
+            return
+        raise
 
 
 def api_of_this_repository() -> RestApi:
@@ -328,8 +365,9 @@ class _ArtifactWalk:
     a page's count is not the first page's less what this walk deleted, an
     artifact may have moved onto a page already read; when the list does not
     end where the count says, the walk may have started in the middle of it.
-    Either way the walk is no longer intact, and the pass keeps its mark. One
-    walk serves one pass.
+    Either way the walk is no longer intact, and the pass keeps its mark. Each
+    check that fails is said once, as an event of its own: `PageOutOfOrder`,
+    `PageCountChanged` or `ListEndMissing`. One walk serves one pass.
     """
 
     def __init__(self, api: Api, *, through: str) -> None:
@@ -359,7 +397,7 @@ class _ArtifactWalk:
 
     def delete(self, raw: dict[str, Any]) -> None:
         """One DELETE, counted, so a page read after it is held to the count it left."""
-        self._api.remove(f"actions/artifacts/{raw['id']}")
+        _remove_member(self._api, f"actions/artifacts/{raw['id']}")
         self._deleted += 1
 
     def _checked_pages(self) -> Iterator[list[dict[str, Any]]]:
@@ -387,14 +425,14 @@ class _ArtifactWalk:
         if counted == expected or not self._counted:
             return
         self._counted = False
-        logger.warning(
-            "%s: page %d counted %d artifacts where the first page less %d deleted leaves %d, "
-            "so one may have moved onto a page already read, and the mark stays where it was",
-            PrunableCollection.WORKFLOW_ARTIFACTS.value,
-            page,
-            counted,
-            self._deleted,
-            expected,
+        event_log.emit(
+            PageCountChanged(
+                collection=PrunableCollection.WORKFLOW_ARTIFACTS.value,
+                page=page,
+                counted=counted,
+                expected=expected,
+            ),
+            level=logging.WARNING,
         )
 
     def _check_end(self, page: int, *, held: int, first: int) -> None:
@@ -415,12 +453,11 @@ class _ArtifactWalk:
         ):
             return
         self._counted = False
-        logger.warning(
-            "%s: the list does not end on page %d, where the first page's count of %d says it "
-            "ends, so the count cannot name the oldest page, and the mark stays where it was",
-            PrunableCollection.WORKFLOW_ARTIFACTS.value,
-            page,
-            first,
+        event_log.emit(
+            ListEndMissing(
+                collection=PrunableCollection.WORKFLOW_ARTIFACTS.value, page=page, first_count=first
+            ),
+            level=logging.WARNING,
         )
 
     def _check_order(self, page: int, *, oldest: str, before: str | None) -> None:
@@ -428,11 +465,9 @@ class _ArtifactWalk:
         if before is None or oldest >= before or not self._in_order:
             return
         self._in_order = False
-        logger.warning(
-            "%s: page %d holds an artifact from a day before one on a page read before it, so "
-            "the order check failed: every page is read, and the mark stays where it was",
-            PrunableCollection.WORKFLOW_ARTIFACTS.value,
-            page,
+        event_log.emit(
+            PageOutOfOrder(collection=PrunableCollection.WORKFLOW_ARTIFACTS.value, page=page),
+            level=logging.WARNING,
         )
 
 
@@ -442,9 +477,11 @@ def artifacts(api: Api, *, through: str) -> Collection[dict[str, Any]]:
     94 percent of our bytes sit here. Read from the oldest end and checked page
     by page, as `_ArtifactWalk` says. An expired artifact is listed with its
     real day like any other, so an age window takes it: GitHub has reclaimed
-    its bytes, but its record still fills a place on a page.
+    its bytes, but its record still fills a place on a page. Every page the
+    walk reads is counted, so the pass can say how many it took.
     """
-    walk = _ArtifactWalk(api, through=through)
+    counted = _Counted(api)
+    walk = _ArtifactWalk(counted, through=through)
     return Collection(
         name=PrunableCollection.WORKFLOW_ARTIFACTS.value,
         listing=walk.members,
@@ -456,6 +493,7 @@ def artifacts(api: Api, *, through: str) -> Collection[dict[str, Any]]:
         ),
         delete=walk.delete,
         listing_intact=walk.intact,
+        pages_read=counted.pages,
     )
 
 
@@ -465,7 +503,7 @@ def runs(api: Api, *, after: str, through: str) -> Collection[dict[str, Any]]:
     Listed one UTC day at a time, oldest day first, which is the order a walk
     from a mark needs: every run of a day is listed before any run of the next.
     Each search is read from its last page back, so deleting a run never moves
-    one the pass has not read yet.
+    one the pass has not read yet. Every page read is counted.
 
     `size_bytes` is 0 for every one of them, and that is the honest number: the
     API publishes no size for a run's logs, and the only way to learn one is to
@@ -473,14 +511,16 @@ def runs(api: Api, *, after: str, through: str) -> Collection[dict[str, Any]]:
     saves. A pass over this collection reports what it deleted and says nothing
     about bytes, rather than inventing a figure (Guardrail #10).
     """
+    counted = _Counted(api)
     return Collection(
         name=PrunableCollection.WORKFLOW_RUNS.value,
-        listing=lambda: _runs_created(api, after, through),
+        listing=lambda: _runs_created(counted, after, through),
         describe=lambda raw: Member(
             id=str(raw["id"]),
             day=_day_of(raw["created_at"]),
             size_bytes=0,
             label=str(raw.get("name", "")),
         ),
-        delete=lambda raw: api.remove(f"actions/runs/{raw['id']}"),
+        delete=lambda raw: _remove_member(counted, f"actions/runs/{raw['id']}"),
+        pages_read=counted.pages,
     )

@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 
 The console's interactive charts read a published projection of item health. They
 never read the item-health ledger directly.
@@ -518,7 +518,7 @@ The run-length panel is different and is filtered rather than re-measured: a run
 is already three numbers, so narrowing the window drops columns and recomputes
 nothing.
 
-Every span is anchored on the same day list the cards are anchored on, so the
+Every span ends on the site's newest published day, as the cards' lines do, so the
 panels on that page name one window. `DayWindow` in
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
 is that one answer, passed down rather than re-derived.
@@ -603,7 +603,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | Seconds reading, seconds writing | the machine record's `server_prompt_seconds`, and the item ledger's `decode_ms` | summed over shards, and never added together into one "model seconds" |
 | Read and write speed | `server_prompt_tokens` over `server_prompt_seconds`, and the item ledger's `output_tokens` over its summed `decode_ms` | sum over sum, never a mean of per-shard rates |
 | Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
-| How much text the model has to read again each time | the item ledger's `input_tokens` against its `cached_tokens` | share of every token the prompt needed, read or reused |
+| How much text the model reads again, and how fast it reads | the item ledger's `input_tokens` against its `cached_tokens`, and its `prefill_ms` and `decode_ms` | a reuse span and a reading-speed span a request, over the window's items |
 | How close the longest text came to the model's limit | the largest `input_tokens + output_tokens` any item recorded, against `--ctx-size` on the summarize entry | the longest sequence any shard saw. A maximum, not a sum |
 | Job clock | the machine record's `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | the machine record's `cpu_model` | text, per shard, and never averaged |

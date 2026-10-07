@@ -13,6 +13,7 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
+import { nameSpan, openWithSpan } from '../console/span-words';
 import { dayMonth, shortDate } from '../format';
 import { readoutOf, type Readout } from './readout';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
@@ -118,9 +119,10 @@ export function coverageText(coverage: number): string {
  *
  * Each clause names its figure, its threshold and which side of it the figure
  * fell. A clause that only printed the figure would leave the reader to do the
- * comparison the rule already made. Both cost clauses open with `The median
- * day`, because the reach clause has no subject of its own and takes one across
- * the join.
+ * comparison the rule already made. Both cost clauses open with the day they
+ * measure - `The median day`, or `This one day` where one day has no median -
+ * because the reach clause has no subject of its own and takes one across the
+ * join.
  */
 function verdictOf(
 	minutes: number | null,
@@ -128,10 +130,11 @@ function verdictOf(
 	thresholds: ChartThresholds,
 	days: number
 ): string {
+	const day = days === 1 ? openWithSpan(days) : 'The median day';
 	const cost =
 		minutes === null
-			? `The median day has no minutes on record over these ${days} days`
-			: `The median day spends ${minutesText(minutes)} minutes per visual, ` +
+			? `${day} has no minutes on record${days === 1 ? '' : ` over ${nameSpan(days)}`}`
+			: `${day} spends ${minutesText(minutes)} minutes per visual, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
 				`${trim(thresholds.minutesTarget)} that retires chart drawing`;
 	const reach =

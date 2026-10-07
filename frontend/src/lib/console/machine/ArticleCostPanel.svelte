@@ -17,6 +17,7 @@
 		type ArticleCost,
 		type CostFigure
 	} from '$lib/console/machine/article-cost';
+	import { nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -76,7 +77,7 @@
 		heading="h3"
 		id="article-cost"
 		title="What one article costs the machine"
-		note="Processor time, added memory and model time for a single article, so a change to the prompt, the model or how many articles a day runs can be priced before the run that pays for it - over the last {windowDays} days."
+		note="Processor time, added memory and model time for a single article, so a change to the prompt, the model or how many articles a day runs can be priced before the run that pays for it - over {nameSpan(windowDays)}."
 	>
 		<ul class="costs">
 			<li
@@ -94,12 +95,12 @@
 					<p class="value">-</p>
 					<p class="reach">
 						{#if processor.outOf > 0}
-							{grouped(processor.outOf)} articles over these {days} days recorded the share of the
+							{grouped(processor.outOf)} articles over {nameSpan(days)} recorded the share of the
 							processors they kept busy, and no machine record over the same days says how many
 							processors that share was taken across, so this is a dash rather than a figure
 							worked out from the runner we usually get.
 						{:else}
-							No article over these {days} days recorded both the share of the processors it kept
+							No article over {nameSpan(days)} recorded both the share of the processors it kept
 							busy and how long it ran, so there is no processor time to work out.
 						{/if}
 					</p>
@@ -156,7 +157,7 @@
 				{#if memory.mid === null}
 					<p class="value">-</p>
 					<p class="reach">
-						No shard over these {days} days recorded the model server's memory for two articles in a
+						No shard over {nameSpan(days)} recorded the model server's memory for two articles in a
 						row, so there is no step from one article to the next to measure.
 					</p>
 				{:else}
@@ -205,7 +206,7 @@
 				{#if model.mid === null}
 					<p class="value">-</p>
 					<p class="reach">
-						No article over these {days} days recorded what the model spent reading its prompt and writing
+						No article over {nameSpan(days)} recorded what the model spent reading its prompt and writing
 						its reply.
 					</p>
 				{:else}

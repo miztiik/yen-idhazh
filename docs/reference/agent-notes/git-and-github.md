@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#8-git-hygiene).
@@ -11,6 +11,7 @@ Checks for agents using Git and GitHub. Follow the
 - Before removing a worktree, verify its pull request is merged, its remote branch is gone, and its tree is clean. Keep its branch attached so cleanup can identify it.
 - Do not use `git branch --merged` as proof after a squash merge: the original branch tip is not an ancestor of `main`.
 - A failed removal can delete tracked files before a locked generated executable stops it. Inspect both `git worktree list --porcelain` and the remaining directory before retrying. Leave the residue when its process cannot safely be stopped; do not force deletion or terminate another task.
+- **`gh pr merge --delete-branch` also removes the worktree that holds the merged branch** (seen twice on 2026-10-06 with gh 2.101.0). Afterwards the folder is gone and `git worktree list` does not name it. A later `cd` into that folder fails, and the next command then runs in the shell's own checkout. Copy out anything you need first, and do not chain a `cd` into that worktree after the merge. Run from a folder that is not a git checkout, with `--repo owner/name`, the same command merged and deleted the remote branch and left the worktree and its local branch in place (seen twice on 2026-10-05 with gh 2.101.0). Use that form when a worktree must outlive its merge, such as one an app session works in.
 
 ## The moving base
 

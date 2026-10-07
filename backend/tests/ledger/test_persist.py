@@ -17,6 +17,7 @@ import json
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 from typing import Any, ClassVar, Final
 
@@ -28,6 +29,7 @@ from pydantic import Field, model_validator
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import (
@@ -62,6 +64,7 @@ LEDGER_OF: Final[dict[type[Contract], LedgerName]] = {
     FeedRetirementRow: LedgerName.FEED_RETIREMENTS,
     HostFingerprintRow: LedgerName.HOST_FINGERPRINT,
     EvalRow: LedgerName.SUMMARY_QUALITY_EVALS,
+    CouncilRunRecord: LedgerName.COUNCIL_RUN_RECORDS,
 }
 
 
@@ -848,3 +851,120 @@ def test_a_file_whose_envelope_names_another_writer_is_refused(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="its bytes are"):
         ledger.load([written], model=EveryColumn)
+
+
+def _row_rewritten(path: Path, **cells: object) -> Path:
+    """A JSON-lines file with its one row's named cells changed, as a bit flip would leave it."""
+    lines = path.read_text(encoding="ascii").splitlines()
+    head, row = lines[0], json.loads(lines[1]) | cells
+    path.write_text("\n".join([head, json.dumps(row, sort_keys=True)]) + "\n", "ascii")
+    return path
+
+
+def test_a_refused_rows_own_value_never_reaches_the_message(tmp_path: Path) -> None:
+    """A validation refusal names the failing field and its pydantic error kind, never the cell.
+
+    `count` is a closed int column; a bit flip turning it into a string is the
+    same accident that could land a fetched article's title in a text column.
+    `load_stored` feeds every one of `ledger_files.py`'s two warnings and
+    `raw_files.py`'s through this one raise, so proving it here proves all
+    three never quote a row's own value (Guardrail #11; Fowler, 2026-10-07).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[0]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, count=canary)
+
+    with pytest.raises(ValueError, match=r"holds a row this build refuses") as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    message = str(refused.value)
+    assert canary not in message
+    assert "count: int_parsing" in message
+
+
+def test_a_refused_rows_own_value_never_reaches_the_traceback(tmp_path: Path) -> None:
+    """The refusal's own text travels on as `__cause__` unless it is raised `from None`.
+
+    `str(ValueError)` is not the only door: `traceback.format_exception` walks
+    the chained cause and prints its text whole, which an uncaught crash or a
+    `logger.exception` call would do too. The row's own value must stay out of
+    that text as well (Guardrail #11; plan owner fold, 2026-10-07).
+    """
+    canary = "CANARY-9f2a-an-articles-fetched-title"
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[0]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, count=canary)
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    rendered = "".join(traceback.format_exception(refused.value))
+    assert canary not in rendered
+    assert "count: int_parsing" in rendered
+
+
+def test_more_than_five_failing_fields_are_capped_with_the_total_shown(tmp_path: Path) -> None:
+    """More than `_REFUSAL_FIELDS_SHOWN` failing fields show the first five and a total count."""
+    (written,) = ledger.persist(
+        tmp_path,
+        [_every_column_rows()[1]],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(
+        written,
+        count="x",
+        maybe_count="x",
+        share="x",
+        maybe_share="x",
+        flag="x",
+        maybe_flag="x",
+    )
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=EveryColumn)
+
+    message = str(refused.value)
+    assert message.endswith("(6 total)")
+    assert message.count("; ") == 4
+    assert "maybe_flag" not in message
+
+
+def test_an_unlisted_cell_key_in_loc_is_shown_as_a_question_mark(tmp_path: Path) -> None:
+    """A `loc` segment naming neither a declared top-level field nor a list index is not closed.
+
+    `tier` is declared on the nested `NestedLedgerItem`, never on `NestedLedgerRow`
+    itself, so a reader of the message alone cannot tell it is a closed fact -
+    it is shown as `?` rather than risk a segment some other row's cell supplies.
+    """
+    (written,) = ledger.persist(
+        tmp_path,
+        [NestedLedgerRow(version=NestedLedgerRow.schema_version(), labels=[], items=[])],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers="2026-09-24",
+        identity=_identity(),
+        fmt=Format.JSON,
+    )
+    _row_rewritten(written, items=[{"name": "a-fetched-name", "tier": "not-a-tier"}])
+
+    with pytest.raises(ValueError) as refused:
+        ledger.load_stored([written], model=NestedLedgerRow)
+
+    message = str(refused.value)
+    assert "a-fetched-name" not in message
+    assert "items.0.?" in message

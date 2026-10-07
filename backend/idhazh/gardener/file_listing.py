@@ -40,6 +40,8 @@ and `fetch` raise `PathNotNamedError`, naming the path and the nearest paths a
 step did name. "Not held" there would be a guess, and a step that looked in the
 wrong months would act on it as if those months were empty. A folder that holds
 a named path passes too, because fetching it brings what was named inside it.
+`saw_any_of` says beforehand whether a path would pass, for a caller that may
+find nothing named there.
 
 **`files_under` answers for all of a folder or for none of it.** It answers
 only for a path a step named, or one inside such a path, because only there has
@@ -54,6 +56,14 @@ file's own folder, and then checks that every listed file it brought is on
 disk. A file the commit holds and the checkout lacks is fetched or the task
 fails; it is never taken for a member that is not there. What the widening
 added is what the shard downloaded for its tasks, and the record says so.
+
+**A fetch can be held to the shard's download budget.** A commit listing is
+built with the most bytes its shard may download. `cost` says what a fetch
+would download now, from the listing's own sizes - the files it brings that
+the checkout lacks, each once - and `room` what is left of the budget.
+`fetch_within_budget` refuses, before anything is downloaded, a fetch that
+would pass it, with `OverBudgetError`. `cost` and `fetch` work out what a fetch
+brings in one place, so what a step is told a fetch costs is what it downloads.
 
 **A task sees what the shard's earlier tasks changed.** One task may read a
 folder another task of its shard owns, so after each task the listing drops
@@ -89,6 +99,25 @@ class PathNotNamedError(Exception):
 
     Not a `ValueError`, so a handler that skips bad data cannot skip this defect too.
     """
+
+
+class OverBudgetError(Exception):
+    """A fetch would download more than is left of the shard's download budget.
+
+    Not a `ValueError`: a compaction step refuses a period over a file it cannot
+    read, and a spent budget is not that. The step stops at the period instead,
+    and a later wake, with a whole budget, takes it. `needed` is what the fetch
+    would download, `room` what was left and `budget` the whole, all in bytes.
+    """
+
+    def __init__(self, *, needed: int, room: int, budget: int) -> None:
+        self.needed = needed
+        self.room = room
+        self.budget = budget
+        super().__init__(
+            f"the fetch would download {needed:,} bytes, and {max(room, 0):,} of the "
+            f"shard's {budget:,} are left"
+        )
 
 
 class TreeReader(Protocol):
@@ -229,6 +258,9 @@ class _Checkout:
     #: Lists what the commit holds under a path a step names as it runs. None for
     #: a listing built from named files alone, which can name nothing more.
     lister: Lister | None = None
+    #: The most bytes the shard may download for its tasks in all, or None for a
+    #: listing that answers to no budget: one read off the disk downloads nothing.
+    budget: int | None = None
     #: Every file a widening put on disk, with its size.
     added: dict[str, int] = field(default_factory=dict)
     #: Every path a step named after the listing was built.
@@ -313,6 +345,7 @@ class FileListing:
         paths: Iterable[str],
         widen: Callable[[Sequence[str]], None],
         lister: Lister | None = None,
+        budget: int | None = None,
     ) -> FileListing:
         """The files the commit holds under these folders, each with a size or a refusal.
 
@@ -321,7 +354,8 @@ class FileListing:
         every file git printed no size for. A file neither can size is refused
         by name: a weight that skipped it would read low and say nothing.
         `lister` lists the same commit for a path a step names later; without
-        one, `name` refuses.
+        one, `name` refuses. `budget` is the most bytes the shard may download,
+        which `room` and `fetch_within_budget` answer to; None answers to none.
         """
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
         sizes = sizes_of(
@@ -332,7 +366,9 @@ class FileListing:
             folders=chosen,
             named=tuple(sorted({_folder(path) for path in paths})),
             sizes=dict(sorted(sizes.items())),
-            checkout=_Checkout(repo_root=repo_root, widen=widen, folders=chosen, lister=lister),
+            checkout=_Checkout(
+                repo_root=repo_root, widen=widen, folders=chosen, lister=lister, budget=budget
+            ),
         )
 
     @property
@@ -369,8 +405,7 @@ class FileListing:
         it: a file can hold no path, and fetching a folder brings what was named
         inside it.
         """
-        self._refuse_outside(path)
-        if any(_inside(path, named) or _inside(named, path) for named in self.named):
+        if self.saw_any_of(path):
             return
         folder = next(folder for folder in self.folders if _inside(path, folder))
         nearest = _nearest(path, [named for named in self.named if _inside(named, folder)])
@@ -379,6 +414,16 @@ class FileListing:
             "the listing never looked there, so it cannot say whether the commit holds it. "
             f"{nearest}. A step reads only inside the periods its task named"
         )
+
+    def saw_any_of(self, path: str | Path) -> bool:
+        """Whether the listing saw any of a path.
+
+        A step named it, a folder above it, or a path inside it. `answers_for`
+        says whether it saw all of the path.
+        """
+        relative = self._relative(path)
+        self._refuse_outside(relative)
+        return any(_inside(relative, named) or _inside(named, relative) for named in self.named)
 
     def answers_for(self, path: str | Path) -> bool:
         """Whether the listing saw all at or under a path: a step named it, or a folder above it."""
@@ -503,18 +548,14 @@ class FileListing:
             path for path in self.sizes if path.startswith(f"{entry}/") or _parent(path) in above
         ]
 
-    def fetch(
-        self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
-    ) -> None:
-        """Put these folders' files, and the files directly beside these files, on disk.
+    def _wanted(
+        self, folders: Iterable[str | Path], beside: Iterable[str | Path]
+    ) -> tuple[dict[str, list[str]], list[str]]:
+        """What one fetch of these brings of what is listed, by entry, and what the checkout lacks.
 
-        One widening of the checkout for the whole call, which a partial clone
-        serves with one download, by exactly the entries that bring a file the
-        checkout lacks: a folder whose files an earlier task of this shard wrote
-        is on disk already. A folder the commit does not hold is passed over,
-        because there is nothing in it to read; a folder or file no step named
-        is refused, as `holds` refuses it. Every listed file brought is on disk
-        afterwards, or this raises naming the first one missing.
+        `fetch` and `cost` both ask this, so what a step is told a fetch costs
+        is what the fetch downloads. A folder the commit does not hold is passed
+        over; a folder or file no step named is refused, as `holds` refuses it.
         """
         entries: list[str] = []
         for folder in folders:
@@ -530,7 +571,22 @@ class FileListing:
             entries.append(relative)
         wanted = {entry: self._brought(entry) for entry in entries}
         brought = sorted({path for paths in wanted.values() for path in paths})
-        absent = [path for path in brought if not (self.repo_root / path).is_file()]
+        return wanted, [path for path in brought if not (self.repo_root / path).is_file()]
+
+    def fetch(
+        self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
+    ) -> None:
+        """Put these folders' files, and the files directly beside these files, on disk.
+
+        One widening of the checkout for the whole call, which a partial clone
+        serves with one download, by exactly the entries that bring a file the
+        checkout lacks: a folder whose files an earlier task of this shard wrote
+        is on disk already. A folder the commit does not hold is passed over,
+        because there is nothing in it to read; a folder or file no step named
+        is refused, as `holds` refuses it. Every listed file brought is on disk
+        afterwards, or this raises naming the first one missing.
+        """
+        wanted, absent = self._wanted(folders, beside)
         if absent and self.checkout.widen is not None:
             lacking = set(absent)
             self.checkout.widen(
@@ -545,6 +601,50 @@ class FileListing:
             )
         for path in absent:
             self.checkout.added[path] = self.sizes[path]
+
+    @property
+    def budget(self) -> int | None:
+        """The most bytes the shard may download for its tasks, or None when it answers to none."""
+        return self.checkout.budget
+
+    def room(self) -> int | None:
+        """How many bytes are left of the shard's download budget, or None when it has none."""
+        if self.checkout.budget is None:
+            return None
+        return self.checkout.budget - sum(self.checkout.added.values())
+
+    def lacking(
+        self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
+    ) -> dict[str, int]:
+        """The listed files fetching these would bring that the checkout lacks, with their sizes.
+
+        Read off the listing's own sizes, so a file two folders both bring is
+        named once and a file already on disk is not named.
+        """
+        _, absent = self._wanted(folders, beside)
+        return {path: self.sizes[path] for path in absent}
+
+    def cost(
+        self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
+    ) -> int:
+        """How many bytes fetching these would download now: what `lacking` names, added up."""
+        return sum(self.lacking(folders, beside=beside).values())
+
+    def fetch_within_budget(
+        self, folders: Iterable[str | Path] = (), *, beside: Iterable[str | Path] = ()
+    ) -> None:
+        """`fetch`, refused with `OverBudgetError` before anything is downloaded past the budget.
+
+        A fetch that downloads nothing is never refused, and a listing with no
+        budget fetches as `fetch` does.
+        """
+        chosen, next_to = list(folders), list(beside)
+        room = self.room()
+        if room is not None and self.checkout.budget is not None:
+            needed = self.cost(chosen, beside=next_to)
+            if needed and needed > room:
+                raise OverBudgetError(needed=needed, room=room, budget=self.checkout.budget)
+        self.fetch(chosen, beside=next_to)
 
     def settled(self, *, written: Iterable[str], deleted: Iterable[str]) -> FileListing:
         """This listing after one task's changes, for the tasks of the shard that run later.

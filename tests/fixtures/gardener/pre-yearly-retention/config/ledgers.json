@@ -1,0 +1,316 @@
+{
+  "families": [
+    {
+      "name": "seen",
+      "lifecycle_status": "active",
+      "description": "When each article address was first seen, so an article whose feed gave no date still has an age.",
+      "onboarded": "2026-08-23",
+      "ledgers": [
+        {
+          "name": "seen",
+          "grain": "raw-and-compact",
+          "prefix": ["seen"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "feed-health",
+      "lifecycle_status": "active",
+      "description": "What every feed did on every run, so a source that stops working is noticed.",
+      "onboarded": "2026-08-23",
+      "ledgers": [
+        {
+          "name": "feed-health",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-health"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "item-health",
+      "lifecycle_status": "active",
+      "description": "What happened to every planned item on every run, successes and failures alike.",
+      "onboarded": "2026-08-24",
+      "ledgers": [
+        {
+          "name": "item-health",
+          "grain": "raw-and-compact",
+          "prefix": ["item-health"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "host-fingerprint",
+      "lifecycle_status": "active",
+      "description": "Which machine each job ran on and what the job cost, as the machine itself reported it.",
+      "onboarded": "2026-09-16",
+      "ledgers": [
+        {
+          "name": "host-fingerprint",
+          "grain": "raw-and-compact",
+          "prefix": ["host-fingerprint"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "summary-quality-evals",
+      "lifecycle_status": "active",
+      "description": "How every published summary scored, one row per measurement.",
+      "onboarded": "2026-08-31",
+      "ledgers": [
+        {
+          "name": "summary-quality-evals",
+          "grain": "raw-and-compact",
+          "prefix": ["summary-quality-evals"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "candidate-models",
+      "lifecycle_status": "active",
+      "description": "The verdict on each candidate model, filed on the day it was measured.",
+      "onboarded": "2026-09-27",
+      "ledgers": [
+        {
+          "name": "candidate-models",
+          "grain": "raw-and-compact",
+          "prefix": ["candidate-models"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "item-health-summary",
+      "lifecycle_status": "active",
+      "description": "Daily totals of item health for each step, kept after the per-item rows are deleted.",
+      "onboarded": "2026-09-27",
+      "ledgers": [
+        {
+          "name": "item-health-summary",
+          "grain": "raw-and-compact",
+          "prefix": ["item-health-summary"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "published",
+      "lifecycle_status": "active",
+      "description": "Every article address already published, so a story does not run twice.",
+      "onboarded": "2026-09-08",
+      "ledgers": [
+        {
+          "name": "published",
+          "grain": "raw-and-compact",
+          "prefix": ["published"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "feed-retirements",
+      "lifecycle_status": "active",
+      "description": "Feed addresses that are gone for good, and the evidence for each one.",
+      "onboarded": "2026-09-02",
+      "ledgers": [
+        {
+          "name": "feed-retirements",
+          "grain": "raw-and-compact",
+          "prefix": ["feed-retirements"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "visual-prunes",
+      "lifecycle_status": "active",
+      "description": "What each cleanup of the rendered pictures found, removed and left behind.",
+      "onboarded": "2026-09-08",
+      "ledgers": [
+        {
+          "name": "visual-prunes",
+          "grain": "raw-and-compact",
+          "prefix": ["visual-prunes"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "counterfactual-scores",
+      "lifecycle_status": "active",
+      "description": "How each run's ranking would have changed if one ranking weight had been different.",
+      "onboarded": "2026-09-14",
+      "ledgers": [
+        {
+          "name": "counterfactual-scores",
+          "grain": "raw-and-compact",
+          "prefix": ["counterfactual-scores"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "content-similarity-judge",
+      "lifecycle_status": "active",
+      "description": "Model verdicts on whether two items tell the same story, and the similarity threshold fitted from them.",
+      "onboarded": "2026-09-21",
+      "ledgers": [
+        {
+          "name": "scored-pairs",
+          "grain": "day",
+          "prefix": ["content-similarity-judge", "scored-pairs"],
+          "stem": null,
+          "suffix": ".csv"
+        },
+        {
+          "name": "fitted-thresholds",
+          "grain": "day",
+          "prefix": ["content-similarity-judge", "fitted-thresholds"],
+          "stem": null,
+          "suffix": ".csv"
+        },
+        {
+          "name": "holdout-pairs",
+          "grain": "flat",
+          "prefix": ["content-similarity-judge"],
+          "stem": "holdout-pairs",
+          "suffix": ".csv"
+        },
+        {
+          "name": "score-distribution",
+          "grain": "flat",
+          "prefix": ["content-similarity-judge"],
+          "stem": "score-distribution",
+          "suffix": ".json"
+        },
+        {
+          "name": "archive",
+          "grain": "stamp",
+          "prefix": ["content-similarity-judge", "archive"],
+          "stem": null,
+          "suffix": ".json"
+        },
+        {
+          "name": "metrics",
+          "grain": "day",
+          "prefix": ["content-similarity-judge", "metrics"],
+          "stem": null,
+          "suffix": ".csv"
+        },
+        {
+          "name": "merge-line-holdout-scores",
+          "grain": "day",
+          "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
+          "stem": null,
+          "suffix": ".csv"
+        }
+      ]
+    },
+    {
+      "name": "traces",
+      "lifecycle_status": "active",
+      "description": "Raw step timings of recent runs, kept a short while so an operator can open one.",
+      "onboarded": "2026-09-15",
+      "ledgers": [
+        {
+          "name": "traces",
+          "grain": "tree",
+          "prefix": ["traces"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "day-metrics",
+      "lifecycle_status": "active",
+      "description": "One record per published day of what its runs measured, read back by the operator console.",
+      "onboarded": "2026-09-07",
+      "ledgers": [
+        {
+          "name": "day-metrics",
+          "grain": "day",
+          "prefix": ["day-metrics"],
+          "stem": null,
+          "suffix": ".json"
+        }
+      ]
+    },
+    {
+      "name": "digest-fragments",
+      "lifecycle_status": "active",
+      "description": "Each run's own block of a published day, from which the day is assembled.",
+      "onboarded": "2026-09-23",
+      "ledgers": [
+        {
+          "name": "digest-fragments",
+          "grain": "tree",
+          "prefix": ["digest-fragments"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "gardener",
+      "lifecycle_status": "active",
+      "description": "One record per gardener shard per wake: what each of its tasks saw, took and left.",
+      "onboarded": "2026-09-27",
+      "ledgers": [
+        {
+          "name": "gardener",
+          "grain": "raw-and-compact",
+          "prefix": ["gardener"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "run-plan",
+      "lifecycle_status": "active",
+      "description": "The ranked plan that a UTC day hands to its later pipeline stages.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "run-plan",
+          "grain": "raw-and-compact",
+          "prefix": ["run-plan"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "council-run-records",
+      "lifecycle_status": "active",
+      "description": "How each step of the nightly judging workflow ended, and what it cost.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "council-run-records",
+          "grain": "raw-and-compact",
+          "prefix": ["council-run-records"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    }
+  ]
+}

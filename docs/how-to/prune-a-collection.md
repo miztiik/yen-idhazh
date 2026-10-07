@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -38,7 +38,7 @@ Read the task's row in the gardener's record from the last wake, under
 `state/raw/gardener/<YYYY>/<MM>/<DD>/`: `selected` is how many members the window
 holds, `deleted` is how many a live pass would take, up to the ceiling, and
 `stopped_because` says whether there is more. That wake's log lists every member
-by id. Each task reads only what was created after `handled_through` on its
+by id, in the `taken` list of the task's `task-finished` line. Each task reads only what was created after `handled_through` on its
 last row, so its `selected` counts the members of those days, and
 `handled_through` says how far its walk has got.
 
@@ -53,29 +53,39 @@ python -m idhazh gardener run-task workflow-artifacts --run-id <YYYY-MM-DD-N> --
 The age is `window.value` in `config/gardener/workflow-artifacts.json` and the
 ceiling is `max_deletes_per_run` beside it.
 
-### 2. Read the last line before you read the list
+### 2. Read how the pass ended before you read the list
 
-| Last line says | What it means | What to do |
-| --- | --- | --- |
-| `nothing was deleted - a live run would delete the members above` | the pass was a dry run; the line above it says why it stopped | to delete them, follow step 3 |
-| `the collection is exhausted` | nothing else is inside the window | one live pass finishes the job |
-| `the ceiling of N stopped this pass at <id>` | there is more | each later wake takes the next batch, until the line changes |
-| `the ceiling of N would stop a live pass at <id>; the rest of that day was counted, not listed` | a dry run listed the ceiling's worth of one day's members and counted the rest | nothing; the next dry run starts on the day after the one it names |
-| `the pass failed at <id>` | the members above it are gone | fix the cause; the next wake retries that member |
-| `the pass failed after N members, before it could name the next one` | the listing itself failed, or a member could not be read | fix the cause; the next wake starts from the oldest member the window holds |
+Each task logs one `task-finished` line of JSON when it ends
+([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md#what-a-shard-logs)).
+Its `outcome` is one word, and `next` says in one sentence what happens next.
+
+| # | `outcome` | What it means | What to do |
+| --- | --- | --- | --- |
+| 1 | `dry-run` | the pass was a dry run: `taken` is what a live pass would delete, and nothing was deleted | to delete them, follow step 3 |
+| 2 | `done` | the window held members, and nothing else is inside it | one live pass finished the job |
+| 3 | `ceiling` | there is more, and `resume_from` names the member the next pass starts at | nothing; each later wake takes the next batch |
+| 4 | `failed`, with `fault` `raised` | a code defect stopped it; `error` names the exception's type and `where` the line of code it passed through. On a live pass the members in `taken` are gone | fix the cause; the next wake retries from `resume_from`, or from the oldest member the window holds when there is none |
+| 5 | `deferred`, with `fault` `api-unavailable` | GitHub's API answered 429 or 5xx, or did not answer | nothing; the next wake retries, and the job stays green |
+| 6 | `not-due` | no member is inside the window yet | nothing |
+
+A `not-deletable` note in `recovered` names a member GitHub answered 409 or 422
+for; it counted against the ceiling, and it stays on GitHub until a person
+removes it. A dry run past its ceiling counts the rest of that day without
+listing it, and the next dry run starts after `handled_through`.
 
 ### 3. Delete
 
 Set the declaration's `dry_run` to `false`, in one reviewed commit taken after a
-scheduled wake has printed its list, and name the task in `LIVE_BY_DECISION` in
+scheduled wake has logged its list, and name the task in `LIVE_BY_DECISION` in
 `backend/tests/contracts/test_gardener_config.py` with the decision beside it.
 The next wake takes up to the ceiling, and each wake after it takes the next
-batch until the last line says the collection is exhausted. Each wake is the
+batch until a wake's `outcome` is `done`. Each wake is the
 same shape and the same cost whatever the backlog is - that is what the ceiling
 is for.
 
-What a wake's exit code means is on the gardener's page: a task that fails part
-way is exit 1, and its row says where the next pass starts.
+What a wake's exit code means is on the gardener's page: a task a code defect
+stops part way is exit 1, a task GitHub's API did not answer is deferred and
+leaves the exit code at 0, and either row says where the next pass starts.
 
 ## Prune a range of days out of a ledger
 
@@ -124,7 +134,9 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 - Whether the command may take a ledger's days is that ledger's compaction
   declaration's `prune_refusal`, in `config/gardener/compact-<ledger>.json`.
   `null` lets it; a sentence refuses the ledger and is the reason printed.
-  `summary-quality-evals` carries one, because every eval row is kept for ever.
+  `summary-quality-evals` carries one to protect retained quality evidence from
+  manual deletion. Its configured yearly policy may expire old evidence
+  36 calendar months after UTC year-end.
 - A pass that stopped, on its ceiling or on a failure, is finished by running
   the same command again. It takes only what is left.
 
@@ -141,10 +153,10 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 | `... cannot be read, so which files hold the days is not known` or `... names <period> and no file holds it` | an index of the ledger is damaged, or names a file that is gone. Nothing was changed | restore the index or the file from git, then run the command again |
 | `since is after until` | the two ends are swapped | the oldest day comes first |
 | the list, then exit 1 | a delete or a write failed part way; the files listed have already changed | fix the cause, then run the same command again |
-| `workflow-artifacts: page N holds an artifact from a day before one on a page read before it, so the order check failed` | GitHub's pages no longer run from the oldest day to the newest. The pass read every page, held each artifact to the line, and kept its mark | nothing for one wake. If every wake says it, GitHub changed its order: each pass then reads every page, so tell the gardener's owner |
-| `workflow-artifacts: page N counted ... so one may have moved onto a page already read` | an artifact was made or removed while the pass read, so one may have been missed. The pass kept its mark | nothing; the next wake starts from the same mark and reads again |
-| `workflow-artifacts: the list does not end on page N, where the first page's count of C says it ends` | GitHub's count no longer names the last page, so the pass may have started in the middle of the list. It kept its mark | nothing for one wake. If every wake says it, the count stops short of the list: tell the gardener's owner |
-| the same members print on every run | the pass is a dry run | for a ledger, add `--no-dry-run`; for a GitHub collection, set its declaration's `dry_run` to `false` |
+| a `page-out-of-order` event naming page N of `workflow-artifacts` | GitHub's pages no longer run from the oldest day to the newest. The pass read every page, held each artifact to the line, and kept its mark | nothing for one wake. If every wake says it, GitHub changed its order: each pass then reads every page, so tell the gardener's owner |
+| a `page-count-changed` event naming page N of `workflow-artifacts` | an artifact was made or removed while the pass read, so one may have been missed. The pass kept its mark | nothing; the next wake starts from the same mark and reads again |
+| a `list-end-missing` event naming page N of `workflow-artifacts` | GitHub's count no longer names the last page, so the pass may have started in the middle of the list. It kept its mark | nothing for one wake. If every wake says it, the count stops short of the list: tell the gardener's owner |
+| the same members are listed on every run | the pass is a dry run | for a ledger, add `--no-dry-run`; for a GitHub collection, set its declaration's `dry_run` to `false` |
 
 ## See also
 

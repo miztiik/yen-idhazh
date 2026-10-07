@@ -15,6 +15,7 @@
 
 import { grouped } from '../charts/series';
 import { dayMonth, shortDate } from '../format';
+import { countDays, nameSpan } from './span-words';
 
 /** The two fields the count reads. A published item carries far more; taking
  * only these two keeps a test fixture to two keys a row. */
@@ -113,21 +114,13 @@ export function mergeState(totals: MergeTotals): MergeState {
 	return totals.merges === 0 ? 'no-merges' : 'merged';
 }
 
-/** The span the control is holding, written the way a person says it.
- *
- * `1` is one of the presets, and `these 1 days` is what a plain template prints
- * for it. */
-function span(windowDays: number): string {
-	return windowDays === 1 ? 'this one day' : `these ${windowDays} days`;
-}
-
 /** The sentence under the chart, one per state. */
 export function mergeNote(totals: MergeTotals, windowDays: number): string {
 	switch (mergeState(totals)) {
 		case 'no-days':
 			return 'No published day is in this window, so nothing here can be counted.';
 		case 'no-merges':
-			return `No story in ${span(windowDays)} was grouped with another. Every one ran on its own.`;
+			return `No story in ${nameSpan(windowDays)} was grouped with another. Every one ran on its own.`;
 		default: {
 			// Singular is spelled out rather than templated over: one day with one
 			// fold would otherwise read "1 stories were folded".
@@ -135,7 +128,7 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
 				totals.merges === 1
 					? '1 story was folded into another'
 					: `${grouped(totals.merges)} stories were folded into another`;
-			return `${folded} over ${span(windowDays)}. The biggest group held ${totals.largest} stories, on ${dayMonth(totals.largestOn)}.`;
+			return `${folded} over ${nameSpan(windowDays)}. The biggest group held ${totals.largest} stories, on ${dayMonth(totals.largestOn)}.`;
 		}
 	}
 }
@@ -154,7 +147,7 @@ export function mergeRate(totals: MergeTotals, windowDays: number): string | nul
 	if (totals.days === 0 || totals.merges === 0 || totals.published === 0) return null;
 	const share = (totals.merges / totals.published) * 100;
 	const printed = share < 0.5 ? '<1' : String(Math.round(share));
-	return `That is ${printed}% of the ${grouped(totals.published)} stories ${span(windowDays)} published.`;
+	return `That is ${printed}% of the ${grouped(totals.published)} stories ${nameSpan(windowDays)} published.`;
 }
 
 // --- Where the merge line sits -------------------------------------------------
@@ -209,9 +202,9 @@ export function clampEnvelope(days: readonly LineDay[]): { low: number; high: nu
 export function clampNote(days: readonly LineDay[], windowDays: number): string {
 	const held = days.filter((day) => day.clampKind !== 'none').length;
 	if (held === 0) {
-		return `The clamp has not held the line back on any of the last ${windowDays} days.`;
+		return `The clamp has not held the line back in ${nameSpan(windowDays)}.`;
 	}
-	return `The clamp held the line back on ${held} of the last ${windowDays} days.`;
+	return `The clamp held the line back on ${held} of ${countDays(windowDays)}.`;
 }
 
 /** How many days in the window fitted nothing, in one sentence, or null.
@@ -223,7 +216,7 @@ export function clampNote(days: readonly LineDay[], windowDays: number): string 
 export function heldNote(days: readonly LineDay[], windowDays: number): string | null {
 	const held = days.filter((day) => day.heldReason !== 'none').length;
 	if (held === 0) return null;
-	return `Nothing was fitted on ${held} of these ${windowDays} days.`;
+	return `Nothing was fitted on ${held} of ${countDays(windowDays)}.`;
 }
 
 // --- Whether the judge agrees with itself, and what the record still needs ------

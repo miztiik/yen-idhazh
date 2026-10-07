@@ -1,7 +1,7 @@
 {
   "compact_after_days": 1,
   "daily_keep_days": 45,
-  "dry_run": true,
+  "dry_run": false,
   "kind": "compaction",
   "ledger": "run-plan",
   "lifecycle_status": "active",
@@ -20,5 +20,7 @@
   "prune_refusal": null,
   "window": {
     "unit": "forever"
-  }
+  },
+  "yearly_keep_months": 36,
+  "yearly_prune_enable": true
 }

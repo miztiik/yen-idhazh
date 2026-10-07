@@ -20,12 +20,7 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
-from idhazh.contracts.council_shard_outcome import (
-    SELECTION_UNIT,
-    SETTLEMENT_UNIT,
-    CouncilShardOutcome,
-    ShardOutcome,
-)
+from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
@@ -42,6 +37,8 @@ ANOTHER_SLUG = "another-paper-tenant"
 A_DATE = "2026-09-20"
 
 A_RUN = "2026-09-21-35534060762"
+
+A_SHA = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
 
 #: Every council verb the router carries. Named here so a verb added without a
 #: zero-tenant check fails this file rather than shipping untested.
@@ -86,22 +83,24 @@ def _config_registering(root: Path, *slugs: str) -> Path:
     return target
 
 
-def _the_councils_record(state_root: Path) -> list[CouncilShardOutcome]:
-    """The night's own day file, read back through the contract that wrote it."""
-    lines = (
-        ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, A_DATE)
-        .read_text(encoding="utf-8")
-        .splitlines()
+def _the_councils_record(state_root: Path) -> list[CouncilRunRecord]:
+    """The night's current rows, read back through the ledger door."""
+    return ledger.load_days(
+        state_root,
+        LedgerName.COUNCIL_RUN_RECORDS,
+        [A_DATE],
+        model=CouncilRunRecord,
     )
-    columns = lines[0].split(",")
-    return [
-        CouncilShardOutcome.from_csv_row(dict(zip(columns, line.split(","), strict=True)))
-        for line in lines[1:]
-    ]
 
 
 def _a_whole_night(
-    config_root: Path, state_root: Path, *, slugs: tuple[str, ...], shards: int, dead: tuple[int, ...]
+    config_root: Path,
+    state_root: Path,
+    *,
+    slugs: tuple[str, ...],
+    shards: int,
+    dead: tuple[int, ...],
+    commit_sha: str = A_SHA,
 ) -> None:
     """Pick the work, run every unit, then settle - all through the command line."""
     common = ["--date", A_DATE, "--run-id", A_RUN, "--config", str(config_root)]
@@ -123,7 +122,19 @@ def _a_whole_night(
                     cli.main(argv)
             else:
                 assert cli.main(argv) == 0
-    assert cli.main(["council-settle", *common, "--state-root", str(state_root)]) == 0
+    assert (
+        cli.main(
+            [
+                "council-settle",
+                *common,
+                "--state-root",
+                str(state_root),
+                "--commit",
+                commit_sha,
+            ]
+        )
+        == 0
+    )
 
 
 def _judge_modules_reached(module: str, prefixes: tuple[str, ...]) -> list[str]:
@@ -246,7 +257,9 @@ def test_the_night_runs_every_hosted_tenant_for_the_date_it_was_given(venue: Pat
     council = config.load(config_root).app.council
 
     session.prepare(council, date=A_DATE, run_id=A_RUN)
-    session.settle(council, date=A_DATE, run_id=A_RUN, state_dir=venue / "state")
+    session.settle(
+        council, date=A_DATE, run_id=A_RUN, state_dir=venue / "state", commit_sha=A_SHA
+    )
 
     tenant = written(A_VENUE, A_SLUG).TENANT
     assert tenant.prepared == [A_DATE]
@@ -335,13 +348,34 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
 
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=4, dead=(2,))
 
-    recorded = _the_councils_record(state_root)
-    ran = [row for row in recorded if row.shard >= 0]
+    shipped = session.outcomes_dir(A_DATE) / A_SLUG
+    assert {path.name for path in shipped.glob("*.csv")} == {
+        "0.csv",
+        "1.csv",
+        "3.csv",
+        "select-judge-work.csv",
+        "combine-judge-results.csv",
+    }
 
-    assert sorted(row.shard for row in recorded) == [SETTLEMENT_UNIT, SELECTION_UNIT, 0, 1, 3]
-    assert [row.shard for row in ran] == [0, 1, 3], "the unit that died filed nothing"
-    assert {row.shards for row in recorded} == {4}
-    assert len(ran) < ran[0].shards, "the pair is what an operator reads as a missing unit"
+    recorded = _the_councils_record(state_root)
+    ran = [row for row in recorded if row.evaluation_step is EvaluationStep.EVALUATE_WORK_PART]
+
+    assert sorted(
+        (row.evaluation_step, row.work_part_index) for row in recorded
+    ) == sorted(
+        [
+            (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
+            (EvaluationStep.SELECT_JUDGE_WORK, None),
+            (EvaluationStep.EVALUATE_WORK_PART, 0),
+            (EvaluationStep.EVALUATE_WORK_PART, 1),
+            (EvaluationStep.EVALUATE_WORK_PART, 3),
+        ]
+    )
+    assert [row.work_part_index for row in ran] == [0, 1, 3], (
+        "the unit that died filed nothing"
+    )
+    assert {row.work_part_count for row in recorded} == {4}
+    assert len(ran) < ran[0].work_part_count, "the pair is what an operator reads as a missing unit"
     assert {row.judge_id for row in recorded} == {A_SLUG}
 
 
@@ -367,7 +401,11 @@ def test_a_unit_that_stopped_on_its_own_clock_still_has_its_row_filed(
 
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=1, dead=())
 
-    unit = next(row for row in _the_councils_record(state_root) if row.shard == 0)
+    unit = next(
+        row
+        for row in _the_councils_record(state_root)
+        if row.evaluation_step is EvaluationStep.EVALUATE_WORK_PART
+    )
 
     assert unit.outcome is ShardOutcome.STOPPED_ON_DEADLINE
     assert unit.model_calls == 7, "the count comes off what the tenant handed back"
@@ -391,7 +429,11 @@ def test_a_tenant_with_no_model_files_empty_cost_cells_and_never_zeros(
 
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=1, dead=())
 
-    unit = next(row for row in _the_councils_record(state_root) if row.shard == 0)
+    unit = next(
+        row
+        for row in _the_councils_record(state_root)
+        if row.evaluation_step is EvaluationStep.EVALUATE_WORK_PART
+    )
 
     assert (unit.model_calls, unit.tokens_in, unit.tokens_out, unit.model_seconds) == (
         None,
@@ -420,15 +462,17 @@ def test_two_tenants_of_one_night_both_keep_their_own_first_unit(
 
     recorded = _the_councils_record(state_root)
 
-    assert "judge_id" in ledger.COUNCIL_SHARD_OUTCOME_KEY
-    assert sorted((row.judge_id, row.shard) for row in recorded) == [
-        (A_SLUG, SETTLEMENT_UNIT),
-        (A_SLUG, SELECTION_UNIT),
-        (A_SLUG, 0),
-        (ANOTHER_SLUG, SETTLEMENT_UNIT),
-        (ANOTHER_SLUG, SELECTION_UNIT),
-        (ANOTHER_SLUG, 0),
-    ]
+    assert "judge_id" in ledger.COUNCIL_RUN_RECORD_KEY
+    assert {
+        (row.judge_id, row.evaluation_step, row.work_part_index) for row in recorded
+    } == {
+        (A_SLUG, EvaluationStep.COMBINE_JUDGE_RESULTS, None),
+        (A_SLUG, EvaluationStep.EVALUATE_WORK_PART, 0),
+        (A_SLUG, EvaluationStep.SELECT_JUDGE_WORK, None),
+        (ANOTHER_SLUG, EvaluationStep.COMBINE_JUDGE_RESULTS, None),
+        (ANOTHER_SLUG, EvaluationStep.EVALUATE_WORK_PART, 0),
+        (ANOTHER_SLUG, EvaluationStep.SELECT_JUDGE_WORK, None),
+    }
 
 
 def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> None:
@@ -458,7 +502,61 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
         == 0
     )
 
-    assert not ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, A_DATE).exists()
+    assert not ledger.raw_root(state_root, LedgerName.COUNCIL_RUN_RECORDS).exists()
+
+
+def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
+    venue: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The door records the workflow identity and keeps only the later attempt."""
+    a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=2)
+    config_root = _config_registering(venue, A_SLUG)
+    state_root = tmp_path / "state"
+
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=2, dead=())
+
+    first = ledger.read_day_files(state_root, LedgerName.COUNCIL_RUN_RECORDS, A_DATE)
+    assert len(first) == 1, "one save job writes one raw file for the judged date"
+    envelope = first[0].envelope
+    assert envelope.identity.run_id == A_RUN
+    assert envelope.identity.attempt == 1
+    assert envelope.identity.job.value == "save_council_results"
+    assert envelope.identity.shard == 0
+    assert envelope.identity.producer == "council.session"
+    assert envelope.identity.git_sha == A_SHA
+    assert {
+        (row.evaluation_step, row.work_part_index)
+        for row in ledger.load_days(
+            state_root, LedgerName.COUNCIL_RUN_RECORDS, [A_DATE], model=CouncilRunRecord
+        )
+    } == {
+        (EvaluationStep.SELECT_JUDGE_WORK, None),
+        (EvaluationStep.EVALUATE_WORK_PART, 0),
+        (EvaluationStep.EVALUATE_WORK_PART, 1),
+        (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
+    }
+
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=2, dead=())
+    retried = ledger.read_day_files(state_root, LedgerName.COUNCIL_RUN_RECORDS, A_DATE)
+    assert len(retried) == 2, "the door keeps each physical attempt for settlement"
+    stored = [
+        ledger.load_stored([raw.path], model=CouncilRunRecord)
+        for raw in retried
+    ]
+    current = ledger.settle_rows(stored, ledger.COUNCIL_RUN_RECORD_KEY)
+
+    assert {row.identity.attempt for row in current} == {2}
+    assert {
+        (row.row.evaluation_step, row.row.work_part_index)
+        for row in current
+    } == {
+        (EvaluationStep.SELECT_JUDGE_WORK, None),
+        (EvaluationStep.EVALUATE_WORK_PART, 0),
+        (EvaluationStep.EVALUATE_WORK_PART, 1),
+        (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
+    }
 
 
 def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:

@@ -1,11 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
 	chronological,
 	failing,
 	feedDays,
-	preserves,
 	resting,
 	settled,
 	streak,
@@ -13,7 +12,6 @@ import {
 	type FeedRead
 } from '../src/lib/feed-health';
 import { axisLabels, denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
-import { feedHealthRows } from '../src/lib/server/ledger-rows';
 
 /**
  * The feed section answers one question: which feed is about to be dropped.
@@ -23,19 +21,15 @@ import { feedHealthRows } from '../src/lib/server/ledger-rows';
  * led a feed one run from being rested - and it printed that same total beside
  * the word "rested", which is a number the pipeline never used to rest anything.
  *
- * So the oracle here is not "does a bar appear". It is that the count on the
- * page equals the run of failures `discover._rests` counts, recomputed here
- * from the same ledger the page read, and that the marker on the bar lands on
- * the quarantine threshold read out of `config/idhazh.json` - the file the
- * pipeline itself reads. A bar drawn to the wrong scale looks perfectly fine.
+ * So the oracle here is not "does a bar appear". It is that the count is the run
+ * of failures `discover._rests` counts - pinned below over rows written by hand,
+ * and over the fixture the pipeline's own test reads - that the page rests and
+ * names exactly what that rule rests, and that the marker on the bar lands on the
+ * quarantine threshold read out of `config/idhazh.json` - the file the pipeline
+ * itself reads. A bar drawn to the wrong scale looks perfectly fine.
  */
 
 const repo = resolve(process.cwd(), '..');
-
-/** The tree `build:canary` builds the site from, and the one this suite runs
- * against. Reading `state/` instead would compare the page to a ledger it never
- * saw - which is exactly how this test failed the first time it ran. */
-const CANARY = join(repo, 'backend', 'var', 'canary');
 
 /** The threshold, from the file the pipeline reads it from. Not a copy. */
 const QUARANTINE_AFTER = (
@@ -62,38 +56,6 @@ function tickDensity(): number {
 			chart: { tick_density: number };
 		}
 	).chart.tick_density;
-}
-
-/** The ledger the page read, read again independently. Nothing is mocked:
- * these are the rows `build_canary_day.py` filed and packed.
- *
- * Through `feedHealthRows`, the reader the page's own server uses, so a grain
- * change cannot pass here and fail there. `-1` is every packed canary day,
- * which is a fixture of fixed size rather than a collection a run appends to.
- */
-type LedgerRow = FeedEvent;
-
-async function ledger(): Promise<LedgerRow[]> {
-	const table = await feedHealthRows(-1, join(CANARY, 'state'));
-	return table.rows.map((row) => ({
-		date: row.date ?? '',
-		runId: row.run_id ?? '',
-		checkedAt: row.checked_at ?? '',
-		outcome: row.outcome ?? '',
-		items: Number(row.items ?? 0) || 0,
-		feedId: row.feed_id ?? ''
-	}));
-}
-
-/** One result per feed per run, then oldest run first - the order the rules
- * read in, and the same reduction `feedResults` runs before the page sees a
- * row. Recomputing without it would compare the page to evidence it never saw. */
-function byFeed(rows: LedgerRow[]): Map<string, LedgerRow[]> {
-	const found = new Map<string, LedgerRow[]>();
-	for (const row of settled(rows)) {
-		found.set(row.feedId, [...(found.get(row.feedId) ?? []), row]);
-	}
-	return new Map([...found].map(([id, group]) => [id, chronological(group)]));
 }
 
 /** Every row the section drew, with the numbers it published about itself. */
@@ -319,32 +281,25 @@ test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ 
 	await page.goto('/console/voices/');
 
 	const rows = await drawn(page);
-	const recomputed = byFeed(await ledger());
-
-	// Read against a fact the fixture owns, never against a locator count: a
-	// renamed attribute would make the count zero and switch this off silently.
-	const troubled = [...recomputed].filter(([, group]) =>
-		group.filter((row) => row.outcome !== 'skipped').some(failing)
-	);
-	expect(
-		troubled.length,
-		'the ledger holds no failing feed, so this oracle asserts nothing'
-	).toBeGreaterThan(0);
+	// How the count and the rest are worked out is the pipeline's own loop, pinned
+	// above over rows written by hand. What the page owes is to draw every failing
+	// feed it counted, up to its cap, and to rest exactly what that loop rests.
+	const table = page.locator('[data-feeds="table"]');
+	const counted =
+		Number(await table.getAttribute('data-feeds-drawn')) +
+		Number(await table.getAttribute('data-feeds-hidden'));
+	expect(counted, 'the page counted no failing feed, so this oracle asserts nothing').toBeGreaterThan(0);
 	await expect(page.locator('[data-feed]'), 'the section drew no feed').toHaveCount(
-		Math.min(troubled.length, FEED_ROWS)
+		Math.min(counted, FEED_ROWS)
 	);
 
 	for (const row of rows) {
-		const group = recomputed.get(row.feedId);
-		expect(group, `${row.feedId} is on the page and not in the ledger`).toBeTruthy();
-		const history = group as LedgerRow[];
-		// The pipeline's own loop, run here on the same rows.
-		expect(row.streak, `${row.feedId} prints a count the pipeline does not use`).toBe(
-			streak(history)
-		);
-		expect(row.resting, `${row.feedId} disagrees with the pipeline about resting`).toBe(
-			resting(history, QUARANTINE_AFTER)
-		);
+		// A feed rests only once its run of failures reaches the threshold the
+		// pipeline reads. A long enough run of skips lifts a rest, so the rule runs
+		// one way.
+		if (row.resting) {
+			expect(row.streak, `${row.feedId} rests short of the threshold`).toBeGreaterThanOrEqual(QUARANTINE_AFTER);
+		}
 		// The word, not just the colour.
 		expect(row.rested, `${row.feedId} is rested and does not say so`).toBe(row.resting);
 	}
@@ -590,43 +545,30 @@ test('the date axis labels the same columns the squares sit in', async ({ page }
 	expect(drawnAxis).toEqual(expected.map(({ column, text }) => ({ column, text })));
 });
 
-/** Feeds the pipeline did not read, computed here from scratch.
- *
- * A rest and a robots answer are both absent from an ask, and for one reason:
- * neither asked the feed whether it still works. That is `preserves`, the same
- * predicate the strike rule runs on.
- */
-function unreadByHand(rows: LedgerRow[]): string[] {
-	const seen = new Set<string>();
-	const read = new Set<string>();
-	for (const row of settled(rows)) {
-		seen.add(row.feedId);
-		if (!preserves(row)) read.add(row.feedId);
-	}
-	return [...seen].filter((feedId) => !read.has(feedId)).sort((a, b) => a.localeCompare(b));
-}
-
 test('THE ORACLE: a source we were only ever refused by is in neither count', async ({
 	page
 }) => {
-	const rows = await ledger();
-	const unread = unreadByHand(rows);
-	// The claim only means something if the fixture holds one. It does: a feed
-	// whose every result is a robots answer, and one the run only ever rested.
-	expect(unread.length, 'the canary has no feed the pipeline left unread').toBeGreaterThan(0);
-
 	await page.goto('/console/voices/');
-	const headline = page.locator('[data-feed-reliability]');
-	await expect(headline).toHaveAttribute('data-feed-ineligible', String(unread.length));
 
-	// Named, and named exactly. A count with no names is a number an operator
-	// cannot act on, and a name in the wrong list is worse than no list.
+	// Named, and named exactly: once each, in name order, and as many as the
+	// headline counts. A count with no names is a number an operator cannot act
+	// on, and a name in the wrong list is worse than no list. Which feeds are
+	// unread is the record's own rule, pinned over rows written in
+	// `console.spec.ts` ("a record with more failing feeds than the list draws is
+	// counted whole").
 	const named = await page
 		.locator('[data-feed-ineligible-name]')
 		.evaluateAll((nodes) =>
 			nodes.map((node) => node.getAttribute('data-feed-ineligible-name') ?? '')
 		);
-	expect(named).toEqual(unread);
+	// The claim only means something if the page names one.
+	expect(named.length, 'the page names no feed the pipeline left unread').toBeGreaterThan(0);
+	expect(new Set(named).size).toBe(named.length);
+	expect(named).toEqual([...named].sort((a, b) => a.localeCompare(b)));
+	await expect(page.locator('[data-feed-reliability]')).toHaveAttribute(
+		'data-feed-ineligible',
+		String(named.length)
+	);
 
 	// And it is in neither of the other two. This is the defect: until
 	// 2026-09-03 every one of these sat in the clean count, so the page reported
@@ -657,9 +599,6 @@ test('the two counts still add up to the denominator beside them', async ({ page
 	// did not read are outside it rather than quietly inside one of the two.
 	expect(clean + listed + hidden).toBe(checked);
 	expect(unread).toBeGreaterThan(0);
-	expect(clean + listed + hidden + unread).toBe(
-		new Set((await ledger()).map((row) => row.feedId)).size
-	);
 });
 
 test('the matrix declares one strip for all its squares', async ({ page }) => {

@@ -182,6 +182,7 @@ test.describe('the frame', () => {
 		// empty state into a white screen.
 		await page.setViewportSize({ width: 1512, height: 950 });
 		await page.goto('/9999-01-01/');
+		await expect(page.getByRole('heading', { name: 'Not here' })).toBeVisible();
 		const body = await page.evaluate(() => document.body.innerText.trim().length);
 		expect(body, 'the missing-day page rendered nothing').toBeGreaterThan(0);
 	});

@@ -183,6 +183,40 @@ body {
 	max-width: var(--frame-console);
 }
 
+/* A workbench is a tool rather than a page of panels, so it is allowed the
+   whole window, at any width. Its route asks for workbench chrome
+   (`console.explorer_chrome`) and CSS reads that from the frame, as the rule
+   above reads the operator surface; no other route changes. The footer goes
+   because it would stand between the workbench and the window's bottom edge;
+   the wordmark leads to the home page, whose footer carries the same links. */
+.frame:has([data-console-chrome='workbench']) {
+	max-width: none;
+}
+
+.frame:has([data-console-chrome='workbench']) > footer {
+	display: none;
+}
+
+/* From the wide breakpoint the frame is exactly the window's height, and the
+   route's workbench takes whatever the header and the strip leave. A window
+   too short for the workbench's smallest regions makes the page scroll rather
+   than clip them. The width matches `frame.breakpoints_px[1]`, which a media
+   query cannot read. */
+@media (min-width: 1024px) {
+	.frame:has([data-console-chrome='workbench']) {
+		display: flex;
+		flex-direction: column;
+		block-size: 100dvh;
+	}
+
+	.frame:has([data-console-chrome='workbench']) > main {
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 0;
+		min-block-size: 0;
+	}
+}
+
 /* The reading measure, applied where prose actually is.
 
    `overflow-wrap` because the text comes off the open web: one unbroken token -

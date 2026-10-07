@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 from idhazh import day_partition
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
@@ -21,7 +20,6 @@ from idhazh.ledger import paths
 from idhazh.ledger.csv_file import CsvContract, _read_rows
 from idhazh.ledger.keys import (
     _PREFERENCES,
-    COUNCIL_SHARD_OUTCOME_KEY,
     FITTED_SIMILARITY_THRESHOLD_CARRIED,
     STORY_SIMILARITY_PAIR_CARRIED,
     STORY_SIMILARITY_PAIR_KEY,
@@ -90,10 +88,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     what settles there is a second attempt at one execution and never a second
     run of the day.
 
-    `state/llm-council/shard-outcomes/` joined on 2026-09-21 with its writer. Its
-    key carries `judge_id` as well as the run and the unit, because one council
-    run has one run id and a night hosting two tenants would otherwise file two
-    tenants' unit 0 under the same three cells.
     """
     if date is not None:
         return [
@@ -108,11 +102,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
                 STORY_SIMILARITY_PAIR_CARRIED,
-            ),
-            KeyedLedger(
-                paths.path(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date),
-                COUNCIL_SHARD_OUTCOME_KEY,
-                CouncilShardOutcome,
             ),
         ]
     return [
@@ -136,12 +125,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             )
             for file in day_partition.day_files(
                 paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS)
-            )
-        ),
-        *(
-            KeyedLedger(file, COUNCIL_SHARD_OUTCOME_KEY, CouncilShardOutcome)
-            for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES)
             )
         ),
     ]

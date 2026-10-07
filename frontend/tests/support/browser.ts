@@ -1,5 +1,6 @@
 /** Browser contexts that never reach the network: the installed Parquet add-on is served from
- *  disk, and the committed archive host, a real one, refuses every request. */
+ *  disk, and the committed archive host, a real one, refuses every request unless a test serves
+ *  it a root the test built (`serveArchiveToPage` in `ledger-lifecycle.ts`): a route added later wins. */
 import { test as playwright } from '@playwright/test';
 import { cachedParquetAddon, parquetAddon, type ParquetAddon } from '../../scripts/duckdb-addon';
 import { ledgerArchiveBaseUrl } from '../../src/lib/server/config';

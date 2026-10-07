@@ -19,6 +19,7 @@
 	import { markReadout, readoutOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import type { DiskReadDay, DiskReads } from '$lib/console/machine/disk-reads';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 
 	let {
@@ -70,15 +71,22 @@
 
 	const finding = $derived.by(() => {
 		if (verdict === 'empty') {
-			return `No article in these ${days} days left a row to read, so there is nothing to say either way.`;
+			return `No article in ${nameSpan(days)} left a row to read, so there is nothing to say either way.`;
 		}
 		if (verdict === 'unrecorded') {
-			return `Nothing in these ${days} days counted whether the model waited on the disk for memory it already had, so the quiet strip below is a missing instrument rather than a quiet machine.`;
+			return `Nothing in ${nameSpan(days)} counted whether the model waited on the disk for memory it already had, so the quiet strip below is a missing instrument rather than a quiet machine.`;
 		}
+		// One day has no worst day and no share of the days that counted, so at one
+		// day the finding names the day once.
 		if (verdict === 'fired' && reads.worst !== null) {
-			return `The model waited on the disk ${grouped(reads.reads)} times for memory it already had, worst on ${reads.worst.date} at ${grouped(reads.worst.reads ?? 0)}, over the ${reads.recorded} of these ${days} days that counted.`;
+			const waited = `The model waited on the disk ${grouped(reads.reads)} times for memory it already had`;
+			return days === 1
+				? `${waited}, on ${reads.worst.date}.`
+				: `${waited}, worst on ${reads.worst.date} at ${grouped(reads.worst.reads ?? 0)}, over the ${reads.recorded} of ${countDays(days)} that counted.`;
 		}
-		return `Over the ${reads.recorded} of these ${days} days that counted, the model never once had to wait on the disk for memory it already had.`;
+		return days === 1
+			? `In ${nameSpan(days)}, the model never once had to wait on the disk for memory it already had.`
+			: `Over the ${reads.recorded} of ${countDays(days)} that counted, the model never once had to wait on the disk for memory it already had.`;
 	});
 
 	/** What the runs themselves recorded about holding the model's memory down.
@@ -97,7 +105,7 @@
 	const pinningSays = $derived.by(() => {
 		const { held, loose } = reads.pinning;
 		if (pinning === 'silent') {
-			return `No run in these ${days} days recorded whether the model's memory was held down, so whether the machine was even allowed to take it back is unknown.`;
+			return `No run in ${nameSpan(days)} recorded whether the model's memory was held down, so whether the machine was even allowed to take it back is unknown.`;
 		}
 		if (pinning === 'held') {
 			return `All ${held} runs that recorded it held the model's memory down, so the machine was not allowed to take it back.`;
@@ -186,7 +194,10 @@
 		heading="h3"
 		id="disk-reads"
 		title="Whether the machine took the model's memory back"
-		note="A wait for the disk is memory the machine handed to something else, and the disk copies it was holding that day say whether it was taken or never there - one tile a day, over the last {windowDays} days."
+		note="A wait for the disk is memory the machine handed to something else, and the disk copies it was holding that day say whether it was taken or never there - {windowDays ===
+		1
+			? `one tile for ${nameSpan(windowDays)}`
+			: `one tile a day, over ${nameSpan(windowDays)}`}."
 	>
 		<p class="finding" data-disk-read-finding={verdict}>{finding}</p>
 

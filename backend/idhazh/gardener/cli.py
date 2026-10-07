@@ -25,7 +25,6 @@ variable (`idhazh.config`).
 from __future__ import annotations
 
 import argparse
-import logging
 import re
 import sys
 from collections.abc import Sequence
@@ -42,7 +41,7 @@ from idhazh.contracts.knobs.gardener import (
     MonthsWindow,
     RetentionPolicy,
 )
-from idhazh.gardener import listing, runner, shards
+from idhazh.gardener import event_log, listing, runner, shards
 from idhazh.gardener.outcome import EXIT_INTEGRITY
 
 #: The word that reaches this router. `idhazh/cli.py` holds it in one place -
@@ -76,17 +75,13 @@ def add_the_run(parser: argparse.ArgumentParser) -> None:
 
 
 def settings_or_none(config_dir: Path) -> GardenerSettings | None:
-    """The loaded declarations with logging set from them, or None once the refusal is printed."""
+    """The loaded declarations with the event log installed at their level, or None once refused."""
     try:
         settings = config.load_gardener(config_dir)
     except ValueError as refusal:
         print(refusal, file=sys.stderr)
         return None
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    event_log.install(settings.app.logging.level.value)
     return settings
 
 

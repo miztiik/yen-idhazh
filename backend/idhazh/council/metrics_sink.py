@@ -27,9 +27,8 @@ from idhazh.council.tenancy import JudgeRow
 
 _SLUG: Final = re.compile(SLUG_PATTERN)
 
-#: What a shipped file is called. One a shard, named for the shard, so the
-#: collecting job can merge every tenant's upload into one tree and still tell
-#: which unit wrote which row.
+#: What a shipped file is called. One a unit, named for that unit, so the
+#: collecting job can merge every tenant's upload into one tree without a collision.
 SHIPPED_SUFFIX: Final = ".csv"
 
 
@@ -59,7 +58,7 @@ def _shipped_dir(root: Path, judge_id: str) -> Path:
     return root / checked_slug(judge_id)
 
 
-def ship_judge_metrics(row: JudgeRow, *, judge_id: str, shard: int, out_dir: Path) -> Path:
+def ship_judge_metrics(row: JudgeRow, *, judge_id: str, name: str, out_dir: Path) -> Path:
     """Write one unit's row where the workflow can upload it. Returns the file.
 
     Temp-file-then-rename, so a job killed part way through leaves the
@@ -68,12 +67,12 @@ def ship_judge_metrics(row: JudgeRow, *, judge_id: str, shard: int, out_dir: Pat
     declares and the row does not carry fails here rather than arriving in a
     committed ledger as an empty string.
 
-    `shard` is a parameter rather than a cell read off the row, because reading a
-    tenant's field by name is the coupling this whole path exists to remove.
+    `name` is checked before it becomes a path component. A step may not be a
+    shard, and reading a tenant's field by name is the coupling this path removes.
     """
     directory = _shipped_dir(out_dir, judge_id)
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{shard}{SHIPPED_SUFFIX}"
+    path = directory / f"{checked_slug(name)}{SHIPPED_SUFFIX}"
     document = ledger.render_file(type(row).csv_columns(), [row.csv_row()])
     scratch = directory / f"{path.stem}.{os.getpid()}.tmp"
     scratch.write_text(document, encoding="utf-8", newline="")

@@ -105,6 +105,7 @@ from idhazh.gardener.outcome import (
     worst,
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.site_weight import BYTES_PER_MB
 
 #: The one identity every commit in this repository carries. The same two values
 #: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
@@ -222,7 +223,8 @@ class Checkout:
 
     def fetch(self) -> str:
         """Fetch `main` as it is now into `origin/main`, and hand back the commit it is at."""
-        self.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        # Keep existing ancestry for push hooks; shallow callers fetch only new commits.
+        self.git("fetch", "--quiet", REMOTE, BRANCH)
         return self.git("rev-parse", "--verify", f"{REMOTE}/{BRANCH}").strip()
 
     def changed_on_main(self, paths: Sequence[str]) -> list[str]:
@@ -513,6 +515,8 @@ def read_the_listing(
     folders: Sequence[str],
     period_paths: Sequence[str],
     trees: TreeReader | None,
+    *,
+    budget: int | None = None,
 ) -> FileListing:
     """Every file the commit holds under these named period paths, with its size.
 
@@ -521,7 +525,9 @@ def read_the_listing(
     file. For one it never downloaded, GitHub's blob API is asked for that
     named file and its size is matched by blob id. `trees` stands in for that
     API, and None reaches it for this repo. A step that names a period as it
-    runs has it listed the same way, from the same commit.
+    runs has it listed the same way, from the same commit. `budget` is the most
+    bytes the shard may download, which a step that chooses its periods by it
+    asks the listing about; None answers to no budget.
 
     The checkout is widened only by a file the commit lists, a folder above one,
     or a name directly inside such a folder - a file an earlier task of the
@@ -582,6 +588,7 @@ def read_the_listing(
         paths=named,
         widen=widen,
         lister=lister,
+        budget=budget,
     )
 
 
@@ -643,7 +650,14 @@ def run_and_land(
                 )
             }
         )
-        listing = read_the_listing(checkout, repo_root, [*owned, *read], paths, trees)
+        listing = read_the_listing(
+            checkout,
+            repo_root,
+            [*owned, *read],
+            paths,
+            trees,
+            budget=settings.config.max_downloaded_mb * BYTES_PER_MB,
+        )
     except (OSError, RuntimeError, ValueError) as refusal:
         say(
             f"shard {shard}: the files under its folders could not be listed, so no task "

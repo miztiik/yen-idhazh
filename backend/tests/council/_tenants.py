@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -96,7 +96,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -159,7 +159,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"

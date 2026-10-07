@@ -1,26 +1,36 @@
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { windowOfDays } from '../src/lib/charts/viewport';
+import { describeHeldPart } from '../src/lib/console/held-part-note';
 import { itemCost } from '../src/lib/console/item-cost';
+import { describePromptCacheSubtitle } from '../src/lib/console/prompt-cache-subtitle';
+import { telemetryRows } from '../src/lib/server/payload';
+import { windowDay } from '../src/lib/server/window-day';
+import { publishedSite } from './support/published-site';
+import { ONE_DAYS, spanSaid } from './support/span-said';
 
 /**
- * What one item cost the model, checked against the file the page was drawn
- * from rather than against the label beside the mark.
- *
- * The oracle is the second half of this file. Every figure the section draws is
- * re-derived here from the committed projection - a second implementation, with
- * its own loops and its own arithmetic, that never calls the reducer the page
- * uses. A spec that compared a bar against the number printed under it would
- * pass on any reducer at all, because both come from one call.
+ * What one item cost the model, checked against answers written out here rather
+ * than against the label beside the mark.
  *
  * The first half is the reducer as a pure function, over rows written by hand
  * for the states the fixture cannot reach: a cell that is empty rather than
  * zero, a window where the two clocks answer for different numbers of items,
  * and a rate that must be pooled rather than averaged.
+ *
+ * The oracles are the second half. One is a site the test builds, read the way
+ * the console's server reads it, with each window's answer written out. A spec
+ * that re-derived each figure from the canary's own rows moved whenever the
+ * canary did; one that compared a bar against the number printed under it would
+ * pass on any reducer at all, because both come from one call. The other is the
+ * note under the share, on rows the test builds, with the words each pair of
+ * figures calls for written out in full.
+ *
+ * The last part is the built console: the window the control set, every counted
+ * item in a bar, and the share note, none of them checked against a figure the
+ * canary holds.
  */
-
-/** The tree the site was built from. The suite builds from the canaries. */
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
@@ -213,83 +223,255 @@ test.describe('what one item cost, as arithmetic', () => {
 // The oracle
 // ---------------------------------------------------------------------------
 
-/** The projection the built tree published, read cell by cell.
- *
- * The canary's own copy, written by `idhazh.telemetry.publish.public_telemetry`
- * from the canary ledger - the same producer and the same shape as the committed
- * months, over a fixture a test may read
- * (`backend/tests/test_archive_readers.py`).
- */
-function projection(): Record<string, string>[] {
-	const dir = join(CANARY, 'state', 'telemetry');
-	if (!existsSync(dir)) return [];
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(dir).filter((file) => file.endsWith('.csv'))) {
-		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
-		const columns = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			const found: Record<string, string> = {};
-			columns.forEach((column, at) => (found[column] = cells[at] ?? ''));
-			rows.push(found);
+/** One projection row for `item`: a prompt of `tokens` tokens that the model
+ * read whole in one second, and a ten-token summary written in half of one. */
+function dated(date: string, item: string, tokens: number): Record<string, string> {
+	return {
+		date,
+		run_id: `${date}-1`,
+		item_id: item,
+		prefill_ms: '1000',
+		decode_ms: '500',
+		input_tokens: String(tokens),
+		output_tokens: '10',
+		cached_tokens: '0'
+	};
+}
+
+test("THE ORACLE: each window counts its own days, and they end on the site's newest published day", () => {
+	// Published on 14 and 15 Jun 2030. The projection holds a row on each window's
+	// first day and on the day before it, and one on 16 Jun, the day after the
+	// newest published day: a projection can run a day past the digest, as the
+	// canary's does. Each prompt is a different power of two, so the tokens a
+	// window read name exactly the rows it counted.
+	const { digest, telemetry } = publishedSite(test.info().outputPath('site'), {
+		published: ['2030-06-14', '2030-06-15'],
+		telemetry: {
+			// Filed under February and dated inside every window, as a misfiled row
+			// is. A read that opened a month no window touches would count it.
+			'2030-02': [dated('2030-06-15', 'misfiled', 2048)],
+			'2030-03': [dated('2030-03-17', 'before-90', 1), dated('2030-03-18', 'first-of-90', 2)],
+			'2030-05': [dated('2030-05-16', 'before-30', 4), dated('2030-05-17', 'first-of-30', 8)],
+			'2030-06': [
+				dated('2030-06-01', 'before-14', 16),
+				dated('2030-06-02', 'first-of-14', 32),
+				dated('2030-06-08', 'before-7', 64),
+				dated('2030-06-09', 'first-of-7', 128),
+				dated('2030-06-14', 'before-1', 256),
+				dated('2030-06-15', 'newest', 512),
+				dated('2030-06-16', 'after', 1024)
+			]
 		}
-	}
-	return rows;
+	});
+
+	const day = windowDay(digest);
+	expect(day).toBe('2030-06-15');
+	const windows = [1, 7, 14, 30, 90].map((days) => ({ days, ...windowOfDays(day, days, 'right') }));
+	expect(windows.map(({ start, end }) => `${start} to ${end}`)).toEqual([
+		'2030-06-15 to 2030-06-15',
+		'2030-06-09 to 2030-06-15',
+		'2030-06-02 to 2030-06-15',
+		'2030-05-17 to 2030-06-15',
+		'2030-03-18 to 2030-06-15'
+	]);
+
+	// Read once, over the widest window, as the console's server reads it.
+	const read = telemetryRows(telemetry, windows[windows.length - 1]).rows;
+	expect(read.map((row) => row.item_id)).toEqual([
+		'first-of-90',
+		'before-30',
+		'first-of-30',
+		'before-14',
+		'first-of-14',
+		'before-7',
+		'first-of-7',
+		'before-1',
+		'newest'
+	]);
+
+	const counted = windows.map((offered) => {
+		const cost = itemCost(read, offered);
+		return { days: cost.days, rows: cost.rows, timed: cost.timed, readTokens: cost.readTokens };
+	});
+	expect(counted).toEqual([
+		{ days: 1, rows: 1, timed: 1, readTokens: 512 },
+		{ days: 7, rows: 3, timed: 3, readTokens: 896 },
+		{ days: 14, rows: 5, timed: 5, readTokens: 992 },
+		{ days: 30, rows: 7, timed: 7, readTokens: 1016 },
+		{ days: 90, rows: 9, timed: 9, readTokens: 1022 }
+	]);
+});
+
+// ---------------------------------------------------------------------------
+// The note under the share
+// ---------------------------------------------------------------------------
+
+/** One projection row for `item`: a 4,000-token prompt with `tokens` of it
+ * already in memory. */
+function held(date: string, item: string, tokens: number): Record<string, string> {
+	return {
+		date,
+		run_id: `${date}-1`,
+		item_id: item,
+		input_tokens: '4000',
+		cached_tokens: String(tokens)
+	};
 }
 
-/** A number, or null for an empty cell. Written out rather than imported: the
- * oracle may share no arithmetic with the thing it checks. */
-function value(row: Record<string, string>, name: string): number | null {
-	const raw = row[name];
-	if (raw === undefined || raw === '') return null;
-	const parsed = Number(raw);
-	return Number.isFinite(parsed) ? parsed : null;
-}
+/** Windows that end on 6 Oct 2026, as the readings behind the note did. */
+const NINETY_DAYS = { start: '2026-07-09', end: '2026-10-06', days: 90 };
+const THIRTY_DAYS = { start: '2026-09-07', end: '2026-10-06', days: 30 };
+const ONE_DAY = { start: '2026-10-06', end: '2026-10-06', days: 1 };
 
-/** The window the section says it is drawing, from the days the page says it
- * drew. It ends on the newest day the projection holds and runs back N days. */
-function span(days: number): { start: string; end: string } {
-	const dates = [...new Set(projection().map((row) => row.date))].filter(Boolean).sort();
-	const end = dates[dates.length - 1];
-	const at = new Date(`${end}T00:00:00Z`);
-	at.setUTCDate(at.getUTCDate() - (days - 1));
-	return { start: at.toISOString().slice(0, 10), end };
-}
+test.describe('THE ORACLE: the note under the share says what its own two figures show', () => {
+	test('a window whose middle item had 922 tokens in memory and whose largest had 2,219 says the amount changed a lot', () => {
+		// The step the note missed: 922 tokens on every day up to 12 Sep 2026, and
+		// about 1,900 from 14 Sep, so the largest is more than twice the middle.
+		const cost = itemCost(
+			[
+				held('2026-07-10', 'a-01', 922),
+				held('2026-08-10', 'a-02', 922),
+				held('2026-09-12', 'a-03', 922),
+				held('2026-09-14', 'a-04', 1905),
+				held('2026-10-06', 'a-05', 2219)
+			],
+			NINETY_DAYS
+		);
+		expect([cost.reusedMedian, cost.reusedWidest]).toEqual([922, 2219]);
+		expect(describeHeldPart(cost)).toBe(
+			'In these 90 days, the amount already in memory changed a lot. The middle item had 922 tokens in memory, and the most any item had was 2,219 tokens. So here a lower percentage can mean less in memory, not only a longer article. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
 
-/** Every doubling bar a set of millisecond values falls into, counted by hand.
- *
- * A deliberately clumsy second implementation: it walks the edges rather than
- * generating them, and it counts with a loop rather than a filter. If it agreed
- * with the page by sharing an expression it would not be an oracle.
- */
-function barsOf(values: number[]): Map<number, number> {
-	const found = new Map<number, number>();
-	for (const ms of values) {
-		const seconds = ms / 1000;
-		let from = 0;
-		let to = 1;
-		while (seconds >= to) {
-			from = to;
-			to = to * 2;
-		}
-		found.set(from, (found.get(from) ?? 0) + 1);
-	}
-	return found;
-}
+	test('a window whose largest is under twice its middle states the two figures and claims nothing about change', () => {
+		// These 30 days start before the step, so their first day held 922, and
+		// they still pass on their two figures. That is why the passing words say
+		// nothing about how much the amount in memory changed.
+		const cost = itemCost(
+			[
+				held('2026-09-07', 'a-01', 922),
+				held('2026-09-20', 'a-02', 1849),
+				held('2026-10-06', 'a-03', 2219)
+			],
+			THIRTY_DAYS
+		);
+		expect([cost.reusedMedian, cost.reusedWidest]).toEqual([1849, 2219]);
+		expect(describeHeldPart(cost)).toBe(
+			'In these 30 days, the middle item had 1,849 tokens already in memory, and the most any item had was 2,219 tokens. A longer article makes the percentage lower, even if the amount in memory does not change. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
 
-function sorted(values: number[]): number[] {
-	return [...values].sort((a, b) => a - b);
-}
+	test('twice the middle has changed a lot, and one token under it has not', () => {
+		const note = (largest: number) =>
+			describeHeldPart(
+				itemCost(
+					[
+						held('2026-09-20', 'a-01', 1000),
+						held('2026-09-21', 'a-02', 1000),
+						held('2026-09-22', 'a-03', largest)
+					],
+					THIRTY_DAYS
+				)
+			);
+		expect(note(2000)).toBe(
+			'In these 30 days, the amount already in memory changed a lot. The middle item had 1,000 tokens in memory, and the most any item had was 2,000 tokens. So here a lower percentage can mean less in memory, not only a longer article. Read the token counts, not the rise or fall of the percentages.'
+		);
+		expect(note(1999)).toBe(
+			'In these 30 days, the middle item had 1,000 tokens already in memory, and the most any item had was 1,999 tokens. A longer article makes the percentage lower, even if the amount in memory does not change. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
 
-/** The value at a fraction of the way through, interpolated. */
-function at(values: number[], fraction: number): number {
-	const list = sorted(values);
-	if (list.length === 1) return list[0];
-	const position = (list.length - 1) * fraction;
-	const below = Math.floor(position);
-	const above = Math.ceil(position);
-	return list[below] + (list[above] - list[below]) * (position - below);
-}
+	test('one day where most items had nothing in memory says the amount changed a lot', () => {
+		// A spread between items, not a step over time: two prompts read whole and
+		// one with 922 tokens in memory, on one day. The words are true of this too.
+		const cost = itemCost(
+			[held('2026-10-06', 'a-01', 0), held('2026-10-06', 'a-02', 0), held('2026-10-06', 'a-03', 922)],
+			ONE_DAY
+		);
+		expect(describeHeldPart(cost)).toBe(
+			'In this one day, the amount already in memory changed a lot. The middle item had 0 tokens in memory, and the most any item had was 922 tokens. So here a lower percentage can mean less in memory, not only a longer article. Read the token counts, not the rise or fall of the percentages.'
+		);
+	});
+
+	test('a window where no item had anything in memory, or none recorded a count, prints no note', () => {
+		// Every prompt read whole is 0 percent at any article length, so there is
+		// nothing to explain; and a note that names two figures needs both.
+		const readWhole = itemCost([held('2026-10-06', 'a-01', 0), held('2026-10-06', 'a-02', 0)], ONE_DAY);
+		expect([readWhole.reusedMedian, readWhole.reusedWidest]).toEqual([0, 0]);
+		expect(describeHeldPart(readWhole)).toBeNull();
+
+		const uncounted = itemCost(
+			[{ date: '2026-10-06', run_id: '2026-10-06-1', item_id: 'a-01', input_tokens: '4000' }],
+			ONE_DAY
+		);
+		expect(uncounted.counted).toBe(1);
+		expect(describeHeldPart(uncounted)).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The subtitle over the share
+// ---------------------------------------------------------------------------
+
+test.describe('THE ORACLE: the subtitle over the share says what its own two figures show', () => {
+	test('a window where 1 of 4 items read its prompt whole names that item and says the rest reused', () => {
+		const cost = itemCost(
+			[
+				held('2026-10-06', 'a-01', 0),
+				held('2026-10-06', 'a-02', 100),
+				held('2026-10-06', 'a-03', 200),
+				held('2026-10-06', 'a-04', 300)
+			],
+			ONE_DAY
+		);
+		expect([cost.counted, cost.readWhole]).toEqual([4, 1]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, 1 of 4 items had to read its prompt whole, with nothing saved from before. The rest reused part of an earlier prompt instead.'
+		);
+	});
+
+	test('a window where no item read its prompt whole says every item reused part of an earlier prompt', () => {
+		const cost = itemCost(
+			[held('2026-10-06', 'a-01', 100), held('2026-10-06', 'a-02', 200)],
+			ONE_DAY
+		);
+		expect([cost.counted, cost.readWhole]).toEqual([2, 0]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, every one of the 2 items reused part of an earlier prompt - none had to start from scratch.'
+		);
+	});
+
+	test('a window where every item read its prompt whole says all of them did, with nothing saved', () => {
+		const cost = itemCost(
+			[held('2026-10-06', 'a-01', 0), held('2026-10-06', 'a-02', 0)],
+			ONE_DAY
+		);
+		expect([cost.counted, cost.readWhole]).toEqual([2, 2]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, all 2 items had to read their prompts whole, with nothing saved from before.'
+		);
+	});
+
+	test('a window with one item that reused part of an earlier prompt names the one item, not "1 items"', () => {
+		const cost = itemCost([held('2026-10-06', 'a-01', 100)], ONE_DAY);
+		expect([cost.counted, cost.readWhole]).toEqual([1, 0]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, the one item reused part of an earlier prompt - it did not start from scratch.'
+		);
+	});
+
+	test('a window with one item that read its prompt whole names the one item, not "1 items"', () => {
+		const cost = itemCost([held('2026-10-06', 'a-01', 0)], ONE_DAY);
+		expect([cost.counted, cost.readWhole]).toEqual([1, 1]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, the one item had to read its prompt whole, with nothing saved from before.'
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The built console
+// ---------------------------------------------------------------------------
 
 async function hydrated(page: Page) {
 	await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeEnabled();
@@ -303,27 +485,17 @@ async function setWindow(page: Page, days: number) {
 	);
 }
 
-/** Every number the section drew, as attributes rather than as prose. */
+/** The window the section drew, its words, and the two charts' counts and bars,
+ * as attributes rather than as prose. */
 async function drawn(page: Page) {
 	return page.locator('[data-windowed="item-cost"]').evaluate((node) => {
-		const attr = (name: string): string | null => {
-			const held = node.querySelector(`[${name}]`);
-			return held === null ? null : held.getAttribute(name);
-		};
 		const histogram = (name: string) => {
 			const chart = node.querySelector(`[data-histogram="${name}"]`);
 			if (chart === null) return null;
 			return {
 				n: Number(chart.getAttribute('data-histogram-n')),
-				bins: [...chart.querySelectorAll('[data-hist-bin]')].map((bin) => ({
-					from: Number(bin.getAttribute('data-hist-bin')),
-					n: Number(bin.getAttribute('data-hist-bin-n'))
-				})),
-				rules: Object.fromEntries(
-					[...chart.querySelectorAll('[data-hist-rule]')].map((rule) => [
-						rule.getAttribute('data-hist-rule') ?? '',
-						Number(rule.getAttribute('data-hist-rule-seconds'))
-					])
+				bars: [...chart.querySelectorAll('[data-hist-bin]')].map((bin) =>
+					Number(bin.getAttribute('data-hist-bin-n'))
 				)
 			};
 		};
@@ -331,175 +503,12 @@ async function drawn(page: Page) {
 			days: Number(node.getAttribute('data-window-days')),
 			says: (node.textContent ?? '').replace(/\s+/g, ' ').trim(),
 			reading: histogram('reading-the-prompt'),
-			writing: histogram('writing-the-summary'),
-			rows: attr('data-item-cost-rows'),
-			promptTokens: attr('data-item-cost-prompt-tokens'),
-			writtenTokens: attr('data-item-cost-written-tokens'),
-			itemReusedPct: attr('data-item-cost-item-reused-pct'),
-			readWhole: attr('data-item-cost-read-whole'),
-			readTokens: attr('data-item-cost-read-tokens'),
-			reusedTokens: attr('data-item-cost-reused-tokens'),
-			reusedPct: attr('data-item-cost-reused-pct'),
-			msPerReadToken: attr('data-item-cost-ms-per-read-token'),
-			msPerWrittenToken: attr('data-item-cost-ms-per-written-token'),
-			writeRatio: attr('data-item-cost-write-ratio')
+			writing: histogram('writing-the-summary')
 		};
 	});
 }
 
 test.describe('the section on the built console', () => {
-	test('THE ORACLE: every bar and every rule is the projection, re-derived', async ({ page }) => {
-		const rows = projection();
-		expect(rows.length, 'the canary projection is empty - the read is broken').toBeGreaterThan(0);
-
-		await page.goto('/console/');
-		await hydrated(page);
-
-		for (const preset of PRESETS) {
-			await setWindow(page, preset);
-			const window = span(preset);
-			const inWindow = rows.filter((row) => row.date >= window.start && row.date <= window.end);
-
-			const readMs: number[] = [];
-			const writeMs: number[] = [];
-			for (const row of inWindow) {
-				const prefill = value(row, 'prefill_ms');
-				const decode = value(row, 'decode_ms');
-				if (prefill !== null) readMs.push(prefill);
-				if (decode !== null) writeMs.push(decode);
-			}
-
-			const marks = await drawn(page);
-			expect(marks.days, `the section is drawing a window the control did not set`).toBe(preset);
-			// The window really narrows the rows rather than only the label. The canary
-			// holds days at 7, 30 and 90 days out, so the three presets read three
-			// different counts and a section that filtered nothing would fail here.
-			expect(
-				Number(marks.rows),
-				`the section at ${preset} days counted rows the window does not hold`
-			).toBe(inWindow.length);
-
-			for (const [name, values, shown] of [
-				['reading', readMs, marks.reading],
-				['writing', writeMs, marks.writing]
-			] as const) {
-				if (shown === null) continue;
-				expect(shown.n, `${name} at ${preset} days drew a count the projection does not hold`).toBe(
-					values.length
-				);
-				const expected = barsOf(values);
-				for (const bin of shown.bins) {
-					expect(
-						bin.n,
-						`${name} at ${preset} days: the bar from ${bin.from} s holds the wrong count`
-					).toBe(expected.get(bin.from) ?? 0);
-				}
-				// Every value has to land in a drawn bar, or the chart is quietly
-				// showing fewer items than it says it counted.
-				const drawnTotal = shown.bins.reduce((total, bin) => total + bin.n, 0);
-				expect(drawnTotal, `${name} at ${preset} days: bars do not sum to the count`).toBe(
-					values.length
-				);
-				expect(
-					shown.rules.median,
-					`${name} at ${preset} days: the median rule is not the median of the values`
-				).toBe(Math.round(at(values, 0.5) / 1000));
-				expect(
-					shown.rules.p95,
-					`${name} at ${preset} days: the 95th rule is not the 95th of the values`
-				).toBe(Math.round(at(values, 0.95) / 1000));
-			}
-		}
-	});
-
-	test('THE ORACLE: every token figure is the projection, re-derived', async ({ page }) => {
-		const rows = projection();
-		await page.goto('/console/');
-		await hydrated(page);
-
-		for (const preset of PRESETS) {
-			await setWindow(page, preset);
-			const window = span(preset);
-			const inWindow = rows.filter((row) => row.date >= window.start && row.date <= window.end);
-
-			const prompts: number[] = [];
-			const written: number[] = [];
-			const shares: number[] = [];
-			let read = 0;
-			let reused = 0;
-			let whole = 0;
-			let readMs = 0;
-			let writeMs = 0;
-			let writtenTokens = 0;
-			for (const line of inWindow) {
-				const input = value(line, 'input_tokens');
-				const output = value(line, 'output_tokens');
-				const cached = value(line, 'cached_tokens');
-				const prefill = value(line, 'prefill_ms');
-				const decode = value(line, 'decode_ms');
-				// The cache figures are about the FIRST call where the projection
-				// publishes one, and about the item where it does not. Derived here a
-				// second time rather than read off the reducer: an item read by two
-				// calls always reuses something, because the second replays the first
-				// call's prompt, so these three taken off the totals would count a
-				// cold slot as a warm one.
-				const firstCached = value(line, 'label_cached_tokens');
-				const firstInput = value(line, 'label_input_tokens');
-				const split = firstCached !== null && firstInput !== null;
-				const cacheOf = split ? firstCached : cached;
-				const promptOf = split ? firstInput : input;
-				if (input !== null) {
-					prompts.push(input);
-					read = read + input - (cached ?? 0);
-					if (cached !== null) reused = reused + cached;
-					if (cacheOf !== null && promptOf !== null) {
-						if (cacheOf === 0) whole = whole + 1;
-						shares.push(Math.round((cacheOf / promptOf) * 100));
-					}
-					if (prefill !== null) readMs = readMs + prefill;
-				}
-				if (output !== null) {
-					written.push(output);
-					if (decode !== null) {
-						writeMs = writeMs + decode;
-						writtenTokens = writtenTokens + output;
-					}
-				}
-			}
-			if (prompts.length === 0) continue;
-
-			const marks = await drawn(page);
-			const say = (what: string) => `${what} at ${preset} days`;
-			// Rounded, because no console cell prints a decimal and the middle of an
-			// even number of items is the mean of two. The rounding is the page's
-			// stated rule; the value under it is derived here.
-			expect(Number(marks.promptTokens), say('the middle prompt')).toBe(
-				Math.round(at(prompts, 0.5))
-			);
-			expect(Number(marks.writtenTokens), say('the middle summary')).toBe(
-				Math.round(at(written, 0.5))
-			);
-			expect(Number(marks.readTokens), say('prompt tokens read')).toBe(read);
-			expect(Number(marks.reusedTokens), say('prompt tokens already in memory')).toBe(reused);
-			expect(Number(marks.reusedPct), say("the window's share")).toBe(
-				Math.round((reused / (read + reused)) * 100)
-			);
-			expect(Number(marks.itemReusedPct), say("the middle item's share")).toBe(
-				Math.round(at(shares, 0.5))
-			);
-			expect(Number(marks.readWhole), say('items read whole')).toBe(whole);
-			expect(Number(marks.msPerReadToken), say('milliseconds a read token costs')).toBe(
-				Math.round(readMs / read)
-			);
-			expect(Number(marks.msPerWrittenToken), say('milliseconds a written token costs')).toBe(
-				Math.round(writeMs / writtenTokens)
-			);
-			expect(marks.writeRatio, say('the ratio between them')).toBe(
-				(writeMs / writtenTokens / (readMs / read)).toFixed(1)
-			);
-		}
-	});
-
 	test('THE ORACLE: the share is carried by figures, and no track is drawn', async ({ page }) => {
 		// The two-segment track that used to draw this share was one flat bar on
 		// no time axis, and the note under it told the reader not to read its
@@ -525,17 +534,33 @@ test.describe('the section on the built console', () => {
 		}
 	});
 
-	test('the section names the window it drew, at every preset', async ({ page }) => {
+	test('the section draws the window the control set, and every item it counted is in a bar', async ({
+		page
+	}) => {
 		// It honours the shared control without claiming a pan it does not follow,
-		// so the day count it prints has to be the one the control set.
+		// so the day count it prints has to be the one the control set. Which rows
+		// each window counts is the oracle above, on a site the test builds; what is
+		// left on the built console is that the page draws what it was handed.
 		await page.goto('/console/');
 		await hydrated(page);
 		for (const preset of PRESETS) {
 			await setWindow(page, preset);
 			const marks = await drawn(page);
-			expect(marks.says, `the section never says it is showing ${preset} days`).toContain(
-				`${preset} days`
+			expect(marks.days, 'the section is drawing a window the control did not set').toBe(preset);
+			expect(marks.says, `the section never says it is showing ${preset} days`).toMatch(
+				spanSaid(preset)
 			);
+			expect(marks.says, 'the section says "1 days"').not.toMatch(ONE_DAYS);
+			for (const [name, shown] of [
+				['reading', marks.reading],
+				['writing', marks.writing]
+			] as const) {
+				if (shown === null) continue;
+				// A count outside every bar is a chart quietly showing fewer items than
+				// it says it counted.
+				const barred = shown.bars.reduce((total, n) => total + n, 0);
+				expect(barred, `${name} at ${preset} days: the bars do not sum to the count`).toBe(shown.n);
+			}
 		}
 	});
 
@@ -577,23 +602,32 @@ test.describe('the section on the built console', () => {
 	test('the share is printed and never drawn as a trend, and the page says why', async ({
 		page
 	}) => {
-		// The held part is nearly fixed and the prompt is not, so a falling line
-		// would read as the cache getting worse when the articles merely got
-		// longer. That is the one wrong action this panel could cause.
+		// A longer article lowers the share while the part already in memory stays
+		// put, so a falling line would read as the cache getting worse when the
+		// articles merely got longer. The note says so only where its own two
+		// figures bear it out, and the oracle above holds which words each pair of
+		// figures gets. Left here is the page against itself: in every window the
+		// control offers, the note names that window and is the note its own two
+		// figures call for, whatever the canary holds.
 		await page.goto('/console/');
+		await hydrated(page);
 		const note = page.locator('[data-item-cost-share-note]');
-		await expect(note).toHaveCount(1);
-		await expect(note).toContainText('follows the article');
-
-		const rows = projection().filter((row) => value(row, 'cached_tokens') !== null);
-		const held = rows.map((row) => value(row, 'cached_tokens') as number);
-		const widest = Math.max(...held);
-		const middle = at(held, 0.5);
-		expect(
-			widest - middle,
-			'the held part has started moving, so this panel needs re-deciding'
-		).toBeLessThan(middle);
-		await expect(note).toContainText(String(Math.round(middle)));
+		for (const preset of PRESETS) {
+			await setWindow(page, preset);
+			await expect(note, `no note under the share at ${preset} days`).toHaveCount(1);
+			const said = (await note.innerText()).replace(/\s+/g, ' ').trim();
+			const named =
+				/middle item had ([\d,]+) tokens (?:already )?in memory, and the most any item had was ([\d,]+) tokens/.exec(
+					said
+				);
+			expect(named, `the note names no middle and largest item: ${said}`).not.toBeNull();
+			const [middle, largest] = [named?.[1], named?.[2]].map((figure) =>
+				Number((figure ?? '').replace(/,/g, ''))
+			);
+			expect(said, `the note at ${preset} days is not the one its two figures call for`).toBe(
+				describeHeldPart({ days: preset, reusedMedian: middle, reusedWidest: largest })
+			);
+		}
 	});
 
 	test('a figure the ledger cannot answer prints a dash, never a zero', async ({ page }) => {

@@ -1,0 +1,4 @@
+{
+  "scored-pairs": "content-similarity-judge/scored-pairs",
+  "metrics": "content-similarity-judge/deep/metrics"
+}

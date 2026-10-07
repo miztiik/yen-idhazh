@@ -48,6 +48,7 @@
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import { namesMoved, type SettingsMoved } from '$lib/console/settings-moved';
+	import { countDays } from '$lib/console/span-words';
 	import { grouped } from '$lib/charts/series';
 
 	let {
@@ -349,7 +350,7 @@
 		{#if moved.length > 0}
 			<p class="note" data-memory-moved={moved.length}>
 				{moved.length === 1 ? 'A setting moved' : 'Settings moved'} on {movedText}, inside the
-				{windowDays} days this page read. This board is one run, so nothing here is drawn across
+				{countDays(windowDays)} this page read. This board is one run, so nothing here is drawn across
 				that change - but a reading remembered from before
 				{moved.length === 1 ? 'it' : 'the last of them'} was taken under a different setup.
 			</p>

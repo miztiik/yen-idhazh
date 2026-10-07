@@ -5,32 +5,17 @@ import {
 	consoleConfig,
 	similarityConfig
 } from '$lib/server/config';
+import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
 import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/console/merge-line';
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
 import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
 import { holdoutReading, mergeLineHoldoutScore } from '$lib/server/similarity-holdout';
+import { windowDay } from '$lib/server/window-day';
 
 export const prerender = true;
 
 export type { JudgeDay, LineDay, MergeDay };
-
-/** Every date the widest preset spans, oldest first, whether or not anything
- * happened on it.
- *
- * Date arithmetic rather than a directory walk, so the cost is the span the
- * config names and never what the archive holds (Guardrail #12).
- */
-function spanOfDays(days: number): string[] {
-	const end = new Date();
-	const dates: string[] = [];
-	for (let back = days; back >= 0; back -= 1) {
-		const day = new Date(end);
-		day.setUTCDate(day.getUTCDate() - back);
-		dates.push(day.toISOString().slice(0, 10));
-	}
-	return dates;
-}
 
 /** What Judgement reads, and what it costs.
  *
@@ -52,6 +37,8 @@ function spanOfDays(days: number): string[] {
 export function load() {
 	const console = consoleConfig();
 	const widestDays = Math.max(...console.window_presets);
+	// Every window on this route ends on the site's newest published day.
+	const day = windowDay();
 	const merges: MergeDay[] = publishedDates(undefined, widestDays)
 		.sort()
 		.map((date) => {
@@ -116,8 +103,10 @@ export function load() {
 		),
 		// Every date the widest preset spans, so the squares strip draws the days
 		// nothing recorded. A strip built from the rows would draw a shorter,
-		// tidier picture of a record that had stopped filling.
-		span: spanOfDays(widestDays),
+		// tidier picture of a record that had stopped filling. Date arithmetic rather
+		// than a directory walk, so the cost is the span the config names and never
+		// what the archive holds (Guardrail #12).
+		span: daysInWindow(windowOfDays(day, widestDays, console.today_anchor)),
 		// The band and the daily step the chart draws against, read off config so
 		// the axis is the range a line MAY take rather than the range it has taken.
 		similarity: similarityConfig(),
@@ -166,6 +155,7 @@ export function load() {
 		console,
 		// How many date labels the day axis may carry - `chart.tick_density`.
 		chart: chartConfig(),
-		today: new Date().toISOString().slice(0, 10)
+		// The day every window on this route ends on: the site's newest published day.
+		windowDay: day
 	};
 }

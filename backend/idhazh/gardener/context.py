@@ -47,10 +47,14 @@ class TaskContext:
     #: weighs. A task lists its members from here and never from the disk, and
     #: fetches a folder through it before it opens a file inside.
     listing: FileListing
+    #: The UTC year, as YYYY, from `config/idhazh_gardener.json`, before which no
+    #: ledger holds a row. A compaction that rebuilds an absent index looks for
+    #: year and month files from it, and never further back.
+    first_ledger_year: str
     #: The inclusive period range this task may read on this run: the range a
-    #: person named, or the scheduled window the runner built.
+    #: person named, the first and last month a ledger migration packs, or else
+    #: the scheduled window the runner built, or None. A compaction has no
+    #: scheduled window, because each of its steps chooses its own periods, so
+    #: for a compaction this is a named range, which only limits that choice,
+    #: or None on a scheduled wake.
     period_range: tuple[str, str] | None = None
-    #: The inclusive range a person named for this run, or None on a scheduled
-    #: wake. A step that chooses its own periods is limited by this alone, never
-    #: by the scheduled window.
-    operator_range: tuple[str, str] | None = None

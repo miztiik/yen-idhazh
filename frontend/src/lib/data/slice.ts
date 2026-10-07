@@ -20,8 +20,10 @@
  * the range is read from comes back with its count, because its file, if it has
  * one, holds every row but theirs.
  *
- * Where the ledger starts is worked out here too, `firstNamed()`, so the slice
- * and the reach never disagree about which hole lies before it.
+ * Where the ledger starts is worked out here too, `firstNamed()`, and how far it
+ * is packed, `newestNamed()`, so every reader cuts a span at the same first day
+ * and clamps it at the same newest one; and where its rows stop, `newestHeld()`,
+ * so a console route can say so without reading a day before its window.
  *
  * Pure: it takes the range and the three entry lists, and reads nothing else.
  * It imports types only, so the site build loads it in plain Node.
@@ -66,9 +68,9 @@ const FIRST_DAY: Record<Exclude<Period, 'daily'>, (covers: string) => DateStamp>
 };
 
 /** The oldest day any index names, a month counting from its first day and a
- *  year from its 1 January. `daily` names at least one day; a hole before this
- *  day is before the ledger starts, and a hole from it on is a day the packing
- *  lost. */
+ *  year from its 1 January. At least one index names a period; a day before
+ *  this one is before the ledger began, so a reader cuts a span there, and a day
+ *  from it on that no index names is a hole. */
 export function firstNamed(
 	daily: readonly CompactEntry[],
 	monthly: readonly CompactEntry[],
@@ -122,6 +124,31 @@ export function newestFile(
 	if (month !== undefined) return { period: 'monthly', entry: month, firstDay: FIRST_DAY.monthly(month.covers) };
 	const year = yearly.findLast(namesFile);
 	return year === undefined ? null : { period: 'yearly', entry: year, firstDay: FIRST_DAY.yearly(year.covers) };
+}
+
+/** One period an index names: a day, a month or a year, by its `covers`. */
+export interface HeldPeriod {
+	period: Period;
+	covers: string;
+}
+
+/** The newest period whose file holds rows, a day before a month before a year,
+ *  or null when no entry holds a row. The packing moves a closed month's days out
+ *  of `daily.json` and a packed year's months out of `monthly.json`, so a day that
+ *  holds rows is newer than any month, and a month than any year. A reader that
+ *  reads nothing before its window learns from this where a ledger's rows stop. */
+export function newestHeld(
+	daily: readonly CompactEntry[],
+	monthly: readonly CompactEntry[],
+	yearly: readonly CompactEntry[]
+): HeldPeriod | null {
+	const holds = (entry: CompactEntry): boolean => namesFile(entry) && entry.rows > 0;
+	const day = daily.findLast(holds);
+	if (day !== undefined) return { period: 'daily', covers: day.covers };
+	const month = monthly.findLast(holds);
+	if (month !== undefined) return { period: 'monthly', covers: month.covers };
+	const year = yearly.findLast(holds);
+	return year === undefined ? null : { period: 'yearly', covers: year.covers };
 }
 
 /** The files that answer every day from `from` to `to`, one file a day, the days

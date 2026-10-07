@@ -23,7 +23,6 @@ from pydantic import TypeAdapter, ValidationError
 from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
     DEFAULT_CLOSED_AFTER_DAYS,
-    GITHUB_RERUN_DAYS,
     JANUARY_DAYS,
     CollectionTaskPolicy,
     CompactionPolicy,
@@ -44,6 +43,10 @@ GARDEN = GARDENER_FIXTURES / "garden"
 def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
     """The fixture garden, with each named declaration replaced, added, or removed (None)."""
     config_dir = a_config(tmp_path, GARDEN)
+    app_path = config_dir / "idhazh.json"
+    app = json.loads(app_path.read_text(encoding="utf-8"))
+    app["collect"]["published_window_days"] = -1
+    app_path.write_text(json.dumps(app), encoding="ascii")
     gardener_config = config_dir / "idhazh_gardener.json"
     settings = json.loads(gardener_config.read_text(encoding="utf-8"))
     names = set(settings["task_names"])
@@ -64,6 +67,8 @@ def a_garden(tmp_path: Path, **declarations: dict[str, Any] | None) -> Path:
 def fixture(name: str, **changes: Any) -> dict[str, Any]:
     """One fixture declaration as a dict, with some keys changed."""
     declared: dict[str, Any] = json.loads((GARDEN / f"{name}.json").read_text(encoding="utf-8"))
+    if declared["kind"] == "compaction":
+        declared.update(yearly_keep_months=None, yearly_prune_enable=False)
     return declared | changes
 
 
@@ -90,51 +95,32 @@ def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
 
 MONTHS = {"unit": "months", "value": 14}
 
-#: Why two of the ledgers the console reads are packed at every wake.
-PACKED_FOR_THE_CONSOLE: Final = (
-    "packed live by owner decision: the console reads this ledger from its packed "
-    "files only, so a finished day is packed within about two days and a month 31 "
-    "days after it ends"
-)
-
-#: Why the monthly window of those two ledgers deletes month files live.
-WINDOW_LIVE_WITH_ITS_PACKING: Final = (
-    "the person turned this ledger's packing live while one switch still ran the "
-    "packing and the monthly window together, so the window went live with it; the "
-    "loader holds that window to every month a reader of the ledger still opens"
-)
-
-#: The two packing tasks a person turned live.
+#: The two declarations used for minimum monthly-wait regressions.
 PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
 
-#: Why a ledger's packing ships live in the change that moves it to the door.
-PACKED_ON_THE_MOVE: Final = (
-    "packing writes every row into a coarser file before it deletes one, and the "
-    "monthly window beside it only reports"
+RETENTION_LEDGERS: Final = (
+    "candidate-models", "council-run-records", "counterfactual-scores", "feed-health",
+    "feed-retirements", "gardener", "host-fingerprint", "item-health",
+    "item-health-summary", "published", "run-plan", "seen", "summary-quality-evals",
+    "visual-prunes",
 )
-
-#: Every switch that ships live, keyed by its task and by the key a person edits
-#: to turn it off, each beside the decision that put it there. Every other switch
-#: ships `dry_run: true`: a task earns its first deletion from a person reading
-#: its records, never from the change that added it.
+YEARLY_RETENTION_DECISION: Final = (
+    "@kumarsnaveen_microsoft approved live packing and 36-calendar-month yearly expiry "
+    "for all fourteen ledgers on 2026-10-07, accepting loss of older history"
+)
 LIVE_BY_DECISION: Final = {
-    ("compact-candidate-models", "dry_run"): PACKED_ON_THE_MOVE,
-    ("compact-counterfactual-scores", "dry_run"): PACKED_ON_THE_MOVE,
-    ("compact-feed-health", "dry_run"): PACKED_ON_THE_MOVE,
-    ("compact-host-fingerprint", "dry_run"): PACKED_FOR_THE_CONSOLE,
-    ("compact-host-fingerprint", "month_deletes_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
-    ("compact-item-health", "dry_run"): PACKED_FOR_THE_CONSOLE,
-    ("compact-item-health", "month_deletes_dry_run"): WINDOW_LIVE_WITH_ITS_PACKING,
-    ("compact-published", "dry_run"): PACKED_ON_THE_MOVE,
-    ("compact-seen", "dry_run"): PACKED_ON_THE_MOVE,
-    ("compact-summary-quality-evals", "dry_run"): (
-        "kumarsnaveen requested the stale console charts be fixed on 2026-10-04: "
-        "score panels read packed files only, so report-only packing leaves them frozen"
-    ),
-    ("compact-summary-quality-evals", "month_deletes_dry_run"): (
-        "the eval window keeps every month forever, so this switch drops no rows; "
-        "packing deletes only source files whose rows were preserved in a coarser file"
-    ),
+    **{
+        (f"compact-{name}", switch): YEARLY_RETENTION_DECISION
+        for name in RETENTION_LEDGERS
+        for switch in ("dry_run", "yearly_prune_enable")
+    },
+    **{
+        (f"compact-{name}", "month_deletes_dry_run"): YEARLY_RETENTION_DECISION
+        for name in (
+            "feed-retirements", "gardener", "host-fingerprint", "item-health",
+            "summary-quality-evals", "visual-prunes",
+        )
+    },
     ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
@@ -150,7 +136,6 @@ UNFOLDED_BY_DECISION: Final[dict[LedgerName, str]] = {}
 #: the declaration's own `dry_run`, so it is live only while both are false.
 WINDOW_SWITCHES: Final = frozenset({"month_deletes_dry_run"})
 
-
 def _switches(declared: Mapping[str, Any], prefix: str = "") -> dict[str, bool]:
     """Every switch a declaration carries, at any depth, by the dotted key a person edits.
 
@@ -162,6 +147,8 @@ def _switches(declared: Mapping[str, Any], prefix: str = "") -> dict[str, bool]:
         path = f"{prefix}{key}"
         if key == "dry_run" and isinstance(value, bool):
             found[path] = value
+        elif key == "yearly_prune_enable" and isinstance(value, bool):
+            found[path] = not value or declared.get("dry_run") is not False
         elif key in WINDOW_SWITCHES and isinstance(value, bool):
             found[path] = value or declared.get("dry_run") is not False
         elif isinstance(value, Mapping):
@@ -238,16 +225,22 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
     )
 
 
-def test_the_two_packing_tasks_the_person_turned_on_pack_a_month_31_days_after_it_ends() -> None:
-    """31 is the shortest wait no GitHub re-run can outlast; evals keep their longer wait."""
+def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
+    """All fourteen declarations activate real packing and finite yearly deletion."""
     tasks = config.load_gardener().tasks
-    for name in PACKED_LIVE:
+    assert {
+        name for name, policy in tasks.items() if isinstance(policy, CompactionPolicy)
+    } == {f"compact-{name}" for name in RETENTION_LEDGERS}
+    for ledger_name in RETENTION_LEDGERS:
+        name = f"compact-{ledger_name}"
         policy = tasks[name]
         assert isinstance(policy, CompactionPolicy), name
-        assert (policy.dry_run, policy.daily_keep_days) == (False, GITHUB_RERUN_DAYS + 1), name
-    evals = tasks["compact-summary-quality-evals"]
-    assert isinstance(evals, CompactionPolicy)
-    assert (evals.dry_run, evals.daily_keep_days) == (False, 45)
+        assert (
+            policy.dry_run, policy.compact_after_days, policy.daily_keep_days,
+            policy.monthly_keep_days,
+            policy.yearly_keep_months, policy.yearly_prune_enable,
+        ) == (False, 1, 45, 93, 36, True), name
+        assert policy.monthly_window.unit == "forever", name
 
 
 @pytest.mark.parametrize(
@@ -312,7 +305,9 @@ def test_a_fold_that_names_no_wait_closes_a_day_after_the_shared_one() -> None:
 #: The keys every kind shares that a declaration may leave out, plus compaction's
 #: optional lookback, whose default is two months.
 SHARED_OPTIONAL_KEYS: Final = frozenset({"reads", "appends_to"})
-COMPACTION_OPTIONAL_KEYS: Final = SHARED_OPTIONAL_KEYS | {"lookback"}
+COMPACTION_OPTIONAL_KEYS: Final = SHARED_OPTIONAL_KEYS | {
+    "lookback", "yearly_keep_months", "yearly_prune_enable"
+}
 
 #: Every key a compaction declaration has to write.
 COMPACTION_KEYS: Final = tuple(
@@ -381,16 +376,45 @@ def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
-    GardenerConfig(version="2026-09-27", task_names=(), attempts=6, shards=5)
+    GardenerConfig(
+        version="2026-09-27", task_names=(), attempts=6, shards=5, first_ledger_year="2026"
+    )
     with pytest.raises(ValidationError, match="attempts is 5 and shards is 5"):
-        GardenerConfig(version="2026-09-27", task_names=(), attempts=5, shards=5)
+        GardenerConfig(
+            version="2026-09-27", task_names=(), attempts=5, shards=5, first_ledger_year="2026"
+        )
 
 
 def test_task_names_must_be_unique() -> None:
     with pytest.raises(ValidationError, match="task_names repeats a task"):
         GardenerConfig(
-            version="2026-09-27", task_names=("seen", "seen"), attempts=6, shards=5
+            version="2026-09-27",
+            task_names=("seen", "seen"),
+            attempts=6,
+            shards=5,
+            first_ledger_year="2026",
         )
+
+
+@pytest.mark.parametrize(
+    ("given", "refusal"),
+    [(None, "missing"), ("26", "string_pattern_mismatch"), (2026, "string_type")],
+    ids=["left-out", "two-digits", "a-number"],
+)
+def test_a_first_ledger_year_that_is_not_a_four_digit_utc_year_is_refused_by_name(
+    given: str | int | None, refusal: str
+) -> None:
+    """A rebuilt index looks for year and month files from it, so no year is assumed for it."""
+    payload: dict[str, Any] = {"version": "2026-10-06", "task_names": [], "attempts": 6, "shards": 5}
+    if given is not None:
+        payload["first_ledger_year"] = given
+
+    with pytest.raises(ValidationError) as refused_payload:
+        GardenerConfig.model_validate(payload)
+
+    assert [(error["type"], error["loc"]) for error in refused_payload.value.errors()] == [
+        (refusal, ("first_ledger_year",))
+    ]
 
 
 def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -> None:
@@ -435,9 +459,7 @@ def test_a_declaration_must_name_its_owned_folders(tmp_path: Path) -> None:
     del declaration["owns"]
     assert "owns" in refused(a_garden(tmp_path / "missing", traces=declaration))
     legacy = fixture("trials", owns_everything_else_under=["state"])
-    assert "owns_everything_else_under" in refused(
-        a_garden(tmp_path / "legacy", trials=legacy)
-    )
+    assert "owns_everything_else_under" in refused(a_garden(tmp_path / "legacy", trials=legacy))
 
 
 @pytest.mark.parametrize(
@@ -504,7 +526,7 @@ def test_the_census_summary_reads_both_folders_of_the_census_it_summarises() -> 
     """
     tasks = config.load_gardener().tasks
     census = tasks["compact-item-health"].owns or []
-    assert sorted(tasks["telemetry-aggregate"].reads) == sorted(census)
+    assert set(census) <= set(tasks["telemetry-aggregate"].reads)
 
 
 def test_a_file_named_as_owned_is_refused(tmp_path: Path) -> None:
@@ -942,6 +964,51 @@ def test_a_compaction_reaches_a_floor_by_its_two_periods(
     assert config.compaction_reaches(policy, WINDOW.validate_python(floor)) is reaches
 
 
+@pytest.mark.parametrize(
+    ("changed", "field"),
+    [
+        ({"yearly_keep_months": 0}, "yearly_keep_months"),
+        ({"yearly_keep_months": 36}, "monthly_keep_days"),
+        ({"yearly_prune_enable": True}, "yearly_keep_months"),
+    ],
+)
+def test_yearly_expiry_requires_a_positive_window_and_year_packing(
+    changed: dict[str, Any], field: str
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        CompactionPolicy.model_validate(a_compaction("gardener", **changed))
+
+
+@pytest.mark.parametrize(("days", "loads"), [(-1, False), (730, True), (1009, False)])
+def test_finite_yearly_retention_covers_the_published_reader(
+    tmp_path: Path, days: int, loads: bool
+) -> None:
+    compact = a_compaction(
+        "published", monthly_window={"unit": "forever"}, monthly_keep_days=93,
+        yearly_keep_months=36, yearly_prune_enable=True,
+    )
+    config_dir = a_garden(tmp_path, compact_published=compact)
+    path = config_dir / "idhazh.json"
+    app = json.loads(path.read_text(encoding="utf-8"))
+    app["collect"]["published_window_days"] = days
+    path.write_text(json.dumps(app), encoding="ascii")
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "compact-published.json" in message
+        assert "collect.published_window_days" in message
+
+
+def test_finite_yearly_retention_checks_the_published_console_floor(tmp_path: Path) -> None:
+    compact = a_compaction(
+        "gardener", monthly_window={"unit": "forever"}, monthly_keep_days=93,
+        yearly_keep_months=1, yearly_prune_enable=True,
+    )
+    config_dir = published(a_garden(tmp_path, compact_gardener=compact), "gardener")
+    assert "widest span the console offers would have days no file holds" in refused(config_dir)
+
+
 def test_a_retention_task_that_kept_an_old_tree_sets_no_floor_on_its_compaction(
     tmp_path: Path,
 ) -> None:
@@ -975,6 +1042,27 @@ def test_a_series_is_the_floor_of_the_ledger_it_covers(tmp_path: Path) -> None:
         "the full-grain series of config/gardener/telemetry-aggregate.json keeps item-health "
         "14 months" in message
     )
+
+
+def test_a_summary_output_window_does_not_require_forever_input_history(tmp_path: Path) -> None:
+    """The aggregate series is produced output, not a reader of all summary history."""
+    summary = a_compaction(
+        "item-health-summary",
+        monthly_window={"unit": "forever"},
+        monthly_keep_days=93,
+        yearly_keep_months=36,
+        yearly_prune_enable=True,
+    )
+    settings = config.load_gardener(
+        a_garden(tmp_path, compact_item_health_summary=summary)
+    )
+    aggregate = settings.tasks["telemetry-aggregate"]
+    assert isinstance(aggregate, RetentionPolicy)
+    assert aggregate.dry_run
+    assert aggregate.series is not None
+    assert aggregate.series["aggregate"].unit == "forever"
+    assert config._old_tree_floor(LedgerName.ITEM_HEALTH_SUMMARY, settings.tasks) is None
+    assert config._old_tree_floor(LedgerName.ITEM_HEALTH, settings.tasks) is not None
 
 
 def test_the_month_rule_counts_the_fewest_and_the_most_days() -> None:

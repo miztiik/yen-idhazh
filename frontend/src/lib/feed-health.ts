@@ -271,9 +271,10 @@ export interface Reliability {
 
 /** Whatever span the caller handed it, and the caller says which.
  *
- * The console hands it `feedResults(shardDays(widest))`, so the record is the
- * newest packed days the window control can reach rather than every run there
- * has been. The same span the streak beside each feed is read over, because two
+ * The console hands it `feedResults` over the widest window the control offers,
+ * which ends on the newest published day, so the record is the packed days that
+ * window reaches rather than every run there has been. The same span the streak
+ * beside each feed is read over, because two
  * spans in one section is the defect the shared window exists to remove - and
  * the sentence the page prints names that span rather than claiming all of
  * them (`CLAUDE.md` Guardrail #12).

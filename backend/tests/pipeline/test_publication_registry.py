@@ -42,9 +42,7 @@ SHIPPED = (
 
 
 def a_check(name: str, ledger: LedgerName | None = None) -> Check:
-    return Check(
-        name=name, scope=CheckScope.DAY, run=lambda _ctx: CheckResult(), ledger=ledger
-    )
+    return Check(name=name, scope=CheckScope.DAY, run=lambda _ctx: CheckResult(), ledger=ledger)
 
 
 def a_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **modules: str) -> None:
@@ -119,12 +117,12 @@ def test_two_modules_claiming_one_name_are_both_named(
 def test_a_check_naming_a_ledger_the_door_has_no_entry_for_is_refused() -> None:
     """Failure 4. The write would fail after the gate had already passed the day.
 
-    The item-health summary is a real ledger the door has no entry for, so this
+    Day metrics is a real ledger the door has no entry for, so this
     is the fault an author actually makes: a name that exists, used where it
     cannot be written.
     """
     with pytest.raises(PublicationCheckError, match="no ledger-door entry"):
-        validate_registry([a_check("probe", LedgerName.ITEM_HEALTH_SUMMARY)])
+        validate_registry([a_check("probe", LedgerName.DAY_METRICS)])
 
 
 def test_a_check_naming_a_door_ledger_passes() -> None:

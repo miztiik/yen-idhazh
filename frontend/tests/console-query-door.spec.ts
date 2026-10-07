@@ -20,6 +20,16 @@ for (const state of ['loading', 'missing', 'quiet', 'unreachable'] as const sati
 	});
 }
 
+test('the machine panel says a published record with no compact folder is not packed yet, never unpublished', async ({ page }) => {
+	// The site copy stages nothing for such a record, so its index requests are answered 404.
+	await machineRecordState(page, 'missing');
+	await page.goto('/console/machine/');
+	const panel = page.locator(PANEL);
+	await expect(panel).toHaveAttribute('data-fleet-state', 'missing');
+	await expect(panel.locator('[data-empty-state="missing"] .empty-sentence')).toHaveText('The machine record is not packed yet.');
+	await expect(panel).not.toContainText(/published/i);
+});
+
 test('thirty days then seven query the real worker and fetch each whole file once', async ({ page, context, parquet }) => {
 	const document = await page.request.get('/console/machine/').then((response) => response.text());
 	expect(document).toContain('data-readout-fetched="host-fingerprint"');

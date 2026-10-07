@@ -66,6 +66,7 @@
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
@@ -129,6 +130,12 @@
 	 * reads 30 days puts two spans on one page, and the two cannot be compared -
 	 * which is the question the operator came here to ask. */
 	const calendar = $derived(daysInWindow(span));
+	/** The plot's name. One day has no range and no left side, so at one day it names the day. */
+	const plotLabel = $derived(
+		calendar.length === 1
+			? `Time per item by stage over ${countDays(calendar.length)}, ${shortDate(calendar[0])}, on a ten-times scale`
+			: `Time per item by stage over ${countDays(calendar.length)}, ${shortDate(calendar[0])} to ${shortDate(calendar[calendar.length - 1])}, oldest day on the left, on a ten-times scale`
+	);
 	const ordered = $derived(
 		days
 			.filter((day) => day.date >= span.start && day.date <= span.end)
@@ -345,10 +352,6 @@
 		return ms === 0 ? 'under 1 ms' : duration(ms);
 	}
 
-	function plural(count: number): string {
-		return count === 1 ? 'day' : 'days';
-	}
-
 	/** A decade label crosses from milliseconds to seconds at 1000 ms. Every
 	 * decade is a whole number in one unit or the other, so neither end of the
 	 * axis needs a decimal place to be read. */
@@ -361,8 +364,7 @@
 
 {#if ordered.length === 0}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-timing="empty">
-		We timed nothing in these {calendar.length}
-		{plural(calendar.length)}. Widen the window to look further back.
+		We timed nothing in {nameSpan(calendar.length)}. Widen the window to look further back.
 	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
@@ -413,7 +415,7 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label={`Time per item by stage over ${calendar.length} ${plural(calendar.length)}, ${shortDate(calendar[0])} to ${shortDate(calendar[calendar.length - 1])}, oldest day on the left, on a ten-times scale`}
+				aria-label={plotLabel}
 				data-timing="plot"
 				data-timing-days={calendar.length}
 				data-timing-series={drawn.length}

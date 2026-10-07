@@ -23,7 +23,9 @@ Three mechanics matter more than they look:
   window is a rival that was never given the same premise to work with.
 
 The dependency is heavy and optional. Absent it, the run fails at this stage
-with a readable message rather than shipping unscored summaries.
+with a readable message rather than shipping unscored summaries. The pinned
+HHEM checkpoint carries older remote model code, so its loader uses a small
+local adapter for the tied-weight name that Transformers 5 requires.
 """
 
 from __future__ import annotations
@@ -69,6 +71,20 @@ class Scorer(Protocol):
     """What the eval stage needs. Anything satisfying this can stand in."""
 
     def score(self, premise: str, hypothesis: str) -> float: ...
+
+
+def _with_transformers_5_tied_weights(remote_class: type[Any]) -> type[Any]:
+    """Add the tied-weight map the pinned HHEM remote class does not initialize."""
+
+    class HHEMv2ForSequenceClassificationCompat(remote_class):  # type: ignore[misc]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.all_tied_weights_keys = {
+                "t5.transformer.encoder.embed_tokens.weight": "t5.transformer.shared.weight",
+                **(getattr(self, "_tied_weights_keys", None) or {}),
+            }
+
+    return HHEMv2ForSequenceClassificationCompat
 
 
 def chunks(text: str, size: int, overlap: int) -> list[str]:
@@ -118,11 +134,24 @@ class HhemScorer:
 
     def load(self) -> None:
         try:
-            from transformers import AutoModelForSequenceClassification
+            from transformers import AutoConfig
+            from transformers.dynamic_module_utils import get_class_from_dynamic_module
         except ImportError as error:  # pragma: no cover - exercised by absence, not by a test
             raise RuntimeError(_MISSING) from error
-        self.model = AutoModelForSequenceClassification.from_pretrained(
+        config = AutoConfig.from_pretrained(
             HHEM_MODEL, revision=self.revision, trust_remote_code=True
+        )
+        remote_class = get_class_from_dynamic_module(
+            "modeling_hhem_v2.HHEMv2ForSequenceClassification",
+            HHEM_MODEL,
+            revision=self.revision,
+        )
+        compatible_class = _with_transformers_5_tied_weights(remote_class)
+        self.model = compatible_class.from_pretrained(
+            HHEM_MODEL,
+            config=config,
+            revision=self.revision,
+            trust_remote_code=True,
         )
 
     def score(self, premise: str, hypothesis: str) -> float:

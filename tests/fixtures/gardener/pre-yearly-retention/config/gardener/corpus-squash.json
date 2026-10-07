@@ -1,0 +1,16 @@
+{
+  "dry_run": false,
+  "every_days": 30,
+  "kind": "history",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "owns": [
+    "corpus"
+  ],
+  "push_attempts": 3,
+  "push_retry_delay_seconds": 60,
+  "window": {
+    "unit": "days",
+    "value": 60
+  }
+}

@@ -353,7 +353,7 @@ def a_night(
     verdicts = root / VERDICTS_DIRNAME
     written = [a_metrics_row(shard=unit, date=date) for unit in range(units)]
     for unit, row in enumerate(written):
-        metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
+        metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, name=str(unit), out_dir=shipped)
         atomic_write.write_atomic(
             verdicts
             / session.unit_file(

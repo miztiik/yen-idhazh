@@ -7,6 +7,7 @@ from typing import Final
 
 import pytest
 from conftest import SEED_COMMIT
+from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
@@ -216,6 +217,7 @@ def test_repeated_roots_prove_every_day_before_deleting_any_csv(tmp_path: Path) 
                 run_id=RUN,
                 git_sha=SEED_COMMIT,
                 today=TODAY,
+                config_dir=PRE_YEARLY_CONFIG,
                 months=MONTHS,
             )
         )
@@ -259,6 +261,7 @@ def test_full_chain_refuses_a_preferred_source_conflict_before_deleting_any_root
                 run_id=RUN,
                 git_sha=SEED_COMMIT,
                 today=TODAY,
+                config_dir=PRE_YEARLY_CONFIG,
                 months=MONTHS,
             )
         )

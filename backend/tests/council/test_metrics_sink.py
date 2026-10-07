@@ -19,7 +19,7 @@ from conftest import REPO_ROOT, read_text
 from pydantic import Field
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.metrics_sink import collect_judge_metrics, ship_judge_metrics
 from idhazh.council.tenancy import ShardResult, Tenant
@@ -31,7 +31,7 @@ METRICS_DIRNAME = "metrics"
 
 #: The ledger whose lifecycle status the collecting write asks about. The
 #: council's own, so nothing here names a judge, and its family is active.
-WHICH = LedgerName.LLM_COUNCIL_SHARD_OUTCOMES
+WHICH = LedgerName.COUNCIL_RUN_RECORDS
 
 
 class PaperMetrics(Contract):
@@ -187,7 +187,7 @@ def test_a_shard_result_hands_the_tenants_row_over_whole() -> None:
 def test_a_shipped_row_lands_under_the_tenants_own_slug(tmp_path: Path) -> None:
     """One file a unit, so the collecting job can merge every upload into one tree."""
     out_dir = tmp_path / METRICS_DIRNAME
-    path = ship_judge_metrics(_paper_row(), judge_id="paper-tenant", shard=2, out_dir=out_dir)
+    path = ship_judge_metrics(_paper_row(), judge_id="paper-tenant", name="2", out_dir=out_dir)
 
     assert path == out_dir / "paper-tenant" / "2.csv"
     assert path.read_text(encoding="utf-8") == "version,date,units\n2026-09-21,2026-09-20,3\n"
@@ -199,7 +199,13 @@ def test_a_shipped_row_lands_under_the_tenants_own_slug(tmp_path: Path) -> None:
 def test_a_judge_id_that_is_not_a_slug_never_becomes_a_directory(tmp_path: Path) -> None:
     """It is a path component, and a path built from an unchecked string is a hole."""
     with pytest.raises(ValueError, match="not a slug"):
-        ship_judge_metrics(_paper_row(), judge_id="../escape", shard=0, out_dir=tmp_path)
+        ship_judge_metrics(_paper_row(), judge_id="../escape", name="0", out_dir=tmp_path)
+
+
+def test_a_shipped_name_that_is_not_a_slug_never_becomes_a_filename(tmp_path: Path) -> None:
+    """The unit name is a path component too, and it is checked before the path is built."""
+    with pytest.raises(ValueError, match="not a slug"):
+        ship_judge_metrics(_paper_row(), judge_id="paper-tenant", name="../escape", out_dir=tmp_path)
 
 
 def test_the_collecting_job_appends_every_shipped_row_to_the_store_the_tenant_named(
@@ -212,7 +218,7 @@ def test_the_collecting_job_appends_every_shipped_row_to_the_store_the_tenant_na
         ship_judge_metrics(
             _paper_row(units=shard + 1),
             judge_id=tenant.judge_id,
-            shard=shard,
+            name=str(shard),
             out_dir=shipped,
         )
 
@@ -234,7 +240,7 @@ def test_a_second_tenants_columns_travel_the_same_path_unchanged(tmp_path: Path)
     """The capability declares nothing about the payload, so two shapes fit one pipe."""
     shipped = tmp_path / METRICS_DIRNAME
     row = OtherPaperMetrics.model_validate({"date": "2026-09-20", "units": 1, "warmth": 0.5})
-    ship_judge_metrics(row, judge_id="other-paper-tenant", shard=0, out_dir=shipped)
+    ship_judge_metrics(row, judge_id="other-paper-tenant", name="0", out_dir=shipped)
 
     into = tmp_path / "state" / "other-paper-tenant" / "metrics" / "20.csv"
     landed = collect_judge_metrics(
@@ -252,7 +258,7 @@ def test_a_second_tenants_columns_travel_the_same_path_unchanged(tmp_path: Path)
 def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) -> None:
     """A row is read back through the contract that wrote it, and refused here."""
     shipped = tmp_path / METRICS_DIRNAME
-    path = ship_judge_metrics(_paper_row(), judge_id="paper-tenant", shard=0, out_dir=shipped)
+    path = ship_judge_metrics(_paper_row(), judge_id="paper-tenant", name="0", out_dir=shipped)
     path.write_text("version,date,units\n2026-09-21,2026-09-20,\n", encoding="utf-8")
 
     into = tmp_path / "state" / "paper-tenant" / "metrics" / "20.csv"
@@ -280,7 +286,7 @@ def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
     ]
     patterns = [
         str(step["with"]["pattern"])
-        for step in workflow["jobs"]["collect"]["steps"]
+        for step in workflow["jobs"]["save_council_results"]["steps"]
         if str(step.get("uses", "")).startswith("actions/download-artifact")
         and "pattern" in step["with"]
     ]

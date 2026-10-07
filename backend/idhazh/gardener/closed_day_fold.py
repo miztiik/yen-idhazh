@@ -53,9 +53,10 @@ from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from idhazh import day_partition, day_shards, ledger
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import FoldPolicy
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.gardener import named_trees, retention_files, schedule
+from idhazh.gardener import error_cause, named_trees, retention_files, schedule
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 
@@ -96,13 +97,15 @@ class SettledMonth:
 class Folded:
     """What one fold settled, or would settle on a dry run, tree by tree and oldest first.
 
-    `failed` says the fold stopped part way. The months and days before the stop
-    are settled on disk all the same, so they are here and they land.
+    `fault` says the fold stopped part way, and why: `raised` for a code defect,
+    `api-unavailable` when what it fetched did not answer. The months and days
+    before the stop are settled on disk all the same, so they are here and they
+    land. None when the fold finished.
     """
 
     dry_run: bool
     days: tuple[SettledDay, ...] = ()
-    failed: bool = False
+    fault: GardenerFault | None = None
     months: tuple[SettledMonth, ...] = ()
 
     @property
@@ -118,13 +121,17 @@ class FoldInterruptedError(Exception):
 
     Carried rather than bare for the reason `one_at_a_time.PruneInterruptedError`
     gives: the months and days before the failure are already settled on disk,
-    and the shard still lands them.
+    and the shard still lands them. `so_far.fault` is what stopped it, as
+    `error_cause` reads the error, so a code defect is never read as an outage.
+    A dry-run fold settled none of the months and days it named, and its message
+    says so.
     """
 
     def __init__(self, so_far: Folded, where: str) -> None:
+        kept = "It was a dry run, so none was settled" if so_far.dry_run else "Those stand"
         super().__init__(
-            f"the fold stopped at {where} after settling {len(so_far.months)} months and "
-            f"{len(so_far.days)} days. Those stand, and the next wake starts again from the "
+            f"the fold stopped at {where} after {len(so_far.months)} months and "
+            f"{len(so_far.days)} days. {kept}, and the next wake starts again from the "
             "oldest still waiting"
         )
         self.so_far = so_far
@@ -233,7 +240,10 @@ def fold(
                     )
         except Exception as failure:
             so_far = Folded(
-                dry_run=dry_run, days=tuple(days_done), months=tuple(months_done), failed=True
+                dry_run=dry_run,
+                days=tuple(days_done),
+                months=tuple(months_done),
+                fault=error_cause.fault_of(error_cause.classify(failure)),
             )
             raise FoldInterruptedError(so_far, where) from failure
     return Folded(dry_run=dry_run, days=tuple(days_done), months=tuple(months_done))

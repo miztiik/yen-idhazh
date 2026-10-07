@@ -1,18 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
 	causeKey,
 	datesIn,
 	failedRows,
 	failureLedger,
 	failureRowKey,
-	parseTelemetryCsv,
 	sourceLosses,
 	type TelemetryRow
 } from '../src/lib/charts/series';
 import { rank, tailSentence, type Rankable, type RankedDisplay } from '../src/lib/charts/rank';
 import type { TimeWindow } from '../src/lib/charts/viewport';
+import { items, openServed } from './support/served-telemetry';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -36,16 +36,14 @@ import { telemetryRow } from './support/telemetry-row';
  * per run. Counting rows would leave every bar in proportion, every name in the
  * right order, and every number too big.
  *
- * The interaction is proved twice over, in two places, because the canary
- * fixture deliberately records no failure at all: `build-canary.mjs` writes
- * dropped items as `ok`, since throwing away a page that is not an article is
- * the job. So the browser half here asserts the shapes and the empty states,
- * and the click-through against real failures is the section-12 smoke against
- * the production build.
+ * The interaction is proved twice over, in two places. The browser half here
+ * serves the page telemetry it builds for the window the page opened on, and
+ * asserts the shapes and the empty states over rows written out; the
+ * click-through against real failures is the section-12 smoke against the
+ * production build.
  */
 
 const frontend = process.cwd();
-const CANARY_TELEMETRY = resolve(frontend, '..', 'backend', 'var', 'canary', 'state', 'telemetry');
 
 /** The cap the source ranking draws with, from the file the page reads it
  * from. Not a copy: a number typed here would pass while the section drew a
@@ -56,14 +54,6 @@ const SOURCE_ROWS =
 			readFileSync(resolve(frontend, '..', 'config', 'appearance.json'), 'utf8')
 		) as { console?: { source_rows?: number } }
 	).console?.source_rows ?? 10;
-
-function shardRows(root: string): TelemetryRow[] {
-	if (!existsSync(root)) return [];
-	return readdirSync(root)
-		.filter((name) => /^\d{4}-\d{2}\.csv$/.test(name))
-		.sort()
-		.flatMap((name) => parseTelemetryCsv(readFileSync(join(root, name), 'utf8')));
-}
 
 /** Rows built to carry the shape a ledger can be plausibly wrong about.
  *
@@ -511,38 +501,26 @@ test.describe('the failure section on the page', () => {
 	});
 
 	test('the three empty states say different things', async ({ page }) => {
-		await page.goto('/console/');
+		// Three published items on the window's newest day, from two sources, and no
+		// failure among them, so both rankings answer no.
+		await openServed(page, (window) => [
+			...items(window.end, 'a', 'publish', 'ok', 2, { source_id: 'a-wire' }),
+			...items(window.end, 'b', 'publish', 'ok', 1, { source_id: 'b-wire' })
+		]);
 
 		const ledger = page.locator('[data-failure-ledger]');
 		const sources = page.locator('[data-source-losses]');
 		await expect(ledger, 'the ledger must be on the page in every state').toHaveCount(1);
 		await expect(sources, 'the source ranking must be on the page in every state').toHaveCount(1);
+		await expect(sources.locator('[data-ranked="none"]')).toHaveText(
+			'No source lost an article in this window.'
+		);
 
-		// The canary fixture records no failure, so this is both rankings
-		// answering no. A renamed attribute fails here rather than switching the
-		// test off.
-		const canary = shardRows(CANARY_TELEMETRY);
-		const start = await page.locator('[data-viewport-control]').getAttribute('data-window-start');
-		const end = await page.locator('[data-viewport-control]').getAttribute('data-window-end');
-		expect(start, 'the viewport publishes no window').not.toBeNull();
-		const window = { start: start as string, end: end as string };
-		const failed = failedRows(canary, window, null).length;
-
-		if (failed === 0) {
-			await expect(sources.locator('[data-ranked="none"]')).toHaveText(
-				'No source lost an article in this window.'
-			);
-		} else {
-			await expect(sources.locator('[data-ranked="rows"]')).toHaveCount(1);
-		}
-
-		// Pan back past every row the fixture holds. Now neither ranking can
+		// One step back the window holds no row at all. Now neither ranking can
 		// answer, and that is a different sentence from answering no.
 		const viewport = page.locator('[data-viewport-control]');
 		await viewport.focus();
-		for (let index = 0; index < 8; index += 1) {
-			await page.keyboard.press('ArrowLeft');
-		}
+		await page.keyboard.press('ArrowLeft');
 		await expect(viewport).toContainText('0 rows in view');
 		await expect(sources.locator('[data-ranked="unmeasured"]')).toHaveText(
 			'Nothing was recorded in this window.'
@@ -550,35 +528,19 @@ test.describe('the failure section on the page', () => {
 	});
 
 	test('the two empty states say different things', async ({ page }) => {
-		await page.goto('/console/');
+		// Two published items on the window's newest day and no failure, so the
+		// ledger answers no.
+		await openServed(page, (window) => items(window.end, 'done', 'publish', 'ok', 2));
 
 		const ledger = page.locator('[data-failure-ledger]');
 		await expect(ledger, 'the ledger must be on the page in every state').toHaveCount(1);
+		await expect(ledger.locator('[data-ranked="none"]')).toHaveText('No item failed in this window.');
 
-		// The canary fixture records no failure, so this is the ledger answering
-		// no. A renamed attribute fails here rather than switching the test off.
-		const canary = shardRows(CANARY_TELEMETRY);
-		const start = await page.locator('[data-viewport-control]').getAttribute('data-window-start');
-		const end = await page.locator('[data-viewport-control]').getAttribute('data-window-end');
-		expect(start, 'the viewport publishes no window').not.toBeNull();
-		const window = { start: start as string, end: end as string };
-		const failed = failedRows(canary, window, null).length;
-
-		if (failed === 0) {
-			await expect(ledger.locator('[data-ranked="none"]')).toHaveText(
-				'No item failed in this window.'
-			);
-		} else {
-			await expect(ledger.locator('[data-ranked="rows"]')).toHaveCount(1);
-		}
-
-		// Pan back past every row the fixture holds. Now the ledger cannot answer,
+		// One step back the window holds no row at all. Now the ledger cannot answer,
 		// and that is a different sentence from answering no.
 		const viewport = page.locator('[data-viewport-control]');
 		await viewport.focus();
-		for (let index = 0; index < 8; index += 1) {
-			await page.keyboard.press('ArrowLeft');
-		}
+		await page.keyboard.press('ArrowLeft');
 		await expect(viewport).toContainText('0 rows in view');
 		await expect(ledger.locator('[data-ranked="unmeasured"]')).toHaveText(
 			'Nothing was recorded in this window.'
@@ -586,29 +548,36 @@ test.describe('the failure section on the page', () => {
 	});
 
 	test('the rows carry the item id without spending a column on it', async ({ page }) => {
-		await page.goto('/console/');
-
-		const canary = shardRows(CANARY_TELEMETRY);
-		const start = await page.locator('[data-viewport-control]').getAttribute('data-window-start');
-		const end = await page.locator('[data-viewport-control]').getAttribute('data-window-end');
-		const window = { start: start as string, end: end as string };
-		const failed = failedRows(canary, window, null);
-
-		// Both cases assert. Which one runs is decided by the fixture, never by a
-		// locator that returns zero because an attribute was renamed.
-		if (failed.length === 0) {
-			await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
-				'No failed item is in this window.'
-			);
-			return;
-		}
+		// One item failed at fetch on the window's newest day, beside two published ones.
+		await openServed(page, (window) => [
+			telemetryRow({
+				date: window.end,
+				run_id: `${window.end}-1`,
+				item_id: 'world-0000000042',
+				source_id: 'a-wire',
+				stage: 'fetch',
+				outcome: 'failed',
+				code: 'http_client_error'
+			}),
+			...items(window.end, 'done', 'publish', 'ok', 2, { source_id: 'a-wire' })
+		]);
 
 		const headers = await page
 			.locator('[data-failure-list="rows"] thead th')
 			.allTextContents();
 		expect(headers.map((text) => text.trim())).toEqual(['Day', 'Source', 'Stage', 'Code']);
 
-		const first = page.locator('[data-failure-list="rows"] tbody tr').first();
-		await expect(first).toHaveAttribute('title', failed[0].item_id);
+		const rows = page.locator('[data-failure-list="rows"] tbody tr');
+		await expect(rows).toHaveCount(1);
+		await expect(rows.first()).toHaveAttribute('title', 'world-0000000042');
+
+		// One step back no item failed, and the list says so rather than drawing an
+		// empty table.
+		const viewport = page.locator('[data-viewport-control]');
+		await viewport.focus();
+		await page.keyboard.press('ArrowLeft');
+		await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
+			'No failed item is in this window.'
+		);
 	});
 });

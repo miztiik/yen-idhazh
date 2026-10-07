@@ -1,0 +1,31 @@
+{
+  "attempts": 6,
+  "first_ledger_year": "2026",
+  "max_downloaded_mb": 128,
+  "shards": 5,
+  "task_names": [
+    "compact-candidate-models",
+    "compact-council-run-records",
+    "compact-counterfactual-scores",
+    "compact-feed-health",
+    "compact-feed-retirements",
+    "compact-gardener",
+    "compact-host-fingerprint",
+    "compact-item-health",
+    "compact-item-health-summary",
+    "compact-published",
+    "compact-run-plan",
+    "compact-seen",
+    "compact-summary-quality-evals",
+    "compact-visual-prunes",
+    "corpus-squash",
+    "digest-fragments",
+    "telemetry-aggregate",
+    "traces",
+    "trials",
+    "visual-prune",
+    "workflow-artifacts",
+    "workflow-runs"
+  ],
+  "version": "2026-10-06"
+}

@@ -52,6 +52,7 @@
 		type RunYieldLoad
 	} from '$lib/charts/run-yield';
 	import { grouped } from '$lib/charts/series';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 
 	let {
@@ -200,7 +201,7 @@
 	);
 
 	const headline = $derived(
-		`Articles published against planned over ${windowDays} days: ${grouped(totals.published)} published of the ${grouped(totals.planned)} planned. The line is the share published, on the right axis.`
+		`Articles published against planned over ${countDays(windowDays)}: ${grouped(totals.published)} published of the ${grouped(totals.planned)} planned. The line is the share published, on the right axis.`
 	);
 
 	/** Where a pointer can land: one mark a day, on the day's own centre. */
@@ -215,7 +216,7 @@
 >
 	{#if load.empty}
 		<p class="text-[0.9375rem] text-text-secondary" data-run-yield-empty>
-			No run planned an article in these {windowDays} days.
+			No run planned an article in {nameSpan(windowDays)}.
 		</p>
 	{:else}
 		<!-- `max-w-full` because the server renders this before anything has measured

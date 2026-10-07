@@ -1,9 +1,10 @@
 """What does a fixture compaction task write, so a shard has a file of its own to land?
 
-It fetches the folder it owns, the way a compaction fetches the files it reads,
-then writes one summary file inside it, naming the day, and deletes nothing.
-That is the shape a compaction has - it reads files and writes files - without
-any of a compaction's arithmetic, which the runner does not look at.
+It names the folder it owns and fetches it, the way a compaction names the
+periods it reads as it runs and then fetches them, then writes one summary file
+inside it, naming the day, and deletes nothing. That is the shape a compaction
+has - it reads files and writes files - without any of a compaction's
+arithmetic, which the runner does not look at.
 """
 
 from dataclasses import replace
@@ -18,7 +19,7 @@ KIND = TaskKind.COMPACTION
 
 def run(context: TaskContext) -> Pass:
     folder = (context.policy.owns or ())[0]
-    context.listing.fetch([folder])
+    context.listing.name([folder]).fetch([folder])
     written = f"{folder}/{context.today.isoformat()}.summary"
     if not context.policy.dry_run:
         target = context.repo_root / written

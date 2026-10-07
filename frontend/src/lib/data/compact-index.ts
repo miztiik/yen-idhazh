@@ -32,7 +32,7 @@
 import { isDay, type LedgerName } from './slice-shapes';
 
 /** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
-export const COMPACT_INDEX_STAMP = '2026-10-04';
+export const COMPACT_INDEX_STAMP = '2026-10-07';
 
 /** How much time one compact file covers. Also the directory name. */
 export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;
@@ -60,6 +60,7 @@ export interface CompactIndex {
 	ledger: LedgerName;
 	period: Period;
 	entries: CompactEntry[];
+	expired_through?: string | null;
 }
 
 /** A stamp as the contract spells one: a UTC day, to the minute or second on a same-day revision. */
@@ -156,8 +157,15 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 	if (value.ledger !== ledger) return unreadable(`it names the ledger ${JSON.stringify(value.ledger)}`);
 	if (value.period !== period) return unreadable(`it names the period ${JSON.stringify(value.period)}`);
 	if (!Array.isArray(value.entries)) return unreadable('it has no list of entries');
+	const expired = value.expired_through ?? null;
+	if (expired !== null && (period !== 'yearly' || typeof expired !== 'string' || !COVERS.yearly.test(expired))) {
+		return unreadable('its expired_through is not a UTC year on a yearly index');
+	}
 	const broken = brokenEntry(value.entries, period);
 	if (broken !== null) return unreadable(broken);
+	if (typeof expired === 'string' && value.entries.some((entry) => entry.covers <= expired)) {
+		return unreadable('it lists entries at or before expired_through');
+	}
 	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, state, lost_days, set_aside }) => ({
 		covers,
 		rows,
@@ -166,5 +174,5 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 		lost_days,
 		set_aside
 	}));
-	return { index: { version: stamp, ledger, period, entries } };
+	return { index: { version: stamp, ledger, period, entries, expired_through: expired } };
 }

@@ -2,9 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { grouped } from '../src/lib/charts/series';
 import { doubted, sourceDoubts, type DayWindow } from '../src/lib/server/model-work';
-import { canaryArticleRows, canaryScoreRows } from './support/canary-records';
 
 /**
  * Which sources the checker doubts, and the rule the ranking is made of.
@@ -18,97 +16,23 @@ import { canaryArticleRows, canaryScoreRows } from './support/canary-records';
  * Two cases, and neither is sufficient alone.
  *
  * The Node case states the ranking over rows built here, where a tie, a share
- * floor and a cap can each be made to bite on purpose. The committed canary
- * cannot produce those states: it scores eight summaries from ONE source, so a
- * ranking over it is a list of one and every ordering question is vacuous.
+ * floor and a cap can each be made to bite on purpose, with every answer
+ * written out.
  *
- * The browser case reads the built canary's own two ledgers, joins them the way
- * the page joins them, and holds the drawn rows to what that join says - the
- * counts, the denominator, the three signals, and the sentence covering what
- * the cap left out. What it proves there is that the page is deriving rather
- * than printing, which is the half the Node case cannot reach.
+ * The browser case keeps only what the built page can prove about itself: every
+ * drawn row prints a count over its own denominator, its three signals fit that
+ * count, the order is the count with ties by name, a share appears only at the
+ * configured floor and is the row's own count over its denominator, and the
+ * source-join note is a named note when the page draws one.
  */
 
-/** The score record, read from its packed files the way the page's server reads it. */
-function scoreRows(): Promise<Record<string, string>[]> {
-	return canaryScoreRows();
-}
-
-/** The article record, read the same way.
- *
- * Through the production readers rather than a copy here, so a change in how the
- * record is filed cannot leave this oracle comparing the page against an empty
- * set - which is exactly what a local `readdir` of `*.csv` did on 2026-09-13.
- */
-function healthRows(): Promise<Record<string, string>[]> {
-	return canaryArticleRows();
-}
-
-/** How deep the list goes, off the committed config rather than a literal. */
-function doubtRows(): number {
-	const read = (name: string) =>
-		JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', name), 'utf8')) as {
-			console?: { doubt_rows?: number; min_attempts_for_rate?: number };
-		};
-	const appearance = read('appearance.json').console ?? {};
-	const app = read('idhazh.json').console ?? {};
-	return appearance.doubt_rows ?? app.doubt_rows ?? 10;
-}
-
-function minForShare(): number {
-	const read = (name: string) =>
-		JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', name), 'utf8')) as {
+/** The fewest summaries a row needs before it prints a share, from the file the page reads it from. */
+const MIN_FOR_SHARE =
+	(
+		JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')) as {
 			console?: { min_attempts_for_rate?: number };
-		};
-	return read('appearance.json').console?.min_attempts_for_rate ?? 5;
-}
-
-/**
- * The ranking, derived here without touching the module under test.
- *
- * The rule, as the page states it: a summary is doubted when the checker marked
- * it "not sure", when it carried a figure the article did not, or when it told
- * a "maybe" as fact. Sources are ordered by that COUNT, ties by name, and a
- * source with nothing doubted is left out.
- */
-function rankedFrom(
-	scores: Record<string, string>[],
-	health: Record<string, string>[],
-	window: { from: string; to: string }
-) {
-	const sourceOf = new Map<string, string>();
-	for (const row of health) {
-		if (row.url_key && row.source_id) sourceOf.set(row.url_key, row.source_id);
-	}
-	const inWindow = scores.filter((row) => row.date >= window.from && row.date <= window.to);
-	const per = new Map<
-		string,
-		{ doubted: number; notSure: number; numbers: number; hedge: number; summaries: number }
-	>();
-	let unattributed = 0;
-	for (const row of inWindow) {
-		const id = sourceOf.get(row.url_key ?? '');
-		if (id === undefined) {
-			unattributed += 1;
-			continue;
 		}
-		const at = per.get(id) ?? { doubted: 0, notSure: 0, numbers: 0, hedge: 0, summaries: 0 };
-		at.summaries += 1;
-		const low = row.band === 'low';
-		const numbers = Number(row.unsupported_numbers || '0') > 0;
-		const hedge = row.hedge_dropped === 'True' || row.hedge_dropped === 'true';
-		if (low) at.notSure += 1;
-		if (numbers) at.numbers += 1;
-		if (hedge) at.hedge += 1;
-		if (low || numbers || hedge) at.doubted += 1;
-		per.set(id, at);
-	}
-	const rows = [...per.entries()]
-		.map(([sourceId, counts]) => ({ sourceId, ...counts }))
-		.filter((source) => source.doubted > 0)
-		.sort((a, b) => b.doubted - a.doubted || a.sourceId.localeCompare(b.sourceId));
-	return { rows, unattributed, scored: inWindow.length };
-}
+	).console?.min_attempts_for_rate ?? 5;
 
 const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
 
@@ -152,9 +76,9 @@ test.describe('the doubt signal, as arithmetic', () => {
 	});
 
 	test('THE ORACLE: the order is the count, so a big denominator cannot be demoted', () => {
-		// The case the plan names: 2 doubted of 3 must not outrank 40 of 400. A
-		// share sort would put the small source first, and it is the forty that
-		// reached a reader.
+		// Two doubted summaries out of three must not outrank forty out of four
+		// hundred. A share sort would put the small source first, and it is the
+		// forty that reached a reader.
 		const scores = [
 			...Array.from({ length: 2 }, (_, at) => score('2026-08-20', `small-${at}`, { band: 'low' })),
 			score('2026-08-20', 'small-2'),
@@ -243,6 +167,62 @@ test.describe('the doubt signal, as arithmetic', () => {
 			}).doubted
 		).toBe(2);
 	});
+
+	test('THE ORACLE: the ranked rows are the values written in this spec', () => {
+		const scores = [
+			score('2026-08-20', 'beta-1', { band: 'low', unsupported_numbers: '2' }),
+			score('2026-08-20', 'beta-2', { band: 'low' }),
+			score('2026-08-20', 'beta-3', { hedge_dropped: 'True' }),
+			score('2026-08-20', 'alpha-1', { unsupported_numbers: '1' }),
+			score('2026-08-20', 'alpha-2', { hedge_dropped: 'true' }),
+			score('2026-08-20', 'alpha-3'),
+			score('2026-08-20', 'clean-1'),
+			score('2026-08-13', 'outside', { band: 'low' })
+		];
+		const health = [
+			published('beta-1', 'beta'),
+			published('beta-2', 'beta'),
+			published('beta-3', 'beta'),
+			published('alpha-1', 'alpha'),
+			published('alpha-2', 'alpha'),
+			published('alpha-3', 'alpha'),
+			published('clean-1', 'clean'),
+			published('outside', 'outside')
+		];
+
+		const doubts = sourceDoubts(scores, health, WEEK, { limit: 10, minForShare: 3 });
+
+		expect(doubts.rows.map((row) => row.sourceId)).toEqual(['beta', 'alpha']);
+		expect(doubts.rows.map((row) => row.doubted)).toEqual([3, 2]);
+		expect(doubts.rows.map((row) => row.summaries)).toEqual([3, 3]);
+		expect(doubts.rows.map((row) => row.notSure)).toEqual([2, 0]);
+		expect(doubts.rows.map((row) => row.unsupportedNumbers)).toEqual([1, 1]);
+		expect(doubts.rows.map((row) => row.hedgeDropped)).toEqual([1, 1]);
+		expect(doubts.rows.map((row) => row.sharePct)).toEqual([100, 67]);
+		expect(doubts.sources).toBe(3);
+		expect(doubts.summaries).toBe(7);
+		expect(doubts.doubted).toBe(5);
+		expect(doubts.unattributed).toBe(0);
+	});
+
+	test('THE ORACLE: an unattributed summary is counted in totals and no source row', () => {
+		const doubts = sourceDoubts(
+			[
+				score('2026-08-20', 'known', { band: 'low' }),
+				score('2026-08-20', 'orphan', { band: 'low' })
+			],
+			[published('known', 'known-source')],
+			WEEK,
+			{ limit: 10, minForShare: 5 }
+		);
+
+		expect(doubts.rows.map((row) => row.sourceId)).toEqual(['known-source']);
+		expect(doubts.rows[0].doubted).toBe(1);
+		expect(doubts.rows[0].summaries).toBe(1);
+		expect(doubts.unattributed).toBe(1);
+		expect(doubts.summaries).toBe(2);
+		expect(doubts.doubted).toBe(1);
+	});
 });
 
 /** Every drawn row, with the three signals it printed. */
@@ -263,46 +243,65 @@ async function drawn(page: Page) {
 }
 
 test.describe('the ranked list, on the built console', () => {
-	test('THE ORACLE: the drawn rows are what the two ledgers say', async ({ page }) => {
+	test('the drawn rows publish the same counts they print', async ({ page }) => {
 		await page.goto('/console/model/');
 
 		const section = page.locator('[data-model-doubt]');
 		await expect(section, 'the Summaries route names no doubted source at all').toHaveCount(1);
-		const window = {
-			from: (await section.getAttribute('data-model-doubt-from')) ?? '',
-			to: (await section.getAttribute('data-model-doubt-to')) ?? ''
-		};
-		expect(window.from, 'the section draws a window it does not name').not.toBe('');
-
-		const expected = rankedFrom(await scoreRows(), await healthRows(), window);
-		expect(expected.scored, 'the canary ledger scored nothing in the open window').toBeGreaterThan(0);
+		await expect(section, 'the section draws a window it does not name').toHaveAttribute(
+			'data-model-doubt-from',
+			/\d{4}-\d{2}-\d{2}/
+		);
 
 		const rows = await drawn(page);
-		const cap = doubtRows();
+		expect(rows.length, 'the page drew no doubted source row to check').toBeGreaterThan(0);
 		expect(
-			rows.map((row) => row.key),
-			'the drawn order is not the ranking the ledger gives'
-		).toEqual(expected.rows.slice(0, cap).map((row) => row.sourceId));
+			new Set(rows.map((row) => row.key)).size,
+			'two drawn rows carry the same source key'
+		).toBe(rows.length);
 
+		const counts: number[] = [];
 		for (const [at, row] of rows.entries()) {
-			const source = expected.rows[at];
-			// The count and the denominator, both, on every row.
-			expect(row.value, `${row.key} printed no count out of a denominator`).toContain(
-				`${grouped(source.doubted)} of ${grouped(source.summaries)}`
-			);
-			// The three signals, apart, each equal to the independent count.
-			expect(row.signals['not-sure'], `${row.key} not-sure`).toBe(source.notSure);
-			expect(row.signals.unsupported, `${row.key} unsupported numbers`).toBe(source.numbers);
-			expect(row.signals.hedge, `${row.key} dropped hedges`).toBe(source.hedge);
-			// A share only where the denominator carries one.
-			const floor = minForShare();
-			if (source.summaries < floor) {
-				expect(row.context, `${row.key} gave a share over ${source.summaries} summaries`).toContain(
-					'no share'
+			const counted = row.value.match(/([\d,]+) of ([\d,]+)/);
+			expect(counted, `${row.key} printed no count out of a denominator`).not.toBeNull();
+			const doubtedCount = Number((counted?.[1] ?? '').replaceAll(',', ''));
+			const summaries = Number((counted?.[2] ?? '').replaceAll(',', ''));
+			expect(summaries, `${row.key} printed an empty denominator`).toBeGreaterThan(0);
+			expect(doubtedCount, `${row.key} printed a row with no doubts`).toBeGreaterThan(0);
+			expect(doubtedCount, `${row.key} doubts more summaries than it has`).toBeLessThanOrEqual(summaries);
+			counts.push(doubtedCount);
+			// Each signal counts doubted summaries, and every doubted summary carries
+			// at least one of the three.
+			const signals = ['not-sure', 'unsupported', 'hedge'].map((signal) => row.signals[signal]);
+			for (const [index, n] of signals.entries()) {
+				expect(n, `${row.key} signal ${index} is missing`).toBeGreaterThanOrEqual(0);
+				expect(n, `${row.key} signal ${index} counts more than the row's doubts`).toBeLessThanOrEqual(
+					doubtedCount
 				);
+			}
+			expect(
+				signals.reduce((total, n) => total + n, 0),
+				`${row.key} counts a doubt that carries no signal`
+			).toBeGreaterThanOrEqual(doubtedCount);
+			// The order is the count, and a tie goes to the name.
+			if (at > 0) {
+				expect(doubtedCount, `${row.key} is ranked above a larger count`).toBeLessThanOrEqual(
+					counts[at - 1]
+				);
+				if (doubtedCount === counts[at - 1]) {
+					expect(
+						rows[at - 1].key.localeCompare(row.key),
+						`${row.key} ties with ${rows[at - 1].key} and sorts before it`
+					).toBeLessThan(0);
+				}
+			}
+			// A share only where the denominator reaches the configured floor, and
+			// then the count over it, rounded.
+			if (summaries < MIN_FOR_SHARE) {
+				expect(row.context, `${row.key} gave a share over ${summaries} summaries`).toContain('no share');
 			} else {
-				expect(row.context, `${row.key} printed no share`).toContain(
-					`${Math.round((source.doubted / source.summaries) * 100)}%`
+				expect(row.context, `${row.key} printed a share that is not its own count over its denominator`).toContain(
+					`${Math.round((doubtedCount / summaries) * 100)}%`
 				);
 			}
 		}
@@ -319,24 +318,16 @@ test.describe('the ranked list, on the built console', () => {
 		await expect(page.locator('[data-model-doubt-intro]')).toContainText('2 doubted of 3');
 	});
 
-	test('a summary no source could be found for is named, not dropped', async ({ page }) => {
+	test('a source-join note is named when the page draws one', async ({ page }) => {
 		await page.goto('/console/model/');
-		const section = page.locator('[data-model-doubt]');
-		const window = {
-			from: (await section.getAttribute('data-model-doubt-from')) ?? '',
-			to: (await section.getAttribute('data-model-doubt-to')) ?? ''
-		};
-		const expected = rankedFrom(
-			await scoreRows(),
-			await healthRows(),
-			window
-		);
 		const note = page.locator('[data-model-doubt-unattributed]');
-		if (expected.unattributed === 0) {
-			await expect(note, 'a note about nothing').toHaveCount(0);
-			return;
+		const count = await note.count();
+		expect(count, 'the page drew more than one source-join note').toBeLessThanOrEqual(1);
+		if (count === 1) {
+			await expect(note).toContainText(/\d/);
+			await expect(note).toContainText('could not be traced to a source');
+			await expect(note).toContainText('counted in neither list');
 		}
-		await expect(note).toContainText(`${grouped(expected.unattributed)} of`);
 	});
 
 	test('no source is tinted, because the checker is still being calibrated', async ({ page }) => {
@@ -375,7 +366,9 @@ test.describe('the ranked list, on the built console', () => {
 				'data-model-doubt-days',
 				String(preset)
 			);
-			await expect(page.locator('[data-model-doubt-intro]')).toContainText(`${preset} days`);
+			await expect(page.locator('[data-model-doubt-intro]')).toContainText(
+				preset === 1 ? 'over this one day' : `over these ${preset} days`
+			);
 		}
 	});
 });

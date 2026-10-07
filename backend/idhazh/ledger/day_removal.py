@@ -12,9 +12,9 @@ questions a prune asks first, and writes nothing:
   index entry covers, and none at all when that entry counts no row.
 - `rebuild_without` builds one compact file again with those days' rows left
   out. A file whose every row goes is built as an empty file rather than left
-  out, so the index that names it and the watermark beside it keep no hole. A
-  year file is built one month a row group, as the compaction builds it, so a
-  reader that filters on a date still skips the other months.
+  out, so the index that names it keeps no hole. A year file is built one
+  month a row group, as the compaction builds it, so a reader that filters on
+  a date still skips the other months.
 
 A raw file is never rebuilt: it holds one writer's rows of one day, so a day
 taken out takes it whole.
@@ -79,11 +79,6 @@ class HeldFile(NamedTuple):
     days: tuple[str, ...]
 
 
-def _shown(state_dir: Path, path: Path) -> str:
-    """A path as it may leave the process: under `state/`, POSIX (CLAUDE.md section 2)."""
-    return f"{paths.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
-
-
 def _inside(day: str, covers: str) -> bool:
     """Whether a UTC day falls in what a file covers: that day, or a day of its month or year."""
     return day == covers or day.startswith(f"{covers}-")
@@ -98,12 +93,12 @@ def _index(state_dir: Path, ledger: LedgerName, period: Period) -> CompactIndex 
         index = CompactIndex.read(path)
     except (ValueError, StalePayloadError) as refusal:
         raise ValueError(
-            f"{_shown(state_dir, path)} cannot be read, so which files hold the days is not "
-            f"known and nothing is taken: {refusal}"
+            f"{paths.shown(state_dir, path)} cannot be read, so which files hold the "
+            f"days is not known and nothing is taken: {refusal}"
         ) from refusal
     if (index.ledger, index.period) != (ledger, period):
         raise ValueError(
-            f"{_shown(state_dir, path)} describes the {index.ledger.value} "
+            f"{paths.shown(state_dir, path)} describes the {index.ledger.value} "
             f"{index.period.value} period, and it sits where the {ledger.value} "
             f"{period.value} index goes"
         )
@@ -140,7 +135,7 @@ def find_holding_files(
                 continue
             found = compact_file(state_dir, ledger, period, entry.covers)
             if found is None:
-                where = _shown(state_dir, paths.compact_index_path(state_dir, ledger, period))
+                where = paths.shown(state_dir, paths.compact_index_path(state_dir, ledger, period))
                 raise ValueError(
                     f"{where} names {entry.covers} and no file holds it, so the rows of "
                     f"{', '.join(covered)} cannot be taken out of it"
@@ -169,8 +164,8 @@ def rebuild_without(
     """
     if held.period is None:
         raise ValueError(
-            f"{_shown(state_dir, held.path)} is a raw file: it holds one writer's rows of one "
-            "day, so a day taken out takes it whole rather than rebuilt"
+            f"{paths.shown(state_dir, held.path)} is a raw file: it holds one writer's "
+            "rows of one day, so a day taken out takes it whole rather than rebuilt"
         )
     envelope = read_envelope(held.path)
     if (envelope.tier, envelope.period, envelope.covers) != (
@@ -179,9 +174,9 @@ def rebuild_without(
         held.covers,
     ):
         raise ValueError(
-            f"{_shown(state_dir, held.path)} says it is a {envelope.tier.value} file covering "
-            f"{envelope.covers}, and it was asked for as the {held.period.value} file "
-            f"covering {held.covers}"
+            f"{paths.shown(state_dir, held.path)} says it is a {envelope.tier.value} "
+            f"file covering {envelope.covers}, and it was asked for as the "
+            f"{held.period.value} file covering {held.covers}"
         )
     model = door_contract(envelope.ledger)
     gone = set(days)

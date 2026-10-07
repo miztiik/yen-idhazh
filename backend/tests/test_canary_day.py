@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh import config, ledger
@@ -260,3 +261,40 @@ def test_filing_the_same_day_twice_reads_back_the_same_rows(tmp_path: Path) -> N
 
     assert build_canary_day.file_scores(tmp_path, items, settings) == len(items)
     assert filed_rows(tmp_path) == once
+
+
+def test_a_build_leaves_no_file_an_earlier_build_wrote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A build over the tree of a build under another `DATE` holds only its own files.
+
+    The earlier build's newest day stayed in the digest tree, and the site build
+    dated its fixture rows from that day. So each folder the builder writes holds
+    one file the earlier build left, and the build must remove each of them. The
+    builder never writes `publication.json`, so it must leave that file alone.
+    """
+    root = tmp_path / "canary"
+    left = [
+        "digest/2026/10/01/digest.json",
+        "assist/index/2026-10.json",
+        "console/band.json",
+        "run-days/2026-10.json",
+        "day-metrics/2026-10.json",
+        "machine/2026-10.csv",
+        "run-timeline/2026-10.csv",
+        "state/day-metrics/2026/10/01.json",
+    ]
+    for name in [*left, "publication.json"]:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("written before this build\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["build_canary_day.py", "--out", str(root / "digest"), "--state", str(root / "state")],
+    )
+
+    assert build_canary_day.main() == 0
+
+    assert [name for name in left if (root / name).exists()] == []
+    assert (root / "digest/2026/08/20/digest.json").is_file()
+    assert (root / "assist/index/2026-08.json").is_file()
+    assert (root / "publication.json").read_text(encoding="utf-8") == "written before this build\n"

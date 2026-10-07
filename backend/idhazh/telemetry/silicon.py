@@ -374,11 +374,9 @@ def _writer(plan: RunPlan, *, commit_sha: str, job: ServerJob, shard: int) -> Wr
     )
 
 
-def _shown(state_root: Path, paths: list[Path]) -> str:
+def _shown_files(state_root: Path, paths: list[Path]) -> str:
     """Where a write landed, as it may leave the process: relative and POSIX."""
-    return ",".join(
-        f"{ledger.STATE_DIRNAME}/{path.relative_to(state_root).as_posix()}" for path in paths
-    ) or "nothing"
+    return ",".join(ledger.paths.shown(state_root, path) for path in paths) or "nothing"
 
 
 def stage_fingerprint(
@@ -443,7 +441,7 @@ def stage_fingerprint(
         row.vm_zone,
         row.boot_seconds,
         row.mhz_at_probe,
-        _shown(state_root, landed),
+        _shown_files(state_root, landed),
     )
     return row
 
@@ -571,7 +569,7 @@ def stage_job_clock(
         row.server_prompt_tokens,
         row.server_prompt_seconds,
         "found" if probe is not None else "absent",
-        _shown(state_root, landed),
+        _shown_files(state_root, landed),
     )
     return whole
 
@@ -646,9 +644,7 @@ def server_prompt_totals(text: str | None) -> tuple[int | None, float | None]:
             found[field] = _number(name, field, raw.strip())
     tokens = found.get("prompt_tokens_total")
     seconds = found.get("prompt_seconds_total")
-    return (None if tokens is None else int(tokens)), (
-        None if seconds is None else float(seconds)
-    )
+    return (None if tokens is None else int(tokens)), (None if seconds is None else float(seconds))
 
 
 def _number(series: str, field: str, raw: str) -> float | int:

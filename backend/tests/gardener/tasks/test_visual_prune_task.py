@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from pathlib import Path
 from typing import Any, Final
@@ -86,16 +85,20 @@ def test_a_second_pass_by_one_execution_is_one_report(tmp_path: Path) -> None:
     assert (row.deleted, row.skipped_by_fuse, row.candidates_found) == (1, 0, 1)
 
 
-def test_the_log_names_what_the_fuse_held_back(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_the_report_names_what_the_fuse_held_back(tmp_path: Path) -> None:
+    """The row the pass files says it, so no log line has to: two went, one waits for the fuse."""
     for n in range(3):
         a_picture(tmp_path, date(2026, 10, 20), f"p-{n:010d}.json")
 
-    with caplog.at_level(logging.INFO):
-        run_task(NAME, tmp_path, dry_run=False, max_deletes_per_run=2)
+    run_task(NAME, tmp_path, dry_run=False, max_deletes_per_run=2)
 
-    assert "2 deleted, 1 held back by the 2-file fuse, 2000 bytes reclaimed" in caplog.text
+    (row,) = ledger.load_visual_prunes(tmp_path / ledger.STATE_DIRNAME)
+    assert (row.deleted, row.skipped_by_fuse, row.max_deletes_per_run, row.bytes_reclaimed) == (
+        2,
+        1,
+        2,
+        2000,
+    )
 
 
 def test_a_tree_the_commit_does_not_hold_is_neither_walked_nor_reported(

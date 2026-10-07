@@ -56,16 +56,17 @@ The ledger is append-only: a writer adds a file to the day and nothing edits a
 file that is already there. It is not kept for ever: a month older than the
 `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months) is
 summarised to one row per `(date, stage)` in
-`state/item-health-summary/<YYYY-MM>.csv` by the gardener's `telemetry-aggregate`
-task, and the browser's copy of that same month under
+`state/raw/item-health-summary/` by the gardener's `telemetry-aggregate` task,
+then packed under `state/compact/item-health-summary/`, and the browser's copy of that same month under
 `frontend/public/telemetry/` goes in the same pass. The month's rows go later,
 when the 15-month `monthly_window` of `config/gardener/compact-item-health.json`
 passes, so a month is always summarised before its rows can be deleted.
 
 **The boundary is still a month and only the files below it are days.** The
 summary is where the two grains meet: it reads a month's days - at most 31 -
-through `ledger.load_days`, writes one aggregate and reads it back. It deletes
-no row of this ledger; the item-health compaction takes the month's rows later.
+through `ledger.load_days`, writes the summary through `ledger.persist` and
+reads it back. It deletes no row of this ledger; the item-health compaction
+takes the month's rows later.
 
 **The step ships in dry run.** It logs every file a live run would remove and
 removes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main`

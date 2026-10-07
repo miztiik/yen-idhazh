@@ -25,6 +25,7 @@ import { dayMonth, shortDate } from '../format';
 import { grouped } from '../charts/series';
 import type { StackSeries } from '../charts/stacked';
 import type { ChartToken } from '../charts/theme';
+import { nameSpan } from './span-words';
 
 /** One reason, as the page draws and names it. */
 export interface DoubtReason {
@@ -243,7 +244,7 @@ export function reasonHeadline(days: readonly ReasonDay[], windowDays: number): 
 	const pct = share(count, totals.items);
 	const rough = pct === null ? null : oneIn(pct);
 	const ratio = rough === null ? '' : `, or about ${rough} published`;
-	return `The reason given most often is "${top.label}": ${grouped(count)} summaries in these ${windowDays} days${ratio}.`;
+	return `The reason given most often is "${top.label}": ${grouped(count)} summaries in ${nameSpan(windowDays)}${ratio}.`;
 }
 
 /** The days that carry a band and no reason, said as a sentence.
@@ -256,7 +257,7 @@ export function unexplainedNote(days: readonly ReasonDay[], windowDays: number):
 	if (totals.unexplained === 0) return null;
 	const doubted = totals.explained + totals.unexplained;
 	const dayWord = totals.unexplainedDays === 1 ? 'day' : 'days';
-	return `${grouped(totals.unexplained)} of the ${grouped(doubted)} doubted summaries in these ${windowDays} days have no reason written down, on ${totals.unexplainedDays} ${dayWord}. Those columns are short by that much: the reason is missing from our record, not from the summary.`;
+	return `${grouped(totals.unexplained)} of the ${grouped(doubted)} doubted summaries in ${nameSpan(windowDays)} have no reason written down, on ${totals.unexplainedDays} ${dayWord}. Those columns are short by that much: the reason is missing from our record, not from the summary.`;
 }
 
 /** The reasons the window never saw, said as a sentence.
@@ -274,5 +275,5 @@ export function neverSeenNote(days: readonly ReasonDay[], windowDays: number): s
 	const list =
 		names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 	const verb = names.length === 1 ? 'is a reason the checker' : 'are reasons the checker';
-	return `${list} ${verb} can give and did not give once in these ${windowDays} days, so ${names.length === 1 ? 'it has' : 'they have'} no line on the chart.`;
+	return `${list} ${verb} can give and did not give once in ${nameSpan(windowDays)}, so ${names.length === 1 ? 'it has' : 'they have'} no line on the chart.`;
 }

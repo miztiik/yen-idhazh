@@ -5,11 +5,16 @@
 	 * record is what is late, broken or short, and every panel built on it is
 	 * empty, stops early or misses the same rows for the same reason. A record
 	 * that did not load is a fault, so it takes the warn tint the Hardware route
-	 * gives a run it left out; one not packed yet, packed some days short, with a
-	 * day it has no record for, or with files set aside unread is a plain note at
-	 * body size like the other recording notes (`recording.ts`): each is recorded
-	 * and the route carries on. Nothing renders when every record was read whole
-	 * and none is late, which is the common case.
+	 * gives a run it left out; one not packed yet, packed some days short, whose
+	 * rows stop before the window, with a day it has no record for, or with files
+	 * set aside unread is a plain note at body size like the other recording
+	 * notes (`recording.ts`): each is recorded and the route carries on.
+	 *
+	 * The newest day in every window is not packed yet in normal running, so the
+	 * line that says so prints every day. It is the quietest line here, a size and
+	 * a colour step down and last, so every other note still reads as news. Nothing
+	 * renders when every record was read whole and is packed as far as the newest
+	 * published day, which only a fixture does.
 	 */
 	import type { RecordNote } from '$lib/console/recording';
 
@@ -18,7 +23,7 @@
 
 {#each notes as note (`${note.kind} ${note.records.join(' ')}`)}
 	<p
-		class="mt-3 text-[0.9375rem] text-text-secondary"
+		class={note.kind === 'on-time' ? 'mt-3 text-[0.8125rem] text-text-tertiary' : 'mt-3 text-[0.9375rem] text-text-secondary'}
 		class:record-fault={note.kind === 'unreadable'}
 		data-record-note={note.kind}
 		data-records={note.records.join(' ')}

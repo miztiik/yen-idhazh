@@ -18,6 +18,7 @@
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { nameSpan, openWithSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
@@ -63,13 +64,11 @@
 		return 0;
 	}
 
-	/** The span the control is holding, always ending on the newest day the
-	 * ledger carries. There is no pan here and there was none on the panels
-	 * before they moved: the source table was reduced once per preset on the
-	 * server, and the browser has no ledger to re-reduce a panned span from. */
-	const viewport = $derived(
-		windowOfDays(data.feedDates, data.today, windowDays, data.console.today_anchor)
-	);
+	/** The span the control is holding, always ending on the newest published
+	 * day. There is no pan here and there was none on the panels before they
+	 * moved: the source table was reduced once per preset on the server, and the
+	 * browser has no ledger to re-reduce a panned span from. */
+	const viewport = $derived(windowOfDays(data.windowDay, windowDays, data.console.today_anchor));
 	const inWindow = $derived((date: string) => date >= viewport.start && date <= viewport.end);
 
 	/** The source table for the window in force. One was built per preset at
@@ -212,7 +211,9 @@
 
 	<!-- The article record is the one record this route reads when the site is
 	     built, and the cut-short table below is built on it. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes
+		notes={data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []}
+	/>
 
 	<h2 class="console-h2">Sources we may ask, and what they yield</h2>
 
@@ -583,8 +584,10 @@
 			data-model-rule-none="a feed answered or it did not, before any summary was written"
 		>
 			<p class="feeds-note">
-				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
-				square a day, oldest to newest, over these {windowDays} days.
+				Nearest to a rest first, then by how much has gone wrong in total.
+				{windowDays === 1
+					? `Each strip is one square, for ${nameSpan(windowDays)}.`
+					: `Each strip is one square a day, oldest to newest, over ${nameSpan(windowDays)}.`}
 			</p>
 
 			<ol class="feed-rows" data-feeds="table" data-feeds-drawn={data.feeds.length} data-feeds-hidden={data.feedsHidden}>
@@ -675,7 +678,7 @@
 				</div>
 			{:else}
 				<p class="feeds-note" data-feed-strip-empty>
-					The pipeline read no feed in these {windowDays} days, so there is no strip to draw.
+					The pipeline read no feed in {nameSpan(windowDays)}, so there is no strip to draw.
 				</p>
 			{/if}
 
@@ -814,28 +817,21 @@
 										></span>
 									{/each}
 									<!-- The dwell is the AREA, not a number in a chip. It underlines
-									     exactly the contiguous under-the-mark squares at the newest
-									     end, so the run length is read off the picture. -->
-									{#if row.daysUnder > 0}
+									     the run the producer counted, from that run's oldest square under
+									     the mark to the newest square, so a square inside the run that
+									     decided nothing sits under it too (`dwellStart()` in
+									     `$lib/server/source-retiring.ts`). -->
+									{#if row.dwellFrom !== null}
 										<span
 											class="yield-dwell"
 											data-retiring-dwell-rule
-											style="grid-column: {strip.dates.length -
-												row.daysUnder +
-												1} / -1"
+											style="grid-column: {row.dwellFrom} / -1"
 										></span>
 									{/if}
 								</div>
 							{/if}
 
-							<p class="feed-result" data-retiring-readout>
-								{row.publications} published of {row.opportunities} offered, over {strip.completeDates}
-								complete {strip.completeDates === 1 ? 'day' : 'days'}.{#if row.daysUnder > 0}
-									Under the mark for {row.daysUnder}
-									{row.daysUnder === 1 ? 'day' : 'days'} running - {row.daysUnder} of {strip.dwellDays}.{#if row.retiresOn && !row.retired}
-										Retires on {row.retiresOn} if it stays there.{/if}
-								{/if}
-							</p>
+							<p class="feed-result" data-retiring-readout>{row.readout}</p>
 						</li>
 					{/each}
 				</ol>
@@ -936,10 +932,7 @@
 										{/each}
 									</div>
 								{/if}
-								<p class="feed-result" data-retiring-readout>
-									Decided {row.decisions} of the {row.opportunities}
-									{row.opportunities === 1 ? 'address' : 'addresses'} it was offered.
-								</p>
+								<p class="feed-result" data-retiring-readout>{row.readout}</p>
 							</li>
 						{/each}
 					</ol>
@@ -970,12 +963,14 @@
 		{/if}
 
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-intro>
-			The last {cuts.days} days, {grouped(cuts.articles)}
-			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
+			{openWithSpan(cuts.days)} held {grouped(cuts.articles)}
+			{cuts.articles === 1 ? 'article' : 'articles'}. An article longer than the cap
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
 			many articles that cost each source. A source can carry several feeds, so this list and
-			"Feeds that failed" above do not name the same things. These days always end on the newest
-			day the ledger holds.
+			"Feeds that failed" above do not name the same things.
+			{cuts.days === 1
+				? `${openWithSpan(cuts.days)} is always the newest published day.`
+				: 'These days always end on the newest published day.'}
 		</p>
 
 		{#if !cuts.measured}
@@ -984,7 +979,7 @@
 			</p>
 		{:else if cuts.rows.length === 0}
 			<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="none">
-				No article was cut short in these {cuts.days} days.
+				No article was cut short in {nameSpan(cuts.days)}.
 			</p>
 		{:else}
 			<div class="mt-3">

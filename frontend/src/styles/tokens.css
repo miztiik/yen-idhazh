@@ -43,6 +43,21 @@
 	--code-string: #4fc7dd;
 	--code-number: #f08cc4;
 	--code-comment: #78859a;
+	/* --- Type colours ----------------------------------------------------
+	   The Data explorer prints a column's type in its family's colour.
+	   Text and numbers wear the editor's string and number colours, so a
+	   kind of value has one colour in the editor and in the column lists.
+	   Time and true/false take hues of their own, kept clear of the accent,
+	   which is the console's link colour, and of the confidence hues. A
+	   type in no family - a list, a struct, a blob - stays tertiary. Each
+	   clears 4.5:1 on --color-surface, and frontend/tests/tokens.spec.ts
+	   recomputes that through the aliases. The light block repeats the
+	   aliases: a custom property inherits its resolved value, so an alias
+	   declared here alone would keep the dark colour under a light scope. */
+	--type-text: var(--code-string);
+	--type-number: var(--code-number);
+	--type-time: #53b0ff;
+	--type-truth: #dd99fe;
 
 	--band-high: #4bbd84;
 	--band-medium: #d6a743;
@@ -210,6 +225,10 @@
 	--code-string: #0e7c8e;
 	--code-number: #b03a86;
 	--code-comment: #667085;
+	--type-text: var(--code-string);
+	--type-number: var(--code-number);
+	--type-time: #0770cc;
+	--type-truth: #754ca5;
 
 	--band-high: #1a7f4b;
 	--band-medium: #8a6300;

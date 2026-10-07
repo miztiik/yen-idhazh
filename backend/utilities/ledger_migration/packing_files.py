@@ -16,7 +16,7 @@ def packing_paths(state_dir: Path, which: LedgerName, months: Sequence[str]) -> 
     """Named raw and daily month folders, named periods' files, and index metadata.
 
     Each path is named whether or not it is there, and nothing is read to name
-    it. The pass's listing answers only for what was named, so a watermark, a
+    it. The pass's listing answers only for what was named, so an index, a
     period file or a quiet day that is absent reads as absent rather than being
     refused.
     """

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import gzip
+import subprocess
 from datetime import date, timedelta
 from typing import Final
 
@@ -74,8 +74,20 @@ def an_index(ledger: LedgerName, period: Period, entries: int) -> bytes:
 
 
 def gzipped(data: bytes) -> int:
-    """The size the bundle gate weighs a file at: gzip level 5."""
-    return len(gzip.compress(data, compresslevel=5, mtime=0))
+    """Use the bundle gate's Node gzip, not the platform-dependent Python compressor."""
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            "const {gzipSync}=require('node:zlib');"
+            "const {readFileSync}=require('node:fs');"
+            "process.stdout.write(String(gzipSync(readFileSync(0),{level:5}).length));",
+        ],
+        input=data,
+        capture_output=True,
+        check=True,
+    )
+    return int(result.stdout)
 
 
 def months_kept(policy: CompactionPolicy) -> int:

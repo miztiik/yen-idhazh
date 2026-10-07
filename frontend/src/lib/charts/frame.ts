@@ -18,6 +18,7 @@
 
 import { scaleLinear, scaleLog } from 'd3-scale';
 
+import { countDays, nameSpan } from '../console/span-words';
 import { dayMonth, shortDate } from '../format';
 import type { ReadoutLine } from './readout';
 import { grouped } from './series';
@@ -556,7 +557,7 @@ export function modelRuleRow(settings: string): ReadoutLine {
  * remembered to draw look identical, and only one of them is an answer.
  */
 export function noModelRuleNote(days: number): string {
-	return `Nothing changed about how the summaries are written inside these ${days} ${days === 1 ? 'day' : 'days'}.`;
+	return `Nothing changed about how the summaries are written inside ${nameSpan(days)}.`;
 }
 
 /** What a dashed rule means, said once under a chart that draws one.
@@ -717,7 +718,7 @@ export function coverageSentence(
 	items: CoverageItems | null = null
 ): string | null {
 	if (!found.sparse) return null;
-	const days = `${lead} ${found.measured} of these ${found.days} days`;
+	const days = `${lead} ${found.measured} of ${countDays(found.days)}`;
 	const count =
 		items === null
 			? ''

@@ -320,28 +320,34 @@ def test_the_eval_ledger_is_refused_through_the_router_with_its_declaration_s_re
     assert exit_code.value.code == 2
     refusal = capsys.readouterr().err
     assert f"{LedgerName.SUMMARY_QUALITY_EVALS} is refused" in refusal
-    assert "kept for ever" in refusal
+    assert "only configured yearly expiry" in refusal
     assert _files_under(state_root) == before
 
 
-def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
+def test_show_names_the_day_file_and_the_summary_raw_file(tmp_path: Path) -> None:
     """The instrument files at two grains, and a listing that sees one is half blind.
 
     A day is one or two folders deep under the ledger door -
     `raw/<ledger>/<YYYY>/<MM>/<DD>/` for the files a run filed,
     `compact/<ledger>/daily/<YYYY>/<MM>/<DD>` once the day is packed - and a
-    month fold is `<ledger>/<YYYY-MM>`: a different depth, not a different
-    suffix. A single glob finds one of them, and the one it misses is silently
-    absent rather than reported empty. Every path is asked of the ledger rather
-    than spelled here, so a ledger that moves takes this with it. The listing
-    reads names alone, so the packed day and the month fold are placed as files
-    and never opened.
+    summary raw file is `raw/item-health-summary/<YYYY>/<MM>/<DD>/`: a different
+    depth, not a different suffix. A single glob finds one of them, and the one
+    it misses is silently absent rather than reported empty. Every path is asked
+    of the ledger rather than spelled here, so a ledger that moves takes this
+    with it. The listing reads names alone, so the packed day and the summary
+    raw file are placed as files and never opened.
     """
     state_root, _digest_root, date = _a_published_day(tmp_path)
     packed = ledger.compact_path(state_root, LedgerName.ITEM_HEALTH, Period.DAILY, date)
     packed.parent.mkdir(parents=True, exist_ok=True)
     packed.write_bytes(b"")
-    month_fold = ledger.path(state_root, LedgerName.ITEM_HEALTH_SUMMARY, assemble.month_of(date))
+    month_fold = (
+        ledger.raw_root(state_root, LedgerName.ITEM_HEALTH_SUMMARY)
+        / date[:4]
+        / date[5:7]
+        / date[8:10]
+        / "summary.parquet"
+    )
     month_fold.parent.mkdir(parents=True, exist_ok=True)
     month_fold.write_text("version\n", encoding="utf-8", newline="\n")
 

@@ -44,6 +44,7 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import { dayMonth } from '$lib/format';
 	import { clampEnvelope, clampNote, corridorOf, heldNote, type LineDay } from '$lib/console/merge-line';
+	import { nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -101,6 +102,9 @@
 	const envelope = $derived(clampEnvelope(drawn));
 	const clamp = $derived(clampNote(drawn, windowDays));
 	const held = $derived(heldNote(drawn, windowDays));
+	/** Which day the dashed rule is the line of, in words. At one day that day is
+	 * the whole window, so it is named as the window, not as the newest of several. */
+	const ruleDay = $derived(windowDays === 1 ? nameSpan(windowDays) : 'the newest day');
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	/** `zero: false` and `nice: false`, and both are load-bearing. Anchoring at
@@ -313,8 +317,9 @@
 						y={yAxis.scale(configuredLine) - 8}
 						fill="var(--color-text-tertiary)"
 						font-size="12"
+						data-line-rule-label
 					>
-						The line the newest day was built with
+						The line {ruleDay} was built with
 					</text>
 				{:else}
 					<!-- The band first, so every line sits on top of it. -->
@@ -411,7 +416,7 @@
 		<p class="line-note">
 			{#if drawn.length === 0}
 				<span data-line-state="no-days"
-					>No day has fitted a line yet. The rule is the line the newest day was built
+					>No line was fitted in {nameSpan(windowDays)}. The rule is the line {ruleDay} was built
 					with, and the scale is the whole range a fitted line may take.</span
 				>
 			{:else}

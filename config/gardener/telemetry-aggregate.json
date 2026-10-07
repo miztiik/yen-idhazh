@@ -4,13 +4,16 @@
   "lifecycle_status": "active",
   "lookback": 2,
   "max_deletes_per_run": null,
+  "appends_to": [
+    "item-health-summary"
+  ],
   "owns": [
-    "state/item-health-summary",
     "frontend/public/telemetry"
   ],
   "reads": [
     "state/compact/item-health",
-    "state/raw/item-health"
+    "state/raw/item-health",
+    "state/raw/item-health-summary"
   ],
   "series": {
     "aggregate": {

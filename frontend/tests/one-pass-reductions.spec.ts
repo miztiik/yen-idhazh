@@ -75,7 +75,7 @@ function reductions(): Record<string, unknown> {
 		modelWork: modelWork(scores, health),
 		modelByDate: [...modelByDate(scores)],
 		runLengths: runLengths(scores, BANDS),
-		sourceCuts: sourceCuts(health, { days: TELEMETRY_DAYS, limit: 4 }),
+		sourceCuts: sourceCuts(health, { ...WINDOW, days: TELEMETRY_DAYS }, { limit: 4 }),
 		failureSeries: failureSeries(telemetryRows(TELEMETRY_DAYS, TELEMETRY_PER_DAY), WINDOW),
 		distribution: distribution(timings(400))
 	};

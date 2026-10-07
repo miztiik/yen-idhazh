@@ -308,7 +308,7 @@ test.describe('a year file read by byte range, in a browser', () => {
 	});
 
 	test('a year file whose ETag changed after the browser kept part of it is still read by byte range', async ({ browser }) => {
-		// Short-lived, so what the browser kept has gone stale before the second read.
+		// Short-lived for the first read alone, so what it kept has gone stale before the second read.
 		host.maxAge = 1;
 		const context = await browser.newContext();
 		try {
@@ -318,6 +318,9 @@ test.describe('a year file read by byte range, in a browser', () => {
 			expect(before.timed.result, before.timed.warned.join('\n')).toEqual(disk);
 			redeploy(servedYear);
 			await first.waitForTimeout(2_000);
+			// Pages' max-age again, so nothing the second read fetches goes stale while it reads. At one
+			// second, a read that took longer would check a part it fetched itself, and get a correct 304.
+			host.maxAge = PAGES_MAX_AGE;
 			const second = await context.newPage();
 			await openDoor(second, host);
 			const after = await sliceOn(second, host, 'year', SPAN);

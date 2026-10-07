@@ -17,6 +17,7 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import { spanTrack } from '$lib/charts/span-track';
 	import type { PromptReuse } from '$lib/console/machine/prompt-reuse';
+	import { nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -59,7 +60,7 @@
 	heading="h3"
 	id="prompt-reuse"
 	title="How much text the model reads again, and how fast it reads"
-	note="A request that reads its whole prompt again pays full price for text the server already holds, and the fix is that request rather than the machine - one span a request, over the items of the last {windowDays} days."
+	note="A request that reads its whole prompt again pays full price for text the server already holds, and the fix is that request rather than the machine - one span a request, over the items of {nameSpan(windowDays)}."
 >
 	<div
 		data-prompt-reuse-requests={measured.length}
@@ -69,7 +70,7 @@
 	>
 		{#if measured.length === 0}
 			<p class="absent" data-prompt-reuse-empty="none">
-				No item in these {days} days recorded how much of a prompt the server read again, so there
+				No item in {nameSpan(days)} recorded how much of a prompt the server read again, so there
 				is no spread to draw.
 			</p>
 		{:else}
@@ -167,7 +168,7 @@
 							</p>
 						{:else}
 							<p class="absent" data-read-absent={request.place}>
-								No item in these {days} days recorded how fast this request read, which is a
+								No item in {nameSpan(days)} recorded how fast this request read, which is a
 								reading that did not survive rather than a request that took no time.
 							</p>
 						{/if}

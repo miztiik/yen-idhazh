@@ -20,6 +20,7 @@
 	} from '$lib/charts/machine';
 	import { readoutOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -105,11 +106,11 @@
 		heading="h3"
 		id="read-against-written"
 		title="How much of a run is reading and how much is writing"
-		note="Cutting what we send and cutting what we ask for are different edits, and only the split says which one pays - one group a run, over the last {windowDays} days."
+		note="Cutting what we send and cutting what we ask for are different edits, and only the split says which one pays - one group a run, over {nameSpan(windowDays)}."
 	>
 		{#if runs.length === 0}
 			<p class="empty" data-machine-panel-empty="tokens">
-				No run in these {days} days recorded both a prompt count and a written count.
+				No run in {nameSpan(days)} recorded both a prompt count and a written count.
 			</p>
 		{:else}
 			<div
@@ -134,7 +135,7 @@
 
 				{#if workAbsent}
 					<p class="empty" data-work-absent="seconds">
-						No run in these {days} days timed the model call, so there are no seconds to draw.
+						No run in {nameSpan(days)} timed the model call, so there are no seconds to draw.
 						That is a measurement that did not survive, not a run that took no time. Count the
 						tokens instead.
 					</p>
@@ -144,7 +145,7 @@
 						option={workOption}
 						width={chart.width_px}
 						height={chart.height_px}
-						label="What each run read beside what it wrote, in {workUnit}, over {days} days. One group is one run."
+						label="What each run read beside what it wrote, in {workUnit}, over {countDays(days)}. One group is one run."
 						readout={workStrip}
 						readoutName="read-against-written"
 						readoutMaxShare={chart.readout_max_share}

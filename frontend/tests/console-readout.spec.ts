@@ -7,7 +7,8 @@ import type { Manifest } from 'vite';
 import { readoutOf } from '../src/lib/charts/readout';
 import { serverCompiler } from './support/server-render';
 import { chartsReady } from './support/charts-ready';
-import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
+import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt } from './support/explorer-answer';
+import { everyDay } from './support/ledger-lifecycle';
 
 /**
  * Every console chart says whether it has a column to hover, and says it in
@@ -268,10 +269,14 @@ function dayOf(owner: Locator): Locator {
 }
 
 test.describe('the readout is the default', () => {
-	test('THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip', async ({ page }) => {
-		await openExplorer(page);
+	test('THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip', async ({ page, context }) => {
+		// The question carries its own rows; the ledger it names is built and served, so it has a day to read.
+		const pinned = '2030-06-15';
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'summary-quality-evals', pinned, days: everyDay(0, 0) });
+		await openExplorer(page, pinned);
 		await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 		await runExplorer(page);
+		await expectAnswer(page, 'table');
 		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
 		await expect(panel.locator('[data-chart-type="dateSeries"]')).toHaveCount(1);
 		await expect(panel.locator('[data-readout-columns], [data-readout-records], [data-readout-none]')).toHaveCount(1);

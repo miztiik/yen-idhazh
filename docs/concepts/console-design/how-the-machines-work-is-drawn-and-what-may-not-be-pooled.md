@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -149,8 +149,8 @@ The chart rules these panels obey are
  takes two lines rather than scrolling sideways, because the speed at the end of
  the row is what ties a job to its colour.
 - **The machine mix reads after mount through the shared query reader.** Its
- window ends on the newest packed day and starts no earlier than the oldest
- packed day. It asks only for the columns it draws. Changing the window keeps
+ window is the route's own, which ends on the site's newest published day, and
+ the door starts it no earlier than the day the record began. It asks only for the columns it draws. Changing the window keeps
  whole files already read, and a late answer cannot replace a newer selection.
  The route still computes the common colour ramp for its other machine panels,
  but carries no fleet rows in its document. The drill-through uses the rows

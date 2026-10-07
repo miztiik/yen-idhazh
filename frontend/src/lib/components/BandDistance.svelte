@@ -48,6 +48,7 @@
 		type UnplottedDay
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { dayMonth, plural } from '$lib/format';
 	import RankedList from './RankedList.svelte';
 
@@ -278,7 +279,7 @@
 	class="mt-8"
 	data-windowed="band-distance"
 	data-window-days={windowDays}
-	aria-label="Summary length against the length asked for, {windowDays} days"
+	aria-label="Summary length against the length asked for, {countDays(windowDays)}"
 >
 	<h2 class="text-[1.0625rem] font-semibold text-text">
 		Summary length against the length asked for
@@ -556,7 +557,7 @@
 				maxText="{grouped(ranked.max)} words outside the band"
 				measured={placed.length > 0}
 				unmeasuredNote="Nothing in this window recorded both an article length and a summary length."
-				emptyNote="Every summary in these {windowDays} days landed inside its band."
+				emptyNote="Every summary in {nameSpan(windowDays)} landed inside its band."
 				{tail}
 			/>
 		</div>

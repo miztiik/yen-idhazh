@@ -296,7 +296,7 @@ test.describe('the console frame', () => {
 			expect(panel.note, `${panel.id}'s subtitle is more than one sentence`).not.toMatch(/\.\s+\S/);
 			const last = panel.note.split(' - ').at(-1) ?? '';
 			expect(last, `${panel.id}'s last clause names no grain`).toMatch(
-				/newest run|last \d+ days/
+				/newest run|these \d+ days|this one day/
 			);
 		}
 	});

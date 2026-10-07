@@ -21,25 +21,41 @@ and `backend/utilities/corpus_history.py` binds it itself; run here, it would
 only stamp the day it last ran and hold off the next real rewrite by a whole
 cadence. So a shard or a hand run that names one is exit 2 before anything runs.
 
-**What a shard downloads is an alarm, not a gate.** What the folders its tasks
-own weighed at its commit arrives as data, read by the program that runs git,
-and lands on every row as `cone_bytes`. What its tasks downloaded to read lands
-beside it as `downloaded_bytes`. Over `max_downloaded_mb` the shard says so,
-naming its three heaviest folders, lands its record, and exits 1: the downloads
-are paid for by the time the number is known, and stopping would only stop the
-passes that shrink the tree.
+**What a shard downloads is held to `max_downloaded_mb`.** What the folders its
+tasks own weighed at its commit arrives as data, read by the program that runs
+git, and lands on every row as `cone_bytes`. What its tasks downloaded to read
+lands beside it as `downloaded_bytes`. A compaction step takes a period only
+while what it downloads fits what is left of that budget, so a correct choice
+never passes it. Over it the shard says so, naming its three heaviest folders,
+lands its record, and exits 1: a task downloaded without choosing by the
+budget, which is a code defect. The downloads are paid for by the time the
+number is known, so stopping then would only stop the passes that shrink the
+tree.
 
-**A task that fails still has a row.** Its row says `failed`, its siblings still
-run, and the shard exits 1 when nothing worse happened. What it had already done
-is on the row, because the core carries it out of any failure part way.
+**A task that stops still has a row, and the row says why.** Every error a task
+meets is read once for what it means (`error_cause`). A code defect ends its row
+`failed` with the fault `raised`; a cause outside the code - GitHub's API that
+did not answer, or a period that waits for a later wake or a person - ends it
+`deferred` with a word that names it. Its siblings still run either way, and
+what it had already done is on the row, because the core carries it out of any
+stop part way. **Only a failed row, or a shard over its download budget, makes
+the shard exit 1**; a deferred one leaves the exit code as it was.
 
 **Every task is handed the folders it walks, judged against the commit.** A
 folder the commit holds is walked whether the checkout holds it or not, because
 a task learns its members from the commit's names and fetches only what it
-reads. A declared folder the commit does not hold yet is left out and logged:
-nothing has written one, and the task's first write makes it. A complement task
-is answered only from the commit, so a caller that could not read it is refused
-before any task runs.
+reads. A declared folder the commit does not hold yet is left out, and the
+task's `TaskPlanned` event names it: nothing has written one, and the task's
+first write makes it. A complement task is answered only from the commit, so a
+caller that could not read it is refused before any task runs.
+
+**Each task is said twice in the log, before it runs and when it ends.**
+`TaskPlanned` names its run and every knob of its declaration;
+`TaskFinished`, logged the moment the task returns, says how it ended in one
+word, what it took and wrote, and what happens next (`report.finished`). A
+later refusal of the whole shard cannot hide how a task ended. The exception
+that stopped a task is kept beside its row, so its event names the type and
+where it was raised, and never its text.
 
 **Every task is handed the listing of the files under its folders.** One
 listing a shard, of every folder its tasks own or read, handed in by whoever
@@ -53,9 +69,10 @@ commit.
 every file it wrote is checked, on a dry run too, because the check is over the
 selection rather than over what was deleted. A path outside is exit 2, and
 nothing is handed on to land. A collection task is checked on what it wrote
-alone: what it takes lives on GitHub, not in this repository. A report a task
-files through the ledger door, into a ledger its declaration `appends_to`, is
-held to that ledger and the wake's day instead, and it lands on a dry run too.
+alone: what it takes lives on GitHub, not in this repository. A raw file a task
+writes through the ledger door, into a ledger its declaration `appends_to`, is
+held to that ledger and its row date instead. A report filed on dry run lands
+through `appended`, and must be under the wake day.
 
 **One record per shard, always.** Every task adds its row, a dry run included,
 so a shard of nothing but dry runs still writes one file and still lands it.
@@ -67,8 +84,8 @@ returned, skipping every day folder that pass took. What the fold writes and
 deletes is held to what the task owns like everything else, and it lands when
 the fold is live whatever the window's `dry_run` says - a live fold inside a
 dry task would otherwise change the disk and stage nothing. A window that
-failed stops the fold for that wake: what it took is then a list nothing has
-checked, and a closed day loses nothing by waiting.
+stopped - failed or deferred - stops the fold for that wake: what it took is
+then a list nothing has checked, and a closed day loses nothing by waiting.
 """
 
 from __future__ import annotations
@@ -78,7 +95,7 @@ import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final
@@ -86,8 +103,10 @@ from typing import Final
 from idhazh import ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, WriterIdentity
+from idhazh.contracts.gardener_events import TaskOutcome, TaskPlanned
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
     RetentionPolicy,
     TaskKind,
@@ -95,16 +114,15 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import closed_day_fold, registry, report, shards
+from idhazh.gardener import closed_day_fold, error_cause, event_log, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
-from idhazh.gardener.file_listing import FileListing
+from idhazh.gardener.error_cause import ErrorCause
+from idhazh.gardener.file_listing import FileListing, OverBudgetError
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.site_weight import BYTES_PER_MB
-
-logger = logging.getLogger(__name__)
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -117,6 +135,15 @@ _HEAVIEST_NAMED: Final = 3
 
 #: The one program that runs a history task, named in the refusal to run one here.
 HISTORY_PROGRAM: Final = "backend/utilities/corpus_history.py"
+
+#: The keys of a declaration a task's planned event leaves out: what it is, the
+#: folders it may touch and the ledgers it may file into, and its prose. Every
+#: other key is a knob.
+_NOT_KNOBS: Final = frozenset({"kind", "owns", "reads", "appends_to", "prune_refusal"})
+
+#: The level a task's finished event is logged at: a defect is an error, a
+#: cause outside the code a warning, and every other ending is information.
+_LEVELS: Final = {TaskOutcome.FAILED: logging.ERROR, TaskOutcome.DEFERRED: logging.WARNING}
 
 
 class ShardRefusedError(Exception):
@@ -210,8 +237,8 @@ def listed_folders(policy: TaskPolicy, folders: Folders) -> tuple[str, ...]:
     return (*policy.owns, *policy.reads)
 
 
-def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
-    """The pass of a task that failed before it reached a single member."""
+def _nothing_reached(name: str, policy: TaskPolicy, fault: GardenerFault) -> Pass:
+    """The pass of a task that stopped before it reached a single member, for this cause."""
     return Pass(
         collection=name,
         since=None,
@@ -223,8 +250,9 @@ def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
         taken=(),
         written=(),
         bytes_freed=0,
-        stopped_because=StopReason.FAILED,
+        stopped_because=stop_for(fault),
         resume_from=None,
+        fault=fault,
     )
 
 
@@ -234,53 +262,88 @@ class _Ran:
     context: TaskContext
     outcome: Pass
     duration_ms: int
+    #: Whether the task's row says `failed`: a code defect, the one stop that
+    #: turns the shard's exit code to 1.
     failed: bool
     #: What the task's fold did. None when it has no fold, or the fold did not run.
     folded: closed_day_fold.Folded | None = None
+    #: The exception that stopped the task or its fold, which its event names
+    #: by type and place. None when nothing raised.
+    failure: BaseException | None = None
 
 
-def _run_one(
-    name: str, held: registry.TaskModule, context: TaskContext, folders: Folders
-) -> _Ran:
-    """One task, timed, with any failure turned into the row that says so."""
+def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran:
+    """One task, timed, with any error read for what it means and turned into its row.
+
+    The error itself is kept beside the row, so the task's event can name its
+    type and where it was raised; its text goes nowhere.
+    """
     started = time.monotonic()
-    failed = True
     folded: closed_day_fold.Folded | None = None
-    for folder in folders.absent:
-        logger.info(
-            "%s names %s, which the commit does not hold yet, so it lists nothing there",
-            name,
-            folder,
-        )
+    failure: BaseException | None = None
     try:
         outcome = held.run(context)
-        failed = outcome.stopped_because is StopReason.FAILED
     except PruneInterruptedError as stop:
-        logger.error("%s failed part way: %s", name, stop)
-        outcome = stop.so_far
-    except Exception:
-        logger.exception("%s failed before it reached a member", name)
-        outcome = _nothing_reached(name, context.policy)
+        outcome, failure = stop.so_far, stop.__cause__
+    except Exception as caught:
+        fault = error_cause.fault_of(error_cause.classify(caught))
+        outcome, failure = _nothing_reached(name, context.policy, fault), caught
     policy = context.policy
-    if not failed and isinstance(policy, RetentionPolicy) and policy.fold is not None:
+    stopped = outcome.stopped_because in (StopReason.FAILED, StopReason.DEFERRED)
+    if not stopped and isinstance(policy, RetentionPolicy) and policy.fold is not None:
         try:
             folded = closed_day_fold.run(context, policy.fold, skip=outcome.taken)
         except closed_day_fold.FoldInterruptedError as stop:
-            logger.error("%s's fold failed part way: %s", name, stop)
-            folded, failed = stop.so_far, True
-        except Exception:
-            logger.exception("%s's fold failed before it settled a day", name)
-            folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, failed=True)
-            failed = True
+            folded, failure = stop.so_far, stop.__cause__
+        except Exception as caught:
+            fault = error_cause.fault_of(error_cause.classify(caught))
+            folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, fault=fault)
+            failure = caught
     elapsed = int((time.monotonic() - started) * 1000)
     return _Ran(
         name=name,
         context=context,
         outcome=outcome,
         duration_ms=elapsed,
-        failed=failed,
+        failed=report.ended(outcome, folded)[0] is StopReason.FAILED,
         folded=folded,
+        failure=failure,
     )
+
+
+def _planned(
+    name: str, context: TaskContext, folders: Folders, operator_range: tuple[str, str] | None
+) -> TaskPlanned:
+    """What a task is about to run with: its run, its knobs, and folders the commit lacks.
+
+    `operator_range` is the range a person named for this run, never the
+    scheduled window a retention task is handed in its place.
+    """
+    policy = context.policy
+    return TaskPlanned(
+        task=name,
+        kind=TaskKind(policy.kind),
+        shard=context.shard,
+        run_id=context.run_id,
+        attempt=context.attempt,
+        today=context.today.isoformat(),
+        operator_range=operator_range,
+        declared=policy.model_dump(mode="json", exclude=set(_NOT_KNOBS)),
+        absent=list(folders.absent),
+    )
+
+
+def _said_finished(ran: _Ran) -> None:
+    """Log how one task ended, at the level its outcome asks for."""
+    finished = report.finished(
+        ran.outcome,
+        task=ran.name,
+        duration_ms=ran.duration_ms,
+        folded=ran.folded,
+        settled=_fold_changes(ran)[0],
+        failure=ran.failure,
+    )
+    event_log.emit(finished, level=_LEVELS.get(finished.outcome, logging.INFO))
 
 
 def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -321,9 +384,35 @@ def _landed(ran: _Ran) -> tuple[set[str], set[str]]:
     return wrote, {*took, *replaced}
 
 
+def _append_path_for(ran: _Ran, appended: str, *, today: str | None = None) -> Path | None:
+    """The expected raw file for an append path, or None when it is not declared."""
+    context = ran.context
+    path = context.repo_root / appended
+    for which in context.policy.appends_to:
+        try:
+            root = ledger.raw_root(context.state_dir, which)
+            relative = path.relative_to(root)
+            year, month, day, filename = relative.parts
+            filed_on = today or date.fromisoformat(f"{year}-{month}-{day}").isoformat()
+            expected = ledger.raw_path(
+                context.state_dir,
+                which,
+                filed_on,
+                uuid.UUID(Path(filename).stem),
+                fmt=Format(Path(filename).suffix.removeprefix(".")),
+            )
+        except (ValueError, TypeError):
+            continue
+        if expected == path:
+            return expected
+    return None
+
+
 def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
     owns = owner_of(ran.name, tasks)
-    outside = [path for path in _touched(ran) if not owns(path)]
+    outside = [
+        path for path in _touched(ran) if not owns(path) and _append_path_for(ran, path) is None
+    ]
     if outside:
         raise ShardRefusedError(
             f"{ran.name} touched {outside[0]}, which it does not own. Nothing is staged: a "
@@ -332,28 +421,13 @@ def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
 
 
 def _refuse_an_append_outside(ran: _Ran, today: str) -> None:
-    """Every report a task filed is a fresh raw file of a ledger it declared, under the wake's day.
+    """Every append a task filed is a fresh raw file of a ledger it declared.
 
     Held the way the shard's own record is held, because it is the same kind of
     write: one new file the ledger door named, which can overwrite nothing.
     """
-    context = ran.context
     for appended in ran.outcome.appended:
-        path = context.repo_root / appended
-        for which in context.policy.appends_to:
-            try:
-                expected = ledger.raw_path(
-                    context.state_dir,
-                    which,
-                    today,
-                    uuid.UUID(path.stem),
-                    fmt=Format(path.suffix.removeprefix(".")),
-                )
-            except ValueError:
-                continue
-            if expected == path:
-                break
-        else:
+        if _append_path_for(ran, appended, today=today) is None:
             raise ShardRefusedError(
                 f"{ran.name} filed {appended}, which is not a report of a ledger it appends "
                 "to under today's day. Nothing is staged"
@@ -418,17 +492,20 @@ def history_tasks_among(names: Sequence[str], tasks: Mapping[str, TaskPolicy]) -
     ]
 
 
-def over_the_ceiling(
-    downloaded: Mapping[str, int], *, ceiling_mb: int, shard: int
-) -> str | None:
+def over_the_ceiling(downloaded: Mapping[str, int], *, ceiling_mb: int, shard: int) -> str | None:
     """What a shard over `max_downloaded_mb` says, naming its heaviest folders, or None when under.
 
     `downloaded` is what the shard's tasks downloaded under each folder it
     listed. Over means strictly more than the ceiling: a shard that downloaded
-    exactly the ceiling is inside it.
+    exactly the ceiling is inside it. `error_cause.classify` decides it by the
+    rule it decides a single period by, that more than the whole budget is a
+    defect: a step that chooses its periods by the budget never passes it, so a
+    shard over it is a code defect to fix, and no row can say which task did it.
     """
     total = sum(downloaded.values())
-    if total <= ceiling_mb * BYTES_PER_MB:
+    budget = ceiling_mb * BYTES_PER_MB
+    spent = OverBudgetError(needed=total, room=budget - total, budget=budget)
+    if error_cause.classify(spent) is not ErrorCause.RAISED:
         return None
     heaviest = sorted(downloaded.items(), key=lambda held: (-held[1], held[0]))
     named = ", ".join(
@@ -437,8 +514,10 @@ def over_the_ceiling(
     return (
         f"shard {shard}: its tasks downloaded {total / BYTES_PER_MB:.1f} MB ({total:,} bytes) "
         f"of file content, over max_downloaded_mb {ceiling_mb} in "
-        f"config/idhazh_gardener.json. The heaviest: {named}. Its tasks ran and its record "
-        "still lands, and the shard exits 1"
+        f"config/idhazh_gardener.json. The heaviest: {named}. A step that chooses its "
+        "periods by the budget never passes it, so a task downloaded without choosing by "
+        "it, which is a code defect. Its tasks ran and its record still lands, and the "
+        "shard exits 1"
     )
 
 
@@ -471,8 +550,9 @@ def run(
     `listing` is the files under every folder the tasks own or read; None lists
     them off the disk here. What the tasks downloaded is read off it once they
     have run. `period_range` is a range a person named for one task: the task
-    reads that range and is told it is the person's, where a scheduled wake
-    reads the window `scheduled_range` builds.
+    reads it in place of the window `scheduled_range` builds for a scheduled
+    wake. A compaction has no such window, so a named range only limits the
+    periods its steps choose.
     """
     refused = history_tasks_among(names, settings.tasks)
     if refused:
@@ -511,9 +591,7 @@ def run(
         resolved = {
             name: folders_of(name, settings.tasks, repo_root, committed_folders) for name in names
         }
-        covered = {
-            name: listed_folders(settings.tasks[name], resolved[name]) for name in names
-        }
+        covered = {name: listed_folders(settings.tasks[name], resolved[name]) for name in names}
         period_ranges = {
             name: period_range
             if period_range is not None
@@ -550,10 +628,12 @@ def run(
                 git_sha=git_sha,
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
+                first_ledger_year=settings.config.first_ledger_year,
                 period_range=period_ranges[name],
-                operator_range=period_range,
             )
-            done = _run_one(name, bound[name], context, resolved[name])
+            event_log.emit(_planned(name, context, resolved[name], period_range))
+            done = _run_one(name, bound[name], context)
+            _said_finished(done)
             _refuse_a_path_outside(done, settings.tasks)
             _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
@@ -578,12 +658,6 @@ def run(
         say(f"shard {shard}: {refusal}")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
-    for each in ran:
-        for line in report.lines(each.outcome):
-            say(line)
-        if each.folded is not None:
-            for line in report.fold_lines(each.name, each.folded):
-                say(line)
     if too_heavy is not None:
         say(too_heavy)
     recorded = record.relative_to(repo_root).as_posix()

@@ -13,11 +13,11 @@
  * while the shard it sits in reads as a normal shard.
  *
  * Two halves, for the two things that can be wrong. The builder tests drive the
- * fold over fixture ledger rows and recompute every expectation from those rows,
- * so the module never checks itself. The browser tests prove the same figures
- * reach the page as attributes, on the run the canary really built.
- *
- * `frontend/scripts/build-canary.mjs` writes the ledgers the browser half reads.
+ * fold over ledger rows this file writes, so every expectation follows from rows
+ * a test chose. The browser tests hold the built page to the figures it
+ * publishes about itself: the lead is the lowest floor its marks carry, one mark
+ * owns it, and an absent reading reaches the page as an empty attribute, whatever
+ * run the page drew.
  */
 
 import { expect, test } from './support/browser';
@@ -35,7 +35,6 @@ import {
 	type MachineRun
 } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
-import { canaryArticleRows, heldRows } from './support/canary-records';
 
 const REPO = resolve(process.cwd(), '..');
 const DATE = '2026-09-04';
@@ -428,19 +427,7 @@ test.describe('the memory board, at item grain', () => {
 	});
 });
 
-/** Every row of the canary's article record, as the canary packed it.
- *
- * Read through the reader the page's server calls, because the packed file is
- * the only copy the canary keeps; every figure below is recomputed from these
- * rows rather than read back off the page.
- */
-const articles = heldRows(canaryArticleRows);
-
-test.beforeAll(async () => {
-	await articles.load();
-});
-
-function measured(cell: string | null | undefined): number | null {
+function measuredAttribute(cell: string | null | undefined): number | null {
 	const text = (cell ?? '').trim();
 	if (text === '') return null;
 	const value = Number(text);
@@ -448,118 +435,87 @@ function measured(cell: string | null | undefined): number | null {
 }
 
 test.describe('the memory panel puts the item grain on the page', () => {
-	test('THE ORACLE: the item minimum on the page recomputes from the canary ledger', async ({
+	test('the page names one tightest item, and the lead matches that item', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 		await expect(board).toBeVisible();
 
-		// A break panel, and it says so rather than leaving a reader to infer it.
 		await expect(board).toHaveAttribute('data-panel-question', 'what is broken');
 		const runId = await board.getAttribute('data-memory-board');
 		expect(runId, 'the panel drew no run').not.toBe('empty');
-
-		const floors = articles
-			.rows()
-			.filter((row) => row.run_id === runId)
-			.map((row) => measured(row.os_mem_available_min_bytes))
-			.filter((value): value is number => value !== null);
-		expect(floors.length, 'the newest canary run records no kernel floor').toBeGreaterThan(0);
-
-		// The figure the panel exists for, on an attribute rather than in prose:
-		// a sentence can be renamed and a negative prose assertion then passes
-		// while the page prints the wrong number.
-		expect(Number(await board.getAttribute('data-memory-floor-low'))).toBe(Math.min(...floors));
+		const floor = measuredAttribute(await board.getAttribute('data-memory-floor-low'));
+		const ceiling = measuredAttribute(await board.getAttribute('data-memory-ceiling'));
+		expect(floor, 'the panel names no lead floor').not.toBeNull();
+		expect(ceiling, 'the panel names no memory ceiling').not.toBeNull();
+		expect(floor, 'the floor is outside the ceiling it is drawn against').toBeLessThanOrEqual(
+			ceiling ?? 0
+		);
 		const owner = await board.getAttribute('data-memory-floor-item');
 		expect(owner, 'the minimum reached the page with no item owning it').not.toBe('');
 
-		// And exactly one mark is flagged, whatever ties behind it: "the item that
-		// took the machine lowest" has to be an item a reader can go and look at,
-		// so a tie is named once.
 		const tightest = board.locator('[data-memory-item-tightest="true"]');
 		await expect(tightest).toHaveCount(1);
 		expect(await tightest.getAttribute('data-memory-item')).toBe(owner);
-		expect(Number(await tightest.getAttribute('data-memory-item-floor'))).toBe(
-			Math.min(...floors)
-		);
+		expect(measuredAttribute(await tightest.getAttribute('data-memory-item-floor'))).toBe(floor);
+
+		// The lead is the lowest floor any drawn item carries, read off the marks
+		// the page drew rather than off a ledger.
+		const floors = (
+			await board
+				.locator('[data-memory-item]')
+				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-memory-item-floor') ?? ''))
+		)
+			.filter((cell) => cell !== '')
+			.map(Number);
+		expect(floors.length, 'no item mark carries a kernel floor').toBeGreaterThan(0);
+		expect(floor, 'the lead floor is not the lowest floor the marks carry').toBe(Math.min(...floors));
 	});
 
-	test('THE ORACLE: an item with no kernel reading is hatched and its count printed', async ({
+	test('the kernel gap sentence follows the skipped count and bounded dates', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
-		const runId = await board.getAttribute('data-memory-board');
-
-		const rows = articles.rows().filter((row) => row.run_id === runId);
-		// The canary's newest run carries one row the kernel account never
-		// reached, beside rows it did.
-		const drawn = rows.filter(
-			(row) =>
-				measured(row.llama_rss_bytes) !== null ||
-				measured(row.python_rss_bytes) !== null ||
-				measured(row.os_mem_available_min_bytes) !== null ||
-				measured(row.os_mem_available_bytes) !== null
-		);
-		const without = drawn.filter((row) => measured(row.os_mem_available_min_bytes) === null);
-		expect(without.length, 'the canary run has no item missing the kernel reading').toBe(1);
-
-		expect(Number(await board.getAttribute('data-memory-kernel-skipped'))).toBe(without.length);
-		expect(Number(await board.getAttribute('data-memory-kernel-from'))).toBe(
-			drawn.length - without.length
-		);
-		// Printed, not only drawn: a hatched mark a reader cannot count is not a
-		// count. And the sentence names the date the reading begins.
+		const skipped = Number(await board.getAttribute('data-memory-kernel-skipped'));
+		const from = Number(await board.getAttribute('data-memory-kernel-from'));
+		const total = Number(await board.getAttribute('data-memory-items'));
+		expect(skipped + from, 'kernel coverage does not add to the items drawn').toBe(total);
 		const gap = board.locator('[data-memory-kernel-gap]');
+		if (skipped === 0) {
+			await expect(gap).toHaveCount(0);
+			return;
+		}
 		await expect(gap).toBeVisible();
 		await expect(gap).toContainText('no kernel reading');
-		const begins = await board.getAttribute('data-memory-kernel-begins');
-		expect(begins, 'the page names no date for the start of the reading').not.toBe('');
-		await expect(gap).toContainText(begins!);
-		// The sentence is bounded by what the page read, not by the archive.
-		const from = await board.getAttribute('data-memory-read-from');
-		expect(from, 'the page bounds its sentence to nothing').not.toBe('');
-		await expect(gap).toContainText(from!);
+		for (const attribute of ['data-memory-kernel-begins', 'data-memory-read-from'] as const) {
+			const date = await board.getAttribute(attribute);
+			expect(date, `${attribute} is missing`).not.toBe('');
+			await expect(gap).toContainText(date ?? '');
+		}
 	});
 
-	test('THE ORACLE: the disputed mark is off the page and the page says so', async ({ page }) => {
+	test('the page says the disputed high-water mark is not drawn', async ({ page }) => {
 		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
-		const runId = await board.getAttribute('data-memory-board');
-
-		const peaks = articles
-			.rows()
-			.filter((row) => row.run_id === runId)
-			.map((row) => measured(row.llama_rss_peak_bytes))
-			.filter((value): value is number => value !== null);
-		expect(peaks.length, 'the canary stopped writing the disputed column').toBeGreaterThan(0);
-
-		// It stays in the ledger and it reaches no attribute the panel publishes.
 		const drawnValues = await board.evaluate((node) =>
 			[...node.attributes]
 				.filter((one) => one.name.startsWith('data-memory-'))
-				.map((one) => one.value)
+				.map((one) => one.name)
 		);
-		expect(drawnValues, 'the disputed maximum is on the panel').not.toContain(
-			String(Math.max(...peaks))
+		expect(drawnValues, 'the disputed maximum has a drawing attribute').not.toContain(
+			'data-memory-peak'
 		);
-		// And the surface that would have drawn it is where the reason is said.
+		await expect(board.locator('[data-memory-not-drawn]')).toBeVisible();
 		await expect(board.locator('[data-memory-not-drawn]')).toContainText(
 			'not drawn here'
 		);
 	});
 
-	test('every item mark carries its own figures, recomputed from the ledger', async ({ page }) => {
+	test('every item mark carries parseable figures, and absent cells stay empty', async ({ page }) => {
 		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
-		const runId = await board.getAttribute('data-memory-board');
-
-		const byItem = new Map<string, Record<string, string>>();
-		for (const row of articles.rows()) {
-			if (row.run_id !== runId) continue;
-			byItem.set((row.item_id ?? '').trim(), row);
-		}
 
 		const marks = board.locator('[data-memory-item]');
 		const count = await marks.count();
@@ -567,21 +523,17 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		for (let index = 0; index < count; index += 1) {
 			const mark = marks.nth(index);
 			const id = (await mark.getAttribute('data-memory-item')) ?? '';
-			const row = byItem.get(id);
-			expect(row, `${id} is on the page and not in the ledger`).toBeTruthy();
-			for (const [attribute, column] of [
-				['data-memory-item-server-end', 'llama_rss_bytes'],
-				['data-memory-item-worker', 'python_rss_bytes'],
-				['data-memory-item-floor', 'os_mem_available_min_bytes'],
-				['data-memory-item-end', 'os_mem_available_bytes'],
-				['data-memory-item-load', 'load_1m']
+			expect(id, 'a memory mark has no item id').not.toBe('');
+			for (const attribute of [
+				'data-memory-item-server-end',
+				'data-memory-item-worker',
+				'data-memory-item-floor',
+				'data-memory-item-end',
+				'data-memory-item-load'
 			] as const) {
 				const drawn = await mark.getAttribute(attribute);
-				const expected = measured(row![column]);
-				// An absent cell reaches the page as an empty attribute, never as a
-				// zero: a zero-length bar claims a reading nobody took.
-				if (expected === null) expect(drawn ?? '', `${id} ${column}`).toBe('');
-				else expect(Number(drawn), `${id} ${column}`).toBeCloseTo(expected, 6);
+				if ((drawn ?? '') === '') continue;
+				expect(Number.isFinite(Number(drawn)), `${id} ${attribute} is not a number`).toBe(true);
 			}
 		}
 	});
@@ -592,8 +544,8 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
 
-		const server = measured(await board.getAttribute('data-memory-server-end-high-water'));
-		const worker = measured(await board.getAttribute('data-memory-worker-high-water'));
+		const server = measuredAttribute(await board.getAttribute('data-memory-server-end-high-water'));
+		const worker = measuredAttribute(await board.getAttribute('data-memory-worker-high-water'));
 		const scale = Number(await board.getAttribute('data-memory-bracket-scale'));
 		expect(server, 'the model server bracket has no figure').not.toBeNull();
 		expect(worker, 'the worker bracket has no figure').not.toBeNull();
@@ -613,7 +565,7 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		// can be checked against the number they were drawn from.
 		const ceiling = Number(await board.getAttribute('data-memory-ceiling'));
 		expect(ceiling, 'the panel drew against no ceiling').toBeGreaterThan(0);
-		const measuredTotal = measured(await board.getAttribute('data-memory-total-measured'));
+		const measuredTotal = measuredAttribute(await board.getAttribute('data-memory-total-measured'));
 		expect(ceiling).toBe(measuredTotal ?? RUNNER_MEMORY_BYTES);
 
 		// The one thing this panel cannot answer is said on the panel rather than

@@ -16,6 +16,7 @@
  */
 
 import type { EChartsOption } from 'echarts';
+import { nameSpan } from '$lib/console/span-words';
 import { dayMonth, shortDate } from '$lib/format';
 import { readoutOf, type Readout } from './readout';
 import { costOf, money, valueGutter, type CostRate, type RunWork } from './machine';
@@ -281,5 +282,5 @@ export function costLabel(shape: CostShape, days: number): string {
 		shape === 'running'
 			? 'added up day by day'
 			: 'one column a day, reading at the bottom and writing on top';
-	return `The counterfactual cost of these ${days} days, ${drawn}. What the work would have cost at a hosted provider's rate, never an amount owed.`;
+	return `The counterfactual cost of ${nameSpan(days)}, ${drawn}. What the work would have cost at a hosted provider's rate, never an amount owed.`;
 }

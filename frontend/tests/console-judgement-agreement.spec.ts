@@ -113,7 +113,7 @@ test.describe('whether the judge agrees with itself', () => {
 
 		if ((await page.locator(`${AGREEMENT} [data-agreement-day]`).count()) > 0) return;
 		await expect(page.locator('[data-agreement-state="none"]')).toContainText(
-			'No pair has been read twice yet'
+			'No pair was read twice in'
 		);
 	});
 });
@@ -128,7 +128,7 @@ test.describe('what the record still needs', () => {
 		expect(await page.locator(`${GATES} [data-target-bar]`).count()).toBe(3);
 		if ((await page.locator('[data-gates-state="empty"]').count()) > 0) {
 			await expect(page.locator('[data-gates-state="empty"]')).toContainText(
-				'Nothing has been judged yet'
+				'Nothing was judged in'
 			);
 		}
 	});

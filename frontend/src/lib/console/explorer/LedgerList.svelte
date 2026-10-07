@@ -27,7 +27,7 @@
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
 	<div class="ledger-options">
 		{#each shown as ledger (ledger.name)}
-			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'}>
+			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
 				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />
 				<span>{ledger.name}</span>
 				<small class:late={through[ledger.name] !== undefined && spanFrom !== '' && through[ledger.name] < spanFrom}>{published.includes(ledger.name) ? `${ledger.grain}${through[ledger.name] ? ` - through ${shortDate(through[ledger.name])}` : ''}` : `not on this site - ${ledger.grain}`}</small>
@@ -44,8 +44,12 @@
 	.filter { display: grid; gap: var(--space-1); font-size: var(--text-xs); color: var(--color-text-secondary); }
 	.filter input { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-bg); color: var(--color-text); padding: var(--space-2); }
 	.ledger-options { display: grid; align-content: start; max-block-size: 100%; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; padding-inline-end: var(--space-1); }
-	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); background: var(--color-surface); }
+	.ledger { min-block-size: var(--workbench-control); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; padding-inline: var(--space-3); border-inline-start: 3px solid transparent; background: var(--color-surface); cursor: pointer; }
 	.ledger small { grid-column: 2; color: var(--color-text-tertiary); }
+	.ledger[data-published='no'] span { color: var(--color-text-secondary); }
+	.ledger[data-chosen='yes'] { border-inline-start-color: var(--color-accent); background: var(--tint-accent); }
+	.ledger[data-chosen='yes'] span { font-weight: 600; }
+	.ledger[data-chosen='yes'] small { color: var(--color-text-secondary); }
+	/* Last, at the same weight as the rule above: a late date warns about a ledger you are about to query. */
 	.ledger small.late { color: var(--color-text); }
-	.ledger[data-published='no'] { opacity: 0.72; }
 </style>

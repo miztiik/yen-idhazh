@@ -1,10 +1,11 @@
 """Does every hand-written list in the console still name what its contract declares?
 
-Eight console modules carry a value that has to match what a Pydantic contract
+Nine console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
 reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
 busy share stopped holding the stolen half, the article and feed records'
-column lists, and the routes the strip draws. A copy that has fallen behind its
+column lists, the columns the run timeline reads off every row, and the routes
+the strip draws. A copy that has fallen behind its
 contract draws a panel with a column missing from it, names a column no run
 writes, or prints a correction for the wrong day, and none of those shows up as
 an error anywhere.
@@ -34,6 +35,7 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.telemetry.publish.console_band import ROUTES
 
 pytestmark = pytest.mark.contract
@@ -137,6 +139,36 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
         "FEED_HEALTH_COLUMNS in ledger-rows.ts is not part of FeedHealthRow's columns in "
         f"order. Not declared: {[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
+    )
+
+
+def test_the_run_timeline_reads_only_columns_every_row_carries() -> None:
+    """A column the timeline reads off every row has to be one no row leaves empty.
+
+    `run-timeline.ts` spells the columns the Pipelines run timeline reads off every
+    row, and draws an item's bar from them. Each has to be a `RunTimelineRow` field
+    that is required and does not allow null, so every published row carries it.
+    A column that may be absent, such as a step nothing timed, belongs with the
+    steps the panel names as not recorded, never in this list, where it would
+    draw an empty slice.
+    """
+    asked = quoted_strings(read_text(SERVER / "run-timeline.ts"), "TIMELINE_COLUMNS")
+    schema = RunTimelineRow.model_json_schema()
+    required = set(schema.get("required", []))
+
+    def nullable(name: str) -> bool:
+        field = schema["properties"][name]
+        return field.get("type") == "null" or any(
+            option.get("type") == "null" for option in field.get("anyOf", [])
+        )
+
+    always = [
+        name for name in RunTimelineRow.model_fields if name in required and not nullable(name)
+    ]
+    assert asked, "TIMELINE_COLUMNS in run-timeline.ts names no column"
+    assert [name for name in asked if name not in always] == [], (
+        "TIMELINE_COLUMNS in run-timeline.ts names a column a RunTimelineRow may leave "
+        f"empty or does not declare. Every row carries only: {always}"
     )
 
 

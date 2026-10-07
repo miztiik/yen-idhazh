@@ -1,0 +1,43 @@
+{
+  "attempt": 1,
+  "bytes_freed": 6150,
+  "candidates_seen": 14,
+  "cone_bytes": 15672361,
+  "date": "2026-09-30",
+  "deleted": 5,
+  "downloaded_bytes": 48211,
+  "dry_run": false,
+  "duration_ms": 2310,
+  "fault": null,
+  "fold_dry_run": null,
+  "folded_days": null,
+  "folded_files": null,
+  "folded_months": null,
+  "handled_through": null,
+  "job": "run-tasks",
+  "max_deletes_per_run": null,
+  "recovered": [
+    {
+      "note": "repacked-from-raw",
+      "subject": "2026-09-20"
+    },
+    {
+      "note": "set-aside",
+      "subject": "2026-09-22"
+    },
+    {
+      "note": "index-rebuilt",
+      "subject": "2026-09-25"
+    }
+  ],
+  "resume_from": null,
+  "run_id": "2026-09-30-19012345678",
+  "selected": 5,
+  "shard": 1,
+  "since": null,
+  "stopped_because": "exhausted",
+  "task": "compact-visual-prunes",
+  "until": "2026-09-28",
+  "version": "2026-10-07",
+  "work_ended_at": "2026-09-30T00:46:02Z"
+}

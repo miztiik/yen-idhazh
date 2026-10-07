@@ -1,7 +1,14 @@
 import { expect, test } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
 
-import { chooseExplorerShape, chooseExplorerShapes, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chooseDateSeriesDays, chooseExplorerShape, chooseExplorerShapes, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
+import { inZone } from './support/in-zone';
+import { serverCompiler } from './support/server-render';
+
+const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const bounds: ExplorerShapeBounds = {
 	chartMinRows: 3,
@@ -121,6 +128,109 @@ test('a date answer with several rows on one UTC day draws no date chart and say
 	});
 });
 
+test('a date column holding a day the chart cannot place draws no date chart and names the column and that day', () => {
+	const held: [string, string][] = [
+		['infinity', 'Nothing here to draw: the column "day" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		['-infinity', 'Nothing here to draw: the column "day" holds -infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		['12345-01-01', 'Nothing here to draw: the column "day" holds 12345-01-01, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'],
+		['0044-03-15 (BC)', 'Nothing here to draw: the column "day" holds 0044-03-15 (BC), and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.']
+	];
+	for (const [day, reason] of held) {
+		expect(shape([
+			{ name: 'day', type: 'DATE' },
+			{ name: 'items', type: 'INTEGER' }
+		], [
+			{ day: '2026-10-01', items: '1' },
+			{ day, items: '2' },
+			{ day: '2026-10-03', items: '3' }
+		]), day).toEqual({ kind: 'none', code: 'unplaceable-day', reason });
+	}
+
+	// A NULL is no day rather than a day the chart cannot place, so the sentence names the value after it.
+	expect(shape([
+		{ name: 'day', type: 'DATE' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ day: null, items: '1' },
+		{ day: 'infinity', items: '2' },
+		{ day: '2026-10-03', items: '3' }
+	])).toEqual({
+		kind: 'none',
+		code: 'unplaceable-day',
+		reason: 'Nothing here to draw: the column "day" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'
+	});
+
+	expect(shape([
+		{ name: 'at', type: 'TIMESTAMP WITH TIME ZONE' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ at: '2026-10-01 00:00:00+00', items: '1' },
+		{ at: 'infinity', items: '2' }
+	])).toEqual({
+		kind: 'none',
+		code: 'unplaceable-day',
+		reason: 'Nothing here to draw: the column "at" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.'
+	});
+});
+
+test('a row whose day is NULL is left out of the date chart, and every figure counts only the rows with a day', () => {
+	const columns: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'items', type: 'INTEGER' }];
+	expect(shape(columns, [
+		{ day: '2026-10-01', items: '3' },
+		{ day: null, items: '40' },
+		{ day: '2026-10-02', items: '5' },
+		{ day: '2026-10-03', items: '8' }
+	])).toMatchObject({ kind: 'chart', type: 'dateSeries', days: 3, rowsWithNoDay: 1, tooFew: false, mainFigure: { column: 'items', value: 8, date: '2026-10-03' } });
+
+	expect(shape(columns, [
+		{ day: '2026-10-01', items: '3' },
+		{ day: null, items: '4' },
+		{ day: '2026-10-02', items: '5' }
+	]), 'two days and a row with no day are under a floor of three days').toMatchObject({ type: 'dateSeries', days: 2, rowsWithNoDay: 1, tooFew: true });
+
+	expect(shape(columns, [
+		{ day: null, items: '1' },
+		{ day: '2026-10-01', items: '3' },
+		{ day: null, items: '2' },
+		{ day: '2026-10-02', items: '5' },
+		{ day: '2026-10-03', items: '8' }
+	]), 'two rows with no day are not two rows on one UTC day').toMatchObject({ type: 'dateSeries', days: 3, rowsWithNoDay: 2 });
+
+	expect(shape([
+		{ name: 'day', type: 'DATE' },
+		{ name: 'a', type: 'INTEGER' },
+		{ name: 'b', type: 'INTEGER' }
+	], [
+		{ day: '2026-10-01', a: '100', b: '80' },
+		{ day: '2026-10-02', a: '90', b: '70' },
+		{ day: null, a: '100000', b: '1' },
+		{ day: '2026-10-03', a: '80', b: '60' }
+	]), 'a number on a row with no day makes no other column too flat to draw').toMatchObject({ seriesColumns: ['a', 'b'], flatColumns: [] });
+});
+
+test('a date column that holds only NULL draws no chart and says so', () => {
+	expect(chooseExplorerShapes([
+		{ name: 'day', type: 'DATE' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ day: null, items: '1' },
+		{ day: null, items: '2' }
+	], bounds)).toEqual([{
+		kind: 'none',
+		code: 'no-day',
+		reason: 'Nothing here to draw: the column "day" holds only null. Give "day" a date in the question to draw it over time.'
+	}]);
+
+	expect(chooseExplorerShapes([
+		{ name: 'at', type: 'TIMESTAMP WITH TIME ZONE' },
+		{ name: 'items', type: 'BIGINT' }
+	], [{ at: null, items: '1' }], bounds)).toEqual([{
+		kind: 'none',
+		code: 'no-day',
+		reason: 'Nothing here to draw: the column "at" holds only null. Give "at" a date in the question to draw it over time.'
+	}]);
+});
+
 test('date charts draw four number columns and name columns that would draw flat', () => {
 	const result = shape([
 		{ name: 'day', type: 'DATE' },
@@ -141,6 +251,62 @@ test('date charts draw four number columns and name columns that would draw flat
 		seriesColumns: ['a', 'b', 'c', 'd'],
 		omittedColumns: ['e'],
 		flatColumns: [{ name: 'tiny', share: 0.03, largestColumn: 'a' }]
+	});
+});
+
+test('a lost day between the days an answer has rows for joins the date axis with no row', () => {
+	const rows: Row[] = [
+		{ day: '2026-08-20', rows: '8' },
+		{ day: '2026-08-17', rows: '3' },
+		{ day: '2026-08-18', rows: '5' }
+	];
+	expect(chooseDateSeriesDays('day', rows, ['2026-08-19'])).toEqual([
+		{ day: '2026-08-17', row: rows[1] },
+		{ day: '2026-08-18', row: rows[2] },
+		{ day: '2026-08-19', row: null },
+		{ day: '2026-08-20', row: rows[0] }
+	]);
+});
+
+test('a lost day outside the answer\'s first and last day, or one the answer has a row for, adds no day', () => {
+	const rows: Row[] = [
+		{ day: '2026-08-17', rows: '3' },
+		{ day: '2026-08-18', rows: '5' },
+		{ day: '2026-08-20', rows: '8' }
+	];
+	// Two ledgers both lost 19 Aug. One of them also lost 18 Aug, which still has a row, and a day at each end.
+	const days = chooseDateSeriesDays('day', rows, ['2026-08-16', '2026-08-18', '2026-08-19', '2026-08-19', '2026-08-21']);
+	expect(days.map(({ day, row }) => [day, row?.rows ?? null])).toEqual([
+		['2026-08-17', '3'],
+		['2026-08-18', '5'],
+		['2026-08-19', null],
+		['2026-08-20', '8']
+	]);
+	expect(chooseDateSeriesDays('day', [], ['2026-08-19']), 'lost days alone draw nothing').toEqual([]);
+});
+
+test('a timestamp answer sits on the date axis by its UTC day', () => {
+	const rows: Row[] = [
+		{ day: '2026-08-17 00:00:00', rows: '3' },
+		{ day: '2026-08-19 00:00:00', rows: '8' }
+	];
+	expect(chooseDateSeriesDays('day', rows, ['2026-08-18']).map(({ day, row }) => [day, row?.rows ?? null])).toEqual([
+		['2026-08-17', '3'],
+		['2026-08-18', null],
+		['2026-08-19', '8']
+	]);
+});
+
+test('a timestamp with a time zone sits on the date axis by its UTC day, not the day the engine printed', () => {
+	// On a page in India the engine prints a fixed +05, so 23:30 UTC on 16 Aug prints as 04:30 on 17 Aug.
+	inZone('Asia/Kolkata', () => {
+		expect(new Date('2026-08-17T00:00:00Z').getTimezoneOffset(), 'the run is not in India time').toBe(-330);
+		const columns: Column[] = [{ name: 'at', type: 'TIMESTAMP WITH TIME ZONE' }, { name: 'rows', type: 'BIGINT' }];
+		const rows: Row[] = [{ at: '2026-08-17 04:30:00+05', rows: '3' }, { at: '2026-08-17 06:00:00+05', rows: '5' }];
+		expect(chooseDateSeriesDays('at', rows, []).map(({ day, row }) => [day, row?.rows ?? null])).toEqual([['2026-08-16', '3'], ['2026-08-17', '5']]);
+		expect(shape(columns, rows)).toMatchObject({ kind: 'chart', type: 'dateSeries', mainFigure: { column: 'rows', value: 5, date: '2026-08-17' } });
+		// 23:00 UTC on the last day of 1969, an instant before 1970, stays on that day.
+		expect(chooseDateSeriesDays('at', [{ at: '1970-01-01 04:00:00+05', rows: '1' }], []).map(({ day }) => day)).toEqual(['1969-12-31']);
 	});
 });
 
@@ -185,4 +351,235 @@ test('an answer can qualify for more than one chart type for the operator switch
 		{ source: 'b', items: 2 },
 		{ source: 'c', items: 1 }
 	], bounds)).toMatchObject({ kind: 'chart', type: 'rankedList' });
+});
+
+test('a timestamp of any precision is a day column, so a TIMESTAMP_NS day column draws over time', () => {
+	for (const type of ['TIMESTAMP_S', 'TIMESTAMP_MS', 'TIMESTAMP_NS']) {
+		expect(shape([
+			{ name: 'day', type },
+			{ name: 'rows', type: 'BIGINT' }
+		], [
+			{ day: '2026-08-17 00:00:00', rows: '3' },
+			{ day: '2026-08-18 00:00:00', rows: '5' },
+			{ day: '2026-08-19 00:00:00', rows: '8' }
+		]), type).toMatchObject({ kind: 'chart', type: 'dateSeries', dateColumn: 'day', seriesColumns: ['rows'] });
+	}
+});
+
+test('an enum names a ranked row, as text does', () => {
+	expect(shape([
+		{ name: 'verdict', type: "ENUM('kept', 'cut')" },
+		{ name: 'items', type: 'BIGINT' }
+	], [
+		{ verdict: 'kept', items: '5' },
+		{ verdict: 'cut', items: '2' }
+	])).toMatchObject({ kind: 'chart', type: 'rankedList', labelColumn: 'verdict', valueColumn: 'items' });
+});
+
+test('every whole number the engine prints is a number to the chart, and a list of numbers is not one', () => {
+	for (const type of ['UHUGEINT', 'BIGNUM']) {
+		expect(shape([
+			{ name: 'source', type: 'VARCHAR' },
+			{ name: 'n', type }
+		], [
+			{ source: 'a', n: '5' },
+			{ source: 'b', n: '2' }
+		]), type).toMatchObject({ kind: 'chart', type: 'rankedList', valueColumn: 'n' });
+	}
+	expect(shape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'shares', type: 'DECIMAL(18,4)[]' }
+	], [{ source: 'a', shares: '[0.5000, 0.2500]' }])).toEqual({
+		kind: 'none',
+		code: 'no-number',
+		reason: 'Nothing here to draw: the answer has no number in it.'
+	});
+});
+
+test('a NULL is no reading: the spread and paired floors, the paired figure and the ranked tail count only rows with a number', () => {
+	expect(shape([{ name: 'latency', type: 'DOUBLE' }], [
+		{ latency: '10' },
+		{ latency: null },
+		{ latency: '20' },
+		{ latency: '30' }
+	])).toMatchObject({ type: 'distribution', readings: 3, tooFew: true });
+
+	expect(shape([
+		{ name: 'host', type: 'VARCHAR' },
+		{ name: 'ms', type: 'DOUBLE' },
+		{ name: 'tokens', type: 'DOUBLE' }
+	], [
+		{ host: 'a', ms: '10', tokens: '100' },
+		{ host: 'b', ms: null, tokens: '150' },
+		{ host: 'c', ms: '30', tokens: '120' },
+		{ host: 'd', ms: '40', tokens: null },
+		{ host: 'e', ms: '50', tokens: '90' }
+	])).toMatchObject({ type: 'pairedScatter', readings: 3, subjects: 3, tooFew: true, mainFigure: '3 rows of tokens against ms' });
+
+	expect(shape([
+		{ name: 'source', type: 'VARCHAR' },
+		{ name: 'items', type: 'INTEGER' }
+	], [
+		{ source: 'a', items: '5' },
+		{ source: 'b', items: null },
+		{ source: 'c', items: '1' }
+	])).toMatchObject({ type: 'rankedList', rowsDrawn: 2, moreRows: 1 });
+});
+
+test.describe('the chart panel draws a NULL as no value, never as zero', () => {
+	let draw: (columns: readonly Column[], rows: readonly Row[], selectedType: ExplorerChartType) => string;
+
+	/** The path of the date chart's first series: one `M` for each run of days it joins. */
+	function dateLine(body: string): string {
+		return body.match(/data-date-series-marks="data-explorer-shape"[\s\S]*?<path d="([^"]*)"/)?.[1] ?? '';
+	}
+
+	/** The words of the panel's note, main figure or no-chart box, as the page prints them. */
+	function printed(body: string, part: 'shape-note' | 'shape-lede' | 'shape-none'): string | undefined {
+		return body.match(new RegExp(`class="${part}[^"]*"[^>]*>([^<]*)<`))?.[1];
+	}
+
+	test.beforeAll(async ({}, testInfo) => {
+		// One directory a worker: a module rewritten while another worker imports it is read half-written.
+		const compiled = serverCompiler(path.join(frontend, 'test-results', 'explorer-shape-panel', String(testInfo.workerIndex)));
+		await compiled('src/lib/components/Reserved.svelte', 'Reserved', []);
+		await compiled('src/lib/charts/d3/EmptyState.svelte', 'EmptyState', [['$lib/components/Reserved.svelte', './Reserved.server.mjs']]);
+		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
+		for (const chart of ['DateSeries', 'Distribution', 'PairedScatter']) {
+			await compiled(`src/lib/charts/d3/${chart}.svelte`, chart, [
+				['./EmptyState.svelte', './EmptyState.server.mjs'],
+				['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs']
+			]);
+		}
+		await compiled('src/lib/components/RankedList.svelte', 'RankedList', []);
+		const panel = await compiled('src/lib/console/explorer/ShapePanel.svelte', 'ShapePanel', [
+			['$lib/charts/d3/DateSeries.svelte', './DateSeries.server.mjs'],
+			['$lib/charts/d3/Distribution.svelte', './Distribution.server.mjs'],
+			['$lib/charts/d3/PairedScatter.svelte', './PairedScatter.server.mjs'],
+			['$lib/components/RankedList.svelte', './RankedList.server.mjs'],
+			['./shape', '$lib/console/explorer/shape'],
+			['./answer', '$lib/console/explorer/answer']
+		]);
+		const component = (await import(pathToFileURL(panel).href)).default;
+		draw = (columns, rows, selectedType) => render(component, { props: { columns, rows, lostDays: [], bounds, height: 200, selectedType } }).body;
+	});
+
+	test('the ranked list leaves the NULL row out and says it is in the table', () => {
+		const body = draw([{ name: 'source', type: 'VARCHAR' }, { name: 'items', type: 'INTEGER' }], [
+			{ source: 'a', items: '5' },
+			{ source: 'b', items: null },
+			{ source: 'c', items: '1' }
+		], 'rankedList');
+		expect(body.match(/data-ranked-row="[^"]*"/g)).toEqual(['data-ranked-row="a"', 'data-ranked-row="c"']);
+		expect(body).toContain('1 more row is in the table.');
+	});
+
+	test('the paired chart draws no point for a row with a NULL', () => {
+		const body = draw([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
+			{ host: 'a', ms: '10', tokens: '100' },
+			{ host: 'b', ms: '20', tokens: '150' },
+			{ host: 'c', ms: '30', tokens: '120' },
+			{ host: 'd', ms: '40', tokens: '90' },
+			{ host: 'e', ms: null, tokens: '60' }
+		], 'pairedScatter');
+		expect(body).toContain('data-readout-records="4"');
+		expect(body).toContain('4 rows of tokens against ms');
+	});
+
+	test('the spread chart counts no NULL among the readings in its bins', () => {
+		const body = draw([{ name: 'latency', type: 'DOUBLE' }], [
+			{ latency: '10' },
+			{ latency: '20' },
+			{ latency: null },
+			{ latency: '30' },
+			{ latency: '40' }
+		], 'distribution');
+		const binned = [...body.matchAll(/aria-label="[^"]*: (\d+) rows, /g)].map((bin) => Number(bin[1]));
+		expect(binned.length, 'no bin was drawn').toBeGreaterThan(0);
+		expect(binned.reduce((sum, count) => sum + count, 0)).toBe(4);
+	});
+
+	test('the date chart breaks its line at a day whose number is NULL', () => {
+		const body = draw([{ name: 'day', type: 'DATE' }, { name: 'rows', type: 'INTEGER' }], [
+			{ day: '2026-08-17', rows: '3' },
+			{ day: '2026-08-18', rows: '5' },
+			{ day: '2026-08-19', rows: null },
+			{ day: '2026-08-20', rows: '8' },
+			{ day: '2026-08-21', rows: '9' }
+		], 'dateSeries');
+		expect(dateLine(body).match(/M/g)?.length, 'the line joined the days either side of the NULL').toBe(2);
+	});
+
+	test('a floor counts readings, so a NULL can leave a chart too few to draw, and the sentence names the floor it missed', () => {
+		expect(draw([{ name: 'latency', type: 'DOUBLE' }], [
+			{ latency: '10' },
+			{ latency: '20' },
+			{ latency: null },
+			{ latency: '30' }
+		], 'distribution')).toContain('Only 3 of the 4 readings this chart needs are in this window, so it is not drawn.');
+
+		expect(draw([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
+			{ host: 'a', ms: '10', tokens: '100' },
+			{ host: 'a', ms: '20', tokens: '150' },
+			{ host: 'b', ms: '30', tokens: '120' },
+			{ host: 'b', ms: '40', tokens: '90' },
+			{ host: 'c', ms: null, tokens: '60' }
+		], 'pairedScatter')).toContain('Only 2 of the 3 subjects this chart needs are in this window, so it is not drawn.');
+	});
+
+	test('the date chart draws every row with a day, and its note says how many rows hold null in the day column', () => {
+		const columns: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'rows', type: 'INTEGER' }];
+		const body = draw(columns, [
+			{ day: '2026-08-17', rows: '3' },
+			{ day: null, rows: '4' },
+			{ day: '2026-08-18', rows: '5' },
+			{ day: '2026-08-19', rows: '8' }
+		], 'dateSeries');
+		expect(body).toContain('data-readout-columns="3"');
+		expect(dateLine(body).match(/M/g)?.length, 'the line did not run through the three days unbroken').toBe(1);
+		expect(printed(body, 'shape-lede')).toBe('8 rows on 2026-08-19');
+		expect(printed(body, 'shape-note')).toBe('Drawn over time because the answer has a date column. 1 row holds null in the column "day", so the chart does not draw it. It is in the table.');
+
+		expect(printed(draw(columns, [
+			{ day: null, rows: '1' },
+			{ day: '2026-08-17', rows: '3' },
+			{ day: null, rows: '2' },
+			{ day: '2026-08-18', rows: '5' },
+			{ day: null, rows: '6' },
+			{ day: '2026-08-19', rows: '8' }
+		], 'dateSeries'), 'shape-note')).toBe('Drawn over time because the answer has a date column. 3 rows hold null in the column "day", so the chart does not draw them. They are in the table.');
+
+		expect(draw(columns, [
+			{ day: '2026-08-17', rows: '3' },
+			{ day: null, rows: '4' },
+			{ day: '2026-08-18', rows: '5' }
+		], 'dateSeries'), 'the floor counted the row with no day as a day').toContain('Only 2 of the 3 UTC days this chart needs are in this window, so it is not drawn.');
+	});
+
+	test('beside a row with no day, a NULL number still breaks the line on its own day and is still no reading in the spread', () => {
+		const columns: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'rows', type: 'INTEGER' }];
+		const rows: Row[] = [
+			{ day: '2026-08-17', rows: '3' },
+			{ day: '2026-08-18', rows: '5' },
+			{ day: '2026-08-19', rows: null },
+			{ day: null, rows: '7' },
+			{ day: '2026-08-20', rows: '8' },
+			{ day: '2026-08-21', rows: '9' }
+		];
+		const body = draw(columns, rows, 'dateSeries');
+		expect(body).toContain('data-readout-columns="5"');
+		expect(dateLine(body).match(/M/g)?.length, 'the line joined the days either side of the NULL number').toBe(2);
+		expect(printed(body, 'shape-note')).toBe('Drawn over time because the answer has a date column. 1 row holds null in the column "day", so the chart does not draw it. It is in the table.');
+		// The spread needs no day, so it draws the row with no day, and the NULL number is still no reading.
+		expect(chooseExplorerShapes(columns, rows, bounds)).toMatchObject([{ type: 'dateSeries', days: 5, rowsWithNoDay: 1 }, { type: 'distribution', readings: 5 }]);
+	});
+
+	test('a date column that holds only NULL puts its sentence in the chart room and draws no chart', () => {
+		const body = draw([{ name: 'day', type: 'DATE' }, { name: 'rows', type: 'INTEGER' }], [
+			{ day: null, rows: '3' },
+			{ day: null, rows: '5' }
+		], 'dateSeries');
+		expect(printed(body, 'shape-none')).toBe('Nothing here to draw: the column "day" holds only null. Give "day" a date in the question to draw it over time.');
+		expect(body).not.toContain('data-chart-type');
+	});
 });

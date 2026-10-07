@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
 	REASONS,
 	neverSeenNote,
@@ -30,12 +30,12 @@ import {
  * archive, which Guardrail #12 refuses and which would cost more every day the
  * pipeline publishes. It is also the stronger case: these days carry an unknown
  * reason and a day of pure absence, neither of which the archive has ever
- * produced. The browser half then re-derives the drawn numbers from the tree the
- * site was actually built from, so nothing here is checked only against itself.
+ * produced. The browser half holds the page to its own numbers: each day the
+ * panel draws adds up, and the sentences above the chart count the same days the
+ * columns do. What the site was built from is never read here, so nothing below
+ * changes when the canary does. That a top-band summary carries no reason is the
+ * producer's rule, and `backend/tests/pipeline/test_banding.py` holds it.
  */
-
-/** The tree the site under test was built from. Bounded, and a fixture. */
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
@@ -48,49 +48,19 @@ interface RawItem {
 	band_reason?: string | null;
 }
 
-function dirs(at: string): string[] {
-	if (!existsSync(at)) return [];
-	return readdirSync(at, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name)
-		.sort();
-}
-
-/** Every committed day of a tree, oldest first, read straight off disk. */
-function daysOf(root: string): { date: string; items: RawItem[] }[] {
-	const found: { date: string; items: RawItem[] }[] = [];
-	for (const year of dirs(root)) {
-		for (const month of dirs(join(root, year))) {
-			for (const day of dirs(join(root, year, month))) {
-				const path = join(root, year, month, day, 'digest.json');
-				if (!existsSync(path)) continue;
-				const parsed = JSON.parse(readFileSync(path, 'utf8')) as { items?: RawItem[] };
-				found.push({ date: `${year}-${month}-${day}`, items: parsed.items ?? [] });
-			}
-		}
-	}
-	return found.sort((a, b) => a.date.localeCompare(b.date));
-}
-
 /** One day counted a second time, by hand, with nothing shared with the module.
  *
  * Deliberately written as one plain loop rather than as a call into
  * `reasonDays`. An oracle that reuses the code under test cannot fail. */
 function countByHand(items: readonly RawItem[]) {
 	const reasons: Record<string, number> = {};
-	let withReason = 0;
 	let doubtful = 0;
-	let highWithReason = 0;
 	for (const item of items) {
 		const reason = item.band_reason ?? '';
-		if (reason !== '') {
-			reasons[reason] = (reasons[reason] ?? 0) + 1;
-			withReason += 1;
-			if (item.band === 'high') highWithReason += 1;
-		}
+		if (reason !== '') reasons[reason] = (reasons[reason] ?? 0) + 1;
 		if (item.band === 'medium' || item.band === 'low') doubtful += 1;
 	}
-	return { reasons, withReason, doubtful, highWithReason, items: items.length };
+	return { reasons, doubtful, items: items.length };
 }
 
 /** `n` items of one shape, so a day below reads as a table rather than a list. */
@@ -253,20 +223,6 @@ test.describe('the arithmetic', () => {
 			expect(reason.label.length, `${reason.id} has no label`).toBeGreaterThan(3);
 		}
 	});
-
-	test('a high summary never carries a reason in the tree the site was built from', () => {
-		// The rule `verdict()` states and the panel depends on: the column counts
-		// items the checker had something to say about, and a top-band item has
-		// nothing to explain.
-		const fixture = daysOf(CANARY);
-		expect(fixture.length, 'the canary tree holds no committed day').toBeGreaterThan(0);
-		for (const day of fixture) {
-			expect(
-				countByHand(day.items).highWithReason,
-				`${day.date}: a top-band summary carries a reason`
-			).toBe(0);
-		}
-	});
 });
 
 async function hydrated(page: Page) {
@@ -281,6 +237,11 @@ async function setWindow(page: Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
+}
+
+/** A sentence as a reader sees it, with its line breaks collapsed. */
+function flat(text: string): string {
+	return text.replace(/\s+/g, ' ').trim();
 }
 
 /** What the page says it drew, per day, read out of its own text list. */
@@ -315,42 +276,66 @@ test.describe('the panel, in a browser', () => {
 		await expect(page.locator('[data-model-reasons-rule]')).toHaveCount(1);
 	});
 
-	test('THE ORACLE: what the page drew is what the built tree holds', async ({ page }) => {
-		// The fixture decides which case runs, and the fixture is read here rather
-		// than counted off the page. A skip that reads a locator count switches
-		// itself off the day the attribute is renamed.
-		const fixture = daysOf(CANARY);
-		expect(fixture.length, 'the canary tree holds no committed day').toBeGreaterThan(0);
-		const explained = fixture.reduce((sum, day) => sum + countByHand(day.items).withReason, 0);
-
+	test('THE ORACLE: each drawn day adds up to its column, and the sentences count the same days', async ({
+		page
+	}) => {
 		await page.goto('/console/model/');
 		await hydrated(page);
-
-		if (explained === 0) {
-			// A real state and a designed one: the fixture published summaries and
-			// the checker wrote a reason on none of them.
-			await expect(page.locator('[data-model-reasons="none"]')).toHaveCount(1);
-			return;
-		}
-
+		const section = page.locator('[data-model-reasons]');
+		const from = (await section.getAttribute('data-model-reasons-from')) ?? '';
+		const to = (await section.getAttribute('data-model-reasons-to')) ?? '';
+		const days = Number(await section.getAttribute('data-model-reasons-days'));
+		expect(from, 'the panel names no window').toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		const rows = await drawn(page);
-		expect(rows.length, 'the page drew no day at all').toBeGreaterThan(0);
-		const byDate = new Map(fixture.map((day) => [day.date, countByHand(day.items)]));
+
+		// The day list is drawn exactly when the window explained something, and one
+		// sentence names the empty state otherwise.
+		await expect(
+			page.locator('[data-model-reasons="none"], [data-model-reasons="empty"]')
+		).toHaveCount(rows.length > 0 ? 0 : 1);
+		const dates = rows.map((row) => row.date);
+		expect(dates, 'the days are not oldest first, once each').toEqual([...new Set(dates)].sort());
 		for (const row of rows) {
-			const hand = byDate.get(row.date);
-			expect(hand, `${row.date} is drawn and the built tree has no such day`).toBeDefined();
+			expect(row.date >= from && row.date <= to, `${row.date} is outside ${from} to ${to}`).toBe(true);
 			const sum = REASONS.reduce((total, reason) => total + (row.counts[reason.id] ?? 0), 0);
 			expect(sum, `${row.date}: the drawn bands do not add up to the column`).toBe(row.explained);
-			expect(row.explained, `${row.date}: the column is not the day own reason count`).toBe(
-				hand?.withReason
-			);
-			expect(row.items, `${row.date}: the denominator is not the day own item count`).toBe(
-				hand?.items
-			);
 			expect(
 				row.explained + row.unexplained,
-				`${row.date}: the doubtful summaries are not all accounted for`
-			).toBe(hand?.doubtful);
+				`${row.date}: more summaries are doubted than the day published`
+			).toBeLessThanOrEqual(row.items);
+		}
+
+		// The headline names the reason the columns hold most of, with their count.
+		const total = (id: string) => rows.reduce((sum, row) => sum + (row.counts[id] ?? 0), 0);
+		const explained = rows.reduce((sum, row) => sum + row.explained, 0);
+		const headline = page.locator('[data-model-reasons-headline]');
+		await expect(headline).toHaveCount(explained > 0 ? 1 : 0);
+		if (explained > 0) {
+			const said = flat(await headline.innerText());
+			const named = /^The reason given most often is "(.+)": ([\d,]+) summaries in these (\d+) days/.exec(said);
+			expect(named, `the headline names no reason and count: ${said}`).not.toBeNull();
+			const reason = REASONS.find((one) => one.label === named?.[1]);
+			expect(reason, `the headline names a reason the panel does not draw: ${named?.[1]}`).toBeDefined();
+			const count = total(reason?.id ?? '');
+			expect(Number(named?.[2].replace(/,/g, '')), 'the headline count is not its columns').toBe(count);
+			expect(Math.max(...REASONS.map((one) => total(one.id))), 'another reason holds more').toBe(count);
+			expect(Number(named?.[3]), 'the headline names another span').toBe(days);
+		}
+
+		// The note on the doubted summaries with no reason counts the same columns.
+		const unexplained = rows.reduce((sum, row) => sum + row.unexplained, 0);
+		const gap = page.locator('[data-model-reasons-unexplained]');
+		await expect(gap).toHaveCount(unexplained > 0 ? 1 : 0);
+		if (unexplained > 0) {
+			const said = flat(await gap.innerText());
+			const counted = /^([\d,]+) of the ([\d,]+) doubted summaries in these (\d+) days have no reason written down, on (\d+) days?\./.exec(said);
+			expect(counted, `the note counts nothing: ${said}`).not.toBeNull();
+			expect(counted?.slice(1).map((value) => Number(value.replace(/,/g, '')))).toEqual([
+				unexplained,
+				explained + unexplained,
+				days,
+				rows.filter((row) => row.unexplained > 0).length
+			]);
 		}
 	});
 
@@ -379,56 +364,50 @@ test.describe('the panel, in a browser', () => {
 			await expect(
 				page.locator('[data-model-reasons-intro]'),
 				`the panel never says it is showing ${preset} days`
-			).toContainText(`${preset} days`);
+			).toContainText(preset === 1 ? 'The single column is this one day' : `over these ${preset} days`);
 		}
 	});
 
 	test('the strip is the key, and it prints one row per reason the window saw', async ({
 		page
 	}) => {
-		const fixture = daysOf(CANARY);
-		const seen = new Set(
-			fixture.flatMap((day) => Object.keys(countByHand(day.items).reasons))
-		);
 		await page.goto('/console/model/');
 		await hydrated(page);
-		if (seen.size === 0) {
-			await expect(page.locator('[data-model-reasons="none"]')).toHaveCount(1);
-			return;
-		}
-		// One row per reason the window actually saw, in the declared order. A
-		// reason that never fired draws no band, so a row for it would be a swatch
-		// in a colour the plot never uses.
+		// One row per reason the drawn days carry, in the declared order. A reason
+		// that never fired draws no band, so a row for it would be a swatch in a
+		// colour the plot never uses.
+		const rows = await drawn(page);
+		const seen = REASONS.filter((reason) => rows.some((row) => (row.counts[reason.id] ?? 0) > 0));
 		const strip = page.locator('[data-readout="doubt-reasons"]');
-		await expect(strip, 'the doubt-reason chart lost its readout strip').toHaveCount(1);
+		await expect(strip, 'the strip is not drawn exactly when a reason is').toHaveCount(
+			seen.length > 0 ? 1 : 0
+		);
 		// Read the labels rather than building one locator per label: two of the
 		// five carry a double quote, which an attribute selector cannot hold.
 		const labels = await strip
 			.locator('[data-readout-row]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-readout-row') ?? ''));
-		expect(labels, 'the strip does not name exactly the reasons the window saw').toEqual(
-			REASONS.filter((reason) => seen.has(reason.id)).map((reason) => reason.label)
+		expect(labels, 'the strip does not name exactly the reasons the columns carry').toEqual(
+			seen.map((reason) => reason.label)
 		);
 	});
 
 	test('a reason the window never saw is named in words, not left invisible', async ({ page }) => {
-		const fixture = daysOf(CANARY);
-		const seen = new Set(
-			fixture.flatMap((day) => Object.keys(countByHand(day.items).reasons))
-		);
-		const missing = REASONS.filter((reason) => !seen.has(reason.id));
 		await page.goto('/console/model/');
 		await hydrated(page);
-		const note = page.locator('[data-model-reasons-never]');
-		if (missing.length === 0) {
-			await expect(note, 'every reason drew, so nothing should be named as absent').toHaveCount(0);
-			return;
-		}
 		// Without this a reader cannot tell a reason that never fired from a reason
-		// nobody thought to look for.
-		await expect(note, 'a reason drew nothing and the panel never said so').toHaveCount(1);
-		for (const reason of missing) {
-			await expect(note, `${reason.id} drew nothing and is not named`).toContainText(reason.label);
+		// nobody thought to look for. The note names every reason the drawn days
+		// never carried and none they did, unless the window held no day at all.
+		const rows = await drawn(page);
+		const missing = REASONS.filter((reason) => !rows.some((row) => (row.counts[reason.id] ?? 0) > 0));
+		const noDay = (await page.locator('[data-model-reasons="empty"]').count()) > 0;
+		const note = page.locator('[data-model-reasons-never]');
+		await expect(note).toHaveCount(!noDay && missing.length > 0 ? 1 : 0);
+		const said = (await note.count()) > 0 ? flat(await note.innerText()) : '';
+		for (const reason of REASONS) {
+			expect(said.includes(`"${reason.label}"`), `the note is wrong about ${reason.id}`).toBe(
+				!noDay && missing.includes(reason)
+			);
 		}
 	});
 });

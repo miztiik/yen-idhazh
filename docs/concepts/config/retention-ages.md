@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-07
 
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
 a publisher reads, because a switch that stops a record being written and an age
@@ -128,16 +128,13 @@ rather than ignored, and it is sent nowhere: the two ledgers above keep their
 own ages, which is a different number for a different ledger.
 
 **Three more ledgers are bounded by a read, and a declaration that deletes what
-the read opens is refused.** The seen ledger's compaction,
-`config/gardener/compact-seen.json`, keeps day files for 45 days after their
-month ends and then 2 month files, which reaches back 104 days, and the gardener
-loader refuses one that reaches back fewer days than `collect.seen_window_days`,
-the days the collector reads. The
-counterfactual-scores ledger's compaction,
-`config/gardener/compact-counterfactual-scores.json`, is held the same way above
-`lens_weights.window_days`, and the published ledger's above
-`collect.published_window_days`, which is `-1` and so reads every day: nothing
-may delete that ledger. Each floor belongs to the ledger and is held against
+the read opens is refused.** The seen ledger's compaction is held above
+`collect.seen_window_days`, counterfactual scores above `lens_weights.window_days`,
+and published addresses above `collect.published_window_days`, which is 730
+days, or two years. All fourteen ledgers follow the
+[yearly policy](idhazh-gardener.md#the-compaction-declarations-that-ship).
+A forever reader is refused while finite yearly pruning is enabled.
+Each floor belongs to the ledger and is held against
 whichever declaration governs it - its retention task while it is on CSV, its
 compaction once it moves - and a ledger no declaration governs is deleted by
 nothing, so it meets every floor.
@@ -270,9 +267,9 @@ folded; the gardener loader refuses the pair otherwise.
 
 **What the `full-grain` series of `telemetry-aggregate` governs is the
 item-health ledger, and nothing else.** Past the window a month is summarised to
-one row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` by the
-gardener's `telemetry-aggregate` task, which reads the month through the ledger
-door. The rows themselves go later, when the item-health compaction's
+one row per `(date, stage)` in `state/raw/item-health-summary/` by the gardener's
+`telemetry-aggregate` task, which reads the month through the ledger door and
+files the summary through the same door. The rows themselves go later, when the item-health compaction's
 `monthly_window` passes, so a month is always summarised before anything can take
 its rows. What survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate

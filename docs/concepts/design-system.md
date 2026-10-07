@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-05
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -32,6 +32,7 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 | `--movement-*` | Whether a change improved or worsened a measure |
 | `--source-swatch-*` | Source identity and the read-state ring |
 | `--tint-*` | Restrained surface treatments |
+| `--type-*` | The family of a column's data type, as readable text |
 
 Do not substitute one family for another. A categorical series colour must not imply confidence. A source tint must not become an unreadable chart stroke.
 

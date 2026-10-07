@@ -163,10 +163,10 @@ test.describe('the sentences count what the chart drew', () => {
 			);
 		const text = (await page.locator('[data-line-clamp-note]').innerText()).trim();
 		if (clamped === 0) {
-			expect(text).toContain('has not held the line back on any');
+			expect(text).toContain('has not held the line back in');
 		} else {
 			expect(text, 'the sentence and the chart disagree about the clamp').toContain(
-				`on ${clamped} of the last`
+				`on ${clamped} of `
 			);
 		}
 	});
@@ -182,7 +182,7 @@ test.describe('the sentences count what the chart drew', () => {
 		expect(Number(await page.locator(`${PANEL} [data-line-rule]`).getAttribute('data-line-rule')))
 			.toBeCloseTo(FLOOR, 3);
 		await expect(page.locator('[data-line-state="no-days"]')).toContainText(
-			'No day has fitted a line yet'
+			'No line was fitted in'
 		);
 
 		const box = await page.locator(`${PANEL} svg`).boundingBox();

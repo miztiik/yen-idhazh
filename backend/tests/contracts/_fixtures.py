@@ -38,8 +38,11 @@ FIXTURE_FILES: Final = (
     "article/fetch-failed.json",
     "article/ok.json",
     "article/truncated.json",
+    "collection-prune-row/a-compaction-that-recovered-three-periods.json",
     "collection-prune-row/a-dry-walk-that-counted-past-its-ceiling.json",
     "collection-prune-row/a-live-fold-beside-a-dry-window.json",
+    "collection-prune-row/a-live-walk-past-a-member-github-kept.json",
+    "collection-prune-row/a-pass-github-did-not-answer.json",
     "collection-prune-row/ceiling-reached.json",
     "collection-prune-row/exhausted-dry-run.json",
     "compact-index/a-daily-index.json",
@@ -58,8 +61,6 @@ FIXTURE_FILES: Final = (
     "council-run-record/a-migrated-count-that-had-nothing-to-do.json",
     "council-run-record/a-part-that-ran-the-model.json",
     "council-run-record/a-selection-that-ran-no-model.json",
-    "council-shard-outcome/a-unit-that-ran-no-model.json",
-    "council-shard-outcome/a-unit-that-stopped-on-its-own-clock.json",
     "counterfactual-score-row/a-refused-candidate-a-heavier-lens-would-lift.json",
     "counterfactual-score-row/no-lens-matched-so-both-scores-agree.json",
     "day-metrics/full.json",
@@ -158,9 +159,6 @@ FIXTURE_FILES: Final = (
     "visual-prune-row/fuse-tripped.json",
     "visual-prune-row/policy-off.json",
     "watchlist/seeded.json",
-    "watermark/a-daily-watermark.json",
-    "watermark/a-monthly-watermark.json",
-    "watermark/a-yearly-watermark.json",
 )
 
 #: The three blocks `AppearanceConfig` re-exposes, as (the key

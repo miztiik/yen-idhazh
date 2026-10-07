@@ -73,9 +73,7 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         job_labels=frozenset({"plan"}),
     ),
     LedgerName.FEED_HEALTH: LedgerStaging(
-        writer=(
-            "idhazh.ledger.persist, called by idhazh.stages.plan.stage_plan and the canary"
-        ),
+        writer=("idhazh.ledger.persist, called by idhazh.stages.plan.stage_plan and the canary"),
         symbol="idhazh.ledger.persist",
         job_labels=frozenset({"plan"}),
     ),
@@ -114,11 +112,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.ITEM_HEALTH_SUMMARY: LedgerStaging(
         writer=(
-            "idhazh.ledger.rows.write_item_health_summary, called by the gardener's "
-            "monthly roll-up (idhazh.gardener.tasks.telemetry_aggregate) - its own "
-            "workflow, not a `digest.yml` commit job"
+            "idhazh.gardener.tasks.telemetry_aggregate.run, the gardener's monthly "
+            "roll-up, through the ledger door - its own workflow, not a `digest.yml` "
+            "commit job"
         ),
-        symbol="idhazh.ledger.rows.write_item_health_summary",
+        symbol="idhazh.gardener.tasks.telemetry_aggregate.run",
         job_labels=frozenset(),
     ),
     LedgerName.PUBLISHED: LedgerStaging(
@@ -193,15 +191,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol=None,
         job_labels=frozenset(),
     ),
-    LedgerName.LLM_COUNCIL_SHARD_OUTCOMES: LedgerStaging(
-        writer=(
-            "idhazh.ledger.rows.append_council_shard_outcomes, called from the "
-            "council's tenant module, resolved from config at call time rather than "
-            "dispatched from a `digest.yml` job"
-        ),
-        symbol="idhazh.ledger.rows.append_council_shard_outcomes",
-        job_labels=frozenset(),
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
         writer=(
             "the council's shipping capability, which renders a tenant's row rather "
@@ -250,6 +239,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
             "shard - its own workflow, not a `digest.yml` commit job"
         ),
         symbol="idhazh.gardener.runner._record",
+        job_labels=frozenset(),
+    ),
+    LedgerName.COUNCIL_RUN_RECORDS: LedgerStaging(
+        writer="idhazh.council.session._collect, through the ledger door",
+        symbol="idhazh.council.session._collect",
         job_labels=frozenset(),
     ),
 }

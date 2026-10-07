@@ -31,7 +31,6 @@ from typing import Final
 
 from idhazh import day_partition
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -53,7 +52,6 @@ from idhazh.ledger.csv_file import (
 from idhazh.ledger.filenames import segment_name
 from idhazh.ledger.keys import (
     _TREE_SHAPES,
-    COUNCIL_SHARD_OUTCOME_KEY,
     DATE_CELL,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
@@ -331,35 +329,6 @@ def append_fitted_thresholds(
         file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
     landed = extend_ledger_file(file, columns, recorded)
     return landed - drop_repeated_rows(file, STORY_SIMILARITY_THRESHOLD_KEY)
-
-
-def append_council_shard_outcomes(
-    state_dir: Path, date: str, rows: Iterable[CouncilShardOutcome]
-) -> int:
-    """Append a night's recorded units of council work into that date's own file.
-
-    Settled against `COUNCIL_SHARD_OUTCOME_KEY` straight after the write, the
-    way `append_fitted_thresholds` is. A repeat under all four cells is a second
-    attempt at one unit, which ran the same work under the same clock, so the
-    first row wins and there is nothing to choose between them.
-
-    **A night with no unit to record writes no file**, which is the one place
-    this writer differs from the three above it. A header with no rows under it
-    is a real day file to the partition walker, so an empty write here would put
-    a permanent day in the prune target and the day inventory that no council
-    run ever had. The ledger's directory is kept in the checkout by its own
-    `.gitkeep`, so the staged path is there whether or not tonight wrote to it.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    recorded = list(rows)
-    if not recorded:
-        return 0
-    if not lifecycle.accepts_new_rows(LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, len(recorded)):
-        return 0
-    file = paths.path(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date)
-    landed = extend_ledger_file(file, CouncilShardOutcome.csv_columns(), recorded)
-    return landed - drop_repeated_rows(file, COUNCIL_SHARD_OUTCOME_KEY)
 
 
 def load_fitted_thresholds(

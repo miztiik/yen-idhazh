@@ -32,6 +32,7 @@
  */
 
 import type { LostDay } from '../console/recording';
+import { nameSpan } from '../console/span-words';
 import type { Row } from '../data/ledger';
 import { plural, shortDate } from '../format';
 import { dayTicks, type DayTick, type Frame } from './frame';
@@ -583,14 +584,9 @@ export function fleetDots(
 	};
 }
 
-/** Words for how much of a span is on the page: `these 30 days`, `this one day`. */
-export function spanWords(days: number): string {
-	return days === 1 ? 'this one day' : `these ${days} days`;
-}
-
 /** The sentence above the plot: the count, its days, and the kind given most. */
 export function fleetSentence(view: FleetView): string {
-	const ran = `${plural(view.placements, 'job', 'jobs')} ran in ${spanWords(view.windowDays)}`;
+	const ran = `${plural(view.placements, 'job', 'jobs')} ran in ${nameSpan(view.windowDays)}`;
 	const on =
 		view.days.length === view.windowDays ? '' : `, on ${plural(view.days.length, 'day', 'days')} of them`;
 	const counted = `${ran}${on}.`;

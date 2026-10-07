@@ -1,0 +1,406 @@
+{
+  "assemble": {
+    "group_identical_titles": true,
+    "same_story": {
+      "adaptive_dedup_threshold": {
+        "applied_lookback_days": 7,
+        "band_high": 1.0,
+        "band_low": 0.88,
+        "bin_width": 0.001,
+        "dead_zone_bins": 1,
+        "disagreement_max": 0.15,
+        "discard_share": 0.03,
+        "enabled": false,
+        "fall_weight": 0.5,
+        "flush_every_pairs": 1,
+        "judge_temperature": 0.0,
+        "max_down_bins": 10,
+        "max_up_bins": 3,
+        "minimum_above_line": 30,
+        "minimum_days": 10,
+        "minimum_negatives": 200,
+        "pair_budget": 200,
+        "rise_weight": 0.15,
+        "settled_delta": 0.001,
+        "settled_window_days": 7,
+        "step_change_guard_enforced": false,
+        "step_change_multiple": 5.0,
+        "step_change_window_rows": 14,
+        "unclear_max": 0.35
+      },
+      "cosine_weight": 1.0,
+      "floor_min": 0.94
+    },
+    "same_story_window_hours": 36.0
+  },
+  "assist": {
+    "max_tokens": 256,
+    "min_readable_letter_share": 0.5,
+    "model_base_url": "https://huggingface.co/Xenova/all-MiniLM-L6-v2",
+    "model_cdn_origins": [
+      "https://us.aws.cdn.hf.co"
+    ],
+    "model_digests": {
+      "config.json": "7135149f7cffa1a573466c6e4d8423ed73b62fd2332c575bf738a0d033f70df7",
+      "onnx/model_quantized.onnx": "afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1",
+      "special_tokens_map.json": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3",
+      "tokenizer.json": "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0",
+      "tokenizer_config.json": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+    },
+    "model_fetch_deadline_ms": 120000,
+    "model_revision": "751bff37182d3f1213fa05d7196b954e230abad9",
+    "result_limit": 10,
+    "search_min_days": 7,
+    "search_months": 1,
+    "similarity_floor": 0.35
+  },
+  "bench": {
+    "corpus_items": 3,
+    "repeats": 3,
+    "run_model_speed_case": true
+  },
+  "collect": {
+    "availability_rest_runs": 5,
+    "availability_strikes_before_rest": 5,
+    "blocked_url_markers": [
+      "fool.com/the-ascent/"
+    ],
+    "carriage_step": 0.25,
+    "dedup_enforce": false,
+    "dedup_similarity_min": 0.94,
+    "feed_http_410_runs_before_retirement": 5,
+    "max_age_hours": 24.0,
+    "max_future_hours": 6.0,
+    "max_per_source": 2,
+    "max_source_share_per_day": 0.05,
+    "published_window_days": -1,
+    "recency_half_life_hours": 18.0,
+    "recency_weight": 0.6,
+    "reliability_floor": 0.5,
+    "reliability_window_days": 30,
+    "robots_denied_recheck_runs": 1,
+    "robots_unreachable_recheck_runs": 1,
+    "seen_window_days": 90,
+    "settled_failure_codes": [
+      "robots_denied",
+      "robots_unreachable",
+      "blocked_address",
+      "http_client_error",
+      "paywalled",
+      "no_text",
+      "not_prose",
+      "boilerplate",
+      "contaminated",
+      "too_short",
+      "unsupported_form"
+    ],
+    "source_quality_auto_retire": false,
+    "source_quality_dwell_days": 14,
+    "source_yield_alarm_min_decisions": 30,
+    "source_yield_alarm_point": 0.5,
+    "source_yield_min_complete_days": 30,
+    "tier_weights": {
+      "community": 0.3,
+      "institution": 1.0,
+      "trade_press": 0.6
+    },
+    "watchlist_bonus": 0.5,
+    "watchlist_max_entities": 30
+  },
+  "console": {
+    "default_window_days": 14,
+    "doubt_rows": 10,
+    "failure_list_max": 25,
+    "feed_rows": 10,
+    "max_window_days": 366,
+    "min_attempts_for_rate": 5,
+    "min_window_days": 1,
+    "pan_days": 7,
+    "source_rows": 10,
+    "today_anchor": "right",
+    "zoom_factor": 1.5
+  },
+  "council": {
+    "first_night": "2026-09-19",
+    "repair_dates_a_night": 1,
+    "repair_window_nights": 7,
+    "shard_preamble_minutes": 13,
+    "shard_timeout_minutes": 200,
+    "shard_wrap_up_minutes": 12,
+    "shards": 4,
+    "tenants": [
+      "content-similarity-judge"
+    ]
+  },
+  "drift": {
+    "extractiveness_rise": 0.15,
+    "min_domain_rows": 20,
+    "min_window_rows": 20,
+    "month_over_month_pct": 10.0,
+    "quarterly_refresh_fraction": 0.5,
+    "source_word_count_drop": 0.4,
+    "year_over_year_pct": 5.0
+  },
+  "elements": {
+    "max_per_article": 256
+  },
+  "evaluation": {
+    "band_high_min": 0.8,
+    "band_medium_min": 0.5,
+    "brief_compression_ceiling": 0.5,
+    "canary_files": [
+      "direct-instruction-override",
+      "encoded-payload",
+      "exfiltration-via-url",
+      "fake-system-delimiter",
+      "page-title-instruction",
+      "tool-call-injection"
+    ],
+    "chunk_overlap_words": 150,
+    "chunk_words": 900,
+    "golden_set_size": 20,
+    "label_draw_per_decile": 6,
+    "label_min_run_days": 10,
+    "labellers": [
+      "miztiik"
+    ],
+    "qualification_min_brief": 2,
+    "qualification_min_over_cap": 2,
+    "qualification_min_per_band": 3,
+    "qualification_pool_multiple": 6,
+    "spot_checks_per_week": 10,
+    "validation_articles": 20,
+    "validation_drop_max": 0.1,
+    "validation_switch_margin": 0.05,
+    "verbatim_reject_ceiling": 0.75
+  },
+  "extract": {
+    "backoff_initial_seconds": 1.0,
+    "backoff_multiplier": 2.0,
+    "boilerplate_ratio_max": 0.4,
+    "corroboration_min_words": 100,
+    "corroboration_ratio_max": 2.0,
+    "max_body_bytes": 2000000,
+    "max_retries": 3,
+    "min_source_words": 60,
+    "paywall_markers": [
+      "isaccessibleforfree\":false",
+      "isaccessibleforfree\": false",
+      "subscribe to continue reading",
+      "register or subscribe to continue"
+    ],
+    "prose_line_count_min": 12,
+    "prose_line_ratio_min": 0.5,
+    "prose_sentence_min": 3,
+    "prose_sentence_words_min": 8,
+    "reject_boilerplate": false,
+    "reject_contaminated": false,
+    "reject_not_prose": false,
+    "reject_too_short": true,
+    "request_timeout_seconds": 20.0,
+    "truncation_cap_tokens": 26000,
+    "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+  },
+  "finetune": {
+    "corpus_rows": 2000,
+    "epochs": 2,
+    "harvest_every_days": 7,
+    "holdout_days": 2,
+    "min_rows": 500,
+    "prompt_iterations": 3,
+    "reference_rows": 500,
+    "reference_test_rows": 100,
+    "sequence_length": 49152,
+    "teacher": "summarizer",
+    "train_rows": 1000
+  },
+  "ledger": {
+    "archive_base_url": "https://raw.githubusercontent.com/miztiik/yen-idhazh/main",
+    "compression_compact": "zstd",
+    "compression_raw": "snappy",
+    "engine_extension_repository": "https://extensions.duckdb.org",
+    "format": "parquet",
+    "published": [
+      "candidate-models",
+      "counterfactual-scores",
+      "host-fingerprint",
+      "item-health",
+      "published",
+      "seen",
+      "summary-quality-evals"
+    ]
+  },
+  "lens_weights": {
+    "counterfactual_multiplier": 1.25,
+    "counterfactual_refused_per_desk": 20,
+    "window_days": 30
+  },
+  "logging": {
+    "capture_prompts": true,
+    "capture_replies": true,
+    "item_lines": true,
+    "level": "INFO",
+    "stage_lines": true,
+    "waiting_heartbeat_seconds": 30
+  },
+  "model_server": {
+    "base_url": "http://127.0.0.1:8080"
+  },
+  "models_file": "models/qwen3.5-9b-q4km.json",
+  "observability": {
+    "cost_currency": "USD",
+    "cost_input_per_million": 0.2,
+    "cost_output_per_million": 0.6,
+    "evaluation_enabled": true,
+    "host_fingerprint": true,
+    "host_fingerprint_bandwidth_cache_multiple": 2,
+    "host_fingerprint_bandwidth_floor_mib": 512,
+    "public_day_metrics_keep_months": 14,
+    "public_machine_keep_months": 14,
+    "public_run_days_keep_months": 14,
+    "public_run_timeline_keep_months": 2,
+    "sample_rate": 1.0,
+    "telemetry_publish": true,
+    "tracing_enabled": true,
+    "visual_aggregate_keep_months": null,
+    "visuals_full_grain_months": 14
+  },
+  "page_weight": {
+    "ceilings_bytes": {
+      "/404": 4400
+    },
+    "cold_console_load_bytes": 2300000,
+    "payload_ceilings_bytes": {
+      "config/ledgers.json": 3400,
+      "console/band.json": 2000,
+      "state/compact/candidate-models/index/": 2200,
+      "state/compact/counterfactual-scores/index/": 2200,
+      "state/compact/host-fingerprint/index/": 2200,
+      "state/compact/item-health/index/": 2200,
+      "state/compact/published/index/": 2200,
+      "state/compact/seen/index/": 2200,
+      "state/compact/summary-quality-evals/index/": 2200,
+      "telemetry/": 1100000
+    }
+  },
+  "placement": {
+    "freshness_decay_at_scale": 0.5,
+    "freshness_offset_hours": 6.0,
+    "freshness_scale_hours": 24.0,
+    "head_items": 20,
+    "head_no_repeat": 10,
+    "max_desk_in_head": 5
+  },
+  "reference_dataset": {
+    "article_words_min": 120,
+    "domains_per_split_min": 20,
+    "request_delay_seconds": 1.0,
+    "rows_per_domain_max": 7,
+    "rows_per_split_min": 200
+  },
+  "retention": {
+    "image_months": 13,
+    "pages_hard_cap_mb": 1024,
+    "site_budget_mb": 800
+  },
+  "run": {
+    "max_parallel": 4,
+    "qualification_repeats": 3,
+    "qualify_on_the_production_path": true,
+    "safety_ceiling_per_day": 400,
+    "safety_ceiling_per_run": 80,
+    "shard_size": 5,
+    "shard_timeout_minutes": 200,
+    "shard_wrap_up_minutes": 12,
+    "success_floor_pct": 70,
+    "trial_state_dirname": null
+  },
+  "summarize": {
+    "asks_for_a_visual_plan": true,
+    "bands": [
+      {
+        "min_source_words": 0,
+        "over_length_action": "trim",
+        "target_words_max": 45,
+        "target_words_min": 30
+      },
+      {
+        "min_source_words": 60,
+        "over_length_action": "trim",
+        "target_words_max": 80,
+        "target_words_min": 45
+      },
+      {
+        "min_source_words": 700,
+        "over_length_action": "trim",
+        "target_words_max": 130,
+        "target_words_min": 70
+      },
+      {
+        "min_source_words": 2000,
+        "over_length_action": "publish",
+        "target_words_max": 160,
+        "target_words_min": 95
+      },
+      {
+        "min_source_words": 4000,
+        "over_length_action": "publish",
+        "target_words_max": 200,
+        "target_words_min": 120
+      }
+    ],
+    "length_policy": {
+      "absolute_floor_words": 25,
+      "floor_applies_above_source_words": 700,
+      "overshoot_ratio": 0.2,
+      "overshoot_words": 25,
+      "undershoot_ratio": 0.3
+    },
+    "max_verbatim_words": 20,
+    "paragraphs_max": 2,
+    "second_paragraph_from_words": 90,
+    "title_words_max": 14,
+    "title_words_min": 6
+  },
+  "ui": {
+    "archive_page_size": 25,
+    "lead_also_covered_weight": 0.0,
+    "lead_cluster_floor": 3,
+    "lead_max_yesterday": 1,
+    "lead_rank_weight": 1.0,
+    "lead_shared_subject_weight": 0.2,
+    "leading_min": 3,
+    "leading_per_desk": 2,
+    "leading_stories": 5,
+    "read_mark_days": 14,
+    "repo_url": "https://github.com/miztiik/yen-idhazh",
+    "sections": [
+      "notice",
+      "leads",
+      "topics",
+      "items"
+    ],
+    "show_filter": true,
+    "site_title": "Yen Idhazh",
+    "source_mark": true,
+    "tagline": "A daily digest that checks its own work.",
+    "theme_default": "dark"
+  },
+  "version": "2026-09-08T16:49",
+  "visuals": {
+    "asset_base_url": "",
+    "downgrade_floor_percentiles": [],
+    "enabled_kinds": [
+      "chart"
+    ],
+    "histogram_bins": 3,
+    "lead_words": 150,
+    "max_chart_points": 8,
+    "max_diagram_steps": 6,
+    "max_facts": 16,
+    "max_output_tokens": 400,
+    "min_chart_points": 3,
+    "min_diagram_steps": 3,
+    "request_timeout_minutes": 2.0
+  }
+}

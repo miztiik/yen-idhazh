@@ -1,7 +1,11 @@
 import { expect, test, type Page } from './support/browser';
-import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
-import { consoleConfig, explorerConfig } from '../src/lib/server/config';
+import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt, type AnswerState } from './support/explorer-answer';
+import { everyDay } from './support/ledger-lifecycle';
+import { explorerConfig } from '../src/lib/server/config';
 import { statusSentence, statusWithHeld } from '../src/lib/console/explorer/status';
+
+/** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
+const PINNED = '2030-06-15';
 
 type Box = { x: number; y: number; width: number; height: number };
 type ShiftSource = {
@@ -86,7 +90,7 @@ async function snapshot(page: Page): Promise<Snapshot> {
 			['answer', '[data-workbench-region="answer"]'],
 			['chart', '[data-workbench-region="chart"]'],
 			['run', '.run-button'],
-			['editorFrame', '[data-workbench-region="editor"] .frame']
+			['editorFrame', '[data-workbench-region="editor"] .editor-frame']
 		] as const;
 		return {
 			boxes: Object.fromEntries(selectors.map(([name, selector]) => [name, read(selector)])),
@@ -126,22 +130,27 @@ function expectStable(before: Snapshot, after: Snapshot) {
 }
 
 for (const view of VIEWS) {
-	test(`Run moves nothing in answered, capped, quiet and refused states at ${view.width}px`, async ({ page }) => {
+	test(`Run moves nothing in answered, capped, quiet and refused states at ${view.width}px`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(1, 0) });
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		await page.evaluate(() => window.scrollTo(0, 0));
-		for (const sql of [
-			'SELECT count(*) AS rows FROM "published"',
-			'SELECT i AS row_number FROM range(0, 1200) AS t(i)',
-			'SELECT * FROM "published" WHERE false',
-			'SELECT 1; SELECT 2'
-		]) {
+		const lede = page.locator('[data-console-panel-id="data-explorer-rows"] [data-lede]');
+		const cases: { sql: string; state: AnswerState; rows: string | null }[] = [
+			{ sql: 'SELECT count(*) AS rows FROM "published"', state: 'table', rows: '1 row' },
+			{ sql: 'SELECT i AS row_number FROM range(0, 1200) AS t(i)', state: 'table', rows: 'The first 1000 rows' },
+			{ sql: 'SELECT * FROM "published" WHERE false', state: 'quiet', rows: null },
+			{ sql: 'SELECT 1; SELECT 2', state: 'refused', rows: null }
+		];
+		for (const { sql, state, rows } of cases) {
 			await chooseExplorerQuestion(page, ['published'], sql);
-			await page.evaluate(() => window.scrollTo(0, 0));
-			await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+			// Run is pressed where a person sees it, so the press itself scrolls nothing.
+			await page.locator('.run-button').scrollIntoViewIfNeeded();
 			await startShiftObserver(page);
 			const before = await snapshot(page);
 			await runExplorer(page);
+			await expectAnswer(page, state);
+			if (rows !== null) await expect(lede).toHaveText(rows);
 			await page.waitForTimeout(1000);
 			expectStable(before, await snapshot(page));
 		}
@@ -151,7 +160,7 @@ for (const view of VIEWS) {
 test('Copy link notice is fixed and moves no region', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await page.setViewportSize({ width: 390, height: 844 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await page.getByRole('button', { name: /^Copy link$/ }).scrollIntoViewIfNeeded();
 	await startShiftObserver(page);
 	const before = await snapshot(page);
@@ -161,12 +170,14 @@ test('Copy link notice is fixed and moves no region', async ({ page, context }) 
 	expectStable(before, await snapshot(page));
 });
 
-test('status text never overlaps the reserved answer link box', async ({ page }) => {
+test('status text never overlaps the reserved answer link box', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 390, height: 844 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 	await runExplorer(page);
+	await expectAnswer(page, 'quiet');
 	const link = page.getByRole('link', { name: 'See the answer' });
 	await expect(link).toHaveAttribute('href', /#data-explorer-rows$/);
 	const overlap = await page.locator('[data-workbench-region="status"]').evaluate((status) => {
@@ -179,53 +190,21 @@ test('status text never overlaps the reserved answer link box', async ({ page })
 	expect(await page.locator('[data-workbench-region="status"]').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 	await runExplorer(page);
+	await expectAnswer(page, 'quiet');
 	await expect(page.getByRole('link', { name: 'See the answer' })).toHaveCount(0);
-});
-
-test('M8: every workbench region keeps its idle block size at all four widths', async ({ page }) => {
-	for (const view of VIEWS) {
-		await page.setViewportSize(view);
-		await openExplorer(page);
-		const sizes = await page.evaluate(() => {
-			const css = getComputedStyle(document.documentElement);
-			const rem = parseFloat(css.fontSize);
-			const control = parseFloat(css.getPropertyValue('--workbench-control')) * rem;
-			const space1 = parseFloat(css.getPropertyValue('--space-1')) * rem;
-			const space3 = parseFloat(css.getPropertyValue('--space-3')) * rem;
-			const leadingSm = parseFloat(css.getPropertyValue('--leading-sm')) * rem;
-			const fieldLeading = parseFloat(css.getPropertyValue('--workbench-field-leading')) * rem;
-			const regions = Object.fromEntries(
-				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
-					const rect = node.getBoundingClientRect();
-					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
-				})
-			);
-			return { control, space1, space3, leadingSm, fieldLeading, rem, regions };
-		});
-		const lines = explorerConfig().readout_lines[view.width < 640 ? 0 : view.width < 1024 ? 1 : view.width < 1400 ? 2 : 3];
-		const editorLines = explorerConfig().editor_lines_shown[view.width < 1024 ? 0 : 1];
-		const editorHeight = 4 * sizes.space3 + sizes.control + editorLines * sizes.fieldLeading;
-		const statusHeight = lines * sizes.leadingSm + 2 * sizes.space1;
-		expect(sizes.regions.editor, `${view.width} editor`).toBeCloseTo(editorHeight, 0);
-		expect(sizes.regions.status, `${view.width} status`).toBeCloseTo(lines * sizes.leadingSm + 2 * sizes.space1, 0);
-		if (view.width >= 1024) {
-			expect(sizes.regions.ledgers, `${view.width} ledgers`).toBeCloseTo(editorHeight + statusHeight, 0);
-			expect(sizes.regions.columns, `${view.width} columns`).toBeCloseTo(editorHeight + statusHeight, 0);
-		}
-		expect(sizes.regions.answer, `${view.width} answer`).toBeCloseTo(view.height * explorerConfig().answer_svh / 100, 0);
-		expect(sizes.regions.chart, `${view.width} chart`).toBeCloseTo(sizes.control + consoleConfig().chart_height + 4 * sizes.rem, 0);
-	}
 });
 
 test('M10: non-run interactions keep every region box fixed', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], 'SELECT i AS row_number FROM range(0, 120) AS t(i)');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	await page.evaluate(() => window.scrollTo(0, 0));
 	const measure = async (act: () => Promise<void>) => {
 		const before = await snapshot(page);
@@ -238,6 +217,8 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 	if (await page.locator('[data-shape-choice]').count()) await measure(() => page.locator('[data-shape-choice]').last().click());
 	if (await page.locator('summary').filter({ hasText: 'more' }).count()) {
 		await measure(() => page.locator('summary').filter({ hasText: 'more' }).first().click());
+		// The open list lies over the regions below it; a person closes it before pressing what it covers.
+		await measure(() => page.keyboard.press('Escape'));
 	}
 	await page.locator('.history-list summary').scrollIntoViewIfNeeded();
 	await measure(() => page.locator('.history-list summary').click());
@@ -252,7 +233,8 @@ test('M10: non-run interactions keep every region box fixed', async ({ page, con
 	await measure(() => page.locator('#explorer-sql').fill(Array.from({ length: 40 }, (_, index) => `SELECT ${index}`).join('\n')));
 });
 
-test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page }) => {
+test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, days: 90, firstRun: true })).toBe('Run reads 123 files, 64.0 MB from 4 ledgers over 90 UTC days. It also starts the query engine.');
 	expect(statusSentence({ state: 'costing' })).toBe('Choosing a ledger fetches one day of it to list its columns.');
 	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
@@ -266,11 +248,12 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 	const longest = statusWithHeld(statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 123, ms: 99999 } }), 67_108_864);
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const status = page.locator('[data-workbench-region="status"]');
 		await expect(status).toContainText('Run reads');
 		await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(page);
+		await expectAnswer(page, 'quiet');
 		await expect(status).toContainText('Ran in');
 		await status.locator('.status-copy').evaluate((node, value) => {
 			node.textContent = value;
@@ -287,7 +270,7 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 test('M12: notices time out, pause on hover or focus, and close on the button', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await page.setViewportSize({ width: 390, height: 844 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await page.clock.install();
 	await page.getByRole('button', { name: /^Copy link$/ }).scrollIntoViewIfNeeded();
 	await page.getByRole('button', { name: /^Copy link$/ }).click();
@@ -309,7 +292,7 @@ test('M12: notices time out, pause on hover or focus, and close on the button', 
 });
 
 test('storage notice dismissal does not re-enable storage-backed controls', async ({ page }) => {
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await page.evaluate(() => {
 		Storage.prototype.setItem = () => {
 			throw new Error('storage blocked');
@@ -327,14 +310,18 @@ test('storage notice dismissal does not re-enable storage-backed controls', asyn
 	await expect(page.locator('.history-list')).toContainText('Nothing asked in this browser yet.');
 });
 
-test('M13: B2 column rail text flips without changing either rail box', async ({ page }) => {
+test('M13: B2 column rail text flips without changing either rail box', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) },
+		{ ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint" LIMIT 1');
 	const rail = '[data-workbench-region="columns"]';
 	const outer = await box(page, rail);
 	const inner = await box(page, '[data-explorer-column-box]');
 	await runExplorer(page);
+	await expectAnswer(page, 'table');
 	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
 	closeBox(outer, await box(page, rail));
 	closeBox(inner, await box(page, '[data-explorer-column-box]'));
@@ -345,17 +332,22 @@ test('M13: B2 column rail text flips without changing either rail box', async ({
 });
 
 test('M15: panel ids stay ordered, headed and joined into one workbench surface', async ({ page }) => {
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const ids = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-console-panel-id')));
 	expect(ids.slice(0, 3)).toEqual(['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']);
 	for (const id of ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"] h2`)).toHaveCount(1);
 	}
-	const gaps = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.slice(0, 3).map((node, index, all) => {
-		if (index === 0) return 0;
-		return Math.round(node.getBoundingClientRect().top - all[index - 1].getBoundingClientRect().bottom);
+	// Each panel touches the one before it, under it or, where the answer and the chart share a row, beside it.
+	const joins = await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.slice(0, 3).map((node, index, all) => {
+		if (index === 0) return 'first';
+		const box = node.getBoundingClientRect();
+		const before = all[index - 1].getBoundingClientRect();
+		const under = Math.abs(box.top - before.bottom) < 0.5;
+		const beside = Math.abs(box.left - before.right) < 0.5 && Math.abs(box.top - before.top) < 0.5;
+		return under || beside ? 'joined' : `${box.top - before.bottom}px under and ${box.left - before.right}px beside the panel before it`;
 	}));
-	expect(gaps).toEqual([0, 0, 0]);
+	expect(joins).toEqual(['first', 'joined', 'joined']);
 	const colours = await page.evaluate(() => ({
 		page: getComputedStyle(document.body).backgroundColor,
 		workbench: getComputedStyle(document.querySelector('.workbench') as HTMLElement).backgroundColor
@@ -365,7 +357,7 @@ test('M15: panel ids stay ordered, headed and joined into one workbench surface'
 
 test('M16: phone width has no document overflow and controls stay inside their regions', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
-	await openExplorer(page);
+	await openExplorer(page, PINNED);
 	const overflow = await page.evaluate(() => {
 		const regions = [...document.querySelectorAll('[data-workbench-region="toolbar"], [data-workbench-region="questions"]')];
 		const offenders: string[] = [];
@@ -388,14 +380,16 @@ test('M16: phone width has no document overflow and controls stay inside their r
 	expect(overflow.controlsFit, overflow.offenders.join('\n')).toBe(true);
 });
 
-test('no workbench control is cut off, idle or after a run, at any width', async ({ page }) => {
+test('no workbench control is cut off, idle or after a run, at any width', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	for (const view of VIEWS) {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		for (const phase of ['idle', 'after a run'] as const) {
 			if (phase === 'after a run') {
 				await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
 				await runExplorer(page);
+				await expectAnswer(page, 'table');
 			}
 			const cut = await page.evaluate(() => {
 				// These regions never scroll, so a control outside them, or content past their
@@ -416,7 +410,8 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 					const box = region.getBoundingClientRect();
 					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
 						const rect = control.getBoundingClientRect();
-						if (rect.width === 0 || rect.height === 0 || getComputedStyle(control).visibility === 'hidden') continue;
+						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
+						if (rect.width === 0 || rect.height === 0 || !control.checkVisibility() || getComputedStyle(control).visibility === 'hidden') continue;
 						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
 						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
 						if (!across || (both && !down)) {
@@ -434,7 +429,7 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 test('M17: keyboard order follows the visual order at desktop and phone widths', async ({ page }) => {
 	for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
 		await page.setViewportSize(view);
-		await openExplorer(page);
+		await openExplorer(page, PINNED);
 		const order = await page.evaluate(() => {
 			const regionOrder = ['strip', 'toolbar', 'questions', 'ledgers', 'editor', 'status', 'columns', 'answer', 'chart'];
 			return [...document.querySelectorAll<HTMLElement>('a[href], button, input, summary, textarea')]

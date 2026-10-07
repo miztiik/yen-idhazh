@@ -2,17 +2,24 @@
 	/** Lists Data explorer runs kept by this browser and reopens one without running it. */
 	import Icon from '$lib/icons/Icon.svelte';
 	import { dayMonth } from '$lib/format';
+	import { closeAfterPick, closesWhenLeft } from './floating-list';
 	import type { RecentRun } from './keep';
 
 	let { runs, onPick }: { runs: readonly RecentRun[]; onPick: (run: RecentRun) => void } = $props();
+	let list = $state<HTMLDetailsElement | null>(null);
 
 	function time(iso: string): string {
 		const date = new Date(iso);
 		return `${dayMonth(date.toISOString().slice(0, 10))} ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')} UTC`;
 	}
+
+	async function pick(run: RecentRun) {
+		onPick(run);
+		await closeAfterPick(list);
+	}
 </script>
 
-<details class="history-list">
+<details class="history-list" bind:this={list} use:closesWhenLeft>
 	<summary><Icon id="history" /> History</summary>
 	<div class="history-menu">
 		<p class="storage">Kept in this browser only.</p>
@@ -22,7 +29,7 @@
 			<ul>
 				{#each runs as run (run.id)}
 					<li>
-						<button type="button" onclick={() => onPick(run)}>
+						<button type="button" onclick={() => pick(run)}>
 							<span>{time(run.askedAt)} - {run.rows} {run.rows === 1 ? 'row' : 'rows'} in {run.ms} ms - {run.ledgers.join(', ')}</span>
 						</button>
 					</li>
@@ -33,8 +40,9 @@
 </details>
 
 <style>
+	/* No position of its own: the list hangs from the end of the group the page sets
+	   History in, so it opens inside the window whichever end of the line History is at. */
 	.history-list {
-		position: relative;
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
@@ -55,7 +63,7 @@
 		display: block;
 		z-index: 10;
 		inset-block-start: calc(100% + var(--space-1));
-		inset-inline-start: 0;
+		inset-inline-end: 0;
 		inline-size: min(28rem, calc(100vw - 2 * var(--space-4)));
 		padding: var(--space-3);
 		border: 1px solid var(--color-rule);

@@ -15,8 +15,10 @@ export type ConsoleWidth = (typeof CONSOLE_WIDTHS)[number];
 
 /** The window height a console page is opened at before anything is measured.
  *
- * Nothing on the console is sized from the window's height except the body's
- * minimum height, so this decides only how much of the page is on screen at
- * once - and through that, which charts are near enough to be drawn.
+ * On every route but the Data explorer, nothing is sized from the window's
+ * height except the body's minimum height, so this decides only how much of
+ * the page is on screen at once - and through that, which charts are near
+ * enough to be drawn. The Data explorer's workbench is sized from it: it fills
+ * the window from 1024 px, and its answer is one window tall below that.
  */
 export const CONSOLE_WINDOW_HEIGHT = 900;

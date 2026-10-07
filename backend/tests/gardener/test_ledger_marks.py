@@ -1,11 +1,13 @@
-"""Where do a ledger's marks sit, what does a pass read from them, and what does it adopt?
+"""Where do a ledger's marks sit, how far do they say it is packed, and what does a pass adopt?
 
-A ledger's marks are its three compact indexes and its three watermarks.
-`name_marks` is the one place their paths come from, so the listing a task is
-given and the pass that reads it cannot disagree. `adopt` is the one place a
-packed file no entry names becomes an entry again. Each test writes the marks
-and files under `tmp_path` as a compaction writes them and reads them through a
-real `FileListing`; nothing reads the committed `state/` (CLAUDE.md section 13).
+A ledger's marks are its three compact indexes. `name_marks` is the one place
+their paths come from, so the listing a task is given and the pass that reads it
+cannot disagree, and `work_out_marks` is the one place how far each period is
+packed is worked out from them. `adopt` is the one place a packed file no entry
+names becomes an entry again. Each test writes the indexes and files under
+`tmp_path` as a compaction writes them and reads them through a real
+`FileListing`, or hands `work_out_marks` periods written here as literals;
+nothing reads the committed `state/` (CLAUDE.md section 13).
 """
 
 from __future__ import annotations
@@ -23,11 +25,16 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.gardener.file_listing import FileListing, FileNotFetchedError, TreeEntry
-from idhazh.gardener.ledger_marks import adopt, name_marks, read_marks
+from idhazh.gardener.file_listing import (
+    FileListing,
+    FileNotFetchedError,
+    OverBudgetError,
+    TreeEntry,
+)
+from idhazh.gardener.ledger_marks import adopt, name_marks, read_marks, work_out_marks
 from idhazh.gardener.period_inputs import paths_for_task
 
 pytestmark = pytest.mark.contract
@@ -36,9 +43,6 @@ WHICH: Final = LedgerName.VISUAL_PRUNES
 
 #: The ledger's compact folder, as a repository path.
 COMPACT: Final = "state/compact/visual-prunes"
-
-#: The newest period each watermark these tests write says is packed.
-THROUGH: Final = {Period.DAILY: "2026-09-02", Period.MONTHLY: "2026-08", Period.YEARLY: "2025"}
 
 
 def state(root: Path) -> Path:
@@ -64,63 +68,37 @@ def an_index(
     path.write_bytes(held.to_json().encode("ascii"))
 
 
-def a_watermark(root: Path, period: Period, *, says: Period | None = None) -> None:
-    """One period's watermark, as a compaction writes it, or another period's in its place."""
-    written = says or period
-    mark = Watermark(
-        version=Watermark.schema_version(),
-        ledger=WHICH,
-        period=written,
-        through=THROUGH[written],
-        advanced_at="2026-09-03T00:41:00Z",
-        run_id="2026-09-03-1",
-    )
-    path = ledger.watermark_path(state(root), WHICH, period)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(mark.to_json().encode("ascii"))
-
-
 def listed(root: Path) -> FileListing:
     """The ledger's compact folder, listed off the disk as a compaction's own folder is."""
     return FileListing.from_disk(root, [COMPACT], paths=[root / COMPACT])
 
 
-def test_a_ledger_s_marks_are_its_three_indexes_and_its_three_watermarks(tmp_path: Path) -> None:
+def test_a_ledger_s_marks_are_its_three_indexes(tmp_path: Path) -> None:
     named = name_marks(state(tmp_path), WHICH)
 
-    by_period = [
-        (period, shown(tmp_path, named.indexes[period]), shown(tmp_path, named.watermarks[period]))
-        for period in Period
+    assert [(period, shown(tmp_path, named.indexes[period])) for period in Period] == [
+        (Period.DAILY, f"{COMPACT}/index/daily.json"),
+        (Period.MONTHLY, f"{COMPACT}/index/monthly.json"),
+        (Period.YEARLY, f"{COMPACT}/index/yearly.json"),
     ]
-    assert by_period == [
-        (Period.DAILY, f"{COMPACT}/index/daily.json", f"{COMPACT}/daily/watermark.json"),
-        (Period.MONTHLY, f"{COMPACT}/index/monthly.json", f"{COMPACT}/monthly/watermark.json"),
-        (Period.YEARLY, f"{COMPACT}/index/yearly.json", f"{COMPACT}/yearly/watermark.json"),
-    ]
-    assert list(named) == [*named.indexes.values(), *named.watermarks.values()]
+    assert list(named) == list(named.indexes.values())
 
 
-def test_a_ledger_nothing_has_packed_reads_as_no_period_packed(tmp_path: Path) -> None:
+def test_a_ledger_nothing_has_packed_names_nothing(tmp_path: Path) -> None:
     marks = read_marks(state(tmp_path), WHICH, listed(tmp_path))
 
-    assert marks.through == dict.fromkeys(Period)
     assert marks.entries == {period: {} for period in Period}
     assert marks.indexed == frozenset()
 
 
-def test_the_marks_say_how_far_each_period_is_packed_and_what_each_index_lists(
-    tmp_path: Path,
-) -> None:
-    """The yearly index is the empty one a pass writes beside the daily one, with no watermark."""
+def test_the_marks_say_what_each_index_lists_an_empty_one_included(tmp_path: Path) -> None:
+    """The yearly index is the empty one a pass writes beside the daily one."""
     an_index(tmp_path, Period.DAILY, ["2026-09-01", "2026-09-02"])
-    a_watermark(tmp_path, Period.DAILY)
     an_index(tmp_path, Period.MONTHLY, ["2026-08"])
-    a_watermark(tmp_path, Period.MONTHLY)
     an_index(tmp_path, Period.YEARLY, [])
 
     marks = read_marks(state(tmp_path), WHICH, listed(tmp_path))
 
-    assert marks.through == {**THROUGH, Period.YEARLY: None}
     assert {period: list(held) for period, held in marks.entries.items()} == {
         Period.DAILY: ["2026-09-01", "2026-09-02"],
         Period.MONTHLY: ["2026-08"],
@@ -132,6 +110,44 @@ def test_the_marks_say_how_far_each_period_is_packed_and_what_each_index_lists(
     assert marks.indexed == frozenset(Period)
 
 
+@pytest.mark.parametrize(
+    ("daily", "monthly", "yearly", "through"),
+    [
+        ([], [], [], (None, None, None)),
+        (["2026-09-01", "2026-09-02"], [], [], ("2026-09-02", None, None)),
+        (["2026-09-01", "2026-09-02"], ["2026-08"], [], ("2026-09-02", "2026-08", None)),
+        ([], ["2026-08", "2026-09"], [], ("2026-09-30", "2026-09", None)),
+        ([], ["2028-02"], [], ("2028-02-29", "2028-02", None)),
+        ([], [], ["2025"], ("2025-12-31", "2025-12", "2025")),
+        (["2026-02-03"], ["2026-01"], ["2025"], ("2026-02-03", "2026-01", "2025")),
+    ],
+    ids=[
+        "nothing",
+        "days-alone",
+        "days-after-a-closed-month",
+        "a-closed-month-and-no-day-after-it",
+        "a-leap-february",
+        "a-packed-year-and-nothing-after-it",
+        "a-year-then-a-month-then-a-day",
+    ],
+)
+def test_each_mark_is_the_newest_period_its_index_or_a_coarser_one_covers(
+    daily: list[str],
+    monthly: list[str],
+    yearly: list[str],
+    through: tuple[str | None, str | None, str | None],
+) -> None:
+    """A closed month carries the daily mark to its last day, and a packed year both marks.
+
+    So a ledger whose month step has just closed every day it packed still
+    resumes the day after that month, and one with no index of a period, or of
+    a coarser one, has no mark there.
+    """
+    marks = work_out_marks({Period.DAILY: daily, Period.MONTHLY: monthly, Period.YEARLY: yearly})
+
+    assert (marks[Period.DAILY], marks[Period.MONTHLY], marks[Period.YEARLY]) == through
+
+
 def test_the_listing_a_compaction_task_is_given_names_every_mark_its_pass_reads(
     tmp_path: Path,
 ) -> None:
@@ -140,7 +156,6 @@ def test_the_listing_a_compaction_task_is_given_names_every_mark_its_pass_reads(
         read_text(CONFIG_DIR / "gardener" / "compact-visual-prunes.json")
     )
     an_index(tmp_path, Period.DAILY, ["2026-09-02"])
-    a_watermark(tmp_path, Period.DAILY)
     named = paths_for_task(
         tmp_path, "compact-visual-prunes", policy, ("2026-08", "2026-08"), today=date(2026, 9, 27)
     )
@@ -148,36 +163,12 @@ def test_the_listing_a_compaction_task_is_given_names_every_mark_its_pass_reads(
 
     marks = read_marks(state(tmp_path), WHICH, listing)
 
-    assert marks.through == {**THROUGH, Period.MONTHLY: None, Period.YEARLY: None}
+    assert {period: list(held) for period, held in marks.entries.items()} == {
+        Period.DAILY: ["2026-09-02"],
+        Period.MONTHLY: [],
+        Period.YEARLY: [],
+    }
     assert marks.indexed == frozenset({Period.DAILY})
-
-
-@pytest.mark.parametrize("period", list(Period))
-def test_an_index_its_watermark_says_was_packed_that_is_not_there_is_refused_as_index_missing(
-    tmp_path: Path, period: Period
-) -> None:
-    """Read as empty, the index would be rewritten naming only what this pass packs."""
-    a_watermark(tmp_path, period)
-
-    with pytest.raises(ValueError) as refused:
-        read_marks(state(tmp_path), WHICH, listed(tmp_path))
-
-    assert str(refused.value) == (
-        f"index-missing: {COMPACT}/index/{period.value}.json is not there, and watermark.json "
-        f"says the {period.value} period is packed through {THROUGH[period]}. Restore "
-        f"{period.value}.json from git history before the next wake; an empty one would "
-        "forget every period packed before"
-    )
-
-
-def test_a_watermark_that_describes_another_period_is_refused_by_name(tmp_path: Path) -> None:
-    an_index(tmp_path, Period.DAILY, [])
-    a_watermark(tmp_path, Period.DAILY, says=Period.MONTHLY)
-
-    with pytest.raises(ValueError) as refused:
-        read_marks(state(tmp_path), WHICH, listed(tmp_path))
-
-    assert str(refused.value) == "watermark.json does not describe the visual-prunes daily period"
 
 
 def test_an_index_that_describes_another_ledger_is_refused_by_name(tmp_path: Path) -> None:
@@ -192,7 +183,7 @@ def test_an_index_that_describes_another_ledger_is_refused_by_name(tmp_path: Pat
 def test_the_marks_are_fetched_in_one_widening_and_no_packed_file_comes_with_them(
     tmp_path: Path,
 ) -> None:
-    """The index folder comes whole and each watermark by itself, never the folder beside it.
+    """The index folder comes whole, and never a period folder beside it.
 
     Nothing widens this checkout, so each file the widening was meant to bring is
     still absent afterwards and the read fails, naming how many there were.
@@ -216,17 +207,10 @@ def test_the_marks_are_fetched_in_one_widening_and_no_packed_file_comes_with_the
         widen=asked.append,
     )
 
-    with pytest.raises(FileNotFetchedError, match=r"\(6 such files\)"):
+    with pytest.raises(FileNotFetchedError, match=r"\(3 such files\)"):
         read_marks(state(tmp_path), WHICH, listing)
 
-    assert asked == [
-        [
-            f"{COMPACT}/index",
-            f"{COMPACT}/daily/watermark.json",
-            f"{COMPACT}/monthly/watermark.json",
-            f"{COMPACT}/yearly/watermark.json",
-        ]
-    ]
+    assert asked == [[f"{COMPACT}/index"]]
 
 
 # --- a packed file no entry names ---------------------------------------------------
@@ -308,3 +292,59 @@ def test_a_file_whose_envelope_names_another_day_is_refused_and_never_adopted(
         "26.parquet sits where the visual-prunes daily file for 2026-09-26 goes, and its "
         "envelope says compact visual-prunes daily 2026-09-25, so it is not adopted"
     )
+
+
+def test_adopting_a_file_spends_the_shard_s_download_budget_and_stops_past_it(
+    tmp_path: Path,
+) -> None:
+    """Reading a day file's footer downloads its month's day files, so Rule R counts them too.
+
+    The two day files weigh 1,100 bytes against a budget of 1,000, so the
+    adoption is refused before the checkout widens, by a type a step stops at
+    for a later wake rather than reading as a refused file.
+    """
+    asked: list[Sequence[str]] = []
+    listing = FileListing.from_commit(
+        tmp_path,
+        [COMPACT],
+        [
+            TreeEntry(path=f"{COMPACT}/daily/2026/09/20.parquet", blob="1" * 40, size=600),
+            TreeEntry(path=f"{COMPACT}/daily/2026/09/21.parquet", blob="2" * 40, size=500),
+        ],
+        {},
+        paths=[f"{COMPACT}/daily/2026/09"],
+        widen=asked.append,
+        budget=1000,
+    )
+
+    with pytest.raises(OverBudgetError) as refused:
+        adopt(listing, state(tmp_path), WHICH, Period.DAILY, "2026-09-20")
+
+    assert (refused.value.needed, refused.value.budget) == (1100, 1000)
+    assert asked == []
+
+
+def test_marks_that_do_not_fit_what_is_left_of_the_budget_are_not_downloaded(
+    tmp_path: Path,
+) -> None:
+    """A pass whose marks do not fit takes nothing until a later wake."""
+    held = [shown(tmp_path, path) for path in name_marks(state(tmp_path), WHICH)]
+    asked: list[Sequence[str]] = []
+    listing = FileListing.from_commit(
+        tmp_path,
+        [COMPACT],
+        [
+            TreeEntry(path=path, blob=f"{number:040x}", size=100)
+            for number, path in enumerate(held, start=1)
+        ],
+        {},
+        paths=held,
+        widen=asked.append,
+        budget=299,
+    )
+
+    with pytest.raises(OverBudgetError) as refused:
+        read_marks(state(tmp_path), WHICH, listing)
+
+    assert refused.value.needed == 300
+    assert asked == []

@@ -55,6 +55,7 @@
 	import ShardBoardPanel from '$lib/console/machine/ShardBoardPanel.svelte';
 	import TailTrendPanel from '$lib/console/machine/TailTrendPanel.svelte';
 	import TwoClocksPanel from '$lib/console/machine/TwoClocksPanel.svelte';
+	import { nameSpan, openWithSpan } from '$lib/console/span-words';
 
 	let { data } = $props();
 
@@ -94,6 +95,21 @@
 	const view = $derived(
 		data.windows[String(windowDays)] ?? data.windows[String(data.console.default_window_days)]
 	);
+
+	/** The route's first line: the runs that committed counters, and the days they span.
+	 * One day has no range, and "1 run in this one day" trips on its two ones, so it
+	 * names the day once and leads with it. */
+	const intro = $derived.by(() => {
+		const runs = `${view.runsRead} ${view.runsRead === 1 ? 'run' : 'runs'}`;
+		if (view.days === 1) {
+			return view.runsRead === 0
+				? `${openWithSpan(view.days)} had no run that committed a counters row. ${view.end}.`
+				: `${openWithSpan(view.days)} had ${runs} that committed counters the model server wrote itself. ${view.end}.`;
+		}
+		return view.runsRead === 0
+			? `No run in ${nameSpan(view.days)} committed a counters row. ${view.start} to ${view.end}.`
+			: `${runs} in ${nameSpan(view.days)} committed counters the model server wrote itself. ${view.start} to ${view.end}.`;
+	});
 </script>
 
 <svelte:head>
@@ -120,26 +136,23 @@
 		data-windowed="machine-runs"
 		data-window-days={windowDays}
 	>
-		{view.runsRead === 0
-			? `No run in these ${view.days} days committed a counters row.`
-			: `${view.runsRead} ${view.runsRead === 1 ? 'run' : 'runs'} in these ${view.days} days committed counters the model server wrote itself.`}
-		{view.start} to {view.end}.
+		{intro}
 	</p>
 
 	<!-- First under the intro, before the recording notes: a record this build did
 	     not read, or read only as far as a day some while back, is the reason every
 	     panel built on it is empty or stops early, and the notes below it would
 	     otherwise explain an empty page as something the recording did. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes notes={data.recordNotes[String(view.days)] ?? []} />
 
 	<!-- What the recording was doing, before anything says what it recorded.
 	     None of these is an error and none is styled as one: each states a fact
 	     about the instrument, at body size, in the route it governs. A day the
 	     scrape never ran and a day the machine did nothing draw the same gap,
 	     and only a sentence can tell them apart. -->
-	{#if view.recording.off}
+	{#if view.measurementOff}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-			{view.recording.off}
+			{view.measurementOff}
 		</p>
 	{/if}
 	{#if view.recording.sampled}
@@ -152,9 +165,9 @@
 			{view.recording.startedMidWindow}
 		</p>
 	{/if}
-	{#if view.recording.scoresOnly}
-		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="scores-only">
-			{view.recording.scoresOnly}
+	{#if view.recording.coveredElsewhere}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="covered-elsewhere">
+			{view.recording.coveredElsewhere}
 		</p>
 	{/if}
 	<!-- The machine record is the other instrument on this route, so it gets its

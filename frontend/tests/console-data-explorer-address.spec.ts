@@ -47,6 +47,19 @@ test('a statement at the configured maximum fits a shared link with every ledger
 	expect(parsed.from).toBe(CUSTOM_FROM);
 	expect(parsed.end).toBe(CUSTOM_END);
 	expect(parsed.days).toBe(8);
+
+	const oneMoreCharacter = printableAscii(0x1234abcd, QUERY_MAX_CHARS + 1);
+	const tooLong = await explorerAddress({
+		basePath: BASE_PATH,
+		ledgers: LEDGER_NAMES,
+		days: 90,
+		from: CUSTOM_FROM,
+		end: CUSTOM_END,
+		statement: oneMoreCharacter,
+		maxBytes: REQUEST_TARGET_LIMIT
+	});
+	expect(tooLong.linkedStatement).toBe(false);
+	expect(tooLong.query).not.toContain('q=');
 });
 
 test('a link too long for the byte bound carries ledgers and days only', async () => {

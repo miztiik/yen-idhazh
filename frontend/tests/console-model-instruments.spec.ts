@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { canaryScoreRows } from './support/canary-records';
 import {
 	DRAWN_BY,
 	EVAL_PANELS,
@@ -31,10 +30,9 @@ import {
  * its first published day. It asks that of the contract itself
  * rather than of a generated copy of it, which is why it is not here.
  *
- * What this file holds is what the browser tier alone can say: every drawn
- * figure re-derived from the canary shard the site was built from, by a plain
- * loop that shares nothing with the module under test. An oracle that calls the
- * code it is checking cannot fail.
+ * What this file holds is split in two: reducer checks over rows written here,
+ * with literal answers, and browser checks that only compare the built page with
+ * the numbers the page publishes beside its own marks.
  */
 
 const REPO = resolve(process.cwd(), '..');
@@ -42,48 +40,6 @@ const REPO = resolve(process.cwd(), '..');
 const CONFIG = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), 'utf8')) as {
 	console?: { default_window_days?: number };
 };
-
-/** The canary's score record, as rows of strings, exactly as the page's reader sees it.
- *
- * Through the page's own reader rather than a directory listing here: the record
- * comes from its packed files, so a listing of any other shape finds nothing and
- * leaves every assertion below passing on an empty set.
- */
-async function canaryRows(): Promise<EvalInput[]> {
-	return (await canaryScoreRows()) as EvalInput[];
-}
-
-/** The value at a fraction of a sorted list, written out rather than imported. */
-function nth(values: number[], fraction: number): number | null {
-	if (values.length === 0) return null;
-	const sorted = [...values].sort((a, b) => a - b);
-	return sorted[Math.min(sorted.length - 1, Math.floor(fraction * sorted.length))];
-}
-
-/** A score as a whole percent, or null where there was nothing to score. */
-function asPct(value: number | null): number | null {
-	return value === null ? null : Math.round(value * 100);
-}
-
-/** One day of a shard, counted by hand, sharing nothing with `evalDays`. */
-function byHand(rows: readonly EvalInput[], date: string) {
-	const match: number[] = [];
-	let differs = 0;
-	for (const row of rows) {
-		if (row.date !== date) continue;
-		const hhem = Number(row.hhem);
-		if ((row.hhem ?? '') !== '' && Number.isFinite(hhem)) match.push(hhem);
-		const delta = Number(row.hhem_delta);
-		if ((row.hhem_delta ?? '') !== '' && Number.isFinite(delta) && delta !== 0) differs += 1;
-	}
-	return {
-		checked: match.length,
-		mid: asPct(nth(match, 0.5)),
-		low: asPct(nth(match, 0.25)),
-		high: asPct(nth(match, 0.75)),
-		differs
-	};
-}
 
 /** The columns a reader must never be shown, which is not every column.
  *
@@ -322,6 +278,65 @@ test.describe('the arithmetic', () => {
 			);
 		}
 	});
+
+	test('THE ORACLE: what the faithfulness panel draws is reduced from rows written here', () => {
+		const days = evalDays([
+			{ date: '2026-05-02', hhem: '0.80', hhem_delta: '0.05' },
+			{ date: '2026-05-01', hhem: '0.40', hhem_delta: '0' },
+			{ date: '2026-05-01', hhem: '0.90', hhem_delta: '-0.10' },
+			{ date: '2026-05-01', hhem: '0.70', hhem_delta: '0.20' },
+			{ date: '2026-05-03', hhem: '', hhem_delta: '', compression: '0.333' }
+		]);
+
+		expect(days.map((day) => day.date)).toEqual(['2026-05-01', '2026-05-02', '2026-05-03']);
+		expect(
+			days.map((day) => ({
+				date: day.date,
+				scored: day.scored,
+				matched: day.matched,
+				low: day.matchLow,
+				mid: day.matchMid,
+				high: day.matchHigh,
+				widerDiffers: day.widerDiffers,
+				widestGap: day.widestGap,
+				compression: day.recorded.compression
+			}))
+		).toEqual([
+			{
+				date: '2026-05-01',
+				scored: 3,
+				matched: 3,
+				low: 40,
+				mid: 70,
+				high: 90,
+				widerDiffers: 2,
+				widestGap: 20,
+				compression: null
+			},
+			{
+				date: '2026-05-02',
+				scored: 1,
+				matched: 1,
+				low: 80,
+				mid: 80,
+				high: 80,
+				widerDiffers: 1,
+				widestGap: 5,
+				compression: null
+			},
+			{
+				date: '2026-05-03',
+				scored: 1,
+				matched: 0,
+				low: null,
+				mid: null,
+				high: null,
+				widerDiffers: 0,
+				widestGap: 0,
+				compression: 33
+			}
+		]);
+	});
 });
 
 test.describe('the panels, in a browser', () => {
@@ -343,40 +358,42 @@ test.describe('the panels, in a browser', () => {
 		expect(marked.slice().sort()).toEqual(EVAL_PANELS.map((panel) => panel.id).sort());
 	});
 
-	test('THE ORACLE: what the page drew is what the built ledger holds', async ({ page }) => {
-		const rows = await canaryRows();
-		expect(
-			rows.length,
-			'the canary score ledger is missing. Build it: python backend/utilities/build_canary_day.py'
-		).toBeGreaterThan(0);
-		const dates = [...new Set(rows.map((row) => row.date ?? ''))].filter((date) => date !== '');
-
+	test('the faithfulness panel publishes the numbers beside its drawn days', async ({ page }) => {
 		await page.goto('/console/model/');
-		for (const date of dates) {
-			const want = byHand(rows, date);
-			const match = page.locator(`[data-match-day="${date}"]`);
-			await expect(match, `${date} is in the ledger and not on the faithfulness panel`).toHaveCount(
-				1
+		const days = page.locator('[data-match-day]');
+		const count = await days.count();
+		if (count === 0) {
+			await expect(page.locator('[data-model-match="empty"]')).toHaveCount(1);
+			return;
+		}
+		for (const day of await days.all()) {
+			const date = (await day.getAttribute('data-match-day')) ?? '';
+			expect(date, 'a faithfulness day has no date').toMatch(/^\d{4}-\d{2}-\d{2}$/);
+			const [mid, low, high, checked] = await Promise.all(
+				['data-match-mid', 'data-match-low', 'data-match-high', 'data-match-checked'].map(
+					async (attribute) => Number(await day.getAttribute(attribute))
+				)
 			);
-			await expect(match).toHaveAttribute('data-match-mid', String(want.mid));
-			await expect(match).toHaveAttribute('data-match-low', String(want.low));
-			await expect(match).toHaveAttribute('data-match-high', String(want.high));
-			await expect(match).toHaveAttribute('data-match-checked', String(want.checked));
+			// A drawn day is a day something was checked, and its three figures are
+			// whole percents in order.
+			expect(checked, `${date} is drawn and checked nothing`).toBeGreaterThan(0);
+			expect(low, `${date} low is below zero`).toBeGreaterThanOrEqual(0);
+			expect(low, `${date} low is above its middle`).toBeLessThanOrEqual(mid);
+			expect(high, `${date} high is below its middle`).toBeGreaterThanOrEqual(mid);
+			expect(high, `${date} high is above 100 percent`).toBeLessThanOrEqual(100);
+			for (const figure of [mid, low, high]) {
+				expect(Number.isInteger(figure), `${date} printed ${figure}, not a whole percent`).toBe(true);
+			}
 		}
 	});
 
 	test('THE ORACLE: the axis floor is the one the drawn days ask for', async ({ page }) => {
-		// The rule, written out rather than imported, for the same reason byHand()
-		// is: round the lowest drawn figure down to the step below it, hold that
-		// between the doubt threshold and the highest floor allowed, and then never
+		// The rule, written out rather than imported: round the lowest drawn figure
+		// down to the step below it, hold that between the doubt threshold and the
+		// highest floor allowed, and then never
 		// let it rise above a mark - a day that fell through the doubt line is the
 		// day the panel was opened for, and an axis that clipped it would answer a
 		// question nobody asked.
-		const rows = await canaryRows();
-		expect(
-			rows.length,
-			'the canary score ledger is missing. Build it: python backend/utilities/build_canary_day.py'
-		).toBeGreaterThan(0);
 		const knobs = JSON.parse(readFileSync(resolve(REPO, 'config', 'appearance.json'), 'utf8')) as {
 			console?: { faithfulness_axis_step?: number; faithfulness_axis_floor_max?: number };
 		};

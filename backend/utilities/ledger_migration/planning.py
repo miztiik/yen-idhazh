@@ -18,18 +18,19 @@ from utilities.ledger_migration.identity import writer_identity
 from utilities.ledger_migration.inputs import MigrationInputs, require_root
 from utilities.ledger_migration.packing import declared
 from utilities.ledger_migration.path_labels import describe_error, label_path
-from utilities.ledger_migration.readback import check_output, door_rows
+from utilities.ledger_migration.readback import check_output, door_rows, migration_rows
 from utilities.ledger_migration.refusals import NotProvenError
 from utilities.named_inputs import month_directories
 
 
 @dataclass(slots=True)
 class PlannedDay:
-    """One day of one ledger: what the door will hold, and the CSV files it came from."""
+    """Expected reader rows and migration-owned writes for one ledger day."""
 
     files: list[Path]
+    #: The expected total after the arriving CSV rows fold onto the reader.
     rows: list[dict[str, str]]
-    #: The same rows read by the contract, for a day that files anything new; else empty.
+    #: Migration-owned rows only, including its earlier rows absent from this CSV.
     models: list[Contract]
     changed: bool
     source_rows: list[dict[str, str]]
@@ -65,13 +66,17 @@ class RootPlan:
     inputs: MigrationInputs
 
 
-def _plan(state_dir: Path, which: LedgerName, months: Sequence[str]) -> dict[str, PlannedDay]:
+def _plan(
+    state_dir: Path,
+    which: LedgerName,
+    months: Sequence[str],
+    identity: WriterIdentity,
+) -> dict[str, PlannedDay]:
     """Every CSV day of this ledger, folded onto what the door holds for it. Nothing written.
 
     Everything that can refuse a day's rows refuses here, before the first
-    write: a row that will not parse, a row dated another day, and a folded row
-    the contract will not take. A fold joins cells from two files, and nothing
-    checks the joined row until the door files it.
+    write. Reader expectations include every current writer; the write set
+    includes only this migration's prior rows and the arriving CSV rows.
     """
     model, key = row_contract(which), ledger.door_key(which)
     planned: dict[str, PlannedDay] = {}
@@ -93,17 +98,20 @@ def _plan(state_dir: Path, which: LedgerName, months: Sequence[str]) -> dict[str
                 "files a row under its own date, so this day would not read back"
             )
         try:
+            owned = migration_rows(state_dir, which, day, identity)
             check_output(state_dir, which, day, required=False)
             held = door_rows(state_dir, which, day)
         except (ValueError, OSError) as refusal:
             raise NotProvenError(f"{context}: {describe_error(refusal)}") from refusal
         rows = folded(held, arriving, key)
-        changed = rows != held
+        owned_rows = folded(owned, arriving, key)
+        changed = owned_rows != owned
         try:
-            models = [read_csv_cells(model, cells) for cells in rows] if changed else []
+            models = [read_csv_cells(model, cells) for cells in owned_rows] if changed else []
         except ValueError as refusal:
             raise NotProvenError(
-                f"{context}: a settled row is not a {model.__name__} the door can file: {refusal}"
+                f"{context}: a migration row is not a {model.__name__} the door can file: "
+                f"{refusal}"
             ) from refusal
         planned[day] = PlannedDay(
             files=files, rows=rows, models=models, changed=changed, source_rows=arriving
@@ -120,7 +128,9 @@ def plan_roots(inputs: MigrationInputs) -> list[RootPlan]:
     policies = declared(inputs.which, inputs.config_dir)
     plans: list[RootPlan] = []
     for root in inputs.state_dirs:
-        planned = {name: _plan(root, name, inputs.months) for name in inputs.which}
+        planned = {
+            name: _plan(root, name, inputs.months, identity) for name in inputs.which
+        }
         reports = {name: Moved(which=name, days=len(days)) for name, days in planned.items()}
         for name, days in planned.items():
             for held in days.values():

@@ -23,6 +23,7 @@ import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { bandScale, linearScale, timeScale } from '../src/lib/charts/d3/scale';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
 import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
+import { inZone } from './support/in-zone';
 import { serverCompiler } from './support/server-render';
 
 /**
@@ -174,17 +175,14 @@ test.describe('the house style', () => {
 	});
 
 	test('the time scale rounds and ticks on UTC midnights wherever it runs', () => {
-		const zone = process.env.TZ;
+		const starting = Intl.DateTimeFormat().resolvedOptions().timeZone;
 		// Half an hour off a whole hour, so a local midnight can never pass for a UTC one.
-		process.env.TZ = 'Asia/Kolkata';
-		try {
+		inZone('Asia/Kolkata', () => {
 			const scale = timeScale([Date.UTC(2026, 8, 1, 5, 30), Date.UTC(2026, 8, 3, 17, 0)], box).nice();
 			expect(scale.domain()[0].toISOString()).toBe('2026-09-01T00:00:00.000Z');
 			for (const tick of scale.ticks(3)) expect(tick.getUTCHours(), tick.toISOString()).toBe(0);
-		} finally {
-			if (zone === undefined) delete process.env.TZ;
-			else process.env.TZ = zone;
-		}
+		});
+		expect(Intl.DateTimeFormat().resolvedOptions().timeZone, 'the zone the run started in did not come back, so later tests in this worker run in India time').toBe(starting);
 	});
 
 	test('a value axis starts at zero, prints one precision, and never a non-ASCII minus', () => {

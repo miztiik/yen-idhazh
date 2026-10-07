@@ -9,8 +9,10 @@ from utilities.ledger_migration.path_labels import label_path
 from utilities.ledger_migration.planning import Moved, RootPlan
 
 
-def root_line(root: Path, *, packs: bool) -> str:
+def root_line(root: Path, *, packs: bool, raw_only: bool = False) -> str:
     """Whether a named root is packed or filed raw."""
+    if raw_only:
+        return f"{label_path(root)}: raw only requested; packing outstanding"
     return f"{label_path(root)}: {'packs' if packs else 'raw only'}"
 
 
@@ -39,7 +41,9 @@ def preview_lines(plans: Sequence[RootPlan]) -> list[str]:
     return lines
 
 
-def moved_line(root: Path, each: Moved, *, csv_kept: bool, proven: bool) -> str:
+def moved_line(
+    root: Path, each: Moved, *, csv_kept: bool, proven: bool, raw_only: bool = False
+) -> str:
     """What one ledger's migration did at one root, in the numbers a reviewer asks for."""
     return (
         f"{label_path(root)}: {each.which.value}: {each.csv_files} CSV file(s), "
@@ -51,4 +55,5 @@ def moved_line(root: Path, each: Moved, *, csv_kept: bool, proven: bool) -> str:
         f"{len(each.compaction_deleted)} deleted; "
         f"{'CSV kept' if csv_kept else 'every CSV file deleted'}"
         f"{'; parity proven' if proven else ''}"
+        f"{'; raw-only write complete; packing and parity proof outstanding' if raw_only else ''}"
     )

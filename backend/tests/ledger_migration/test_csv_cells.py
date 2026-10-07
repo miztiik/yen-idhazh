@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from conftest import SEED_COMMIT
+from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
@@ -76,7 +77,7 @@ def test_no_undeclared_csv_cell_can_be_retired(
         source.write_text("\n".join([lines[0], lines[1] + ",7"]) + "\n", encoding="utf-8")
     inputs = MigrationInputs(
         state_dirs=[root], which=[ITEM], run_id=RUN, git_sha=SEED_COMMIT,
-        today=TODAY, months=MONTHS,
+        today=TODAY, config_dir=PRE_YEARLY_CONFIG, months=MONTHS,
     )
     before = file_hashes(tmp_path)
     action = {

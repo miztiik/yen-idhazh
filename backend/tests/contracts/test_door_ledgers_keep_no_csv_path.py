@@ -41,6 +41,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.VISUAL_PRUNES: frozenset({"run_id"}),
     LedgerName.FEED_RETIREMENTS: frozenset(),
     LedgerName.ITEM_HEALTH: frozenset({"run_id", "tier"}),
+    LedgerName.ITEM_HEALTH_SUMMARY: frozenset(),
     LedgerName.SUMMARY_QUALITY_EVALS: frozenset({"compression", "run_id"}),
     LedgerName.HOST_FINGERPRINT: frozenset({"job", "run_id", "shard"}),
     LedgerName.COUNTERFACTUAL_SCORES: frozenset({"run_id"}),
@@ -49,6 +50,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.SEEN: frozenset(),
     LedgerName.PUBLISHED: frozenset(),
     LedgerName.RUN_PLAN: frozenset({"run_id"}),
+    LedgerName.COUNCIL_RUN_RECORDS: frozenset({"run_id"}),
 }
 
 
@@ -115,9 +117,7 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
     door = _door_ledgers()
     built = {
         _under_state(*ledger.entry(member).prefix) for member in LedgerName if member not in door
-    } | {
-        _under_state(tier.value, *ledger.entry(member).prefix) for member in door for tier in Tier
-    }
+    } | {_under_state(tier.value, *ledger.entry(member).prefix) for member in door for tier in Tier}
 
     stray = sorted(
         f"config/gardener/{name}.json owns {folder}"
@@ -125,7 +125,8 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
         for folder in policy.owns or ()
         if folder.split("/")[0] == ledger.STATE_DIRNAME
         and folder not in built
-        and (name, folder) not in {
+        and (name, folder)
+        not in {
             ("trials", "state/pipeline-tests-production-settings"),
             ("trials", "state/pipeline-tests-no-visual-plan"),
             ("trials", "state/pipeline-tests-parallel-summarization"),

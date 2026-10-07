@@ -19,8 +19,10 @@
       "state/item-health/2026/09/17/settled.csv"
     ],
     "written": [
-      "state/item-health-summary/2026-08.csv",
-      "state/item-health-summary/2026-09.csv"
+      "state/raw/item-health-summary/2026/08/04/<file_id>.parquet",
+      "state/raw/item-health-summary/2026/08/17/<file_id>.parquet",
+      "state/raw/item-health-summary/2026/09/04/<file_id>.parquet",
+      "state/raw/item-health-summary/2026/09/17/<file_id>.parquet"
     ]
   },
   "traces": {

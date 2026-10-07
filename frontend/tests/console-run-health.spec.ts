@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { daySlots } from '../src/lib/charts/day-slots';
 import { slotCellFor } from '../src/lib/charts/run-history';
 import { health, runOutcome, squareLabel, type RunFacts } from '../src/lib/console/run-square';
 import { shortDate } from '../src/lib/format';
+import { loadManifests } from '../src/lib/server/payload';
+import { publishedSite } from './support/published-site';
 
 /**
  * The oracle for `Run health`: its squares are painted at fill weight, they
@@ -61,63 +63,17 @@ const DESKTOP = { width: 1440, height: 900 };
  * of the layout, not of today's data. */
 const UNDERFULL = { width: 390, height: 844 };
 
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
-
-/** The newest day the canary build publishes, found rather than typed. */
-function canaryDay(): string {
-	const root = join(CANARY, 'digest');
-	const newest = (at: string) =>
-		readdirSync(at, { withFileTypes: true })
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name)
-			.sort()
-			.at(-1) as string;
-	const year = newest(root);
-	const month = newest(join(root, year));
-	return `${year}-${month}-${newest(join(root, year, month))}`;
-}
-
-/** What each run of that day wrote down about itself, in its own manifest. */
-function canaryRuns(day: string): RunFacts[] {
-	const [year, month, date] = day.split('-');
-	const raw = readFileSync(join(CANARY, 'digest', year, month, date, 'run.json'), 'utf8');
-	return (
-		JSON.parse(raw) as {
-			runs: {
-				n: number;
-				status: string;
-				items_succeeded: number;
-				items_failed: number;
-				items_skipped: number;
-				source_list_stale: boolean;
-			}[];
-		}
-	).runs.map((run) => ({
-		n: run.n,
-		status: run.status,
-		succeeded: run.items_succeeded,
-		failed: run.items_failed,
-		skipped: run.items_skipped,
-		sourceListStale: run.source_list_stale
-	}));
-}
-
-/** The line under which a run is red, from the knob CI reads. */
-function successFloor(): number {
-	const config = JSON.parse(
-		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-	) as { run?: { success_floor_pct?: number } };
-	const floor = config.run?.success_floor_pct;
-	expect(floor, 'config/idhazh.json names no run.success_floor_pct').toBeDefined();
-	return floor as number;
-}
-
 /** Every span the control offers, from the same knob the control reads. */
 const WINDOW_PRESETS = (
 	JSON.parse(
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 	) as { console?: { window_presets?: number[] } }
 ).console?.window_presets ?? [1, 7, 14, 30, 90];
+
+/** The widest span the control offers. Ninety days of squares are far more than a
+ * phone is wide, whatever the record holds, so a rule about a strip wider than
+ * the screen is a rule about the layout and not about today's data. */
+const WIDEST = Math.max(...WINDOW_PRESETS);
 
 /** Click the label, never the input: a span inside it takes the pointer. */
 async function setWindow(page: Page, days: number) {
@@ -127,32 +83,6 @@ async function setWindow(page: Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
-}
-
-/** The narrowest preset that reaches back past the canary's first published day.
- *
- * The console opens on fourteen days since 2026-10-02, which fit one phone, so a
- * rule about a strip wider than a phone needs a wider span. Found from the
- * fixture's own days and the presets, so a canary that grows a day moves it.
- */
-function presetPastTheCanary(): number {
-	const root = join(CANARY, 'digest');
-	const dirs = (at: string) =>
-		readdirSync(at, { withFileTypes: true })
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name)
-			.sort();
-	const published = dirs(root).flatMap((year) =>
-		dirs(join(root, year)).flatMap((month) =>
-			dirs(join(root, year, month)).map((day) => `${year}-${month}-${day}`)
-		)
-	);
-	const first = new Date(`${published[0]}T00:00:00Z`).getTime();
-	const last = new Date(`${published.at(-1)}T00:00:00Z`).getTime();
-	const span = Math.round((last - first) / 86_400_000) + 1;
-	const wide = WINDOW_PRESETS.find((preset) => preset > span);
-	expect(wide, `no preset reaches back past the canary's ${span} days`).toBeDefined();
-	return wide as number;
 }
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
@@ -429,40 +359,15 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 	page
 }) => {
 	await openConsole(page, 'light');
-	const day = canaryDay();
-	const floor = successFloor();
 
-	// The rule written out again here rather than imported, so the page is held
-	// to what the run wrote down and not to whatever the module happens to say.
-	// The count of articles read only in part comes from the item rows rather
-	// than the run's own record, so it is the one clause allowed in the middle.
-	const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const expected = canaryRuns(day).map((run) => {
-		const tried = run.succeeded + run.failed;
-		const head = [tried === 0 ? 'nothing new to try' : `${run.succeeded} of ${tried} succeeded`];
-		if (tried > 0 && (run.succeeded / tried) * 100 < floor) head.push(`under ${floor}%`);
-		if (run.failed > 0) head.push(`${run.failed} failed`);
-		if (run.skipped > 0) head.push(`${run.skipped} skipped`);
-		const tail = [
-			...(run.sourceListStale ? ["reused yesterday's list of sources"] : []),
-			...(run.status === 'partial' && run.failed === 0
-				? ["another run's failed article was still missing"]
-				: []),
-			...(run.status === 'failed' ? ['the run failed'] : [])
-		];
-		return {
-			label: `Run ${run.n}`,
-			shape: new RegExp(
-				`^${escape(head.join(', '))}(, \\d+ read only in part)?${tail.map((one) => `, ${escape(one)}`).join('')}$`
-			)
-		};
-	});
-
-	// The readout rests on the newest day, which is the canary's own.
+	// The readout rests on the window's newest day and prints one line for each run
+	// the squares draw on that day: the line is the square's own sentence after the
+	// run and the day. Both are built from what the run wrote down, read through
+	// `loadManifests`, which the next test holds to a manifest it writes.
+	const end = (await page.locator('[data-viewport-control]').getAttribute('data-window-end')) ?? '';
+	expect(end, 'the viewport prints no window').toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	const readout = page.locator('[data-readout="run-health"]');
-	await expect(readout.locator('[data-readout-day]')).toHaveText(
-		`${shortDate(day)}, the newest day`
-	);
+	await expect(readout.locator('[data-readout-day]')).toHaveText(`${shortDate(end)}, the newest day`);
 	const rows = await readout
 		.locator('[data-readout-row^="Run "]')
 		.evaluateAll((nodes) =>
@@ -471,14 +376,32 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 				(node.querySelectorAll('dd')[1]?.textContent ?? '').trim()
 			])
 		);
-	expect(rows.map(([label]) => label)).toEqual(expected.map((one) => one.label));
-	rows.forEach(([label, value], index) => {
-		expect(value, `${label} does not carry every clause of its run`).toMatch(expected[index].shape);
-	});
+	const squares = await page
+		.locator(`[data-run-history] [data-day="${end}"] [data-health]`)
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+	expect(rows.length, 'the newest day drew no run, so no line is checked').toBeGreaterThan(0);
 	expect(
-		rows.some(([, value]) => /^\d+ of \d+ succeeded/.test(value)),
-		'no run on the canary day tried an article, so the count is untested'
-	).toBe(true);
+		rows.map(([label, value]) => `${label} on ${shortDate(end)}: ${value}`),
+		'a run line is not its square sentence'
+	).toEqual(squares);
+
+	// Every clause in the order the rule writes them: what it tried, then what went
+	// wrong, then what the run itself recorded.
+	const clauses = new RegExp(
+		[
+			'^(nothing new to try|\\d+ of \\d+ succeeded)',
+			'(, under \\d+%)?',
+			'(, \\d+ failed)?',
+			'(, \\d+ skipped)?',
+			'(, \\d+ read only in part)?',
+			"(, reused yesterday's list of sources)?",
+			"(, another run's failed article was still missing)?",
+			'(, the run failed)?$'
+		].join('')
+	);
+	for (const [label, value] of rows) {
+		expect(value, `${label} does not read as the clauses of its run`).toMatch(clauses);
+	}
 
 	// And the words that named a colour rather than a fact are gone from the
 	// panel, from what it prints and from what a square says to a pointer or a
@@ -508,6 +431,117 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 	]) {
 		expect(said, `${word} is still in Run health`).not.toMatch(word);
 	}
+});
+
+test('a run manifest reads into the facts its square and its line are built from', () => {
+	// Two published days. 14 Jun 2030 has no manifest, and reads as no row rather
+	// than a day of zeros. 15 Jun 2030 ran twice: run 1 completed, tried 8 articles
+	// of the 9 it planned, published 6, failed 2 and skipped 1, on two shards, with
+	// the planner timed; run 2 reused yesterday's list of sources and failed on all
+	// 3 it planned. The day's site size is the last run's, never a sum.
+	const { digest } = publishedSite(test.info().outputPath('site'), {
+		published: ['2030-06-14', '2030-06-15']
+	});
+	const model = { model_ref: { id: 'model-a' } };
+	writeFileSync(
+		join(digest, '2030', '06', '15', 'run.json'),
+		JSON.stringify({
+			date: '2030-06-15',
+			runs: [
+				{
+					run_id: '2030-06-15-1',
+					n: 1,
+					status: 'completed',
+					started_at: '2030-06-15T06:00:00Z',
+					items_planned: 9,
+					items_succeeded: 6,
+					items_failed: 2,
+					items_skipped: 1,
+					source_list_stale: false,
+					shards: 2,
+					items_routed: 5,
+					items_prefiltered: 3,
+					charts_drafted: 2,
+					route_ms: 90_000,
+					inputs: { summarizer: 'model-a' },
+					models: [model],
+					site_bytes: 2_400_000,
+					site_files: 39
+				},
+				{
+					run_id: '2030-06-15-2',
+					n: 2,
+					status: 'failed',
+					started_at: '2030-06-15T12:00:00Z',
+					items_planned: 3,
+					items_succeeded: 0,
+					items_failed: 3,
+					items_skipped: 0,
+					source_list_stale: true,
+					route_ms: null,
+					models: [model],
+					site_bytes: 2_500_000,
+					site_files: 40
+				}
+			]
+		})
+	);
+
+	const days = loadManifests(digest, 2);
+	expect(days.map((day) => day.date)).toEqual(['2030-06-15']);
+	const [day] = days;
+	expect(day).toMatchObject({
+		runs: 2,
+		planned: 12,
+		failed: 5,
+		siteBytes: 2_500_000,
+		siteFiles: 40,
+		models: ['model-a']
+	});
+	expect(day.records).toEqual([
+		{
+			runId: '2030-06-15-1',
+			n: 1,
+			status: 'completed',
+			planned: 9,
+			succeeded: 6,
+			failed: 2,
+			skipped: 1,
+			startedAt: '2030-06-15T06:00:00Z',
+			sourceListStale: false,
+			shards: 2,
+			decided: 5,
+			prefiltered: 3,
+			chartsDrafted: 2,
+			decisionMs: 90_000,
+			inputs: { summarizer: 'model-a' }
+		},
+		{
+			runId: '2030-06-15-2',
+			n: 2,
+			status: 'failed',
+			planned: 3,
+			succeeded: 0,
+			failed: 3,
+			skipped: 0,
+			startedAt: '2030-06-15T12:00:00Z',
+			sourceListStale: true,
+			shards: null,
+			decided: 0,
+			prefiltered: 0,
+			chartsDrafted: 0,
+			// Nothing timed the planner, and the manifest says so with a null: a zero
+			// here would be a measurement nobody took.
+			decisionMs: null,
+			inputs: null
+		}
+	]);
+
+	// What each square says, and the line beside it, at a floor of 70 percent.
+	expect(day.records.map((run) => squareLabel(day.date, run, 70, 0))).toEqual([
+		'Run 1 on 15 Jun 2030: 6 of 8 succeeded, 2 failed, 1 skipped',
+		"Run 2 on 15 Jun 2030: 0 of 3 succeeded, under 70%, 3 failed, reused yesterday's list of sources, the run failed"
+	]);
 });
 
 test('a square carries the whole run in one sentence', () => {
@@ -819,8 +853,8 @@ test('on a phone a tap or a step on the chart brings its day into view, and a ho
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	// More days than a phone is wide - the default fourteen fit one - so the page
-	// opens on a wider span, the way a reader's stored choice reopens it.
-	const wide = presetPastTheCanary();
+	// opens on the widest span, the way a reader's stored choice reopens it.
+	const wide = WIDEST;
 	await page.addInitScript(
 		(stored) => localStorage.setItem('idhazh:console-window', String(stored)),
 		wide

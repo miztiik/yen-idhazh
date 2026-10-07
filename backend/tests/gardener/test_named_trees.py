@@ -291,11 +291,9 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     state = tmp_path / ledger.STATE_DIRNAME
     compact = {
         ledger.compact_path(state, RAW, Period.YEARLY, "2025"),
-        ledger.watermark_path(state, RAW, Period.YEARLY),
         ledger.compact_path(state, RAW, Period.MONTHLY, "2026-07"),
         ledger.compact_path(state, RAW, Period.DAILY, "2026-08-01"),
         ledger.compact_path(state, RAW, Period.DAILY, "2026-08-02"),
-        ledger.watermark_path(state, RAW, Period.DAILY),
     }
     raw = ledger.raw_root(state, RAW)
     plant(
@@ -308,7 +306,7 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     an_index(state, Period.YEARLY, ["2025"])
     an_index(state, Period.MONTHLY, ["2026-07"])
     an_index(state, Period.DAILY, ["2026-08-01", "2026-08-02"])
-    compacted = ledger.watermark_path(state, RAW, Period.DAILY).parent.parent
+    compacted = ledger.compact_root(state, RAW, Period.DAILY).parent
     listing = FileListing.from_disk(
         tmp_path,
         [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()],

@@ -2,7 +2,8 @@
 
 Two shapes, and they answer one question at two sizes. `GardenerConfig` is
 `config/idhazh_gardener.json`: how many shards a wake splits into, how many
-times a shard may try to land its record, and how much one shard may download.
+times a shard may try to land its record, how much one shard may download, and
+the first year a ledger can hold.
 `TaskPolicy` is one file under `config/gardener/`: one task, what it owns and
 what it only reads, how far back it keeps, and whether it may delete at all.
 
@@ -11,9 +12,9 @@ what it only reads, how far back it keeps, and whether it may delete at all.
 promise `RetentionConfig` makes and for the same reason: a fresh clone that
 starts deleting on its first run is a clone nobody can try out.
 
-**A compaction names every setting it runs with.** No setting of a pass has a
-default in code, so the declaration a person reads holds every number the pass
-uses, and the loader refuses one that leaves a setting out, naming it.
+**A compaction names every packing setting it runs with.** The loader refuses
+one that leaves a packing setting out, naming it. Older declarations without
+the yearly expiry fields retain all years and do not enable deletion.
 
 **A declaration names its module by what it is, and never by a path.** Which
 Python runs a task is decided by `idhazh.gardener.registry` from the task's
@@ -34,7 +35,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import DateStamp, Model, RelPath, Slug
+from idhazh.contracts.base import DateStamp, Model, RelPath, Slug, YearStamp
 from idhazh.contracts.ledger_name import LedgerName
 
 
@@ -105,9 +106,17 @@ class GardenerConfig(Model):
         description=(
             "The most file content one shard may download for its tasks, in megabytes "
             "of 1024 * 1024 bytes. The code and config every shard checks out are not "
-            "counted. A shard over it still runs its tasks and lands its record, then "
+            "counted. A compaction takes only the periods whose files fit what is left "
+            "of it. A shard over it still runs its tasks and lands its record, then "
             "exits 1 naming what it downloaded, this ceiling and its three heaviest "
             "folders."
+        ),
+    )
+    first_ledger_year: YearStamp = Field(
+        description=(
+            "The UTC year, as YYYY, from which a compaction looks for year and month files "
+            "when one of a ledger's indexes is absent and is rebuilt from the files in the "
+            "year folders it names. No ledger holds a row from before it."
         ),
     )
 
@@ -236,10 +245,11 @@ class _Declared(Model):
     appends_to: list[LedgerName] = Field(
         default_factory=list,
         description=(
-            "The ledgers this task files a report of its own into, through the ledger door: "
-            "one new raw file under the wake's day, dry run or not. Appending is not "
-            "owning. The door names each file afresh, so it cannot overwrite anything, and "
-            "the folder it lands in stays with whichever task owns it."
+            "The ledgers this task writes into through the ledger door without owning their "
+            "folders. A path in written is held to the row's date and lands only on a live "
+            "run. A path in appended is a report, held to the wake day, and lands dry run or "
+            "not. The door names each file afresh, so it cannot overwrite anything, and the "
+            "folder stays with whichever task owns it."
         ),
     )
     reads: list[RelPath] = Field(
@@ -436,9 +446,9 @@ class CompactionPolicy(_Declared):
     Its periods are its retention, so the two keys every other task uses to
     bound what it deletes are fixed here: `window` is `forever` and
     `max_deletes_per_run` is null. A declaration that sets `monthly_keep_days`
-    also packs each finished year's month files into one yearly file, kept for
-    ever. It has two switches, because packing loses no row and its monthly
-    window does: `dry_run` for the whole pass, and `month_deletes_dry_run` for
+    also packs each finished year's month files into one yearly file.
+    Packing loses no row, but monthly and yearly expiry do.
+    `dry_run` controls the whole pass, and `month_deletes_dry_run` controls
     what the window deletes, so a ledger can pack live while its window only
     reports.
     """
@@ -466,8 +476,10 @@ class CompactionPolicy(_Declared):
         default=None,
         ge=1,
         description=(
-            "How many earlier months a scheduled compaction pass checks beyond the month "
-            "that just expired. Defaults to two months."
+            "How many months before the month that holds the newest eligible day, the "
+            "newest day at least compact_after_days whole days past its end, a first pass "
+            "with no daily mark looks back over for its oldest raw day. Raw days older than "
+            "that stay raw. A named range replaces this look-back. Defaults to two months."
         ),
     )
     daily_keep_days: int = Field(
@@ -504,7 +516,22 @@ class CompactionPolicy(_Declared):
             "month files are packed into one yearly file and deleted. Null packs no year. "
             "Set, it needs monthly_window forever and at least daily_keep_days + 32: a "
             "year is packed only once its next January is absorbed, so no smaller value "
-            "changes anything. Year files are kept for ever."
+            "changes anything. yearly_keep_months controls expiry after the UTC year end."
+        ),
+    )
+    yearly_keep_months: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Calendar months after the UTC year-end instant before a yearly file expires. "
+            "Null keeps years forever. Finite retention requires monthly_keep_days."
+        ),
+    )
+    yearly_prune_enable: bool = Field(
+        default=False,
+        description=(
+            "True deletes indexed years past yearly_keep_months; false keeps them. "
+            "dry_run still prevents every change."
         ),
     )
     max_periods_per_run: int = Field(
@@ -517,7 +544,10 @@ class CompactionPolicy(_Declared):
     )
     max_raw_files_per_period: int = Field(
         ge=1,
-        description="The most raw files one period may be built from in one pass.",
+        description=(
+            "The most raw files one period may be built from in one pass. A day holding "
+            "more packs its oldest that many, and the rest wait for the next wake."
+        ),
     )
     compact_after_days: int = Field(
         ge=1,
@@ -539,7 +569,7 @@ class CompactionPolicy(_Declared):
 
     @property
     def lookback_periods(self) -> int:
-        """The configured extra months a scheduled compaction pass examines."""
+        """How many months before the newest eligible day's month a first pass looks back over."""
         return self.lookback or DEFAULT_MONTH_LOOKBACK_PERIODS
 
     @model_validator(mode="after")
@@ -550,6 +580,10 @@ class CompactionPolicy(_Declared):
         year file would miss that month's rows. And a wait shorter than the one the
         next January already imposes would be a number that changes nothing.
         """
+        if self.yearly_keep_months is not None and self.monthly_keep_days is None:
+            raise ValueError("yearly_keep_months requires monthly_keep_days")
+        if self.yearly_prune_enable and self.yearly_keep_months is None:
+            raise ValueError("yearly_prune_enable requires yearly_keep_months")
         if self.monthly_keep_days is None:
             return self
         if not isinstance(self.monthly_window, ForeverWindow):

@@ -1,6 +1,6 @@
 # Plan 57 - The upkeep tasks switch on, each with the person's approval
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 
 **Level**: 4 (CLAUDE.md section 6). A file a live task deletes is gone for good once the history squash passes its commit (CLAUDE.md section 8), and a workflow run or artifact it deletes is gone at once. So a wrong switch costs more to undo than to make.
 
@@ -53,7 +53,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 - **Precondition:** the person's approval (section 2). Plan 56's row "The score month summary is retired, and no eval row is ever deleted" must be complete, with `monthly_window` and `window` kept `forever`. Packing (#1177) and publication (#1169) are complete (section 3), and `config.load_gardener()` must accept that declaration. Year packing supports the published `forever` window; #1182 removed the publication-specific minimum wait after year reads gained fresh addresses, not by loosening a retention setting. Section 2's first-wake check still applies.
 - **Files touched:** `config/gardener/compact-scores.json`; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; `docs/architecture/publishing/ledger-compaction.md`; `docs/how-to/run-the-pipeline.md`; `docs/concepts/config/retention-ages.md`; `docs/concepts/evaluation.md`; this plan's Reckoner line.
 - **Acceptance gates:** local: the checks `npm --prefix frontend run test:changed -- --list` selects, which include `pytest backend/tests/contracts/test_gardener_config.py` (its `test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live` is red until the entry is added), and `python backend/utilities/doc_load.py` with all touched Markdown paths passed as arguments, before and after. CI: the full suite.
-- **Oracle:** the first scheduled wake after the merge moves `through` in `state/compact/scores/daily/watermark.json` past 2026-09-28. For every day that wake packed or absorbed, `load_days` returns the same rows at the task's commit as at its parent, and no raw file of that day is left. Today it fails: the task only reports, so `through` stays at 2026-09-28. It cannot settle a later wake; the first wake that absorbs a month is read the same way.
+- **Oracle:** the first scheduled wake after the merge moves the daily mark, the newest day `state/compact/scores/index/daily.json` names, past 2026-09-28. For every day that wake packed or absorbed, `load_days` returns the same rows at the task's commit as at its parent, and no raw file of that day is left. Today it fails: the task only reports, so the mark stays at 2026-09-28. It cannot settle a later wake; the first wake that absorbs a month is read the same way.
 - **Merge window:** section 2, item 4.
 
 | # | Decision | Authority |
@@ -71,7 +71,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 - **Precondition:** the person's approval (section 2). It covers the month windows as committed, because they say when each ledger's first rows go, and a ledger the person does not approve stays report-only. Packing #1177 is merged; its first live wake must have packed `item-health` and `host-fingerprint` without failure before these three follow (section 3).
 - **Files touched:** the three declarations above; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/architecture/publishing/idhazh-gardener.md`; `docs/architecture/publishing/ledger-compaction.md`; `docs/how-to/run-the-pipeline.md`; `docs/concepts/config/retention-ages.md`; this plan's Reckoner line.
 - **Acceptance gates:** as row 1.
-- **Oracle:** the first scheduled wake after the merge gives `state/compact/gardener/`, `state/compact/visual-prunes/` and `state/compact/feed-retirements/` each an `index/daily.json` and a `daily/watermark.json`. For every day it packed, `load_days` returns the same rows at the task's commit as at its parent, and no raw file of that day is left. Today it fails: none of the three folders exists. A wake packs at most `max_periods_per_run` days, so a watermark reaches the newest due day over several wakes. It cannot settle `feed-retirements`, which has no raw file yet: its first wakes pack quiet days only, and its first real move is read at the first wake after a retirement row lands.
+- **Oracle:** the first scheduled wake after the merge gives `state/compact/gardener/`, `state/compact/visual-prunes/` and `state/compact/feed-retirements/` each an `index/daily.json`. For every day it packed, `load_days` returns the same rows at the task's commit as at its parent, and no raw file of that day is left. Today it fails: none of the three folders exists. A wake packs at most `max_periods_per_run` days, so the daily mark, the newest day that index names, reaches the newest due day over several wakes. It cannot settle `feed-retirements`, which has no raw file yet: its first wakes pack quiet days only, and its first real move is read at the first wake after a retirement row lands.
 - **Merge window:** section 2, item 4.
 
 | # | Decision | Authority |

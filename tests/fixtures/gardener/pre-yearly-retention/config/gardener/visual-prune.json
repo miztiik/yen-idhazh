@@ -1,0 +1,17 @@
+{
+  "appends_to": [
+    "visual-prunes"
+  ],
+  "dry_run": true,
+  "kind": "retention",
+  "lifecycle_status": "active",
+  "lookback": 7,
+  "max_deletes_per_run": 200,
+  "owns": [
+    "frontend/public/digest"
+  ],
+  "window": {
+    "unit": "days",
+    "value": 390
+  }
+}
