@@ -55,7 +55,7 @@ Table C - when to stop and ask
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The council's run record has its own contract, and it reads every old row | - | A | DONE #1294 | cautious-adventure | #1294 | Plan 61 row 1: council run record contra |
 | 2 | The council saves its run records through the ledger door | 1; Plan 60 "Which months may close", shipped in #1303 | B | DONE | plan-row-status | #1323 | Council ledger writer |
-| 3 | The committed council records are copied and proved while workflows continue | 2, 5, 6 | E | PENDING | - | - | - |
+| 3 | The committed council records are copied and proved while workflows continue | 2, 5, 6 | E | IN-FLIGHT | probable-giggle | - | owner |
 | 4 | The old-row reader and the migrator's council entry are deleted | 3; section 2.5 retirement gate | F | PENDING | - | - | - |
 | 5 | Migration preserves writer ownership and can write raw files without packing | 2 | C | DONE | - | - | - |
 | 6 | Explicit historical packing reaches imported records outside the rerun window | 5 | D | DONE | supreme-pancake | - | owner |
