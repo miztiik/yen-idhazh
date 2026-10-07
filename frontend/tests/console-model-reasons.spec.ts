@@ -364,7 +364,7 @@ test.describe('the panel, in a browser', () => {
 			await expect(
 				page.locator('[data-model-reasons-intro]'),
 				`the panel never says it is showing ${preset} days`
-			).toContainText(`${preset} days`);
+			).toContainText(preset === 1 ? 'The single column is this one day' : `over these ${preset} days`);
 		}
 	});
 

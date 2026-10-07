@@ -210,6 +210,31 @@ no full stop.**
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 
+## A window's days take one of two names, and one day never needs a second
+
+Every windowed sentence takes its day words from one helper,
+`frontend/src/lib/console/span-words.ts`, so the 1-day window never prints
+`1 days` and one edit moves every sentence. Reader chose the words on
+2026-10-07.
+
+- **The days on screen:** `these 7 days`, and `this one day` at one day. A
+ sentence or a row label that opens on them is capitalised: `These 7 days`,
+ `This one day`.
+- **A bare count:** `7 days`, and `1 day` at one day - the days control's own
+ words. A count over the window takes it and drops `these`: `on 5 of 7 days`,
+ `on 1 of 1 day`.
+- **No `the last 7 days`.** Every console window ends on the newest published
+ day, which is not always today, so `the last` claims more than the page knows.
+- **At one day, a sentence must not need a second day.** No range - one day is
+ one date, never `2026-10-06 to 2026-10-06`. No order across days, no waiting for
+ a later day, and no worst, middle, median, quietest or loudest day. Such a
+ sentence is written whole for one day, in the same tense: `No day in these 7
+ days published a summary` is `This one day did not publish a summary`, and
+ `one tile a day, over these 7 days` is `one tile for this one day`.
+
+A sentence that counts something other than the window's days - runs, a rule's
+own span, the days a record read - keeps its own count.
+
 ## A section keeps the sentence that decides and loses the sentence that narrates
 
 Every panel writes its own heading, intro, readout and empty state, and many
@@ -231,7 +256,7 @@ new section.
 
 - **One name for one span.** Four phrasings for one window, and the same
  instruction written two ways, is what a page reads like when nobody has done
- this pass.
+ this pass. The two names a window's days may take are in the section above.
 - **One name for one control.** A name taken from a component outlives the
  component: `Failure rate against volume` went on naming a component that no
  longer existed.
@@ -245,6 +270,14 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+**Two names for a window's days, not one.** One name everywhere was the fewest
+words to keep, and it breaks a count: `on 1 of this one day`. The bare count is
+the days control's own words, so the second name adds no new kind of words to the
+page. A name per sentence was what the console had before, and at the 1-day
+window it printed `these 1 days`, `over the last 1 days` and `the 1 days ending
+there` from templates of their own on every route. Reader ruled the words on
+2026-10-07.
 
 **One classification of a column's type.** The table, the chart and the colours
 each read type names with lists of their own, and they disagreed about the same

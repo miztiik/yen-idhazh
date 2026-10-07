@@ -32,6 +32,7 @@ import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
 import type { StackRule, StackSeries } from '../charts/stacked';
 import { dayMonth, shortDate } from '../format';
+import { nameSpan, openWithSpan } from './span-words';
 
 /** One surface on the console that answers for at least one ledger column.
  *
@@ -603,7 +604,12 @@ export function matchHeadline(days: readonly EvalDay[], windowDays: number): str
 	const low = middleDay(drawn.map((day) => day.matchLow));
 	if (mid === null || low === null) return null;
 	const totals = evalTotals(days);
-	return `Over these ${windowDays} days the middle day put half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched)} summaries checked.`;
+	// One day has no middle day, so at one day the sentence names the day itself.
+	const lead =
+		windowDays === 1
+			? `${openWithSpan(windowDays)} put`
+			: `Over ${nameSpan(windowDays)} the middle day put`;
+	return `${lead} half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched)} summaries checked.`;
 }
 
 /** What the second faithfulness column says, in words.

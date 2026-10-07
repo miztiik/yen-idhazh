@@ -29,6 +29,7 @@
 import type { LedgerFault, LedgerName, SetAsideFiles } from '../data/ledger';
 import { coveredDays, type HeldPeriod } from '../data/slice';
 import { dayMonth, MONTHS, shortDate } from '../format';
+import { nameSpan } from './span-words';
 
 /** What the "Measurement is off" line is worked out from, for one window. */
 export interface MeasurementFacts {
@@ -553,7 +554,7 @@ function namedPeriod(held: HeldPeriod): string {
 
 /** The open window as a sentence ends on it: `on 6 Oct 2026` for one day, `in these 14 days` for more. */
 function windowPhrase(open: OfferedWindow): string {
-	return open.days === 1 ? `on ${shortDate(open.start)}` : `in these ${open.days} days`;
+	return open.days === 1 ? `on ${shortDate(open.start)}` : `in ${nameSpan(open.days)}`;
 }
 
 /** The narrowest window the control offers that holds the whole of `held`, or undefined when none does. */

@@ -70,7 +70,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L14 | Console specs that work their answer out from the canary's own files check data they build | L9 | D | DONE | glowing-waddle | - | Plan 62 row l14 |
 | L15 | The held-part note says what its own two figures show | L13 | E | DONE | fuzzy-goggles | - | Plan 62 row l15 |
 | L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | - | Plan 62 row l16 |
-| L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | PENDING | - | - | - |
+| L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | DONE | probable-umbrella | - | Plan 62 row l17 |
 
 ## 2. Shared declarations
 
@@ -893,17 +893,31 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/console-window.spec.ts` (its oracles require each windowed surface to say `${preset} days` at every preset, 1 included, and `machineSpan` reads the Hardware intro)
   - `frontend/tests/console-doubt.spec.ts`, `frontend/tests/console-item-cost.spec.ts`, `frontend/tests/console-model-panels.spec.ts`, `frontend/tests/console-model-reasons.spec.ts`, `frontend/tests/console-published.spec.ts` (each requires `${preset} days` at every preset)
   - `frontend/tests/merge-line.spec.ts`, `frontend/tests/platform-mix.spec.ts`, `frontend/tests/console-judgement-merges.spec.ts` (pin the helper's words or accept both)
+  - `frontend/src/lib/console/span-words.ts` (new, found during execution: the one helper, named for its one question, what words name a window's days; decision 5)
+  - `frontend/src/lib/console/held-part-note.ts` (found at dispatch by the owner: it took `spanWords` from `fleet.ts`; its words, Reader's and Jony's in row L15, do not change)
+  - `frontend/src/lib/console/recording.ts` (found during execution: its phrase for more than one day takes the helper; at one day it names the date, Reader's words in row L11)
+  - `frontend/src/lib/components/RunSquares.svelte`, `frontend/src/lib/components/StageTimings.svelte`, `frontend/src/lib/components/MemoryBoard.svelte` (found during execution: windowed sentences the search missed - "Run health history over 1 days", "We timed nothing in these 1 day", "inside the 1 days this page read")
+  - `frontend/tests/span-words.spec.ts`, `frontend/tests/span-sentences.spec.ts`, `frontend/tests/support/span-said.ts` and `frontend/scripts/test-groups.ts` (new, found during execution: the Oracle, the words the browser checks owe at each preset, and the two specs named under `logic`; decision 6)
+  - `frontend/tests/console-timings.spec.ts`, `frontend/tests/console.spec.ts`, `frontend/tests/console-judgement-line.spec.ts`, `frontend/tests/console-memory-held.spec.ts`, `frontend/tests/console-frame.spec.ts` (found during execution: they pin a count over the window, "4 of these 15 days", the clamp line's "of the last", and a Hardware subtitle's "last N days", words Reader changed)
+  - `docs/concepts/console-design.md` and `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md` (found during execution: Reader's two names and the one-day rule; the second page quoted the old one-day sentence)
+  - Unchanged, found during execution: `MergeLinePlot.svelte` (its sentences come from `merge-line.ts`), `JudgeAgreement.svelte` (it prints no day count), `KpiCard.svelte` (each route hands it its note), `completeness.ts` (it counts missing days and already says "1 day is missing."), `platform-mix.spec.ts` and `console-judgement-merges.spec.ts` (the words they pin did not change)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the specs it selects for the changed files; `npm --prefix frontend run check`; the browser smoke of every console route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** on data the test builds (Table D, D3): each windowed surface reads "1 day" at the 1-day preset and "7 days" at the 7-day preset. It cannot settle a sentence that counts something other than the window's days, such as runs or days with rows.
+- **Follow-ups** (found during execution):
+  - Reader's rule that at one day a sentence must not need a second day also binds sentences that print no day count, and these break it at the 1-day preset: the disk panel's legend "How far the memory holding disk copies fell, 2026-10-06 to 2026-10-06"; the latency chart's label, a range of run dates that is one day; the throughput chart's "oldest day on the left"; the run health hint "Left and Right step through the days"; the memory panel's "no run that wrote these days"; the labels "on the busiest day" (Pipelines cards), "one point a day over 1 day" (extraction), "per day, over 1 day" (doubt reasons) and "a day, over 1 day" (merged stories); the counterfactual cost chart's "one column a day" and "added up day by day"; and the chart-drawing verdict's "no day published anything", reachable only where the rule's own span is one day. A Level 1 row with Reader's words.
+  - Counts of other days that still print "1 days" when they are 1: the memory panel's "Read over {n} days" and "over {n} days of ledger" (the days the record read) and the chart-drawing line's "over {n} measured days". A Level 1 row, through `countDays`.
+  - The Judgement route has no window oracle in `console-window.spec.ts`, and three of its four windowed surfaces can name no span in words: `judge-agreement` always, `record-gates` when no line was fitted, and `merge-line` when no fitted day is in the window. On the canary all three print no day count at 1 and at 7 days (the browser smoke).
 
 **Decisions**
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Fault 4 of row L16, moved here. It changes `console-window.spec.ts`, which L13 held, so it waits for L13. Since L13 (#1366), `console-article-cost.spec.ts` no longer reads the Hardware intro | The owner, 2026-10-07 |
-| 2 | Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | Reader chooses the words (CLAUDE.md section 14). Two names: the days on screen are "these 7 days" or "this one day", and a bare count is "7 days" or "1 day", the days control's own words. A count over the window drops "these": "on 5 of 7 days", "on 1 of 1 day". "The last N days" goes, because every window ends on the newest published day. At one day a sentence must not need a second day - no range, no order across days, no waiting for a later day, no worst, middle, median, quietest or loudest day - so about twenty sentences are written whole for one day, such as "This one day did not publish a summary, so there is nothing to explain." and "1 day, 2026-10-06. 12 rows in view." Recorded in `docs/concepts/console-design.md` | Reader, 2026-10-07, in three rulings |
 | 3 | `spanWords` in `fleet.ts` and `span` in `merge-line.ts` fold into one helper, which every windowed surface uses | The owner, 2026-10-07 |
 | 4 | Level 1: the words of sentences on four routes; a wrong version is obvious and local | The owner, 2026-10-07 |
+| 5 | The helper is `frontend/src/lib/console/span-words.ts` with three verbs: `nameSpan` (the days on screen), `openWithSpan` (the same words opening a sentence or a row label) and `countDays` (a bare count, through `plural` in `format.ts`, as the days control counts). Reader's two names need two forms, and a sentence that opens on the span needs a capital | Found during execution |
+| 6 | The Oracle is two logic specs on inputs they build, every word written out: `span-words.spec.ts` holds the helper, and `span-sentences.spec.ts` calls each windowed sentence a function writes at one day and at seven. A sentence in a Svelte template is held by the browser loops of `console-window.spec.ts` and five other specs: at the 1-day preset each windowed surface says "one day" or "1 day" and never "1 days", and at seven it says "7 days", in words `tests/support/span-said.ts` writes out. Those loops hold for any data and reach only the states the canary renders, so the browser smoke read every route at 1 and 7 | Found during execution (Table D, D3) |
 
 **Rejected alternatives**
 

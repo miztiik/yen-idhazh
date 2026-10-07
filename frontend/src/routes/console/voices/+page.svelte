@@ -18,6 +18,7 @@
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { nameSpan, openWithSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
@@ -583,8 +584,10 @@
 			data-model-rule-none="a feed answered or it did not, before any summary was written"
 		>
 			<p class="feeds-note">
-				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
-				square a day, oldest to newest, over these {windowDays} days.
+				Nearest to a rest first, then by how much has gone wrong in total.
+				{windowDays === 1
+					? `Each strip is one square, for ${nameSpan(windowDays)}.`
+					: `Each strip is one square a day, oldest to newest, over ${nameSpan(windowDays)}.`}
 			</p>
 
 			<ol class="feed-rows" data-feeds="table" data-feeds-drawn={data.feeds.length} data-feeds-hidden={data.feedsHidden}>
@@ -675,7 +678,7 @@
 				</div>
 			{:else}
 				<p class="feeds-note" data-feed-strip-empty>
-					The pipeline read no feed in these {windowDays} days, so there is no strip to draw.
+					The pipeline read no feed in {nameSpan(windowDays)}, so there is no strip to draw.
 				</p>
 			{/if}
 
@@ -958,12 +961,14 @@
 		{/if}
 
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-intro>
-			The last {cuts.days} days, {grouped(cuts.articles)}
-			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
+			{openWithSpan(cuts.days)} held {grouped(cuts.articles)}
+			{cuts.articles === 1 ? 'article' : 'articles'}. An article longer than the cap
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
 			many articles that cost each source. A source can carry several feeds, so this list and
-			"Feeds that failed" above do not name the same things. These days always end on the newest
-			published day.
+			"Feeds that failed" above do not name the same things.
+			{cuts.days === 1
+				? `${openWithSpan(cuts.days)} is always the newest published day.`
+				: 'These days always end on the newest published day.'}
 		</p>
 
 		{#if !cuts.measured}
@@ -972,7 +977,7 @@
 			</p>
 		{:else if cuts.rows.length === 0}
 			<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="none">
-				No article was cut short in these {cuts.days} days.
+				No article was cut short in {nameSpan(cuts.days)}.
 			</p>
 		{:else}
 			<div class="mt-3">
