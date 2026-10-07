@@ -133,6 +133,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   git status --porcelain
   npm run build:canary
   ```
+- **The preview refuses a build your change never touched, after a browser tool ran in the worktree; the tool's files are inputs.**
+  Every untracked file that `.gitignore` does not cover is fingerprinted. The
+  Playwright MCP browser saves page snapshots and screenshots to
+  `.playwright-mcp/` in the worktree root; on 2026-10-07 one snapshot there
+  made `verified-preview.ts` refuse a fresh canary build, until `.gitignore`
+  listed the folder. The tell is `git status` naming a folder no change of
+  yours wrote. Ignore that folder in `.gitignore`; deleting its files before
+  each build only moves the trap:
+  ```powershell
+  git status --porcelain --untracked-files=all
+  ```
 - **The same timeout from a fresh build reads as a stale one; the box was too busy to start the preview in 120 s.**
   `verified-preview.ts` checks the build's inputs and output before it
   serves. On this Windows box at 90 to 100 percent CPU on 2026-10-06, it
