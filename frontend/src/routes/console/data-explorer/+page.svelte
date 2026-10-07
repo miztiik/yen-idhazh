@@ -1113,6 +1113,7 @@
 		}
 		:global([data-workbench-region='questions'] .question-strip summary),
 		:global([data-workbench-region='questions'] .history-list summary),
+		:global([data-workbench-region='questions'] .history-list),
 		.how-to {
 			box-sizing: border-box;
 			block-size: var(--workbench-control);

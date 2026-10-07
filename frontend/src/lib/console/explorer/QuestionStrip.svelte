@@ -149,6 +149,8 @@
 	@media (max-width: 639px) {
 		.example,
 		summary {
+			box-sizing: border-box;
+			block-size: var(--workbench-control);
 			min-inline-size: max-content;
 			inline-size: auto;
 			max-inline-size: 100%;
