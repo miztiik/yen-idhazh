@@ -9,8 +9,10 @@ text can carry a ledger row fetched from the open web (Guardrail #11).
 
 The instant is pinned under a zone that is not UTC, so a stamp read off the
 machine's local clock fails here wherever the test runs (CLAUDE.md section 2).
-The last test starts the gardener's own command-line setup in a fresh process,
-because the handler goes on a root logger that pytest already holds.
+On GitHub the handler also writes the workflow commands around an event's line;
+those are text by definition, so those tests read the lines. The tests that
+start the gardener's own command-line setup do so in a fresh process, because
+the handler goes on a root logger that pytest already holds.
 """
 
 from __future__ import annotations
@@ -291,6 +293,37 @@ def test_a_declaration_with_no_ceiling_says_null_rather_than_nothing(
     assert "operator_range" not in said
 
 
+def test_on_github_the_handler_writes_the_commands_around_an_event_on_the_event_s_own_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A group opens before a task's first line and closes after its last; text stands alone.
+
+    Under pytest `install` adds no handler, so the formatter is read directly.
+    """
+    planned = TaskPlanned(
+        task="old-days",
+        kind=TaskKind.RETENTION,
+        shard=0,
+        run_id="2026-10-07-1",
+        attempt=1,
+        today="2026-10-07",
+        operator_range=None,
+        declared={},
+        absent=[],
+    )
+    with caplog.at_level(logging.INFO):
+        event_log.emit(planned)
+        event_log.emit(finished())
+        logging.getLogger("idhazh.ledger").warning("said as text")
+    opened, closed, text = caplog.records
+    github = event_log.GitHubLines()
+
+    assert github.format(opened).split("\n") == ["::group::old-days (retention)", line_of(opened)]
+    assert github.format(closed).split("\n") == [line_of(closed), "::endgroup::"]
+    assert github.format(text) == line_of(text)
+    assert line_of(opened).startswith('{"event":"task-planned"'), "the plain line grew a command"
+
+
 def test_the_gardener_command_lines_write_every_line_as_json_on_stderr_in_utc() -> None:
     """The handler `settings_or_none` installs, twice over, in a process whose clock is not UTC.
 
@@ -340,3 +373,57 @@ def test_the_gardener_command_lines_write_every_line_as_json_on_stderr_in_utc() 
         "logger": "idhazh.ledger",
         "message": "said so",
     }
+
+
+def test_on_github_the_command_line_folds_each_task_into_a_group_on_stderr() -> None:
+    """`settings_or_none(..., github=True)`, in a fresh process: the commands ride the event lines.
+
+    A task that failed closes its group and then adds its one error line, all on
+    stderr, so nothing can print between a command and the event it belongs to.
+    """
+    script = textwrap.dedent(
+        """
+        import logging, sys
+        from pathlib import Path
+        from idhazh.contracts.collection_prune import StopReason
+        from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
+        from idhazh.contracts.gardener_fault import GardenerFault
+        from idhazh.contracts.knobs.gardener import TaskKind
+        from idhazh.gardener import cli, event_log
+        assert cli.settings_or_none(Path(sys.argv[1]), github=True) is not None
+        event_log.emit(TaskPlanned(
+            task="defect", kind=TaskKind.RETENTION, shard=0, run_id="2026-10-07-1", attempt=1,
+            today="2026-10-07", operator_range=None, declared={}, absent=[],
+        ))
+        event_log.emit(TaskFinished(
+            task="defect", outcome=TaskOutcome.FAILED, dry_run=False, seen=0, selected=0,
+            taken=[], written=[], bytes_freed=0, stopped_because=StopReason.FAILED,
+            fault=GardenerFault.RAISED, error="KeyError", recovered=[],
+            next="a code defect stopped it, and the log names the error", duration_ms=1,
+        ), level=logging.ERROR)
+        """
+    )
+    environment = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")}
+
+    done = subprocess.run(
+        [sys.executable, "-c", script, str(CONFIG_DIR)],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == ""
+    said = [
+        line if line.startswith("::") else json.loads(line)["event"]
+        for line in done.stderr.splitlines()
+    ]
+    assert said == [
+        "::group::defect (retention)",
+        "task-planned",
+        "task-finished",
+        "::endgroup::",
+        "::error title=defect::raised (KeyError): a code defect stopped it, and the log names "
+        "the error",
+    ]

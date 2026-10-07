@@ -182,10 +182,9 @@ def test_a_listing_github_cannot_size_runs_no_task_and_exits_1(
     )
 
     assert (outcome.exit_code, outcome.record, outcome.landing) == (EXIT_TASK_FAILED, None, None)
-    assert any(
-        "could not be listed, so no task ran" in line and "did not report a size" in line
-        for line in said
-    ), said
+    (line,) = [line for line in said if "could not be listed, so no task ran" in line]
+    assert "(ValueError at idhazh.gardener.file_listing:" in line, line
+    assert "did not report a size" not in line, "the line printed the exception's text"
     assert on_origin(origin, AGED) == FILES[AGED]
 
 

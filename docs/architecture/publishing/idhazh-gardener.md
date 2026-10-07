@@ -4,10 +4,10 @@
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
-shard checks before and after its tasks run, what each line of its log says,
-how its one record lands on `main` however many shards race it, and how a
-retention task folds the closed days of a CSV day tree into one file each. What
-each knob means is
+shard checks before and after its tasks run, what each line of its log says and
+what its job page says, how its one record lands on `main` however many shards
+race it, and how a retention task folds the closed days of a CSV day tree into
+one file each. What each knob means is
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md);
 the workflow that wakes it is `.github/workflows/idhazh-gardener.yml`, once a
 day at 00:40 UTC or when a person dispatches it.
@@ -392,6 +392,7 @@ the log record (`event_log.payload`), never its text.
 | 5 | `period-refused`, `download-over-budget`, `ledger-fault-met`, `raw-file-skipped` | When a compaction step refuses a period, stops at the download budget, passes a month file already gone, or meets a raw file outside a day folder | The ledger, the step, the period or path, and the words that say why |
 | 6 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, what its fold did, and what a compaction did period by period |
 | 7 | `logged-text` | When a module outside the gardener logs text while a task runs | The logger and the message as it was said |
+| 8 | `shard-published` | Once a shard, when it ends, whatever ended it | The tasks it ran and the ones that failed, how its commit came to rest on main or why it never did, the try, the record, the downloads against their budget, the exit code and what it means, and the type and place of an exception that stopped it |
 
 **How a task ended is one word.** `report.classify` takes the first that holds:
 `failed`, `deferred`, `dry-run`, `ceiling`, `done`, and otherwise the pass's
@@ -405,8 +406,8 @@ task files on every pass is not work. `next` is one fixed sentence for the word,
 fault's own sentence when a fault stopped the task; no sentence says a member
 is gone. A `failed` task's event is an error, a `deferred` task's event is a
 warning, and every other ending is information. A period refused for a cause a
-person settles is a warning too, so an error in a shard's log always means a
-code defect.
+person settles is a warning too, so an error from a task always means a code
+defect.
 
 **An exception is named by its type and where it was raised, never by its
 text.** `error` is the type, such as `ValueError`. `where` is the deepest line
@@ -416,12 +417,79 @@ hold text fetched from the open web (Guardrail #11), so no event field holds
 it. A line that another module logged with an exception keeps its message and
 names the exception the same way.
 
-**The shard's own lines stay printed text.** A refusal that stops a shard
-before its tasks run, a download over the budget, `run-task`'s closing line, and
-every line the publisher prints are command output on stdout, not events. The
-publisher's two warnings, for a `stale` or `lost` landing, start with
-`::warning::`, so GitHub shows them on the job's page; GitHub reads such a
-command only at the start of a line.
+**The shard says how it ended once, in `shard-published`.** The publisher logs
+it whatever ended the shard: how its commit came to rest on main, as a landing
+word, or why it never did, as one of `listing-failed`, `check-refused` and
+`crashed`; the try, the record, what the tasks downloaded against
+`max_downloaded_mb`, the exit code, and one fixed sentence for what that code
+means. An exception that escapes the publisher is said the same way, by its
+type and place, before it goes on, so Python still exits 1 and prints its
+traceback. The event is an error exactly when the shard exits other than 0 and
+its job turns red, a warning when nothing landed because main moved on, and
+information otherwise. The publisher prints nothing about a push that worked or
+failed: the event says it once.
+
+**What stays printed text.** A check that refuses the shard, before its tasks
+run or after, a download over the budget, which names the three heaviest
+folders, a listing that could not be read, `run-task`'s closing line, and a job
+summary that could not be written are command output on stdout, not events.
+None of them prints an exception's text: the listing's line names the
+exception's type and place, as an event does.
+
+**On GitHub, each task's lines fold into one group.** `gardener_publish.py`
+reads whether it runs as a step on GitHub (`GITHUB_ACTIONS`) and tells the
+handler, which then writes GitHub's workflow commands on the event's own stream,
+around the event's line (`backend/idhazh/gardener/workflow_commands.py`):
+
+| # | Command | Where | Why |
+| --- | --- | --- | --- |
+| 1 | `::group::<task> (<kind>)` | Before `task-planned` | Every line a task logs folds into one group named for it |
+| 2 | `::endgroup::` | After `task-finished` | The group closes when the task does |
+| 3 | `::error title=<task>::<fault> while it worked on <period or member> (<error> at <where>): <next>` | After the group, for a task that `failed` | GitHub lists it on the run's page, and it shows while the group is folded |
+| 4 | `::warning title=shard <n>::...` | After `shard-published`, when the landing is `stale` or `lost` | Nothing landed because main moved on, and the job stays green |
+
+Each value is escaped the way GitHub's own toolkit escapes it: `%`, CR and LF
+in a message, and `:` and `,` as well in a property, so nothing inside a command
+can end its line and start another. The error line is built from the event's
+own words and never an exception's text; a part with no value is left out. At a
+level above `info` no `task-planned` is written, so no group opens. Run anywhere
+else, the handler writes the JSON lines alone.
+
+## What a person reads on the job page
+
+**Each shard adds a summary to its job's page, whether it passes or fails.**
+GitHub names the page in the step's environment (`GITHUB_STEP_SUMMARY`), and
+`gardener_publish.py` appends one Markdown summary to it
+(`backend/idhazh/gardener/run_summary.py`) after it logs `shard-published`. The
+summary is rendered from that event and the `task-finished` of each task that
+ran and nothing else, so it cannot say what the log does not. Top to bottom:
+
+- one heading: what the exit code means, the tasks a code defect stopped, the
+  tasks deferred, then the exit code, such as "No task failed; deferred:
+  `workflow-runs` (exit 0)";
+- where the record went, or why nothing landed: one sentence for each landing
+  word and each word for a stop;
+- what the tasks downloaded against `max_downloaded_mb`, and, past it, that a
+  task did not fit its work to the budget;
+- one row a task, in the order the tasks ran: how it ended, with `failed` in
+  bold and the fault that stopped it, and what it did, naming what it took -
+  files, runs or artifacts, days, months and years - and the exception's type
+  and place that stopped it;
+- what each word in the table means and what happens next, once a word: the
+  event's own `next`, keyed by the fault when a fault stopped the task;
+- what the tasks handled without stopping: one line for each task and note,
+  with the first period or member the note names and how many more.
+
+A compaction's old months and raw days are said as found past the keep line,
+because its record lists them whether its monthly window deleted them or only
+reported them. A summary holds closed words, counts, periods, member ids, paths
+the gardener named, an exception's type and place, and fixed sentences, never
+an exception's text or a row's value, and every sentence is escaped for
+Markdown. A page that will not take the summary costs the summary and never the
+exit code: the shard prints one line naming the error's type. A shard whose
+declarations cannot load writes no summary, because it stops before it knows
+its tasks, and its printed refusal says why. `idhazh gardener run-task` writes
+none: it never runs as a step on GitHub.
 
 ## Landing the commit
 
@@ -455,23 +523,23 @@ shard writes or deletes but its record, with `git diff-tree -r --no-renames
 `main` changed after the shard's commit, so the shard's version of it is older
 than `main`'s. A re-run is the usual cause: it checks out its run's commit again,
 after later runs have landed, and it names its record afresh, so the record check
-above cannot catch it. Nothing lands, not even the record. The shard writes a
-warning naming the first such path and exits 0, and the next wake does the work
-again on the new `main`. The comparison reads trees only, so the clone downloads
-no file for it.
+above cannot catch it. Nothing lands, not even the record. The shard's
+`shard-published` lists those paths, a warning on GitHub names the first, and
+the shard exits 0; the next wake does the work again on the new `main`. The
+comparison reads trees only, so the clone downloads no file for it.
 
 **When every try failed, `main`'s tip says why.** The publisher fetches `main`
 once more after the last try. If `main` moved after the last try's base, other
-writers are landing: the shard writes a warning and exits 0, and the next wake
+writers are landing: the shard warns on GitHub and exits 0, and the next wake
 does the work again. If it did not move, `main` refused this push, and the shard
 exits 3 and its job is red. The publisher never reads the push's error text,
 because git's words change with versions and languages. A GitHub outage through
 every try reads as a refusal, so it costs one red job.
 
-**Each way a shard comes to rest has one word.** Its log line names it:
-`landed`, `already-on-main`, `stale`, `lost` or `refused`. The words live in
-`backend/idhazh/contracts/shard_landing.py`. They are not persisted: the record
-lands inside the commit, so it cannot say how that commit landed.
+**Each way a shard comes to rest has one word.** Its `shard-published` event
+names it: `landed`, `already-on-main`, `stale`, `lost` or `refused`. The words
+live in `backend/idhazh/contracts/shard_landing.py`. They are not persisted: the
+record lands inside the commit, so it cannot say how that commit landed.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
@@ -917,6 +985,35 @@ word the record carries, and `ledger_fault` is the ledger's own word for a
 missing file, which the ledger reader and the query door print too. An event
 names an exception's type and place only, so a line can never carry a ledger
 row's text (Fowler, 2026-10-07).
+
+**2026-10-07: a shard says how it ended once, whatever ended it, and its
+summary reads nothing else.** The publisher printed a line for every try and
+every landing, and a summary written beside them would have told the same push
+a third time. So `publish` hands back its landing, the try and the paths main
+changed, and `shard-published` says them once: after the push loop, or where the
+shard stopped short of one, a crash included. The summary then has one input
+and cannot disagree with the log. The words for a shard that never came to
+rest sit beside that event, not with the landing words, which answer where a
+commit came to rest. The exit codes' sentences live beside the codes, and only
+the code that builds the event reads them. Which commands GitHub reads beside an
+event is a module of its own, apart from how an event becomes a line, and only
+the landing utility reads the environment that says the run is on GitHub. An
+`::error` for a shard over its budget or a refused push, and a `::warning` for a
+deferred task, were left out: the summary and the job's own colour say them
+already (Fowler, 2026-10-07).
+
+**2026-10-07: the shard summary is GitHub's page.** GitHub draws a job summary
+from Markdown, and we cannot set a plot, panel, drawing or colour on it, so
+sufficiency gates 1, 2 and 5 to 10 have nothing to measure
+([../../concepts/design-system.md](../../concepts/design-system.md#sufficiency-is-a-gate-not-a-taste)).
+Gates 3 and 4 hold: one heading leads, a test holds the page to exactly one, and
+the downloads are read against their budget. The cost: that one comparison is a
+sentence, not a bar. It stays a sentence because the job page belongs to GitHub;
+a drawn view of these rows belongs on the operator console. Words carry every
+state and only `failed` is bold, because GitHub draws no emoji shortcode in a
+summary and a picture would break the repository's ASCII rule (Susan,
+2026-10-07). The heading names a deferred task, because a deferral that waits
+for a person exits 0 behind a green tick (Reader, 2026-10-07).
 
 ## See also
 

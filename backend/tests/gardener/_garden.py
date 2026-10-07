@@ -179,7 +179,12 @@ def named_task_package(root: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleTyp
 
 
 def quiet_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Git in this process and its children, with no machine configuration at all."""
+    """Git in this process and its children, with no machine configuration at all.
+
+    The variables a GitHub step sets go too, because CI runs these tests inside
+    one: a shard driven here must not write into the CI job's own outputs or
+    summary page, or write the workflow commands only a shard's own step may.
+    """
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
@@ -187,7 +192,8 @@ def quiet_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / "gitconfig"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     monkeypatch.setenv("GIT_TERMINAL_PROMPT", "0")
-    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    for variable in ("GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY", "GITHUB_ACTIONS"):
+        monkeypatch.delenv(variable, raising=False)
 
 
 def git(repo: Path, *args: str) -> str:
