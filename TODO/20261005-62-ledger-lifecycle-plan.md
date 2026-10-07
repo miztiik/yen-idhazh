@@ -76,7 +76,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
 | L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | - | Plan 62 row l22 |
-| L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | PENDING | - | - | - |
+| L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | DONE | fuzzy-winner | - | Plan 62 row l23 |
 | L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | #1376 | Plan 62 row l24 |
 | L25 | Hardware's platform-mix panel says the machine record is not packed yet | L7, L17 | G | DONE | fantastic-giggle | - | Plan 62 row l25 |
 | L26 | Every console sentence reads right at the one-day window | L17, L23 | G | PENDING | - | - | - |
@@ -1134,7 +1134,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the subtitle's words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Reader chooses the subtitle's words (CLAUDE.md section 14) | Reader, 2026-10-07: "Over {span}, {N} of {M} items had to read {pronoun} whole, with nothing saved from before. The rest reused part of an earlier prompt instead." for some-in-memory, and "Over {span}, every one of the {M} items reused part of an earlier prompt - none had to start from scratch." for none-read-whole. Reader, 2026-10-07 (second round, before merge): "Over {span}, all {M} items had to read their prompts whole, with nothing saved from before." for every item in a window of more than one reading whole, confirmed unchanged from the draft; and, for a window of exactly one item, "Over {span}, the one item reused part of an earlier prompt - it did not start from scratch." when it did not read whole, or "Over {span}, the one item had to read its prompt whole, with nothing saved from before." when it did. Reader chose "the one item" over `plural()` from `frontend/src/lib/format.ts` so a single item is never named "1 items" |
 | 2 | The subtitle's words come from one pure function of the window's `ItemCost`, in `frontend/src/lib/console/prompt-cache-subtitle.ts`, and the page prints what it returns, as the note under the share has since L15 (#1368). So a test pins Reader's words on rows it builds | Plan author, 2026-10-07, from row L15 |
 | 3 | The three faults are row L15's findings. The search for the old title found two more pages that name it, `console-machine.md` and `telemetry-series.md`, so this row corrects all three pages | Row L15's report; plan author, 2026-10-07 |
 | 4 | L23 waits for L15, which edited the note under the share, the home route's page and the prompt-cache section | The owner, 2026-10-07 |
