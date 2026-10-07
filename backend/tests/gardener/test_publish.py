@@ -19,6 +19,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as parquet
 import pytest
 from pydantic import ValidationError
 
@@ -149,11 +151,40 @@ def test_a_tip_that_moved_keeps_the_movers_change_and_this_one(
     ]
 
 
+def test_a_raw_arrival_survives_an_older_compactors_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    raw = "state/raw/council-run-records/2026/09/20/arrival.parquet"
+    packed = "state/compact/council-run-records/daily/2026/09/20.parquet"
+    mover = tmp_path / "writer"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    (mover / raw).parent.mkdir(parents=True, exist_ok=True)
+    parquet.write_table(pa.table({"writer": ["later"]}), mover / raw)
+    raw_bytes = (mover / raw).read_bytes()
+    git(mover, "add", raw)
+    git(mover, "commit", "--quiet", "-m", "another writer filed raw data")
+    git(mover, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    (checkout / packed).parent.mkdir(parents=True, exist_ok=True)
+    parquet.write_table(pa.table({"writer": ["older"]}), checkout / packed)
+
+    code, _ = landed(a_shard(written={packed}), checkout)
+
+    assert code == EXIT_OK
+    landed_checkout = tmp_path / "landed"
+    git(tmp_path, "clone", "--quiet", str(origin), str(landed_checkout))
+    assert (landed_checkout / raw).read_bytes() == raw_bytes
+    assert parquet.read_table(landed_checkout / packed).to_pydict() == {"writer": ["older"]}
+
+
 def test_a_push_that_lost_is_tried_again_on_the_new_tip(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     origin, checkout = a_checkout(tmp_path, monkeypatch)
-    a_hook(origin, 'if [ -f "$GIT_DIR/lost-once" ]; then exit 0; fi\ntouch "$GIT_DIR/lost-once"\nexit 1')
+    a_hook(
+        origin,
+        'if [ -f "$GIT_DIR/lost-once" ]; then exit 0; fi\ntouch "$GIT_DIR/lost-once"\nexit 1',
+    )
 
     code, said = landed(a_shard(), checkout, attempts=2)
 
@@ -405,7 +436,12 @@ def test_the_commit_listing_names_only_the_requested_folders(
     shutil.rmtree(checkout / "state" / "traces")
 
     listed = gardener_publish.Checkout(checkout).committed_folders(
-        ["state/traces/", "state/a-folder-nothing-committed", "state/raw/visual-prunes", "frontend/public/digest"]
+        [
+            "state/traces/",
+            "state/a-folder-nothing-committed",
+            "state/raw/visual-prunes",
+            "frontend/public/digest",
+        ]
     )
 
     assert listed == {
