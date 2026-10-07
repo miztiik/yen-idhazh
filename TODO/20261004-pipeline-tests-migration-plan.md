@@ -246,6 +246,7 @@ Table J - Rejected alternatives
   - `backend/idhazh/cli.py`
   - `backend/idhazh/config.py`
   - `backend/idhazh/stages/common.py`
+  - `backend/utilities/pipeline_test_case.py`
   - `backend/utilities/pipeline_test_case_config.py`
   - `backend/utilities/pipeline_test_ledgers.py`
   - `config/idhazh.json`

@@ -43,7 +43,7 @@ from idhazh import day_partition, ledger
 from idhazh.contracts.file_envelope import Format, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 from utilities.named_inputs import day_files
 
 #: How deep a writer's file sits below a trial root: the ledger, a year, a month,
@@ -54,11 +54,11 @@ TRACES = "traces"
 
 
 def _roots(config_root: Path) -> list[str]:
-    """Every declared test case's trial root, in the order config declares them."""
+    """Every declared test case's child slug, including disabled cases."""
     settings = PipelineTestsConfig.from_json(
         (config_root / "pipeline-tests.json").read_text(encoding="utf-8")
     )
-    return [test_case.trial_state_dirname for test_case in settings.test_cases]
+    return [test_case.id for test_case in settings.test_cases]
 
 
 def _refuse_raw_file(path: Path, relative: str, root: Path) -> list[str]:
@@ -182,7 +182,7 @@ def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) ->
     tree.mkdir(parents=True)
     arrived = []
     for name in roots:
-        root = state / name
+        root = state / TRIAL_STATE_PREFIX / name
         bases = [root / TRACES]
         bases.extend(
             ledger.raw_root(root, which)
@@ -213,7 +213,7 @@ def place(tree: Path, state: Path, *, roots: list[str]) -> list[str]:
     """
     staged = []
     for name in roots:
-        destination = state / name
+        destination = state / TRIAL_STATE_PREFIX / name
         destination.mkdir(parents=True, exist_ok=True)
         source = tree / name
         if source.is_dir():

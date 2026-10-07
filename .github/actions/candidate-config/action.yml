@@ -7,7 +7,8 @@ inputs:
     required: true
   trial_state:
     description: >-
-      Where this run''s ledgers go under `state/`, as `run.trial_state_dirname`.
+      The trial state root under `state/`, as `run.trial_state_dirname`.
+      A case-specific config may add `run.trial_case_dirname` below this root.
       Empty keeps the committed value, which is production.
     required: false
     default: ''
