@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-07
 
 Checks before trusting command output or an editor operation. Keep instructions portable; omit machine configuration and session transcripts.
 
@@ -43,6 +43,7 @@ Checks before trusting command output or an editor operation. Keep instructions 
 
 - Use an interpreter supported by the project's declared version range. Verify imports and package paths in the intended checkout before running checks.
 - Isolate environment changes to the task. Do not rebuild or change a shared environment while another task uses it.
+- A `.venv` copied from another worktree keeps an editable install of the project that points at that other worktree, so `import idhazh` fails once that worktree is removed. Run `pip install --no-deps -e .` with the copied environment's Python, from the new worktree's root, to point it at the new worktree (plan 62's row L18, 2026-10-07).
 
 ## Downloads
 
