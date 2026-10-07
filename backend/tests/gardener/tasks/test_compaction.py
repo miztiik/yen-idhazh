@@ -42,17 +42,25 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_events import (
+    CompactionStep,
+    LedgerFaultMet,
+    PeriodRefused,
+    PeriodsChosen,
+    TaskOutcome,
+)
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import MonthsWindow
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.gardener import report, schedule
+from idhazh.gardener import event_log, report, schedule
 from idhazh.gardener.one_at_a_time import Pass
 from idhazh.gardener.tasks import _monthly_period
 from idhazh.ledger import paths
 
+from .._events import events, the_event
 from ._marks import marks_on_disk
 from ._task import context_for, run_task
 
@@ -229,7 +237,7 @@ def test_a_first_pass_starts_at_its_oldest_raw_day_and_a_quiet_day_has_no_file(
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-09-20"))
 
-    compact(root, date(2026, 9, 23), max_periods_per_run=31)
+    outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
     index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
     assert [entry.covers for entry in index.entries] == ["2026-09-20", "2026-09-21"]
@@ -239,16 +247,20 @@ def test_a_first_pass_starts_at_its_oldest_raw_day_and_a_quiet_day_has_no_file(
     )
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-21") is None
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-01") is None
+    assert outcome.periods is not None
+    assert (
+        outcome.periods.days_packed,
+        outcome.periods.empty_periods,
+        outcome.periods.daily_mark,
+    ) == (["2026-09-20"], ["2026-09-21"], "2026-09-21"), "the event says what the index says"
+    assert report.classify(outcome) is TaskOutcome.DONE
 
 
 def chosen_on(caplog: pytest.LogCaptureFixture) -> dict[str, Any]:
-    """The periods the pass logged that it chose, as the one line says them, None left out."""
-    (said,) = [
-        record.getMessage().removeprefix("periods chosen ")
-        for record in caplog.records
-        if record.getMessage().startswith("periods chosen ")
-    ]
-    chosen: dict[str, Any] = json.loads(said)
+    """The periods the pass said it chose, as its one event says them, None left out."""
+    chosen: dict[str, Any] = the_event(caplog.records, PeriodsChosen).model_dump(
+        mode="json", exclude_none=True
+    )
     return chosen
 
 
@@ -272,6 +284,7 @@ def test_an_empty_ledger_writes_nothing_and_ends_empty(
     chosen = chosen_on(caplog)
     assert (chosen["days"], chosen["months"]) == ({"start": "none"}, {"start": "none"})
     assert "rerun_span" not in chosen
+    assert report.classify(outcome) is TaskOutcome.EMPTY
 
 
 def test_after_every_pass_the_daily_index_names_every_due_day_a_quiet_one_included(
@@ -690,20 +703,13 @@ def test_a_day_taken_again_and_then_its_month_keep_the_count_of_files_set_aside(
     assert (august.rows, august.set_aside, august.lost_days) == (2, 1, [])
 
 
-def faults(caplog: pytest.LogCaptureFixture, naming: str, *, at: int = logging.WARNING) -> list[str]:
-    """The `fault=` word of every record at or above `at` the pass logged about one period."""
+def refusals(caplog: pytest.LogCaptureFixture, period: str) -> list[tuple[Any, ...]]:
+    """Each period event the pass logged about one period: its step, words, and the level said."""
     return [
-        word
+        (held.step, held.fault, held.ledger_fault, record.levelno)
         for record in caplog.records
-        if record.levelno >= at and naming in record.getMessage()
-        for word in record.getMessage().split()
-        if word.startswith("fault=")
+        if isinstance(held := event_log.payload(record), PeriodRefused) and held.period == period
     ]
-
-
-def refusals(caplog: pytest.LogCaptureFixture, naming: str) -> list[str]:
-    """The `fault=` word of every error the pass logged about one period."""
-    return faults(caplog, naming, at=logging.ERROR)
 
 
 def recovered(outcome: Pass, period: str) -> list[RecoveryNote]:
@@ -882,6 +888,9 @@ def test_a_late_file_that_cannot_be_read_is_set_aside_and_its_re_opened_month_co
     assert not late.exists() and not stray.exists()
     assert recovered(outcome, "2026-08") == [RecoveryNote.REOPENED_MONTH]
     assert recovered(outcome, "2026-08-15") == [RecoveryNote.SET_ASIDE]
+    assert outcome.periods is not None
+    assert outcome.periods.set_aside_paths == ["state/raw/visual-prunes/2026/08/15/notes.txt"]
+    assert outcome.periods.months_closed == [], "a month re-opened is not a month closed anew"
 
 
 def test_a_re_open_whose_month_file_is_gone_is_refused_as_file_missing(
@@ -899,7 +908,7 @@ def test_a_re_open_whose_month_file_is_gone_is_refused_as_file_missing(
     gone.unlink()
     late = filed(root, a_pass("2026-08-15", run="9"))
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         outcome = compact(root, date(2026, 10, 21), max_periods_per_run=100)
 
     assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
@@ -909,7 +918,14 @@ def test_a_re_open_whose_month_file_is_gone_is_refused_as_file_missing(
     )
     assert late.is_file()
     assert ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-08") is None
-    assert refusals(caplog, "month=2026-08") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
+    assert refusals(caplog, "2026-08") == [
+        (
+            CompactionStep.REOPEN_MONTHS,
+            GardenerFault.PACKED_FILE_UNREADABLE,
+            ledger.LedgerFault.FILE_MISSING,
+            logging.WARNING,
+        )
+    ], "a refusal a person settles is a warning, never an error"
     assert mark(root, Period.DAILY) == "2026-10-19", "the rest of the pass still ran"
 
 
@@ -1030,7 +1046,7 @@ def test_a_re_run_into_a_day_whose_packed_file_is_gone_is_refused_as_file_missin
     lost.unlink()
     late = filed(root, a_pass("2026-09-20", before=222), attempt=2)
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         outcome = compact(root, date(2026, 9, 24), max_periods_per_run=31)
 
     assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
@@ -1040,7 +1056,14 @@ def test_a_re_run_into_a_day_whose_packed_file_is_gone_is_refused_as_file_missin
     )
     assert late.is_file()
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-20") is None
-    assert refusals(caplog, "day=2026-09-20") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
+    assert refusals(caplog, "2026-09-20") == [
+        (
+            CompactionStep.PACK_DAYS,
+            GardenerFault.PACKED_FILE_UNREADABLE,
+            ledger.LedgerFault.FILE_MISSING,
+            logging.WARNING,
+        )
+    ]
     assert mark(root, Period.DAILY) == "2026-09-22", "the rest of the pass still ran"
 
 
@@ -1504,11 +1527,15 @@ def test_an_old_month_with_no_row_goes_unwarned_and_one_whose_file_is_gone_warns
     old_months(root)
 
     with caplog.at_level(logging.WARNING):
-        compact(root, DROP_WAKE)
+        dropped = compact(root, DROP_WAKE)
 
     assert not {QUIET_MONTH, GONE_MONTH} & set(monthly_covers(root))
-    assert faults(caplog, f"month={QUIET_MONTH}") == []
-    assert faults(caplog, f"month={GONE_MONTH}") == [f"fault={ledger.LedgerFault.FILE_MISSING}"]
+    assert [
+        (met.step, met.period, met.ledger_fault)
+        for met in events(caplog.records, LedgerFaultMet)
+    ] == [(CompactionStep.DROP_MONTHS, GONE_MONTH, ledger.LedgerFault.FILE_MISSING)]
+    assert dropped.periods is not None
+    assert {QUIET_MONTH, GONE_MONTH} <= set(dropped.periods.months_dropped)
 
 
 def test_a_raw_day_past_the_line_goes_by_its_listed_paths_even_when_a_file_cannot_be_read(

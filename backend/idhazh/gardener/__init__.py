@@ -10,7 +10,9 @@ a wake's tasks into shards, and lands one record per shard on main.
 - `schedule` says whether a UTC day is old enough to act on at an instant.
 - `runner` runs one shard or one task, checks what each task touched, and writes the record.
 - `outcome` is what a shard comes to: its exit code, and the paths it hands on to land.
-- `context` is what a task is handed; `report` turns what a pass did into its row.
+- `context` is what a task is handed; `report` turns what a pass did into its row
+  and its `task-finished` event.
+- `event_log` writes each event a task or the runner logs as one line of JSON.
 - `one_at_a_time` deletes a collection's members one at a time, under a ceiling.
 - `github_collections` lists and deletes what GitHub holds for this repository.
 - `error_cause` says what an error a pass meets means: a member gone, one GitHub

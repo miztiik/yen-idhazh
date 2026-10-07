@@ -123,12 +123,15 @@ class FoldInterruptedError(Exception):
     gives: the months and days before the failure are already settled on disk,
     and the shard still lands them. `so_far.fault` is what stopped it, as
     `error_cause` reads the error, so a code defect is never read as an outage.
+    A dry-run fold settled none of the months and days it named, and its message
+    says so.
     """
 
     def __init__(self, so_far: Folded, where: str) -> None:
+        kept = "It was a dry run, so none was settled" if so_far.dry_run else "Those stand"
         super().__init__(
-            f"the fold stopped at {where} after settling {len(so_far.months)} months and "
-            f"{len(so_far.days)} days. Those stand, and the next wake starts again from the "
+            f"the fold stopped at {where} after {len(so_far.months)} months and "
+            f"{len(so_far.days)} days. {kept}, and the next wake starts again from the "
             "oldest still waiting"
         )
         self.so_far = so_far

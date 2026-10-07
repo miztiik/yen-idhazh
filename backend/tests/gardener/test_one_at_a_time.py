@@ -26,9 +26,12 @@ from pathlib import Path
 import pytest
 
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.gardener_events import MemberOutOfOrder, TaskOutcome, WindowChosen
 from idhazh.contracts.gardener_fault import GardenerFault
-from idhazh.gardener import one_at_a_time
+from idhazh.gardener import event_log, one_at_a_time
 from idhazh.gardener.one_at_a_time import Collection, Member, PruneInterruptedError, Window
+
+from ._events import the_event
 
 pytestmark = pytest.mark.contract
 
@@ -301,6 +304,75 @@ def test_a_member_the_pass_cannot_read_still_carries_what_went(tmp_path: Path) -
     assert isinstance(stop.value.__cause__, OSError), "the file system's own refusal was lost"
 
 
+@pytest.mark.parametrize(
+    ("dry_run", "said"),
+    [
+        pytest.param(True, "It was a dry run, so none was deleted", id="dry-run"),
+        pytest.param(False, "Those are gone", id="live"),
+    ],
+)
+def test_a_pass_whose_listing_fails_part_way_says_it_deleted_nothing_only_when_it_did_not(
+    tmp_path: Path, dry_run: bool, said: str
+) -> None:
+    """THE ORACLE for the dry run: two members named, the third unreadable, and nothing gone.
+
+    A dry run names the members it would take and deletes none of them, so the
+    message that carries the pass out never says they are gone. A live pass
+    did delete them, and says so.
+    """
+    root = tmp_path / "files"
+    collection = a_collection(root)
+    (root / f"{DAYS[2]}.txt").unlink()
+    (root / f"{DAYS[2]}.txt").mkdir()
+    reading = Collection(
+        name=collection.name,
+        listing=lambda: iter(sorted(root.glob("*.txt"))),
+        describe=lambda path: Member(
+            id=path.stem, day=path.stem, size_bytes=len(path.read_bytes()), label=path.name
+        ),
+        delete=collection.delete,
+    )
+
+    with pytest.raises(PruneInterruptedError) as stop:
+        one_at_a_time.take(reading, window=Window(until=DAYS[6]), ceiling=None, dry_run=dry_run)
+
+    assert stop.value.so_far.taken == (DAYS[0], DAYS[1])
+    assert said in str(stop.value)
+    if dry_run:
+        assert "gone" not in str(stop.value)
+        assert on_disk(root) == [DAYS[0], DAYS[1], *DAYS[3:]], "a dry run deleted a member"
+
+
+def test_a_pass_says_its_window_before_it_lists_a_member(caplog: pytest.LogCaptureFixture) -> None:
+    """A listing that fails at once still leaves the window the pass held members to in the log."""
+
+    def listing() -> Iterable[Path]:
+        raise OSError("the listing cannot be read")
+
+    failing = Collection(
+        name="files", listing=listing, describe=lambda _: Member("x", DAYS[0], 0, "x"), delete=print
+    )
+
+    with caplog.at_level("INFO", logger=event_log.__name__), pytest.raises(PruneInterruptedError):
+        one_at_a_time.take(failing, window=Window(until=DAYS[4]), ceiling=3, mark=DAYS[0])
+
+    assert the_event(caplog.records, WindowChosen) == WindowChosen(
+        collection="files", since=None, until=DAYS[4], ceiling=3, dry_run=True, mark=DAYS[0]
+    )
+
+
+def test_a_listing_that_counts_its_pages_puts_the_count_on_the_pass(tmp_path: Path) -> None:
+    """A listing with no pages says nothing, rather than a count of zero nobody read."""
+    root = tmp_path / "files"
+    paged = dataclasses.replace(a_collection(root), pages_read=lambda: 4)
+
+    counted = one_at_a_time.take(paged, window=Window(until=DAYS[1]), ceiling=None)
+    unpaged = one_at_a_time.take(collection_over(root), window=Window(until=DAYS[1]), ceiling=None)
+
+    assert (counted.pages_read, unpaged.pages_read) == (4, None)
+    assert unpaged.idle_outcome is TaskOutcome.NOT_DUE, "a pass that chose no idle word"
+
+
 def test_no_ceiling_takes_every_member_the_window_holds(tmp_path: Path) -> None:
     """None is no ceiling at all, recorded as none rather than as a number nobody chose."""
     root = tmp_path / "files"
@@ -490,14 +562,16 @@ def test_a_walk_out_of_day_order_keeps_its_mark_and_says_so(
         delete=walk.delete,
     )
 
-    with caplog.at_level("WARNING", logger="idhazh.gardener.one_at_a_time"):
+    with caplog.at_level("WARNING", logger=event_log.__name__):
         taken = one_at_a_time.take(
             shuffled, window=Window(until="2026-08-02"), ceiling=None, mark="2026-07-28"
         )
 
     assert sorted(taken.taken) == list(WALK)
     assert taken.handled_through == "2026-07-28"
-    assert "out of day order" in caplog.text
+    late = the_event(caplog.records, MemberOutOfOrder)
+    assert late.collection == walk.name
+    assert late.day < late.after, "the member it names came from an earlier day"
 
 
 @pytest.mark.parametrize(

@@ -79,16 +79,16 @@ window deletes.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Final
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason, stop_for
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.gardener_events import StepChoice
+from idhazh.contracts.gardener_events import CompactionStep, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
@@ -97,7 +97,8 @@ from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks import _reopened_month
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 
-logger = logging.getLogger(__name__)
+#: The step a day this module refuses is named under.
+_STEP: Final = CompactionStep.PACK_DAYS
 
 
 def _past_the_line(
@@ -131,14 +132,16 @@ def drop(tree: CompactTree, months: Sequence[str], *, first_kept: str | None) ->
             tree.delete(path)
     dropped = {day for day, _files in gone}
     tree.raw_days = [day for day in tree.raw_days if day not in dropped]
+    tree.dropped_raw_days.extend(day for day, _files in gone)
     return ()
 
 
 def spare(tree: CompactTree, months: Sequence[str], *, first_kept: str | None) -> tuple[Stop, ...]:
     """Every raw file a live drop would take is named and kept, for `compact` in an open month."""
-    for _day, files in _past_the_line(tree, months, first_kept=first_kept):
+    for day, files in _past_the_line(tree, months, first_kept=first_kept):
         for path in files:
             tree.spare(path)
+        tree.dropped_raw_days.append(day)
     return ()
 
 
@@ -146,29 +149,6 @@ def _days_from(first: str, last: str) -> list[str]:
     """Every UTC day from `first` to `last`, both named."""
     start, end = date.fromisoformat(first), date.fromisoformat(last)
     return [(start + timedelta(days=step)).isoformat() for step in range((end - start).days + 1)]
-
-
-def _refused(
-    tree: CompactTree,
-    day: str,
-    why: str,
-    ledger_fault: ledger.LedgerFault | None = None,
-    *,
-    fault: GardenerFault = GardenerFault.RAISED,
-) -> Stop:
-    """A raw day the step does not take, said once by name. Its files are kept.
-
-    `fault` is the record's word for it: `raised`, a defect, unless the caller
-    names a cause outside the code, which defers the pass instead.
-    """
-    logger.error(
-        "a raw day is not compacted, and its files are kept ledger=%s day=%s fault=%s reason=%s",
-        tree.ledger.value,
-        day,
-        ledger_fault or "none",
-        why,
-    )
-    return Stop(stop_for(fault), day, fault)
 
 
 def _take[C: Contract](
@@ -194,7 +174,7 @@ def _take[C: Contract](
     try:
         raw = tree.read_raw_day(day, most=policy.max_raw_files_per_period, model=model)
     except ValueError as refusal:
-        return _refused(tree, day, str(refusal))
+        return tree.refuse(_STEP, day, failure=refusal)
     entry = tree.daily.get(day)
     adopted: ledger_marks.Adopted | None = None
     if entry is not None and entry.names_file:
@@ -202,14 +182,13 @@ def _take[C: Contract](
             tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day
         )
         if existing is None:
-            where = ledger.compact_index_path(tree.state_dir, tree.ledger, Period.DAILY)
-            return _refused(
-                tree,
+            # Its index names the day and the file is not there: a person
+            # restores it from git history, and the next wake takes the re-run in.
+            return tree.refuse(
+                _STEP,
                 day,
-                f"{where.name} names the day and its file is not there. Restore the file from "
-                "git history, and the next wake takes the re-run in",
-                ledger.LedgerFault.FILE_MISSING,
                 fault=GardenerFault.PACKED_FILE_UNREADABLE,
+                ledger_fault=ledger.LedgerFault.FILE_MISSING,
             )
     else:
         try:
@@ -217,14 +196,14 @@ def _take[C: Contract](
                 tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day
             )
         except ValueError as refusal:
-            return _refused(tree, day, str(refusal))
+            return tree.refuse(_STEP, day, failure=refusal)
         existing = None if adopted is None else adopted.path
     try:
         kept = [tree.load(existing, model=model)] if existing is not None and raw.taken else []
     except ValueError as refusal:
-        return _refused(tree, day, str(refusal), fault=GardenerFault.PACKED_FILE_UNREADABLE)
-    for path, why in raw.unreadable:
-        tree.set_aside(path, day, why)
+        return tree.refuse(_STEP, day, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal)
+    for path in raw.unreadable:
+        tree.set_aside(path)
     set_aside = (0 if entry is None else entry.set_aside) + len(raw.unreadable)
     if raw.taken:
         _record(
@@ -257,13 +236,6 @@ def _take[C: Contract](
     _advance(tree, day)
     if raw.carried:
         tree.note_recovery(RecoveryNote.CARRIED_OVER, day)
-        logger.info(
-            "a day's newest raw files wait for the next wake ledger=%s day=%s waiting=%s most=%s",
-            tree.ledger.value,
-            day,
-            raw.carried,
-            policy.max_raw_files_per_period,
-        )
         return Stop(StopReason.CEILING, day)
     return None
 
@@ -351,15 +323,9 @@ def compact(
     mark below it, whether the fault fails the pass or defers it.
     """
     if choice.stopped_because is StopReason.DEFERRED and choice.resume_from is not None:
-        return (
-            _refused(
-                tree,
-                choice.resume_from,
-                "the operator range leaves it out, and it is due before any day the range "
-                "names. Widen the range to include it",
-                fault=GardenerFault.RANGE_STARTS_LATE,
-            ),
-        )
+        # The range leaves the day out, and it is due before any day the range
+        # names: the person widens the range to include it.
+        return (tree.refuse(_STEP, choice.resume_from, fault=GardenerFault.RANGE_STARTS_LATE),)
     new = (
         [] if choice.first is None or choice.last is None else _days_from(choice.first, choice.last)
     )
@@ -377,16 +343,9 @@ def compact(
             if (first_kept is None or month >= first_kept) and month not in closed:
                 closed.append(month)
         elif tree.monthly_through is not None and month <= tree.monthly_through:
-            stops.append(
-                _refused(
-                    tree,
-                    day,
-                    "no monthly entry names its month and the monthly mark is past it: the "
-                    "month never closed, was dropped, or sits in a packed year, so there is "
-                    "no month to re-open",
-                    fault=GardenerFault.NO_MONTH_TO_REOPEN,
-                )
-            )
+            # The month never closed, was dropped, or sits in a packed year, so
+            # there is no month to re-open: its files wait for a person.
+            stops.append(tree.refuse(_STEP, day, fault=GardenerFault.NO_MONTH_TO_REOPEN))
         else:
             again.append(day)
     taken = 0
