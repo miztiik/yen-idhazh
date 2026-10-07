@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { windowOfDays } from '../src/lib/charts/viewport';
 import { describeHeldPart } from '../src/lib/console/held-part-note';
 import { itemCost } from '../src/lib/console/item-cost';
+import { describePromptCacheSubtitle } from '../src/lib/console/prompt-cache-subtitle';
 import { telemetryRows } from '../src/lib/server/payload';
 import { windowDay } from '../src/lib/server/window-day';
 import { publishedSite } from './support/published-site';
@@ -405,6 +406,39 @@ test.describe('THE ORACLE: the note under the share says what its own two figure
 		);
 		expect(uncounted.counted).toBe(1);
 		expect(describeHeldPart(uncounted)).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The subtitle over the share
+// ---------------------------------------------------------------------------
+
+test.describe('THE ORACLE: the subtitle over the share says what its own two figures show', () => {
+	test('a window where 1 of 4 items read its prompt whole names that item and says the rest reused', () => {
+		const cost = itemCost(
+			[
+				held('2026-10-06', 'a-01', 0),
+				held('2026-10-06', 'a-02', 100),
+				held('2026-10-06', 'a-03', 200),
+				held('2026-10-06', 'a-04', 300)
+			],
+			ONE_DAY
+		);
+		expect([cost.counted, cost.readWhole]).toEqual([4, 1]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, 1 of 4 items had to read its prompt whole, with nothing saved from before. The rest reused part of an earlier prompt instead.'
+		);
+	});
+
+	test('a window where no item read its prompt whole says every item reused part of an earlier prompt', () => {
+		const cost = itemCost(
+			[held('2026-10-06', 'a-01', 100), held('2026-10-06', 'a-02', 200)],
+			ONE_DAY
+		);
+		expect([cost.counted, cost.readWhole]).toEqual([2, 0]);
+		expect(describePromptCacheSubtitle(cost)).toBe(
+			'Over this one day, every one of the 2 items reused part of an earlier prompt - none had to start from scratch.'
+		);
 	});
 });
 

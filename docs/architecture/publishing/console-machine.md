@@ -34,7 +34,7 @@ The other panels still read their ledgers at build time under `$lib/server/`.
 | How close we are to the limits | What is holding the machine's memory | one bar for the tightest moment of each day | What the memory is going to, and which of those parts a reader may add together. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
 | What the model spends | What one article costs the machine | three figures over the span, each a range across the articles that recorded it | What a change to the prompt, the model or how many articles a day runs will cost before the run that pays for it. |
-| What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
+| What the model spends | How much text the model reads again, and how fast it reads | two spans a request, over the window's items | Whether a bigger cache would save wall clock. |
 | What the model spends | How much of a run is reading and how much is writing | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
 | What the model spends | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
 

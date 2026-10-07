@@ -55,6 +55,7 @@
 	import Reserved from '$lib/components/Reserved.svelte';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import { describeHeldPart } from '$lib/console/held-part-note';
+	import { describePromptCacheSubtitle } from '$lib/console/prompt-cache-subtitle';
 	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
@@ -355,6 +356,9 @@
 	/** The note under the share, for the same window, or null where no item had
 	 * anything in memory. */
 	const heldPartNote = $derived(describeHeldPart(cost));
+	/** The panel's subtitle, for the same window. Printed only where the panel
+	 * itself renders, which is where `cost.counted` is above zero. */
+	const promptCacheSubtitle = $derived(describePromptCacheSubtitle(cost));
 
 	/** Whole seconds, and `<1` where a real measurement rounds away. The console
 	 * prints no decimal, and a `0` there would say the work was free. */
@@ -1219,7 +1223,7 @@
 			{:else}
 				<Panel
 					title="How much of each prompt was already in memory"
-					note="Prompt tokens the model had to read, against the ones it did not - the instructions in front of every article stay in memory between items."
+					note={promptCacheSubtitle}
 				>
 					<!-- Counts, not a track. The two-segment bar that used to sit here
 					     drew one flat share on no time axis, and the note below it told
