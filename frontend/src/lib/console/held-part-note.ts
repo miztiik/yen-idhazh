@@ -10,13 +10,14 @@
  * change: a window can pass on those two while some of its days held far less.
  *
  * The words are fixed - Reader and Jony chose them - and only the span and the
- * two counts inside them are computed. The readings behind the rule are in
- * `docs/architecture/publishing/what-the-pipelines-route-draws.md`.
+ * two counts inside them are computed. The span's own words come from
+ * `span-words.ts`, like every windowed sentence's. The readings behind the rule
+ * are in `docs/architecture/publishing/what-the-pipelines-route-draws.md`.
  */
 
-import { spanWords } from '../charts/fleet';
 import { grouped } from '../charts/series';
 import type { ItemCost } from './item-cost';
+import { nameSpan } from './span-words';
 
 /** The note for one window, or null where no item had anything in memory.
  *
@@ -32,7 +33,7 @@ export function describeHeldPart({
 	reusedWidest: largest
 }: Pick<ItemCost, 'days' | 'reusedMedian' | 'reusedWidest'>): string | null {
 	if (middle === null || largest === null || largest === 0) return null;
-	const span = spanWords(days);
+	const span = nameSpan(days);
 	if (largest - middle < middle) {
 		return `In ${span}, the middle item had ${grouped(middle)} tokens already in memory, and the most any item had was ${grouped(largest)} tokens. A longer article makes the percentage lower, even if the amount in memory does not change. Read the token counts, not the rise or fall of the percentages.`;
 	}

@@ -18,15 +18,20 @@ which run it is; the artifacts on 2026-10-05, each trimmed to the four fields
 from __future__ import annotations
 
 import copy
+import email.message
+import io
 import json
+import urllib.error
 from collections.abc import Mapping
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 from conftest import FIXTURES_DIR
 
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import Recovery, StopReason
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.gardener import github_collections, one_at_a_time
 from idhazh.gardener.one_at_a_time import Member, Window
 
@@ -60,7 +65,8 @@ class RecordedAnswers:
     `removed` is the ordered list of the paths this was asked to DELETE, which is
     how a test says "one call a member, in this order" rather than "the member is
     gone". A DELETE whose path ends in `fails_at` is refused, as the API can
-    refuse one.
+    refuse one. A request named in `refusing` is answered with that status code,
+    raised as the `HTTPError` `urlopen` raises for GitHub's refusal.
     """
 
     def __init__(
@@ -69,6 +75,7 @@ class RecordedAnswers:
         repository: Path | None = None,
         answering: Mapping[str, dict[str, Any]] | None = None,
         fails_at: str | None = None,
+        refusing: Mapping[str, int] | None = None,
     ) -> None:
         self._answers: dict[str, dict[str, Any]] = {}
         for recording in recordings:
@@ -77,16 +84,31 @@ class RecordedAnswers:
             self._answers[""] = json.loads(repository.read_bytes().decode("utf-8"))
         self._answers.update(answering or {})
         self._fails_at = fails_at
+        self._refusing = dict(refusing or {})
         self.read_paths: list[str] = []
         self.removed: list[str] = []
 
+    def _refuse(self, path: str) -> None:
+        """GitHub's refusal of this request, when the case names one."""
+        status = self._refusing.get(path)
+        if status is not None:
+            raise urllib.error.HTTPError(
+                f"{github_collections.API_ROOT}/repos/miztiik/yen-idhazh/{path}",
+                status,
+                HTTPStatus(status).phrase,
+                email.message.Message(),
+                io.BytesIO(b"{}"),
+            )
+
     def read(self, path: str) -> dict[str, Any]:
         self.read_paths.append(path)
+        self._refuse(path)
         if path not in self._answers:
             raise LookupError(f"no answer was recorded for {path!r}")
         return copy.deepcopy(self._answers[path])
 
     def remove(self, path: str) -> None:
+        self._refuse(path)
         if self._fails_at is not None and path.endswith(self._fails_at):
             raise OSError("the API said no")
         self.removed.append(path)
@@ -385,6 +407,105 @@ def test_a_failed_delete_stops_the_pass_and_keeps_what_went_before() -> None:
     assert api.removed == [f"actions/artifacts/{first}"], "a later member was still deleted"
     assert stop.value.so_far.taken == (first,)
     assert stop.value.so_far.resume_from == second
+    assert (stop.value.so_far.stopped_because, stop.value.so_far.fault) == (
+        StopReason.FAILED,
+        GardenerFault.RAISED,
+    )
+
+
+def test_a_member_github_will_not_delete_is_recorded_and_the_members_either_side_go() -> None:
+    """THE ORACLE for a refused delete: member 2 of 3 answers 422, and 1 and 3 are deleted.
+
+    The refused member counts against the ceiling of three, so the pass stops at
+    the fourth, and its record names the one it could not delete.
+    """
+    one, two, three, four = (str(raw["id"]) for raw in oldest_first(4)[:4])
+    api = RecordedAnswers(
+        fixture(ARTIFACT_PAGES), refusing={f"actions/artifacts/{two}": HTTPStatus.UNPROCESSABLE_ENTITY}
+    )
+
+    outcome = one_at_a_time.take(
+        github_collections.artifacts(api, through=RECORDED_LINE),
+        window=Window.older_than(today="2026-10-05", days=30),
+        ceiling=3,
+        dry_run=False,
+    )
+
+    assert api.removed == [f"actions/artifacts/{one}", f"actions/artifacts/{three}"]
+    assert outcome.taken == (one, three)
+    assert outcome.recovered == (Recovery(note=RecoveryNote.NOT_DELETABLE, subject=two),)
+    assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
+        StopReason.CEILING,
+        four,
+        None,
+    )
+
+
+@pytest.mark.parametrize("status", [HTTPStatus.NOT_FOUND, HTTPStatus.GONE], ids=["404", "410"])
+def test_a_member_already_gone_counts_as_deleted(status: HTTPStatus) -> None:
+    """Somebody else deleted it, or an earlier pass did and its record was lost."""
+    one, two, three = (str(raw["id"]) for raw in oldest_first(4)[:3])
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), refusing={f"actions/artifacts/{two}": status})
+
+    outcome = one_at_a_time.take(
+        github_collections.artifacts(api, through=RECORDED_LINE),
+        window=Window.older_than(today="2026-10-05", days=30),
+        ceiling=3,
+        dry_run=False,
+    )
+
+    assert api.removed == [f"actions/artifacts/{one}", f"actions/artifacts/{three}"]
+    assert (outcome.taken, outcome.recovered) == ((one, two, three), ())
+
+
+def test_an_answer_that_says_the_request_was_wrong_stops_the_pass_as_a_defect() -> None:
+    """A 403 is not GitHub being down: the token or the code is wrong, and a person looks."""
+    first, second = (str(raw["id"]) for raw in oldest_first(4)[:2])
+    api = RecordedAnswers(
+        fixture(ARTIFACT_PAGES), refusing={f"actions/artifacts/{second}": HTTPStatus.FORBIDDEN}
+    )
+
+    with pytest.raises(one_at_a_time.PruneInterruptedError) as stop:
+        one_at_a_time.take(
+            github_collections.artifacts(api, through=RECORDED_LINE),
+            window=Window.older_than(today="2026-10-05", days=30),
+            ceiling=5,
+            dry_run=False,
+        )
+
+    so_far = stop.value.so_far
+    assert (so_far.taken, so_far.resume_from) == ((first,), second)
+    assert (so_far.stopped_because, so_far.fault) == (StopReason.FAILED, GardenerFault.RAISED)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.TOO_MANY_REQUESTS],
+    ids=["503", "429"],
+)
+def test_a_page_github_could_not_serve_defers_the_pass_and_its_mark_does_not_move(
+    status: HTTPStatus,
+) -> None:
+    """THE ORACLE for an outage: the first page answers 503, so nothing past the mark was read."""
+    api = RecordedAnswers(fixture(ARTIFACT_PAGES), refusing={artifact_page(1): status})
+
+    with pytest.raises(one_at_a_time.PruneInterruptedError) as stop:
+        one_at_a_time.take(
+            github_collections.artifacts(api, through=RECORDED_LINE),
+            window=Window(until=RECORDED_LINE),
+            ceiling=50,
+            dry_run=False,
+            mark="2026-08-19",
+        )
+
+    so_far = stop.value.so_far
+    assert (so_far.stopped_because, so_far.fault) == (
+        StopReason.DEFERRED,
+        GardenerFault.API_UNAVAILABLE,
+    )
+    assert (so_far.taken, so_far.resume_from, so_far.handled_through) == ((), None, "2026-08-19")
+    assert api.removed == []
+    assert "was deferred (api-unavailable)" in str(stop.value)
 
 
 def test_a_dry_run_reads_the_collection_and_calls_no_delete() -> None:

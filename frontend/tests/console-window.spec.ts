@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './support/browser';
+import { ONE_DAYS, spanSaid } from './support/span-said';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -226,9 +227,10 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		expect(surfaces.length, 'a surface stopped declaring itself windowed').toBe(found.length);
 		for (const surface of surfaces) {
 			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
-			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
-				`${preset} days`
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toMatch(
+				spanSaid(preset)
 			);
+			expect(surface.says, `${surface.name} says "1 days"`).not.toMatch(ONE_DAYS);
 		}
 	}
 });
@@ -251,9 +253,10 @@ test('THE ORACLE: the Model route obeys the same control over its own surfaces',
 		await setWindow(page, preset);
 		for (const surface of await windowed(page)) {
 			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
-			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
-				`${preset} days`
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toMatch(
+				spanSaid(preset)
 			);
+			expect(surface.says, `${surface.name} says "1 days"`).not.toMatch(ONE_DAYS);
 		}
 	}
 });
@@ -290,9 +293,10 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 		expect(surfaces.length, 'a surface stopped declaring itself windowed').toBe(found.length);
 		for (const surface of surfaces) {
 			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
-			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
-				`${preset} days`
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toMatch(
+				spanSaid(preset)
 			);
+			expect(surface.says, `${surface.name} says "1 days"`).not.toMatch(ONE_DAYS);
 		}
 	}
 });
@@ -320,9 +324,10 @@ test('THE ORACLE: the Voices route obeys the same control over its own surfaces'
 		expect(surfaces.length, 'a surface stopped declaring itself windowed').toBe(found.length);
 		for (const surface of surfaces) {
 			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
-			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
-				`${preset} days`
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toMatch(
+				spanSaid(preset)
 			);
+			expect(surface.says, `${surface.name} says "1 days"`).not.toMatch(ONE_DAYS);
 		}
 	}
 });
@@ -438,7 +443,7 @@ async function cutFacts(page: Page) {
 	return {
 		// Thousands are grouped in the sentence, so the comma is stripped rather
 		// than the digits before it being read as the whole count.
-		articles: Number(/, ([\d,]+) articles between them/.exec(intro)?.[1]?.replace(/,/g, '')),
+		articles: Number(/ held ([\d,]+) articles?/.exec(intro)?.[1]?.replace(/,/g, '')),
 		tailSources: Number(/(\d+) more sources/.exec(more)?.[1]),
 		cut: Number(/(\d+) articles were cut short/.exec(cost)?.[1])
 	};
@@ -471,7 +476,7 @@ test('the source table follows the window, and drops what falls outside it', asy
 	// as six articles and a share over six is not a rate. `\s+` rather than a
 	// space: the sentence wraps in the template, and a regex reads the raw text.
 	await expect(page.locator('[data-windowed="source-cuts"]')).toContainText(
-		/[\d,]+\s+articles between/
+		/held\s+[\d,]+\s+articles/
 	);
 });
 
@@ -570,7 +575,8 @@ test('a daily table drawn under the control stays inside the control span', asyn
 			expect(
 				table.summary,
 				`${route} opens a table without saying how many days are in it`
-			).toContain(`${preset} days`);
+			).toMatch(spanSaid(preset));
+			expect(table.summary, `${route} says "1 days"`).not.toMatch(ONE_DAYS);
 
 			const sorted = [...table.dates].sort();
 			expect(new Set(sorted).size, `${route} repeated a daily row at ${preset} days`).toBe(

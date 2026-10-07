@@ -47,6 +47,7 @@
 	import { failureLoad, type FailurePoint, type FailureStage } from '$lib/charts/glance';
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 
 	let {
@@ -175,7 +176,7 @@
 	 */
 	function sentence(stage: FailureStage): string {
 		if (stage.reached === 0) {
-			return `Nothing reached this stage in these ${windowDays} days.`;
+			return `Nothing reached this stage in ${nameSpan(windowDays)}.`;
 		}
 		if (stage.rate === null) {
 			return `${grouped(stage.failures)} failed of the ${grouped(stage.reached)} that reached it. Too few to give a rate - ${minAttempts} needed.`;
@@ -254,8 +255,8 @@
 
 	const headline = $derived(
 		load.empty
-			? `No item was planned in these ${windowDays} days.`
-			: `Failure rate against volume, ${windowDays} days. ${load.stages
+			? `No item was planned in ${nameSpan(windowDays)}.`
+			: `Failure rate against volume, ${countDays(windowDays)}. ${load.stages
 					.map((stage) => `${stage.label}: ${sentence(stage)}`)
 					.join(' ')}`
 	);
@@ -330,7 +331,7 @@
 	data-failure-panels
 	data-windowed="failure-rate"
 	data-window-days={windowDays}
-	aria-label="Failure rate against volume, over {windowDays} days"
+	aria-label="Failure rate against volume, over {countDays(windowDays)}"
 >
 	<div class="flex flex-wrap items-baseline justify-between gap-3">
 		<div>
@@ -363,7 +364,7 @@
 
 	{#if load.empty}
 		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-empty>
-			No item was planned in these {windowDays} days, so there is no rate to give and no volume to
+			No item was planned in {nameSpan(windowDays)}, so there is no rate to give and no volume to
 			give it against.
 		</p>
 	{:else}

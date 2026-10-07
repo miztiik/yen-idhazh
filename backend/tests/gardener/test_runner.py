@@ -23,6 +23,7 @@ from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.gardener import runner
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
@@ -46,7 +47,7 @@ AGED, FRESH = "2026/09/19/2026-09-19.txt", "2026/09/26/2026-09-26.txt"
 
 DECLARATIONS = {
     "runner": ("compact-gardener.json", "old-days.json", "rehearsal.json"),
-    "breaks": ("broken.json", "old-days.json"),
+    "breaks": ("broken.json", "defect.json", "old-days.json"),
     "wander": ("wanderer.json",),
     "report": ("astray.json", "late.json", "reporter.json"),
 }
@@ -165,18 +166,49 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
-def test_a_task_that_fails_still_has_a_row_and_its_sibling_still_runs(
+def test_a_task_whose_service_is_down_is_deferred_and_the_shard_stays_green(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """THE ORACLE for an outage at the shard: its only non-green task is deferred, so it exits 0.
+
+    The listing service did not answer, which is a cause outside the code: the
+    row says `deferred` and why, the sibling still runs and lands, and nothing
+    asks a person for work.
+    """
     files = {f"state/old-days/{AGED}": "aged\n", "state/broken/.keep": ""}
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "breaks", files)
 
-    outcome, _ = ran(("broken", "old-days"), settings, checkout, "garden_tasks_breaks", monkeypatch)
+    outcome, said = ran(
+        ("broken", "old-days"), settings, checkout, "garden_tasks_breaks", monkeypatch
+    )
+
+    assert outcome.exit_code == EXIT_OK, said
+    rows = rows_of(outcome.record)
+    assert (rows["broken"].stopped_because, rows["broken"].fault) == (
+        StopReason.DEFERRED,
+        GardenerFault.API_UNAVAILABLE,
+    )
+    assert (rows["broken"].deleted, rows["broken"].resume_from) == (0, None)
+    assert rows["old-days"].stopped_because is StopReason.EXHAUSTED
+    assert on_origin(origin, f"state/old-days/{AGED}") is None, "the sibling did not land"
+
+
+def test_a_task_whose_code_is_wrong_fails_and_its_sibling_still_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A code defect is the one stop that turns the shard red, and it still lands its record."""
+    files = {f"state/old-days/{AGED}": "aged\n", "state/defect/.keep": ""}
+    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "breaks", files)
+
+    outcome, _ = ran(("defect", "old-days"), settings, checkout, "garden_tasks_breaks", monkeypatch)
 
     assert outcome.exit_code == EXIT_TASK_FAILED
     rows = rows_of(outcome.record)
-    assert rows["broken"].stopped_because is StopReason.FAILED
-    assert (rows["broken"].deleted, rows["broken"].resume_from) == (0, None)
+    assert (rows["defect"].stopped_because, rows["defect"].fault) == (
+        StopReason.FAILED,
+        GardenerFault.RAISED,
+    )
+    assert (rows["defect"].deleted, rows["defect"].resume_from) == (0, None)
     assert rows["old-days"].stopped_because is StopReason.EXHAUSTED
     assert on_origin(origin, f"state/old-days/{AGED}") is None, "the sibling did not land"
 

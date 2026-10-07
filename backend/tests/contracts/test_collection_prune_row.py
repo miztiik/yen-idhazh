@@ -13,7 +13,13 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.collection_prune import (
+    CollectionPruneRow,
+    Recovery,
+    StopReason,
+    stop_for,
+)
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 
 pytestmark = pytest.mark.contract
 
@@ -201,3 +207,109 @@ def test_a_mark_no_pass_could_have_written_is_refused(handled_through: str, refu
     """
     with pytest.raises(ValidationError, match=refusal):
         a_walking_row(handled_through=handled_through)
+
+
+def a_sample(name: str) -> CollectionPruneRow:
+    """One committed sample row, read inside the test that wants it."""
+    return CollectionPruneRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / name)
+    )
+
+
+def test_a_pass_github_did_not_answer_is_deferred_and_its_mark_stays() -> None:
+    """The outage met the first search, so the pass carries forward the day it started after."""
+    row = a_sample("a-pass-github-did-not-answer.json")
+
+    assert (row.stopped_because, row.fault) == (StopReason.DEFERRED, GardenerFault.API_UNAVAILABLE)
+    assert (row.deleted, row.resume_from, row.handled_through) == (0, None, "2026-08-24")
+    assert row.recovered == []
+
+
+def test_a_pass_that_recorded_what_it_met_is_still_done_and_names_each_note() -> None:
+    """A note names the member or the period it is about, and changes how the pass ended not at all."""
+    walked = a_sample("a-live-walk-past-a-member-github-kept.json")
+    packed = a_sample("a-compaction-that-recovered-three-periods.json")
+
+    assert (walked.stopped_because, walked.fault) == (StopReason.EXHAUSTED, None)
+    assert walked.recovered == [
+        Recovery(note=RecoveryNote.NOT_DELETABLE, subject="9472586502")
+    ]
+    assert walked.deleted + len(walked.recovered) == walked.selected
+    assert (packed.stopped_because, packed.fault) == (StopReason.EXHAUSTED, None)
+    assert [(each.note, each.subject) for each in packed.recovered] == [
+        (RecoveryNote.REPACKED_FROM_RAW, "2026-09-20"),
+        (RecoveryNote.SET_ASIDE, "2026-09-22"),
+        (RecoveryNote.INDEX_REBUILT, "2026-09-25"),
+    ]
+
+
+def test_a_row_from_before_the_fault_word_reads_as_one_that_named_none() -> None:
+    """`fault` and `recovered` are additive: a row written before them reads, and says nothing."""
+    sample = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / "ceiling-reached.json")
+    )
+    sample.pop("fault")
+    sample.pop("recovered")
+    older = CollectionPruneRow.model_validate(sample | {"version": "2026-10-04"})
+    assert (older.fault, older.recovered) == (None, [])
+    failed = CollectionPruneRow.model_validate(
+        sample | {"version": "2026-10-04", "stopped_because": "failed"}
+    )
+    assert (failed.stopped_because, failed.fault) == (StopReason.FAILED, None)
+
+
+@pytest.mark.parametrize(
+    ("changes", "refusal"),
+    [
+        pytest.param(
+            {"stopped_because": "exhausted", "resume_from": None, "fault": "raised"},
+            "fault raised ends a pass failed, not exhausted",
+            id="a-fault-beside-an-exhausted-pass",
+        ),
+        pytest.param(
+            {"fault": "api-unavailable"},
+            "fault api-unavailable ends a pass deferred, not ceiling",
+            id="a-fault-beside-a-ceiling",
+        ),
+        pytest.param(
+            {"stopped_because": "deferred", "fault": "raised"},
+            "fault raised ends a pass failed, not deferred",
+            id="a-defect-that-left-the-job-green",
+        ),
+        pytest.param(
+            {"stopped_because": "failed", "fault": "api-unavailable"},
+            "fault api-unavailable ends a pass deferred, not failed",
+            id="an-outage-that-turned-the-job-red",
+        ),
+        pytest.param(
+            {"stopped_because": "deferred"},
+            "a deferred pass names what deferred it",
+            id="a-deferred-pass-with-no-cause",
+        ),
+        pytest.param({"fault": "interrupted"}, "fault", id="a-word-nobody-declared"),
+        pytest.param(
+            {"recovered": [{"note": "not-deletable", "subject": "../config/gardener"}]},
+            "string_pattern_mismatch",
+            id="a-subject-that-is-a-path-out",
+        ),
+        pytest.param(
+            {"recovered": [{"note": "skipped", "subject": "2026-09-20"}]},
+            "note",
+            id="a-note-nobody-declared",
+        ),
+    ],
+)
+def test_a_cause_or_a_note_no_pass_could_have_written_is_refused(
+    changes: dict[str, Any], refusal: str
+) -> None:
+    with pytest.raises(ValidationError, match=refusal):
+        a_row(**changes)
+
+
+@pytest.mark.parametrize("fault", list(GardenerFault), ids=lambda fault: fault.value)
+def test_a_code_defect_fails_a_pass_and_every_other_cause_defers_it(fault: GardenerFault) -> None:
+    """Only `failed` turns the job red, so only a defect may end a pass there."""
+    expected = StopReason.FAILED if fault is GardenerFault.RAISED else StopReason.DEFERRED
+
+    assert stop_for(fault) is expected
+    assert a_row(stopped_because=expected.value, fault=fault.value).fault is fault
