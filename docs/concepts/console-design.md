@@ -86,6 +86,13 @@ chose the words of the first five on 2026-08-30. On 2026-10-07 Reader and Jony
 chose new words for the measurement-off line and for the two lines about days
 one instrument covered alone, and Reader for the started line.
 
+**A panel keeps its own line for a nothing the route's note also states.** It
+says it in the note's words and never points at the note. On Hardware the
+platform-mix panel says `The machine record is not packed yet.` when that record
+has no packed day, which the route's note says too: the note sits several panels
+above, and is not always on the page when the box is empty. Jony chose to keep
+the panel's own line, and Reader chose its words, on 2026-10-07.
+
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
 which Guardrail #10 forbids. And **no string names a config key as if it were a
