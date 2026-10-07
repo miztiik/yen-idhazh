@@ -242,7 +242,7 @@ for (const view of [
 	{ width: 390, height: 844 },
 	{ width: 768, height: 1024 }
 ] as const) {
-	test(`below the wide breakpoint the workbench runs edge to edge and the answer is one window tall, at ${view.width}`, async ({ page }) => {
+	test(`below the wide breakpoint the workbench runs edge to edge, and the answer is one window tall from a whole pixel, at ${view.width}`, async ({ page }) => {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		const at = await measure(page, ['answer']);
@@ -250,6 +250,11 @@ for (const view of [
 		expect(at.workbench.right).toBeCloseTo(at.width, 0);
 		expect(at.scrollWidth, 'the page scrolls sideways').toBe(at.width);
 		expect(at.regions.answer.bottom - at.regions.answer.top).toBeCloseTo(view.height, 0);
+		// The browser scrolls and sizes the page in whole pixels, so an answer that
+		// starts between two pixels never fills the window exactly, and a foot
+		// between two pixels is past the last pixel a scroll can reach.
+		expect(Number.isInteger(at.regions.answer.top), `the answer starts at ${at.regions.answer.top} px, between two pixels`).toBe(true);
+		expect(Number.isInteger(at.workbench.bottom), `the page ends at ${at.workbench.bottom} px, between two pixels`).toBe(true);
 	});
 }
 

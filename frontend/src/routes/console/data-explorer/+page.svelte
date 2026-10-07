@@ -994,6 +994,15 @@
 		.answer-region {
 			min-block-size: 100svh;
 		}
+		/* The question is rounded up to a whole pixel, because the answer under it
+		   is one window tall and the browser scrolls and sizes the page in whole
+		   pixels. Its text lines are not whole pixels tall, so left to its content
+		   it ends between two pixels: the answer could never fill the window
+		   exactly, and the page's foot would lie past the last pixel a scroll
+		   reaches. A browser without `calc-size()` keeps the content's height. */
+		.workbench > :global([data-console-panel-id='data-explorer-ask']) {
+			block-size: calc-size(auto, round(up, size, 1px));
+		}
 		.chart-region {
 			block-size: calc(var(--workbench-control) + var(--idle-height) + 4rem);
 		}
