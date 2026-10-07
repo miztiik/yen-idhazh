@@ -1,4 +1,4 @@
-"""Do the index and watermark shapes accept what a compaction writes, and refuse everything else?
+"""Do the index shapes accept what a compaction writes, and refuse everything else?
 
 One test per cell of the shapes' accept-and-refuse table. An accepted payload is
 a committed sample, read inside the test that accepts it; a refused one is built
@@ -32,7 +32,7 @@ from pydantic_core import ErrorDetails
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope
-from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex, Watermark
+from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex
 
 pytestmark = pytest.mark.contract
 
@@ -66,7 +66,6 @@ def _names_the_file(error: ErrorDetails, *words: str) -> None:
         (FileEnvelope, "file-envelope", "a-raw-file"),
         (RawDayIndex, "raw-day-index", "a-populated-day"),
         (CompactIndex, "compact-index", "a-yearly-index"),
-        (Watermark, "watermark", "a-yearly-watermark"),
     ],
 )
 def test_surviving_ledger_payloads_keep_their_fields_when_read_under_an_older_stamp(
@@ -353,55 +352,6 @@ def test_a_negative_set_aside_count_is_refused() -> None:
     error = _refusal(CompactIndex, payload | {"entries": [first | {"set_aside": -1}, *rest]})
 
     assert (error["type"], error["loc"]) == ("greater_than_equal", ("entries", 0, "set_aside"))
-
-
-# --- Watermark ---------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("name", "through"),
-    [
-        ("a-daily-watermark", "2026-09-23"),
-        ("a-monthly-watermark", "2026-08"),
-        ("a-yearly-watermark", "2025"),
-    ],
-)
-def test_a_watermark_accepts_a_day_a_month_or_a_year_on_a_watermark_of_that_period(
-    name: str, through: str
-) -> None:
-    mark = Watermark.model_validate(_sample("watermark", name))
-
-    assert mark.through == through
-
-
-def test_a_daily_watermark_refuses_to_stand_on_a_month_by_ledger_and_period() -> None:
-    """A compaction resumes after this stamp, and a daily one cannot resume after a month."""
-    payload = _sample("watermark", "a-daily-watermark")
-    a_month = _sample("watermark", "a-monthly-watermark")["through"]
-
-    error = _refusal(Watermark, payload | {"through": a_month})
-
-    _names_the_file(error, payload["ledger"], payload["period"], a_month)
-
-
-def test_a_monthly_watermark_refuses_to_stand_on_a_year_by_ledger_and_period() -> None:
-    """A month and a year are both stamps, and a monthly compaction resumes after a month."""
-    payload = _sample("watermark", "a-monthly-watermark")
-    a_year = _sample("watermark", "a-yearly-watermark")["through"]
-
-    error = _refusal(Watermark, payload | {"through": a_year})
-
-    _names_the_file(error, payload["ledger"], payload["period"], a_year)
-
-
-def test_a_watermark_refuses_a_run_id_that_is_only_the_run_number() -> None:
-    """A run id is `<YYYY-MM-DD>-<execution>` everywhere, so a bare number is a second spelling."""
-    payload = _sample("watermark", "a-daily-watermark")
-    bare = payload["run_id"].rsplit("-", 1)[1]
-
-    error = _refusal(Watermark, payload | {"run_id": bare})
-
-    assert (error["type"], error["loc"]) == ("string_pattern_mismatch", ("run_id",))
 
 
 def test_a_raw_day_index_accepts_one_size_per_file() -> None:

@@ -197,7 +197,7 @@ def a_tree_with_every_kind_of_file(state: Path) -> dict[str, Path]:
 
 
 def test_every_date_is_read_from_exactly_one_file_and_a_hole_is_named(tmp_path: Path) -> None:
-    """The oracle: no date is readable twice, and a day the watermark passed is never skipped."""
+    """The oracle: no date is readable twice, and a day the daily mark passed is never skipped."""
     made = a_tree_with_every_kind_of_file(tmp_path)
 
     found = ledger.list_ledger_files(tmp_path, WHICH)

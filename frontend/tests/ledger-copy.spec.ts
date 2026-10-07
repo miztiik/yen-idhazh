@@ -36,7 +36,7 @@ function coversIn(index: string): string[] {
 	return (JSON.parse(index).entries as { covers: string }[]).map((entry) => entry.covers);
 }
 
-/** A whole ledger: all indexes, every file they name, the watermark beside them and a stray file. */
+/** A whole ledger: all indexes, every file they name, and a stray file no index names. */
 function aWholeLedger(ledger: string): Record<string, string> {
 	return {
 		[`compact/${ledger}/index/daily.json`]: anIndex(ledger, 'daily', ['2026-09-01', '2026-09-02']),
@@ -46,7 +46,6 @@ function aWholeLedger(ledger: string): Record<string, string> {
 		[`compact/${ledger}/daily/2026/09/02.parquet`]: 'PAR1',
 		[`compact/${ledger}/monthly/2026/08.parquet`]: 'PAR1',
 		[`compact/${ledger}/yearly/2025/2025.parquet`]: 'PAR1',
-		[`compact/${ledger}/daily/watermark.json`]: '{}\n',
 		[`compact/${ledger}/daily/2026/09/03.parquet`]: 'PAR1'
 	};
 }
@@ -189,15 +188,54 @@ for (const period of ['daily', 'monthly', 'yearly']) {
 	test(`a ledger missing its ${period} index stops the build, naming the ledger and the file`, () => {
 		const tree = aWholeLedger('summary-quality-evals');
 		delete tree[`compact/summary-quality-evals/index/${period}.json`];
-		const copy = ledgerCopy(aStateTree(tree), ['summary-quality-evals', 'item-health']);
+		const copy = ledgerCopy(aStateTree(tree), ['summary-quality-evals']);
 		expect(copy.refused).toEqual([
-			`summary-quality-evals: state/compact/summary-quality-evals/index/${period}.json is missing`,
-			'item-health: state/compact/item-health/index/daily.json is missing',
-			'item-health: state/compact/item-health/index/monthly.json is missing',
-			'item-health: state/compact/item-health/index/yearly.json is missing'
+			`summary-quality-evals: state/compact/summary-quality-evals/index/${period}.json is missing`
 		]);
 	});
 }
+
+test('a published ledger with no compact folder stages nothing, stops nothing, and the build log names it once', () => {
+	// item-health has written a raw day and has never been packed: the state every ledger starts in.
+	const tree = aWholeLedger('summary-quality-evals');
+	tree['raw/item-health/2026/09/02/01a0fbc4-1707-8428-b765-119571d6249f.parquet'] = 'PAR1';
+	const copy = ledgerCopy(aStateTree(tree), ['item-health', 'summary-quality-evals']);
+	expect(copy.refused).toEqual([]);
+	expect(copy.missing).toEqual([]);
+	expect(copy.logs).toEqual([
+		'published ledgers: state/compact/item-health/ is not there, so item-health is not packed yet and the site ' +
+			'holds none of its files. If it was packed before, restore that folder from git history.'
+	]);
+	expect(copy.files).toEqual([
+		'compact/summary-quality-evals/daily/2026/09/01.parquet',
+		'compact/summary-quality-evals/daily/2026/09/02.parquet',
+		'compact/summary-quality-evals/index/daily.json',
+		'compact/summary-quality-evals/index/monthly.json',
+		'compact/summary-quality-evals/index/yearly.json',
+		'compact/summary-quality-evals/monthly/2026/08.parquet'
+	]);
+	expect(Object.keys(copy.indexes).sort()).toEqual([
+		'compact/summary-quality-evals/index/daily.json',
+		'compact/summary-quality-evals/index/monthly.json',
+		'compact/summary-quality-evals/index/yearly.json'
+	]);
+});
+
+test('a ledger with only its daily index still stops the build, once for each index it lacks', () => {
+	const copy = ledgerCopy(
+		aStateTree({
+			'compact/item-health/index/daily.json': anIndex('item-health', 'daily', ['2026-09-01']),
+			'compact/item-health/daily/2026/09/01.parquet': 'PAR1'
+		}),
+		['item-health']
+	);
+	expect(copy.refused).toEqual([
+		'item-health: state/compact/item-health/index/monthly.json is missing',
+		'item-health: state/compact/item-health/index/yearly.json is missing'
+	]);
+	expect(copy.logs).toEqual([]);
+	expect(copy.files).toEqual([]);
+});
 
 test('a file an index names and the tree lacks is reported, and the rest still ships', () => {
 	const tree = aWholeLedger('host-fingerprint');

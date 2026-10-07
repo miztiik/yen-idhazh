@@ -54,8 +54,8 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
 
     A scheduled wake builds no window for a compaction, and a range a person
     names limits what the steps choose, not what the listing starts with. A
-    listing that lost a mark would hand the pass an index or watermark it reads
-    as absent.
+    ledger's marks are its three indexes; a listing that lost one would hand the
+    pass an index it reads as absent, and rebuilds.
     """
     today = date(2026, 9, 27)
     compactions = {
@@ -72,12 +72,9 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
             assert _named(
                 tmp_path, paths_for_task(tmp_path, name, policy, period_range, today=today)
             ) == [
-                f"{compact}/daily/watermark.json",
                 f"{compact}/index/daily.json",
                 f"{compact}/index/monthly.json",
                 f"{compact}/index/yearly.json",
-                f"{compact}/monthly/watermark.json",
-                f"{compact}/yearly/watermark.json",
             ], (name, period_range)
 
 
@@ -100,14 +97,11 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
         "frontend/public/telemetry/2026/09/20.parquet",
         "state/compact/item-health/daily/2026/09/20.json",
         "state/compact/item-health/daily/2026/09/20.parquet",
-        "state/compact/item-health/daily/watermark.json",
         "state/compact/item-health/index/daily.json",
         "state/compact/item-health/index/monthly.json",
         "state/compact/item-health/index/yearly.json",
-        "state/compact/item-health/monthly/watermark.json",
         "state/compact/item-health/yearly/2026/2026.json",
         "state/compact/item-health/yearly/2026/2026.parquet",
-        "state/compact/item-health/yearly/watermark.json",
         "state/raw/item-health-summary/2026/09/20",
         "state/raw/item-health/2026/09/20",
     ]

@@ -1690,7 +1690,8 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
     own compaction task, under the ledger's own declaration made live, so the
     fixture is packed by the code that packs production.
     """
-    declared = config.load_gardener().tasks
+    settings = config.load_gardener()
+    declared = settings.tasks
     for which in PACKED_LEDGERS:
         policy = declared.get(f"compact-{which.value}")
         if not isinstance(policy, CompactionPolicy):
@@ -1717,6 +1718,7 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
                     policy.owns,
                     paths=(state.parent / folder for folder in policy.owns),
                 ),
+                first_ledger_year=settings.config.first_ledger_year,
             )
         )
         if outcome.resume_from is not None:

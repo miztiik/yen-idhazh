@@ -8,8 +8,7 @@ folder and its day file, whichever format wrote it - and the same of the packed
 days a GitHub re-run may still write into. Then it works oldest first, against
 the one cap: first each closed month a raw file landed in, which it re-opens,
 then each packed day that holds raw files again, then the new days, each day on
-its own. A new day the index already names and no raw file holds keeps its
-entry as it is, and the mark moves past it.
+its own.
 
 **A packed day that holds raw files again is taken again.** A GitHub re-run
 writes into the day its run first wrote, for up to thirty days, which is why
@@ -36,7 +35,8 @@ packed year, so there is no month to re-open.
 
 **A day with no row is an entry `empty` with no file.** The entry keeps the
 newest day the daily index names equal to the mark, so a reader tells a quiet
-day from a hole without a file to open. **A day no entry names that has a file
+day from a hole without a file to open, and the next pass works the mark out
+from the index again. **A day no entry names that has a file
 at its path is adopted first** (`ledger_marks.adopt`): an index restored from
 an older commit can lose a day whose file is still there, and recording the
 day empty, or writing over the file, would lose its rows.
@@ -50,9 +50,9 @@ oldest that many**, and the rest stay in its folder: the mark moves past the
 day, the pass ends `ceiling` at it, and the next wake takes the rest in as it
 takes a re-run. Nothing is decided for a day that is refused, so a refused day
 keeps every file. The pass writes its final daily index once, then deletes raw
-files, and advances its watermark once, last. Before the index lands, raw files
-survive; after it lands, the next wake moves the mark past each indexed day no
-raw file is left in, and takes again a day whose raw files remain.
+files, so before the index lands raw files survive. The daily mark is the
+newest day the indexes name, so a raw file left after the index landed sits in
+a day at or below the mark, and the next wake takes that day again.
 
 **The step takes only the days whose fetch fits the shard's download budget**,
 oldest first, read off the listing's sizes before anything is downloaded. The
@@ -163,7 +163,6 @@ def _take[C: Contract](
     model: type[C],
     key: tuple[str, ...],
     identity: WriterIdentity,
-    stamp: str,
 ) -> Stop | None:
     """Pack one day; None when it is packed whole.
 
@@ -178,9 +177,6 @@ def _take[C: Contract](
     except ValueError as refusal:
         return _refused(tree, day, str(refusal))
     entry = tree.daily.get(day)
-    if entry is not None and not (raw.taken or raw.unreadable or raw.carried):
-        _advance(tree, day, stamp=stamp, identity=identity)
-        return None
     adopted: ledger_marks.Adopted | None = None
     if entry is not None and entry.names_file:
         existing = named_trees.compact_file(
@@ -236,7 +232,7 @@ def _take[C: Contract](
     if adopted is not None:
         tree.note_recovery(RecoveryNote.INDEX_REBUILT, day)
     tree.mark_index(Period.DAILY)
-    _advance(tree, day, stamp=stamp, identity=identity)
+    _advance(tree, day)
     if raw.carried:
         tree.note_recovery(RecoveryNote.CARRIED_OVER, day)
         logger.info(
@@ -250,11 +246,10 @@ def _take[C: Contract](
     return None
 
 
-def _advance(tree: CompactTree, day: str, *, stamp: str, identity: WriterIdentity) -> None:
+def _advance(tree: CompactTree, day: str) -> None:
     """Move the daily mark to a day the step has finished, when the day is past it."""
     if tree.daily_through is None or day > tree.daily_through:
         tree.daily_through = day
-        tree.write_watermark(Period.DAILY, through=day, advanced_at=stamp, run_id=identity.run_id)
 
 
 def _record[C: Contract](
@@ -321,7 +316,6 @@ def compact(
     *,
     rerun_span: tuple[str, str] | None,
     first_kept: str | None,
-    stamp: str,
     identity: WriterIdentity,
 ) -> tuple[Stop, ...]:
     """Re-open each closed month raw files landed in, then take days again and new days, to the cap.
@@ -404,7 +398,7 @@ def compact(
             break
         fresh = tree.daily_through is None or day > tree.daily_through
         try:
-            stop = _take(tree, policy, day, model=model, key=key, identity=identity, stamp=stamp)
+            stop = _take(tree, policy, day, model=model, key=key, identity=identity)
         except OverBudgetError as spent:
             stops.append(tree.stop_spent(day, spent))
             break

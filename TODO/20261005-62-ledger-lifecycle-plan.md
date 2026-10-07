@@ -15,7 +15,7 @@ Table A - operating contract
 | # | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Ledgers start, pause, resume and stop. Since #1309 a ledger's index starts on its first raw day, but the readers treat a day before a ledger began as a day that is missing: the data explorer asks the archive for it and then reports a fault. The tests hid this until #1309, because the canary began every ledger on the 1st of a month and the browser answer key read other inputs than the page. Now ten browser tests fail on `main` (run 37361239642, 2026-10-05). This plan makes every reader and every test treat each stage of a ledger's life as normal |
-| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10).<br>- The "Measurement is off" line names no day outside the window, and says that nothing has been recorded at all only for a record that never held a row (L11).<br>- The data explorer's span sentences count the days read, give every date its year, and name each ledger with its own first day (L12).<br>- The console specs that still work their answer out from the canary, or write out its figures, serve the data they check (L13)<br>- The console specs that work their answer out from the canary's own files, or skip on what it holds, serve the data they check (L14)<br>- The note under the item-cost section says the held part of a prompt hardly changes only when its own two figures show it (L15)<br>- On Hardware and Summaries, the "Recording started" line names a start only where it is known and on screen, Summaries works out its recording lines for each window, and its "Measurement is off" line prints whenever measurement is off (L16)<br>- Every windowed console surface says "1 day" at the 1-day preset (L17) |
+| A2 | Hard scope - in | - The data explorer leaves out a ledger's days before its first day and names that day, and it asks the archive only for days the site copy trimmed (L1).<br>- Every data explorer browser test serves data it built and checks written-out results. The canary keeps only the checks that do not depend on what it holds (L2).<br>- The real compaction is tested on each lifecycle state, and the states get a page of their own (L3).<br>- A panel slice leaves out the days before a ledger began and names its first day. How far a ledger is packed comes from all three indexes (L4).<br>- Every console window ends on the site's newest published day, reads exactly that window, and says when a record's rows stop (L5).<br>- A published ledger that has no compact folder yet does not stop the site build (L7).<br>- When the archive does not answer for trimmed days, the explorer answers the site's days and names the archive (L8).<br>- Console specs outside the explorer that read canary content serve the data they check (L9).<br>- When a chosen ledger's newest named day holds no rows, the data explorer's column rail still lists its columns (L10).<br>- The "Measurement is off" line names no day outside the window, and says that nothing has been recorded at all only for a record that never held a row (L11).<br>- The data explorer's span sentences count the days read, give every date its year, and name each ledger with its own first day (L12).<br>- The console specs that still work their answer out from the canary, or write out its figures, serve the data they check (L13)<br>- The console specs that work their answer out from the canary's own files, or skip on what it holds, serve the data they check (L14)<br>- The note under the item-cost section says the held part of a prompt hardly changes only when its own two figures show it (L15)<br>- On Hardware and Summaries, the "Recording started" line names a start only where it is known and on screen, Summaries works out its recording lines for each window, and its "Measurement is off" line prints whenever measurement is off (L16)<br>- Every windowed console surface says "1 day" at the 1-day preset (L17)<br>- The console home opens each published day's payload once, and the articles card takes its count from that read (L18)<br>- The swap chart's case in the console's mark-parity test checks a swap the test builds, instead of skipping because the canary holds no model change (L19)<br>- The dwell rule on the retiring strip starts at the oldest day under the mark in the run, so a day that decided nothing inside the run leaves no such day out (L20)<br>- Before a run, the data explorer's action line counts the days the run will read, not the days of the window (L21)<br>- On Summaries and Hardware, the lines for a day that only one record answered say only what is true of the days the window shows (L22)<br>- The pipelines route's page names the Hardware panel as it is drawn now and says the share is printed, and the prompt-cache subtitle says nothing its own figures contradict (L23)<br>- The bundle gate reports the index key of a published ledger that is not packed yet as not weighed, and names the ledger, while every other payload key that names nothing still fails (L24)<br>- Hardware's platform-mix panel no longer says that a published machine record that is not packed yet has not been published (L25) |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | Change the readers and the tests, never the data: no persisted shape changes, a day before a ledger began is outside the ledger and never a fault, every window ends on a day that no ledger can move, and every test serves the data it checks. Fowler, 2026-10-05, on the owner's rulings of the same day |
@@ -33,7 +33,7 @@ Table B - what is out
 | B4 | Choosing the words of three sentences that Reader and Jony own (Fowler's E5, E9 and H3): the explorer's answer for a ledger that has never held a row, joined with one that has rows; the `behind` note for the days a stopped packing has not reached; and the sentence for trimmed days that the archive did not answer | The first two keep today's words. The first says that the ledger is not on this site yet, which is false for a ledger that is packed but has never held a row. L8 cannot finish without the third | Reader and Jony rule (CLAUDE.md section 14). L8 asks them for the third when it is dispatched, and L5 takes the second if they rule first. The first needs a Level 1 row of its own after their ruling |
 | B5 | Showing a family's `paused` or `retired` status on a console surface | An operator sees no sign of it. The explorer already parses the status (`frontend/src/lib/console/explorer/registry.ts`) and shows nothing from it. No family is paused or retired today | Reader and Jony rule whether and where it shows; then a Level 1 row |
 | B6 | A test that each published explorer example names only columns its ledger has | No test catches an example that names a column its ledger lacks; it fails when an operator runs it. Table G, G17 checks the statement, the ledgers and the preset only | A contract-tier row that reads each example's columns against its ledger's row contract (CLAUDE.md section 13) |
-| B7 | Specs outside the console that compute their answer from data, such as `frontend/tests/ledger-ranges.spec.ts`, which takes its expected slice from the disk reader | They break Table D, D3 until a row rewrites them, and a producer change can still turn one red after a merge | L9's inventory, run over the `reader`, `archive`, `publishing` and `model-search` groups, as a row of its own |
+| B7 | Specs outside the console that compute their answer from data, such as `frontend/tests/ledger-ranges.spec.ts`, which takes its expected slice from the disk reader. `frontend/tests/published-ledgers.spec.ts` is one more: it expects every published ledger's three indexes in the canary build, and it passes today only because the canary packs all seven published ledgers, so a published ledger the canary does not pack would read there as a fault (row L7's report) | They break Table D, D3 until a row rewrites them, and a producer change can still turn one red after a merge | L9's inventory, run over the `reader`, `archive`, `publishing` and `model-search` groups, as a row of its own |
 | B8 | Panels that mark the days packing has not reached. Susan and Jony accept a hairline outline on bar and strip panels. Two points are open: whether a panel whose whole window is not packed shows one line ("6 Oct 2026 is not packed yet.") or nothing, and whether line-chart readouts say "not packed yet" | On bar and strip panels those days look like quiet days, and only the route's note says otherwise: the `behind` note, or the quietest line when packing is one day short. The design rationale of `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md` records the gap | An owner decision on the two open points, then a Level 1 row with Susan's, Jony's and Reader's rulings (row L5's report) |
 | B9 | Naming a hole in the archive's indexes as the archive's (since L8 the explorer calls the archive the repository) | The hole stays `day-missing`, and the page says "No file on this site holds {ledger} for {day}.", which blames the site | A Level 2 row that puts the tier on the `unreachable` answer in `frontend/src/lib/data/slice-shapes.ts`. That is a field of the run-time answer, not a persisted shape, so Table C, C1 does not fire (row L8's report) |
 | B10 | Listing the columns of a published ledger that has no file on the site: `candidate-models` once its September 2026 month packs as `empty`, with no file, and a ledger whose writer's last rows are older than the days the site copy keeps (Table E, E4) | The column rail lists no column for such a ledger | A row of its own when the first family is paused or retired. Reading the archive for such a ledger costs 3 index reads and 1 whole file (row L10's report; Fowler, 2026-10-07) |
@@ -60,17 +60,25 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L3 | Lifecycle states at the producers | L1 | B | PENDING | - | - | - |
 | L4 | A slice cuts only the days before a ledger began | L1 | B | DONE | fluffy-couscous | #1348 | Plan 62 row l4 |
 | L5 | Console windows end on the site's newest published day | L4 | C | DONE | solid-potato | #1353 | Plan 62 row l5 |
-| L7 | A published ledger that has not started | L1 | B | PENDING | - | - | - |
+| L7 | A published ledger that has not started | L1 | B | DONE | expert-pancake | #1370 | Plan 62 row l7 |
 | L8 | The archive's failures are named as the archive's | L1, L2, L4, L5 | C | DONE | jubilant-dollop | #1358 | Plan 62 row l8 |
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | #1361 | Plan 62 row l9 |
 | L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | #1360 | Plan 62 row l10 |
-| L11 | The "Measurement is off" line names only a day that is on screen | L5 | D | DONE | reimagined-happiness | - | Plan 62 row l11 |
-| L12 | The data explorer's span sentences say what each ledger read | L10 | D | DONE | miniature-journey | - | Plan 62 row l12 |
-| L13 | The remaining console specs check data they build | L9 | D | DONE | curly-umbrella | - | Plan 62 row l13 |
-| L14 | Console specs that work their answer out from the canary's own files check data they build | L9 | D | DONE | glowing-waddle | - | Plan 62 row l14 |
-| L15 | The held-part note says what its own two figures show | L13 | E | DONE | fuzzy-goggles | - | Plan 62 row l15 |
-| L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | - | Plan 62 row l16 |
+| L11 | The "Measurement is off" line names only a day that is on screen | L5 | D | DONE | reimagined-happiness | #1363 | Plan 62 row l11 |
+| L12 | The data explorer's span sentences say what each ledger read | L10 | D | DONE | miniature-journey | #1364 | Plan 62 row l12 |
+| L13 | The remaining console specs check data they build | L9 | D | DONE | curly-umbrella | #1366 | Plan 62 row l13 |
+| L14 | Console specs that work their answer out from the canary's own files check data they build | L9 | D | DONE | glowing-waddle | #1365 | Plan 62 row l14 |
+| L15 | The held-part note says what its own two figures show | L13 | E | DONE | fuzzy-goggles | #1368 | Plan 62 row l15 |
+| L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | #1367 | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | PENDING | - | - | - |
+| L18 | The console home reads each day payload once | L13 | F | PENDING | - | - | - |
+| L19 | console-mark-parity's skipped test checks data it builds | L13 | F | PENDING | - | - | - |
+| L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
+| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
+| L22 | Summaries' one-sided lines say what is true | L16 | F | PENDING | - | - | - |
+| L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | PENDING | - | - | - |
+| L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | PENDING | - | - | - |
+| L25 | Hardware's platform-mix panel says the machine record is not packed yet | L7, L17 | G | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -805,6 +813,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #L15 - The held-part note says what its own two figures show
 
 - **Scope:** The note under the console's item-cost section says that the held part of a prompt hardly changes only when its own two figures show it: the largest held count minus the middle one is under the middle one. When they do not, it says the held part moved inside the window. Level 1.
+- **Follow-ups:**
+  - The rule compares only the largest held count with the middle one, so it cannot see a step that fewer than half the items sit below; that is why the passing words claim nothing about change (row L15 report, 2026-10-07).
 - **Files touched** (each path checked on `main` at 1414492d5):
   - `frontend/src/routes/console/+page.svelte` (prints the note, `data-item-cost-share-note`, with the middle and the largest held counts)
   - `frontend/src/lib/console/item-cost.ts` (`reusedMedian` and `reusedWidest`, the two figures the note reads)
@@ -818,9 +828,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader and Jony choose the note's words for both cases (CLAUDE.md section 14) | To be ruled at dispatch (Reader and Jony) |
+| 1 | Reader and Jony choose the note's words for both cases (CLAUDE.md section 14) | Reader and Jony, 2026-10-07; one wording split settled by responsibility: plain language is Reader's |
 | 2 | The page checks the premise itself, on every build, for the window on screen, with one copy of the rule. No audit utility is built (row L13, decision 4) | The owner, 2026-10-07, after the audit's first reading (Fowler's option A5) |
-| 3 | The evidence: over the 90 days ending 2026-10-06 the middle item held 922 tokens and the largest 2,219. The held part was 922 tokens every day to 2026-09-12 and about 1,800 to 1,940 from 2026-09-14, so every window that spans 2026-09-13 prints a false note today | Row L13's report, 2026-10-07 |
+| 3 | The evidence: the held part was 922 tokens every day to 2026-09-12 and about 1,800 to 1,940 from 2026-09-14. By the rule (the largest held count minus the middle one is under the middle one), the 30-day window ending 2026-10-06 passes, though it spans the 2026-09-13 step, so its note claims nothing about change; the 90-day window ending the same day fails (middle 922, largest 2,219), so its note says the amount changed a lot | Row L13's report, 2026-10-07; corrected from row L15's report, 2026-10-07 |
 | 4 | L15 waits for L13, which edits the item-cost files and the pipelines route's page | The owner, 2026-10-07 |
 | 5 | Level 1: the words of one note on one route; a wrong version shows on that route | The owner, 2026-10-07 |
 
@@ -911,3 +921,259 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | Fix only the Hardware intro, inside row L16 | The oracle in `console-window.spec.ts` requires every windowed surface to say `${preset} days` at the 1-day preset, so the intro alone turns it red, and every other surface keeps "1 days" | One sentence fixed, in a file L13 holds | The owner, 2026-10-07 (row L16's report) |
 | 2 | As today | Every console route says "these 1 days", "over the last 1 days" or "the 1 days ending there" at the 1-day preset | Nothing to build | The owner, 2026-10-07 |
+
+### Row #L18 - The console home reads each day payload once
+
+- **Scope:** The console home opens each published day's payload once, through `publishedCharts`, and the articles card takes each day's count from that read, so `publishedItems` goes and the route opens half as many day payloads at build time. Level 2.
+- **Files touched** (found by a search on `main` at 3f6440edb for `publishedItems`, the name this row deletes):
+  - `frontend/src/lib/server/payload.ts` (`publishedItems` goes; the comment on `publishedCharts` says it is bounded the way `publishedItems` is)
+  - `frontend/src/routes/console/+page.server.ts` (imports both readers, hands the page `publishedItems(undefined, widest)`, and hands `chartDays` the map `publishedCharts(undefined, widest)` returns)
+  - `frontend/tests/console-published.spec.ts` (imports `publishedItems`; row L14's test "the articles a day published are read off its own payload, over the days the cover reaches"; the comment in "THE ORACLE: the articles card counts what the chart table says each day published" names the two readers)
+  - `frontend/tests/console.spec.ts` (not found by the search: the test of `publishedCharts`, "a visual that never drew is a visual and is not a published chart", beside which row L14's days and windows move; decision 4)
+  - `docs/concepts/growing-reads.md` (the `payload.publishedItems` line of its table of reads)
+  - `docs/architecture/publishing/console-payloads.md` (the `Published items` line names `publishedItems` as the reader it replaces, and a paragraph names three reads off the run-day row)
+  - `docs/architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md` (says a route walks `DIGEST_ROOT` the way `publishedItems` does)
+  - `backend/idhazh/contracts/console_payloads.py` (the entry whose reader is `payload.ts publishedItems()`; decision 5)
+  - `backend/idhazh/contracts/public_run_day.py` and `backend/idhazh/telemetry/publish/run_days.py` (each module's docstring names three reads; decision 5)
+  - Left as they are: `frontend/src/routes/console/+page.svelte`, which reads the key the route keeps (decision 3); `frontend/tests/empty-day.spec.ts`, whose helper of the same name reads the canary day and imports nothing from `payload.ts`; `TODO/20260926-52-fifty-panels-move-and-six-projections-go-plan.md`, `TODO/20260906-data-growth-research.md` and row L14 of this plan, which record what was true when each was written
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-published.spec.ts --spec console.spec.ts`; `npm --prefix frontend run check`; ruff, mypy and the backend tests that `test:changed -- --list` selects for the three Python files; `doc_load.py` on the three pages; the browser smoke of the console's home route. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
+- **Oracle:** in `console.spec.ts`, on a published site the test builds (Table D, D3): three days that published 4, 0 and 2 articles. Over a 3-day window that ends on the newest published day, `publishedCharts` gives each day's count, the day with none as 0; over a 2-day window it never opens the oldest day. It cannot settle that the route hands the articles card those counts; "THE ORACLE: the articles card counts what the chart table says each day published" relates the card to the table on the page.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The articles card takes each day's count from the map `publishedCharts` returns, which the route already reads for `chartDays`, so each day payload of the widest window is opened once, not twice | Rows L13 and L14 reports; the owner, 2026-10-07 |
+| 2 | The count comes from that map and not from `charts`: `chartDays` gives a day whose payload did not load 0 items (`frontend/src/lib/server/chart-days.ts`), while the map leaves that day out, as `publishedItems` did, and a day with no count stays absent rather than reading as zero (row L14, decision 6) | Plan author, 2026-10-07 |
+| 3 | The route keeps the name of the key it hands the page, `publishedItems`, so `frontend/src/routes/console/+page.svelte`, which row L17 also edits, does not change | Plan author, 2026-10-07 |
+| 4 | Row L14's test of `publishedItems` goes with the function. Its three days and two windows move beside the test of `publishedCharts` in `console.spec.ts`, so the reader the articles card now uses keeps a test of how far back it reads and of a day that published nothing (row L14, decision 6) | Plan author, 2026-10-07 |
+| 5 | `console_payloads.py` is an index and never a shape, as its own docstring says, and the other two Python files change only in their docstrings, so Table C, C1 does not fire | Plan author, 2026-10-07 |
+| 6 | L18 waits for L13, which moved `chartDays` out of the route: row L14's report said `publishedItems` and its test can go once L13 lands | Fowler, 2026-10-07 (row L14's report) |
+| 7 | Level 2: one reader goes, and the articles card and the per-article cost depend on the count it gave | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today: `publishedItems` and `publishedCharts` each open every day payload of the widest window | Two readers open the same file to take the same count | Nothing to build, and twice the day-payload reads the route needs at build time | Rows L13 and L14 reports; the owner, 2026-10-07 |
+| 2 | Take the count off `charts`, the list the page already receives, and hand the page no second map | A day whose payload did not load would read as 0 articles (decision 2) | One map fewer in the page's data, and a change to `+page.svelte` | Plan author, 2026-10-07 |
+
+### Row #L19 - console-mark-parity's skipped test checks data it builds
+
+- **Scope:** The swap chart's case in `console-mark-parity.spec.ts`, "swap dots: the drawn marks survive a window change and a resize", checks a swap the test builds, and no longer skips because the canary holds no model change. Level 1.
+- **Files touched** (found by a search on `main` at 3f6440edb for `test.skip` in the spec, for `data-swap-domain`, and for the helpers that build and render a swap in `console-model-panels.spec.ts`):
+  - `frontend/tests/console-mark-parity.spec.ts` (the case skips where the canary holds no model change; the file's header and the `optional` field's comment say why)
+  - `frontend/tests/console-model-panels.spec.ts` (`swapFixture()` builds a swap from rows the test writes, and `renderSwap()` renders `SwapDots.svelte` on it; both move to the support file, decision 2)
+  - `frontend/tests/support/model-swap.ts` (new: the swap both specs build and render; decision 2)
+  - Left as it is: `frontend/src/lib/components/SwapDots.svelte`, which publishes `data-swap-domain` and which the case renders
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-mark-parity.spec.ts --spec console-model-panels.spec.ts`; `npm --prefix frontend run check`. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-mark-parity.spec.ts`, on a swap the test builds (Table D, D3): `SwapDots.svelte`, rendered at the spec's two widths, `WIDE` and `NARROW`, publishes the same `data-swap-domain` and the same marks at both, and a swap built from other rows, standing for the other window, publishes an extent too. The case never skips. It cannot settle the live resize, because a server render draws once; that stays with the other five charts, which draw on the canary.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | No row named this skip: rows L13 and L14 took the console tests that skip on what the canary holds, and this one was left | Row L13's report; the owner, 2026-10-07 |
+| 2 | The case renders `SwapDots.svelte` on a swap built from rows the test writes, as `console-model-panels.spec.ts` has since L13 (#1366). `swapFixture()`, `renderSwap()` and the helpers that write their rows move to `frontend/tests/support/model-swap.ts`, so the two specs share one swap rather than two copies of it | Plan author, 2026-10-07, from row L13 |
+| 3 | L19 waits for L13, which built the swap that `console-model-panels.spec.ts` renders | The owner, 2026-10-07 |
+| 4 | Level 1: one test case and its test support; a wrong version is obvious and local | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today: the case skips on the canary | It never runs, so nothing checks the swap chart's extent across a resize or a window change | Nothing to build, and a case that passes by never running | Row L13's report; the owner, 2026-10-07 |
+| 2 | Delete the case, because `console-model-panels.spec.ts` already builds a swap | That spec checks the swap panel's layout, and no other test reads `data-swap-domain` | One case fewer, and no test of the extent `SwapDots.svelte` publishes | Plan author, 2026-10-07 |
+| 3 | Change the canary so that its ledger holds a model change | The plan changes the readers and the tests, never the data (Table A, A5), and the case would then depend on what the canary holds (Table D, D3) | One change to the canary's rows in `backend/utilities/build_canary_day.py`, and a case that turns red when they move | The owner, 2026-10-05 (Table A, A5; Table D, D3) |
+| 4 | Copy the swap's rows and its render into `console-mark-parity.spec.ts` | Two copies of one fixture drift apart, and a change to the swap must be made twice | No support file, and the swap written twice | Plan author, 2026-10-07 |
+
+### Row #L20 - The dwell rule is placed right when a day that decided nothing sits inside the run
+
+- **Scope:** On the voices route's retiring strip, the dwell rule - the line under the days a source has run under the mark - starts at the oldest day under the mark in the run the producer counted, so a day that decided nothing inside the run no longer pushes a day under the mark out from under it. Level 1.
+- **Files touched** (found by a search on `main` at 3f6440edb for `dwellFrom` and `daysUnder`):
+  - `frontend/src/lib/server/source-retiring.ts` (`dwellFrom` is `dates.length - daysUnder + 1`)
+  - `frontend/tests/console-voices-retiring.spec.ts` ("the dwell is an area under the newest squares, not a number in a chip"; no day of its census decided nothing)
+  - `docs/concepts/console-design/what-the-quality-and-source-panels-draw.md` ("The dwell is the area" says the rule sits under exactly the contiguous under-the-mark squares at the newest end)
+  - Left as they are: `frontend/src/routes/console/voices/+page.svelte`, which draws the rule from `dwellFrom` and prints `daysUnder`; `frontend/tests/staged-day.spec.ts`, whose helper of the same name, `daysUnder()`, lists a tree's days; `backend/idhazh/telemetry/publish/source_health.py`, whose `dwell()` counts the run, and `backend/tests/test_source_dwell.py`, which holds that count
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-voices-retiring.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the console's voices route. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-voices-retiring.spec.ts`, on a census the test writes (Table D, D3): a source whose newest three days are under the mark, a day that decided nothing, and under the mark again, which the census counts as 2 days under, is underlined from the first of those three columns. A source whose newest three days are all under the mark is underlined from the first of them, as today. On `main` the first source is underlined from the second of the three, which is what lets this check fail. It cannot settle the count itself, which the producer's `dwell()` owns and `backend/tests/test_source_dwell.py` holds.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The fault: the rule starts at column `dates.length - daysUnder + 1`, but the producer's `dwell()` counts through a day that decided nothing. So for a run of under, nothing, under, which counts 2, the rule underlines the no-decision day and the newest one and leaves out the older under day. No canary source is under the mark, so no test saw it | Fowler, 2026-10-07 (row L14's report) |
+| 2 | The rule's first column is the run's oldest square under the mark: walking back from the newest square, it passes `daysUnder` squares under the mark and every square between them that decided nothing. It counts no run of its own, because `retiring()` re-derives nothing the run decided (its header; row L14, decision 4). `dwell()` counts over the same dates the strip draws, so the walk ends inside the strip | Plan author, 2026-10-07 |
+| 3 | The fix ships with its test, on a census the test writes | Fowler, 2026-10-07 (row L14's report) |
+| 4 | L20 waits for L14, which moved `retiring()` out of the voices route and wrote the census its tests read | The owner, 2026-10-07 |
+| 5 | Level 1: where one line starts on one panel; a wrong version is obvious and local | Fowler, 2026-10-07 (row L14's report) |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The rule leaves out a day under the mark and underlines a day that decided nothing, so the picture disagrees with the count printed beside it | Nothing to build, and a wrong rule whenever a day that decided nothing sits inside a run | Fowler, 2026-10-07 (row L14's report) |
+| 2 | The producer publishes the first day of each source's run on the census, and the page draws from it | It changes a persisted shape, `SourceHealthView` in `backend/idhazh/contracts/source_health_view.py` (Table C, C1), to place a line the page can place from squares it already holds | A Level 5 change in two commits, reader first (CLAUDE.md section 11): a new field with a new version and changelog line, and its frontend copy in `frontend/src/lib/server/payload.ts` | Plan author, 2026-10-07 |
+| 3 | The page counts the run from the squares itself and ignores `daysUnder` | A count the page works out again is a second verdict, which can disagree with the countdown beside it (`retiring()`'s header) | No use of the producer's count, and two counts of one run | Plan author, 2026-10-07 |
+
+### Row #L21 - The data explorer's action line counts the days a run will read
+
+- **Scope:** Before a run, the data explorer's action line - the line that prices a run before it fetches anything - counts the days the run will read, not the days of the window. Level 2.
+- **Files touched** (found by a search on `main` at 3f6440edb for "Run reads", `statusSentence` and `spanDays`; search again at dispatch, after #1357 merges):
+  - `frontend/src/lib/console/explorer/status.ts` (`statusSentence`, state `idle`: "Run reads {files}, {size} from {ledgers} over {days} UTC days.")
+  - `frontend/src/routes/console/data-explorer/+page.svelte` (`statusLine()` hands that sentence `days: spanDays()`, the window's days)
+  - `frontend/src/lib/data/slice-shapes.ts` and `frontend/src/lib/data/ask-reader.ts` (only if `SpanCost.cut` must carry more than each cut ledger and the day its answer starts; decision 3)
+  - `frontend/tests/console-data-explorer-still.spec.ts` (pins the words of the `idle` sentence, and reads "Run reads" on the page)
+  - `frontend/tests/console-data-explorer.spec.ts` (the Oracle, on roots built with `frontend/tests/support/ledger-lifecycle.ts`)
+  - `docs/how-to/query-a-ledger-from-the-console.md` (says what the action line prices)
+  - Left as they are: `frontend/scripts/published-ledgers.mjs`, whose `spanDays` is the site copy's own parameter; `TODO/20260928-55-one-page-queries-every-ledger-plan.md`, which declares the action line's words (decision 4)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-data-explorer.spec.ts --spec console-data-explorer-still.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the data explorer. CI: the pull request runs the console specs; every group runs on the merge push.
+- **Oracle:** in `console-data-explorer.spec.ts`, on ledgers the test builds (Table D, D3): one ledger built to begin 5 days before the end of a 14-day window. Before the run, the action line counts the 5 days the run will read; on `main` it counts the window's 14, which is what lets this check fail. A second case adds a ledger built to begin 4 years before, and the line says what Reader rules for two ledgers that read different days. It cannot settle the words, which Reader chooses (decision 1); the test pins the words Reader chooses.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Reader chooses the words, and how the line counts when the selected ledgers read different days (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | The fault: the line before a run, "Run reads ... over {n} UTC days.", counts the window's days, not the days each ledger will read. So for one question it can count days that the line under the answer, which counts the days read since L12, does not | Row L12's report; the owner, 2026-10-07 |
+| 3 | The count comes from `SpanCost`, which the page asks for before every run. Its `cut` names each selected ledger cut from the window and the day that ledger's answer starts, and it can carry the days each ledger will read (row L12's report). That is a field of a run-time answer, not a persisted shape, so Table C, C1 does not fire | Row L12's report; plan author, 2026-10-07 |
+| 4 | L21 waits for plan 55's row "The Data explorer reaches the reference's density" (#1357), which reshapes the data explorer page and edits `status.ts`, `+page.svelte` and both explorer specs this row edits. The Depends-on cell names that row by number so that the plan reader holds L21; check its title again at dispatch. Plan 55 declares the action line's words too, so coordinate with plan 55's owner session before dispatch | The owner, 2026-10-07 |
+| 5 | Level 2: the line before every explorer run changes, and every run is priced through `SpanCost` | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | For a ledger that began inside the window, the line counts days before it began, which the run does not read | Nothing to build, and a line that overstates what a run reads whenever every selected ledger began inside the window | Row L12's report; the owner, 2026-10-07 |
+| 2 | Build L21 now, beside #1357 | Both change `status.ts`, the page and its two specs, and #1357 reshapes the page this line sits on, so one of the two would be written again | The fix sooner, and the line written a second time after #1357 merges | The owner, 2026-10-07 |
+
+### Row #L22 - Summaries' one-sided lines say what is true
+
+- **Scope:** The two lines that say only one record answered for a day - on Summaries, server counters with no score; on Hardware, a score with no server counters - say only what is true of the days the open window shows. Level 1.
+- **The three faults** (row L16's report, 2026-10-07):
+  1. Both lines say "this day", but each prints once for a window and speaks for every such day in it.
+  2. On Summaries, "Nothing scored the summaries" prints for a day the score record lost, because a timed day with no score row counts as a day nothing scored.
+  3. On Hardware, "The summaries were scored" is decided from the article record, which has a row for every run, so it can print for a day nothing scored.
+- **Files touched** (found by a search on `main` at 3f6440edb for `countersWithoutScores`, `scoresWithoutCounters`, `countersOnly` and `coveredElsewhere`):
+  - `frontend/src/lib/console/recording.ts` (`countersWithoutScores()` and `scoresWithoutCounters()` hold the two lines; `recordingNotes` decides the Hardware line from `coveredElsewhere`)
+  - `frontend/src/routes/console/model/+page.server.ts` (`countersOnly`: a timed day in the window that is not a scored day; fault 2)
+  - `frontend/src/routes/console/machine/+page.server.ts` (hands `coveredElsewhere` the article record's days, `healthDays`; fault 3)
+  - `frontend/tests/console-chrome.spec.ts` ("the two one-sided days each name which instrument answered" pins both lines' words; "a day another instrument covered is named, not drawn as a quiet day")
+  - `docs/concepts/console-design.md` (names the six states with fixed wording, these two among them, and who chose each one's words)
+  - Left as they are: `frontend/src/routes/console/model/+page.svelte` and `frontend/src/routes/console/machine/+page.svelte`, which print the two lines as the routes hand them
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-chrome.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of Hardware and Summaries at each window preset. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
+- **Oracle:** in `console-chrome.spec.ts`, on facts the test builds (Table D, D3), with the server's counters written every day. A window whose only day without a score row is one the score record lost prints no line saying nothing scored the summaries; a window with two days the scorer did not run prints that line, and it does not call them "this day". On Hardware, a day the article record holds, with no score row and no counters row, gets no line that says the summaries were scored. It cannot settle the words, which Reader and Jony choose (decision 2); the test pins the words they choose.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The three faults are Reader's findings in row L16, left for a row of their own | Reader, 2026-10-07 (row L16's report) |
+| 2 | Reader and Jony choose the words of both lines (CLAUDE.md section 14) | To be ruled at dispatch (Reader and Jony) |
+| 3 | Summaries' line is worked out in `recording.ts` from the facts the route hands it, as the Hardware line already is, so a test can hand it facts it builds: a `+page.server.ts` may export nothing else, so nothing in it can have a logic test (row L13) | Plan author, 2026-10-07 |
+| 4 | Fault 3 is fixed either by Hardware reading which days the score record holds, or by a line that claims no score. Fowler rules which, because the first adds a read of the score record to the Hardware route | To be ruled at dispatch (Fowler) |
+| 5 | L22 waits for L16, which changed what the two routes hand `recordingNotes` and where Summaries prints its recording lines | The owner, 2026-10-07 |
+| 6 | Level 1: the words of two lines and the facts two routes hand them; a wrong version shows on those two routes | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | Each fault leaves a false line on screen | Nothing to build, and a false line on two routes whenever a window holds two or more one-sided days, a lost score day, or a day with articles and no counters | Reader, 2026-10-07 (row L16's report) |
+| 2 | Drop the two lines | A one-sided day would read as a full day or a quiet one, which these lines exist to stop (`docs/concepts/console-design.md`) | No words to choose, and a reader who cannot tell why a day has speed figures and no quality figure, or the reverse | Plan author, 2026-10-07 |
+
+### Row #L23 - The pipelines route's page and the prompt-cache subtitle say what is drawn
+
+- **Scope:** The pipelines route's page names the Hardware panel by the title it carries and says how that panel draws, its prompt-cache section says the share is printed and not drawn, and the prompt-cache panel's subtitle says nothing its own figures contradict. Level 1.
+- **The three faults** (row L15's report, 2026-10-07):
+  1. `docs/architecture/publishing/what-the-pipelines-route-draws.md` names a Hardware panel "How much text the model has to read again each time", drawn one column a day. The Hardware route now draws "How much text the model reads again, and how fast it reads" (`frontend/src/lib/console/machine/PromptReusePanel.svelte`), as spans with no day axis.
+  2. The same section says "The share is drawn, and it is named in words beside it", which its own heading contradicts: the share is printed rather than drawn.
+  3. The panel's subtitle says the instructions in front of every article "stay in memory between items", but 16.7 percent of items over the 90-day window, and 29.8 percent over the 1-day window, had nothing in memory.
+- **Files touched** (found by a search on `main` at 3f6440edb for the old title, "stay in memory between items" and "The share is drawn"):
+  - `docs/architecture/publishing/what-the-pipelines-route-draws.md` (its prompt-cache section; faults 1 and 2)
+  - `docs/architecture/publishing/console-machine.md` (its table of Hardware panels names the old title, drawn one column a day; found by the search, not named in row L15's report)
+  - `docs/architecture/publishing/telemetry-series.md` (its table of figures names the old title; found by the search, not named in row L15's report)
+  - `frontend/src/routes/console/+page.svelte` (the panel's `note`, its subtitle; fault 3)
+  - `frontend/src/lib/console/prompt-cache-subtitle.ts` (new: the subtitle's words for one window; decision 2)
+  - `frontend/tests/console-item-cost.spec.ts` (the Oracle)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-item-cost.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the three pages; the browser smoke of the console's home route. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
+- **Oracle:** in `console-item-cost.spec.ts`, on rows the test builds (Table D, D3): a window in which 1 of 4 items read its prompt whole, which today's subtitle misdescribes, and one in which no item did. The test pins the words the subtitle's function returns for each, and neither says anything the window's own count of items read whole contradicts. It cannot settle the three pages, which no test reads; review reads each against `PromptReusePanel.svelte` and the section's own heading.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Reader chooses the subtitle's words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | The subtitle's words come from one pure function of the window's `ItemCost`, in `frontend/src/lib/console/prompt-cache-subtitle.ts`, and the page prints what it returns, as the note under the share has since L15 (#1368). So a test pins Reader's words on rows it builds | Plan author, 2026-10-07, from row L15 |
+| 3 | The three faults are row L15's findings. The search for the old title found two more pages that name it, `console-machine.md` and `telemetry-series.md`, so this row corrects all three pages | Row L15's report; plan author, 2026-10-07 |
+| 4 | L23 waits for L15, which edited the note under the share, the home route's page and the prompt-cache section | The owner, 2026-10-07 |
+| 5 | Level 1: the words of one subtitle on one route, and three pages; a wrong version is obvious and local | The owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The page names a Hardware panel that is not drawn, says the share is drawn under a heading that says it is not, and the subtitle says every article's instructions stay in memory while the panel prints how many items had nothing in memory | Nothing to build, and three pages and one subtitle that a reader can check and find false | Row L15's report; the owner, 2026-10-07 |
+| 2 | Change the words in the page, with no function | No test can read them without the canary's page, so their test would rest on what the canary holds (Table D, D3), or they would have none | One file fewer, and words no test pins | Plan author, 2026-10-07 |
+
+### Row #L24 - The bundle gate does not fail a published ledger that is not packed yet
+
+- **Scope:** When a site build holds none of a published ledger's files, the bundle gate reports that ledger's index key as not weighed and names the ledger instead of failing, so CI passes and a push to `main` publishes while the ledger is not packed yet. Every other payload key that names nothing in the build still fails the gate. Level 2.
+- **Files touched** (found by a search on `main` at 3d56802ea for `bundle-gate`, for "names nothing" and "matches nothing", and for `payload_ceilings_bytes`):
+  - `frontend/scripts/bundle-gate.mjs` (its payload loop adds each key whose path holds no file to `namesNothing`, which fails the gate with "{key} is capped at {size}, and no file in the build is at that path", and the comment above the loop says a key that matches nothing fails. The loop moves out; decision 3)
+  - `frontend/scripts/payload-ceilings.mjs` (new: the payload check as one function, which the gate calls; decision 3)
+  - `frontend/tests/payload-ceilings.spec.ts` (new, under `logic`: the Oracle, on build trees the test writes)
+  - `frontend/scripts/test-groups.ts` (names the new spec under `logic`)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (its paragraph on what the indexes weigh says that a ledger not packed yet fails the gate, so CI fails and a push to `main` does not publish; row L7 wrote it)
+  - `docs/concepts/config/run-limits.md` (its `page_weight.payload_ceilings_bytes` line says a key matching nothing fails the gate; found by the search, not named in row L7's report)
+  - `backend/idhazh/contracts/knobs/page_weight.py` (the `payload_ceilings_bytes` description says a key that matches no file in the build fails the gate; found by the search, not named in row L7's report; decision 5)
+  - Left as they are: `backend/tests/contracts/test_page_ceilings.py`, which requires one index key for each published ledger and none for another ledger; `backend/utilities/publish_decision.py`; `docs/architecture/publishing/console-site-size.md` and `docs/architecture/publishing/console-payloads.md`, whose key that would match nothing names `source-health.json`, which is no ledger; `docs/how-to/run-the-gates.md`, whose sections on the gate say nothing of a key that names nothing; `frontend/tests/published-ledgers.spec.ts` (Table B, B7)
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec payload-ceilings.spec.ts`; `npm --prefix frontend run check`; ruff, mypy and the backend tests that `test:changed -- --list` selects for `page_weight.py`; `doc_load.py` on the two pages; the gate on a copy of a finished build with one published ledger's `state/compact/<ledger>/` and `state/raw/<ledger>/` folders deleted, as the site copy leaves a ledger not packed yet: it exits 0 and names that ledger, where row L7 measured exit 1 on such a build. CI: the `site` job runs the gate on a real build of the committed data; what `ciAnswer` selects, then every group on the merge push.
+- **Oracle:** in `payload-ceilings.spec.ts`, on build trees the test writes, against written-out verdicts (Table D, D3). A published ledger whose build holds none of its files passes, and the answer names it as not weighed. A key that names nothing and belongs to no published ledger still fails. A published ledger with some of its files in the build and nothing at its index key still fails. It cannot settle that `bundle-gate.mjs` prints and fails from what the function returns; the local gate run above and CI's `site` job, which runs the gate on every code change, cover that.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The fault: since L7 the site build goes on for a published ledger with no compact folder, but the bundle gate fails on any payload key that names nothing in the build, and `backend/tests/contracts/test_page_ceilings.py` requires such a key for every published ledger. On row L7's build check the gate said "state/compact/feed-retirements/index/ is capped at 2.2 KB, and no file in the build is at that path". CI runs the gate on every code change, and a push to `main` publishes only after CI passes (`backend/utilities/publish_decision.py`). So while a published ledger is not packed yet, CI stays red, merges wait and pushes do not publish. The daily run still publishes, because Pages publishes what it landed whatever its conclusion, though its own run of the gate in `.github/workflows/digest.yml` ends its job red | Row L7's report (#1370), 2026-10-07; the daily run's red job, plan author, 2026-10-07 |
+| 2 | The gate reports a published ledger's index key as not weighed, and names the ledger, when the build holds none of that ledger's files. Every other key that names nothing still fails, the index key of a published ledger with some of its files in the build included. As in the site build since L7, a compact folder deleted by accident then reads as a ledger not packed yet: the build log and the gate each name it, and nothing fails. About an hour of work, by row L7's estimate | Plan owner, 2026-10-07 (option A1 of row L7's report) |
+| 3 | The check moves into one function that a logic test runs on a build tree the test writes, because the gate has no test. The function is in `frontend/scripts/payload-ceilings.mjs` (new), which the gate imports: `bundle-gate.mjs` runs every check and exits when it is loaded, so a test cannot import a function from it. The site copy is split the same way: `copy-visuals.mjs` runs it, and `ledger-copy.spec.ts` tests `ledgerCopy` from `published-ledgers.mjs` | Plan owner, 2026-10-07 (option A1 of row L7's report); the new file, plan author, 2026-10-07 |
+| 4 | A ledger's files in a build are the paths the site copy stages for it, under `state/compact/<ledger>/` and `state/raw/<ledger>/` (`ledgerCopy` in `frontend/scripts/published-ledgers.mjs`). The function checks those two named paths, so its read does not grow with the build (Guardrail #12). It takes the published ledgers from `ledger.published` in `config/idhazh.json`, the file the gate already reads | Plan author, 2026-10-07 |
+| 5 | Only the words of the `payload_ceilings_bytes` description in `page_weight.py` change. It describes a config knob, not a persisted shape, so Table C, C1 does not fire, as for the `today_anchor` description that L5 changed | Plan author, 2026-10-07 |
+| 6 | L24 waits for L7 (#1370): before it, the site build stopped for such a ledger before the gate ran | Plan owner, 2026-10-07 |
+| 7 | Level 2: the gate's verdict changes, and every CI run, and so every publish of a push, depends on it | Plan owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Leave the gate as it is, and add a ledger to `ledger.published` only after it is packed (option A2 of row L7's report) | It gives up what L7 turned down its rejected alternative 1 for: a ledger's start is a normal state and stops nothing. Whenever that order slips, CI stays red, merges wait and pushes do not publish until the ledger is packed | Nothing to build, and an order a person must keep each time a ledger joins `ledger.published` | Plan owner, 2026-10-07 |
+| 2 | Fold the fix into #1370 (option A3 of row L7's report) | L7 would grow past its brief by three files and a new spec, which gives up a focused review | One merge instead of two | Plan owner, 2026-10-07 |
+| 3 | Export the function from `bundle-gate.mjs`, and run its checks only when node starts it, as `frontend/scripts/test-scope.ts` does | Every check in the gate moves inside one function so that a test can reach one of them | No new file, and a change to most lines of the gate | Plan author, 2026-10-07 |
+
+### Row #L25 - Hardware's platform-mix panel says the machine record is not packed yet
+
+- **Scope:** When the door answers `missing` for the machine record, the platform-mix panel on the Hardware route no longer says the record has not been published: since L7 a published record with no compact folder answers `missing`, and it is one that is not packed yet (Table F, F1). Level 1.
+- **Files touched** (found by a search on `main` at 3d56802ea for "has not been published yet", for the panel's other empty-state sentences, for `machineRecordState` and for the panel's id, `platform-mix`):
+  - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (line 127 prints "The machine record has not been published yet." when the door answers `missing`; no other file under `frontend/src/` says "has not been published yet")
+  - `frontend/tests/console-query-door.spec.ts` (its `missing` case answers the record's index requests with 404 through `frontend/tests/support/machine-record-state.ts`, and checks only that the panel prints a sentence; the Oracle. Found by the search, not named in row L7's report)
+  - `frontend/tests/panel-sufficiency.spec.ts` (only if decision 2 leaves the panel no line of its own: its test that the panel's four empty states draw four different pictures puts the panel into `missing` the same way; found by the search, not named in row L7's report)
+  - Left as they are: `frontend/tests/platform-mix.spec.ts`, a logic spec of what the panel draws from the door's rows, which loads no page, so it cannot reach `missing` and pins none of the panel's empty states; `frontend/tests/support/machine-record-state.ts`; `frontend/src/lib/console/recording.ts`, whose note on the route already says the record has not been packed yet. No page under `docs/` quotes the panel's empty states
+- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-query-door.spec.ts`, with `--spec panel-sufficiency.spec.ts` if decision 2 leaves the panel no line of its own; `npm --prefix frontend run check`; the browser smoke of the console's Hardware route with the machine record's index requests answered 404. CI: the pull request runs the console specs, because the change is the console's own; every group runs on the merge push.
+- **Oracle:** in `console-query-door.spec.ts`, on a site whose published machine record has no compact folder, which the test serves by answering that record's index requests with 404 (Table D, D3): the panel never says the record is not published, and prints the words Reader chooses, or no sentence of its own if decision 2 leaves it to the route's note. On `main` it says "The machine record has not been published yet.", which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 1); the test pins the words Reader chooses.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | Jony rules whether the panel keeps a line of its own for `missing` or leaves the route's note to say it (CLAUDE.md section 14) | To be ruled at dispatch (Jony) |
+| 3 | The fault: the panel prints "The machine record has not been published yet." when the door answers `missing`. Since L7 a published ledger with no compact folder answers `missing`, so the sentence is false for it. On row L7's build check, with the machine record's compact folder removed, the Hardware route's note said "The machine record has not been packed yet..." above the panel saying it has not been published | Row L7's report (#1370), 2026-10-07 |
+| 4 | L25 waits for L7 (#1370), which turned such a record from a stopped build into a `missing` answer, and for L17, which holds the panel and its spec, `PlatformMixPanel.svelte` and `platform-mix.spec.ts` | Plan owner, 2026-10-07 |
+| 5 | Level 1: the words of one line on one panel; a wrong version is obvious and local | Plan owner, 2026-10-07 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The panel says the record has not been published under a route note that says it has not been packed yet, and the panel's sentence is false | Nothing to build, and a false line on the Hardware route whenever the machine record is published and not packed yet | Row L7's report (#1370); plan owner, 2026-10-07 |
