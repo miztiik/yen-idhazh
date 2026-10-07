@@ -566,7 +566,15 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'nothing was judged in it, though the record has a row the day before',
 		days: [judgeDay('2030-06-14', FILLING)],
 		words:
-			'Nothing was judged in this one day. The three bars are what the record needs before a line may be fitted at all.'
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+	},
+	{
+		surface: 'record-gates',
+		preset: 7,
+		state: 'nothing was judged in them, though the record has a row before them',
+		days: [judgeDay('2030-06-01', FILLING)],
+		words:
+			'The bars show what the record held on 1 Jun 2030, before these 7 days. No run has recorded anything since.'
 	},
 	{
 		surface: 'record-gates',
@@ -1430,6 +1438,95 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			hint: 'Point at a square to read its day. Left and Right step through the days, Escape returns to the newest.'
 		});
 	});
+});
+
+/** A record panel case the bars oracle draws: its window, the days the test
+ * builds, the three counts the bars must stand at, and the note's words. */
+interface BarsCase {
+	surface: 'record-gates';
+	preset: number;
+	state: string;
+	days: JudgeDay[];
+	bars: string[];
+	words: string;
+}
+
+/** The bars stand on the record's newest row on or before the window's last day,
+ * so only a record that never held a row, or one that emptied, draws them at
+ * zero. Every count and every word is written out. */
+const BARS_CASES: BarsCase[] = [
+	{
+		surface: 'record-gates',
+		preset: 1,
+		state: 'the window holds no row, after earlier rows counted readings, days and pairs',
+		days: [
+			judgeDay('2030-06-12', { ...FILLING, negativesOnRecord: 100, daysOnRecord: 5, aboveLineOnRecord: 9 }),
+			judgeDay('2030-06-14', FILLING)
+		],
+		bars: ['120', '6', '12'],
+		words:
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+	},
+	{
+		surface: 'record-gates',
+		preset: 1,
+		state: 'the record never held a row',
+		days: [],
+		bars: ['0', '0', '0'],
+		words:
+			'Nothing was judged in this one day. The three bars are what the record needs before a line may be fitted at all.'
+	},
+	{
+		surface: 'record-gates',
+		preset: 1,
+		state: "the record emptied on the window's day",
+		days: [judgeDay('2030-06-14', FILLING), judgeDay(JUDGED_THROUGH, { heldReason: 'inputs_changed' })],
+		bars: ['0', '0', '0'],
+		words:
+			'The record has 0 of the 200 readings it needs, 0 of 10 days, and 0 of 30 pairs above the line. No line was fitted in this one day.'
+	}
+];
+
+test.describe("the record's bars stand on its newest row, on days the test builds", () => {
+	/** The record panel rendered on the server with its real children, never a stub. */
+	let drawGates: (props: Record<string, unknown>) => string = () => '';
+
+	test.beforeAll(async ({}, testInfo) => {
+		// One directory a worker: a module rewritten while another worker imports
+		// it is read half-written.
+		const compiled = serverCompiler(
+			resolve(process.cwd(), 'test-results', 'record-bars', String(testInfo.workerIndex))
+		);
+		const children: Rewrite[] = [
+			['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
+			['$lib/components/Panel.svelte', './Panel.server.mjs'],
+			['$lib/components/TargetBar.svelte', './TargetBar.server.mjs']
+		];
+		for (const child of ['ChartReadout', 'Panel', 'TargetBar']) {
+			await compiled(`src/lib/components/${child}.svelte`, child, []);
+		}
+		const module = await compiled(
+			'src/routes/console/judgement/RecordGates.svelte',
+			'RecordGates',
+			children
+		);
+		const component = (await import(pathToFileURL(module).href)).default;
+		drawGates = (props) => render(component, { props }).body;
+	});
+
+	for (const one of BARS_CASES) {
+		test(`THE ORACLE: the record's bars and note when ${one.state}`, async ({ page }) => {
+			await page.setContent(`<main>${drawGates(propsOf(one))}</main>`);
+
+			const panel = page.locator('[data-windowed="record-gates"]');
+			await expect(panel).toHaveAttribute('data-window-days', String(one.preset));
+			// Three tracks: each bar is drawn at its count, never replaced by a dash.
+			await expect(panel.locator('[data-target-cell="track"]')).toHaveCount(3);
+			const bars = await panel.locator('[data-target-cell="value"]').allTextContents();
+			expect(bars.map((bar) => bar.trim()), 'the bars stand on a different row').toEqual(one.bars);
+			expect(await said(page, SAID['record-gates'])).toBe(one.words);
+		});
+	}
 });
 
 /** The first day the Machine route says it is showing, at the open preset. */
