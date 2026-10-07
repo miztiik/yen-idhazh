@@ -65,7 +65,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L9 | Console specs outside the explorer serve the data they check | L2 | C | DONE | special-robot | #1361 | Plan 62 row l9 |
 | L10 | The column rail describes a ledger whose newest day holds no rows | L8 | C | DONE | redesigned-spork | #1360 | Plan 62 row l10 |
 | L11 | The "Measurement is off" line names only a day that is on screen | L5 | D | DONE | reimagined-happiness | - | Plan 62 row l11 |
-| L12 | The data explorer's span sentences say what each ledger read | L10 | D | PENDING | - | - | - |
+| L12 | The data explorer's span sentences say what each ledger read | L10 | D | DONE | miniature-journey | - | Plan 62 row l12 |
 | L13 | The remaining console specs check data they build | L9 | D | PENDING | - | - | - |
 
 ## 2. Shared declarations
@@ -662,6 +662,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (each path checked on `main` at 0d61b9b49):
   - `frontend/src/routes/console/data-explorer/+page.svelte` ("Read from {n} UTC days, {from} to {to}." takes `n` from `spanDays()`, the days asked, and prints the first date with no year)
   - `frontend/src/lib/console/waiting.ts` (`explorerSiteFromSentence`: "Days before {day} are not on this site.", which names no ledger)
+  - `frontend/src/lib/console/explorer/days-read.ts` (new; found during execution: the span line and the sentence for each cut ledger, beside `gaps.ts`, with relative imports so the logic suite pins Reader's words. `waiting.ts` says what a panel says while it has no rows, which the span line is not, so `explorerSiteFromSentence` leaves it)
   - `frontend/src/lib/data/ask-reader.ts` (if the answer carries each ledger's first day: it keeps only the earliest of the ledgers' `siteFrom` days)
   - `frontend/src/lib/data/slice-shapes.ts` (found by a search for `siteFrom`: `siteFrom` on `SpanCost` and on the `ok` and `quiet` answers)
   - `frontend/tests/ledger-lifecycle.spec.ts` (the reader's cases, on roots Table G, G1 builds)

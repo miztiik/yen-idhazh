@@ -1687,7 +1687,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		};
 		// This site is what a copy that keeps the five days 1 to 5 Sep leaves.
 		const answer = await readAsk(sitePage, { keeper: archivePage, siteWindowDays: 5 }, query, {});
-		expect(answer).toMatchObject({ state: 'ok', siteFrom: null });
+		expect(answer).toMatchObject({ state: 'ok', cut: [] });
 		if (answer.state !== 'ok') return;
 		expect(answer.rows).toEqual(expectedAnswer('archive-before-site'));
 		expect(dataAsked(archive.asked)).toEqual([dataPath(LEDGER, 'yearly', '2026')]);
@@ -1706,7 +1706,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			[MONTHLY_INDEX]: { status: 200, body: encoded(emptyMonthly) }
 		}).fetcher), null, [LEDGER], '2026-08-30', '2026-09-01', {});
 		// The site copy leaves one day file, 2026-09-01's 13,631 bytes.
-		expect(clamped).toMatchObject({ siteFrom: '2026-09-01', files: 1, bytes: 13631 });
+		expect(clamped).toMatchObject({ cut: [{ ledger: LEDGER, before: '2026-09-01' }], files: 1, bytes: 13631 });
 	});
 
 	test('a month file the span starts inside answers only the days the span asked for', async () => {
@@ -1719,7 +1719,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 			sql: 'SELECT covers, run_id, job, shard FROM "host-fingerprint" ORDER BY covers, run_id, job, shard',
 			maxRows: 20
 		}, {});
-		expect(answer).toMatchObject({ state: 'ok', capped: false, siteFrom: null });
+		expect(answer).toMatchObject({ state: 'ok', capped: false, cut: [] });
 		if (answer.state !== 'ok') return;
 		expect(answer.rows).toEqual(expectedAnswer('month-edge'));
 		expect(dataAsked(asked)).toEqual([dataPath(LEDGER, 'monthly', '2026-08'), dataPath(LEDGER, 'daily', '2026-09-01')]);
