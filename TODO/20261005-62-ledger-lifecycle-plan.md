@@ -69,7 +69,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L13 | The remaining console specs check data they build | L9 | D | DONE | curly-umbrella | - | Plan 62 row l13 |
 | L14 | Console specs that work their answer out from the canary's own files check data they build | L9 | D | DONE | glowing-waddle | - | Plan 62 row l14 |
 | L15 | The held-part note says what its own two figures show | L13 | E | PENDING | - | - | - |
-| L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | IN-FLIGHT | supreme-journey | - | Plan 62 row l16 |
+| L16 | The console's record notes on Hardware and Summaries say only what is true and on screen | L11 | D | DONE | supreme-journey | - | Plan 62 row l16 |
 | L17 | Every windowed console surface says "1 day" at the 1-day preset | L13 | E | PENDING | - | - | - |
 
 ## 2. Shared declarations
