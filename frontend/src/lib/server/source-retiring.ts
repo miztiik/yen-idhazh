@@ -49,8 +49,9 @@ export interface Countdown {
 	 * how much it decided of what it was offered. */
 	readout: string;
 	/** The strip's first column, counted from 1, that the dwell rule underlines
-	 * through the newest one, or null while no run of days under the mark is
-	 * running. */
+	 * through the newest one: the run's oldest square under the mark. Null while no
+	 * run of days under the mark is running, or where the squares cannot hold the
+	 * run's count. */
 	dwellFrom: number | null;
 }
 
@@ -121,6 +122,35 @@ function dayWord(count: number): string {
 	return count === 1 ? 'day' : 'days';
 }
 
+/** The column, counted from 1, where the dwell rule starts: the oldest square
+ * under the mark in the run the producer counted.
+ *
+ * Walking back from the newest square, it passes `daysUnder` squares under the
+ * mark and every square between them that decided nothing. `dwell()` in
+ * `backend/idhazh/telemetry/publish/source_health.py` walks the same days the
+ * same way, so a change to one is a change to the other. A day that decided
+ * nothing breaks no run, so a run can span more squares than its count. The count
+ * is the producer's; this walk only finds where that run begins.
+ *
+ * Null where the squares cannot hold the count: the walk meets a square at or
+ * above the mark, or runs out of squares, before it has passed `daysUnder`
+ * squares under the mark. The producer never writes such a row. Any column drawn
+ * for one would underline a day at or above the mark, or stand for a count of the
+ * page's own. The line under the row still prints the count in words.
+ */
+function dwellStart(squares: YieldSquare[], daysUnder: number): number | null {
+	if (daysUnder <= 0) return null;
+	let passed = 0;
+	for (let at = squares.length - 1; at >= 0; at -= 1) {
+		const state = squares[at].state;
+		if (state === 'nothing') continue;
+		if (state === 'at-or-above') break;
+		passed += 1;
+		if (passed === daysUnder) return at + 1;
+	}
+	return null;
+}
+
 /** What a ranked row says under its strip: what it published of what it was
  * offered over the complete days, and while it is under the mark, for how long
  * and the day it retires on if it stays there. */
@@ -172,6 +202,7 @@ export function retiring(view: SourceHealthView | null, rows: number): Retiring 
 			const daysUnder = row.days_under_the_mark ?? 0;
 			const retiresOn = row.retires_on ?? null;
 			const unjudged = !deepEnough || decisions < minDecisions;
+			const squares = (row.recent_days ?? []).map((day) => squareFor(day, alarmPoint));
 			return {
 				sourceId: row.source_id,
 				title: row.title,
@@ -185,7 +216,7 @@ export function retiring(view: SourceHealthView | null, rows: number): Retiring 
 				daysLeft: retiresOn === null ? null : Math.max(dwellDays - daysUnder, 0),
 				retired: row.retired,
 				unjudged,
-				squares: (row.recent_days ?? []).map((day) => squareFor(day, alarmPoint)),
+				squares,
 				readout: unjudged
 					? decidedReadout(decisions, row.opportunities)
 					: countdownReadout(
@@ -193,7 +224,7 @@ export function retiring(view: SourceHealthView | null, rows: number): Retiring 
 							view.complete_dates,
 							dwellDays
 						),
-				dwellFrom: daysUnder > 0 ? dates.length - daysUnder + 1 : null
+				dwellFrom: dwellStart(squares, daysUnder)
 			};
 		});
 

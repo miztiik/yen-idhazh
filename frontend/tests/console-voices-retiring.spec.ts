@@ -43,9 +43,17 @@ function source(over: Partial<SourceHealthRow> & Pick<SourceHealthRow, 'source_i
 	};
 }
 
+/** The census's five-day axis, oldest first. */
+const DATES = ['2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14', '2030-06-15'];
+
 /** One day of a source's share on the census's five-day axis. */
 function day(date: string, publications: number, failures: number) {
 	return { date, opportunities: publications + failures, publications, source_failures: failures };
+}
+
+/** A source's five days on that axis, oldest first, each as published and lost. */
+function days(shares: [number, number][]) {
+	return shares.map(([kept, lost], at) => day(DATES[at], kept, lost));
 }
 
 /** A census of 20 complete days, judged at 7 of them and 30 decisions, with a mark of
@@ -58,8 +66,6 @@ function day(date: string, publications: number, failures: number) {
  *  - `thin` decided 5 of the 9 it was offered, under both evidence floors.
  */
 function census(): SourceHealthView {
-	const dates = ['2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14', '2030-06-15'];
-	const days = (shares: [number, number][]) => shares.map(([kept, lost], at) => day(dates[at], kept, lost));
 	return {
 		generated_at: '2030-06-15T19:00:00Z',
 		run_id: '2030-06-15-1',
@@ -75,7 +81,7 @@ function census(): SourceHealthView {
 		yield_alarm_min_decisions: 30,
 		dwell_days: 14,
 		auto_retire: false,
-		dwell_dates: dates,
+		dwell_dates: DATES,
 		sources: [
 			source({ source_id: 'gone', retired: true, retired_on: '2030-06-10', opportunities: 45, publications: 3, source_failures: 37 }),
 			source({
@@ -166,14 +172,41 @@ test('every row draws its bar on the same track with its marker at the same shar
 
 test('the dwell is an area under the newest squares, not a number in a chip', () => {
 	// On a five-day axis, a run of 3 days under the mark is underlined from the third
-	// square to the newest, and a run of 1 day under the newest square alone. A row
-	// with no run under way draws no rule at all. Which days are under the mark is
-	// the run's own count, and `backend/tests/test_source_dwell.py` holds it.
-	const strip = retiring(census(), 10);
+	// square to the newest, and a run of 1 day under the newest square alone. A day
+	// that decided nothing breaks no run, so `pausing` - under the mark, then a day it
+	// decided nothing, then under the mark again - counts 2 days and is underlined
+	// from the third square too: the older of its two days under the mark. A row with
+	// no run under way draws no rule at all, and neither does `overcounted`, whose
+	// count of 3 its squares cannot hold because a day at or above the mark sits two
+	// squares back. The producer never writes such a row; any rule drawn for it would
+	// underline a day at or above the mark. Which days are under the mark is the
+	// run's own count, and `backend/tests/test_source_dwell.py` holds it.
+	const view = census();
+	const pausing = source({
+		source_id: 'pausing',
+		opportunities: 45,
+		publications: 16,
+		source_failures: 24,
+		recent_days: days([[7, 3], [6, 4], [1, 9], [0, 0], [2, 8]]),
+		days_under_the_mark: 2,
+		retires_on: '2030-06-27'
+	});
+	const overcounted = source({
+		source_id: 'overcounted',
+		opportunities: 55,
+		publications: 10,
+		source_failures: 40,
+		recent_days: days([[1, 9], [2, 8], [6, 4], [0, 10], [1, 9]]),
+		days_under_the_mark: 3,
+		retires_on: '2030-06-26'
+	});
+	const strip = retiring({ ...view, sources: [...view.sources, pausing, overcounted] }, 10);
 	expect(strip?.dates).toHaveLength(5);
 	expect(strip?.rows.map((row) => [row.sourceId, row.daysUnder, row.dwellFrom])).toEqual([
 		['gone', 0, null],
+		['overcounted', 3, null],
 		['falling', 3, 3],
+		['pausing', 2, 3],
 		['sliding', 1, 5]
 	]);
 });
