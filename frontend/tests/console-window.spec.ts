@@ -2557,6 +2557,53 @@ test('THE ORACLE: the span picked on one console route is the span the next one 
 	}
 });
 
+/** The span the control holds, and every span the route's windowed surfaces draw. */
+async function heldAndDrawn(page: Page) {
+	return {
+		held: Number(await page.locator('[data-window-control]').getAttribute('data-window-days')),
+		drawn: [...new Set((await windowed(page)).map((surface) => surface.days))]
+	};
+}
+
+/** Click a route's tab and wait for that route's panels. The router follows the
+ * link with no page load, which a mark left on `window` proves: a load would
+ * clear it, and a page load is the move the case above already takes. */
+async function followTab(page: Page, route: string) {
+	await page.evaluate(() => Object.assign(window, { stayedOnPage: true }));
+	await page.locator(`[data-console-tab="${route}"]`).click();
+	await expect(page.locator(`[data-console-panels="${route}"]`)).toBeVisible();
+	expect(
+		await page.evaluate(() => 'stayedOnPage' in window),
+		'the tab loaded a page, so the move this case is about never happened'
+	).toBe(true);
+}
+
+test('THE ORACLE: after a tab click, the control holds the span the next route draws', async ({
+	page
+}) => {
+	// The case above moves with a page load. An operator moves with the tabs, and
+	// the router then mounts the next route under the same layout and drops the
+	// last one, with the stored span read again by the route that arrives. The
+	// control used to stay on 14 days there while every Judgement panel drew 1.
+	// So the control is compared with what the page draws, never with a number
+	// the data holds, and every check retries until the route has settled.
+	await page.goto('/console/');
+	await hydrated(page);
+	await setWindow(page, 1);
+
+	await followTab(page, 'judgement');
+	await expect.poll(() => heldAndDrawn(page)).toEqual({ held: 1, drawn: [1] });
+	await expect(page.locator('[data-window-preset="1"] input')).toBeChecked();
+	await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
+
+	// Back the other way, on a span picked on the route the tab led to.
+	await setWindow(page, 7);
+	await followTab(page, 'pipelines');
+	await expect.poll(() => heldAndDrawn(page)).toEqual({ held: 7, drawn: [7] });
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+	await expect(page.locator('[data-window-preset="7"] input')).toBeEnabled();
+});
+
 /** The three numbers the source section prints about its own window. */
 async function cutFacts(page: Page) {
 	// Named, not positional. The cost sentence sits above this one now, and a
