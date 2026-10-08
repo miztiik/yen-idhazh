@@ -1,6 +1,6 @@
 # Label the Similarity Holdout
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-08
 
 Read pairs of articles the merge line has to decide between, and record whether
 each pair is one news event or two. The marks land in
@@ -200,20 +200,26 @@ Widen `--draw-root` rather than editing the batch.
 
 ```powershell
 python -m idhazh score-merge-line-holdout --date 2026-09-21 `
-  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6
+  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6 `
+  --commit <full-commit-sha>
 ```
 
 It counts what the merge line in force does to every marked pair and writes one
 row into
-`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`:
+`state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`,
+which the gardener packs under
+`state/compact/content-similarity-judge/merge-line-holdout-scores/`:
 the line, the four cells, how many pairs it could not score, and how many marks
 say two stories. `--labeller` is the same name the harvest was given, and
 `--run-id` is `<date>-<a number>` - the row has to say which run took the
-reading.
+reading. `--commit` is the full commit SHA of the checkout that took it, which
+`git rev-parse HEAD` prints, so the door file's envelope points back to the code
+that wrote it. The verb refuses to run without it.
 
 **Nothing schedules it.** The marked file changes when somebody labels more
 pairs rather than when a day publishes, so no workflow runs this verb and no job
-stages what it writes. Commit the row yourself, the way you commit the marks.
+stages what it writes. Commit the raw file yourself, the way you commit the
+marks.
 
 **It writes nothing when fewer than half the marks can be scored.** Retention
 deletes published days the marked file still names, and four cells counted over
@@ -226,8 +232,9 @@ The verb exits 1 and prints how many it resolved.
 | `labeller=X appears in none of the N marks' notes` | The name does not match what the harvest wrote. Check `--labeller`. |
 | `the highest pair marked as two stories now scores A and HOLDOUT_TWO_STORY_MAX declares B` | New marks, or new weights, have moved the hardest pair. Retake the constant in `backend/idhazh/contracts/knobs/placement.py`. |
 
-`/console/judgement/` prints the newest row under the holdout panel, and says
-the line has not been scored where there is none.
+`/console/judgement/` prints the newest row under the holdout panel once the
+gardener has packed its day, within about two days of the date it is filed
+under, and says the line has not been scored where there is none.
 
 ## The mark spelling
 

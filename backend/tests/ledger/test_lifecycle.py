@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR, SEED_COMMIT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
@@ -191,7 +191,10 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         1,
         lambda s: _wrote(
-            s, lambda: score_merge_line_holdout._append(s, A_DAY, _first(MergeLineHoldoutScore))
+            s,
+            lambda: score_merge_line_holdout._append(
+                s, A_DAY, _first(MergeLineHoldoutScore), commit_sha=SEED_COMMIT
+            ),
         ),
     ),
     "collect_judge_metrics": (LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, 1, _collect_metrics),

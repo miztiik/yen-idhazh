@@ -28,9 +28,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, seed_publication_inventory
+from conftest import CONFIG_DIR, SEED_COMMIT, seed_publication_inventory
 
-from idhazh import assemble, config, ledger
+from idhazh import assemble, cli, config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import (
     DigestDay,
     DigestEmbeddings,
@@ -60,6 +61,10 @@ SCORED_ON: Final = "2026-09-20"
 A_RUN: Final = "2026-09-20-35534060762"
 
 A_LABELLER: Final = "claude-opus-4.6"
+
+#: The commit a person's checkout is at when they type the verb. Any full SHA but
+#: the stand-in of zeros, which the verb refuses.
+A_COMMIT: Final = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
 
 #: Digits spelled as letters, so a built headline carries no figure. Two
 #: headlines around two different numbers are vetoed before they are scored, and
@@ -153,10 +158,13 @@ def write_marks(state: Path, marks: list[SimilarityHoldoutPair]) -> Path:
 
 
 def committed_rows(state: Path, date: str) -> list[MergeLineHoldoutScore]:
-    """The rows one day file holds, read back through the contract that wrote them."""
-    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date)
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return [MergeLineHoldoutScore.from_csv_row(row) for row in csv.DictReader(handle)]
+    """The rows one day holds, read back through the door."""
+    return ledger.load_days(
+        state,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+        [date],
+        model=MergeLineHoldoutScore,
+    )
 
 
 def a_marked_tree(tmp_path: Path) -> tuple[Path, Path]:
@@ -298,6 +306,7 @@ def test_the_four_cells_and_the_unresolved_count_add_up_to_the_marked_file(
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
@@ -325,6 +334,7 @@ def test_the_row_is_written_where_the_ledger_says_and_reads_back(tmp_path: Path)
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
@@ -333,7 +343,75 @@ def test_the_row_is_written_where_the_ledger_says_and_reads_back(tmp_path: Path)
     assert row is not None
     written = committed_rows(state, SCORED_ON)
     assert written == [row]
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).is_file()
+    assert list(
+        ledger.raw_days(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES)
+    ) == [SCORED_ON]
+    (raw_file,) = ledger.list_raw_files(
+        state,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+        days=[SCORED_ON],
+    )
+    assert raw_file.envelope.identity.job is ServerJob.OPERATOR
+
+
+def a_typed_verb(state: Path, digest: Path, *extra: str) -> list[str]:
+    """The verb as a person types it, against this test's own tree."""
+    return [
+        "score-merge-line-holdout",
+        "--date",
+        SCORED_ON,
+        "--run-id",
+        A_RUN,
+        "--labeller",
+        A_LABELLER,
+        "--state-root",
+        str(state),
+        "--digest-root",
+        str(digest),
+        *extra,
+    ]
+
+
+def test_the_typed_verb_files_one_raw_file_under_the_person_who_ran_it(tmp_path: Path) -> None:
+    """Through the router, the reading is one door file whose writer is the person's command.
+
+    No workflow job ran it, so its job is `operator`, at attempt 1 and shard 0.
+    The run is the one `--run-id` names and the commit the one `--commit` names,
+    so the file points back at the code that took the reading.
+    """
+    state, digest = a_marked_tree(tmp_path)
+
+    assert cli.main(a_typed_verb(state, digest, "--commit", A_COMMIT)) == 0
+
+    (raw_file,) = ledger.list_raw_files(
+        state,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+        days=[SCORED_ON],
+    )
+    identity = raw_file.envelope.identity
+    assert (identity.job, identity.attempt, identity.shard) == (ServerJob.OPERATOR, 1, 0)
+    assert (identity.run_id, identity.git_sha, identity.producer) == (
+        A_RUN,
+        A_COMMIT,
+        "stages.score_merge_line_holdout",
+    )
+    assert [row.labeller for row in committed_rows(state, SCORED_ON)] == [A_LABELLER]
+
+
+def test_the_typed_verb_refuses_a_reading_that_names_no_commit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A door file names the code that wrote it, and the stand-in of zeros names none."""
+    state, digest = a_marked_tree(tmp_path)
+
+    with pytest.raises(SystemExit) as stopped:
+        cli.main(a_typed_verb(state, digest))
+
+    assert stopped.value.code == 2
+    assert "score-merge-line-holdout needs --commit" in capsys.readouterr().err
+    assert not ledger.raw_root(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    ).exists()
 
 
 def test_a_second_attempt_at_one_run_leaves_one_row(tmp_path: Path) -> None:
@@ -350,6 +428,7 @@ def test_a_second_attempt_at_one_run_leaves_one_row(tmp_path: Path) -> None:
             SCORED_ON,
             run_id=A_RUN,
             labeller=A_LABELLER,
+            commit_sha=SEED_COMMIT,
             settings=settings,
             state_dir=state,
             digest_root=digest,
@@ -396,13 +475,16 @@ def test_a_reading_below_the_floor_writes_no_row_at_all(tmp_path: Path) -> None:
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
     )
 
     assert row is None
-    assert not ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).exists()
+    assert not ledger.raw_root(
+        state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    ).exists()
 
 
 def test_a_marked_file_that_is_not_there_writes_no_row(tmp_path: Path) -> None:
@@ -413,6 +495,7 @@ def test_a_marked_file_that_is_not_there_writes_no_row(tmp_path: Path) -> None:
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=committed_settings(),
         state_dir=state,
         digest_root=digest,
@@ -434,6 +517,7 @@ def test_the_row_records_the_ruler_the_cells_were_counted_under(tmp_path: Path) 
         SCORED_ON,
         run_id=A_RUN,
         labeller=A_LABELLER,
+        commit_sha=SEED_COMMIT,
         settings=settings,
         state_dir=state,
         digest_root=digest,

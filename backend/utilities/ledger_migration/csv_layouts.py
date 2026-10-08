@@ -12,7 +12,11 @@ from idhazh.contracts.eval_row import RENAMED_CELLS
 from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain, LedgerEntry
+from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
+from idhazh.contracts.merge_line_holdout_score import (
+    DROPPED_CELLS as DROPPED_HOLDOUT_SCORE_CELLS,
+)
+from idhazh.ledger.paths import REGISTRY_FILENAME
 from utilities.ledger_migration.refusals import RefusedError
 
 
@@ -29,9 +33,15 @@ def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
     return LedgerEntry(name=name, grain=Grain.DAY_TREE, prefix=(folder or name.value,))
 
 
-def _day_file(name: LedgerName) -> LedgerEntry:
-    """One shared CSV file a day, under the ledger's own name."""
-    return LedgerEntry(name=name, grain=Grain.DAY_FILE, prefix=(name.value,), suffix=".csv")
+def _day_file(name: LedgerName, folders: tuple[str, ...] = ()) -> LedgerEntry:
+    """One shared CSV file a day, under the ledger's own name unless it sat elsewhere.
+
+    `folders` is the path under `state/` where that is not the ledger's own name,
+    such as a family's folder and then the ledger's own.
+    """
+    return LedgerEntry(
+        name=name, grain=Grain.DAY_FILE, prefix=folders or (name.value,), suffix=".csv"
+    )
 
 
 CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
@@ -59,6 +69,16 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         ),
         LedgerName.FEED_HEALTH: CsvLedger(
             _tree(LedgerName.FEED_HEALTH), MonthsWindow(unit="months", value=14)
+        ),
+        # A person's command filed one shared file a day inside the judge's folder.
+        # Nothing deleted a reading.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+                ("content-similarity-judge", "merge-line-holdout-scores"),
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType(dict.fromkeys(DROPPED_HOLDOUT_SCORE_CELLS)),
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
@@ -89,6 +109,13 @@ def csv_root(state_dir: Path, which: LedgerName) -> Path:
     return state_dir.joinpath(*require_layout(which).prefix)
 
 
-def door_ledgers() -> list[LedgerName]:
-    """Every ledger in the table that `config/ledgers.json` files through the door now."""
-    return [name for name in CSV_LEDGERS if ledger.entry(name).grain is Grain.RAW_AND_COMPACT]
+def door_ledgers(config_dir: Path) -> list[LedgerName]:
+    """Every ledger in the table that this config's registry files through the door now.
+
+    Read from the config a run is held against, so a run over a recorded config
+    takes the ledgers that config had moved, and no ledger moved since.
+    """
+    registry = ledger.registry_entries(
+        LedgersConfig.from_json((config_dir / REGISTRY_FILENAME).read_text(encoding="utf-8"))
+    )
+    return [name for name in CSV_LEDGERS if registry[name].grain is Grain.RAW_AND_COMPACT]
