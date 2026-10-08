@@ -466,7 +466,7 @@ Level 2.
 
 On 2026-10-08 the page stopped naming the deleted test, and says instead that
 no test checks the rule. A search of `backend/tests/contracts/` on `origin/main`
-at f2ccfa46d found none that does. The rule holds today: the one panel that
+at 702b00be7 found none that does. The rule holds today: the one panel that
 asks the door, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, asks
 it for `host-fingerprint`, which is published. The bounded test is still the
 next move.
