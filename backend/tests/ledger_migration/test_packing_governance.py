@@ -1,15 +1,16 @@
 """Which compaction packs a migrated root, and which ledger or root is refused or filed raw?
 
 A ledger the registry still files as CSV, one with no compaction, and one whose
-compaction keeps less than its CSV was kept are refused before a file is
-written; an undeclared non-production root is filed raw, while a declared trial
-root uses its own compaction policy.
+compaction keeps less than its CSV was kept, with no named decision allowing
+it, are refused before a file is written; an undeclared non-production root is
+filed raw, while a declared trial root uses its own compaction policy.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -22,6 +23,7 @@ from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledgers import Grain
 from utilities.ledger_migration import (
     csv_files,
+    csv_layouts,
     packing,
     phases,
     refusals,
@@ -263,6 +265,26 @@ def test_current_finite_retention_refuses_an_old_forever_csv_reader(tmp_path: Pa
     (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
     with pytest.raises(refusals.RefusedError, match="does not reach the window of forever"):
         packing.declared([EVALS], config_dir)
+
+
+def test_a_named_decision_lets_the_door_keep_a_ledger_for_less_than_its_csv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same shorter compaction is accepted once the entry names who allowed it, and kept.
+
+    The decision does not widen the compaction: the declared yearly expiry is
+    what the migration packs under.
+    """
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
+    named = csv_layouts.CSV_LEDGERS[EVALS]._replace(shorter_by="a person, on a named day")
+    monkeypatch.setattr(
+        packing, "CSV_LEDGERS", MappingProxyType(dict(csv_layouts.CSV_LEDGERS) | {EVALS: named})
+    )
+
+    declared = packing.declared([EVALS], config_dir)
+
+    assert (declared[EVALS].yearly_prune_enable, declared[EVALS].yearly_keep_months) == (True, 36)
 
 
 def test_current_migration_initializes_new_indexes_but_refuses_a_lost_one(

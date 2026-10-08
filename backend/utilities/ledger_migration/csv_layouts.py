@@ -21,11 +21,24 @@ from utilities.ledger_migration.refusals import RefusedError
 
 
 class CsvLedger(NamedTuple):
-    """How one ledger was filed before it moved to the door, and how long it was kept."""
+    """How one ledger was filed before it moved to the door, and how long it was kept.
+
+    `shorter_by` names the person's decision that let the door keep it for less
+    time than the CSV did. Without one, a compaction that keeps less is refused.
+    """
 
     old_entry: LedgerEntry
     old_window: Window
     old_headings: Mapping[str, str | None] = MappingProxyType({})
+    shorter_by: str | None = None
+
+
+#: A judge ledger was kept for ever on CSV only because no task pruned it.
+EVERY_LEDGER_EXPIRES: Final = (
+    "@kumarsnaveen_microsoft approved on 2026-10-07 live packing and 36-calendar-month "
+    "yearly expiry for every ledger, superseding forever retention and accepting loss of "
+    "older history; applied on 2026-10-08 to each judge ledger moved to the door after it"
+)
 
 
 def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
@@ -79,6 +92,7 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
             ),
             ForeverWindow(unit="forever"),
             MappingProxyType(dict.fromkeys(DROPPED_HOLDOUT_SCORE_CELLS)),
+            EVERY_LEDGER_EXPIRES,
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
