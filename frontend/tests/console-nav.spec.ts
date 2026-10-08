@@ -82,8 +82,17 @@ const CITES_A_PLAN = /TODO\/\d|\brows?\s*#?\d|\bplan\s+\d/i;
 /** The three verdict colours, as the tokens a stylesheet would have to name. */
 const HEALTH_RAMP = ['--fill-high', '--fill-medium', '--fill-low', '--band-high', '--band-medium', '--band-low'];
 
+/** The strip's tabs, as drawn. `evaluateAll` reads at once and never waits, and
+ * Data explorer's document has no strip until its script draws one, which can be
+ * after `page.goto` returns. So the read waits for the first tab: the strip draws
+ * every tab in one pass. */
 async function tabs(page: Page) {
-	return page.locator('[data-console-nav] [data-console-tab]').evaluateAll((links) =>
+	const strip = page.locator('[data-console-nav] [data-console-tab]');
+	await expect(
+		strip.first(),
+		`${new URL(page.url()).pathname}: the strip drew no tab`
+	).toBeAttached();
+	return strip.evaluateAll((links) =>
 		links.map((node) => ({
 			id: node.getAttribute('data-console-tab') ?? '',
 			href: (node as HTMLAnchorElement).getAttribute('href') ?? '',

@@ -351,13 +351,17 @@ test('THE ORACLE: a chart that leaves the page releases its instance', async ({ 
 	);
 
 	// Client-side, so the engine's own count survives the move. A full page load
-	// resets it and proves nothing.
+	// resets it and proves nothing. The page's time origin, the instant its
+	// document started, tells the two apart: a full page load starts a new
+	// document, and a move inside the page keeps the first one. A count of
+	// navigation entries cannot, because it is 1 after either.
+	const opened = await page.evaluate(() => performance.timeOrigin);
 	await page.locator('a[href$="/console/model/"]').first().click();
 	await page.waitForURL('**/console/model/**');
 	expect(
-		await page.evaluate(() => performance.getEntriesByType('navigation').length),
+		await page.evaluate(() => performance.timeOrigin),
 		'the link reloaded the page, so the count was reset rather than kept'
-	).toBe(1);
+	).toBe(opened);
 
 	await expect
 		.poll(
