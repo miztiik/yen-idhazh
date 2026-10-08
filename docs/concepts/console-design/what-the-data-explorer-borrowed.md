@@ -1,6 +1,6 @@
 # What the data explorer borrowed
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The Data explorer page borrowed only the parts of the reference workbench that fit this console's data, trust boundary and visual system.
 
@@ -17,7 +17,7 @@ The Data explorer page borrowed only the parts of the reference workbench that f
 | One-line status bar under the editor | Kept as the fixed run status | Price, progress and readout land in one place that never changes size. |
 | Schema panel with column types | Kept as the column rail | The operator writes against the names and types in view. |
 | Dense results table | Kept with row numbers and a sticky typed header | Reading rows is the job, and the box scrolls instead of moving the page. |
-| View switch | Kept as `Draw it as` | A choice is useful only among drawings the answer's columns can honestly support. |
+| View switch | Kept as `Draw it as`, with a pill for each role's column | Every chart is offered on every answer and the reader picks the columns; a chart the answer's columns cannot support draws nothing and says what it needs. |
 | Chart under the table | Kept at measured width | A full-width drawing keeps dates and labels readable. |
 | Docs and history controls | Kept | Help and recent questions stand with the question row. |
 | Expand next rows | Kept as `Show 50 more rows` | More rows arrive inside the answer box, so nothing below moves. |

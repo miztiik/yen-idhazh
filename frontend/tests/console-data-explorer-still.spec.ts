@@ -1,6 +1,11 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt, type AnswerState } from './support/explorer-answer';
-import { everyDay } from './support/ledger-lifecycle';
+import { everyDay, serveToPage } from './support/ledger-lifecycle';
+import { consolePanels } from './support/console-panels';
+import { judgeFill, readPanel } from './support/panel-gates';
 import { explorerConfig } from '../src/lib/server/config';
 import { statusSentence } from '../src/lib/console/explorer/status';
 
@@ -575,6 +580,112 @@ test('M16: phone width has no document overflow and controls stay inside their r
 	expect(overflow.controlsFit, overflow.offenders.join('\n')).toBe(true);
 });
 
+/** Every control the named regions cut off: one outside a region that never scrolls, or past its
+ *  height; one outside a clipping box it sits in; and one whose own text is cut. A region in
+ *  `whole` never scrolls; a region in `sideways` scrolls by design, so it is held only sideways.
+ *  `openList` names a floating list that is open: the list itself lies inside the window and inside
+ *  its region's side edges, and its lines, which scroll inside it, are held sideways. */
+async function cutOffControls(page: Page, whole: readonly string[], sideways: readonly string[], openList: string | null = null): Promise<string[]> {
+	return page.evaluate(({ whole, sideways, openList }) => {
+		const list = openList === null ? null : document.querySelector<HTMLElement>(openList);
+		const offenders: string[] = openList !== null && list === null ? [`${openList}: the open list is missing`] : [];
+		if (list !== null) {
+			const at = list.getBoundingClientRect();
+			const windowWidth = document.documentElement.clientWidth;
+			const windowHeight = document.documentElement.clientHeight;
+			if (at.left < -0.5 || at.top < -0.5 || at.right > windowWidth + 0.5 || at.bottom > windowHeight + 0.5) offenders.push(`the open list at ${Math.round(at.left)},${Math.round(at.top)}-${Math.round(at.right)},${Math.round(at.bottom)} passes the window`);
+			const region = list.closest('[data-workbench-region]')?.getBoundingClientRect();
+			if (region !== undefined && (at.left < region.left - 0.5 || at.right > region.right + 0.5)) offenders.push('the open list passes its region\'s side edges');
+		}
+		const overflows = (node: HTMLElement) => {
+			const style = getComputedStyle(node);
+			return style.overflowX !== 'visible' || style.overflowY !== 'visible';
+		};
+		const scrolls = (node: HTMLElement) => {
+			const style = getComputedStyle(node);
+			return style.overflowX === 'auto' || style.overflowX === 'scroll' || style.overflowY === 'auto' || style.overflowY === 'scroll';
+		};
+		const visible = (node: HTMLElement) => {
+			const rect = node.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0 && node.checkVisibility() && getComputedStyle(node).visibility !== 'hidden';
+		};
+		const label = (node: HTMLElement) => `${node.tagName.toLowerCase()} "${(node.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 50)}"`;
+		const fitsInside = (inner: DOMRect, outer: DOMRect, bothAxes: boolean) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && (!bothAxes || (inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5));
+		const intersects = (inner: DOMRect, outer: DOMRect) => inner.right > outer.left && inner.left < outer.right && inner.bottom > outer.top && inner.top < outer.bottom;
+		const canScrollIntoView = (control: HTMLElement, rect: DOMRect, bothAxes: boolean) => {
+			for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
+				if (!visible(ancestor) || !overflows(ancestor)) continue;
+				const ancestorBox = ancestor.getBoundingClientRect();
+				if (fitsInside(rect, ancestorBox, bothAxes)) continue;
+				return scrolls(ancestor) && (bothAxes ? !intersects(rect, ancestorBox) : rect.right <= ancestorBox.left || rect.left >= ancestorBox.right || rect.bottom <= ancestorBox.top || rect.top >= ancestorBox.bottom);
+			}
+			return false;
+		};
+		for (const name of [...whole, ...sideways]) {
+			const region = document.querySelector<HTMLElement>(`[data-workbench-region="${name}"]`);
+			if (region === null) {
+				offenders.push(`${name}: the region is missing`);
+				continue;
+			}
+			const regionBoth = whole.includes(name);
+			const box = region.getBoundingClientRect();
+			// A list that floats over the page - the folded questions, History's list - is
+			// a box placed out of the flow that reaches past its region. Its controls are
+			// held to the window, and the region is measured without it.
+			const floats = (node: Element, itself = false) => {
+				for (let ancestor: Element | null = itself ? node : node.parentElement; ancestor !== null && ancestor !== region; ancestor = ancestor.parentElement) {
+					const position = getComputedStyle(ancestor).position;
+					if ((position === 'absolute' || position === 'fixed') && !fitsInside(ancestor.getBoundingClientRect(), box, true)) return true;
+				}
+				return false;
+			};
+			const scrolledInside = (node: Element) => {
+				for (let ancestor = node.parentElement; ancestor !== null && ancestor !== region; ancestor = ancestor.parentElement) {
+					if (scrolls(ancestor)) return true;
+				}
+				return false;
+			};
+			if (regionBoth) {
+				// Content in the flow below the region's foot lies over the region under it,
+				// whether or not this region clips.
+				let foot = box.top;
+				for (const node of region.querySelectorAll<HTMLElement>('*')) {
+					if (!visible(node) || floats(node, true) || scrolledInside(node)) continue;
+					foot = Math.max(foot, node.getBoundingClientRect().bottom);
+				}
+				if (foot > box.bottom + 0.5) offenders.push(`${name}: ${Math.round(foot - box.bottom)}px of its content lies below it`);
+			}
+			const windowBox = new DOMRect(0, 0, document.documentElement.clientWidth, document.documentElement.clientHeight);
+			for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
+				const rect = control.getBoundingClientRect();
+				// A line of an open list scrolls inside the list by design, so it is held sideways, as a rail's row is.
+				const both = list !== null && list.contains(control) ? false : regionBoth;
+				// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
+				if (!visible(control)) continue;
+				if (canScrollIntoView(control, rect, both)) continue;
+				const floating = floats(control);
+				const frame = floating ? windowBox : box;
+				const across = rect.left >= frame.left - 0.5 && rect.right <= frame.right + 0.5;
+				const down = rect.top >= frame.top - 0.5 && rect.bottom <= frame.bottom + 0.5;
+				if (!across || ((both || floating) && !down)) {
+					offenders.push(`${name}: ${label(control)} at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${floating ? 'the window' : 'its region'} ${Math.round(frame.left)},${Math.round(frame.top)}-${Math.round(frame.right)},${Math.round(frame.bottom)}`);
+				}
+				if ((control.matches('button, a[href], summary') || control.classList.contains('example')) && control.scrollWidth > control.clientWidth + 1) {
+					offenders.push(`${name}: ${label(control)} cuts its text by ${control.scrollWidth - control.clientWidth}px`);
+				}
+				for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
+					if (!visible(ancestor) || !overflows(ancestor)) continue;
+					const ancestorBox = ancestor.getBoundingClientRect();
+					if (!fitsInside(rect, ancestorBox, both)) {
+						offenders.push(`${name}: ${label(control)} is outside clipping ancestor ${ancestor.tagName.toLowerCase()}.${ancestor.className} at ${Math.round(ancestorBox.left)},${Math.round(ancestorBox.top)}-${Math.round(ancestorBox.right)},${Math.round(ancestorBox.bottom)}`);
+					}
+				}
+			}
+		}
+		return offenders;
+	}, { whole, sideways, openList });
+}
+
 test('no workbench control is cut off, idle or after a run, at any width', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	for (const view of VIEWS) {
@@ -589,97 +700,9 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 			for (const disclosure of ['closed', 'questions open'] as const) {
 				const summary = page.locator('[data-workbench-region="questions"] .question-strip summary');
 				if (disclosure === 'questions open' && await summary.count()) await summary.click();
-				const cut = await page.evaluate(() => {
 				// These regions never scroll, so a control outside them, or content past their
 				// height, is cut off. The rails scroll by design, so they are held only sideways.
-				const whole = ['questions', 'editor'];
-				const sideways = ['ledgers', 'columns'];
-				const offenders: string[] = [];
-				const overflows = (node: HTMLElement) => {
-					const style = getComputedStyle(node);
-					return style.overflowX !== 'visible' || style.overflowY !== 'visible';
-				};
-				const scrolls = (node: HTMLElement) => {
-					const style = getComputedStyle(node);
-					return style.overflowX === 'auto' || style.overflowX === 'scroll' || style.overflowY === 'auto' || style.overflowY === 'scroll';
-				};
-				const visible = (node: HTMLElement) => {
-					const rect = node.getBoundingClientRect();
-					return rect.width > 0 && rect.height > 0 && node.checkVisibility() && getComputedStyle(node).visibility !== 'hidden';
-				};
-				const label = (node: HTMLElement) => `${node.tagName.toLowerCase()} "${(node.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 50)}"`;
-				const fitsInside = (inner: DOMRect, outer: DOMRect, bothAxes: boolean) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && (!bothAxes || (inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5));
-				const intersects = (inner: DOMRect, outer: DOMRect) => inner.right > outer.left && inner.left < outer.right && inner.bottom > outer.top && inner.top < outer.bottom;
-				const canScrollIntoView = (control: HTMLElement, rect: DOMRect, bothAxes: boolean) => {
-					for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
-						if (!visible(ancestor) || !overflows(ancestor)) continue;
-						const ancestorBox = ancestor.getBoundingClientRect();
-						if (fitsInside(rect, ancestorBox, bothAxes)) continue;
-						return scrolls(ancestor) && (bothAxes ? !intersects(rect, ancestorBox) : rect.right <= ancestorBox.left || rect.left >= ancestorBox.right || rect.bottom <= ancestorBox.top || rect.top >= ancestorBox.bottom);
-					}
-					return false;
-				};
-				for (const name of [...whole, ...sideways]) {
-					const region = document.querySelector<HTMLElement>(`[data-workbench-region="${name}"]`);
-					if (region === null) {
-						offenders.push(`${name}: the region is missing`);
-						continue;
-					}
-					const both = whole.includes(name);
-					const box = region.getBoundingClientRect();
-					// A list that floats over the page - the folded questions, History's list - is
-					// a box placed out of the flow that reaches past its region. Its controls are
-					// held to the window, and the region is measured without it.
-					const floats = (node: Element, itself = false) => {
-						for (let ancestor: Element | null = itself ? node : node.parentElement; ancestor !== null && ancestor !== region; ancestor = ancestor.parentElement) {
-							const position = getComputedStyle(ancestor).position;
-							if ((position === 'absolute' || position === 'fixed') && !fitsInside(ancestor.getBoundingClientRect(), box, true)) return true;
-						}
-						return false;
-					};
-					const scrolledInside = (node: Element) => {
-						for (let ancestor = node.parentElement; ancestor !== null && ancestor !== region; ancestor = ancestor.parentElement) {
-							if (scrolls(ancestor)) return true;
-						}
-						return false;
-					};
-					if (both) {
-						// Content in the flow below the region's foot lies over the region under it,
-						// whether or not this region clips.
-						let foot = box.top;
-						for (const node of region.querySelectorAll<HTMLElement>('*')) {
-							if (!visible(node) || floats(node, true) || scrolledInside(node)) continue;
-							foot = Math.max(foot, node.getBoundingClientRect().bottom);
-						}
-						if (foot > box.bottom + 0.5) offenders.push(`${name}: ${Math.round(foot - box.bottom)}px of its content lies below it`);
-					}
-					const windowBox = new DOMRect(0, 0, document.documentElement.clientWidth, document.documentElement.clientHeight);
-					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
-						const rect = control.getBoundingClientRect();
-						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
-						if (!visible(control)) continue;
-						if (canScrollIntoView(control, rect, both)) continue;
-						const floating = floats(control);
-						const frame = floating ? windowBox : box;
-						const across = rect.left >= frame.left - 0.5 && rect.right <= frame.right + 0.5;
-						const down = rect.top >= frame.top - 0.5 && rect.bottom <= frame.bottom + 0.5;
-						if (!across || ((both || floating) && !down)) {
-							offenders.push(`${name}: ${label(control)} at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${floating ? 'the window' : 'its region'} ${Math.round(frame.left)},${Math.round(frame.top)}-${Math.round(frame.right)},${Math.round(frame.bottom)}`);
-						}
-						if ((control.matches('button, a[href], summary') || control.classList.contains('example')) && control.scrollWidth > control.clientWidth + 1) {
-							offenders.push(`${name}: ${label(control)} cuts its text by ${control.scrollWidth - control.clientWidth}px`);
-						}
-						for (let ancestor = control.parentElement; ancestor !== null && !ancestor.classList.contains('workbench'); ancestor = ancestor.parentElement) {
-							if (!visible(ancestor) || !overflows(ancestor)) continue;
-							const ancestorBox = ancestor.getBoundingClientRect();
-							if (!fitsInside(rect, ancestorBox, both)) {
-								offenders.push(`${name}: ${label(control)} is outside clipping ancestor ${ancestor.tagName.toLowerCase()}.${ancestor.className} at ${Math.round(ancestorBox.left)},${Math.round(ancestorBox.top)}-${Math.round(ancestorBox.right)},${Math.round(ancestorBox.bottom)}`);
-							}
-						}
-					}
-				}
-				return offenders;
-				});
+				const cut = await cutOffControls(page, ['questions', 'editor'], ['ledgers', 'columns']);
 				expect(cut, `${view.width}px, ${phase}, ${disclosure}`).toEqual([]);
 				if (disclosure === 'questions open' && await summary.count()) await summary.click();
 			}
@@ -706,4 +729,574 @@ test('M17: keyboard order follows the visual order at desktop and phone widths',
 		const ranks = order.filter((entry) => entry.rank >= 0).map((entry) => entry.rank);
 		expect(ranks).toEqual([...ranks].sort((left, right) => left - right));
 	}
+});
+
+// --- The Chart tab: the reader chooses the chart and its columns (plan 55 row 19) ----------------
+
+/** Two date columns, a name a row and four number columns, one of them too flat to draw: every
+ *  role of every chart has a column to pick and another to change to. Two date columns pick no
+ *  chart of their own, so the tiles start with none checked. */
+const CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, TIMESTAMP '2026-01-01 06:00:00' + INTERVAL (i) DAY AS stamp, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other, 0 AS tiny FROM range(0, 170) AS t(i)";
+const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution'] as const;
+/** The lines the role row takes, by the four widths in `VIEWS`, when the chart with the most roles has three. */
+const ROLE_LINES: Record<number, number> = { 1440: 1, 1024: 1, 768: 2, 390: 3 };
+
+/** Wait two frames, so a layout shift the last action caused has been reported. */
+async function settle(page: Page) {
+	await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 50)))));
+}
+
+type ChartReading = { boxes: Record<string, Box>; pills: (Box | null)[]; scrollY: number; shift: number; sources: ShiftSource[] };
+
+/** Every box on the Chart tab that a choice must not move, and the pill each slot holds. */
+async function chartReading(page: Page): Promise<ChartReading> {
+	return page.evaluate(() => {
+		const read = (node: Element) => {
+			const rect = node.getBoundingClientRect();
+			return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+		};
+		const boxes: Record<string, Box> = {};
+		for (const [name, selector] of [['region', '[data-workbench-region="answer"]'], ['strip', '.result-tabs'], ['roles', '[data-chart-roles]'], ['drawing', '[data-chart-drawing]'], ['foot', '[data-chart-foot]']]) {
+			const node = document.querySelector(selector);
+			if (node === null) throw new Error(`${selector} was not found`);
+			boxes[name] = read(node);
+		}
+		document.querySelectorAll('[role="tab"]').forEach((tab) => (boxes[`tab ${tab.textContent?.trim()}`] = read(tab)));
+		document.querySelectorAll('[data-shape-choice]').forEach((tile) => (boxes[`tile ${tile.getAttribute('data-shape-choice')}`] = read(tile)));
+		const slots = [...document.querySelectorAll('[data-role-slot]')];
+		slots.forEach((slot) => (boxes[`slot ${slot.getAttribute('data-role-slot')}`] = read(slot)));
+		const held = window as typeof window & { __explorerShift?: number; __explorerSources?: ShiftSource[] };
+		return {
+			boxes,
+			pills: slots.map((slot) => {
+				const pill = slot.querySelector('summary');
+				return pill === null ? null : read(pill);
+			}),
+			scrollY: window.scrollY,
+			shift: held.__explorerShift ?? 0,
+			sources: held.__explorerSources ?? []
+		};
+	});
+}
+
+/** Nothing outside the drawing moved: no layout shift, no scroll, every box where it was, and
+ *  each pill exactly filling its slot. */
+function expectChartStill(before: ChartReading, after: ChartReading, label: string) {
+	expect(after.shift, `${label}: layout shift sources ${JSON.stringify(after.sources, null, 2)}`).toBe(0);
+	expect(after.scrollY, `${label}: the page scrolled`).toBe(before.scrollY);
+	expect(Object.keys(after.boxes).sort(), `${label}: the parts on the tab`).toEqual(Object.keys(before.boxes).sort());
+	for (const [name, box] of Object.entries(before.boxes)) {
+		for (const side of ['x', 'y', 'width', 'height'] as const) expect(after.boxes[name][side], `${label}: ${name} ${side}`).toBeCloseTo(box[side], 0);
+	}
+	after.pills.forEach((pill, index) => {
+		if (pill === null) return;
+		const slot = after.boxes[`slot ${index}`];
+		for (const side of ['x', 'y', 'width', 'height'] as const) expect(pill[side], `${label}: pill ${index} ${side} against its slot`).toBeCloseTo(slot[side], 0);
+	});
+}
+
+/** The page's own sizes, in pixels, so a check is computed from the tokens and never from a constant. */
+async function tokens(page: Page) {
+	return page.evaluate(() => {
+		const css = getComputedStyle(document.documentElement);
+		const rem = parseFloat(css.fontSize);
+		const px = (name: string) => {
+			const value = css.getPropertyValue(name).trim();
+			return value.endsWith('rem') ? parseFloat(value) * rem : parseFloat(value);
+		};
+		return { control: px('--workbench-control'), space1: px('--space-1') };
+	});
+}
+
+async function openChart(page: Page, sql = CHART_SQL) {
+	await chooseExplorerQuestion(page, ['published'], sql);
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	await page.locator('[data-workbench-region="answer"]').evaluate((node) => node.scrollIntoView({ block: 'start', behavior: 'instant' }));
+	await settle(page);
+}
+
+function pill(page: Page, role: string) {
+	return page.locator(`[data-chart-roles] .column-picker[data-role="${role}"]`);
+}
+
+for (const view of VIEWS) {
+	test(`I1, I2, I13 and I15: the role row stands between the strip and the drawing, the lists float and nothing is cut off, at ${view.width}px`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		const sizes = await tokens(page);
+		const strip = async () => box(page, '.result-tabs');
+		// I2: the strip is the same box with either tab open, two lines below 640 px and one above.
+		const tableStrip = await strip();
+		const lines = view.width < 640 ? 2 : 1;
+		expect(tableStrip.height, 'the strip is not its lines tall').toBeCloseTo(lines * sizes.control + (lines + 1) * sizes.space1, 0);
+		await page.getByRole('tab', { name: 'Chart' }).click();
+		closeBox(tableStrip, await strip());
+		await page.getByRole('tab', { name: 'Table' }).click();
+		await openChart(page);
+		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(4);
+		await expect(page.locator('.result-tabs').getByRole('button', { name: /^Copy as/ })).toHaveCount(0);
+		await page.locator('[data-shape-choice="pairedScatter"]').click();
+		await settle(page);
+		// I1: the role row is the chart panel's first row, from the strip's foot to the drawing's top.
+		const placed = await page.evaluate(() => {
+			const panel = document.querySelector('#data-explorer-shape')!.getBoundingClientRect();
+			const roles = document.querySelector('[data-chart-roles]')!;
+			const at = roles.getBoundingClientRect();
+			return {
+				panelTop: panel.top,
+				stripBottom: document.querySelector('.result-tabs')!.getBoundingClientRect().bottom,
+				top: at.top,
+				bottom: at.bottom,
+				height: at.height,
+				drawingTop: document.querySelector('[data-chart-drawing]')!.getBoundingClientRect().top,
+				pillTops: [...roles.querySelectorAll('summary')].map((summary) => Math.round(summary.getBoundingClientRect().top))
+			};
+		});
+		expect(placed.pillTops, 'Paired does not show its three pills').toHaveLength(3);
+		expect(Math.abs(placed.top - placed.panelTop), 'the role row is not the panel\'s first row').toBeLessThanOrEqual(0.5);
+		expect(Math.abs(placed.top - placed.stripBottom), 'the role row does not start at the strip\'s foot').toBeLessThanOrEqual(0.5);
+		expect(Math.abs(placed.bottom - placed.drawingTop), 'the role row does not end at the drawing\'s top').toBeLessThanOrEqual(0.5);
+		expect(new Set(placed.pillTops).size, 'the pills stand on the wrong number of lines').toBe(ROLE_LINES[view.width]);
+		const rows = ROLE_LINES[view.width];
+		expect(placed.height).toBeCloseTo(rows * sizes.control + (rows - 1) * sizes.space1 + 2 * sizes.space1, 0);
+		// I15: the role row takes height, not width, so the plot still covers the panel's width.
+		if (view.width !== 1024) {
+			const fill = judgeFill(await readPanel(page.locator('[data-console-panel-id="data-explorer-shape"]')), consolePanels().fillFloor);
+			expect(fill.pass, fill.says).toBe(true);
+		}
+		// Nothing on the strip or the Chart tab is cut off, with every pill's list closed and open.
+		expect(await cutOffControls(page, ['answer'], []), `${view.width}px, every list closed`).toEqual([]);
+		for (const role of ['across', 'up', 'name']) {
+			await startShiftObserver(page);
+			const before = await chartReading(page);
+			await pill(page, role).locator('summary').click();
+			await expect(pill(page, role).locator('[data-pill-list]')).toBeVisible();
+			await settle(page);
+			// I13: opening the list moves nothing; it floats over the drawing.
+			expectChartStill(before, await chartReading(page), `${role} list opened`);
+			expect(await cutOffControls(page, ['answer'], [], '.column-picker[open] [data-pill-list]'), `${view.width}px, ${role} open`).toEqual([]);
+			// I13: it closes on Escape, with focus on its pill.
+			await page.keyboard.press('Escape');
+			await expect(pill(page, role).locator('[data-pill-list]')).toBeHidden();
+			await expect(pill(page, role).locator('summary')).toBeFocused();
+			await settle(page);
+			expectChartStill(before, await chartReading(page), `${role} list closed`);
+		}
+		// I13: a press outside closes it, and a pick in a one-column list closes it with focus on its pill.
+		// The press lands on the open tab, which the list never covers at any width and which does nothing more.
+		await pill(page, 'across').locator('summary').click();
+		await page.getByRole('tab', { name: 'Chart' }).click();
+		await expect(pill(page, 'across').locator('[data-pill-list]')).toBeHidden();
+		await expect(page.getByRole('tab', { name: 'Chart' })).toHaveAttribute('aria-selected', 'true');
+		await pill(page, 'across').locator('summary').click();
+		await pill(page, 'across').locator('[data-column="other"] input').click();
+		await expect(pill(page, 'across').locator('[data-pill-list]')).toBeHidden();
+		await expect(pill(page, 'across').locator('summary')).toBeFocused();
+		await expect(pill(page, 'across').locator('[data-pill-name]')).toHaveText('other');
+		// I2: the copy buttons stand on the strip only while Table is open, and the tiles only while Chart is.
+		await page.getByRole('tab', { name: 'Table' }).click();
+		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(0);
+		await expect(page.locator('.result-tabs').getByRole('button', { name: /^Copy as/ })).toHaveCount(2);
+		closeBox(tableStrip, await strip());
+	});
+
+	test(`I3, I4 and T9: a change of chart or of column moves nothing outside the drawing, at ${view.width}px`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		await openChart(page);
+		for (const tile of await page.locator('[data-shape-choice] input').all()) await expect(tile, 'two date columns picked a chart').not.toBeChecked();
+		// I3 by a press, from every tile to every other.
+		for (const from of CHART_TYPES) {
+			for (const to of CHART_TYPES) {
+				if (from === to) continue;
+				await page.locator(`[data-shape-choice="${from}"]`).click();
+				await settle(page);
+				await startShiftObserver(page);
+				const before = await chartReading(page);
+				await page.locator(`[data-shape-choice="${to}"]`).click();
+				await settle(page);
+				expectChartStill(before, await chartReading(page), `${from} to ${to}`);
+				await expect(page.locator(`[data-shape-choice="${to}"] input`)).toBeFocused();
+			}
+		}
+		// I3 by an arrow key, along the tiles and back.
+		await page.locator('[data-shape-choice="dateSeries"]').click();
+		for (const [key, to] of [['ArrowRight', 'rankedList'], ['ArrowRight', 'pairedScatter'], ['ArrowRight', 'distribution'], ['ArrowLeft', 'pairedScatter'], ['ArrowLeft', 'rankedList'], ['ArrowLeft', 'dateSeries']] as const) {
+			await settle(page);
+			await startShiftObserver(page);
+			const before = await chartReading(page);
+			await page.keyboard.press(key);
+			await settle(page);
+			expectChartStill(before, await chartReading(page), `${key} to ${to}`);
+			await expect(page.locator(`[data-shape-choice="${to}"] input`)).toBeFocused();
+			await expect(page.locator(`[data-shape-choice="${to}"] input`)).toBeChecked();
+		}
+		// I4: for each pill, open it and pick another column; in the several-column list check one and uncheck it.
+		const picks: { type: (typeof CHART_TYPES)[number]; role: string; column: string }[] = [
+			{ type: 'dateSeries', role: 'date', column: 'stamp' },
+			{ type: 'rankedList', role: 'name', column: 'across' },
+			{ type: 'rankedList', role: 'rankBy', column: 'up' },
+			{ type: 'pairedScatter', role: 'across', column: 'other' },
+			{ type: 'pairedScatter', role: 'up', column: 'across' },
+			{ type: 'pairedScatter', role: 'name', column: '' },
+			{ type: 'distribution', role: 'values', column: 'up' }
+		];
+		for (const { type, role, column } of picks) {
+			await page.locator(`[data-shape-choice="${type}"]`).click();
+			await settle(page);
+			await startShiftObserver(page);
+			const before = await chartReading(page);
+			await pill(page, role).locator('summary').click();
+			await pill(page, role).locator(`[data-column="${column}"] input`).click();
+			await expect(pill(page, role).locator('[data-pill-list]')).toBeHidden();
+			await settle(page);
+			expectChartStill(before, await chartReading(page), `${type} ${role} to ${column || 'Row number'}`);
+			await expect(pill(page, role).locator('summary')).toBeFocused();
+		}
+		await page.locator('[data-shape-choice="dateSeries"]').click();
+		await settle(page);
+		await startShiftObserver(page);
+		const before = await chartReading(page);
+		await pill(page, 'lines').locator('summary').click();
+		const tiny = pill(page, 'lines').locator('[data-column="tiny"] input');
+		await expect(tiny, 'the flat column was checked by default').not.toBeChecked();
+		await tiny.click();
+		await expect(tiny).toBeChecked();
+		await tiny.click();
+		await expect(tiny).not.toBeChecked();
+		await page.keyboard.press('Escape');
+		await expect(pill(page, 'lines').locator('[data-pill-list]')).toBeHidden();
+		await settle(page);
+		expectChartStill(before, await chartReading(page), 'Lines checked and unchecked');
+		await expect(pill(page, 'lines').locator('summary')).toBeFocused();
+	});
+}
+
+for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
+	test(`I5: switching between Table and Chart moves nothing in every state, with the role row in place, at ${view.width}px`, async ({ page, context }) => {
+		const root = test.info().outputPath('state');
+		// item-health holds two days, so a run reads one that choosing the ledger did not.
+		await serveBuilt(context, root, { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) }, { ledger: 'item-health', pinned: PINNED, days: everyDay(1, 0) });
+		await serveToPage(context, root, 'feed-health');
+		const switchesStill = async (one: Page, state: string) => {
+			await one.getByRole('tab', { name: 'Table' }).click();
+			await one.evaluate(() => window.scrollTo(0, 0));
+			await startShiftObserver(one);
+			const before = await snapshot(one);
+			await one.getByRole('tab', { name: 'Chart' }).click();
+			await expect(one.locator('[data-chart-roles]'), `${state}: no role row`).toBeVisible();
+			expectStable(before, await snapshot(one));
+			await one.getByRole('tab', { name: 'Table' }).click();
+			expectStable(before, await snapshot(one));
+		};
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		await switchesStill(page, 'idle');
+		await chooseExplorerQuestion(page, ['published'], CHART_SQL);
+		await runExplorer(page);
+		await switchesStill(page, 'answered');
+		await page.getByRole('tab', { name: 'Chart' }).click();
+		await page.locator('[data-shape-choice="dateSeries"]').click();
+		await chooseExplorerQuestion(page, ['published'], "SELECT 'n' || i::VARCHAR AS name, i AS a FROM range(0, 5) AS t(i)");
+		await runExplorer(page);
+		await page.getByRole('tab', { name: 'Chart' }).click();
+		await expect(page.locator('[data-shape-none]'), 'the chosen chart is not drawn with no date column').toHaveCount(1);
+		await switchesStill(page, 'a needed role with no column');
+		for (const [state, sql] of [['quiet', 'SELECT * FROM "published" WHERE false'], ['refused', 'SELECT 1; SELECT 2']] as const) {
+			await chooseExplorerQuestion(page, ['published'], sql);
+			await runExplorer(page);
+			await expectAnswer(page, state);
+			await switchesStill(page, state);
+		}
+		await chooseExplorerQuestion(page, ['feed-health'], 'SELECT count(*) AS rows FROM "feed-health"', false);
+		await runExplorer(page);
+		await expectAnswer(page, 'missing');
+		await switchesStill(page, 'missing');
+		// A page that already holds a file fetches nothing for it again, so a failed fetch and a held
+		// one each start on a page of their own.
+		const failing = await context.newPage();
+		await failing.setViewportSize(view);
+		await failing.route('**/state/**/*.parquet*', (route) => route.abort());
+		await openExplorer(failing, PINNED);
+		await chooseExplorerQuestion(failing, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
+		await runExplorer(failing);
+		await expectAnswer(failing, 'unreachable');
+		await switchesStill(failing, 'unreachable');
+		await failing.close();
+		const waiting = await context.newPage();
+		await waiting.setViewportSize(view);
+		await openExplorer(waiting, PINNED);
+		await chooseExplorerQuestion(waiting, ['item-health'], 'SELECT count(*) AS rows FROM "item-health"');
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => { release = resolve; });
+		await waiting.route('**/state/**/*.parquet*', async (route) => {
+			await held;
+			await route.abort();
+		});
+		await waiting.getByRole('button', { name: /^Run$/ }).click();
+		await expect(waiting.locator('[data-console-panel-id="data-explorer-rows"] [data-state="loading"]')).toHaveCount(1);
+		await switchesStill(waiting, 'running');
+		release();
+		await waiting.close();
+	});
+}
+
+test('I6: across four runs, each drawn by a different chart, the tiles keep their count, order and boxes, checked or not', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, PINNED);
+	const answers = [
+		{ opens: 'dateSeries', sql: "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)" },
+		{ opens: 'rankedList', sql: "SELECT * FROM (VALUES ('a', 9), ('b', 4), ('c', 2)) AS t(name, rows)" },
+		{ opens: 'pairedScatter', sql: "SELECT 'row-' || i::VARCHAR AS name, i AS x, 170 - i AS y FROM range(0, 170) AS t(i)" },
+		{ opens: 'distribution', sql: 'SELECT * FROM range(0, 170) AS t(rows)' }
+	] as const;
+	let first: Record<string, Box> | null = null;
+	for (const { opens, sql } of answers) {
+		await chooseExplorerQuestion(page, ['published'], sql);
+		await runExplorer(page);
+		await page.getByRole('tab', { name: 'Chart' }).click();
+		await expect(page.locator(`[data-shape-choice="${opens}"] input`), `${opens} did not open`).toBeChecked();
+		const tiles = await tileBoxes(page, '[data-shape-choice]', 'data-shape-choice');
+		expect(Object.keys(tiles)).toEqual([...CHART_TYPES]);
+		if (first === null) first = tiles;
+		else expectTileBoxesStable(first, tiles, `after ${opens} opened`);
+		await page.getByRole('tab', { name: 'Table' }).click();
+	}
+});
+
+test.describe('on a phone, with touch', () => {
+	test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+	test('I7: a role over 128 columns, 88 of them numbers, lists exactly the numbers in the window and scrolls inside itself', async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+		await openExplorer(page, PINNED);
+		const wide = wideAnswer();
+		await openChart(page, wide.sql);
+		await page.locator('[data-shape-choice="distribution"]').tap();
+		const values = pill(page, 'values');
+		await values.locator('summary').tap();
+		const list = values.locator('[data-pill-list]');
+		await expect(list).toBeVisible();
+		// A touch puts focus on the checked line, so the phone's keyboard does not rise until the filter is tapped.
+		await expect(values.locator(`[data-column="${wide.numbers[0]}"] input`)).toBeFocused();
+		expect(await list.locator('[data-column]').evaluateAll((lines) => lines.map((line) => line.getAttribute('data-column')))).toEqual(wide.numbers);
+		const sizes = await tokens(page);
+		const placed = await list.evaluate((node) => {
+			const at = node.getBoundingClientRect();
+			const region = node.closest('[data-workbench-region="chart"]')!.getBoundingClientRect();
+			return {
+				at: { left: at.left, top: at.top, right: at.right, bottom: at.bottom },
+				region: { left: region.left, right: region.right },
+				window: { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight },
+				pageWidth: { scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth },
+				lines: [...node.querySelectorAll('.pill-line')].map((line) => line.getBoundingClientRect().height),
+				scrolls: node.scrollHeight > node.clientHeight
+			};
+		});
+		expect(placed.at.left).toBeGreaterThanOrEqual(-0.5);
+		expect(placed.at.top).toBeGreaterThanOrEqual(-0.5);
+		expect(placed.at.right).toBeLessThanOrEqual(placed.window.width + 0.5);
+		expect(placed.at.bottom).toBeLessThanOrEqual(placed.window.height + 0.5);
+		expect(placed.at.left).toBeGreaterThanOrEqual(placed.region.left - 0.5);
+		expect(placed.at.right).toBeLessThanOrEqual(placed.region.right + 0.5);
+		expect(placed.pageWidth.scroll).toBeLessThanOrEqual(placed.pageWidth.client);
+		expect(Math.min(...placed.lines)).toBeGreaterThanOrEqual(sizes.control - 0.5);
+		// Scrolled to its end with the wheel, the list takes the scroll and the page does not.
+		expect(placed.scrolls, 'the list does not scroll, so this proves nothing').toBe(true);
+		const scrollY = await page.evaluate(() => window.scrollY);
+		const listBox = (await list.boundingBox())!;
+		await page.mouse.move(listBox.x + listBox.width / 2, listBox.y + listBox.height / 2);
+		for (let turn = 0; turn < 40 && !(await list.evaluate((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 1)); turn += 1) {
+			await page.mouse.wheel(0, 600);
+		}
+		expect(await list.evaluate((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 1), 'the list did not reach its end').toBe(true);
+		await page.mouse.wheel(0, 600);
+		await settle(page);
+		expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
+	});
+});
+
+test('I8: the filter keeps the names that hold the typed text anywhere, in their order, and clearing it shows every one again', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, PINNED);
+	const wide = wideAnswer();
+	await openChart(page, wide.sql);
+	await page.locator('[data-shape-choice="distribution"]').click();
+	const values = pill(page, 'values');
+	await values.locator('summary').click();
+	const filter = values.getByRole('searchbox', { name: 'Find a column' });
+	await expect(filter, 'a mouse did not put focus in the filter').toBeFocused();
+	const listed = () => values.locator('[data-column]').evaluateAll((lines) => lines.map((line) => line.getAttribute('data-column')));
+	await page.keyboard.type('decode');
+	expect(await listed()).toEqual(wide.numbers.filter((name) => name.includes('decode')));
+	expect(await listed()).toHaveLength(5);
+	await filter.fill('');
+	expect(await listed()).toEqual(wide.numbers);
+	await filter.fill('no-such-name');
+	await expect(values.locator('.pill-note')).toHaveText('No column here has "no-such-name" in its name.');
+});
+
+/** 128 columns as `SELECT * FROM "item-health"` returns them: 88 numbers that share a few starts,
+ *  five of them about decoding, among 40 text columns. */
+function wideAnswer(): { sql: string; numbers: string[] } {
+	const decode = ['label_decode_tokens_per_s', 'summary_decode_tokens_per_s', 'label_decode_ms', 'summary_decode_ms', 'os_mem_decode_peak_bytes'];
+	const starts = ['label', 'summary', 'os_mem'];
+	const numbers: string[] = [];
+	const parts: string[] = [];
+	for (let index = 0; index < 128; index += 1) {
+		if (index % 16 < 11) {
+			const name = numbers.length % 17 === 3 && decode.length > 0 ? (decode.shift() as string) : `${starts[numbers.length % 3]}_reading_${numbers.length}`;
+			numbers.push(name);
+			parts.push(`${numbers.length} AS ${name}`);
+		} else {
+			parts.push(`'v' AS text_${index}`);
+		}
+	}
+	return { sql: `SELECT ${parts.join(', ')}`, numbers };
+}
+
+test('I9: a 28-character name stands whole beside the longest role word, and a 60-character alias is cut on the pill alone', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	for (const view of VIEWS) {
+		await page.setViewportSize(view);
+		await openChart(page, "SELECT * FROM (VALUES ('a', 5), ('b', 3)) AS t(name, summary_prefill_tokens_per_s)");
+		const name = pill(page, 'rankBy').locator('[data-pill-name]');
+		await expect(name).toHaveText('summary_prefill_tokens_per_s');
+		expect(await name.evaluate((node) => node.scrollWidth <= node.clientWidth), `${view.width}px cut the name`).toBe(true);
+	}
+	const alias = 'a_sixty_character_alias_that_an_operator_typed_in_a_question';
+	expect(alias).toHaveLength(60);
+	for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
+		await page.setViewportSize(view);
+		await openChart(page, `SELECT i AS ${alias} FROM range(0, 170) AS t(i)`);
+		const name = pill(page, 'values').locator('[data-pill-name]');
+		expect(await name.evaluate((node) => node.scrollWidth > node.clientWidth && getComputedStyle(node).textOverflow === 'ellipsis'), `${view.width}px did not end the alias in an ellipsis`).toBe(true);
+		await expect(pill(page, 'values').locator('summary')).toHaveAttribute('aria-label', `Values: ${alias}`);
+		await expect(page.locator('[data-console-panel-id="data-explorer-shape"] svg[data-chart-type="distribution"]')).toHaveAttribute('aria-label', `Spread: ${alias}`);
+		await pill(page, 'values').locator('summary').click();
+		await expect(pill(page, 'values').locator(`[data-column="${alias}"] code`)).toHaveText(alias);
+		await page.keyboard.press('Escape');
+	}
+});
+
+test('I10: Tab runs from the tab to the checked tile, each pill and the readout, and back; a list closes on Escape and when Tab leaves it', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, PINNED);
+	await openChart(page, "SELECT DATE '2026-01-01' + i::INTEGER AS day, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up FROM range(0, 170) AS t(i)");
+	const chartTab = page.getByRole('tab', { name: 'Chart' });
+	const stops = [
+		chartTab,
+		page.locator('[data-shape-choice="dateSeries"] input'),
+		pill(page, 'date').locator('summary'),
+		pill(page, 'lines').locator('summary'),
+		page.locator('[data-console-panel-id="data-explorer-shape"] svg[data-chart-type="dateSeries"]')
+	];
+	await chartTab.focus();
+	await page.keyboard.press('Shift+Tab');
+	for (const stop of stops) {
+		await page.keyboard.press('Tab');
+		await expect(stop).toBeFocused();
+	}
+	for (const stop of [...stops].reverse().slice(1)) {
+		await page.keyboard.press('Shift+Tab');
+		await expect(stop).toBeFocused();
+	}
+	// Left and Right on a tab move between the two tabs, never to a tile.
+	await page.keyboard.press('ArrowRight');
+	await expect(page.getByRole('tab', { name: 'Table' })).toBeFocused();
+	await page.keyboard.press('ArrowLeft');
+	await expect(chartTab).toBeFocused();
+	// With Paired, the three pills follow the tile in order.
+	await page.locator('[data-shape-choice="pairedScatter"]').click();
+	for (const role of ['across', 'up', 'name']) {
+		await page.keyboard.press('Tab');
+		await expect(pill(page, role).locator('summary')).toBeFocused();
+	}
+	// A list opened from the keyboard closes on Escape with focus on its pill.
+	await pill(page, 'across').locator('summary').focus();
+	await page.keyboard.press('Enter');
+	await expect(pill(page, 'across').locator('[data-pill-list]')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(pill(page, 'across').locator('[data-pill-list]')).toBeHidden();
+	await expect(pill(page, 'across').locator('summary')).toBeFocused();
+	// Down opens it too; Tab moves from the filter to the lines, then out to the next pill and closes it.
+	await page.keyboard.press('ArrowDown');
+	await expect(pill(page, 'across').getByRole('searchbox', { name: 'Find a column' })).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(pill(page, 'across').locator('[data-column="across"] input')).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(pill(page, 'up').locator('summary')).toBeFocused();
+	await expect(pill(page, 'across').locator('[data-pill-list]')).toBeHidden();
+	// Up and Down move between lines without picking; Enter picks one and closes the list.
+	await page.keyboard.press('Shift+Tab');
+	await page.keyboard.press('Enter');
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('ArrowDown');
+	await expect(pill(page, 'across').locator('[data-column="up"] input')).toBeFocused();
+	await expect(pill(page, 'across').locator('[data-pill-name]')).toHaveText('across');
+	await page.keyboard.press('Enter');
+	await expect(pill(page, 'across').locator('[data-pill-list]')).toBeHidden();
+	await expect(pill(page, 'across').locator('[data-pill-name]')).toHaveText('up');
+	await expect(pill(page, 'across').locator('summary')).toBeFocused();
+});
+
+test('I11 and I12: a role the chart needs with no column keeps a quiet pill and the box says why; one it can do without draws without it', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, PINNED);
+	await openChart(page, "SELECT 'n' || i::VARCHAR AS name, i AS a FROM range(0, 5) AS t(i)");
+	await expect(page.locator('[data-shape-choice="rankedList"] input')).toBeChecked();
+	await startShiftObserver(page);
+	const drawn = await chartReading(page);
+	await page.locator('[data-shape-choice="dateSeries"]').click();
+	await settle(page);
+	expectChartStill(drawn, await chartReading(page), 'Ranked to Over time with no date column');
+	const date = pill(page, 'date');
+	await expect(date.locator('summary')).toHaveAttribute('aria-disabled', 'true');
+	await expect(date.locator('[data-pill-name]')).toHaveText('None');
+	await expect(date.locator('.pill-mark'), 'the empty pill shows a chevron').toHaveCount(0);
+	await expect(date.locator('summary')).not.toHaveAttribute('disabled');
+	await page.keyboard.press('Tab');
+	await expect(date.locator('summary'), 'the empty pill is not a Tab stop').toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(date.locator('[data-pill-list]'), 'the empty pill opened its list').toBeHidden();
+	await expect(date).not.toHaveAttribute('open');
+	const box = page.locator('[data-chart-drawing]');
+	await expect(box.locator('[data-shape-none]')).toHaveCount(1);
+	await expect(box.locator('[data-shape-none]')).toHaveText('Nothing here to draw: Over time needs a date or timestamp column for Date, and a number column for Lines. The ledgers keep their dates as text: CAST(date AS DATE) in the question makes a date column.');
+	const said = await page.locator('[data-chart-roles]').evaluate((row) => ({
+		row: (row as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
+		pills: [...row.querySelectorAll('summary')].map((summary) => (summary as HTMLElement).innerText.replace(/\s+/g, ' ').trim()).join(' ')
+	}));
+	expect(said.row, 'the role row says something besides its pills').toBe(said.pills);
+	await startShiftObserver(page);
+	const empty = await chartReading(page);
+	await page.locator('[data-shape-choice="rankedList"]').click();
+	await settle(page);
+	expectChartStill(empty, await chartReading(page), 'Over time back to Ranked');
+	// I12: two numbers and no text column draw Paired with each row its own point (Susan's A7).
+	await openChart(page, 'SELECT i AS a, 200 - i AS b FROM range(0, 170) AS t(i)');
+	await page.locator('[data-shape-choice="pairedScatter"]').click();
+	await expect(pill(page, 'name').locator('[data-pill-name]')).toHaveText('Row number');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] svg[data-chart-type="pairedScatter"]')).toHaveCount(1);
+	await expect(page.locator('[data-shape-none]')).toHaveCount(0);
+});
+
+test('I14: the column picker borrows the page\'s floating list and type label, and no other explorer file closes a list itself', () => {
+	const folder = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'console', 'explorer');
+	const picker = readFileSync(path.join(folder, 'ColumnPicker.svelte'), 'utf8');
+	expect(picker).toMatch(/from '\$lib\/console\/explorer\/floating-list'/);
+	expect(picker).toMatch(/import ColumnType from '\$lib\/console\/explorer\/ColumnType\.svelte'/);
+	const handlers = readdirSync(folder)
+		.filter((name) => name !== 'floating-list.ts')
+		.filter((name) => /addEventListener\('(pointerdown|focusin)'|'Escape'/.test(readFileSync(path.join(folder, name), 'utf8')));
+	expect(handlers).toEqual([]);
 });

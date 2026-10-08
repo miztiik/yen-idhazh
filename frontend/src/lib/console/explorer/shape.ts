@@ -1,8 +1,24 @@
+/** What the Data explorer's chart draws for an answer: the chart the page opens on, the columns
+ * each role holds, and the shape a chart takes with them - or the one sentence its box says when
+ * those columns cannot draw it.
+ *
+ * Until the reader presses a tile or picks a column, each answer opens on the chart its own
+ * columns choose, first match wins (`openingType`), with each role holding the columns that rule
+ * has always drawn. After that the reader's chart and columns hold across runs, while the answer
+ * still has each column in a family the role takes. Every chart is offered on every answer, and
+ * one these columns cannot support draws nothing and says what it needs, so the page still never
+ * draws a story the columns do not tell. The sentences are Susan's (2026-10-07).
+ */
+
+// Relative, not `$lib`: the logic suite imports this module in plain Node.
 import type { Column, DateStamp, Row } from '../../data/slice-shapes';
+import { plural } from '../../format';
+import { printCell } from './answer';
+import { CHART_KINDS, ROW_NUMBER, SERIES_TOKENS, chartKind, roleOptions, type ChartRole, type ExplorerChartType, type RoleId, type RoleOption } from './chart-roles';
 import { classifyType, isDay, isNumber, type TypeFamily } from './type-family';
 import { readUtcDay } from './utc-instant';
 
-export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution';
+export type { ExplorerChartType } from './chart-roles';
 
 export type ExplorerShapeBounds = {
 	chartMinRows: number;
@@ -18,8 +34,10 @@ export type DateSeriesShape = {
 	option: 'Over time';
 	icon: 'shape-series';
 	dateColumn: string;
+	/** The checked lines, in the answer's order; the first takes the first series colour. */
 	seriesColumns: readonly string[];
-	omittedColumns: readonly string[];
+	/** Number columns the page's own lines leave out because they would draw flat. Empty once the
+	 *  reader has picked the lines, because the sentence explains a choice the reader did not make. */
 	flatColumns: readonly { name: string; share: number; largestColumn: string }[];
 	/** UTC days the answer has a row for: the days the floor counts. */
 	days: number;
@@ -50,10 +68,11 @@ export type PairedScatterShape = {
 	icon: 'shape-scatter';
 	xColumn: string;
 	yColumn: string;
+	/** The column that names each point, or null where each row is its own point. */
 	subjectColumn: string | null;
 	/** Rows with a number in both columns: the points drawn. */
 	readings: number;
-	/** Distinct subjects among those rows. */
+	/** Distinct names among those rows. */
 	subjects: number;
 	tooFew: boolean;
 	mainFigure: string;
@@ -74,16 +93,62 @@ export type DistributionShape = {
 	comparison: string;
 };
 
-export type NoShape = {
-	kind: 'none';
-	reason: string;
-	code: 'no-number' | 'unplaceable-day' | 'no-day' | 'several-rows-per-day' | 'too-many-numbers' | 'too-many-text-columns' | 'no-fit';
-};
+export type NoShapeCode =
+	| 'no-number'
+	| 'not-picked'
+	| 'unfilled'
+	| 'unplaceable-day'
+	| 'no-day'
+	| 'several-rows-per-day'
+	| 'no-line-checked'
+	| 'lines-all-null'
+	| 'repeated-name'
+	| 'below-zero'
+	| 'all-zero';
+
+export type NoShape = { kind: 'none'; reason: string; code: NoShapeCode };
 
 export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | NoShape;
 
-function columnsOf(columns: readonly Column[], holds: (family: TypeFamily) => boolean): string[] {
+/** The columns the reader picked, by chart and then by role, kept on the page for as long as it is
+ *  open. Never saved with a question and never carried in a link. */
+export type ChosenRoles = Partial<Record<ExplorerChartType, Partial<Record<RoleId, readonly string[]>>>>;
+
+/** One role of the chart drawn: the columns it can take, and the ones it holds, in the answer's order. */
+export type RoleState = { role: ChartRole; options: readonly RoleOption[]; chosen: readonly string[]; byReader: boolean };
+
+/** The chart a tile shows checked - null for none - its roles in order, and what its box draws. */
+export type ExplorerChart = { type: ExplorerChartType | null; roles: readonly RoleState[]; shape: ExplorerShape };
+
+const NO_NUMBER: NoShape = { kind: 'none', code: 'no-number', reason: 'Nothing here to draw: the answer has no number in it.' };
+
+const NOT_PICKED: NoShape = { kind: 'none', code: 'not-picked', reason: 'The page does not pick a chart for these columns. Choose one under Draw it as.' };
+
+/** What each chart needs, the same whichever of its roles is empty: the empty pill shows which. */
+const NEEDS: Record<ExplorerChartType, string> = {
+	dateSeries: 'Nothing here to draw: Over time needs a date or timestamp column for Date, and a number column for Lines.',
+	rankedList: 'Nothing here to draw: Ranked needs a number column to rank by, and one more column for Name.',
+	pairedScatter: 'Nothing here to draw: Paired needs two number columns, one for Across and one for Up.',
+	distribution: 'Nothing here to draw: Spread needs a number column for Values.'
+};
+
+/** Said after a chart's needs when the answer has no date or timestamp column for it. */
+const DATES_ARE_TEXT = 'The ledgers keep their dates as text: CAST(date AS DATE) in the question makes a date column.';
+
+/** Where the explorer counts what a floor needs: the rows of one answer, not a window of days. */
+export const IN_THE_ANSWER = 'in the answer';
+
+function namesOf(columns: readonly Column[], holds: (family: TypeFamily) => boolean): string[] {
 	return columns.filter((column) => holds(classifyType(column.type))).map((column) => column.name);
+}
+
+function columnOf(columns: readonly Column[], name: string): Column {
+	return columns.find((column) => column.name === name) ?? { name, type: 'VARCHAR' };
+}
+
+/** A cell as the answer table prints it, `null` included. */
+function printed(columns: readonly Column[], row: Row, name: string): string {
+	return printCell(columnOf(columns, name), row[name]).text;
 }
 
 /** A cell's number, or `null` when it holds none. The door returns every cell as text and a
@@ -130,97 +195,126 @@ function biggestRow(rows: readonly Row[], column: string): Row | undefined {
 	return [...rows].sort((left, right) => (firstNumber(right, column) ?? Number.NEGATIVE_INFINITY) - (firstNumber(left, column) ?? Number.NEGATIVE_INFINITY))[0];
 }
 
-export function chooseExplorerShapes(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): readonly ExplorerShape[] {
-	const dateColumns = columnsOf(columns, isDay);
-	const numericColumns = columnsOf(columns, isNumber);
-	const textColumns = columnsOf(columns, (family) => family === 'text');
-	const shapes: ExplorerShape[] = [];
-
-	if (numericColumns.length === 0) {
-		return [{ kind: 'none', code: 'no-number', reason: 'Nothing here to draw: the answer has no number in it.' }];
-	}
-
-	if (dateColumns.length === 1 && numericColumns.length > 0) {
-		const dateColumn = dateColumns[0];
-		const unplaceable = firstUnplaceableDay(rows, dateColumn);
-		if (unplaceable !== null) {
-			return [{
-				kind: 'none',
-				code: 'unplaceable-day',
-				reason: `Nothing here to draw: the column "${dateColumn}" holds ${unplaceable}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.`
-			}];
-		}
-		const datedRows = rows.filter((row) => dayValue(row[dateColumn]) !== null);
-		const rowsWithNoDay = rows.length - datedRows.length;
-		if (datedRows.length === 0 && rowsWithNoDay > 0) {
-			return [{
-				kind: 'none',
-				code: 'no-day',
-				reason: `Nothing here to draw: the column "${dateColumn}" holds only null. Give "${dateColumn}" a date in the question to draw it over time.`
-			}];
-		}
-		if (hasSeveralRowsPerUtcDay(datedRows, dateColumn)) {
-			return [{
-				kind: 'none',
-				code: 'several-rows-per-day',
-				reason: 'Nothing here to draw: the answer has several rows a UTC day. Group by day in the question to draw it over time.'
-			}];
-		}
-		shapes.push(dateSeriesShape(dateColumn, numericColumns, datedRows, rowsWithNoDay, bounds));
-	}
-
-	if (numericColumns.length === 1 && textColumns.length === 1 && rows.every((row) => (numericValue(row, numericColumns[0]) ?? 0) >= 0)) {
-		shapes.push(rankedListShape(textColumns[0], numericColumns[0], rows, bounds));
-	}
-
-	if (numericColumns.length === 2 && textColumns.length <= 1) {
-		shapes.push(pairedScatterShape(numericColumns, textColumns, rows, bounds));
-	}
-
-	if (numericColumns.length === 1) {
-		shapes.push(distributionShape(numericColumns[0], rows, bounds));
-	}
-	if (shapes.length > 0) return shapes;
-
-	if (numericColumns.length >= 3) {
-		return [{
-			kind: 'none',
-			code: 'too-many-numbers',
-			reason: `Nothing here to draw: ${numericColumns.length} number columns are more than one chart can show. Keep one or two in the question.`
-		}];
-	}
-
-	if (numericColumns.length === 2 && textColumns.length > 1) {
-		return [{
-			kind: 'none',
-			code: 'too-many-text-columns',
-			reason: `Nothing here to draw: two number columns pair up with at most one text column naming each point, and this answer has ${textColumns.length}.`
-		}];
-	}
-
-	return [{ kind: 'none', code: 'no-fit', reason: 'Nothing here to draw: the answer has no number in it.' }];
+/** The chart an answer opens on before the reader chooses: the first type its columns fit, in the
+ *  order the mark-shapes page gives, or null where none fits. A date column that holds a day the
+ *  chart cannot place, only NULL, or several rows a UTC day still opens the date chart, whose box
+ *  then says why it draws nothing. What this rule picks does not change with the reader's choices. */
+export function openingType(columns: readonly Column[], rows: readonly Row[]): ExplorerChartType | null {
+	const dateColumns = namesOf(columns, isDay);
+	const numericColumns = namesOf(columns, isNumber);
+	const textColumns = namesOf(columns, (family) => family === 'text');
+	if (numericColumns.length === 0) return null;
+	if (dateColumns.length === 1) return 'dateSeries';
+	if (numericColumns.length === 1 && textColumns.length === 1 && rows.every((row) => (numericValue(row, numericColumns[0]) ?? 0) >= 0)) return 'rankedList';
+	if (numericColumns.length === 2 && textColumns.length <= 1) return 'pairedScatter';
+	if (numericColumns.length === 1) return 'distribution';
+	return null;
 }
 
-export function chooseExplorerShape(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
-	return chooseExplorerShapes(columns, rows, bounds)[0];
-}
-
-/** The date chart's figures, read from the rows it draws: `datedRows` each have a day. A row whose
- *  day is NULL moves no figure, and only its count is kept, for the note. */
-function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], datedRows: readonly Row[], rowsWithNoDay: number, bounds: ExplorerShapeBounds): DateSeriesShape {
-	const largestByColumn = new Map<string, number>();
-	for (const column of numericColumns) {
-		largestByColumn.set(column, Math.max(0, ...datedRows.map((row) => numericValue(row, column) ?? 0)));
-	}
-	const largestColumn = [...largestByColumn.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? numericColumns[0];
+/** The number columns a date chart draws by default, and the ones it leaves out because they would
+ *  draw flat: a column whose largest value is under `share` of the largest column's. Read from the
+ *  rows the chart draws. */
+function lineSplit(numbers: readonly string[], rows: readonly Row[], share: number) {
+	const largestByColumn = new Map<string, number>(numbers.map((column) => [column, Math.max(0, ...rows.map((row) => numericValue(row, column) ?? 0))]));
+	const largestColumn = [...largestByColumn.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? numbers[0];
 	const largestValue = largestByColumn.get(largestColumn) ?? 0;
-	const usable = numericColumns.filter((column) => largestValue === 0 || (largestByColumn.get(column) ?? 0) >= largestValue * bounds.seriesFloorShare);
-	const seriesColumns = usable.slice(0, 4);
-	const omittedColumns = usable.slice(4);
-	const flatColumns = numericColumns
+	const usable = numbers.filter((column) => largestValue === 0 || (largestByColumn.get(column) ?? 0) >= largestValue * share);
+	const flat = numbers
 		.filter((column) => !usable.includes(column))
 		.map((name) => ({ name, share: largestValue === 0 ? 0 : (largestByColumn.get(name) ?? 0) / largestValue, largestColumn }));
-	const firstSeries = seriesColumns[0] ?? numericColumns[0];
+	return { usable, flat };
+}
+
+/** The rows a date chart draws: those with a day in `dateColumn`, or every row where there is none. */
+function datedRowsOf(rows: readonly Row[], dateColumn: string | undefined): readonly Row[] {
+	return dateColumn === undefined ? rows : rows.filter((row) => dayValue(row[dateColumn]) !== null);
+}
+
+/** The page's own column for one role (Table A), given the roles before it, which a later role's
+ *  choice may depend on: the date chart's lines are read from the rows with a day, and the ranked
+ *  list ranks by a number that does not name its rows. */
+function defaultFor(type: ExplorerChartType, role: RoleId, held: Partial<Record<RoleId, readonly string[]>>, columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): string[] {
+	const numbers = namesOf(columns, isNumber);
+	const texts = namesOf(columns, (family) => family === 'text');
+	const one = (name: string | undefined): string[] => (name === undefined ? [] : [name]);
+	if (type === 'dateSeries' && role === 'date') return one(namesOf(columns, isDay)[0]);
+	if (type === 'dateSeries' && role === 'lines') return lineSplit(numbers, datedRowsOf(rows, held.date?.[0]), bounds.seriesFloorShare).usable.slice(0, SERIES_TOKENS.length);
+	if (type === 'rankedList' && role === 'name') return one(texts[0] ?? columns.find((column) => !isNumber(classifyType(column.type)))?.name ?? columns[0]?.name);
+	if (type === 'rankedList' && role === 'rankBy') return one(numbers.find((name) => name !== held.name?.[0]));
+	if (type === 'pairedScatter' && role === 'across') return one(numbers[0]);
+	if (type === 'pairedScatter' && role === 'up') return one(numbers[1]);
+	if (type === 'pairedScatter' && role === 'name') return [texts[0] ?? ROW_NUMBER.value];
+	if (type === 'distribution' && role === 'values') return one(numbers[0]);
+	return [];
+}
+
+/** Each role of `type`, holding the reader's columns where this answer still has them in a family
+ *  the role takes, and the page's own pick where it does not. A several-column role keeps the
+ *  reader's columns that are left, in the answer's order, and keeps none where the reader checked
+ *  none. */
+export function resolveRoles(type: ExplorerChartType, columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds, chosen: Partial<Record<RoleId, readonly string[]>> = {}): RoleState[] {
+	const held: Partial<Record<RoleId, readonly string[]>> = {};
+	return chartKind(type).roles.map((role) => {
+		const options = roleOptions(role, columns);
+		const offered = options.map((option) => option.value);
+		const picked = chosen[role.id];
+		const kept = picked === undefined ? [] : offered.filter((value) => picked.includes(value));
+		const holds = picked !== undefined && (kept.length > 0 || (role.several && picked.length === 0));
+		const state: RoleState = holds
+			? { role, options, chosen: kept.slice(0, role.several ? SERIES_TOKENS.length : 1), byReader: true }
+			: { role, options, chosen: defaultFor(type, role.id, held, columns, rows, bounds), byReader: false };
+		held[role.id] = state.chosen;
+		return state;
+	});
+}
+
+function chosenOf(roles: readonly RoleState[], id: RoleId): readonly string[] {
+	return roles.find((state) => state.role.id === id)?.chosen ?? [];
+}
+
+/** The sentence for a chart whose roles these columns cannot fill, with the cast that makes a date
+ *  column where the chart needs one and the answer has none. */
+function unfilled(type: ExplorerChartType, roles: readonly RoleState[]): NoShape {
+	const noDay = roles.some((state) => state.role.takes === 'day' && state.options.length === 0);
+	return { kind: 'none', code: 'unfilled', reason: noDay ? `${NEEDS[type]} ${DATES_ARE_TEXT}` : NEEDS[type] };
+}
+
+function dateSeriesShape(roles: readonly RoleState[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	const dateColumn = chosenOf(roles, 'date')[0];
+	const lines = roles.find((state) => state.role.id === 'lines');
+	if (dateColumn === undefined || lines === undefined || lines.options.length === 0) return unfilled('dateSeries', roles);
+	const unplaceable = firstUnplaceableDay(rows, dateColumn);
+	if (unplaceable !== null) {
+		return {
+			kind: 'none',
+			code: 'unplaceable-day',
+			reason: `Nothing here to draw: the column "${dateColumn}" holds ${unplaceable}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.`
+		};
+	}
+	const datedRows = datedRowsOf(rows, dateColumn);
+	const rowsWithNoDay = rows.length - datedRows.length;
+	if (datedRows.length === 0 && rowsWithNoDay > 0) {
+		return {
+			kind: 'none',
+			code: 'no-day',
+			reason: `Nothing here to draw: the column "${dateColumn}" holds only null. Give "${dateColumn}" a date in the question to draw it over time.`
+		};
+	}
+	if (hasSeveralRowsPerUtcDay(datedRows, dateColumn)) {
+		return {
+			kind: 'none',
+			code: 'several-rows-per-day',
+			reason: `Nothing here to draw: the answer has several rows a UTC day in "${dateColumn}". Group by day in the question to draw it over time.`
+		};
+	}
+	const seriesColumns = lines.chosen;
+	if (seriesColumns.length === 0) return { kind: 'none', code: 'no-line-checked', reason: 'Nothing here to draw: Over time needs a column checked under Lines.' };
+	if (datedRows.every((row) => seriesColumns.every((column) => numericValue(row, column) === null))) {
+		return { kind: 'none', code: 'lines-all-null', reason: 'Nothing here to draw: every line you checked is null on every day.' };
+	}
+	const numbers = lines.options.map((option) => option.value);
+	const flatColumns = lines.byReader ? [] : lineSplit(numbers, datedRows, bounds.seriesFloorShare).flat;
+	const firstSeries = seriesColumns[0];
 	const latest = [...datedRows].sort((left, right) => String(right[dateColumn]).localeCompare(String(left[dateColumn])))[0];
 	const value = firstNumber(latest, firstSeries);
 	return {
@@ -230,7 +324,6 @@ function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], 
 		icon: 'shape-series',
 		dateColumn,
 		seriesColumns,
-		omittedColumns,
 		flatColumns,
 		days: datedRows.length,
 		rowsWithNoDay,
@@ -238,6 +331,144 @@ function dateSeriesShape(dateColumn: string, numericColumns: readonly string[], 
 		mainFigure: latest && value !== null ? { column: firstSeries, value, date: dayValue(latest[dateColumn]) ?? String(latest[dateColumn]) } : null,
 		comparison: `${firstSeries} on each day against the other days in the span`
 	};
+}
+
+function rankedListShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	const labelColumn = chosenOf(roles, 'name')[0];
+	const valueColumn = chosenOf(roles, 'rankBy')[0];
+	if (labelColumn === undefined || valueColumn === undefined) return unfilled('rankedList', roles);
+	const ranked = rows.filter((row) => numericValue(row, valueColumn) !== null);
+	const names = new Set<string>();
+	for (const row of ranked) {
+		const name = printed(columns, row, labelColumn);
+		if (names.has(name)) {
+			return {
+				kind: 'none',
+				code: 'repeated-name',
+				reason: `Nothing here to draw: "${name}" is in more than one row of "${labelColumn}", and each row here needs its own name. Group by "${labelColumn}" in the question to draw it.`
+			};
+		}
+		names.add(name);
+	}
+	const negative = ranked.find((row) => (numericValue(row, valueColumn) ?? 0) < 0);
+	if (negative !== undefined) {
+		return {
+			kind: 'none',
+			code: 'below-zero',
+			reason: `Nothing here to draw: "${valueColumn}" holds ${printed(columns, negative, valueColumn)}, below zero, and this chart measures from zero.`
+		};
+	}
+	if (ranked.every((row) => numericValue(row, valueColumn) === 0)) {
+		return { kind: 'none', code: 'all-zero', reason: `Nothing here to draw: every value in "${valueColumn}" is 0 or null.` };
+	}
+	const leader = biggestRow(rows, valueColumn);
+	const value = firstNumber(leader, valueColumn);
+	const rowsDrawn = Math.min(ranked.length, bounds.rankMax);
+	return {
+		kind: 'chart',
+		type: 'rankedList',
+		option: 'Ranked',
+		icon: 'shape-ranked',
+		labelColumn,
+		valueColumn,
+		rowsDrawn,
+		moreRows: rows.length - rowsDrawn,
+		mainFigure: leader && value !== null ? { label: String(leader[labelColumn]), value, column: valueColumn } : null,
+		comparison: `each ${labelColumn} against the largest`
+	};
+}
+
+function pairedScatterShape(roles: readonly RoleState[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	const xColumn = chosenOf(roles, 'across')[0];
+	const yColumn = chosenOf(roles, 'up')[0];
+	if (xColumn === undefined || yColumn === undefined) return unfilled('pairedScatter', roles);
+	const named = chosenOf(roles, 'name')[0];
+	const subjectColumn = named === undefined || named === ROW_NUMBER.value ? null : named;
+	const drawn = rows.filter((row) => numericValue(row, xColumn) !== null && numericValue(row, yColumn) !== null);
+	const subjects = subjectColumn === null ? drawn.length : new Set(drawn.map((row) => String(row[subjectColumn]))).size;
+	return {
+		kind: 'chart',
+		type: 'pairedScatter',
+		option: 'Paired',
+		icon: 'shape-scatter',
+		xColumn,
+		yColumn,
+		subjectColumn,
+		readings: drawn.length,
+		subjects,
+		tooFew: drawn.length < bounds.fleetMinRows || subjects < bounds.bandwidthMinKinds,
+		mainFigure: `${drawn.length} rows of ${yColumn} against ${xColumn}`,
+		comparison: `${yColumn} against ${xColumn}`
+	};
+}
+
+function distributionShape(roles: readonly RoleState[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	const valueColumn = chosenOf(roles, 'values')[0];
+	if (valueColumn === undefined) return unfilled('distribution', roles);
+	const values = rows.map((row) => numericValue(row, valueColumn)).filter((value): value is number => value !== null);
+	const middle = median(values);
+	return {
+		kind: 'chart',
+		type: 'distribution',
+		option: 'Spread',
+		icon: 'shape-distribution',
+		valueColumn,
+		readings: values.length,
+		tooFew: values.length < bounds.fleetMinRows,
+		median: middle,
+		mainFigure: middle === null ? null : `Half of ${valueColumn} is at or under ${middle}`,
+		comparison: `each band of ${valueColumn} against the share of rows at or below it`
+	};
+}
+
+/** What `type` draws with the columns its roles hold: a chart, or the one reason it cannot. */
+export function chartShape(type: ExplorerChartType, roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	if (type === 'dateSeries') return dateSeriesShape(roles, rows, bounds);
+	if (type === 'rankedList') return rankedListShape(roles, columns, rows, bounds);
+	if (type === 'pairedScatter') return pairedScatterShape(roles, rows, bounds);
+	return distributionShape(roles, rows, bounds);
+}
+
+function fills(roles: readonly RoleState[]): boolean {
+	return roles.every((state) => !state.role.needed || state.chosen.length > 0);
+}
+
+/** The chart the Chart tab shows for an answer: the reader's type when there is one, else the
+ *  type the answer opens on, with each role resolved and what the box draws. With no type the box
+ *  says whether another chart can be filled from these columns; when none can, it says so
+ *  whichever tile is checked, because pressing another would not help. */
+export function chooseChart(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds, chosenType: ExplorerChartType | null = null, chosenRoles: ChosenRoles = {}): ExplorerChart {
+	const type = chosenType ?? openingType(columns, rows);
+	const fillable = CHART_KINDS.some((kind) => fills(resolveRoles(kind.type, columns, rows, bounds)));
+	if (type === null) return { type, roles: [], shape: fillable ? NOT_PICKED : NO_NUMBER };
+	const roles = resolveRoles(type, columns, rows, bounds, chosenRoles[type] ?? {});
+	return { type, roles, shape: fillable ? chartShape(type, roles, columns, rows, bounds) : NO_NUMBER };
+}
+
+/** The sentences under a drawn chart, each only while it is true: the number columns the page's own
+ *  lines leave out as too flat to draw, the rows a date chart leaves out because their day is NULL,
+ *  and that the drawing reads only the first rows of an answer that stopped at its cap. */
+export function chartNotes(shape: ExplorerShape, bounds: ExplorerShapeBounds, capped: boolean, maxRows: number): string[] {
+	if (shape.kind === 'none') return [];
+	const notes: string[] = [];
+	if (shape.type === 'dateSeries' && shape.flatColumns.length > 0) {
+		const share = Number((bounds.seriesFloorShare * 100).toFixed(1));
+		const largest = shape.flatColumns[0].largestColumn;
+		notes.push(
+			shape.flatColumns.length === 1
+				? `"${shape.flatColumns[0].name}" is left out: it is under ${share}% of "${largest}", so it would draw flat.`
+				: `${shape.flatColumns.length} number columns are left out: each is under ${share}% of "${largest}", so each would draw flat.`
+		);
+	}
+	if (shape.type === 'dateSeries' && shape.rowsWithNoDay > 0) {
+		notes.push(
+			shape.rowsWithNoDay === 1
+				? `1 row holds null in the column "${shape.dateColumn}", so the chart does not draw it. It is in the table.`
+				: `${shape.rowsWithNoDay} rows hold null in the column "${shape.dateColumn}", so the chart does not draw them. They are in the table.`
+		);
+	}
+	if (capped) notes.push(`Drawn from the first ${plural(maxRows, 'row', 'rows')}.`);
+	return notes;
 }
 
 /** One UTC day on the date chart's axis, and the answer's row for it: `null` on a lost day. */
@@ -264,59 +495,4 @@ export function chooseDateSeriesDays(dateColumn: string, rows: readonly Row[], l
 	const last = drawn[drawn.length - 1];
 	const lost = lostDays.filter((day) => first < day && day < last && !byDay.has(day));
 	return [...new Set([...drawn, ...lost])].sort().map((day) => ({ day, row: byDay.get(day) ?? null }));
-}
-
-function rankedListShape(labelColumn: string, valueColumn: string, rows: readonly Row[], bounds: ExplorerShapeBounds): RankedListShape {
-	const leader = biggestRow(rows, valueColumn);
-	const value = firstNumber(leader, valueColumn);
-	const rowsDrawn = Math.min(rows.filter((row) => numericValue(row, valueColumn) !== null).length, bounds.rankMax);
-	return {
-		kind: 'chart',
-		type: 'rankedList',
-		option: 'Ranked',
-		icon: 'shape-ranked',
-		labelColumn,
-		valueColumn,
-		rowsDrawn,
-		moreRows: rows.length - rowsDrawn,
-		mainFigure: leader && value !== null ? { label: String(leader[labelColumn]), value, column: valueColumn } : null,
-		comparison: `each ${labelColumn} against the largest`
-	};
-}
-
-function pairedScatterShape(numericColumns: readonly string[], textColumns: readonly string[], rows: readonly Row[], bounds: ExplorerShapeBounds): PairedScatterShape {
-	const [xColumn, yColumn] = numericColumns;
-	const drawn = rows.filter((row) => numericValue(row, xColumn) !== null && numericValue(row, yColumn) !== null);
-	const subjects = textColumns.length === 1 ? new Set(drawn.map((row) => String(row[textColumns[0]]))).size : drawn.length;
-	return {
-		kind: 'chart',
-		type: 'pairedScatter',
-		option: 'Paired',
-		icon: 'shape-scatter',
-		xColumn,
-		yColumn,
-		subjectColumn: textColumns[0] ?? null,
-		readings: drawn.length,
-		subjects,
-		tooFew: drawn.length < bounds.fleetMinRows || subjects < bounds.bandwidthMinKinds,
-		mainFigure: `${drawn.length} rows of ${yColumn} against ${xColumn}`,
-		comparison: `${yColumn} against ${xColumn}`
-	};
-}
-
-function distributionShape(valueColumn: string, rows: readonly Row[], bounds: ExplorerShapeBounds): DistributionShape {
-	const values = rows.map((row) => numericValue(row, valueColumn)).filter((value): value is number => value !== null);
-	const middle = median(values);
-	return {
-		kind: 'chart',
-		type: 'distribution',
-		option: 'Spread',
-		icon: 'shape-distribution',
-		valueColumn,
-		readings: values.length,
-		tooFew: values.length < bounds.fleetMinRows,
-		median: middle,
-		mainFigure: middle === null ? null : `Half of ${valueColumn} is at or under ${middle}`,
-		comparison: `each band of ${valueColumn} against the share of rows at or below it`
-	};
 }

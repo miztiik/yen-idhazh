@@ -19,6 +19,9 @@ import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths'
 import { machineRecordState } from './support/machine-record-state';
 import { viewsOf } from './support/views';
 import {
+	judgeComparison,
+	judgeFill,
+	judgeLede,
 	judgeNothings,
 	judgeSettled,
 	NOTHINGS,
@@ -392,4 +395,49 @@ test.describe('the judged panels', () => {
 		// above runs on nothing; this is the case that proves it would refuse.
 		expect(() => driverFor('a-panel-nobody-drew')).toThrow(/a-panel-nobody-drew/);
 	});
+});
+
+// --- The Data explorer's chart once the reader has chosen -----------------
+
+/** One answer each of the four charts can draw: a row a UTC day, a name a row, three numbers. */
+const EVERY_CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other FROM range(0, 170) AS t(i)";
+
+/** A choice the page would not make, for each chart: its tile, then a column its role does not open on. */
+const CHOICES = [
+	{ type: 'dateSeries', role: 'lines', column: 'other', said: 'Lines: across, up' },
+	{ type: 'rankedList', role: 'rankBy', column: 'up', said: 'Rank by: up' },
+	{ type: 'pairedScatter', role: 'across', column: 'other', said: 'Across: other' },
+	{ type: 'distribution', role: 'values', column: 'other', said: 'Values: other' }
+] as const;
+
+test('T10: after a choice the page would not make, each of the four charts passes gates 1, 3, 4, 5 and 9 at every width, in both themes', async ({ page }) => {
+	const { fillFloor } = consolePanels();
+	for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
+		await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
+		await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
+		await openExplorer(page, PINNED);
+		await chooseExplorerQuestion(page, ['published'], EVERY_CHART_SQL);
+		await runExplorer(page);
+		await page.getByRole('tab', { name: 'Chart' }).click();
+		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+		for (const { type, role, column, said } of CHOICES) {
+			const label = `${width} ${theme} ${type}`;
+			await page.locator(`[data-shape-choice="${type}"]`).click();
+			const pill = panel.locator(`[data-chart-roles] .column-picker[data-role="${role}"]`);
+			await pill.locator('summary').click();
+			await pill.locator(`[data-column="${column}"] input`).click();
+			if (await pill.locator('[data-pill-list]').isVisible()) await page.keyboard.press('Escape');
+			await expect(pill.locator('summary'), `${label}: the choice was not made`).toHaveAttribute('aria-label', said);
+			await expect(panel.locator(`[data-chart-type="${type}"]`), `${label}: the chart was not drawn`).toHaveCount(1);
+			const reading = await readPanel(panel);
+			for (const verdict of [judgeFill(reading, fillFloor), judgeLede(reading), judgeComparison(reading)]) {
+				console.log(`${label} gate ${verdict.gate}: ${verdict.says}`);
+				expect.soft(verdict.pass, `${label} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
+			}
+			// Gate 4, as far as a selector can read it: no native tooltip on a mark.
+			await expect.soft(panel.locator('[title], title'), `${label} gate 4: a mark carries a native tooltip`).toHaveCount(0);
+			// Gate 9: the readout strip is declared and drawn.
+			await expect.soft(panel.locator('[data-readout] [data-readout-row]').first(), `${label} gate 9: no readout strip is drawn`).toBeVisible();
+		}
+	}
 });

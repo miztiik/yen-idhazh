@@ -179,11 +179,14 @@ export function unreachableSentence(months: readonly string[], heldDays: number)
  * It names the floor, from the value the panel passed in, and how many rows
  * there were, so an operator can tell a window that is too short from a
  * pipeline that stopped. `noun` is the plural the floor counts - `readings`,
- * `kinds` - because "fewer than 160" alone does not say of what.
+ * `kinds` - because "fewer than 160" alone does not say of what. `place` says
+ * where the rows were counted: a windowed panel counts `in this window`, and
+ * the Data explorer, which draws an answer rather than a window, passes
+ * `in the answer`.
  */
-export function tooFewSentence(have: number, floor: number, noun: string): string {
+export function tooFewSentence(have: number, floor: number, noun: string, place = 'in this window'): string {
 	const are = have === 1 ? 'is' : 'are';
-	return `Only ${grouped(have)} of the ${grouped(floor)} ${noun} this chart needs ${are} in this window, so it is not drawn.`;
+	return `Only ${grouped(have)} of the ${grouped(floor)} ${noun} this chart needs ${are} ${place}, so it is not drawn.`;
 }
 
 /** The label on the retry, which carries its own subject.

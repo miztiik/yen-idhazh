@@ -1,5 +1,6 @@
 <script lang="ts" generics="T extends string | number">
-	/** A row of radio tiles: every choice on the page at once, one of them picked.
+	/** A row of radio tiles: every choice on the page at once, one of them picked, or none while
+	 * the caller has no value to give.
 	 *
 	 * Radio buttons rather than a menu, so a reader compares the choices without
 	 * opening anything. The whole tile is the target, not the dot inside it, and
@@ -8,6 +9,9 @@
 	 * A tile shows a short word and says a whole one: `14D` to the eye and
 	 * `14 days` to a screen reader. The shown word is hidden from the reader and
 	 * the spoken one from the eye, so the tile is never heard as "14D days".
+	 *
+	 * With nothing picked, the first tile is the group's one Tab stop, from either
+	 * side, as the picked tile is once there is one.
 	 *
 	 * The group's name belongs to the caller, who draws the fieldset and its
 	 * legend around these tiles and decides whether the legend is seen.
@@ -26,7 +30,8 @@
 		/** The radio group's name, shared by every input in it. */
 		name: string;
 		items: readonly { value: T; shown: string; spoken: string; icon?: IconId }[];
-		selected: T;
+		/** The picked value, or null for none. */
+		selected: T | null;
 		disabled?: boolean;
 		/** The data attribute each tile carries its value in, so a page and a test
 		 * find one tile by what it means rather than by where it stands. */
@@ -36,7 +41,7 @@
 </script>
 
 <div class="choice-tiles">
-	{#each items as item (item.value)}
+	{#each items as item, index (item.value)}
 		<label
 			class="choice-tile"
 			{...{ [tileAttribute]: item.value }}
@@ -48,6 +53,7 @@
 				{name}
 				value={item.value}
 				checked={item.value === selected}
+				tabindex={selected === null && index > 0 ? -1 : undefined}
 				{disabled}
 				onchange={() => onChange(item.value)}
 			/>

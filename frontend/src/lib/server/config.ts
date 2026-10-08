@@ -354,6 +354,7 @@ export interface ExplorerConfig {
 	save_name_max_chars: number;
 	series_floor_share: number;
 	readout_lines: [number, number, number, number];
+	role_slots_per_line: [number, number, number, number];
 	notice_ms: number;
 	editor_lines_shown: [number, number];
 	strip_shown: [number, number];
@@ -618,6 +619,7 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
 	readout_lines: [4, 3, 4, 3],
+	role_slots_per_line: [1, 2, 3, 4],
 	notice_ms: 6000,
 	editor_lines_shown: [8, 4],
 	strip_shown: [0, 6],
@@ -1178,6 +1180,7 @@ export function explorerConfig(): ExplorerConfig {
 		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
 		chrome: consoleBlock.explorer_chrome === 'console' ? 'console' : EXPLORER_DEFAULTS.chrome,
 		readout_lines: (consoleBlock.explorer_readout_lines ?? EXPLORER_DEFAULTS.readout_lines) as [number, number, number, number],
+		role_slots_per_line: (consoleBlock.explorer_role_slots_per_line ?? EXPLORER_DEFAULTS.role_slots_per_line) as [number, number, number, number],
 		notice_ms: consoleBlock.explorer_notice_ms ?? EXPLORER_DEFAULTS.notice_ms,
 		editor_lines_shown: (consoleBlock.explorer_editor_lines_shown ?? EXPLORER_DEFAULTS.editor_lines_shown) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],
