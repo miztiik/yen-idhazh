@@ -103,7 +103,9 @@ jobs:
     timeout-minutes: 360
     strategy:
       # One encoder a shard. A model that will not load is a reading of its own,
-      # so a red shard never hides the seven that worked.
+      # so a red shard never hides the ones that worked. Ten encoders against
+      # eight shards means two wait their turn, which is a queue and not a
+      # failure.
       fail-fast: false
       max-parallel: 8
       matrix:
@@ -121,13 +123,38 @@ jobs:
         with:
           name: pair-set
 
+      # Which machine this shard drew, before anything heavy runs. Two runs of
+      # one encoder came back 10x apart - 8.4 articles a second and then 0.8 -
+      # while three other encoders repeated to within one percent. A processor
+      # model and its cache size say whether that was the silicon or the model,
+      # and nothing else in the reading could tell them apart.
+      - name: What machine this shard drew
+        run: |
+          set -euo pipefail
+          python -m idhazh fingerprint \
+            --date "$(date -u +%F)" \
+            --execution "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
+            --shard 0 \
+            --job work 2>&1 | tee -a "host.log" || \
+            echo "no fingerprint written; the comparison does not depend on it"
+          {
+            echo "processors: $(nproc)"
+            grep -m1 'model name' /proc/cpuinfo || true
+            lscpu | grep -E 'L3 cache|Model name|CPU max MHz' || true
+          } | tee -a "host.log"
+
       # The processor-only build. The runner has no graphics card, and the
       # default wheel drags several gigabytes of card support behind it.
       - name: Install the encoder runtime
         run: |
           set -euo pipefail
           pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --quiet sentence-transformers scikit-learn numpy pydantic
+          # Newest first. A recent foundation needs a recent library, and a
+          # model that still will not load is recorded as unavailable with the
+          # reason rather than taking the shard down.
+          pip install --quiet --upgrade \
+            'transformers>=4.48' sentence-transformers scikit-learn numpy pydantic
 
       - name: Score it
         env:
@@ -138,19 +165,26 @@ jobs:
           PYTHONUNBUFFERED: '1'
         run: |
           set -euo pipefail
-          # The same shape `Slug` enforces in the contract. They disagreed
-          # once: this check allowed a dot, the contract did not, and the shard
-          # named for a model with a dot in its version failed after the
-          # weights had already downloaded.
+          # The maths libraries under the encoder read these, and they do not
+          # read the thread count the program asks for. Left unset, a library
+          # can pick its own number - often the physical core count rather than
+          # the processors the runner advertises. Taken from the machine, so a
+          # bigger runner is used without anybody editing a number.
+          PROCESSORS="$(nproc)"
+          export OMP_NUM_THREADS="$PROCESSORS"
+          export MKL_NUM_THREADS="$PROCESSORS"
+          export OPENBLAS_NUM_THREADS="$PROCESSORS"
+          echo "processors the runner reports: $PROCESSORS"
           if ! [[ "$ENCODER" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
             echo "an encoder slug is lower-case letters and digits, joined by dashes" >&2
             exit 1
           fi
-          mkdir -p readings logs
+          mkdir -p readings logs vectors
           python3 backend/utilities/compare_summary_encoders.py score \
             --slug "$ENCODER" \
             --pairs "$SET_DIRECTORY/pairs.json" \
-            --out "readings/$ENCODER.json" 2>&1 | tee "logs/$ENCODER.log"
+            --out "readings/$ENCODER.json" \
+            --vectors-out "vectors/$ENCODER.npy" 2>&1 | tee "logs/$ENCODER.log"
 
       # `always()`, so a shard stopped at the deadline still hands over the
       # part-finished reading and the log that says where it stopped.
@@ -161,7 +195,20 @@ jobs:
           path: |
             readings/${{ matrix.encoder }}.json
             logs/${{ matrix.encoder }}.log
+            host.log
           retention-days: 7
+          if-no-files-found: warn
+
+      # Separate, because the vectors are large and only one later job wants
+      # them. Which pairs deserve a person's judgement depends on where the
+      # encoders disagree with each other, and no score can answer that - only
+      # the positions the scores came from.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vectors-${{ matrix.encoder }}
+          path: vectors/${{ matrix.encoder }}.npy
+          retention-days: 3
           if-no-files-found: warn
 
   collect:

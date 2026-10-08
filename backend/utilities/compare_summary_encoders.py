@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import random
 import re
@@ -197,10 +198,24 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
     slot_of = {index: slot for slot, index in enumerate(touched)}
     return {
         "texts": [items[index]["summary"] for index in touched],
+        # Which article each encoded position belongs to. A later job reads the
+        # kept vectors and has to know whose they are.
+        "urls": [items[index]["url"] for index in touched],
+        "days": [items[index]["day"] for index in touched],
         "same": [[slot_of[a], slot_of[b]] for a, b in same],
         "different": [[slot_of[a], slot_of[b]] for a, b in different],
         "ambiguous": [[slot_of[a], slot_of[b]] for a, b in ambiguous],
         "related": [[slot_of[a], slot_of[b]] for a, b in related],
+        # The day each pair sits on, so a resample can draw whole days. Pairs
+        # that share an article or a wire story move together, and drawing
+        # pairs one at a time would treat them as independent when they are
+        # not.
+        "pair_days": {
+            "same": [items[a]["day"] for a, _ in same],
+            "different": [items[a]["day"] for a, _ in different],
+            "ambiguous": [items[a]["day"] for a, _ in ambiguous],
+            "related": [items[a]["day"] for a, _ in related],
+        },
     }
 
 
@@ -309,7 +324,22 @@ def stage_score(args: argparse.Namespace) -> None:
     import torch
     from sklearn.metrics import roc_auc_score
 
-    torch.set_num_threads(settings["encode"]["threads"])
+    # Asked for, then read back. The two can differ: the libraries underneath
+    # read their own environment settings, and a runner's processor count is
+    # not always the number of threads a maths library will use. A rate that
+    # looks slow is a different problem from a rate taken on one thread, and
+    # nothing in the output told them apart.
+    #
+    # Zero in the settings means take the machine's own count, so a bigger
+    # runner is used without anybody editing a number.
+    asked = settings["encode"]["threads"] or os.cpu_count() or 1
+    torch.set_num_threads(int(asked))
+    reading.threads_used = int(torch.get_num_threads())
+    reading.processors_available = os.cpu_count() or 1
+    save()
+    print(f"{chosen['slug']}: asked for {asked} threads, using "
+          f"{reading.threads_used} of {reading.processors_available} "
+          f"processors", flush=True)
 
     try:
         from sentence_transformers import SentenceTransformer
@@ -371,6 +401,17 @@ def stage_score(args: argparse.Namespace) -> None:
 
     vectors = np.concatenate(encoded)
 
+    # Kept, because the next job needs them and nothing else can produce them
+    # cheaply. Which pairs are worth a person's judgement depends on where the
+    # encoders disagree, and that question cannot be asked of a score - it
+    # needs the positions the scores came from. One encoder's opinion of which
+    # pairs are hard would bias the set towards that encoder.
+    if args.vectors_out is not None:
+        args.vectors_out.parent.mkdir(parents=True, exist_ok=True)
+        np.save(args.vectors_out, vectors)
+        print(f"{chosen['slug']}: wrote {vectors.shape} to {args.vectors_out}",
+              flush=True)
+
     def score(pairs_list: list[list[int]]) -> Any:
         left = vectors[[p[0] for p in pairs_list]]
         right = vectors[[p[1] for p in pairs_list]]
@@ -393,7 +434,7 @@ def stage_score(args: argparse.Namespace) -> None:
         settings["corpus"]["published_articles"] / per_second / 60, 1
     )
     reading.minutes_for_one_day = round(
-        settings["corpus"]["articles_a_day"] / per_second / 60, 2
+        settings["corpus"]["articles_a_batch"] / per_second / 60, 2
     )
 
     # Where the uncertain pairs land. Nobody knows whether they match, so this
@@ -427,17 +468,37 @@ def stage_score(args: argparse.Namespace) -> None:
 def stage_collect(args: argparse.Namespace) -> None:
     """Merge the readings into one table and one manifest.
 
-    The readings directory holds one file a shard, each written by this run, so
-    listing it is bounded by the matrix and not by the repository.
+    The readings come from one run's downloaded artifacts, so the search is
+    bounded by that run's own matrix and not by the repository (CLAUDE.md
+    Guardrail #12). Each shard uploads `readings/<slug>.json` inside an
+    artifact named for itself, so the file sits one or two directories down
+    depending on whether the artifacts were merged on download.
     """
     settings = read_config(args.config)
     pairs = json.loads(args.pairs.read_text(encoding="utf-8"))
 
+    def find_reading(slug: str) -> Path | None:
+        """Where this shard's reading landed, however the download nested it.
+
+        An artifact downloaded on its own keeps the directories the shard
+        uploaded; several merged into one directory lose the outer name. Both
+        layouts are known, so both are tried rather than guessed at.
+        """
+        root: Path = args.readings_from
+        for candidate in (
+            root / f"{slug}.json",
+            root / f"reading-{slug}" / "readings" / f"{slug}.json",
+            root / "readings" / f"{slug}.json",
+        ):
+            if candidate.is_file():
+                return candidate
+        return None
+
     readings = []
     for encoder in settings["encoders"]:
-        reading_path = args.readings_from / f"{encoder['slug']}.json"
-        if reading_path.is_file():
-            readings.append(json.loads(reading_path.read_text(encoding="utf-8")))
+        found = find_reading(encoder["slug"])
+        if found is not None:
+            readings.append(json.loads(found.read_text(encoding="utf-8")))
         else:
             readings.append(
                 {"slug": encoder["slug"], "model_id": encoder["model_id"],
@@ -572,6 +633,11 @@ def main() -> None:
     one.add_argument("--slug", required=True)
     one.add_argument("--pairs", type=Path, required=True)
     one.add_argument("--out", type=Path, required=True)
+    one.add_argument(
+        "--vectors-out",
+        type=Path,
+        help="keep the vectors, so a later job can ask where encoders disagree",
+    )
     one.set_defaults(run=stage_score)
 
     merge = stages.add_parser("collect", help="merge the readings")

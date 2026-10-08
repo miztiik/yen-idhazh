@@ -1047,8 +1047,8 @@ def test_a_run_that_comes_back_as_itself_still_produces_a_day() -> None:
 def test_a_carried_item_is_not_recorded_as_published_twice() -> None:
     """The join in `_published_rows` is the only thing keeping `published.csv` clean.
 
-    `ledger.extend_ledger_file` writes every row it is handed, so a second row for one
-    address would stay in the file forever. A day carries yesterday's items
+    `ledger.append_published` files every row it is handed, so a second row for one
+    address would stay on the record forever. A day carries yesterday's items
     forward, and the plan a later run built has already dropped their addresses,
     so they fall out of the join instead of being recorded again.
     """

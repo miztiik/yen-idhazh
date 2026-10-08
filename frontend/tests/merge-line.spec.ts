@@ -381,6 +381,14 @@ test.describe('the judge, and what the record still needs', () => {
 		expect(rateWithDenominator(1, 20, 5)).toBe('5% of 20 pairs');
 	});
 
+	test('a disagreed share that rounds away prints under one, and a zero stays a zero', () => {
+		// 1 of 300 is a third of a percent. A 0 would say no pair disagreed, and one did.
+		expect(rateWithDenominator(1, 300, 5)).toBe('<1% of 300 pairs');
+		expect(rateWithDenominator(0, 300, 5)).toBe('0% of 300 pairs');
+		// 2 of 300 is two thirds of a percent, which rounds to a whole one.
+		expect(rateWithDenominator(2, 300, 5)).toBe('1% of 300 pairs');
+	});
+
 	test('"could not tell" is a share of the pairs that agreed, and their counts under the floor', () => {
 		// Its share is taken over the pairs whose two readings agreed, so the count
 		// beside it is theirs and the floor counts them. The words are Reader's.

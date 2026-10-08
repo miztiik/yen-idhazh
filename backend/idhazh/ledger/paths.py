@@ -35,7 +35,9 @@ from __future__ import annotations
 
 import os
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import cache
 from pathlib import Path, PurePath
 from typing import Final
@@ -99,9 +101,87 @@ _REGISTRY: Final[dict[LedgerName, LedgerEntry]] = {
 }
 
 
+#: The registry every builder falls back to when a caller passes none, swapped
+#: for the run of a trial pass by `use_registry` and never by a builder itself.
+#: Production code never sets this: a call site that wants a trial address
+#: still passes no `registry` at all, because the active override, not the
+#: call site, says which. A `ContextVar` rather than a plain global: each
+#: thread gets its own value by default, and each asyncio task gets a copy
+#: taken at the point it was created, so a second trial root entered on
+#: another thread or task cannot see, or clobber, this one's override even
+#: though both run in the same process.
+_ACTIVE_OVERRIDE: ContextVar[DoorRegistry | None] = ContextVar("_ACTIVE_OVERRIDE", default=None)
+
+
 def _registry(registry: DoorRegistry | None) -> DoorRegistry:
-    """The caller's fixture registry, or the committed one this build loaded."""
-    return _REGISTRY if registry is None else registry
+    """The caller's fixture registry, the active override, or the committed one."""
+    if registry is not None:
+        return registry
+    active = _ACTIVE_OVERRIDE.get()
+    return _REGISTRY if active is None else active
+
+
+@contextmanager
+def use_registry(registry: DoorRegistry | None) -> Iterator[None]:
+    """Swap the active override for one block, then put back whatever it was.
+
+    One process compacts one trial root at a time
+    (`gardener.runner._run_compaction_roots`), so the registry every builder
+    falls back to can be swapped once around that block instead of every call
+    site threading a `registry=` argument through stage code that never knew
+    trials existed. Nested use is restored to the enclosing override rather
+    than to `None`, so a block that opens inside another's `with` leaves it
+    exactly as it found it. The restore uses the token `ContextVar.set`
+    returns rather than a saved value, so it undoes exactly this block's
+    change even if another thread or task set its own override in between.
+    """
+    token = _ACTIVE_OVERRIDE.set(registry)
+    try:
+        yield
+    finally:
+        _ACTIVE_OVERRIDE.reset(token)
+
+
+def overlay_registry(
+    segments: Sequence[str], *, registry: DoorRegistry | None = None
+) -> DoorRegistry:
+    """The registry this build loaded, or `registry`, with `segments` spliced into every prefix.
+
+    Built for `use_registry`, so a trial run's producers and its compaction pass
+    address the same files with no call site telling a ledger where a trial
+    puts it. `segments` is what the trial root names beyond `state/` - one
+    bench segment, or a case segment after it.
+
+    A door ledger (`Grain.RAW_AND_COMPACT`) has no folder of its own under
+    `state/` - its tier comes from `raw_root`/`compact_folder`, not from its
+    prefix - so `segments` goes in front of its prefix, putting the tier first
+    and the trial segments right after it: `state/<raw|compact>/<segments>/<ledger>/...`.
+
+    `traces` takes the same front placement, even though its grain is `tree`
+    and it owns a folder at `prefix[0]` in production. Production's own
+    `traces` retention task (`config/gardener/traces.json`) walks all of
+    `state/traces` on a 7-day window; a trial's trace files are JSONL kept for
+    the trial's own, longer window
+    (`config/gardener/trials.json`), and nesting them at
+    `state/traces/<segments>` would put both tasks' claims one inside the
+    other - the refusal `config._refuse_overlapping_claims` exists to catch.
+    So a trial's traces go at `state/<segments>/traces`, beside its other
+    ledgers rather than inside production's claim, which is also where they
+    already sat before this registry existed and so costs no data move.
+
+    Every remaining grain already owns a folder under `state/` at `prefix[0]`
+    with nothing else claiming inside it for a different window, so that
+    folder stays first and `segments` goes in right behind it.
+    """
+    base = _registry(registry)
+    overlaid: dict[LedgerName, LedgerEntry] = {}
+    for name, held in base.items():
+        if held.grain is Grain.RAW_AND_COMPACT or name is LedgerName.TRACES:
+            new_prefix = (*segments, *held.prefix)
+        else:
+            new_prefix = (held.prefix[0], *segments, *held.prefix[1:])
+        overlaid[name] = held.model_copy(update={"prefix": new_prefix})
+    return overlaid
 
 
 def entry(ledger: LedgerName, *, registry: DoorRegistry | None = None) -> LedgerEntry:
@@ -185,7 +265,13 @@ def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
     return (*held.prefix, f"{covers}{held.suffix}")
 
 
-def path(state_dir: Path, ledger: LedgerName, covers: str | None = None) -> Path:
+def path(
+    state_dir: Path,
+    ledger: LedgerName,
+    covers: str | None = None,
+    *,
+    registry: DoorRegistry | None = None,
+) -> Path:
     """Where this ledger puts the rows covering this period, under this state root.
 
     `covers` is the period the rows describe and never the day the job woke
@@ -193,12 +279,14 @@ def path(state_dir: Path, ledger: LedgerName, covers: str | None = None) -> Path
     handed a period raises: an address this cannot build is a row filed where
     nobody will look for it.
     """
-    return state_dir.joinpath(*_segments(_REGISTRY[ledger], covers))
+    return state_dir.joinpath(*_segments(entry(ledger, registry=registry), covers))
 
 
-def relpath(ledger: LedgerName, covers: str | None = None) -> str:
+def relpath(
+    ledger: LedgerName, covers: str | None = None, *, registry: DoorRegistry | None = None
+) -> str:
     """The same address as `path`, POSIX and relative, for a log line or a manifest."""
-    return "/".join((STATE_DIRNAME, *_segments(_REGISTRY[ledger], covers)))
+    return "/".join((STATE_DIRNAME, *_segments(entry(ledger, registry=registry), covers)))
 
 
 def _folder(held: LedgerEntry) -> tuple[str, ...]:
@@ -220,7 +308,9 @@ def _folder(held: LedgerEntry) -> tuple[str, ...]:
     return held.prefix
 
 
-def tree_root(state_dir: Path, ledger: LedgerName) -> Path:
+def tree_root(
+    state_dir: Path, ledger: LedgerName, *, registry: DoorRegistry | None = None
+) -> Path:
     """The folder that holds every file of this ledger and nothing else, under this state root.
 
     What the `day_shards`, `day_partition` and `month_partition` readers are
@@ -228,12 +318,12 @@ def tree_root(state_dir: Path, ledger: LedgerName) -> Path:
     has filed. It is a builder of its own rather than `path` with no period, so
     `path` keeps refusing a missing one.
     """
-    return state_dir.joinpath(*_folder(_REGISTRY[ledger]))
+    return state_dir.joinpath(*_folder(entry(ledger, registry=registry)))
 
 
-def tree_relpath(ledger: LedgerName) -> str:
+def tree_relpath(ledger: LedgerName, *, registry: DoorRegistry | None = None) -> str:
     """The same folder as `tree_root`, POSIX and relative, for a log line or a manifest."""
-    return "/".join((STATE_DIRNAME, *_folder(_REGISTRY[ledger])))
+    return "/".join((STATE_DIRNAME, *_folder(entry(ledger, registry=registry))))
 
 
 # --- the two roots the ledger door files under --------------------------------
