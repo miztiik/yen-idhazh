@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 **Thirty-six defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
@@ -464,6 +464,13 @@ If one does, the page names it instead, Level 0. If none does, restore a
 bounded test that reads only named config and never scans the frontend tree,
 Level 2.
 
+On 2026-10-08 the page stopped naming the deleted test, and says instead that
+no test checks the rule. A search of `backend/tests/contracts/` on `origin/main`
+at 702b00be7 found none that does. The rule holds today: the one panel that
+asks the door, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, asks
+it for `host-fingerprint`, which is published. The bounded test is still the
+next move.
+
 Found by Fowler's review of plan 60 on 2026-10-04 (item 17), and filed the same
 day.
 
@@ -638,6 +645,13 @@ all eight frontend groups, and so a canary site build. Counted on `main` on
 2026-09-30, the same rule catches all 14 helpers under `backend/tests/` and the 14
 test modules two folders down, in `backend/tests/gardener/tasks/`. A row that
 edits one helper is asked to run the whole local suite for it.
+
+Plan 60's row 35 met it on 2026-10-08: `frontend/scripts/test-scope.ts` takes a
+backend test module as one only at most one folder under `backend/tests/`, so a
+change to `backend/tests/gardener/tasks/test_yearly_expiry.py` alone falls to
+"shared or unknown input; full coverage", which selects every frontend group and
+turns on CI's browser job (`ciAnswer` does so for any group but `backend` and
+`logic`).
 
 **The home is `test-scope.ts`**: send a file under `backend/tests/` that is not a
 test module to the backend group alone, since no frontend test or script reads
