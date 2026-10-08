@@ -39,10 +39,11 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
-	import { daysBetween, windowOfDays, type TimeWindow } from '$lib/charts/viewport';
+	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import { dayMonth } from '$lib/format';
+	import { findAppliedLine } from '$lib/console/applied-line';
 	import { clampEnvelope, clampNote, corridorOf, heldNote, type LineDay } from '$lib/console/merge-line';
 	import { nameSpan } from '$lib/console/span-words';
 
@@ -113,20 +114,8 @@
 	 * the whole window, so it is named as the window, not as the newest of several. */
 	const ruleDay = $derived(windowDays === 1 ? nameSpan(windowDays) : 'the newest day');
 	/** The line the window's last day was built with: where the dashed rule goes
-	 * when no fitted day is in the window. A build's own rule, `applied_line()` in
-	 * `backend/idhazh/similarity/applied.py`: with the switch on, the newest line a
-	 * fit applied on its own day or in the lookback before it, skipping a held day,
-	 * whose line was inherited rather than fitted; otherwise the committed floor.
-	 * It reads the newest run of each date, the run this panel draws. */
-	const ruleLine = $derived.by(() => {
-		if (!knobs.enabled) return configuredLine;
-		// The days a build reads end on its own day, wherever the console anchors it.
-		const read = windowOfDays(viewport.end, knobs.applied_lookback_days + 1, 'right');
-		const fitted = days.findLast(
-			(day) => day.heldReason === 'none' && day.date >= read.start && day.date <= read.end
-		);
-		return fitted?.applied ?? configuredLine;
-	});
+	 * when no fitted day is in the window. */
+	const ruleLine = $derived(findAppliedLine(viewport.end, days, knobs, configuredLine));
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	/** `zero: false` and `nice: false`, and both are load-bearing. Anchoring at
