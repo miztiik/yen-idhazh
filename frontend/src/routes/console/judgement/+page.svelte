@@ -16,7 +16,6 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
-	import { findAppliedLine } from '$lib/console/applied-line';
 	import { markedApart, scoreRange } from '$lib/console/holdout';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
@@ -68,18 +67,6 @@
 	 * this route that has a date axis to draw the line walking into them. */
 	const apartSpan = $derived(markedApart(data.holdout.marks));
 	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
-
-	/** The line the newest published day was built with, which the verdict split
-	 * and the holdout margin both measure the record against. */
-	const newestDayLine = $derived(
-		findAppliedLine(data.windowDay, data.lines, data.similarity, data.configuredLine)
-	);
-
-	/** The line the window's last day was built with, where the merge line draws
-	 * its rule when no fitted day is in the window. */
-	const windowEndLine = $derived(
-		findAppliedLine(viewport.end, data.lines, data.similarity, data.configuredLine)
-	);
 </script>
 
 <svelte:head>
@@ -114,7 +101,7 @@
 		width={data.console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
-		builtWith={windowEndLine}
+		builtWith={data.builtWith}
 		markedApart={apartAt === null
 			? null
 			: { low: apartAt.min, high: apartAt.max, count: apartSpan.length }}
@@ -148,7 +135,7 @@
 
 	<VerdictSplit
 		record={data.record}
-		applied={newestDayLine}
+		applied={data.builtWith}
 		discardShare={data.similarity.discard_share}
 		axisMultiple={data.console.precision_axis_multiple}
 		width={data.console.chart_width}
@@ -160,7 +147,7 @@
 		agreedScores={data.holdout.agreedScores}
 		skipped={data.holdout.skipped}
 		marked={data.holdout.marked}
-		applied={newestDayLine}
+		applied={data.builtWith}
 		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
 		fitted={data.lines.length > 0}
 		weights={data.holdout.weights}
