@@ -66,6 +66,15 @@ the step: the run, the attempt, the job, the shard and the producer are the same
 for both steps of one job, so both files belong to one work unit and the later
 one is read.
 
+**`assemble` took the probe from 2026-09-17 and the clock only from 2026-10-08.**
+For those three weeks it wrote the one job that never closed its row: a machine
+with no wall clock, which reads as a job that cost nothing rather than as a job
+nobody timed. It takes no server log and no counters file, because it stands no
+model server up - `model_load_ms` and the two prompt cells stay empty for it, and
+that is the reading rather than a gap. A probing job that never clocks itself now
+fails `backend/tests/workflows/test_worker_ledgers.py` instead of filing half a
+row for three weeks.
+
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
 whole state root with `run.trial_state_dirname`, so its rows land under
 `state/pipeline-tests/`. The trial compaction declaration packs that root
