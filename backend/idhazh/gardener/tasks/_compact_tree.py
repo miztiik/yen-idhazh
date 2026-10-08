@@ -65,8 +65,9 @@ that refused it - an error for a defect, a warning for every other word.
 pass hands them on in `recovered`. A step that stops for a fault says which in
 its `Stop`, and the pass's record names it. **What it did, period by period,
 goes on its finished event** (`periods_taken`): the entries it wrote, compared
-with the indexes it read, the months and raw days it dropped or named for a
-window that only reports, the files it moved aside, and where each mark ended.
+with the indexes it read, the years it expired, the months and raw days it
+dropped or named for a window that only reports, the files it moved aside, and
+where each mark ended.
 
 The indexes are read by `ledger_marks`, which stops the pass on one this build
 cannot trust, rather than read it as absent, and says why.
@@ -217,6 +218,8 @@ class CompactTree:
     pending_indexes: set[Period] = field(default_factory=set)
     #: Every fault the pass recorded instead of stopping, in the order it met them.
     recovered: list[Recovery] = field(default_factory=list)
+    #: The indexed years the yearly expiry took, oldest first, each one's files and entry.
+    expired_years: list[str] = field(default_factory=list)
     #: The months the drop step took, or named and kept for a window that only reports.
     dropped_months: list[str] = field(default_factory=list)
     #: The raw days past the keep line the pass dropped, or named and kept.
@@ -580,9 +583,10 @@ class CompactTree:
 
         An entry written since `before` is listed under its state, an adopted one
         too; a packed day written again is a day taken again, whatever its state.
-        A day is lost when a written entry newly lists it. Drops and set-asides
-        are read off the lists the steps kept, because a year packed takes its
-        months out of the index too.
+        A day is lost when a written entry newly lists it. Expired years, drops
+        and set-asides are read off the lists the steps kept: an expired year
+        leaves no entry to compare, and a year packed takes its months out of
+        the index too.
         """
         days = self._written(before, Period.DAILY)
         months = self._written(before, Period.MONTHLY)
@@ -605,6 +609,7 @@ class CompactTree:
             days_retaken=[entry.covers for entry in days if entry.covers in before[Period.DAILY]],
             months_closed=[entry.covers for entry in months if entry.covers in packed],
             years_packed=[entry.covers for entry in years if entry.covers in packed],
+            years_expired=list(self.expired_years),
             months_dropped=list(self.dropped_months),
             raw_days_dropped=list(self.dropped_raw_days),
             empty_periods=[entry.covers for entry in new if entry.state is EntryState.EMPTY],

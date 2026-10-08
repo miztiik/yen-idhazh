@@ -106,7 +106,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
 | 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
-| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - not reproduced; a second abort opens a row** |
+| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - reproduced twice; a row to fix it is now due** |
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
@@ -121,6 +121,32 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
 | 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+| 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
+
+## 66 - The plan status utility splits a quoted row title wherever "and" appears in it (OPEN)
+
+**A Depends-on cell that quotes another row's title loses a piece of that
+title to the parser, whenever the title itself contains the word "and".**
+`backend/utilities/plan_status.py`, line 343, reads a Depends-on cell with
+`for piece in re.split(r",|;| and ", text):`, which splits on the literal
+substring " and " anywhere in the cell, including inside a quoted title. Plan
+62's row L48 depends on plan 55's row "The reader chooses the chart and the
+columns it draws"; the parser splits that title at its own " and ", so it
+looks for a row named `plan 55's row "The reader chooses the chart` and a row
+named `the columns it draws" (holds ...)`, finds neither, and reports two
+false `dependency-not-found` findings for L48 (seen on a direct run against
+`origin/main`, and carried by #1432).
+
+**The next move is a worker's: stop splitting inside a quoted title**, such as
+by matching a quoted span first and splitting only the text outside it, or by
+reading the Depends-on cell's row references with a dedicated small parser
+instead of a blanket `re.split`. Level 1 - one regular expression in one
+function; a wrong version shows as a spurious finding against a row whose
+dependency is in fact present, which a reader can confirm from the cell
+itself.
+
+Found on 2026-10-08, confirmed on `origin/main` by a direct run of
+`plan_status.py --plan` against plan 62.
 
 ## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
 
@@ -605,7 +631,14 @@ so a second one opens a row to reproduce and fix it. A retry in
 parquet, so it is not the fix (CLAUDE.md Guardrail #5). Level 2 - the canary
 build, and every browser group behind it, read this program's answer.
 
-Found on 2026-09-30 by plan 50's row 9, on the merge of #1166.
+**A second abort reproduced it.** In PR #1428's first browser job (CI run
+37773872779, attempt 1, job 113299900513), the same step printed its whole
+answer and then aborted the same way, on 2026-10-08; attempt 2 passed. The two
+occurrences now meet the bar this entry set: a second abort opens a row to
+reproduce and fix it.
+
+Found on 2026-09-30 by plan 50's row 9, on the merge of #1166. Reproduced on
+2026-10-08 in PR #1428's first browser job.
 
 ## 50 - A publisher link on the home page named a story the page did not draw, so a news run's site build failed (CLOSED 2026-09-30)
 

@@ -299,11 +299,11 @@ console is where the loop is watched once it starts
 
 | Ledger | The one question it answers |
 | --- | --- |
-| `state/content-similarity-judge/scored-pairs/` | What did the judge say about this pair, in both orders, and under which models? |
+| `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? |
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
 | `state/content-similarity-judge/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
 | `state/content-similarity-judge/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
-| `state/content-similarity-judge/metrics/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
+| `content-similarity-judge/metrics`, under `state/raw/` and `state/compact/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each ledger is partitioned,
@@ -333,9 +333,10 @@ measured nothing; a zero would say it measured everything and found nothing
 wrong.
 
 **A unit ships its row as it finishes and commits nothing.** The row goes out as
-an artifact, the collecting job appends it to the ledger above, and the trip
-belongs to the venue - so a unit the platform killed has still handed over every
-reading it took.
+an artifact, the collecting job files it through the ledger door into the
+ledger above, and the trip belongs to the venue - so a unit the platform killed
+has still handed over every reading it took. Each row names the part that took
+it as `work_part_index`.
 
 ### The nights this judge says it is behind on
 
@@ -360,12 +361,12 @@ prompt, a weight or the sampler and the counts are archived, because they answer
 a different question afterwards. Which nights were read is not a count, so it
 comes across. Without that, retuning the scorer on a Monday would have the
 council dispatch every night of its window that week - and every one of those
-jobs would append its rows and then be refused, because the record still counts
+jobs would file its rows and then be refused, because the record still counts
 a date once.
 
 **What it does name is the night that lost a unit.** Three units of four
 reporting is the failure this repair path exists for: every row those three
-judged was appended, and the date stayed out of both lists because a partial day
+judged was filed, and the date stayed out of both lists because a partial day
 cannot be counted and cannot be topped up later. That date comes back here, and
 the next council night judges it again from the top.
 
@@ -375,8 +376,8 @@ record has not arrived on any of them. An operator who wants one of those nights
 judged names the date, which replaces the plan outright.
 
 **The counting step admits only rows the record's own stamp matches**, and that
-filter runs before the one-row-a-pair de-duplication. The day file is
-append-only, so a day judged twice under two instruments holds both readings;
+filter runs before the one-row-a-pair de-duplication. The ledger keeps each
+run's rows, so a day judged twice under two instruments holds both readings;
 adding them together would make the record's own stamp a lie with nothing able
 to separate them afterwards. Filtering first is what lets the right row win - a
 discarded row from the old instrument is the more recent one, so filtering

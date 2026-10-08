@@ -173,10 +173,10 @@
       "ledgers": [
         {
           "name": "scored-pairs",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "scored-pairs"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         },
         {
           "name": "fitted-thresholds",
@@ -208,10 +208,10 @@
         },
         {
           "name": "metrics",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "metrics"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         },
         {
           "name": "merge-line-holdout-scores",

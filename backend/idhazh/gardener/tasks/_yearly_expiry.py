@@ -1,10 +1,12 @@
 """Which indexed UTC years expire on this wake, and which exact files they remove.
 
 **The step says what it chose once, before it deletes anything**, as one
-`ExpiredYearsChosen` event: the expired years this pass takes, or none. A range
-a person names that would skip an older indexed year is refused at the oldest
-indexed year (`CompactTree.refuse`), and the step takes nothing. A person's
-range is not a code defect, so the refusal defers the pass with
+`ExpiredYearsChosen` event: the expired years this pass takes, or none. **The
+years it took go on the pass's finished event too** (`CompactTree.expired_years`),
+because a year that leaves the index leaves no entry for the pass to compare. A
+range a person names that would skip an older indexed year is refused at the
+oldest indexed year (`CompactTree.refuse`), and the step takes nothing. A
+person's range is not a code defect, so the refusal defers the pass with
 `range-starts-late`, and the job stays green.
 """
 
@@ -73,6 +75,7 @@ def drop(
         del tree.yearly[year]
         tree.expired_through = year
         tree.mark_index(Period.YEARLY)
+    tree.expired_years.extend(years)
     if years:
         tree.work_out_marks()
     return (Stop(StopReason.CEILING, due[len(years)]),) if len(due) > len(years) else ()
