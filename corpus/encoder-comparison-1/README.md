@@ -44,17 +44,19 @@ its choice is open. Changing one does not change the other.
 flowchart TD
   ARCHIVE[("Published days<br/>Title, summary, outlet, day")] --> NEIGHBOUR{"Two articles near<br/>each other in time?"}
   NEIGHBOUR -->|"No"| SKIP["Not compared<br/>Too far apart to be one event"]
-  NEIGHBOUR -->|"Yes"| OUTLET{"Different outlets?"}
-  OUTLET -->|"No"| DROP["Dropped<br/>Could be a correction or a follow-up"]
-  OUTLET -->|"Yes"| OVERLAP{"How much of the subject<br/>do the two TITLES share?"}
+  NEIGHBOUR -->|"Yes"| OVERLAP{"How much of the subject<br/>do the two TITLES share?"}
 
-  OVERLAP -->|"0.30 and above"| SAMEBUCKET["Same event<br/>Should score high"]
-  OVERLAP -->|"0.10 to 0.30"| MIDBUCKET["Uncertain<br/>Never scored right or wrong"]
   OVERLAP -->|"Below 0.10"| DIFFBUCKET["Different events<br/>Should score low"]
+  OVERLAP -->|"0.10 to 0.30"| MIDBUCKET["Uncertain<br/>Never scored right or wrong"]
+  OVERLAP -->|"0.30 and above"| OUTLET{"Same outlet?"}
+
+  OUTLET -->|"No"| SAMEBUCKET["Same event<br/>Should score high"]
+  OUTLET -->|"Yes"| RELBUCKET["Second piece<br/>A correction or a follow-up<br/>Never scored right or wrong"]
 
   SAMEBUCKET --> PAIRSET[("Pair set<br/>SUMMARIES and pair numbers<br/>The titles stop here")]
-  MIDBUCKET --> PAIRSET
   DIFFBUCKET --> PAIRSET
+  MIDBUCKET --> PAIRSET
+  RELBUCKET --> PAIRSET
 
   PAIRSET --> ENCODE["One encoder a shard<br/>Encode every summary"]
   ENCODE --> PROGRESS[("Reading saved<br/>Every 512 articles")]
@@ -64,6 +66,7 @@ flowchart TD
   subgraph OBSERVED["Metrics"]
     SEPARATION["separation<br/>Chance a same-event pair<br/>outscores a different one (0 to 1)"]
     LEAN["ambiguous_lean<br/>Share of uncertain pairs<br/>scored above halfway (0 to 1)"]
+    SECOND["related_lean<br/>Share of second pieces<br/>scored above halfway (0 to 1)"]
     RATE["articles_a_second<br/>Encoding rate on the runner (count/s)"]
   end
 
@@ -81,49 +84,51 @@ flowchart TD
   class NEIGHBOUR,OUTLET,OVERLAP decision;
   class SAMEBUCKET yes;
   class DIFFBUCKET no;
-  class MIDBUCKET,DROP,SKIP warn;
+  class MIDBUCKET,RELBUCKET,SKIP warn;
   class ARCHIVE,PAIRSET,PROGRESS,TABLE data;
-  class SEPARATION,LEAN,RATE metric;
+  class SEPARATION,LEAN,SECOND,RATE metric;
 ```
 
 **The encoders read summaries. They never read a title.** A title decides which
-pairs are worth testing and is then set aside. Letting an encoder see the same
+bucket a pair goes in and is then set aside. Letting an encoder see the same
 signal that built the answer key would flatter every one of them equally.
 
-An article is encoded once however many pairs it appears in: 10,553 articles
-carry 15,034 pair comparisons, and comparing two vectors is nearly free next to
+**Only the first two buckets make a separation score.** The other two are
+scored on the same vectors and reported on their own, because neither has an
+answer anybody knows. Folding them in would leave one number answering three
+questions and none of them clearly.
+
+An article is encoded once however many pairs it appears in: 10,675 articles
+carry 15,522 pair comparisons, and comparing two vectors is nearly free next to
 producing one.
 
-### The same-outlet rule, and what it costs
+### The same-outlet bucket
 
-Every pair in all three buckets is from **two different outlets**. One outlet
-publishing twice about one subject on one day is usually a correction, an
-update, or a follow-up - *"Tencent leases 100,000 chips"* followed by *"What the
-Tencent chip lease means for Oracle"*. Whether those are one event or two is a
-real question with a real answer, and it is not the question this comparison
-asks.
+One outlet publishing twice about one subject on one day is usually a
+correction, an update, or a follow-up - *"Tencent leases 100,000 chips"*
+followed by *"What the Tencent chip lease means for Oracle"*. Whether those are
+one event or two is a real question with a real answer, and a title-overlap
+rule cannot give it: the two titles share their subject words either way.
 
 Counted over the 44 published days: **488 high-overlap pairs come from one
-outlet, against 5,517 from two.** The rule drops 8.1 percent of what it could
-have used.
+outlet, against 5,517 from two.**
 
-Dropping them is the right trade here and the wrong one later.
+They were dropped at first and are now their own bucket, scored on the same
+vectors and reported beside the rest. They are never folded into separation,
+because separation answers *"can you tell one event from another"* and this
+asks *"can you tell an update from a new story"*. One number answering both
+would answer neither clearly.
 
-**Right here**, because the pair set has no human judgement in it. Every pair's
-label comes from a title-overlap rule, and that rule is at its least reliable
-exactly where one outlet writes about one subject twice: the titles will share
-most of their words whether it is a correction of one event or coverage of two.
-Keeping them would put the noisiest pairs in the bucket the ranking depends on.
+What the reading means:
 
-**Wrong later**, because a correction and a follow-up are precisely what the
-pipeline has to tell apart, and this set says nothing about whether an encoder
-can. Plan 63 row R14 builds the set a person validates, and that one has no
-reason to drop same-outlet pairs - a person can say which of the two it is,
-where a word-overlap rule cannot.
+- **Near 1.0** - the encoder scores a follow-up as high as a genuine match. In
+  production it will fold every update into the story it follows.
+- **Lower** - it keeps some signal, and a grouping rule has something to work
+  with.
 
-So this comparison ranks encoders on the question *"can you tell one event from
-another"*, and leaves *"can you tell an update from a new story"* to a set that
-can actually answer it.
+Nobody has said which of those 488 are one event, so this is not an accuracy
+either. Plan 63 row R14 builds the set a person validates, and that one can
+settle each pair where a word-overlap rule cannot.
 
 ## Who wrote the labels
 
@@ -136,7 +141,7 @@ generated title. A title in this pipeline is actor plus action with the hype
 removed, so the words two titles share carry a real signal about whether they
 cover one story.
 
-### Three buckets, not two
+### Four buckets, not two
 
 A comparison that asks only "can you tell an obvious match from an obvious
 mismatch" is one every encoder passes. It would also repeat a fault this project
@@ -149,13 +154,14 @@ middle band is kept.
 
 | Bucket | Rule | Treated as |
 | --- | --- | --- |
-| Same event | Shares **0.30 or more** of its subject words | A match the encoder should score high |
-| Uncertain | Shares **0.10 up to 0.30** | Neither. Never scored right or wrong |
-| Different events | Shares **less than 0.10** | A mismatch the encoder should score low |
+| Same event | Two outlets, titles share **0.30 or more** of their subject words | A match the encoder should score high |
+| Second piece | **One outlet**, titles share 0.30 or more | Neither. A correction or a follow-up |
+| Uncertain | Two outlets, titles share **0.10 up to 0.30** | Neither |
+| Different events | Two outlets, titles share **less than 0.10** | A mismatch the encoder should score low |
 
-Every pair in all three buckets is from **two different outlets**, published the
-same day or a day apart. One outlet repeating itself is a different question,
-so those pairs are dropped.
+Every pair is published the same day or a day apart. Only the first and last
+bucket make a separation score; the middle two are scored on the same vectors
+and reported on their own.
 
 ### Where the thresholds came from
 
