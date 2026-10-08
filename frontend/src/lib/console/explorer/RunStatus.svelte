@@ -1,12 +1,11 @@
 <script lang="ts">
-	let { text, lines = 2, tone = 'neutral', href = '', files = 0, bytes = 0, heldBytes = 0 }: {
+	let { text, lines = 2, tone = 'neutral', href = '', files = 0, bytes = 0 }: {
 		text: string;
 		lines?: number;
 		tone?: 'neutral' | 'warn';
 		href?: string;
 		files?: number;
 		bytes?: number;
-		heldBytes?: number;
 	} = $props();
 </script>
 
@@ -17,7 +16,6 @@
 	data-workbench-region="status"
 	data-files={files}
 	data-bytes={bytes}
-	data-held-bytes={heldBytes}
 	aria-live="polite"
 	style={`--readout-lines:${lines}`}
 >

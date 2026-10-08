@@ -55,7 +55,9 @@
 			{#if item.icon === 'shape-ranked'}<Icon id="shape-ranked" />{/if}
 			{#if item.icon === 'shape-scatter'}<Icon id="shape-scatter" />{/if}
 			{#if item.icon === 'shape-distribution'}<Icon id="shape-distribution" />{/if}
-			<span class="choice-shown" aria-hidden="true">{item.shown}</span>
+			<span class="choice-word" data-shown={item.shown}>
+				<span class="choice-shown" aria-hidden="true">{item.shown}</span>
+			</span>
 			<span class="sr-only">{item.spoken}</span>
 		</label>
 	{/each}
@@ -114,13 +116,29 @@
 		clip-path: inset(50%);
 	}
 
-	.choice-shown {
+	.choice-word {
+		display: grid;
+		place-items: center;
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
-		font-weight: 400;
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text);
 		white-space: nowrap;
+	}
+
+	.choice-word::before,
+	.choice-word > span {
+		grid-area: 1 / 1;
+	}
+
+	.choice-word::before {
+		content: attr(data-shown);
+		visibility: hidden;
+		font-weight: 600;
+	}
+
+	.choice-shown {
+		font-weight: 400;
 	}
 
 	.choice-tile[data-selected='true'] .choice-shown {

@@ -1,20 +1,22 @@
-"""What does a gardener program print when an exception ends it? Where it broke, never what it said.
+"""What does a gardener program or command print when it crashes? Where it broke, never its text.
 
 Python's own trace prints each exception's message, and the message of every
-exception chained to it. A message can quote what GitHub's API or a file
-returned, and that can be text fetched from the open web (Guardrail #11). So
-each program `.github/workflows/idhazh-gardener.yml` runs calls `install` before
-its `main`, and a program that catches an exception to end on an exit code of
-its own prints it with `print_trace`.
+exception chained to it. A message can quote a ledger row or what GitHub's API
+or a file returned, and that can be text fetched from the open web (Guardrail
+#11). So each program `.github/workflows/idhazh-gardener.yml` runs, and the
+ledger migrator, call `install` before their `main`; `idhazh gardener` calls it
+as its `main` starts, and `idhazh telemetry` for `prune` alone. A program that
+catches an exception to end on an exit code of its own prints it with
+`print_trace`.
 
 **The trace keeps Python's layout and drops every word an exception carries.**
 For the exception and each one chained to it, oldest first, with Python's own
 sentence between two of them: `Traceback (most recent call last):`, one
 `module:line` for each frame, most recent call last, and the type's name.
 `module:line` is the form a gardener event's `where` takes, and `__main__` is
-the program the step ran. Never a message, an argument, a local, a source line,
-a note or a file path. An exception group is not opened: none of these programs
-raises one.
+the program the step ran, or the command's own entry. Never a message, an
+argument, a local, a source line, a note or a file path. An exception group is
+not opened: none of these programs raises one.
 
 **Printing the trace never raises.** When the hook raises, Python prints its own
 trace of the exception that ended the program, text included. So a module's name
@@ -24,8 +26,8 @@ is read only when it is a plain string, and one that is not prints `?`.
 interrupt's own code for an interrupt. A `SystemExit` never reaches the hook, so
 a program's own refusals keep their words.
 
-The standard library alone, because two of the programs that import it run
-before anything is installed.
+The standard library alone, as the package's `__init__.py` is, because two of
+the programs that import it run before anything is installed.
 """
 
 from __future__ import annotations

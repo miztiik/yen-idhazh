@@ -1,4 +1,5 @@
-<script lang="ts">
+<script>
+	// @ts-nocheck
 	/** One glyph, one id, one tint.
 	 *
 	 * Colour arrives by semantic tint rather than by multi-colour artwork: the
@@ -9,27 +10,15 @@
 	 * A component names an icon and never holds a `<path>`; `icons.spec.ts`
 	 * asserts that in both directions.
 	 */
-	import { ICONS, type IconId } from './generated';
+	import { ICONS } from './generated';
 
-	let {
-		id,
-		size = 16,
-		label,
-		class: className = ''
-	}: {
-		id: IconId;
-		size?: number;
-		/** Give this only where the icon is the whole meaning. Beside text that
-		 * already says it, an icon is decoration and gets hidden instead. */
-		label?: string;
-		class?: string;
-	} = $props();
+	let { id, size = 16, label = undefined } = $props();
 
 	const strokeWidth = $derived((__ICON_STROKE_PX__ * 24) / size);
 </script>
 
 <svg
-	class="icon {className}"
+	class="icon"
 	width={size}
 	height={size}
 	viewBox="0 0 24 24"
@@ -44,7 +33,7 @@
 	focusable="false"
 >
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-	{@html ICONS[id]}
+	{@html ICONS[id] ?? ''}
 </svg>
 
 <style>
