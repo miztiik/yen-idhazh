@@ -49,6 +49,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.FEED_HEALTH: frozenset({"run_id"}),
     LedgerName.SEEN: frozenset(),
     LedgerName.PUBLISHED: frozenset(),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: frozenset({"run_id"}),
     LedgerName.RUN_PLAN: frozenset({"run_id"}),
     LedgerName.COUNCIL_RUN_RECORDS: frozenset({"run_id"}),
 }
@@ -83,10 +84,10 @@ def test_a_door_ledger_is_not_a_csv_prune_target() -> None:
 
 
 def test_a_compaction_and_a_door_ledger_come_together() -> None:
-    """Every door ledger has its `compact-<ledger>`, and nothing compacts a ledger on CSV.
+    """Every door ledger has its compaction, and nothing compacts a ledger on CSV.
 
-    The loader refuses a compaction not named for its ledger, so a compaction that
-    loads is the file `config/gardener/compact-<ledger>.json`.
+    The loader refuses a compaction not named for its folder, so a compaction that
+    loads is the file `config/gardener/compact-<folder>.json`.
     """
     tasks = config.load_gardener().tasks
     compacted = {policy.ledger for policy in tasks.values() if isinstance(policy, CompactionPolicy)}
@@ -138,21 +139,23 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
     )
 
 
-@pytest.mark.parametrize("member", list(keys._DOOR_SHAPES), ids=lambda member: member.value)
+@pytest.mark.parametrize(
+    "member", sorted(keys.door_table_ledgers()), ids=lambda member: member.value
+)
 def test_every_door_key_names_fields_its_contract_declares(member: LedgerName) -> None:
     """A key cell the contract lacks settles nothing, and an unmapped field stops the write."""
-    shape = keys._DOOR_SHAPES[member]
-    fields = list(shape.model.model_fields)
+    model = keys.door_contract(member)
+    fields = list(model.model_fields)
 
-    assert sorted(set(shape.key) - set(fields)) == []
-    assert [column.name for column in arrow_schema.columns_of(shape.model)] == fields
+    assert sorted(set(keys.door_key(member)) - set(fields)) == []
+    assert [column.name for column in arrow_schema.columns_of(model)] == fields
 
 
 def test_every_door_field_with_an_envelope_name_is_listed() -> None:
     named = set(file_envelope._KEYS)
     found = {
-        member: frozenset(set(shape.model.model_fields) & named)
-        for member, shape in keys._DOOR_SHAPES.items()
+        member: frozenset(set(keys.door_contract(member).model_fields) & named)
+        for member in keys.door_table_ledgers()
     }
 
     assert found == dict(ENVELOPE_NAMED_FIELDS)

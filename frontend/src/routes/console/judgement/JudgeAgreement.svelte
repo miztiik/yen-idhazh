@@ -7,9 +7,11 @@
 	 * summaries swapped, and a pair whose two readings differ is a fact about
 	 * the judge rather than about the pair.
 	 *
-	 * Two rates, one axis. Both are a share of the same denominator, so a reader
-	 * comparing them is comparing like with like; two panels at two scales would
-	 * invite the comparison and make it wrong.
+	 * Two rates, one axis, each against its own mark. They are shares of
+	 * different pairs: "disagreed" of every pair read twice, "could not tell" of
+	 * the pairs whose two readings agreed. So every figure names the pairs it was
+	 * taken over, and two panels at two scales would still invite a comparison
+	 * and make it wrong.
 	 *
 	 * **The axis is the two knobs and never the data.** Neither rate can reach 1
 	 * without the run holding first, so 0 to 1 would leave half the plot in a
@@ -31,6 +33,7 @@
 	import { dayMonth, plural } from '$lib/format';
 	import {
 		agreementCorridor,
+		describeUnclear,
 		rateWithDenominator,
 		type AgreementLimits,
 		type JudgeDay
@@ -94,46 +97,30 @@
 	/** One day's two readings in words: what the strip prints at that day, and
 	 * the name its two dots carry, written together so the two never differ.
 	 *
-	 * A share needs `attemptsFloor` pairs behind it, the floor the sentence under
-	 * the strip keeps through `rateWithDenominator`, so the strip and the
-	 * sentence agree about when a share is a measurement. Under it the day prints
-	 * its counts and no share, which are the counts that sentence points at.
-	 * "Could not tell" is counted against the pairs whose two readings agreed,
-	 * the only pairs its share is taken over. The words are Reader's.
+	 * Each share is taken over its own pairs, and the floor counts those pairs:
+	 * "disagreed" every pair read twice, "could not tell" only the pairs whose
+	 * two readings agreed, the day's own count of them. It is the floor the
+	 * sentence under the strip keeps, so the two agree about when a share is a
+	 * measurement; under it a figure prints its counts. The words are Reader's.
 	 */
 	function readingsOf(day: JudgeDay): { disagreed: string; unclear: string; name: string } {
 		const date = dayMonth(day.date);
-		const shares = {
-			disagreed: rateWithDenominator(
-				day.disagreementRate * day.pairsJudged,
-				day.pairsJudged,
-				attemptsFloor
-			),
-			unclear: rateWithDenominator(day.unclearRate * day.pairsJudged, day.pairsJudged, attemptsFloor)
-		};
-		if (shares.disagreed !== null && shares.unclear !== null) {
-			return {
-				disagreed: shares.disagreed,
-				unclear: shares.unclear,
-				name: `${date}: ${shares.disagreed} disagreed with the second reading, and ${percent(day.unclearRate)} could not tell.`
-			};
-		}
-		const disagreedCount = Math.round(day.disagreementRate * day.pairsJudged);
-		const agreedCount = day.pairsJudged - disagreedCount;
-		const disagreedWords = `${disagreedCount} of ${plural(day.pairsJudged, 'pair', 'pairs')}`;
-		if (agreedCount === 0) {
-			const notCounted = 'not counted, no pair agreed';
-			return {
-				disagreed: disagreedWords,
-				unclear: notCounted,
-				name: `${date}: ${disagreedWords} disagreed with the second reading. Could not tell: ${notCounted}.`
-			};
-		}
-		const unclearWords = `${Math.round(day.unclearRate * agreedCount)} of the ${agreedCount} that agreed`;
+		const disagreedCount = day.disagreementRate * day.pairsJudged;
+		const disagreed =
+			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor) ??
+			`${Math.round(disagreedCount)} of ${plural(day.pairsJudged, 'pair', 'pairs')}`;
+		const unclear = describeUnclear(
+			day.unclearRate * day.pairsUsable,
+			day.pairsUsable,
+			attemptsFloor
+		);
 		return {
-			disagreed: disagreedWords,
-			unclear: unclearWords,
-			name: `${date}: ${disagreedWords} disagreed with the second reading, and ${unclearWords} could not tell.`
+			disagreed,
+			unclear,
+			name:
+				day.pairsUsable === 0
+					? `${date}: ${disagreed} disagreed with the second reading. Could not tell: ${unclear}.`
+					: `${date}: ${disagreed} disagreed with the second reading, and ${unclear} could not tell.`
 		};
 	}
 
@@ -150,17 +137,25 @@
 	const disagreePath = $derived(marks.map((mark) => `${mark.x},${mark.disagreeY}`).join(' '));
 	const unclearPath = $derived(marks.map((mark) => `${mark.x},${mark.unclearY}`).join(' '));
 
-	/** How many pairs the window read altogether. The denominator every sentence
-	 * on this panel prints beside its share. */
+	/** How many pairs the window read altogether: what the disagreed share is
+	 * taken over, printed beside it. */
 	const judged = $derived(read.reduce((total, day) => total + day.pairsJudged, 0));
 	const disagreed = $derived(
 		read.reduce((total, day) => total + day.disagreementRate * day.pairsJudged, 0)
 	);
+	/** How many of them got two readings that agreed, from each day's own count:
+	 * what "could not tell" is taken over, printed beside it. */
+	const agreed = $derived(read.reduce((total, day) => total + day.pairsUsable, 0));
 	const unclear = $derived(
-		read.reduce((total, day) => total + day.unclearRate * day.pairsJudged, 0)
+		read.reduce((total, day) => total + day.unclearRate * day.pairsUsable, 0)
 	);
 	const disagreeShare = $derived(rateWithDenominator(disagreed, judged, attemptsFloor));
-	const unclearShare = $derived(rateWithDenominator(unclear, judged, attemptsFloor));
+	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor));
+	/** The disagreed share against its mark, read off the share itself and never
+	 * off why a day was held, for the sentences that judge that share alone. */
+	const disagreedVerdict = $derived(
+		judged > 0 && disagreed / judged > limits.disagreementMax ? 'past' : 'inside'
+	);
 	const heldByJudge = $derived(
 		drawn.filter((day) => day.heldReason === 'judge_unstable' || day.heldReason === 'judge_uncertain')
 			.length
@@ -338,10 +333,22 @@
 					fitted on {heldByJudge} of {countDays(windowDays)}, because a rate was past its mark on
 					{heldByJudge === 1 ? 'that day' : 'those days'}.</span
 				>
+			{:else if agreed === 0}
+				<span data-agreement-state="none-agreed"
+					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading.
+					Could not tell: {unclearSaid}. The {percent(disagreed / judged)} that disagreed is
+					{disagreedVerdict} its mark.</span
+				>
+			{:else if agreed < attemptsFloor}
+				<span data-agreement-state="few-agreed"
+					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
+					{unclearSaid} could not tell. The {percent(disagreed / judged)} that disagreed is
+					{disagreedVerdict} its mark, and {agreed} is too few to report a share.</span
+				>
 			{:else}
 				<span data-agreement-state="inside"
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearShare} could not tell. Both rates are inside the marks.</span
+					{unclearSaid} could not tell. Both rates are inside the marks.</span
 				>
 			{/if}
 		</p>

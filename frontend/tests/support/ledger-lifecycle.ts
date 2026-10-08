@@ -3,7 +3,8 @@
  *
  * A test names a ledger, pins a UTC day, and lists the ledger's days counted back from it,
  * each packed with a number of rows, empty or lost. `buildLedger` writes what the gardener's
- * compaction leaves for those days: the three compact indexes, and one real Parquet file for
+ * compaction leaves for those days, in the folder the readers look in for that ledger: the
+ * three compact indexes, and one real Parquet file for
  * each packed day and each closed month that holds a row, written by the door's own query
  * engine with `COPY ... TO`. A packed day may hold no row, as the compaction once packed a
  * quiet day: its file holds every column and no row. A day the list leaves out is a hole.
@@ -28,6 +29,7 @@ import { ledgerCopy } from '../../scripts/published-ledgers.mjs';
 import { COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../../src/lib/data/compact-index';
 import { nodeEngine } from '../../src/lib/data/engine';
 import type { Fetcher } from '../../src/lib/data/fetched-bytes';
+import { ledgerFolder } from '../../src/lib/data/slice-reader';
 import type { DateStamp, LedgerName } from '../../src/lib/data/slice-shapes';
 import { engineExtensionRepository, ledgerArchiveBaseUrl } from '../../src/lib/server/config';
 
@@ -144,7 +146,7 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 		named.set(covers, day);
 	}
 	const ascending = [...named.keys()].sort();
-	const ledgerRoot = path.join(root, 'compact', built.ledger);
+	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(built.ledger).split('/'));
 	const daily: CompactEntry[] = [];
 	const monthly: CompactEntry[] = [];
 	for (const covers of ascending) {

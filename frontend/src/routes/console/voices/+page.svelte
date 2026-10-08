@@ -198,6 +198,10 @@
 	);
 </script>
 
+<svelte:head>
+	<title>Voices &mdash; Console &mdash; {data.ui.site_title}</title>
+</svelte:head>
+
 <div data-console-panels="voices">
 	<!-- The title, the strip, the band and the days control are the shell and
 	     live in `../+layout.svelte`. The window stays here because it governs

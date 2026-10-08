@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 
@@ -52,7 +52,7 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
 
     assert compactions, "config/idhazh_gardener.json names no compaction"
     for name, policy in compactions.items():
-        compact = f"state/compact/{policy.ledger.value}"
+        compact = f"state/compact/{'/'.join(ledger.door_folders(policy.ledger))}"
         assert scheduled_range(name, policy, today) is None, name
         for period_range in (None, ("2026-08", "2026-08")):
             assert _named(
