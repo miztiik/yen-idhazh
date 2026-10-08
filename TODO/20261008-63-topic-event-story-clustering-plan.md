@@ -99,14 +99,25 @@ Table E - the papers and what each one decides here
 
 | # | Short name | Paper | What it settles |
 | --- | --- | --- | --- |
-| E1 | NewsLens | Laban and Hearst, ACL 2017 | Overlapping windows give link, split and merge for free. A keyword graph plus community detection separates two crowds that share one accidental link. Honest about coverage: their strict setting grouped **10 percent** of articles |
-| E2 | EntityBERT | Saravanakumar and others, EACL 2021 | Word counts plus a timestamp score **91.7** out of 100 on a standard set, against **94.8** for the full neural stack - so the expensive part buys 3 points. Entity awareness as a yes-or-no flag beats one flag a type by more than 2 points. Fine-tuning on the wrong objective scores **worse than no fine-tuning** |
-| E3 | TimeBERT | Jiang and others, 2024 | Folding the timestamp into the vector beats keeping it apart, **+14 points** on one set. Their gain comes from recurring events - two daily stock reports months apart. Needs months of corpus to learn that, which is B1's reason |
-| E4 | StoryForest | Liu and others, CIKM 2017, run at Tencent | Two layers of grouping - keywords first, then documents - lift purity from **0.55 to 0.96**. Their reviewers rated a tree **82.8 percent** correct edges against **32.9 percent** for a free-form graph |
-| E5 | NarrativeMaps | Keith Norambuena and Mitra, 2020 | Combine parts with a geometric mean, not an average, so any weak part drags the whole to zero. Pick the main route as the highest-scoring path. Pick one representative a storyline using a standard graph result, with no cutoff to argue about |
-| E6 | ContrastTL | Duan and others, ECAI 2020 | Importance has two scales: important inside one time window, and important across many |
-| E7 | TLS-Bench | Gholipour Ghalandari and Ifrim, ACL 2020 | Automatic scores **reward repetition**. Forcing their timelines to repeat less made every score worse. A warning for any self-tuning loop |
-| E8 | Survey54 | Keith Norambuena and others, ACM 2023 | Screened 900 papers, kept 54. Entity use across the field "remains limited in scope". **No benchmark exists** for grouping at the article-set level - a gap this project could fill |
+| E1 | NewsLens | Laban, P. and Hearst, M. "newsLens: building and visualizing long-ranging news stories." Events and Stories in the News Workshop, ACL 2017. <https://aclanthology.org/W17-2701.pdf> | Overlapping windows give link, split and merge for free. A keyword graph plus community detection separates two crowds that share one accidental link. Honest about coverage: their strict setting grouped **10 percent** of articles |
+| E2 | EntityBERT | Saravanakumar, K.K., Ballesteros, M., Chandrasekaran, M.K. and McKeown, K. "Event-Driven News Stream Clustering using Entity-Aware Contextual Embeddings." EACL 2021. <https://aclanthology.org/2021.eacl-main.198.pdf> | Word counts plus a timestamp score **91.7** out of 100 on a standard set, against **94.8** for the full neural stack - so the expensive part buys 3 points. Entity awareness as a yes-or-no flag beats one flag a type by more than 2 points. Fine-tuning on the wrong objective scores **worse than no fine-tuning** |
+| E3 | TimeBERT | Jiang, H., Beeferman, D., Mao, W. and Roy, D. "Topic Detection and Tracking with Time-Aware Document Embeddings." arXiv:2112.06166v2, March 2024. <https://arxiv.org/html/2112.06166v2> | Folding the timestamp into the vector beats keeping it apart, **+14 points** on one set. Their gain comes from recurring events - two daily stock reports months apart. Needs months of corpus to learn that, which is B1's reason |
+| E4 | StoryForest | Liu, B., Niu, D., Lai, K., Kong, L. and Xu, Y. "Growing Story Forest Online from Massive Breaking News." CIKM 2017. arXiv:1803.00189v1. <https://arxiv.org/html/1803.00189v1> | Two layers of grouping - keywords first, then documents - lift purity from **0.55 to 0.96**. Their reviewers rated a tree **82.8 percent** correct edges against **32.9 percent** for a free-form graph |
+| E5 | NarrativeMaps | Keith Norambuena, B.F. and Mitra, T. "Narrative Maps: An Algorithmic Approach to Represent and Extract Information Narratives." arXiv:2009.04508v2, 2020. <https://arxiv.org/html/2009.04508v2> | Combine parts with a geometric mean, not an average, so any weak part drags the whole to zero. Pick the main route as the highest-scoring path. Pick one representative a storyline using a standard graph result, with no cutoff to argue about |
+| E6 | ContrastTL | Duan, Y., Jatowt, A. and Yoshikawa, M. "Comparative Timeline Summarization via Dynamic Affinity-Preserving Random Walk." ECAI 2020. <https://adammo12.github.io/adamjatowt/ecai20.pdf> | Importance has two scales: important inside one time window, and important across many |
+| E7 | TLS-Bench | Gholipour Ghalandari, D. and Ifrim, G. "Examining the State-of-the-Art in News Timeline Summarization." ACL 2020. arXiv:2005.10107v1. <https://arxiv.org/html/2005.10107v1> | Automatic scores **reward repetition**. Forcing their timelines to repeat less made every score worse. A warning for any self-tuning loop |
+| E8 | Survey54 | Keith Norambuena, B.F., Mitra, T. and North, C. "A Survey on Event-based News Narrative Extraction." ACM Computing Surveys, 2023. arXiv:2302.08351. <https://arxiv.org/pdf/2302.08351> | Screened 900 papers, kept 54. Entity use across the field "remains limited in scope". **No benchmark exists** for grouping at the article-set level - a gap this project could fill |
+
+All eight were read in full on 2026-10-07, not read about. E1 and E2 came from
+the owner first, E3 and E4 second, E5 to E8 third. The ninth input is this
+repository's own `TODO/unsupervised-topic-detection-event-clustering.md`, which
+is the design these papers were read against.
+
+**No paper here chooses an encoder.** E2 and E3 use BERT-family models from 2019
+to 2021 because that is what they had; their finding is about *what to do with*
+an encoder - add entity awareness, add time - not about which to buy today. The
+encoder choice is row R2's to measure (Table G, G3), and nothing in this table
+settles it.
 
 **What they agree on, which is the part worth trusting.** Seven of the eight use
 the headline or the opening lines as the unit of meaning. Four replace a
@@ -194,8 +205,41 @@ Table G - what the owner still decides
 | --- | --- | --- | --- |
 | G1 | Does sentence structure come from the parser that was tested as noisy, or another? | Without it, reversed roles and denials have no cheap detector (B2). The noisy test may have been the small model; the large one is a different thing | Measure the large one on 200 summaries and show the owner the rate before deciding |
 | G2 | How many groups can the owner validate in a week | R14 blocks every measured number | About 2,000 groups, over-grouped on purpose so the work is mostly splitting, which is quicker than hunting for a missed merge |
-| G3 | Which encoders go in the runner comparison | R2 | The current one, two mid-sized ones, and one large - the owner has approved the larger storage, so measure whether it earns it |
+| G3 | Which encoders go in the runner comparison | R2 | Table H. No paper read here settles it, and the one trial so far was run on a laptop and scored wrongly (C4) |
 | G4 | May the plan commit work that rebuilds vectors for every published day | A better encoder means re-reading 45 days | Yes, once. The published form stays compressed for the site; the grouping reads the full-precision form inside the run |
+
+### The encoder shortlist
+
+Table H - what R2 measures on the runner, and why each is in it
+
+An encoder turns a summary into a list of numbers so two summaries can be
+compared. The current one dates from 2021 and is the smallest in common use.
+**No paper in Table E chooses one**, so this list is argued from the shape of
+this job, not borrowed: English only, short text of about 110 word-pieces,
+4 shared processor threads, no graphics card, and a six-hour job that also has
+to summarize the day.
+
+| # | Encoder | Numbers an article | Size | Why it is in the list |
+| --- | --- | --- | --- | --- |
+| H1 | `sentence-transformers/all-MiniLM-L6-v2` | 384 | 22M | What runs today. Every other row is read as a gain or a loss against it |
+| H2 | `BAAI/bge-base-en-v1.5` | 768 | 110M | A widely used mid-sized English model. Known to pack unrelated pairs close together, which is a problem for a fixed cut-off and not for a rank score |
+| H3 | `thenlper/gte-base` | 768 | 110M | Same size as H2, trained differently. Two models of one size tell us whether size or training is doing the work |
+| H4 | `intfloat/e5-base-v2` | 768 | 110M | Same size again. Needs a short prefix on its input; getting that wrong silently costs quality, which is itself worth proving on our own data |
+| H5 | `BAAI/bge-large-en-v1.5` | 1024 | 335M | Three times H2. The owner has approved the larger published size, so the question is whether the extra time fits the job |
+| H6 | `BAAI/bge-m3` | 1024 | 568M | The one with a different shape: it returns a meaning vector **and** word weights from a single pass, which is channels F1 and F2 from one model instead of two. Five times H2 in size, and multilingual weight we do not need |
+
+**On H6.** It is the model most often named when people ask for "the best", and
+it may well not win here. It carries languages this corpus never uses, and its
+long-text ability is wasted on a 78-word summary. Its one real attraction is
+that it could collapse two channels into one pass. That is worth a measurement
+and not an assumption.
+
+**What R2 reports for each row.** How well it separates - the chance that it
+scores a same-event pair above a different-event pair, which no difference in
+scale can distort. How wide its spread is, because an encoder that puts every
+unrelated pair at 0.46 leaves less room for a decision than one that puts them
+at 0.11. How many seconds for 15,122 summaries on four threads. And peak memory,
+against the 16 GB the runner has.
 
 ## 6. Design rationale
 
