@@ -42,10 +42,7 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger.keys import (
-    STORY_SIMILARITY_PAIR_KEY,
-    STORY_SIMILARITY_THRESHOLD_KEY,
-)
+from idhazh.ledger.keys import STORY_SIMILARITY_THRESHOLD_KEY
 from idhazh.ledger.staging import REGISTRY, staged_path
 
 from ._harness import (
@@ -72,7 +69,6 @@ TRIAL_WORKFLOW: Final = "measure.yml"
 LEDGER_KEYS: Final[Mapping[LedgerName, tuple[str, ...]]] = MappingProxyType(
     {
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: STORY_SIMILARITY_THRESHOLD_KEY,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: STORY_SIMILARITY_PAIR_KEY,
     }
 )
 

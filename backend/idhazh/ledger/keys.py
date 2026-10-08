@@ -37,9 +37,6 @@ from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import (
-    DROPPED_CELLS as DROPPED_PAIR_CELLS,
-)
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -126,18 +123,33 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #: the fold picks the newest run itself, over the whole day, rather than letting
 #: a line-by-line rewrite decide.
 #:
+#: `work_part_index` follows `run_id`, because a judge row about one part of the
+#: split is keyed on its part: two parts of one run never settle into one record.
+#:
 #: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
 #: published the day, so two judging runs over one date write the identical
 #: string there. Without this cell the settlement would keep the row already in
 #: the checked-out file and discard every fresh verdict, while the record
 #: counted the fresh ones - two descriptions of one day with nothing able to
 #: tell them apart.
-STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
+#:
+#: The shape these cells name is `idhazh.contracts.story_similarity_pair`, and
+#: the door table below imports it only when its ledger is asked about, for the
+#: reason the holdout score's key gives.
+STORY_SIMILARITY_PAIR_KEY: Final = (
+    "date",
+    "run_id",
+    "work_part_index",
+    "pair_key",
+    "judged_by_run_id",
+)
 
 
-#: What makes two metrics rows the same record while the CSV ledger still spells
-#: the split unit `shard`. The row that moves the ledger renames that field.
-CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "shard")
+#: What makes two metrics rows the same record: one part of one council run's
+#: night, for one judged date. The door table below imports the row contract,
+#: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
+#: asked about, for the reason the holdout score's key gives.
+CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
 
 
 #: What makes two retirement rows the same record. The address and nothing else:
@@ -275,15 +287,8 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
 
 
 #: The headings a day file an earlier run wrote still carries that the current
-#: judged-pair row no longer names. A dropped heading has no replacement - the
-#: file still re-files, and the cell goes, which is the point of dropping it. One
-#: column has left this row and none has moved, so there is no retired half:
-#: `from_csv_row` reads a day file by the names the contract holds now and the
-#: dropped heading simply goes.
-STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
-
-
-#: The same again, for the fitted line's day files.
+#: fitted-line row no longer names. A dropped heading has no replacement - the
+#: file still re-files, and the cell goes, which is the point of dropping it.
 FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
 
 
@@ -330,6 +335,22 @@ def _merge_line_holdout_score() -> type[Contract]:
     return MergeLineHoldoutScore
 
 
+def _story_similarity_pair() -> type[Contract]:
+    """The judged pair's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    return StorySimilarityPair
+
+
+def _content_similarity_judge_metrics() -> type[Contract]:
+    """The judge's per-part reading, imported when its ledger is first asked about."""
+    from idhazh.contracts.content_similarity_judge_metrics import (
+        ContentSimilarityJudgeMetrics,
+    )
+
+    return ContentSimilarityJudgeMetrics
+
+
 #: The door ledgers a judge writes, each with its key and the function that
 #: imports the contract one of its rows is read by. The rest of the door table
 #: imports its contracts as this module loads. A judge's waits for the first
@@ -343,6 +364,14 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
         MERGE_LINE_HOLDOUT_SCORE_KEY,
         _merge_line_holdout_score,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
+        STORY_SIMILARITY_PAIR_KEY,
+        _story_similarity_pair,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
+        CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
+        _content_similarity_judge_metrics,
     ),
 }
 

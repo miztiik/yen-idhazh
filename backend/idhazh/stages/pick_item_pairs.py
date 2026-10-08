@@ -52,7 +52,7 @@ def _drawn_row(
         version=StorySimilarityPair.schema_version(),
         date=date,
         run_id=run_id,
-        shard=shard,
+        work_part_index=shard,
         pair_key=selection.pair_key(left, right),
         left_url_key=left,
         right_url_key=right,

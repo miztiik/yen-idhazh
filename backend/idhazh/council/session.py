@@ -166,7 +166,12 @@ def settle(
     place in the night that writes under `state/`. The collect runs on the way
     out whatever the tenants did, so a tenant that died still leaves the venue
     holding the record of every unit that reported before it.
+
+    Every tenant is handed the state root and the writer identity the council
+    files its own rows under, so a tenant's files and the venue's name one run,
+    one attempt and one commit.
     """
+    identity = _identify_writer(run_id=run_id, commit_sha=commit_sha)
     hosted = _hosted(council, date)
     try:
         return tuple(
@@ -178,12 +183,18 @@ def settle(
                 evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
                 work_part_index=None,
                 work_part_count=shard_width(council, host),
-                work=partial(host.settle, date=date, run_id=run_id),
+                work=partial(
+                    host.settle,
+                    date=date,
+                    run_id=run_id,
+                    state_dir=state_dir,
+                    identity=identity,
+                ),
             )
             for host in hosted
         )
     finally:
-        _collect(hosted, date=date, run_id=run_id, state_dir=state_dir, commit_sha=commit_sha)
+        _collect(hosted, date=date, state_dir=state_dir, identity=identity)
 
 
 def run_shard(
@@ -326,13 +337,30 @@ def _file(
     )
 
 
+def _identify_writer(*, run_id: RunId, commit_sha: str) -> WriterIdentity:
+    """Who wrote each file the job that saves the night's results files.
+
+    Built once a date and shared: the council run, that job and its one shard,
+    the platform's attempt at the run, and the commit the run checked out. The
+    council files its own record under it, and a tenant files its own rows under
+    it with its own stage as the producer.
+    """
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="council.session",
+        git_sha=commit_sha,
+    )
+
+
 def _collect(
     hosted: Sequence[Tenant],
     *,
     date: DateStamp,
-    run_id: RunId,
     state_dir: Path,
-    commit_sha: str,
+    identity: WriterIdentity,
 ) -> int:
     """File every row tonight's units wrote through the ledger door.
 
@@ -352,14 +380,7 @@ def _collect(
         recorded,
         ledger=LedgerName.COUNCIL_RUN_RECORDS,
         covers=date,
-        identity=WriterIdentity(
-            run_id=run_id,
-            attempt=run_context.run_attempt(),
-            job=ServerJob.SAVE_COUNCIL_RESULTS,
-            shard=0,
-            producer="council.session",
-            git_sha=commit_sha,
-        ),
+        identity=identity,
     )
     landed = len(recorded) if written else 0
     _log.info("the council recorded %d units of its own work on %s", landed, date)

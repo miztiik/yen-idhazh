@@ -6,20 +6,28 @@ compaction declarations. A ledger the table does not declare is refused by name.
 
 from __future__ import annotations
 
+import csv
+import shutil
 from pathlib import Path
 from types import MappingProxyType
+from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR
+from conftest import CONFIG_DIR, FIXTURES_DIR
 from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.knobs.gardener import CompactionPolicy, ForeverWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.contracts.seen import PublishedRow
+from idhazh.contracts.story_similarity_pair import DROPPED_CELLS as PAIR_DROPPED_CELLS
+from idhazh.contracts.story_similarity_pair import RENAMED_CELLS as PAIR_RENAMED_CELLS
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from utilities.ledger_migration import (
+    csv_cells,
     csv_files,
     csv_layouts,
     refusals,
@@ -29,6 +37,7 @@ from ._fixtures import (
     EVALS,
     NEW,
     file_hashes,
+    fixture_text,
     plan_named_roots,
     read_back,
     run_migration,
@@ -39,6 +48,13 @@ from ._fixtures import (
 )
 
 pytestmark = pytest.mark.contract
+
+PAIRS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
+METRICS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+
+#: One committed scored-pairs day as it stood before `decode_digest` left: the
+#: `shard` heading, and filled cells under every heading the pair row dropped.
+OLD_PAIRS: Final = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
 
 
 def test_a_declared_shared_day_file_is_read_under_two_folders(
@@ -158,6 +174,80 @@ def test_every_moved_ledger_kept_its_old_window_before_yearly_expiry() -> None:
 
     assert moved, "no ledger in the table has moved, so nothing is checked"
     assert short == []
+
+
+def test_the_judges_two_ledgers_are_read_from_their_shared_day_files(tmp_path: Path) -> None:
+    """Each sat as one CSV file a day in the judge's family folder, and nothing deleted it."""
+    state = tmp_path / "state"
+    for which in (PAIRS, METRICS):
+        entry = csv_layouts.require_layout(which)
+
+        assert (entry.grain, entry.suffix) == (Grain.DAY_FILE, ".csv"), which
+        assert csv_layouts.csv_root(state, which) == state.joinpath(*ledger.door_folders(which))
+        assert isinstance(csv_layouts.CSV_LEDGERS[which].old_window, ForeverWindow), which
+        assert which in csv_layouts.door_ledgers(CONFIG_DIR), which
+
+
+def test_an_old_scored_pairs_day_reads_its_part_and_drops_what_the_row_stopped_naming(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The committed shape: `shard`, and three headings the pair row dropped, filled.
+
+    `shard` is read as `work_part_index`, and each dropped heading's filled cell
+    goes by declaration. The same file under a table that declares only the
+    rename is refused, so no cell is lost without a line saying so.
+    """
+    state = tmp_path / "state"
+    day = "2026-09-18"
+    path = csv_layouts.csv_root(state, PAIRS) / day[:4] / day[5:7] / f"{day[8:10]}.csv"
+    path.parent.mkdir(parents=True)
+    shutil.copyfile(OLD_PAIRS, path)
+    with OLD_PAIRS.open(encoding="utf-8", newline="") as handle:
+        old = list(csv.DictReader(handle))
+
+    assert csv_files.csv_days(state, PAIRS, months=[day[:7]]) == {day: [path]}
+    rows = csv_cells.read_csv_rows(
+        state, PAIRS, day, [path], ledger.door_key(PAIRS), StorySimilarityPair
+    )
+
+    assert [row["work_part_index"] for row in rows] == [cells["shard"] for cells in old]
+    assert all(not set(row) & {"shard", *PAIR_DROPPED_CELLS} for row in rows)
+    assert any(cells[name] for cells in old for name in PAIR_DROPPED_CELLS), (
+        "the fixture holds no filled cell under a dropped heading, so the drop is unproved"
+    )
+
+    rename_only = csv_layouts.CSV_LEDGERS[PAIRS]._replace(old_headings=PAIR_RENAMED_CELLS)
+    monkeypatch.setattr(
+        csv_layouts,
+        "CSV_LEDGERS",
+        MappingProxyType(dict(csv_layouts.CSV_LEDGERS) | {PAIRS: rename_only}),
+    )
+    with pytest.raises(ValueError, match="is not declared"):
+        csv_cells.read_csv_rows(
+            state, PAIRS, day, [path], ledger.door_key(PAIRS), StorySimilarityPair
+        )
+
+
+def test_an_old_metrics_day_reads_its_part_under_the_new_name(tmp_path: Path) -> None:
+    """A metrics day written while the row said `shard` reads back cell for cell."""
+    state = tmp_path / "state"
+    row = ContentSimilarityJudgeMetrics.from_json(
+        fixture_text("content-similarity-judge-metrics", "a-shard-that-read-its-pairs.json")
+    )
+    cells = row.csv_row()
+    old = {("shard" if name == "work_part_index" else name): cell for name, cell in cells.items()}
+    path = write_shared_csv(state, METRICS, row.date, [old])
+
+    rows = csv_cells.read_csv_rows(
+        state,
+        METRICS,
+        row.date,
+        [path],
+        ledger.door_key(METRICS),
+        ContentSimilarityJudgeMetrics,
+    )
+
+    assert rows == [cells]
 
 
 def test_a_named_shorter_window_is_only_on_a_ledger_the_door_keeps_for_less() -> None:

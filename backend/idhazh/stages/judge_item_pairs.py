@@ -290,7 +290,7 @@ def _instrument_reading(
         "grammar_digest": stamp.grammar_digest,
         "date": date,
         "run_id": run_id,
-        "shard": shard,
+        "work_part_index": shard,
         "pairs_dealt": dealt,
         "pairs_read": len(read),
         "pairs_agreed": len(agreed),
@@ -326,14 +326,14 @@ def _rows_this_shard_owns(
         )
     with path.open("r", encoding="utf-8", newline="") as handle:
         rows = [StorySimilarityPair.from_csv_row(cells) for cells in csv.DictReader(handle)]
-    beyond = sorted({row.shard for row in rows if row.shard >= shards})
+    beyond = sorted({row.work_part_index for row in rows if row.work_part_index >= shards})
     if beyond:
         raise ValueError(
             f"{path.name} was drawn for more shards than this run has: it carries "
             f"shard(s) {beyond} and this run judges {shards}. Those pairs would never "
             "be read and the day would be counted as though they had never been drawn"
         )
-    return [row for row in rows if row.shard == shard]
+    return [row for row in rows if row.work_part_index == shard]
 
 
 def _items_by_url_key(

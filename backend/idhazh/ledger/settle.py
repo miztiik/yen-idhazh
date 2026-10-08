@@ -15,14 +15,11 @@ from typing import NamedTuple
 from idhazh import day_partition
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.ledger import paths
 from idhazh.ledger.csv_file import CsvContract, _read_rows
 from idhazh.ledger.keys import (
     _PREFERENCES,
     FITTED_SIMILARITY_THRESHOLD_CARRIED,
-    STORY_SIMILARITY_PAIR_CARRIED,
-    STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
 )
 
@@ -84,9 +81,8 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     anything writes it: the settlement runs over whatever it finds, a missing
     file settles to nothing, and registering the shape rather than its first
     writer is what stops two stale checkouts leaving one date fitted twice. Its
-    sibling `scored-pairs/` joins on the same terms: `run_id` is in its key, so
-    what settles there is a second attempt at one execution and never a second
-    run of the day.
+    sibling `scored-pairs/` left when it moved under `state/raw/`, for the reason
+    the trees above did.
 
     """
     if date is not None:
@@ -97,36 +93,17 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 FittedSimilarityThreshold,
                 FITTED_SIMILARITY_THRESHOLD_CARRIED,
             ),
-            KeyedLedger(
-                paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date),
-                STORY_SIMILARITY_PAIR_KEY,
-                StorySimilarityPair,
-                STORY_SIMILARITY_PAIR_CARRIED,
-            ),
         ]
     return [
-        *(
-            KeyedLedger(
-                file,
-                STORY_SIMILARITY_THRESHOLD_KEY,
-                FittedSimilarityThreshold,
-                FITTED_SIMILARITY_THRESHOLD_CARRIED,
-            )
-            for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS)
-            )
-        ),
-        *(
-            KeyedLedger(
-                file,
-                STORY_SIMILARITY_PAIR_KEY,
-                StorySimilarityPair,
-                STORY_SIMILARITY_PAIR_CARRIED,
-            )
-            for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS)
-            )
-        ),
+        KeyedLedger(
+            file,
+            STORY_SIMILARITY_THRESHOLD_KEY,
+            FittedSimilarityThreshold,
+            FITTED_SIMILARITY_THRESHOLD_CARRIED,
+        )
+        for file in day_partition.day_files(
+            paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS)
+        )
     ]
 
 

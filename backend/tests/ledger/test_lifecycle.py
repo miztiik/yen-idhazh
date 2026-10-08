@@ -33,7 +33,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
 from idhazh.ledger import paths
@@ -119,15 +118,16 @@ def _collect_metrics(state: Path) -> bool:
         name="0",
         out_dir=shipped,
     )
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
     return _wrote(
         state,
         lambda: metrics_sink.collect_judge_metrics(
             shipped,
             judge_id="content-similarity-judge",
             contract=ContentSimilarityJudgeMetrics,
-            which=which,
-            into=ledger.path(state, which, A_DAY),
+            which=LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+            state_dir=state,
+            covers=A_DAY,
+            identity=_identity(ServerJob.SAVE_COUNCIL_RESULTS),
         ),
     )
 
@@ -169,14 +169,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             lambda: source_health.file_retirements(
                 s, [_first(FeedRetirementRow)], _identity(ServerJob.PLAN)
             ),
-        ),
-    ),
-    "append_story_similarity_pairs": (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_story_similarity_pairs(s, A_DAY, [_first(StorySimilarityPair)]),
         ),
     ),
     "append_fitted_thresholds": (

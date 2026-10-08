@@ -152,11 +152,12 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: LedgerStaging(
         writer=(
-            "idhazh.ledger.rows.append_story_similarity_pairs, called from the "
-            "council's tenant module, resolved from config at call time rather than "
-            "dispatched from a `digest.yml` job"
+            "idhazh.stages.count_verdicts.stage_count_verdicts, through the ledger door, "
+            "called from the council's tenant module in the job that saves the night's "
+            "results - resolved from config at call time rather than dispatched from a "
+            "`digest.yml` job"
         ),
-        symbol="idhazh.ledger.rows.append_story_similarity_pairs",
+        symbol="idhazh.stages.count_verdicts.stage_count_verdicts",
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: LedgerStaging(
@@ -193,10 +194,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
         writer=(
-            "the council's shipping capability, which renders a tenant's row rather "
-            "than calling a ledger writer - nothing fills it yet"
+            "idhazh.council.metrics_sink.collect_judge_metrics, through the ledger door, "
+            "called by idhazh.stages.count_verdicts in the job that saves the night's "
+            "results"
         ),
-        symbol=None,
+        symbol="idhazh.council.metrics_sink.collect_judge_metrics",
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: LedgerStaging(

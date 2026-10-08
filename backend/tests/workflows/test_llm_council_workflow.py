@@ -17,8 +17,11 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT
 
-from idhazh import cli
+from idhazh import cli, ledger
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.council import session
+from idhazh.ledger import staging
 from utilities import council_matrix, shard_bound
 
 from ._harness import (
@@ -543,19 +546,26 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
 
 
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:
-    """`git add` runs under `set -euo pipefail`, so a missing path aborts the step.
+    """`git add` runs under `set -euo pipefail`, so a path nothing fills commits nothing.
 
-    The venue's own path is absent until its first save, and the commit helper
-    skips that path while nothing is on disk or tracked. Tenant paths must exist
-    when a tenant registers them, so check those paths without requiring the
-    venue's not-yet-created ledger.
+    A ledger the door files is staged by its raw folder, and that folder holds
+    files only between a save and the compaction that packs them, so a fresh
+    checkout may have none of it: the venue's own record is one such folder, and
+    the commit helper skips one while nothing is on disk or tracked. Such a path
+    must be the raw folder the registry builds for a door ledger. Every other
+    path a tenant names must exist when the tenant registers it. Either way a
+    misspelt path is caught here rather than by a night that stages nothing.
     """
-    tenant_paths = [
+    door_folders = {
+        staging.staged_path(which)
+        for which in LedgerName
+        if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+    }
+    missing = [
         path
         for path in council_matrix.committed_paths(CONFIG_DIR)
-        if path != council_matrix.COUNCIL_LEDGER
+        if path not in door_folders and not (REPO_ROOT / path).exists()
     ]
-    missing = [path for path in tenant_paths if not (REPO_ROOT / path).exists()]
 
     assert not missing, f"a tenant names paths a fresh checkout does not have: {missing}"
 

@@ -6,6 +6,8 @@
   "task_names": [
     "compact-candidate-models",
     "compact-content-similarity-judge-merge-line-holdout-scores",
+    "compact-content-similarity-judge-metrics",
+    "compact-content-similarity-judge-scored-pairs",
     "compact-council-run-records",
     "compact-counterfactual-scores",
     "compact-feed-health",

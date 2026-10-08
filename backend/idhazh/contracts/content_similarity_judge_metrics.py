@@ -28,9 +28,11 @@ nothing wrong. Those are opposite facts.
 on the day-grain rates, and a second threshold here would be an answer nobody
 could reconcile with the first.
 
-The ledger is `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv`. The
-directory name is spelled in `idhazh.ledger`, which is where a path belongs and
-which this module may not import (CLAUDE.md section 4).
+The ledger door files it under
+`state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, and the gardener
+packs it under `state/compact/content-similarity-judge/metrics/`. The folder is
+spelled in `idhazh.ledger`, which is where a path belongs and which this module
+may not import (CLAUDE.md section 4).
 """
 
 from __future__ import annotations
@@ -44,11 +46,13 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     RunId,
+    renamed_keys,
     without_retired_keys,
 )
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
+    RENAMED_CELLS,
     ContentSimilarityJudgeId,
     JudgeModelId,
 )
@@ -59,6 +63,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
 
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-08",
+            change="shard is renamed work_part_index. An old shard heading is read under it.",
+            why="The ledger door writes its own shard cell on every row it files.",
+        ),
         ChangelogEntry(
             version="2026-09-21T14:00",
             change="decode_digest is gone from the inherited judge-call stamp.",
@@ -90,7 +99,9 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
 
     date: DateStamp = Field(description="The digest date judged.")
     run_id: RunId = Field(description="The council run this shard belonged to.")
-    shard: int = Field(ge=0, description="Which unit of the split this row is about.")
+    work_part_index: int = Field(
+        ge=0, description="Which part of the judging split this row is about."
+    )
     pairs_dealt: int = Field(
         ge=0, description="How many pairs the selection gave this shard."
     )
@@ -177,14 +188,15 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     @model_validator(mode="before")
     @classmethod
     def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
-        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+        """The read-side migration `CLAUDE.md` section 11 owes a removed or renamed column.
 
         A shard writes one of these the moment it finishes and a later step reads
         it back, so a key the row stopped naming is one `extra="forbid"` refuses
-        on a payload nothing is wrong with. The set is the pair row's, so the
-        two shapes that lost the same column cannot name different sets.
+        on a payload nothing is wrong with. The set and the map are the pair
+        row's, so the two shapes that lost and renamed the same columns cannot
+        name different ones.
         """
-        return without_retired_keys(data, *DROPPED_CELLS)
+        return renamed_keys(without_retired_keys(data, *DROPPED_CELLS), RENAMED_CELLS)
 
     @model_validator(mode="after")
     def _the_funnel_closes(self) -> Self:
@@ -227,9 +239,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
 
         A column the file does not carry at all reads as an empty cell too, so a
         row written before a column existed still opens and a widening stays
-        additive.
+        additive. A heading the row renamed is read under its new name.
         """
-        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | dict(row)
+        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | renamed_keys(
+            dict(row), RENAMED_CELLS
+        )
         for name in cls._absent_when_blank():
             if payload[name] == "":
                 payload[name] = None

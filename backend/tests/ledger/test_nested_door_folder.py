@@ -26,13 +26,11 @@ A_SHA = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
 REGISTRY = REPO_ROOT / "config" / "ledgers.json"
 PREFIXES = FIXTURES_DIR / "ledger-door" / "nested-prefixes.json"
 KEYS: Mapping[LedgerName, tuple[str, ...]] = {
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
-        "date",
-        "run_id",
-        "pair_key",
-        "judged_by_run_id",
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: ("date", "run_id", "shard"),
+    which: ledger.door_key(which)
+    for which in (
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+    )
 }
 
 

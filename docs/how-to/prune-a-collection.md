@@ -100,7 +100,7 @@ Both ends are named and both are inclusive, so `--since X --until X` is one day.
 range you typed is taken whole unless you ask for a smaller bite:
 
 ```
-idhazh telemetry prune --target content-similarity-judge-scored-pairs \
+idhazh telemetry prune --target content-similarity-judge-fitted-thresholds \
   --since 2025-01-01 --until 2025-12-31 --no-dry-run --max-deletes 30
 ```
 

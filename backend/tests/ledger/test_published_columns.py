@@ -183,15 +183,10 @@ def test_f3_newer_file_fails_and_prints(
 def test_f4_published_ledger_without_door_contract_fails_and_prints(
     tmp_path: Path, capsys: CaptureFixture[str]
 ) -> None:
-    assert (
-        published_columns.check(
-            tmp_path / "site", [LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS]
-        )
-        == 1
-    )
+    assert published_columns.check(tmp_path / "site", [LedgerName.DAY_METRICS]) == 1
 
     assert capsys.readouterr().out == (
-        "published-columns FAIL F4 ledger=scored-pairs file=<no file> "
+        "published-columns FAIL F4 ledger=day-metrics file=<no file> "
         "file_schema=<not declared> contract_schema=<not declared> "
         "column=<not declared> file_type=<not declared> contract_type=<not declared>; "
         "fix: add the ledger to the door table in idhazh/ledger/keys.py\n"

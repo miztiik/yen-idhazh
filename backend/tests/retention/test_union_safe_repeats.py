@@ -1,6 +1,6 @@
 """Does a row arriving twice change any answer a union-safe tree gives?
 
-`.gitattributes` gives three committed collections `merge=union`, so a merge that
+`.gitattributes` gives one committed collection `merge=union`, so a merge that
 finds the same row on both sides keeps both copies. That is safe only where the
 row is keyed and something settles the repeat: the same key twice is one record
 recorded twice, never two records.
@@ -23,25 +23,17 @@ import pytest
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 
 pytestmark = pytest.mark.contract
 
 A_DATE = "2026-08-20"
 A_RUN = "2026-08-20-1"
-AN_ADDRESS = "a" * 64
 
 #: Every union-safe tree, with the contract that spells its columns and what
 #: makes two of its rows one record. Checked against `path_classes.UNION_SAFE` below,
 #: so a tree added to that list without a row here fails rather than merges
 #: untested.
 _TREES = (
-    (
-        "state/content-similarity-judge/scored-pairs",
-        StorySimilarityPair,
-        ledger.STORY_SIMILARITY_PAIR_KEY,
-        {"date": A_DATE, "run_id": A_RUN, "pair_key": AN_ADDRESS, "judged_by_run_id": A_RUN},
-    ),
     (
         "state/content-similarity-judge/fitted-thresholds",
         FittedSimilarityThreshold,
@@ -50,6 +42,7 @@ _TREES = (
     ),
 )
 
+
 def _doubled(path: Path) -> None:
     """Append every record line a second time, the way a union merge leaves them."""
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -57,16 +50,12 @@ def _doubled(path: Path) -> None:
 
 
 def test_every_union_safe_tree_has_a_repeat_case_beside_it() -> None:
-    """A fourth tree joins the list and arrives with nothing proving it settles.
-
-    `state/content-similarity-judge/metrics` is the one entry with no case
-    below. It is named here so the gap is a known one rather than a silent one.
-    """
+    """A tree that joins the list arrives with nothing proving it settles."""
     driven = {name for name, _, _, _ in _TREES}
-    absent = set(path_classes.UNION_SAFE) - driven
 
-    assert absent == {"state/content-similarity-judge/metrics"}, (
-        f"these union-safe trees have no repeat case: {sorted(absent)}"
+    assert set(path_classes.UNION_SAFE) == driven, (
+        f"these union-safe trees have no repeat case: "
+        f"{sorted(set(path_classes.UNION_SAFE) - driven)}"
     )
 
 

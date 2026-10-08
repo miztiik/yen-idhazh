@@ -1,9 +1,9 @@
 """Does a row the council knows nothing about survive the whole trip?
 
 Written on a runner, uploaded under a name the collecting job looks for, and
-appended to the ledger the tenant named. Every payload here is declared in this
-file, so nothing in it names a judge and the whole module runs in a repository
-with no judge in it.
+filed through the ledger door into the ledger the tenant named. Every payload
+here is declared in this file, so nothing in it names a judge and the whole
+module runs in a repository with no judge in it.
 """
 
 from __future__ import annotations
@@ -15,11 +15,13 @@ from typing import Any, ClassVar, Self
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import REPO_ROOT, read_text
+from conftest import REPO_ROOT, SEED_COMMIT, read_text
 from pydantic import Field
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId
+from idhazh import ledger
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob
 from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.metrics_sink import collect_judge_metrics, ship_judge_metrics
 from idhazh.council.tenancy import ShardResult, Tenant
@@ -29,9 +31,25 @@ COUNCIL_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "llm-council.yml"
 #: What the capability writes into on a runner. One directory a night.
 METRICS_DIRNAME = "metrics"
 
-#: The ledger whose lifecycle status the collecting write asks about. The
-#: council's own, so nothing here names a judge, and its family is active.
+#: The ledger the collecting write files into, and whose lifecycle status it
+#: asks about. The council's own, so nothing here names a judge, and its family
+#: is active.
 WHICH = LedgerName.COUNCIL_RUN_RECORDS
+
+#: The judged date every row here carries.
+A_DATE = "2026-09-20"
+
+
+def _identity() -> WriterIdentity:
+    """The writer the collecting job files under: the council's save, run once."""
+    return WriterIdentity(
+        run_id="2026-09-21-35534060762",
+        attempt=1,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="tests.council.test_metrics_sink",
+        git_sha=SEED_COMMIT,
+    )
 
 
 class PaperMetrics(Contract):
@@ -131,11 +149,18 @@ class PaperTenant:
             metrics=_paper_row(date=date, units=shard + 1),
         )
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
 
-def _paper_row(date: str = "2026-09-20", units: int = 3) -> PaperMetrics:
+def _paper_row(date: str = A_DATE, units: int = 3) -> PaperMetrics:
     """The base class stamps `version` itself, the way every contract here is built."""
     return PaperMetrics.model_validate({"date": date, "units": units})
 
@@ -208,10 +233,10 @@ def test_a_shipped_name_that_is_not_a_slug_never_becomes_a_filename(tmp_path: Pa
         ship_judge_metrics(_paper_row(), judge_id="paper-tenant", name="../escape", out_dir=tmp_path)
 
 
-def test_the_collecting_job_appends_every_shipped_row_to_the_store_the_tenant_named(
+def test_the_collecting_job_files_every_shipped_row_into_the_store_the_tenant_named(
     tmp_path: Path,
 ) -> None:
-    """The Oracle, end to end: written, named for the download, appended, read back."""
+    """The Oracle, end to end: written, named for the download, filed, read back."""
     tenant = PaperTenant()
     shipped = tmp_path / "var" / METRICS_DIRNAME
     for shard in (0, 1):
@@ -222,37 +247,43 @@ def test_the_collecting_job_appends_every_shipped_row_to_the_store_the_tenant_na
             out_dir=shipped,
         )
 
-    into = tmp_path / tenant.committed_paths[0] / "2026" / "09" / "20.csv"
+    state = tmp_path / "state"
     landed = collect_judge_metrics(
-        shipped, judge_id=tenant.judge_id, contract=PaperMetrics, which=WHICH, into=into
+        shipped,
+        judge_id=tenant.judge_id,
+        contract=PaperMetrics,
+        which=WHICH,
+        state_dir=state,
+        covers=A_DATE,
+        identity=_identity(),
     )
 
+    (filed,) = ledger.list_raw_files(state, WHICH, days=[A_DATE])
     assert landed == 2
-    assert into.read_text(encoding="utf-8").splitlines() == [
-        "version,date,units",
-        "2026-09-21,2026-09-20,1",
-        "2026-09-21,2026-09-20,2",
-    ]
-    assert [row.units for row in _read_back(into)] == [1, 2]
+    assert filed.envelope.identity == _identity()
+    assert [row.units for row in ledger.load([filed.path], model=PaperMetrics)] == [1, 2]
 
 
 def test_a_second_tenants_columns_travel_the_same_path_unchanged(tmp_path: Path) -> None:
     """The capability declares nothing about the payload, so two shapes fit one pipe."""
     shipped = tmp_path / METRICS_DIRNAME
-    row = OtherPaperMetrics.model_validate({"date": "2026-09-20", "units": 1, "warmth": 0.5})
+    row = OtherPaperMetrics.model_validate({"date": A_DATE, "units": 1, "warmth": 0.5})
     ship_judge_metrics(row, judge_id="other-paper-tenant", name="0", out_dir=shipped)
 
-    into = tmp_path / "state" / "other-paper-tenant" / "metrics" / "20.csv"
+    state = tmp_path / "state"
     landed = collect_judge_metrics(
         shipped,
         judge_id="other-paper-tenant",
         contract=OtherPaperMetrics,
         which=WHICH,
-        into=into,
+        state_dir=state,
+        covers=A_DATE,
+        identity=_identity(),
     )
 
+    (filed,) = ledger.list_raw_files(state, WHICH, days=[A_DATE])
     assert landed == 1
-    assert into.read_text(encoding="utf-8").startswith("version,date,units,warmth\n")
+    assert ledger.load([filed.path], model=OtherPaperMetrics) == [row]
 
 
 def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) -> None:
@@ -261,12 +292,18 @@ def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) ->
     path = ship_judge_metrics(_paper_row(), judge_id="paper-tenant", name="0", out_dir=shipped)
     path.write_text("version,date,units\n2026-09-21,2026-09-20,\n", encoding="utf-8")
 
-    into = tmp_path / "state" / "paper-tenant" / "metrics" / "20.csv"
+    state = tmp_path / "state"
     with pytest.raises(ValueError):
         collect_judge_metrics(
-            shipped, judge_id="paper-tenant", contract=PaperMetrics, which=WHICH, into=into
+            shipped,
+            judge_id="paper-tenant",
+            contract=PaperMetrics,
+            which=WHICH,
+            state_dir=state,
+            covers=A_DATE,
+            identity=_identity(),
         )
-    assert not into.exists(), "a ledger never gains a row the contract refused"
+    assert not state.exists(), "a ledger never gains a row the contract refused"
 
 
 def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
@@ -297,13 +334,3 @@ def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
             f"{name} is uploaded and no download pattern in the collecting job "
             f"({', '.join(patterns)}) matches it, so the rows are deleted with the runner."
         )
-
-
-def _read_back(path: Path) -> list[PaperMetrics]:
-    """The committed rows, through the contract that wrote them."""
-    lines = path.read_text(encoding="utf-8").splitlines()
-    columns = lines[0].split(",")
-    return [
-        PaperMetrics.from_csv_row(dict(zip(columns, line.split(","), strict=True)))
-        for line in lines[1:]
-    ]

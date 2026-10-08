@@ -75,8 +75,9 @@ def stage_set_merge_line(
     """Walk the record, damp the move, clamp what is left, and write the day's row.
 
     **Every read is bounded** (Guardrail #12). One published day, the fixed-size
-    record, the one day file the date names, and the fitted rows inside a window
-    two knobs set. Nothing walks a collection a run appends to.
+    record, the one day of judged pairs the date names, read through the ledger
+    door, and the fitted rows inside a window two knobs set. Nothing walks a
+    collection a run appends to.
 
     **`run_id` is the council's own and is handed in.** The run that fitted the
     line is the council night, not the digest run that published the day it read

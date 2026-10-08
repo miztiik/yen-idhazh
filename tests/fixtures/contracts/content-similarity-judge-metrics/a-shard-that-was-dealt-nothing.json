@@ -16,8 +16,8 @@
   "pairs_unreadable": 0,
   "prompt_digest": null,
   "run_id": "2026-09-20-35550001",
-  "shard": 3,
   "thinking_spans": null,
   "unclear_rate": null,
-  "version": "2026-09-21"
+  "version": "2026-09-21",
+  "work_part_index": 3
 }
