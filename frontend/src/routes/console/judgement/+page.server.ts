@@ -55,7 +55,7 @@ export async function load() {
 	// One read, three panels. The fitted row carries the line, both judge rates
 	// and all three gate counts, so asking the ledger twice would be two reads of
 	// one file that could disagree about which run of a date they took. It also
-	// holds the days the merge line's rule looks back over while
+	// holds the days the rule a build follows looks back over while
 	// `applied_lookback_days` is under the widest preset, because no row is dated
 	// after the newest published day.
 	const rows = fittedLines(widestDays);
