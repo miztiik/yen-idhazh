@@ -11,7 +11,6 @@
 	 * stays a Tab stop so a keyboard reader reaches it (`aria-disabled`, never `disabled`). The
 	 * look and keys are Jony's and the words Susan's, both 2026-10-07.
 	 */
-	import { tick } from 'svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import ColumnType from '$lib/console/explorer/ColumnType.svelte';
 	import { closeAfterPick, closesWhenLeft } from '$lib/console/explorer/floating-list';
@@ -91,15 +90,19 @@
 		list.style.blockSize = up ? `min(${rows} * var(--workbench-control) + 2 * var(--space-1) + 2 * var(--pill-list-edge), ${room})` : '';
 	}
 
-	async function opened() {
-		if (details === null || !details.open) {
-			typed = '';
-			current = null;
-			return;
-		}
-		await tick();
+	/** Focus as the list opens: with a mouse or a key, in the filter, so typing filters at once; with
+	 *  touch, on the checked line, so a phone's keyboard rises only when the reader taps the filter.
+	 *  It runs in the task that opens the list, so a key pressed straight after lands in the list. */
+	function focusOnOpen() {
 		if (opener === 'touch') (lines().find((line) => line.checked) ?? lines()[0] ?? filterField)?.focus();
 		else filterField?.focus();
+	}
+
+	/** A closed list forgets its filter and the line it was on. */
+	function emptied() {
+		if (details === null || details.open) return;
+		typed = '';
+		current = null;
 	}
 
 	function press(event: MouseEvent) {
@@ -174,14 +177,19 @@
 		if (!role.several && !byKey) void closeAfterPick(details);
 	}
 
-	/** Place the list again in the task that opens it, before the page paints, for an open the pill's
-	 *  own press did not place, such as a screen reader's click, and again when the window resizes. */
+	/** In the task that opens the list, before the page paints and before the next key arrives: place
+	 *  it again, for an open the pill's own press did not place, such as a screen reader's click, and
+	 *  put focus in it. Place it again, too, when the window resizes. */
 	$effect(() => {
 		if (details === null) return;
 		const again = () => {
 			if (details?.open) place();
 		};
-		const opening = new MutationObserver(again);
+		const opening = new MutationObserver(() => {
+			if (!details?.open) return;
+			place();
+			focusOnOpen();
+		});
 		opening.observe(details, { attributes: true, attributeFilter: ['open'] });
 		addEventListener('resize', again);
 		return () => {
@@ -191,7 +199,7 @@
 	});
 </script>
 
-<details class="column-picker" class:empty data-role={role.id} data-opens={opens} bind:this={details} use:closesWhenLeft ontoggle={opened}>
+<details class="column-picker" class:empty data-role={role.id} data-opens={opens} bind:this={details} use:closesWhenLeft ontoggle={emptied}>
 	<summary aria-label={label} aria-disabled={empty ? 'true' : undefined} onpointerdown={pillDown} onclick={press} onkeydown={pillKey}>
 		<span class="pill-role">{role.word}</span>
 		<span class="pill-face"><span class="pill-name" data-pill-name>{face.name}</span>{#if face.more}<span class="pill-more">{face.more}</span>{/if}</span>
