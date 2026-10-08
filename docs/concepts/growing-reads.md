@@ -418,16 +418,17 @@ the last day there was.
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
-**A day is one file, and the cover counts recorded days.** Both ledgers this
-reader serves, the fitted merge line and the merge line's holdout score, file one
-`<YYYY>/<MM>/<DD>.csv` a day: grain `day` in `config/ledgers.json`, the registry
-`backend/idhazh/ledger/paths.py` builds each writer's path from. `dayShardFiles`
+**A day is one file, and the cover counts recorded days.** The ledger this
+reader serves, the fitted merge line, files one `<YYYY>/<MM>/<DD>.csv` a day:
+grain `day` in `config/ledgers.json`, the registry
+`backend/idhazh/ledger/paths.py` builds its writer's path from. `dayShardFiles`
 keeps the newest `days` of the days the publication inventory names and opens
 one file a day, so `LEDGER_WINDOW_DAYS` bounds the read at 91 files whatever the
 ledger holds. From #1068 until 2026-10-08 the reader looked for a folder of files
-a day, which neither writer files, so the Judgement page read no row.
+a day, which no writer filed, so the Judgement page read no row.
 `frontend/tests/similarity-ledgers.spec.ts` now holds the registry and the
-reader to the one layout.
+reader to the one layout. The merge line's holdout score left this reader when it
+moved onto the ledger door; it is read with the packed records above.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -456,7 +457,7 @@ matters, because the vector block is most of what a day payload weighs.
 once to find the newest year, which costs one directory entry a year for ever.
 `readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
 which shards are newest, which costs one entry a month for ever.
-`readDayShards` is the bigger one, and both judge readers inherit it: the
+`readDayShards` is the bigger one, and the fitted-line reader inherits it: the
 inventory names one entry a recorded day, and the reader reads every entry of
 its ledger to find the newest. It looks on disk only for the files inside its
 cover and opens no other, and deriving the newest day from today's date instead
