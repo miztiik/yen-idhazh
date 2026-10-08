@@ -70,5 +70,8 @@
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
 		text-align: center;
+		/* A centred sentence that wraps leaves its last word alone on a phone
+		   unless its lines are evened out. */
+		text-wrap: balance;
 	}
 </style>

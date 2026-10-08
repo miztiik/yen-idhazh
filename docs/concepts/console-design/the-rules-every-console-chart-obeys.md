@@ -245,7 +245,11 @@ column - four series or one - and the rules are not negotiable per chart:
  lie along one line and wrap only when the next one does not fit. Each value
  keeps the room its widest reading needs, so an entry does not shift sideways as
  the pointer moves from `9` to `1,204` - and never more room than the strip is
- wide. The strip is a CSS container and the reserve is capped at its width, so on
+ wide. A day nothing measured prints its not-measured sentence once, in place of
+ every entry, so that sentence is no entry's reading and holds no room in any of
+ them; a phone's strip would otherwise put every value on a line of its own the
+ moment its window held such a day. The strip is a CSS container and the
+ reserve is capped at its width, so on
  a phone a value whose widest reading would not fit takes the strip's width
  rather than pushing the page sideways, and every value that does fit keeps its
  room at every width. Measured 2026-09-28: an uncapped reserve pushed
