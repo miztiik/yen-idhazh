@@ -290,7 +290,8 @@ never commits a second tenant's output, so the paths come back from
 night with no tenant registered stages nothing, and the step is skipped: `git
 add` with no path is an error rather than a no-op. A ledger that files through
 the door is named by its folder under `state/raw/`, because the collecting job
-writes only raw files and the gardener packs them later.
+writes only raw files and the gardener packs them later. On a night that files
+nothing there the folder is absent, and the commit step skips the absent path.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the
