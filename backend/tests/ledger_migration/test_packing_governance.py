@@ -23,6 +23,7 @@ from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledgers import Grain
 from utilities.ledger_migration import (
     csv_files,
+    csv_layouts,
     packing,
     phases,
     refusals,
@@ -276,9 +277,9 @@ def test_a_named_decision_lets_the_door_keep_a_ledger_for_less_than_its_csv(
     """
     config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
     (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
-    named = packing.CSV_LEDGERS[EVALS]._replace(shorter_by="a person, on a named day")
+    named = csv_layouts.CSV_LEDGERS[EVALS]._replace(shorter_by="a person, on a named day")
     monkeypatch.setattr(
-        packing, "CSV_LEDGERS", MappingProxyType(dict(packing.CSV_LEDGERS) | {EVALS: named})
+        packing, "CSV_LEDGERS", MappingProxyType(dict(csv_layouts.CSV_LEDGERS) | {EVALS: named})
     )
 
     declared = packing.declared([EVALS], config_dir)
