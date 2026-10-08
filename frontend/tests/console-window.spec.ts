@@ -1064,6 +1064,158 @@ const STRIP_CASES: {
 	}
 ];
 
+/** The colour each rate is drawn in, which the strip's swatch for it carries. */
+const DOT_FILL = { disagreement: 'var(--chart-1)', unclear: 'var(--chart-3)' } as const;
+
+/** The rule under the agreement chart, in Reader's words, at a floor of 5. */
+const FLOOR_RULE =
+	'A day has no "disagreed" dot if fewer than 5 pairs were read twice, and no "could not tell" dot if fewer than 5 pairs agreed.';
+
+/** What the agreement chart draws for each day at one window. Each rate is
+ * judged by the pairs its share is taken over: "disagreed" by every pair read
+ * twice, "could not tell" by the pairs whose two readings agreed. Under
+ * `SHARE_FLOOR` of them that rate gets no dot and its line breaks there, while
+ * the day keeps its column. A measured day with no measured neighbour is a dot
+ * with no line. Jony's ruling; the note's words are Reader's. */
+const DOT_CASES: {
+	preset: number;
+	state: string;
+	days: JudgeDay[];
+	/** Each column's dots, named by the axis label each sits on. */
+	dots: Record<string, Partial<Record<keyof typeof DOT_FILL, string>>>;
+	/** Each rate's line, as the days each of its runs joins. */
+	lines: Record<keyof typeof DOT_FILL, string[][]>;
+	/** The note after the sentence, or null where none prints. */
+	note: string | null;
+}[] = [
+	{
+		preset: 7,
+		state: 'days of 40, 1 and 4 pairs read twice sit beside a day of 5 where only 4 agreed',
+		days: [
+			judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 36, disagreementRate: 0.1 }),
+			judgeDay('2030-06-12', { pairsJudged: 1, pairsUsable: 0, disagreementRate: 1 }),
+			judgeDay('2030-06-13', {
+				pairsJudged: 50,
+				pairsUsable: 45,
+				disagreementRate: 0.1,
+				unclearRate: 0.2
+			}),
+			judgeDay('2030-06-14', { pairsJudged: 5, pairsUsable: 4, disagreementRate: 0.2 }),
+			judgeDay('2030-06-15', {
+				pairsJudged: 4,
+				pairsUsable: 3,
+				disagreementRate: 0.25,
+				unclearRate: 1 / 3
+			})
+		],
+		dots: {
+			'2030-06-10': { disagreement: '10%', unclear: '0%' },
+			'2030-06-12': {},
+			'2030-06-13': { disagreement: '10%', unclear: '20%' },
+			'2030-06-14': { disagreement: '20%' },
+			'2030-06-15': {}
+		},
+		lines: { disagreement: [['2030-06-13', '2030-06-14']], unclear: [] },
+		note: `${FLOOR_RULE} The chart shows a gap where a dot is left out, and that day's counts are still above.`
+	},
+	{
+		preset: 7,
+		state: 'every day read fewer than 5 pairs twice, and the window read 5',
+		days: [
+			judgeDay('2030-06-12', { pairsJudged: 2, pairsUsable: 2 }),
+			judgeDay('2030-06-13', { pairsJudged: 2, pairsUsable: 2 }),
+			judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 1 })
+		],
+		dots: { '2030-06-12': {}, '2030-06-13': {}, '2030-06-15': {} },
+		lines: { disagreement: [], unclear: [] },
+		note: `${FLOOR_RULE} So the chart has no dots, and each day's counts are still above.`
+	},
+	{
+		preset: 7,
+		state: 'every day read 5 pairs or more, and 5 or more agreed',
+		days: [
+			judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 36, disagreementRate: 0.1 }),
+			judgeDay('2030-06-13', {
+				pairsJudged: 50,
+				pairsUsable: 45,
+				disagreementRate: 0.1,
+				unclearRate: 0.2
+			})
+		],
+		dots: {
+			'2030-06-10': { disagreement: '10%', unclear: '0%' },
+			'2030-06-13': { disagreement: '10%', unclear: '20%' }
+		},
+		lines: {
+			disagreement: [['2030-06-10', '2030-06-13']],
+			unclear: [['2030-06-10', '2030-06-13']]
+		},
+		note: null
+	},
+	{
+		preset: 1,
+		state: 'its day read 5 pairs, and the 4 that agreed are too few for a dot',
+		days: [judgeDay('2030-06-15', { pairsJudged: 5, pairsUsable: 4, disagreementRate: 0.2 })],
+		dots: { '2030-06-15': { disagreement: '20%' } },
+		lines: { disagreement: [], unclear: [] },
+		note: FLOOR_RULE
+	},
+	{
+		preset: 1,
+		state: 'its day read 4 pairs, too few for either dot',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 4,
+				pairsUsable: 3,
+				disagreementRate: 0.25,
+				unclearRate: 1 / 3
+			})
+		],
+		dots: { '2030-06-15': {} },
+		lines: { disagreement: [], unclear: [] },
+		note: null
+	}
+];
+
+/** The agreement chart's dots, each named by the axis label it sits on, and each
+ * rate's lines, each named by the days whose dots it joins. A dot is told by the
+ * colour its rate is drawn in. */
+async function agreementMarks(page: Page): Promise<{
+	dots: Record<string, Record<string, string>>;
+	lines: Record<string, string[][]>;
+}> {
+	return page.locator('[data-windowed="judge-agreement"] svg[aria-label]').evaluate((svg, fills) => {
+		const axis = [...svg.querySelectorAll('[data-tick="y"]')].map((tick) => ({
+			label: (tick.textContent ?? '').trim(),
+			y: Math.round(Number(tick.getAttribute('y')) * 10) / 10
+		}));
+		const rates = Object.entries(fills);
+		const dots: Record<string, Record<string, string>> = {};
+		const dayAt: Record<string, Record<string, string>> = {};
+		for (const day of svg.querySelectorAll('[data-agreement-day]')) {
+			const date = day.getAttribute('data-agreement-day') ?? '';
+			dots[date] = {};
+			for (const dot of day.querySelectorAll('circle')) {
+				const rate = rates.find(([, fill]) => fill === dot.getAttribute('fill'))?.[0] ?? 'unknown';
+				const y = Number(dot.getAttribute('cy'));
+				dots[date][rate] = axis.find((tick) => tick.y === y)?.label ?? `off every axis label, at y ${y}`;
+				(dayAt[rate] ??= {})[`${dot.getAttribute('cx')},${dot.getAttribute('cy')}`] = date;
+			}
+		}
+		const lines = Object.fromEntries(
+			rates.map(([rate]) => [
+				rate,
+				[...svg.querySelectorAll(`[data-agreement-series="${rate}"]`)].map((line) =>
+					(line.getAttribute('points') ?? '')
+						.split(' ')
+						.map((point) => dayAt[rate]?.[point] ?? `no dot at ${point}`)
+				)
+			])
+		);
+		return { dots, lines };
+	}, DOT_FILL);
+}
+
 test.describe('the Judgement panels name their span in every state, on days the test builds', () => {
 	/** Each panel rendered on the server with its real children, never a stub. */
 	const drawn = {} as Record<SpanCase['surface'], (props: Record<string, unknown>) => string>;
@@ -1166,6 +1318,27 @@ test.describe('the Judgement panels name their span in every state, on days the 
 				);
 			expect(dots).toEqual(one.dots);
 			expect(await said(page, SAID['judge-agreement'])).toBe(one.words);
+		});
+	}
+
+	for (const one of DOT_CASES) {
+		test(`THE ORACLE: judge-agreement draws no dot for a rate under the floor at the ${one.preset}-day window, when ${one.state}`, async ({
+			page
+		}) => {
+			await page.setContent(
+				`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', words: '', ...one }))}</main>`
+			);
+
+			const marks = await agreementMarks(page);
+			expect(marks.dots, 'a dot is drawn at a share the strip calls too few to report').toEqual(
+				one.dots
+			);
+			expect(marks.lines, 'a line joins across a day its rate has no dot on').toEqual(one.lines);
+			if (one.note === null) {
+				await expect(page.locator('[data-agreement-floor-note]')).toHaveCount(0);
+			} else {
+				expect(await said(page, '[data-agreement-floor-note]')).toBe(one.note);
+			}
 		});
 	}
 });
