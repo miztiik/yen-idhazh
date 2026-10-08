@@ -465,6 +465,12 @@ class PeriodsTaken(Model):
     years_packed: list[YearStamp] = Field(
         description="UTC years no entry named before, now `packed` into a year file."
     )
+    years_expired: list[YearStamp] = Field(
+        description=(
+            "Indexed UTC years the yearly expiry deleted, each one's files and its entry, "
+            "oldest first, or would delete on a dry run."
+        )
+    )
     months_dropped: list[MonthStamp] = Field(
         description=(
             "UTC months the monthly window dropped, or named and kept while its deletes only "

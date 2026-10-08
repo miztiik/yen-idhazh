@@ -96,6 +96,7 @@ def finished() -> TaskFinished:
             days_retaken=[],
             months_closed=[],
             years_packed=[],
+            years_expired=[],
             months_dropped=[],
             raw_days_dropped=[],
             empty_periods=[],

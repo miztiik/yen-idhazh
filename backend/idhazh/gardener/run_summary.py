@@ -25,7 +25,9 @@ being defined is italic; and only `failed` is bold.
 
 A compaction's old months and raw days are said as found past the keep line,
 because its record lists them whether its monthly window deleted them or only
-reported them.
+reported them. Its expired years are said as deleted, first in its row: the
+yearly expiry has no switch that only reports, so a live pass deletes them and
+a dry run says it would, and no later wake can undo them.
 """
 
 from __future__ import annotations
@@ -235,8 +237,12 @@ def _work(each: TaskFinished) -> list[str]:
 
 
 def _periods_work(periods: PeriodsTaken) -> list[tuple[str, str, int, str, str]]:
-    """A compaction's work, period by period: each verb's two forms, its count and noun."""
+    """A compaction's work, period by period: each verb's two forms, its count and noun.
+
+    Expired years lead, because no later wake can undo them.
+    """
     return [
+        ("delete", "deleted", len(periods.years_expired), "expired year", "expired years"),
         ("pack", "packed", len(periods.days_packed), "day", "days"),
         ("re-pack", "re-packed", len(periods.days_retaken), "day", "days"),
         ("close", "closed", len(periods.months_closed), "month", "months"),
