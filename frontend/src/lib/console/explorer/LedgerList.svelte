@@ -19,9 +19,10 @@
 	} = $props();
 	const shown = $derived(ledgers.filter((ledger) => ledger.name.includes(filter.toLowerCase())));
 	let options = $state<HTMLDivElement | null>(null);
-	// The list keeps the first chosen ledger in view until the reader takes it over. One move
-	// when the page opened was not enough: a row's second line arrives with the cost reading,
-	// after the move, and the taller row fell partly out of view again.
+	// The list keeps the first chosen ledger in view until the reader scrolls it, or presses or
+	// types anywhere on the page. One move when the page opened was not enough: a row's second
+	// line arrives with the cost reading, after the move, and the taller row fell partly out of
+	// view again.
 	let following = true;
 	let movedTo: number | null = null;
 
@@ -44,10 +45,19 @@
 		});
 	});
 
-	/** The reader pressed or typed in the list: from now on only the reader moves it. */
-	function readerTakesOver() {
-		following = false;
-	}
+	// Any press or key on the page is the reader at work - a tick, a typed question, Run - so the
+	// list stops following there, and no move can follow anything the reader did.
+	$effect(() => {
+		const stop = () => {
+			following = false;
+		};
+		document.addEventListener('pointerdown', stop, { capture: true });
+		document.addEventListener('keydown', stop, { capture: true });
+		return () => {
+			document.removeEventListener('pointerdown', stop, { capture: true });
+			document.removeEventListener('keydown', stop, { capture: true });
+		};
+	});
 
 	/** A scroll this list did not make is the reader's, by wheel, touch or scroll bar. */
 	function scrolled() {
@@ -61,7 +71,7 @@
 		<button type="button" onclick={onRefresh} disabled={refreshing}><Icon id="list-refresh" /> {refreshing ? 'Refreshing' : 'Refresh'}</button>
 	</div>
 	<label class="filter">Filter <input value={filter} oninput={(event) => onFilter(event.currentTarget.value)} /></label>
-	<div class="ledger-options" bind:this={options} onscroll={scrolled} onpointerdown={readerTakesOver} onkeydown={readerTakesOver}>
+	<div class="ledger-options" bind:this={options} onscroll={scrolled}>
 		{#each shown as ledger (ledger.name)}
 			<label class="ledger" data-ledger-name={ledger.name} data-published={published.includes(ledger.name) ? 'yes' : 'no'} data-chosen={selected.includes(ledger.name) ? 'yes' : 'no'}>
 				<input type="checkbox" checked={selected.includes(ledger.name)} onchange={() => onToggle(ledger.name)} />
