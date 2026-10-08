@@ -22,10 +22,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain
 from idhazh.gardener import ledger_marks
-
-_TRIAL_ROOT_PREFIX = "state/pipeline-tests-"
 
 
 def _day_window(name: str, policy: RetentionPolicy, today: date) -> tuple[str, str]:
@@ -131,40 +128,6 @@ def _dated_paths(
     return paths
 
 
-def _trial_ledger_folder(root: Path, which: LedgerName) -> Path:
-    """One trial root's folder for a ledger, using the door prefix where it has one."""
-    if ledger.entry(which).grain is Grain.RAW_AND_COMPACT:
-        return root.joinpath(*ledger.door_folders(which))
-    return root / which.value
-
-
-def _trial_paths(
-    root: Path, days: tuple[date, ...], months: tuple[str, ...], *, monthly: bool
-) -> set[Path]:
-    """Named period paths for one pipeline-test root and its declared ledgers."""
-    paths: set[Path] = set()
-    if monthly:
-        for month in months:
-            year, number = month.split("-")
-            for which in LedgerName:
-                paths.add(root / which.value / year / number)
-                paths.add(root / which.value / f"{month}.csv")
-        return paths
-    for day in days:
-        suffix = Path(f"{day:%Y}/{day:%m}/{day:%d}")
-        paths.add(root / "traces" / suffix)
-        for which in LedgerName:
-            folder = _trial_ledger_folder(root, which)
-            raw_folder = _trial_ledger_folder(root / "raw", which)
-            paths.add(folder / suffix)
-            paths.add(raw_folder / suffix)
-            paths.add(folder / f"{day:%Y-%m}.csv")
-            for extension in (".csv", ".json", ".parquet"):
-                paths.add(folder / suffix.with_suffix(extension))
-                paths.add(raw_folder / suffix.with_suffix(extension))
-    return paths
-
-
 def _ledger_paths(
     folder: str,
     repo_root: Path,
@@ -240,9 +203,6 @@ def paths_for_task(
     paths: set[Path] = set()
     for folder in (*policy.claims(), *policy.reads):
         root = repo_root / folder
-        if name == "trials" and folder.startswith(_TRIAL_ROOT_PREFIX):
-            paths.update(_trial_paths(root, days, months, monthly=monthly))
-            continue
         if (
             name == "visual-prune"
             and isinstance(policy, RetentionPolicy)

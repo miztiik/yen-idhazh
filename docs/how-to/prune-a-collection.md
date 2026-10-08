@@ -132,7 +132,8 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
   counts a file's rows and not a day's, so every day of the range in a month or
   a year file that holds a row counts, whether or not that day filed one.
 - Whether the command may take a ledger's days is that ledger's compaction
-  declaration's `prune_refusal`, in `config/gardener/compact-<folder>.json`.
+  declaration's `prune_refusal`, in `config/gardener/compact-<folder>.json`,
+  where `<folder>` is its door folder with `/` written `-`.
   `null` lets it; a sentence refuses the ledger and is the reason printed.
   `summary-quality-evals` carries one to protect retained quality evidence from
   manual deletion. Its configured yearly policy may expire old evidence

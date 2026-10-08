@@ -39,7 +39,7 @@ Run the migrator from the checked-out code commit. Name the roots and UTC months
 The migrator must import this checkout's code; set the import path to this worktree's backend as described in [Git fixtures and child producers](../reference/agent-notes.md#git-fixtures-and-child-producers).
 
 ```text
-python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests-no-visual-plan --state-dir state/pipeline-tests-production-settings --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
+python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests/production-settings --state-dir state/pipeline-tests/no-visual-plan --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
 ```
 
 To move the same inputs in separate phases, add exactly one of `--plan`,
@@ -82,16 +82,19 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the ten layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the eleven layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
 `counterfactual-scores`, `candidate-models`, `feed-health`, `seen`,
-`published`, and the similarity judge's `content-similarity-judge/scored-pairs`
-and `content-similarity-judge/metrics`, each one shared file a day. This tool
-does not migrate `council-run-records`, `span-rollup` or an undeclared CSV
-layout. Moving another shape requires its own contract and reader design first.
-The reader supports a declared day tree or shared day file under a multi-folder
-prefix. It does not infer an undeclared layout. `item-health-summary`
-moved without a migrator entry because no committed file existed.
+`published`, and three of the similarity judge's ledgers, each one shared file
+a day inside its family's folder:
+`content-similarity-judge/merge-line-holdout-scores`,
+`content-similarity-judge/scored-pairs` and `content-similarity-judge/metrics`.
+This tool does not migrate `council-run-records`, `span-rollup` or an
+undeclared CSV layout. Moving another shape requires its own contract and
+reader design first. The reader supports a declared day tree or shared day file
+under a multi-folder prefix. It does not infer an undeclared layout.
+`item-health-summary` moved without a migrator entry because no committed file
+existed.
 
 Both CSV layouts refuse a filled cell under an unknown heading, a value with
 no heading, and conflicting filled values under an old heading and its current

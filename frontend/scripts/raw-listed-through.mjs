@@ -1,9 +1,28 @@
-/** Which newest raw day listing did the site build stage for each ledger? */
+/**
+ * Which newest raw day listing did the site build stage for each ledger?
+ *
+ * The folder is found from this file's own place, never from the working folder, so a build
+ * reads the same folder wherever it runs. `frontend/static/` is committed, so a folder that is
+ * not there is a wrong path, never a build with no raw day: it stops the build rather than
+ * baking an empty list. A static folder with no `state/raw/` names no day.
+ *
+ * The read lists names and opens no file. It reads what the last `copy-visuals.mjs` run staged,
+ * and that run empties `static/state/` first: one listing of the raw folder, then at most one for
+ * each ledger `ledger.published` names, each holding at most `max(console.window_presets)` days.
+ */
 
 import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export function rawListedThrough(staticRoot = 'frontend/static') {
+const STATIC_ROOT = fileURLToPath(new URL('../static', import.meta.url));
+const REPOSITORY = fileURLToPath(new URL('../..', import.meta.url));
+
+export function rawListedThrough(staticRoot = STATIC_ROOT) {
+	if (!existsSync(staticRoot)) {
+		const named = relative(REPOSITORY, staticRoot).split(sep).join('/');
+		throw new Error(`the static folder ${named}/ is not there, so the build cannot say which raw days it listed`);
+	}
 	const raw = join(staticRoot, 'state', 'raw');
 	if (!existsSync(raw)) return {};
 	/** @type {Record<string, string>} */

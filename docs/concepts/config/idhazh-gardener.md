@@ -29,9 +29,9 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty-seven ship today:
-five `retention` tasks, two `collection` tasks, nineteen `compaction` tasks -
-sixteen for production and three for trial roots (below) - and `corpus-squash`,
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty-eight ship today:
+five `retention` tasks, two `collection` tasks, twenty `compaction` tasks -
+seventeen for ledgers and three for trial roots (below) - and `corpus-squash`,
 the one `history` task (below).
 There is no `name` key inside a declaration. Both plan writers open the same
 named list, so adding an unrelated file cannot change a wake's plan.
@@ -78,7 +78,7 @@ Why each tree gets the age it has is
 
 ## The compaction declarations that ship
 
-All sixteen production declarations pack live. They keep day files until 45 whole days
+All seventeen ledger declarations pack live. They keep day files until 45 whole days
 after their month ends, then month files until 93 whole days after their year
 ends. Indexed year files expire 36 calendar months after that UTC year ends.
 For example, 2026 expires on 2030-01-01 at 00:00 UTC. Each declaration has
@@ -87,13 +87,14 @@ and `yearly_prune_enable: true`. The monthly forever window preserves rows
 until yearly packing; it does not mean years survive forever.
 
 Each declaration owns `state/raw/<folder>` and `state/compact/<folder>`, where
-`<folder>` is its ledger's door folder, and is called `compact-<folder>` with
-`/` written `-`: the similarity judge's scored pairs sit in
-`content-similarity-judge/scored-pairs`, so their declaration is
-`compact-content-similarity-judge-scored-pairs`.
+`<folder>` is its ledger's door folder: the ledger's name, or the family's
+folder and then that name for a ledger filed inside its family's folder, such as
+`content-similarity-judge/merge-line-holdout-scores` for the holdout score and
+`content-similarity-judge/scored-pairs` for the judge's scored pairs. Each is
+called `compact-<folder>` with `/` written `-`.
 The raw-day packing wait remains one whole day for every ledger.
 
-Table A. All sixteen declarations use the same packing and expiry settings.
+Table A. All seventeen declarations use the same packing and expiry settings.
 
 | ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
 | --- | --- | --- |
@@ -111,8 +112,9 @@ Table A. All sixteen declarations use the same packing and expiry settings.
 | A12 | `compact-seen` | 45 days / 93 days / 36 calendar months |
 | A13 | `compact-summary-quality-evals` | 45 days / 93 days / 36 calendar months |
 | A14 | `compact-visual-prunes` | 45 days / 93 days / 36 calendar months |
-| A15 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
-| A16 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
+| A15 | `compact-content-similarity-judge-merge-line-holdout-scores` | 45 days / 93 days / 36 calendar months |
+| A16 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
+| A17 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
 
 `item-health-summary` has a declaration but no generated rows yet.
 `telemetry-aggregate` remains `dry_run: true`; it produces summaries only for
@@ -230,12 +232,11 @@ which is live only while its task's own `dry_run` is `false` too; and every
 `yearly_prune_enable`, which is live only when it is `true` and its task's own
 `dry_run` is `false`. It names the live ones as its exceptions, each with the
 decision beside it: `corpus-squash`'s `dry_run`; the `dry_run` and the
-`yearly_prune_enable` of the fourteen compactions the owner approved on
-2026-10-07, `compact-gardener` among them; the same two switches of each
-compaction of a ledger moved onto the door since, under the owner's directive of
-2026-10-05 that a moved ledger takes its retention with it and that same
-approval - `compact-content-similarity-judge-scored-pairs` and
-`compact-content-similarity-judge-metrics` so far; and the `month_deletes_dry_run`
+`yearly_prune_enable` of all fourteen compactions, `compact-gardener` among
+them, under the owner's approval of 2026-10-07; the same two of each compaction
+for a ledger moved onto the door since, under that approval and the owner's
+direction of 2026-10-05 that a moved ledger takes its retention and upkeep with
+it; and the `month_deletes_dry_run`
 of `compact-feed-retirements`, `compact-gardener`, `compact-host-fingerprint`,
 `compact-item-health`, `compact-summary-quality-evals` and
 `compact-visual-prunes`, whose forever monthly windows drop no month. A task
@@ -262,7 +263,7 @@ names the file an operator edits and the rule it broke.
 | The declaration that governs the host-fingerprint ledger - its compaction - keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from that ledger, so a source month deleted while its published month is kept is a shard nothing can rebuild |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
-| A compaction not called `compact-<folder>` or `compact-trial-<folder>` for its ledger's door folder, with `/` written `-` | Separate names keep trial retention from governing production, and the folder names the files the task owns |
+| A compaction not called `compact-<folder>`, or `compact-trial-<folder>` for trial roots, where `<folder>` is its ledger's door folder with each `/` written `-` | One compaction a ledger folder, found by name, and separate names keep trial retention from governing production |
 | A trial compaction whose roots are not trial roots, or whose ownership differs from the ledger's raw and compact folders under those roots | The declaration cannot pack or delete another ledger's paths |
 | Duplicate or unsafe `state_roots` | A root is explicit and relative, not a traversal or a second spelling of one input |
 | A compaction that leaves out any key in [the table above](#the-keys-of-a-compaction) | Nothing fills a setting in from code, so a missing one is named rather than guessed |
@@ -286,10 +287,10 @@ is refused by the commit loop, where the deletions are known.
 Owner @kumarsnaveen_microsoft approved this policy on 2026-10-07 for all fourteen
 ledgers, including the four report-only tasks that now run live. Older
 published deduplication and evaluation history may be lost. A ledger moved onto
-the door after that day takes the same policy with it, under the owner's
-directive of 2026-10-05; `MOVED_LEDGER_TASKS` in
-`backend/tests/contracts/test_gardener_config.py` names each one's compaction.
-The owning
+the door since takes the same policy with it, because the owner directed on
+2026-10-05 that a moved ledger takes its retention and upkeep with it:
+`MOVED_LEDGER_TASKS` in `backend/tests/contracts/test_gardener_config.py` names
+each one. The owning
 [compaction rationale](../../architecture/publishing/ledger-compaction.md#design-rationale)
 records the safety design. The yearly boolean is a permanent operator choice,
 not a second packing implementation.

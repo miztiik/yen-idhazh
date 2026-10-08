@@ -22,6 +22,7 @@ from __future__ import annotations
 import csv
 import shutil
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 import pytest
@@ -73,19 +74,14 @@ NARROW = FIXTURES_DIR / "state" / "fitted-thresholds-before-the-judge-stamp.csv"
 #: committed day file as it stood before that column left on 2026-09-24.
 WIDE = FIXTURES_DIR / "state" / "fitted-thresholds-carrying-the-key-point-weight.csv"
 
-#: The ledgers in the vocabulary that the registry names no reader for.
-#: Named rather than counted, because a count that falls by one says a ledger lost
-#: its reader and never says which one - and that is exactly the failure this
-#: file missed on 2026-09-22, when five day trees left `ledger.keyed_paths` and
-#: the only test watching a refusal was watching a ledger that had just joined
-#: them.
-UNREGISTERED: Final = frozenset(
-    {
-        "-".join(
-            ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix
-        ),
-    }
-)
+#: The ledgers in the vocabulary that the registry names no reader for: none,
+#: since every judge ledger but the fitted line moved to the door and left the
+#: vocabulary. Named rather than counted, because a count that falls by one says
+#: a ledger lost its reader and never says which one - and that is exactly the
+#: failure this file missed on 2026-09-22, when five day trees left
+#: `ledger.keyed_paths` and the only test watching a refusal was watching a
+#: ledger that had just joined them.
+UNREGISTERED: Final[frozenset[str]] = frozenset()
 
 
 def a_narrow_day(state_dir: Path) -> Path:
@@ -290,13 +286,16 @@ def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: P
     assert live == dry
 
 
-def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Path) -> None:
+def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An operator who typed a real ledger is holding a real question.
 
-    The merge line's holdout scores are in the prune vocabulary, their day files
-    are real, and the registry names no contract that reads one of their rows.
-    Saying so beats reporting that nothing happened to a file that is plainly
-    there.
+    Every ledger in the vocabulary has a reader today, so the case is built: a
+    word for the folder the judge's scored pairs filled as CSV before they moved
+    to the door. Its day files are real, and the registry names no contract that
+    reads one of their rows. Saying so beats reporting that nothing happened to
+    a file that is plainly there.
 
     **This target used to be `scores`, and that was a bug.** `scores` was a day
     tree, so the refusal it was asserting stopped being about a ledger with no
@@ -304,15 +303,19 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
     refusal is the right answer for exactly the ledgers in `UNREGISTERED`
     below, and the census there is what keeps this one honest.
     """
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
-    day = ledger.path(tmp_path, which, "2026-09-18")
+    folder = "content-similarity-judge/scored-pairs"
+    word = folder.replace("/", "-")
+    monkeypatch.setattr(
+        widen_ledger_header,
+        "LEDGERS",
+        MappingProxyType({**widen_ledger_header.LEDGERS, word: folder}),
+    )
+    day = tmp_path / folder / "2026" / "09" / "18.csv"
     day.parent.mkdir(parents=True)
     day.write_text("version\n", encoding="utf-8", newline="")
 
     with pytest.raises(ValueError, match="names a reader for"):
-        widen_ledger_header.widen(
-            "-".join(ledger.entry(which).prefix), names=["2026/09/18.csv"], state_dir=tmp_path
-        )
+        widen_ledger_header.widen(word, names=["2026/09/18.csv"], state_dir=tmp_path)
 
 
 def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:
@@ -369,5 +372,5 @@ def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
 
     assert refused == UNREGISTERED
     assert len(widen_ledger_header.LEDGERS) - len(refused) == 1, (
-        "one of two has CSV headers; the other is named in UNREGISTERED"
+        "the one ledger in the vocabulary has CSV headers"
     )

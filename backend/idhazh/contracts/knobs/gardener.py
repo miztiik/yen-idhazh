@@ -29,7 +29,6 @@ vocabulary of their own here.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal, Self
@@ -367,17 +366,6 @@ GITHUB_LARGE_FILE_BYTES: Final = 50 * 1024 * 1024
 #: and one wake later, because a pass packs years before it absorbs months. So
 #: `monthly_keep_days` takes effect only from `daily_keep_days` plus this plus one.
 JANUARY_DAYS: Final = 31
-
-
-def compaction_name(folders: Sequence[str], *, trial: bool = False) -> str:
-    """The name a ledger's compaction is declared under, from the ledger's door folder.
-
-    `compact-`, then `trial-` for the compaction of named trial roots, then the
-    folder with each `/` written `-`. The folder rather than the ledger's value,
-    so a ledger nested in a family is named for its whole address, and a ledger
-    that is its own family keeps `compact-<value>`.
-    """
-    return f"compact-{'trial-' if trial else ''}{'-'.join(folders)}"
 
 
 class CompactionPolicy(_Declared):

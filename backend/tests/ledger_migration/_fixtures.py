@@ -237,8 +237,8 @@ def entry_back_on_csv(which: LedgerName) -> dict[str, Any]:
     }
 
 
-def file_back_on_csv(config_dir: Path, which: LedgerName) -> None:
-    """Rewrite the registry in `config_dir` to file one ledger as it was filed before it moved."""
+def registry_back_on_csv(config_dir: Path, which: LedgerName) -> Path:
+    """This config folder, its registry filing one ledger the way it was filed before it moved."""
     registry_path = config_dir / "ledgers.json"
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     for family in registry["families"]:
@@ -247,6 +247,7 @@ def file_back_on_csv(config_dir: Path, which: LedgerName) -> None:
             for held in family["ledgers"]
         ]
     registry_path.write_text(json.dumps(registry), encoding="ascii")
+    return config_dir
 
 
 def compaction_identity() -> WriterIdentity:

@@ -34,11 +34,14 @@ export type { JudgeDay, LineDay, MergeDay };
  * reads and none of it belongs in this document, so it is reduced to its counts
  * here rather than handed to the browser.
  */
-export function load() {
+export async function load() {
 	const console = consoleConfig();
 	const widestDays = Math.max(...console.window_presets);
 	// Every window on this route ends on the site's newest published day.
 	const day = windowDay();
+	// The widest span the window control offers, as a window: the holdout score
+	// is read inside it, and the squares strip draws every day of it.
+	const readSpan = windowOfDays(day, widestDays, console.today_anchor);
 	const merges: MergeDay[] = publishedDates(undefined, widestDays)
 		.sort()
 		.map((date) => {
@@ -70,10 +73,11 @@ export function load() {
 	// `docs/concepts/growing-reads.md`.
 	const holdout = holdoutReading(weights);
 	// How the line stood against the marks, off the committed row rather than
-	// counted again here. Null where nobody has run the verb that writes it, or
-	// where the newest row is older than the widest preset reaches - and the panel
-	// says the line has not been scored rather than showing four zeros.
-	const scored = mergeLineHoldoutScore(widestDays);
+	// counted again here. Null where nobody has run the verb that writes it, where
+	// its day is not packed yet, or where the newest row is older than the widest
+	// preset reaches - and the panel says the line has not been scored rather
+	// than showing four zeros.
+	const scored = await mergeLineHoldoutScore(readSpan);
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
@@ -109,7 +113,7 @@ export function load() {
 		// tidier picture of a record that had stopped filling. Date arithmetic rather
 		// than a directory walk, so the cost is the span the config names and never
 		// what the archive holds (Guardrail #12).
-		span: daysInWindow(windowOfDays(day, widestDays, console.today_anchor)),
+		span: daysInWindow(readSpan),
 		// The band and the daily step the chart draws against, read off config so
 		// the axis is the range a line MAY take rather than the range it has taken.
 		// The switch and the lookback come with them, so a window with no fitted

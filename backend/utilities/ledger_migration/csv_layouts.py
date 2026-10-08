@@ -13,8 +13,12 @@ from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
-from idhazh.contracts.story_similarity_pair import DROPPED_CELLS as PAIR_DROPPED_CELLS
-from idhazh.contracts.story_similarity_pair import RENAMED_CELLS as PAIR_RENAMED_CELLS
+from idhazh.contracts.merge_line_holdout_score import (
+    DROPPED_CELLS as DROPPED_HOLDOUT_SCORE_CELLS,
+)
+from idhazh.contracts.story_similarity_pair import DROPPED_CELLS as DROPPED_PAIR_CELLS
+from idhazh.contracts.story_similarity_pair import RENAMED_CELLS as RENAMED_PAIR_CELLS
+from idhazh.ledger.paths import REGISTRY_FILENAME
 from utilities.ledger_migration.refusals import RefusedError
 
 
@@ -31,13 +35,14 @@ def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
     return LedgerEntry(name=name, grain=Grain.DAY_TREE, prefix=(folder or name.value,))
 
 
-def _day_file(name: LedgerName, folder: str | None = None) -> LedgerEntry:
-    """One shared CSV file a day, under the ledger's own name unless it sat elsewhere."""
+def _day_file(name: LedgerName, folders: tuple[str, ...] = ()) -> LedgerEntry:
+    """One shared CSV file a day, under the ledger's own name unless it sat elsewhere.
+
+    `folders` is the path under `state/` where that is not the ledger's own name,
+    such as a family's folder and then the ledger's own.
+    """
     return LedgerEntry(
-        name=name,
-        grain=Grain.DAY_FILE,
-        prefix=tuple((folder or name.value).split("/")),
-        suffix=".csv",
+        name=name, grain=Grain.DAY_FILE, prefix=folders or (name.value,), suffix=".csv"
     )
 
 
@@ -67,28 +72,41 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         LedgerName.FEED_HEALTH: CsvLedger(
             _tree(LedgerName.FEED_HEALTH), MonthsWindow(unit="months", value=14)
         ),
+        # A person's command filed one shared file a day inside the judge's folder.
+        # Nothing deleted a reading.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+                ("content-similarity-judge", "merge-line-holdout-scores"),
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType(dict.fromkeys(DROPPED_HOLDOUT_SCORE_CELLS)),
+        ),
+        # The council's save job filed the judge's pairs and its per-part readings
+        # as one shared file a day inside the judge's folder, and nothing deleted
+        # either. `shard` is read as the part it named, by the rename map both rows
+        # read, and each heading the pair row stopped naming is dropped with its
+        # filled cells.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+                ("content-similarity-judge", "scored-pairs"),
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType({**RENAMED_PAIR_CELLS, **dict.fromkeys(sorted(DROPPED_PAIR_CELLS))}),
+        ),
+        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+                ("content-similarity-judge", "metrics"),
+            ),
+            ForeverWindow(unit="forever"),
+            RENAMED_PAIR_CELLS,
+        ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
         LedgerName.PUBLISHED: CsvLedger(
             _day_file(LedgerName.PUBLISHED), ForeverWindow(unit="forever")
-        ),
-        # The judge's day files sit in its family folder, and nothing deleted them.
-        # `shard` is read as the part it named, and each heading the pair row
-        # stopped naming is dropped with its filled cells.
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: CsvLedger(
-            _day_file(
-                LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-                "content-similarity-judge/scored-pairs",
-            ),
-            ForeverWindow(unit="forever"),
-            MappingProxyType({**PAIR_RENAMED_CELLS, **dict.fromkeys(sorted(PAIR_DROPPED_CELLS))}),
-        ),
-        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: CsvLedger(
-            _day_file(
-                LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, "content-similarity-judge/metrics"
-            ),
-            ForeverWindow(unit="forever"),
-            PAIR_RENAMED_CELLS,
         ),
     }
 )
@@ -114,20 +132,13 @@ def csv_root(state_dir: Path, which: LedgerName) -> Path:
     return state_dir.joinpath(*require_layout(which).prefix)
 
 
-def door_ledgers(config_dir: Path | None = None) -> list[LedgerName]:
-    """Every ledger in the table that a registry files through the door now.
+def door_ledgers(config_dir: Path) -> list[LedgerName]:
+    """Every ledger in the table that this config's registry files through the door now.
 
-    The registry under `config_dir` when one is named, so a command takes by
-    default only the ledgers the declarations it packs with can move; the
-    committed `config/ledgers.json` otherwise.
+    Read from the config a run is held against, so a run over a recorded config
+    takes the ledgers that config had moved, and no ledger moved since.
     """
-    entries = (
-        {name: ledger.entry(name) for name in CSV_LEDGERS}
-        if config_dir is None
-        else ledger.registry_entries(
-            LedgersConfig.from_json(
-                (config_dir / ledger.paths.REGISTRY_FILENAME).read_text(encoding="utf-8")
-            )
-        )
+    registry = ledger.registry_entries(
+        LedgersConfig.from_json((config_dir / REGISTRY_FILENAME).read_text(encoding="utf-8"))
     )
-    return [name for name in CSV_LEDGERS if entries[name].grain is Grain.RAW_AND_COMPACT]
+    return [name for name in CSV_LEDGERS if registry[name].grain is Grain.RAW_AND_COMPACT]

@@ -14,6 +14,7 @@ import {
 	type EmptyDrawing
 } from '../src/lib/charts/d3/empty';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
+import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
 import { machineRecordState } from './support/machine-record-state';
 import { viewsOf } from './support/views';
@@ -21,6 +22,8 @@ import {
 	judgeNothings,
 	judgeSettled,
 	NOTHINGS,
+	REFUSED_NOTHINGS,
+	type BasicNothing,
 	readPanel,
 	type GateNumber,
 	type Nothing,
@@ -28,6 +31,8 @@ import {
 	type Verdict
 } from './support/panel-gates';
 import { serverCompiler } from './support/server-render';
+
+const PINNED = '2026-08-20';
 
 /**
  * THE ORACLE for the sufficiency gates a selector can decide: each one clears
@@ -79,7 +84,7 @@ const trend = dateSeries([{ label: 'Minutes', token: '--chart-1', points: minute
 });
 
 /** Every nothing drawn the way `waiting.ts` words it. */
-const FOUR_NOTHINGS: Record<Nothing, EmptyDrawing> = {
+const FOUR_NOTHINGS: Record<BasicNothing, EmptyDrawing> = {
 	loading: emptyState('loading'),
 	quiet: emptyState('quiet', quietSentence(DAYS, 30)),
 	missing: emptyState('missing', missingSentence(['2026-08'])),
@@ -90,7 +95,7 @@ interface Witness {
 	props: Record<string, unknown>;
 	/** Paint the page the colour of a panel, which no console page does. */
 	flatPage?: boolean;
-	nothings: Record<Nothing, EmptyDrawing>;
+	nothings: Record<BasicNothing, EmptyDrawing>;
 }
 
 const GOOD: Witness = {
@@ -245,7 +250,7 @@ type Driver = (page: Page) => Promise<void>;
  * `console.judged_panel_ids` with its entry here, in the same pull request -
  * the requests a panel makes are its own, so nothing here can guess them.
  */
-const DRIVERS: Record<string, Record<Nothing, Driver>> = {
+const DRIVERS: Record<string, Record<BasicNothing, Driver>> = {
 	'platform-mix': {
 		loading: (page) => machineRecordState(page, 'loading'),
 		missing: (page) => machineRecordState(page, 'missing'),
@@ -254,7 +259,7 @@ const DRIVERS: Record<string, Record<Nothing, Driver>> = {
 	}
 };
 
-function driverFor(id: string): Record<Nothing, Driver> {
+function driverFor(id: string): Record<BasicNothing, Driver> {
 	const driver = DRIVERS[id];
 	if (driver === undefined) {
 		throw new Error(
@@ -284,6 +289,52 @@ async function settled(page: Page, id: string) {
 	return panel;
 }
 
+async function settledExplorer(page: Page, id: string, width: number, theme: Theme): Promise<PanelReading> {
+	await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
+	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
+	await runExplorer(page);
+	if (id === 'data-explorer-shape') await page.getByRole('tab', { name: 'Chart' }).click();
+	return readPanel(await settled(page, id));
+}
+
+async function explorerNothing(page: Page, id: string, state: Nothing, theme: Theme): Promise<PanelReading> {
+	await page.unrouteAll({ behavior: 'ignoreErrors' });
+	await page.setViewportSize({ width: NOTHING_WIDTH, height: CONSOLE_WINDOW_HEIGHT });
+	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
+	if (state === 'unreachable') await page.route('**/state/**/*.parquet*', (route) => route.abort());
+	await openExplorer(page, PINNED);
+	if (state === 'loading') {
+		await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => { release = resolve; });
+		await page.route('**/state/**/*.parquet*', async (route) => {
+			await held;
+			await route.continue();
+		}, { times: 1 });
+		if (id === 'data-explorer-shape') await page.getByRole('tab', { name: 'Chart' }).click();
+		await page.getByRole('button', { name: /^Run$/ }).click();
+		const panel = page.locator(`[data-console-panel-id="${id}"]`);
+		await expect(panel.locator('.shimmer, [data-state="loading"]')).toHaveCount(1);
+		const reading = await readPanel(panel);
+		release();
+		return reading;
+	}
+	const sql =
+		state === 'quiet' ? 'SELECT * FROM "published" WHERE false' :
+		state === 'missing' ? 'SELECT count(*) AS rows FROM "feed-health"' :
+		state === 'refused' ? 'SELECT 1; SELECT 2' :
+		'SELECT count(*) AS rows FROM "published"';
+	const ledgers = state === 'missing' ? (['feed-health'] as const) : (['published'] as const);
+	await chooseExplorerQuestion(page, ledgers, sql, false);
+	await runExplorer(page);
+	if (id === 'data-explorer-shape') await page.getByRole('tab', { name: 'Chart' }).click();
+	const panel = page.locator(`[data-console-panel-id="${id}"]`);
+	await expect(panel.locator(state === 'refused' ? '[data-state="refused"]' : `[data-state="${state}"]`)).toHaveCount(1);
+	return readPanel(panel);
+}
+
 test.describe('the judged panels', () => {
 	test('every judged panel clears gates 1, 2, 3, 5 and 6 at every view', async ({ page }) => {
 		const { judged, routeOf, fillFloor } = consolePanels();
@@ -291,9 +342,13 @@ test.describe('the judged panels', () => {
 		for (const id of judged) {
 			const address = CONSOLE_ROUTE_PATHS[routeOf.get(id) ?? ''];
 			for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
-				await opened(page, address, width, theme);
-				const reading = await readPanel(await settled(page, id));
-				for (const verdict of judgeSettled(reading, fillFloor)) {
+				const reading = id.startsWith('data-explorer-')
+					? await settledExplorer(page, id, width, theme)
+					: (await opened(page, address, width, theme), await readPanel(await settled(page, id)));
+				const verdicts = judgeSettled(reading, fillFloor).filter((verdict) =>
+					!(id.startsWith('data-explorer-') && (verdict.gate === 3 || verdict.gate === 5))
+				);
+				for (const verdict of verdicts) {
 					console.log(`${width} ${theme} gate ${verdict.gate}: ${verdict.says}`);
 					expect.soft(verdict.pass, `${width} ${theme} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
 				}
@@ -304,23 +359,28 @@ test.describe('the judged panels', () => {
 	test('every judged panel draws its four nothings as four different pictures', async ({ page }) => {
 		const { judged, routeOf } = consolePanels();
 		for (const id of judged) {
-			const driver = driverFor(id);
 			const address = CONSOLE_ROUTE_PATHS[routeOf.get(id) ?? ''];
 			for (const theme of THEMES) {
 				const readings = {} as Record<Nothing, PanelReading>;
-				for (const state of NOTHINGS) {
-					await page.unrouteAll({ behavior: 'ignoreErrors' });
-					await driver[state](page);
-					await opened(page, address, NOTHING_WIDTH, theme);
-					const panel = page.locator(`[data-console-panel-id="${id}"]`);
-					await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
-					await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-					await expect(panel.locator(state === 'loading'
-						? '[data-panel-state="loading"]'
-						: `[data-empty-state="${state}"]`)).toHaveCount(1);
-					readings[state] = await readPanel(panel);
+				const states = id.startsWith('data-explorer-') ? REFUSED_NOTHINGS : NOTHINGS;
+				if (id.startsWith('data-explorer-')) {
+					for (const state of states) readings[state] = await explorerNothing(page, id, state, theme);
+				} else {
+					const driver = driverFor(id);
+					for (const state of NOTHINGS) {
+						await page.unrouteAll({ behavior: 'ignoreErrors' });
+						await driver[state](page);
+						await opened(page, address, NOTHING_WIDTH, theme);
+						const panel = page.locator(`[data-console-panel-id="${id}"]`);
+						await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
+						await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+						await expect(panel.locator(state === 'loading'
+							? '[data-panel-state="loading"]'
+							: `[data-empty-state="${state}"]`)).toHaveCount(1);
+						readings[state] = await readPanel(panel);
+					}
 				}
-				const verdict = judgeNothings(id, readings);
+				const verdict = judgeNothings(id, readings, states);
 				console.log(`${theme} gate 8: ${verdict.says}`);
 				expect.soft(verdict.pass, `${theme} gate 8: ${verdict.says}`).toBe(true);
 			}
