@@ -966,26 +966,28 @@ test('Ctrl+Enter runs a question only when Run could: never while another run is
 	const release = await holdNextDataFile(page);
 	await page.getByRole('button', { name: /^Run$/ }).click();
 	await expect(inFlight, 'the run was not in flight when the shortcut was pressed').toHaveCount(1);
+	// A run writes the question it runs into the page's address, and typing does not, so a run the
+	// shortcut started would leave this question there.
+	await editor.fill('SELECT 2 AS pressed_during_the_run FROM "published"');
 	await editor.press('Control+Enter');
 	release();
 	await expect(inFlight).toHaveCount(0);
-	// A run pressed now answers after any run the shortcut started, so History would hold that one too.
-	const second = 'SELECT 2 AS second FROM "published"';
-	await editor.fill(second);
-	await runExplorer(page);
-	await expect(inFlight).toHaveCount(0);
-	expect(await ranQuestions(page), 'Ctrl+Enter started a second run while one was in flight').toEqual([second, first]);
+	expect(new URL(page.url()).searchParams.get('q'), 'Ctrl+Enter started a run while another was in flight').toBe(await encodeQuestion(first));
+	expect(await ranQuestions(page)).toEqual([first]);
 
+	// History names a run by the time it answered, and the page's clock is pinned, so each step
+	// below happens a minute after the one before it.
+	await page.clock.setFixedTime(`${PINNED}T12:01:00Z`);
 	await editor.fill('');
 	await editor.press('Control+Enter');
 	expect(await inFlight.count(), 'Ctrl+Enter started a run with an empty statement').toBe(0);
-	const third = 'SELECT 3 AS third FROM "published"';
-	await editor.fill(third);
+	await page.clock.setFixedTime(`${PINNED}T12:02:00Z`);
+	const second = 'SELECT 3 AS second FROM "published"';
+	await editor.fill(second);
 	await runExplorer(page);
 	await expect(inFlight).toHaveCount(0);
-	expect(await ranQuestions(page), 'Ctrl+Enter ran an empty statement').toEqual([third, second, first]);
+	expect(await ranQuestions(page), 'Ctrl+Enter ran an empty statement').toEqual([second, first]);
 });
-
 test('History keeps the question a run asked, when the editor changes while its answer is on the way', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), TWO_DAYS);
 	await openExplorer(page, PINNED);
@@ -1021,6 +1023,8 @@ test('Ctrl+Enter runs nothing before the page has read its ledgers, even a quest
 	release();
 	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 	await expect(inFlight).toHaveCount(0);
+	// A minute on, so a run the shortcut started keeps its own line: History names a run by the time it answered.
+	await page.clock.setFixedTime(`${PINNED}T12:01:00Z`);
 	await runExplorer(page);
 	await expect(inFlight).toHaveCount(0);
 	expect(await ranQuestions(page), 'Ctrl+Enter ran the linked question before the page had read its ledgers').toEqual([statement]);
