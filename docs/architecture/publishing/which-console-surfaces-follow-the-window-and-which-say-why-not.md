@@ -121,14 +121,15 @@ count.
 
 ## The surfaces that do not simply follow the span
 
-Each one says so on the page. Three are on Voices, one on Pipelines, and one
-stands on every route.
+Each one says so on the page. Three are on Voices, one on Pipelines, one on
+Judgement, and one stands on every route.
 
 | Surface | Route | What it does | Why |
 | --- | --- | --- | --- |
 | `Feeds that failed` | Voices | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
 | `Sources we may ask, and what they yield` | Voices | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
 | `What the ranking makes of each feed` | Voices | Reads the factor the run applied, over the span the run reduced it on | The run reduced it over `collect.reliability_window_days` when it happened. Redrawing it over seven days would print a number no run ever applied. |
+| `What the record still needs` | Judgement | The three bars read the record's newest row on or before the window's last day, so they show the same counts at every preset; the strip of squares and the count of fitted days follow the span | The record is a running total that changes only when a run writes a row, so its newest row is what it holds whatever span is open. Read from the window's rows alone, a window with no row drew the bars at zero, which is the picture of a record that holds nothing. When the bars stand on a row before the window, the note names its day: `The bars show what the record held on 14 Jun 2030, before this one day.` |
 | `Site size` | every route | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's, whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Minutes per visual` | Pipelines | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
@@ -229,6 +230,20 @@ says that day is not packed yet. So waiting and quiet still look alike for one
 day on those panels. The follow-up row that marks the unpacked days on bar and
 strip panels, and gives every panel whose whole window is unpacked its own
 sentence, closes it; until it lands, this entry is the record of the gap.
+
+**The record's three bars stand on its newest row, not on the window's.** Ruled
+on 2026-10-07 by Jony, with Reader on the words, after one debate round in which
+Reader added the window to the note, because every windowed panel names its own
+days. A window with no row used to draw the bars at zero while the record still
+held what its newest earlier row counted. Three other pictures were refused: a
+dash in place of each bar (the operator loses how far the record is from each
+gate, an exact count the page already holds), the same bars in a muted fill (an
+exact value made to look doubtful, and a second kind of target bar to say what a
+date already says), and no bars at all (the empty state is the panel, and the
+panel would change height with the window). So bars at zero mean one thing: the
+record holds nothing, because it never held a row or because it emptied. The
+note says the record `was started again` only where that row's own hold reason
+says so; a row of zeros alone does not prove it.
 
 ## See also
 
