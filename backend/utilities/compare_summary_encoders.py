@@ -48,7 +48,7 @@ STOP = frozenset(
 
 def read_config(path: Path) -> dict[str, Any]:
     """Load the comparison settings, refusing a missing key by name."""
-    settings = json.loads(path.read_text(encoding="utf-8"))
+    settings: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     for key in ("pair_build", "encode", "encoders"):
         if key not in settings:
             raise SystemExit(f"{path}: no {key}")
