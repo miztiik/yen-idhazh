@@ -1,8 +1,7 @@
 """The sample sheet's arithmetic: which band a pair is in, and which pairs are chosen.
 
 `backend/utilities/` is outside `testpaths`, so nothing there is collected by
-pytest. Its pure functions are still owed tests, and this is where they live -
-the same arrangement `test_check_seeded_ledgers.py` uses.
+pytest. Its pure functions are still owed tests, and this is where they live.
 
 Every case here is built in the test. Nothing reads the draw tree, the published
 days or the committed sheet, so none of it gets slower as the archive grows

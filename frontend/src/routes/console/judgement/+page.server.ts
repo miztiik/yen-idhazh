@@ -161,7 +161,7 @@ export async function load() {
 				.map((mark) => Number(mark.score.toFixed(6))),
 			weights,
 			// The committed reading, or null. Ten numbers, so the panel can print what
-			// the line did to the whole marked file on the day somebody scored it -
+			// the line did to every mark on the day somebody scored it -
 			// which is the part a rebuild of this page cannot reconstruct.
 			scored
 		},

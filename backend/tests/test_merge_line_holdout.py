@@ -1,7 +1,7 @@
 """Where the merge line stands against the marked holdout, and when it refuses to say.
 
 Unit tier for the two rules a reading rests on - which side of the line a pair
-falls and how much of the marked file has to be counted - and integration tier
+falls and how many of the marks have to be counted - and integration tier
 for the verb writing a row the contract reads back.
 
 **The oracle has two halves and both are checked.** The four cells plus the
@@ -254,7 +254,7 @@ def test_the_two_directions_of_a_mistake_are_counted_apart() -> None:
 
 
 def test_the_negative_population_counts_marks_the_line_never_reached() -> None:
-    """The denominator is the marked file, not the part of it that could be scored.
+    """The denominator is every mark, not the part of the marks that could be scored.
 
     A rate read against the pairs that happened to survive retention is a rate
     that improves every time a day is deleted.
@@ -450,7 +450,7 @@ def test_a_second_attempt_at_one_run_leaves_one_row(tmp_path: Path) -> None:
 def test_a_pair_whose_day_is_gone_is_counted_unresolved_rather_than_dropped(
     tmp_path: Path,
 ) -> None:
-    """Retention deletes days the marked file still names, and that has to be visible.
+    """Retention deletes days the marks still name, and that has to be visible.
 
     Dropped instead, the comparison would look complete at whatever size
     retention had left it.

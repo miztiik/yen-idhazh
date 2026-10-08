@@ -103,7 +103,7 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
 
 #: What makes two merge-line holdout rows the same record. One run scores one
-#: line against one marked file on one date, so a second row under those two
+#: line against the marks it reads on one date, so a second row under those two
 #: cells is a second attempt at one execution rather than a second answer. The
 #: marks are hand-written and the day payloads are committed, so two attempts
 #: count the same cells and the first row wins.

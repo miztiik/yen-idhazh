@@ -1237,13 +1237,6 @@ def _vector_norm(vector: array[int]) -> float:
     return math.sqrt(sum(value * value for value in vector)) or 1.0
 
 
-def _csv_cell(value: str) -> str:
-    """One cell, quoted where a headline carries a comma or a quotation mark."""
-    if any(mark in value for mark in ',"\n'):
-        return '"' + value.replace('"', '""') + '"'
-    return value
-
-
 def _fixture_digest(*parts: str) -> str:
     """A stable stand-in for a field a real run fills with a real digest."""
     return hashlib.sha256("|".join(("canary", *parts)).encode("utf-8")).hexdigest()
