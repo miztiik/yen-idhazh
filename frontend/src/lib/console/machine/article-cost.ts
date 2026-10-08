@@ -116,8 +116,8 @@ function figureOf(values: readonly number[], outOf: number): CostFigure {
  * count is absent for the same reason: the join cannot state one count, so it
  * leaves the shard out rather than picking whichever record came last in the
  * span it was handed - the pick a refused run's two disagreeing records exist
- * to refuse (row #L37). Collected per shard first, so two records that agree
- * (a duplicate write) still count once (row #L37).
+ * to refuse. Collected per shard first, so two records that agree
+ * (a duplicate write) still count once.
  */
 function processorsByShard(hosts: readonly MachineProcessors[]): Map<string, number> {
 	const named = new Map<string, Set<number>>();

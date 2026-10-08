@@ -301,7 +301,7 @@ that changes with that order and not with anything the run did - measured
 and 160 with the other, nothing about the run having moved between the two.
 The join leaves the shard out instead, the same absence a missing record
 already produces, rather than add a second dash sentence for a case the panel's
-existing one already covers truthfully. Authority: Fowler, Row #L37.
+existing one already covers truthfully. Authority: Fowler, 2026-10-08.
 
 **What the panel cannot answer, it names.** The memory step belongs to the
 model's work, and nothing in the ledger says which half of it - the prompt the

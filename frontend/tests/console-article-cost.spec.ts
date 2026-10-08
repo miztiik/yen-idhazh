@@ -124,7 +124,7 @@ test.describe('the three costs, as arithmetic', () => {
 		// Two machine records that disagree, naming 4 and 8: the shard is left
 		// out of the figure, the same whichever order the two records arrive in.
 		// Picking whichever comes last would be the pick a refused run's two
-		// disagreeing records exist to refuse (row #L37).
+		// disagreeing records exist to refuse.
 		const forward = articleCost(health, [
 			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 4 },
 			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 8 }
