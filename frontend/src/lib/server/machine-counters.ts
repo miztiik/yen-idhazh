@@ -290,8 +290,13 @@ export interface MachineRun {
  * article rows alone carries none, and nor does a run whose machine record
  * holds the probe and the clocks and neither cell. One cell from one shard is
  * enough: a run with one written server figure is not a run with none.
+ *
+ * A refused run answers by the same cells. Its figures cannot be read, but
+ * where its machine records hold one of them it was written down that day. It
+ * has no merged shards to read, so `oneRun` records the answer on it.
  */
-export function carriesServerCounters(run: MachineRun): boolean {
+export function carriesServerCounters(run: MachineRun | RefusedRun): boolean {
+	if ('why' in run) return run.serverCountersWritten;
 	return run.promptTokens.from > 0 || run.readSeconds.from > 0;
 }
 
@@ -309,6 +314,9 @@ export interface RefusedRun {
 	rows: number;
 	/** Plain words: what could not be reconciled. */
 	why: string;
+	/** Whether one of the run's machine records holds a cell the server itself
+	 * wrote. Two that disagree are still figures written down that day. */
+	serverCountersWritten: boolean;
 }
 
 /** Every run the two ledgers describe, and every run they could not. */
@@ -519,6 +527,15 @@ function foldItem(carry: ItemFold, row: Record<string, string>): void {
 	if (queued !== null) carry.queueWaits.push(queued);
 }
 
+/** Whether one machine row holds a cell the server itself wrote, read the way
+ * `mergeHost` reads it: trimmed, and a number. */
+function holdsServerCounter(row: Record<string, string>): boolean {
+	return (
+		measured((row.server_prompt_tokens ?? '').trim()) !== null ||
+		measured((row.server_prompt_seconds ?? '').trim()) !== null
+	);
+}
+
 /** The machine record's halves for one shard, merged. Null where they disagree. */
 function mergeHost(rows: Record<string, string>[]): HostCells | null {
 	const held = new Map<string, string>();
@@ -711,7 +728,13 @@ function oneRun(
 ): MachineRun | RefusedRun {
 	const rows = hosts.length + health.length;
 	const date = hosts[0]?.date ?? health[0]?.date ?? '';
-	const refuse = (why: string): RefusedRun => ({ runId, date, rows, why });
+	const refuse = (why: string): RefusedRun => ({
+		runId,
+		date,
+		rows,
+		why,
+		serverCountersWritten: hosts.some(holdsServerCounter)
+	});
 
 	const days = new Set([...hosts, ...health].map((row) => row.date ?? ''));
 	if (days.size > 1) {

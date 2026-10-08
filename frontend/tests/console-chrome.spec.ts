@@ -760,6 +760,7 @@ test.describe('what the recording was doing, in fixed words', () => {
 		) =>
 			describeServerCounters({
 				runs,
+				refused: [],
 				ran: ARTICLE_DAYS,
 				articleDays: ARTICLE_DAYS,
 				machineRead,
