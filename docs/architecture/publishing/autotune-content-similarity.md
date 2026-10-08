@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-08
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -299,11 +299,11 @@ console is where the loop is watched once it starts
 
 | Ledger | The one question it answers |
 | --- | --- |
-| `state/content-similarity-judge/scored-pairs/` | What did the judge say about this pair, in both orders, and under which models? |
+| `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? |
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
 | `state/content-similarity-judge/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
 | `state/content-similarity-judge/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
-| `state/content-similarity-judge/metrics/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
+| `content-similarity-judge/metrics`, under `state/raw/` and `state/compact/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each ledger is partitioned,
@@ -333,9 +333,10 @@ measured nothing; a zero would say it measured everything and found nothing
 wrong.
 
 **A unit ships its row as it finishes and commits nothing.** The row goes out as
-an artifact, the collecting job appends it to the ledger above, and the trip
-belongs to the venue - so a unit the platform killed has still handed over every
-reading it took.
+an artifact, the collecting job files it through the ledger door into the
+ledger above, and the trip belongs to the venue - so a unit the platform killed
+has still handed over every reading it took. Each row names the part that took
+it as `work_part_index`.
 
 ### The nights this judge says it is behind on
 
@@ -360,12 +361,12 @@ prompt, a weight or the sampler and the counts are archived, because they answer
 a different question afterwards. Which nights were read is not a count, so it
 comes across. Without that, retuning the scorer on a Monday would have the
 council dispatch every night of its window that week - and every one of those
-jobs would append its rows and then be refused, because the record still counts
+jobs would file its rows and then be refused, because the record still counts
 a date once.
 
 **What it does name is the night that lost a unit.** Three units of four
 reporting is the failure this repair path exists for: every row those three
-judged was appended, and the date stayed out of both lists because a partial day
+judged was filed, and the date stayed out of both lists because a partial day
 cannot be counted and cannot be topped up later. That date comes back here, and
 the next council night judges it again from the top.
 
@@ -375,8 +376,8 @@ record has not arrived on any of them. An operator who wants one of those nights
 judged names the date, which replaces the plan outright.
 
 **The counting step admits only rows the record's own stamp matches**, and that
-filter runs before the one-row-a-pair de-duplication. The day file is
-append-only, so a day judged twice under two instruments holds both readings;
+filter runs before the one-row-a-pair de-duplication. The ledger keeps each
+run's rows, so a day judged twice under two instruments holds both readings;
 adding them together would make the record's own stamp a lie with nothing able
 to separate them afterwards. Filtering first is what lets the right row win - a
 discarded row from the old instrument is the more recent one, so filtering
@@ -446,7 +447,7 @@ flowchart TD
 
 `/console/judgement/` draws the margin above, and to draw it the route's build-time `load` scores every hand-marked pair itself. Nothing else in the console scores anything, and the reason is narrow: **no run has ever scored these pairs**. They are a person's marks rather than judged pairs, and nothing writes a score for them anywhere, so this is the first derivation and not a second opinion about one. A judged pair is the opposite case - its score is already on its row, and recomputing that in a page would be two verdicts about one number.
 
-**The four cells are the exception, and since 2026-09-21 they come off a committed row.** `python -m idhazh score-merge-line-holdout` counts what the line did to every marked pair and writes one row into `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`. The page reads that row and prints it; it does not count the cells again. **Two answers to one question is what the commit exists to stop** - and a reading that exists only while a page renders cannot be held against one taken a month earlier. What the page still derives is the per-pair score, because no row carries one and the panel draws a dot for each.
+**The four cells are the exception, and since 2026-09-21 they come off a committed row.** `python -m idhazh score-merge-line-holdout` counts what the line did to every marked pair and writes one row through the ledger door under `state/raw/content-similarity-judge/merge-line-holdout-scores/`; the gardener packs it under `state/compact/content-similarity-judge/merge-line-holdout-scores/`. The page reads that packed row and prints it; it does not count the cells again. **Two answers to one question is what the commit exists to stop** - and a reading that exists only while a page renders cannot be held against one taken a month earlier. What the page still derives is the per-pair score, because no row carries one and the panel draws a dot for each.
 
 **It scores the line, not the judge.** The marks carry no verdict and the step calls no model. A pair is joined exactly when the weighted score reaches the line, which is the one branch of the diagram above that the line decides. How well a judge agrees with the marks is a different measurement with a different budget, and no row here answers it.
 

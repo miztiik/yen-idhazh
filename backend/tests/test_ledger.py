@@ -1038,24 +1038,42 @@ def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> N
     )
 
 
-def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None:
-    """One nested segment more than every other day tree, and the relpath says so.
-
-    Everything this judge produces hangs off `state/content-similarity-judge/`,
-    so the commit step can stage one prefix. That makes this the first ledger
-    whose day file sits two
-    directories below `state/` rather than one, and a helper that quietly dropped
-    the nest would write a tree nothing else in this file can find.
-    """
-    date = "2026-09-18"
-    state = Path("state")
-
-    assert (
-        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
-        == "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
+def judge_identity(*, run_id: str, attempt: int = 1) -> WriterIdentity:
+    """Who files a night's judged pairs: the council's save, with the counting stage producing."""
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=attempt,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="stages.count_verdicts",
+        git_sha="a" * 40,
     )
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date) == Path(
-        "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
+
+
+def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from(tmp_path: Path) -> None:
+    """One nested folder more than a ledger that is its own family, and the path says so.
+
+    Everything this judge files hangs off `content-similarity-judge/`, in each of
+    the door's two roots, so a helper that quietly dropped the nest would file a
+    ledger nothing else can find. A pair is filed under the day it was drawn
+    from, never under the day the council judged it.
+    """
+    drawn_on = "2026-09-18"
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
+
+    (filed,) = ledger.persist(
+        tmp_path,
+        [pair_row(on=drawn_on)],
+        ledger=which,
+        covers="2026-09-19",
+        identity=judge_identity(run_id="2026-09-19-7"),
+    )
+
+    assert filed.parent.relative_to(tmp_path).as_posix() == (
+        "raw/content-similarity-judge/scored-pairs/2026/09/18"
+    )
+    assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
+        "compact/content-similarity-judge/scored-pairs"
     )
 
 
@@ -1219,18 +1237,17 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     this list ever looks short. Each became a day directory where every writer
     holds its own file, so two files nobody else can write need no settlement to
     tell them apart and the repeat this pass existed to drop is one they can no
-    longer make. The feed retirements and the cleanup record left for the same
-    reason when they moved under `state/raw/`.
+    longer make. The feed retirements, the cleanup record and the judged pairs
+    left for the same reason when they moved under `state/raw/`.
 
     Both covers name the same ledgers on a tree with one day of each in it. What
     separates them is what a second day would add: to the operator's pass, a
     file; to a run's pass, nothing.
 
     `state/content-similarity-judge/fitted-thresholds/` is registered before
-    anything writes it, which is why it is built here by hand rather than by an append
-    call. Its sibling `scored-pairs/` has a writer and is filled by one.
+    anything writes it, which is why it is built here by hand rather than by an
+    append call.
     """
-    ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
     fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
@@ -1238,10 +1255,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         (
             f"content-similarity-judge/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_THRESHOLD_KEY,
-        ),
-        (
-            f"content-similarity-judge/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.STORY_SIMILARITY_PAIR_KEY,
         ),
     ]
 
@@ -1259,23 +1272,31 @@ def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
 ) -> None:
     """`judged_by_run_id` is in the key because `run_id` cannot tell these two apart.
 
-    `run_id` on this row names the DIGEST run that published the day, so two
-    judging runs over one date write the identical string. Under a key without
-    the judging stamp the settlement would keep the row already in the file and
-    drop every fresh verdict, while the record counted the fresh ones - two
-    descriptions of one day with nothing able to tell them apart. A second
-    attempt at ONE judging run is still one row: both attempts read the same
-    pair the same way.
+    `run_id` on this row names the run that drew the pair, so two judging runs
+    over one draw write the identical string. Under a key without the judging
+    stamp the settlement would keep one row and drop the fresh verdict, while
+    the record counted it - two descriptions of one day with nothing able to
+    tell them apart. A second attempt at ONE judging run is still one row: the
+    door keeps the higher attempt of one writer's work and drops the first.
     """
     first = pair_row()
     again = pair_row(judged_by_run_id=f"{DATE}-7")
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
 
-    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [first]) == 1
-    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [again]) == 1
-    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [again]) == 0
+    ledger.persist(
+        tmp_path, [first], ledger=which, covers=DATE, identity=judge_identity(run_id=f"{DATE}-1")
+    )
+    for attempt in (1, 2):
+        ledger.persist(
+            tmp_path,
+            [again],
+            ledger=which,
+            covers=DATE,
+            identity=judge_identity(run_id=f"{DATE}-7", attempt=attempt),
+        )
 
     kept = ledger.load_story_similarity_pairs(tmp_path, DATE)
-    assert [row.judged_by_run_id for row in kept] == [None, f"{DATE}-7"]
+    assert sorted(row.judged_by_run_id or "" for row in kept) == ["", f"{DATE}-7"]
 
 
 def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_asks(

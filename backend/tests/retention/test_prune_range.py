@@ -109,9 +109,6 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
     "-".join(ledger.entry(name).prefix): name
     for name in (
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
     )
 }
 
@@ -644,7 +641,7 @@ def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
 
 def compaction_of(tasks: Mapping[str, TaskPolicy], which: LedgerName) -> CompactionPolicy:
     """The production compaction declaration that governs a ledger."""
-    found = tasks.get(f"compact-{which.value}")
+    found = tasks.get(config.compaction_task(which))
     assert isinstance(found, CompactionPolicy)
     return found
 

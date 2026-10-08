@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR, SEED_COMMIT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
@@ -33,7 +33,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
 from idhazh.ledger import paths
@@ -119,15 +118,16 @@ def _collect_metrics(state: Path) -> bool:
         name="0",
         out_dir=shipped,
     )
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
     return _wrote(
         state,
         lambda: metrics_sink.collect_judge_metrics(
             shipped,
             judge_id="content-similarity-judge",
             contract=ContentSimilarityJudgeMetrics,
-            which=which,
-            into=ledger.path(state, which, A_DAY),
+            which=LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+            state_dir=state,
+            covers=A_DAY,
+            identity=_identity(ServerJob.SAVE_COUNCIL_RESULTS),
         ),
     )
 
@@ -171,14 +171,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             ),
         ),
     ),
-    "append_story_similarity_pairs": (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_story_similarity_pairs(s, A_DAY, [_first(StorySimilarityPair)]),
-        ),
-    ),
     "append_fitted_thresholds": (
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
         1,
@@ -191,7 +183,10 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         1,
         lambda s: _wrote(
-            s, lambda: score_merge_line_holdout._append(s, A_DAY, _first(MergeLineHoldoutScore))
+            s,
+            lambda: score_merge_line_holdout._append(
+                s, A_DAY, _first(MergeLineHoldoutScore), commit_sha=SEED_COMMIT
+            ),
         ),
     ),
     "collect_judge_metrics": (LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, 1, _collect_metrics),

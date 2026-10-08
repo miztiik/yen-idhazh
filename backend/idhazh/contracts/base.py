@@ -114,7 +114,8 @@ class ServerJob(StrEnum):
 
     Every value is a job's own id in its workflow file, lowercase, so a reader
     goes from a row to the steps that wrote it with no lookup table in between.
-    A display name would drift from the thing it identifies.
+    A display name would drift from the thing it identifies. `operator`, below,
+    is the one value that names no workflow job.
 
     It sits here, at the bottom of the contract graph, because three ledgers and
     a filename grammar all name a job and none of them owns the vocabulary.
@@ -132,6 +133,13 @@ class ServerJob(StrEnum):
     schemas list it because one enum answers "which workflow job" for the whole
     repository, which is why none of the three is version-stamped for it - a
     stamp says a shape moved, and theirs did not.
+
+    **`operator` is here for a file's writer and not for a column, as `decide`
+    is.** A command a person runs on their own machine, outside any workflow,
+    files a door ledger - the merge line's holdout score - and the door names
+    every file's writer from this set. No row of the three ledgers that carry a
+    `job` column can hold it, so none of them is version-stamped for it; the
+    file envelope, whose writer identity can, is.
 
     **`migrate`, `run-tasks` and `history` are here before any workflow runs
     them.** The ledger door names a file's writer from this set, so a job has to
@@ -161,6 +169,8 @@ class ServerJob(StrEnum):
     RUN_TASKS = "run-tasks"
     HISTORY = "history"
     SAVE_COUNCIL_RESULTS = "save_council_results"
+    # A command a person runs on their own machine, outside any workflow.
+    OPERATOR = "operator"
 
 
 #: The jobs whose writes file rows again rather than record new ones. The

@@ -24,10 +24,11 @@ count would add them together.
 (Guardrail #12). Each holdout row names its own two days, so the hand-marked
 file is the bound on what has to be opened.
 
-The ledger is
-`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`.
-The directory name is spelled in `idhazh.ledger`, which is where a path belongs
-and which this module may not import (CLAUDE.md section 4).
+The ledger is filed through the ledger door under
+`state/raw/content-similarity-judge/merge-line-holdout-scores/` and packed under
+`state/compact/content-similarity-judge/merge-line-holdout-scores/`. The
+directory name is spelled in `idhazh.ledger`, which is where a path belongs and
+which this module may not import (CLAUDE.md section 4).
 """
 
 from __future__ import annotations

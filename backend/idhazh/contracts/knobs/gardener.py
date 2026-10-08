@@ -397,7 +397,8 @@ class CompactionPolicy(_Declared):
     ledger: LedgerName = Field(
         description=(
             "The ledger this task compacts. Typed rather than read off the file's name, "
-            "and the declaration must be called compact-<ledger> or compact-trial-<ledger>."
+            "and the declaration must be called compact-<folder> or compact-trial-<folder>, "
+            "where <folder> is the ledger's door folder with each / written -."
         )
     )
     state_roots: list[RelPath] = Field(

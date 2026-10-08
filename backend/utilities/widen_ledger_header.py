@@ -37,8 +37,11 @@ single file. Everything else is already the engine's - `migrate_header` refuses 
 heading this build cannot place, keeps a row no reader could place and raises,
 and re-files through the contract's own reader rather than cell by cell.
 
-    python backend/utilities/widen_ledger_header.py --target content-similarity-judge-scored-pairs
+    python backend/utilities/widen_ledger_header.py --target <ledger>
     python backend/utilities/widen_ledger_header.py --target <ledger> --no-dry-run
+
+`<ledger>` is one word of the prune verb's list, such as
+`content-similarity-judge-fitted-thresholds`.
 
 Exit code 1 when a file could not be re-filed, so a shell can gate on it.
 """

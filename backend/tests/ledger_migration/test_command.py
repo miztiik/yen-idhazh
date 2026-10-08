@@ -13,8 +13,6 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import LedgerEntry
-from idhazh.ledger import paths
 from utilities import migrate_to_parquet as command
 from utilities.ledger_migration import (
     csv_files,
@@ -36,13 +34,13 @@ from ._fixtures import (
     ByKey,
     clock_row,
     config_beside,
-    entry_back_on_csv,
     feed_row,
     file_hashes,
     item_row,
     plan_named_roots,
     probe_row,
     read_back,
+    registry_back_on_csv,
     run_migration,
     todays_reader,
     write_csv,
@@ -92,7 +90,8 @@ def test_check_reads_moved_ledgers_unless_named(
     ]
 
     with monkeypatch.context() as patched:
-        patched.setitem(paths._REGISTRY, ON_CSV, LedgerEntry.model_validate(entry_back_on_csv(ON_CSV)))
+        held_back = registry_back_on_csv(config_beside(state), ON_CSV)
+        patched.setattr(config, "DEFAULT_CONFIG_DIR", held_back)
         assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_MIGRATED
     assert capsys.readouterr().out.splitlines() == ["0 CSV file(s) left"]
 

@@ -26,6 +26,7 @@ export function canaryFiles(publicRoot, stateRoot) {
 	}
 	const stateFiles = runFiles(stateRoot).filter((name) =>
 		/^(?:raw|compact)\/feed-health\//.test(name) ||
-		/^content-similarity-judge\/(?:fitted-thresholds|merge-line-holdout-scores)\//.test(name));
+		/^content-similarity-judge\/fitted-thresholds\//.test(name) ||
+		/^(?:raw|compact)\/content-similarity-judge\/merge-line-holdout-scores\//.test(name));
 	return { publicFiles: [...publicFiles].sort(), stateFiles: stateFiles.sort() };
 }

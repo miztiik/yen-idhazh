@@ -12,8 +12,9 @@ it moved.** Where its declaration asks, it then packs each finished year's month
 files into one file a year. A raw file holds one writer's rows for one day, so a
 ledger gains a file on every run, and at a few rows a file a parquet file is
 mostly its footer.
-One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
-by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
+One task a ledger does the move: `config/gardener/compact-<folder>.json`, where
+`<folder>` is its door folder with `/` written `-`. It is served by
+`backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. The declarations that ship are in
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
 **Every ledger the console reads packs live.** The console reads packed files
@@ -21,7 +22,7 @@ and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**All fourteen ledgers pack live and use the same retention chain:** days
+**All seventeen ledgers pack live and use the same retention chain:** days
 become months 45 whole days after the month ends; months become years 93 whole
 days after the year ends; indexed years expire 36 calendar months after their
 UTC end.
@@ -1062,7 +1063,10 @@ months of retention after UTC year-end. The owner accepts the loss of older
 published-address deduplication and evaluation history. A retained yearly index
 with `expired_through` preserves progress without keeping an entry for every
 deleted year. The manual prune refusal still protects recent history; scheduled
-expiry follows the reviewed yearly policy.
+expiry follows the reviewed yearly policy. A ledger moved onto the door since
+takes the same chain with it, because the owner directed on 2026-10-05 that a
+moved ledger takes its retention and upkeep with it; the merge line's holdout
+score is one.
 
 `telemetry-aggregate` stays report-only. No item-health summaries have been
 generated yet, because its source months must first age past 14 months.

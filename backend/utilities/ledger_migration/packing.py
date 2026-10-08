@@ -34,7 +34,8 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
     Asked before anything is read or written. A ledger `config/ledgers.json` still
     files as CSV has no door to move into; one with no compaction has nothing to
     say which days are packed; and a compaction that keeps less than the CSV was
-    kept would delete, at its first live pass, days the CSV still held.
+    kept would delete, at its first live pass, days the CSV still held - unless
+    the ledger's `CsvLedger` entry names the person's decision that allowed it.
     """
     registry = LedgersConfig.from_json((config_dir / "ledgers.json").read_text(encoding="utf-8"))
     entries = {entry.name: entry for family in registry.families for entry in family.ledgers}
@@ -49,7 +50,7 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 f"to move into yet: its entry becomes {Grain.RAW_AND_COMPACT.value} in the "
                 "change that moves its writers and readers"
             )
-        task = f"compact-{name.value}"
+        task = config.compaction_task(name, registry=entries)
         policy = tasks.get(task)
         if not isinstance(policy, CompactionPolicy):
             raise RefusedError(
@@ -57,12 +58,16 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 "say which days the packing rule admits"
             )
         kept = CSV_LEDGERS[name].old_window
-        if not config.compaction_reaches(policy, kept):
+        if (
+            not config.compaction_reaches(policy, kept)
+            and CSV_LEDGERS[name].shorter_by is None
+        ):
             raise RefusedError(
                 f"config/gardener/{task}.json keeps daily_keep_days {policy.daily_keep_days} "
                 f"and monthly_window {_spelled(policy.monthly_window)}, which does not reach "
                 f"the window of {_spelled(kept)} that kept {name.value} on CSV, so its first "
-                "live pass would delete days the CSV still held"
+                "live pass would delete days the CSV still held. A person's decision to keep "
+                "it for less goes in its CsvLedger entry, as shorter_by"
             )
         # Validated, because model_copy(update=...) is not: a misspelt key there would be
         # kept beside the real one, and the declaration's own month deletes would run.
@@ -97,7 +102,7 @@ def policies_for_roots(
             if root_name == "state":
                 selected[state_dir][name] = production[name]
                 continue
-            trial = tasks.get(f"compact-trial-{name.value}")
+            trial = tasks.get(config.compaction_task(name, trial=True))
             if isinstance(trial, CompactionPolicy) and root_name in trial.state_roots:
                 root_owns = [
                     folder for folder in trial.owns if folder.startswith(f"{root_name}/")

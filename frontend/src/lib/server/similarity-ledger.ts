@@ -50,11 +50,13 @@ export interface FittedLine {
 	unclearRate: number;
 	/** How many distinct pairs the day file holds - what the draw dealt. */
 	pairsInBand: number | null;
-	/** How many pairs a judging shard read. The denominator both rates share, so a
-	 * panel can print it in the same sentence as the share. Null where the row
-	 * carries no answer, which is a different fact from a day that judged none. */
+	/** How many pairs a judging shard read: what the disagreement rate is a share
+	 * of, so a panel can print it in the same sentence as that share. Null where
+	 * the row carries no answer, which is a different fact from a day that judged
+	 * none. */
 	pairsJudged: number | null;
-	/** How many got two readings that agreed. Only these went into the record. */
+	/** How many got two readings that agreed: what the unclear rate is a share
+	 * of. Only these went into the record. */
 	pairsUsable: number | null;
 	/** Agreed NO readings the whole record holds. The slowest gate to fill. */
 	negativesOnRecord: number;

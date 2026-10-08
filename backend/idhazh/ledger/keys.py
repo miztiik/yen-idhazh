@@ -8,7 +8,9 @@ readers start disagreeing about what one file holds.
 One table pairs a key with the contract that reads a row: the ledgers the door
 in `ledger/persist.py` files under `state/raw/` and `state/compact/`. It also
 holds each ledger still on CSV that is ready to move, so moving one is a switch
-of its registry grain.
+of its registry grain. A judge's ledgers sit in a second part of the table,
+whose contracts are imported on first use, for the reason beside
+`_JUDGE_DOOR_SHAPES`.
 
 Where a ledger's file lives is a different question with its own home, which is
 why `paths` imports nothing from here and this module imports nothing from it.
@@ -35,9 +37,6 @@ from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import (
-    DROPPED_CELLS as DROPPED_PAIR_CELLS,
-)
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -109,11 +108,11 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 #: marks are hand-written and the day payloads are committed, so two attempts
 #: count the same cells and the first row wins.
 #:
-#: Spelled here as four strings and nothing else. The shape they name is
-#: `idhazh.contracts.merge_line_holdout_score`, and this module may not import
-#: it: a council verb reaches this module for its own row types, and a judge
-#: contract arriving through it would put a judge in the council's import
-#: closure (`backend/tests/council/test_council_runs_without_a_judge.py`).
+#: The shape these two cells name is `idhazh.contracts.merge_line_holdout_score`,
+#: and the door table below imports it only when its ledger is asked about: a
+#: council verb reaches this module for its own row types, and a judge contract
+#: imported here as the module loads would sit in the council's import closure
+#: (`backend/tests/council/test_council_runs_without_a_judge.py`).
 MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 
 
@@ -124,18 +123,33 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #: the fold picks the newest run itself, over the whole day, rather than letting
 #: a line-by-line rewrite decide.
 #:
+#: `work_part_index` follows `run_id`, because a judge row about one part of the
+#: split is keyed on its part: two parts of one run never settle into one record.
+#:
 #: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
 #: published the day, so two judging runs over one date write the identical
 #: string there. Without this cell the settlement would keep the row already in
 #: the checked-out file and discard every fresh verdict, while the record
 #: counted the fresh ones - two descriptions of one day with nothing able to
 #: tell them apart.
-STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
+#:
+#: The shape these cells name is `idhazh.contracts.story_similarity_pair`, and
+#: the door table below imports it only when its ledger is asked about, for the
+#: reason the holdout score's key gives.
+STORY_SIMILARITY_PAIR_KEY: Final = (
+    "date",
+    "run_id",
+    "work_part_index",
+    "pair_key",
+    "judged_by_run_id",
+)
 
 
-#: What makes two metrics rows the same record while the CSV ledger still spells
-#: the split unit `shard`. The row that moves the ledger renames that field.
-CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "shard")
+#: What makes two metrics rows the same record: one part of one council run's
+#: night, for one judged date. The door table below imports the row contract,
+#: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
+#: asked about, for the reason the holdout score's key gives.
+CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
 
 
 #: What makes two retirement rows the same record. The address and nothing else:
@@ -273,15 +287,8 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
 
 
 #: The headings a day file an earlier run wrote still carries that the current
-#: judged-pair row no longer names. A dropped heading has no replacement - the
-#: file still re-files, and the cell goes, which is the point of dropping it. One
-#: column has left this row and none has moved, so there is no retired half:
-#: `from_csv_row` reads a day file by the names the contract holds now and the
-#: dropped heading simply goes.
-STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
-
-
-#: The same again, for the fitted line's day files.
+#: fitted-line row no longer names. A dropped heading has no replacement - the
+#: file still re-files, and the cell goes, which is the point of dropping it.
 FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
 
 
@@ -321,9 +328,65 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
 }
 
 
+def _merge_line_holdout_score() -> type[Contract]:
+    """The holdout score's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
+
+    return MergeLineHoldoutScore
+
+
+def _story_similarity_pair() -> type[Contract]:
+    """The judged pair's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    return StorySimilarityPair
+
+
+def _content_similarity_judge_metrics() -> type[Contract]:
+    """The judge's per-part reading, imported when its ledger is first asked about."""
+    from idhazh.contracts.content_similarity_judge_metrics import (
+        ContentSimilarityJudgeMetrics,
+    )
+
+    return ContentSimilarityJudgeMetrics
+
+
+#: The door ledgers a judge writes, each with its key and the function that
+#: imports the contract one of its rows is read by. The rest of the door table
+#: imports its contracts as this module loads. A judge's waits for the first
+#: question about its ledger, because the council imports this module for its
+#: own row types, and the owner ruled on 2026-09-21 that no further judge
+#: contract may join a council verb's imports: a judge deleted from the tree has
+#: to leave every council verb running.
+_JUDGE_DOOR_SHAPES: Final[
+    dict[LedgerName, tuple[tuple[str, ...], Callable[[], type[Contract]]]]
+] = {
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
+        MERGE_LINE_HOLDOUT_SCORE_KEY,
+        _merge_line_holdout_score,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
+        STORY_SIMILARITY_PAIR_KEY,
+        _story_similarity_pair,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
+        CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
+        _content_similarity_judge_metrics,
+    ),
+}
+
+
+def door_table_ledgers() -> frozenset[LedgerName]:
+    """Every ledger the door table holds a key and a row contract for."""
+    return frozenset(_DOOR_SHAPES) | frozenset(_JUDGE_DOOR_SHAPES)
+
+
 def _door_shape(ledger: LedgerName) -> _DoorShape:
     """This ledger's row of the door table, or a refusal naming it."""
     held = _DOOR_SHAPES.get(ledger)
+    if held is None and ledger in _JUDGE_DOOR_SHAPES:
+        key, contract = _JUDGE_DOOR_SHAPES[ledger]
+        held = _DoorShape(key, contract())
     if held is None:
         raise ValueError(
             f"{ledger.value} has no key and no row contract in the door table in "

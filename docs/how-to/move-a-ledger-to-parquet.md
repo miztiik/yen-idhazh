@@ -1,6 +1,6 @@
 # Move a ledger to Parquet
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 How do I move one ledger from CSV to the ledger door without losing a row?
 
@@ -8,7 +8,7 @@ This procedure is project-specific because it names this repository's ledger con
 
 ## Complete the code change
 
-Read the ledger's contract, its registry entry, its CSV writer and readers, and its compaction declaration. The ledger's registry entry must use `raw-and-compact`. Its `compact-<ledger>` declaration must exist and retain at least the old CSV retention window. The migrator refuses a missing door entry, a missing compaction, or a compaction that could discard data the CSV window kept.
+Read the ledger's contract, its registry entry, its CSV writer and readers, and its compaction declaration. The ledger's registry entry must use `raw-and-compact`. Its `compact-<folder>` declaration must exist and retain at least the old CSV retention window, where `<folder>` is the ledger's door folder with `/` written `-`. The migrator refuses a missing door entry, a missing compaction, or a compaction that could discard data the CSV window kept. A person may decide that the door keeps a ledger for less time than its CSV did. That decision goes in the ledger's `CsvLedger` entry as `shorter_by`, which names who decided and when; it is the only way past that last refusal.
 
 A move is complete only when every applicable part below holds.
 
@@ -16,11 +16,11 @@ A move is complete only when every applicable part below holds.
 | --- | --- | --- |
 | Registry | The ledger has the intended entry in `config/ledgers.json`. | `backend/tests/contracts/test_ledger_registry.py` |
 | Door table | `backend/idhazh/ledger/keys.py` declares the ledger, and neither legacy tree table names it. | The registry and door-shape tests in `backend/tests/ledger/` |
-| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<ledger>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` naming its old day-tree or shared-day-file layout, retention window and `old_headings` map from old headings to current columns. Reuse the contract's rename map. Declared prefixes may contain more than one folder. Month files and all other layouts are refused by name for now. | `backend/tests/ledger_migration/test_csv_layouts.py` |
+| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<folder>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` naming its old day-tree or shared-day-file layout, retention window and `old_headings` map from old headings to current columns. Reuse the contract's rename map. Declared prefixes may contain more than one folder. Month files and all other layouts are refused by name for now. | `backend/tests/ledger_migration/test_csv_layouts.py` |
 | Writers | Every writer uses `ledger.persist` with its writer identity. Each workflow command that writes passes `--commit`. | `backend/tests/workflows/test_ledger_door_jobs.py` |
 | Backend readers | Each reader uses the door and keeps its existing answer. | The ledger's row tests |
 | Console readers | Every declared ledger is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it. | `backend/tests/contracts/test_frontend_index_shapes.py` |
-| Compaction | `config/gardener/compact-<ledger>.json` declares the ledger's periods and windows. | `config.load_gardener()` and the compaction tests |
+| Compaction | `config/gardener/compact-<folder>.json` declares the ledger's periods and windows. | `config.load_gardener()` and the compaction tests |
 | Migration | Every CSV day in `state/` and each named trial root reads back cell for cell before any CSV is deleted. | `backend/tests/ledger_migration/` and `--check` |
 | Retention | The old retention declaration, task and tests are removed when they no longer have a reader. | The retention and contract tests |
 | Union | A retired CSV union entry is removed when the ledger no longer needs it. | `backend/tests/workflows/test_daily_commit_steps.py` and union tests |
@@ -39,7 +39,7 @@ Run the migrator from the checked-out code commit. Name the roots and UTC months
 The migrator must import this checkout's code; set the import path to this worktree's backend as described in [Git fixtures and child producers](../reference/agent-notes.md#git-fixtures-and-child-producers).
 
 ```text
-python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests-no-visual-plan --state-dir state/pipeline-tests-production-settings --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
+python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests/production-settings --state-dir state/pipeline-tests/no-visual-plan --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
 ```
 
 To move the same inputs in separate phases, add exactly one of `--plan`,
@@ -82,21 +82,27 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the eight layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the eleven layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
-`counterfactual-scores`, `candidate-models`, `feed-health`, `seen` and
-`published`. This tool does not migrate `council-run-records`, `span-rollup` or an
+`counterfactual-scores`, `candidate-models`, `feed-health`, `seen`,
+`published`, and three of the similarity judge's ledgers, each one shared file
+a day inside its family's folder:
+`content-similarity-judge/merge-line-holdout-scores`,
+`content-similarity-judge/scored-pairs` and `content-similarity-judge/metrics`.
+This tool does not migrate `council-run-records`, `span-rollup` or an
 undeclared CSV layout. Moving another shape requires its own contract and
 reader design first. The reader supports a declared day tree or shared day file
-under a multi-folder prefix. It does not infer an undeclared layout such as
-`content-similarity-judge/scored-pairs`. `item-health-summary`
-moved without a migrator entry because no committed file existed.
+under a multi-folder prefix. It does not infer an undeclared layout.
+`item-health-summary` moved without a migrator entry because no committed file
+existed.
 
 Both CSV layouts refuse a filled cell under an unknown heading, a value with
 no heading, and conflicting filled values under an old heading and its current
 column. Empty cells under unknown headings are allowed. A dropped heading
 requires an explicit `old_headings` entry mapped to `None`, added by a person
-in a reviewed commit. There are no such declarations for `runner_name`,
+in a reviewed commit. The scored-pairs entry has three: `decode_digest`,
+`key_point` and `key_point_weight`, the headings its contract stopped naming.
+There are no such declarations for `runner_name`,
 `cgroup_peak_bytes`, `max_output_tokens`, `coverage` or `new_fact_rate`.
 Their filled CSV cells are refused, even if the contract's legacy reader
 would otherwise ignore them.
@@ -123,8 +129,8 @@ file ids use the write clock, so this is a row and work-identity guarantee,
 not a promise of identical file ids or bytes after a new write.
 
 List only trial roots that hold this ledger. `state/` uses the production
-`compact-<ledger>` declaration; another root is packed only when
-`compact-trial-<ledger>` names it in `state_roots`. A root with no matching
+`compact-<folder>` declaration; another root is packed only when
+`compact-trial-<folder>` names it in `state_roots`. A root with no matching
 trial declaration is written raw. Each declared compaction runs over only the
 named months, with packing live and its monthly deletion window in report-only
 mode. The migrator repeats that task until a pass writes and deletes no selected

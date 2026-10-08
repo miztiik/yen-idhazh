@@ -106,6 +106,11 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+#: The commit a verb is handed when it is not told one: a workflow always names
+#: the real one, and a test or a local run takes this stand-in.
+_STAND_IN_COMMIT: Final = "0" * 40
+
+
 def _positive_int(text: str) -> int:
     """A whole number of at least 1, refused by name before any feed is read."""
     try:
@@ -325,7 +330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
-    parser.add_argument("--commit", default="0" * 40)
+    parser.add_argument("--commit", default=_STAND_IN_COMMIT)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     parser.add_argument(
@@ -624,10 +629,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "the reading, and a digest run's id would claim a machine and a clock "
                 "that scored nothing"
             )
+        if args.commit == _STAND_IN_COMMIT:
+            parser.error(
+                "score-merge-line-holdout needs --commit: the file it writes names the "
+                "commit of the code that took the reading, and the stand-in of zeros "
+                "names none. Pass what git rev-parse HEAD prints"
+            )
         scored = score_merge_line_holdout.stage_score_merge_line_holdout(
             args.date or _today(),
             run_id=args.run_id,
             labeller=args.labeller,
+            commit_sha=args.commit,
             settings=settings,
             state_dir=None if args.state_root is None else args.state_root,
             digest_root=args.digest_root,

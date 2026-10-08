@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -100,7 +100,7 @@ Both ends are named and both are inclusive, so `--since X --until X` is one day.
 range you typed is taken whole unless you ask for a smaller bite:
 
 ```
-idhazh telemetry prune --target content-similarity-judge-scored-pairs \
+idhazh telemetry prune --target content-similarity-judge-fitted-thresholds \
   --since 2025-01-01 --until 2025-12-31 --no-dry-run --max-deletes 30
 ```
 
@@ -132,7 +132,8 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
   counts a file's rows and not a day's, so every day of the range in a month or
   a year file that holds a row counts, whether or not that day filed one.
 - Whether the command may take a ledger's days is that ledger's compaction
-  declaration's `prune_refusal`, in `config/gardener/compact-<ledger>.json`.
+  declaration's `prune_refusal`, in `config/gardener/compact-<folder>.json`,
+  where `<folder>` is its door folder with `/` written `-`.
   `null` lets it; a sentence refuses the ledger and is the reason printed.
   `summary-quality-evals` carries one to protect retained quality evidence from
   manual deletion. Its configured yearly policy may expire old evidence

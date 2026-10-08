@@ -76,6 +76,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 21 | The site build checks that each published file carries its contract's columns | - | Q | DONE | p55r21 | #1390 | p55-row21-worker |
 | 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | DESCOPED | - | - | - |
 | 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | DESCOPED | - | - | - |
+| 24 | The page reads each index once before a run, and the ledger list raises no accessibility warning | 10 | Q | DONE | p55fix1 | #1435 | executing owner |
 
 **One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. **Rows 19 and 20 were added on 2026-10-07 on the owner's A1+A2 ruling, specified by Susan and Jony.** **Rows 21 to 23 were added on 2026-10-07 at plan 62's request, designed by Fowler.** Rows 19 and 21 share no file and may run together. Row 20 is BLOCKED on the owner deciding whether this plan carries the small slice of plan 52 row 2 that its charts need. **Rows 22 and 23 were descoped on 2026-10-07 by the owner**, who kept the column list as it is: each ledger's columns are read from its newest file through the query engine. Row 21 stays, because it proves at each deploy that every published file carries the columns its contract declares.
 
@@ -1104,7 +1105,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | E2 | **R4 removes the chart's reason, not its facts.** `Drawn ... because ...` is gone; row 17's sentence for rows with no day stands under the drawing, beside the readout | Executing owner, 2026-10-07 |
   | E3 | **Below 640 px, Questions and History share the first line and the how-to link has the second.** History beside the how-to filled the line to within a pixel in the Windows face and overflowed it in the Linux one; this way no line depends on the face | Executing owner, 2026-10-08 |
   | E4 | **History's edge is its summary's own, as a chip's is**, so it is exactly one control tall at every width; an edge around the whole details made it 2 px taller | Executing owner, 2026-10-08 |
-  | E5 | **The selected ledger scrolls into view once, when the page first shows a selection**, inside the list and never the page. Ticking another ledger never moves the list | Executing owner, 2026-10-07 |
+  | E5 | **The first chosen ledger stays in view inside the list, never the page, until the reader scrolls the list or presses or types anywhere on the page.** One move at open was not enough, because a row's second line arrives with the cost reading and grows the row; a tick or a Run never moves the list (row 24) | Executing owner, 2026-10-08 |
   | E6 | **The clipping check holds a floating list to the window.** A box placed out of the flow that reaches past its region - the folded questions, History's list - is checked against the window, and its region's foot is measured from the content in the flow | Executing owner, 2026-10-08 |
 
 ### Row #11 - The column rail stops overlapping, and types and the chosen ledger show in colour
@@ -1799,6 +1800,24 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 5 | The transfer target is a measured page-open smoke, with 9.2 MB before and at most 0.3 MB after as an estimate | Fowler, 2026-10-07 |
 
 - **Not in this row:** Trigger 3 clearance, adding `CONTRACT_COLUMNS`, build-time published-column checks, starting the engine early, and changing row 20 chart layout.
+
+---
+
+### Row #24 - The page reads each index once before a run, and the ledger list raises no accessibility warning
+
+- **Scope:** two faults that plan 62 row L46's smoke found on 2026-10-08, after #1357 and #1427. **One:** opened from a link or a kept run, the page started a cost pass for the restored selection, then `refreshRegistry()` called `startAfresh()`, which drops every index the page has read, and the pass after it read them all again. `startAfresh()` now runs only when the reader presses Refresh, as `ledger.ts` says, and `pickSaved()` and `pickRun()` no longer start a second pass after `setSpan()` or `setWindow()` has started one. **Two:** row 10 put pointer and key handlers on the ledger list's `div`, which has no role, and the build printed a Svelte accessibility warning. The list now listens on the document, in the capture phase, so any press or key anywhere ends its following, and no move can follow a tick or a Run (row 10 decision E5).
+- **What a reader sees change:** a page opened from a link fetches each index and listing once before Run, not twice. The ledger list behaves as before.
+- **Files touched:** `frontend/src/routes/console/data-explorer/+page.svelte`, `frontend/src/lib/console/explorer/LedgerList.svelte`, `frontend/tests/console-data-explorer.spec.ts`, and this plan (row 10 decision E5).
+- **Acceptance gates:** the browser specs that read these files, `console-data-explorer.spec.ts` and `console-data-explorer-window.spec.ts`, on the canary build; the build prints no accessibility warning for `LedgerList.svelte`; CI runs the full suite.
+- **Checks:** opened from a link on a ledger the test builds, before Run, the page reads at least one index and reads no `.json` file under `state/` twice. It fails if `refreshRegistry()` drops the page's reads on open again; plan 62's smoke saw each index and listing read twice on main at 7df6a74d9. Row 10's ledger-list checks still pass: the chosen ledger comes into view, and a wheel scroll and a tick do not move the list.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **Only Refresh drops what the page has read.** On open, the pass a restored selection started keeps its files, so nothing is read twice | Executing owner, 2026-10-08 |
+  | 2 | **Any press or key anywhere ends the ledger list's following**, listened for on the document, so the list carries no handlers that need a role | Executing owner, 2026-10-08 |
+
+- **Not in this row:** the `Read from {n} UTC days` line naming a last day the page did not read, which plan 62 owns (L12, #1364) and takes as a row of its own.
 
 ---
 

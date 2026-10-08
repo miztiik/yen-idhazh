@@ -101,7 +101,7 @@
 </script>
 
 <svelte:head>
-	<title>Console: Hardware &mdash; {data.ui.site_title}</title>
+	<title>Hardware &mdash; Console &mdash; {data.ui.site_title}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 

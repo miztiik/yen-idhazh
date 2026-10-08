@@ -20,7 +20,7 @@ from conftest import CONFIG_DIR
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import TypeAdapter, ValidationError
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
     JANUARY_DAYS,
     CollectionTaskPolicy,
@@ -107,6 +107,16 @@ YEARLY_RETENTION_DECISION: Final = (
     "@kumarsnaveen_microsoft approved live packing and 36-calendar-month yearly expiry "
     "for all fourteen ledgers on 2026-10-07, accepting loss of older history"
 )
+MOVED_LEDGER_TASKS: Final = (
+    "compact-content-similarity-judge-merge-line-holdout-scores",
+    "compact-content-similarity-judge-scored-pairs",
+    "compact-content-similarity-judge-metrics",
+)
+MOVED_LEDGER_RETENTION_DECISION: Final = (
+    "@kumarsnaveen_microsoft directed on 2026-10-05 that each ledger moved onto the door "
+    "takes its retention and upkeep with it, and approved on 2026-10-07 live packing and "
+    "36-calendar-month yearly expiry for every ledger, accepting loss of older history"
+)
 TRIAL_PACKING_DECISION: Final = (
     "@kumarsnaveen_microsoft approved live packing of declared trial roots on 2026-10-04; "
     "monthly deletion remains report-only and yearly expiry stays disabled"
@@ -115,6 +125,11 @@ LIVE_BY_DECISION: Final = {
     **{
         (f"compact-{name}", switch): YEARLY_RETENTION_DECISION
         for name in RETENTION_LEDGERS
+        for switch in ("dry_run", "yearly_prune_enable")
+    },
+    **{
+        (task, switch): MOVED_LEDGER_RETENTION_DECISION
+        for task in MOVED_LEDGER_TASKS
         for switch in ("dry_run", "yearly_prune_enable")
     },
     **{
@@ -229,16 +244,16 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
 
 
 def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
-    """All fourteen declarations activate real packing and finite yearly deletion."""
+    """All fourteen declarations, and each moved onto the door since, pack live and expire."""
     tasks = config.load_gardener().tasks
+    retained = (*(f"compact-{name}" for name in RETENTION_LEDGERS), *MOVED_LEDGER_TASKS)
     assert {
         name
         for name, policy in tasks.items()
         if isinstance(policy, CompactionPolicy) and name.startswith("compact-")
         and not name.startswith("compact-trial-")
-    } == {f"compact-{name}" for name in RETENTION_LEDGERS}
-    for ledger_name in RETENTION_LEDGERS:
-        name = f"compact-{ledger_name}"
+    } == set(retained)
+    for name in retained:
         policy = tasks[name]
         assert isinstance(policy, CompactionPolicy), name
         assert (
@@ -491,15 +506,13 @@ def test_a_folder_that_only_shares_a_prefix_of_letters_is_not_nested(tmp_path: P
     assert "traces-archive" in config.load_gardener(a_garden(tmp_path, traces_archive=extra)).tasks
 
 
-def test_trials_owns_only_configured_pipeline_test_roots() -> None:
+def test_trials_owns_only_configured_pipeline_test_trace_roots() -> None:
     policy = config.load_gardener().tasks["trials"]
     tests = PipelineTestsConfig.from_json(
         (CONFIG_DIR / "pipeline-tests.json").read_text(encoding="utf-8")
     )
 
     assert policy.owns == [
-        f"state/{TRIAL_STATE_PREFIX}-{test_case.id}" for test_case in tests.test_cases
-    ] + [
         f"state/{TRIAL_STATE_PREFIX}/{test_case.id}/traces"
         for test_case in tests.test_cases
     ]
@@ -815,6 +828,38 @@ def test_a_task_that_summarises_whole_months_carries_no_ceiling(tmp_path: Path, 
 def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:
     config_dir = a_garden(tmp_path, compact_gardener=None, compact_old=a_compaction("gardener"))
     assert "call it compact-gardener.json" in refused(config_dir)
+
+
+#: A ledger the committed registry files inside its family's folder, and that folder.
+NESTED_LEDGER: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+NESTED_FOLDER: Final = "content-similarity-judge/merge-line-holdout-scores"
+
+
+def a_nested_compaction() -> dict[str, Any]:
+    """The fixture compaction, moved onto the nested ledger's two folders."""
+    return fixture(
+        "compact-gardener",
+        ledger=NESTED_LEDGER.value,
+        owns=[f"state/raw/{NESTED_FOLDER}", f"state/compact/{NESTED_FOLDER}"],
+    )
+
+
+def test_a_nested_ledger_s_compaction_is_named_for_its_whole_folder(tmp_path: Path) -> None:
+    """The folder names the compaction, with each `/` written `-`, never the last name alone."""
+    assert ledger.door_folders(NESTED_LEDGER) == tuple(NESTED_FOLDER.split("/"))
+    task = f"compact-{NESTED_FOLDER.replace('/', '-')}"
+    assert config.compaction_task(NESTED_LEDGER) == task
+
+    loaded = config.load_gardener(a_garden(tmp_path / "named", **{task: a_nested_compaction()}))
+    policy = loaded.tasks[task]
+    assert isinstance(policy, CompactionPolicy) and policy.ledger is NESTED_LEDGER
+
+    message = refused(
+        a_garden(
+            tmp_path / "last-name", **{f"compact-{NESTED_LEDGER.value}": a_nested_compaction()}
+        )
+    )
+    assert f"call it {task}.json" in message
 
 
 def test_a_collection_task_is_named_for_its_collection(tmp_path: Path) -> None:

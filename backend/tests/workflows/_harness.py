@@ -657,7 +657,7 @@ PRUNE_PUSH_CALL: Final = (
 SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_due.py"
 
 #: The gardener's plan job's one program: it splits the tasks into shards on a
-#: checkout of two folders, before anything of this project is installed.
+#: sparse checkout, before anything of this project is installed.
 GARDENER_PLAN_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 
 #: The gardener's shard program: it runs one shard's tasks and lands its record.
@@ -665,7 +665,11 @@ GARDENER_SHARD_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_p
 
 #: What every gardener program prints when an exception ends it. Two of those
 #: programs run before any install, so it is held to the standard library too.
-CRASH_TRACE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "crash_trace.py"
+CRASH_TRACE_MODULE: Final = REPO_ROOT / "backend" / "idhazh" / "crash_trace.py"
+
+#: The package's `__init__.py`, which Python runs before the printer whenever a
+#: program imports it, so it is held to the standard library as well.
+PACKAGE_INIT_MODULE: Final = REPO_ROOT / "backend" / "idhazh" / "__init__.py"
 
 #: The Pages workflow's one program: whether to publish and which commit, run on
 #: a bare checkout before anything is installed.

@@ -4,27 +4,26 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { PublicationInventory } from '../src/lib/server/publication';
 import { fittedLines } from '../src/lib/server/similarity-ledger';
-import { mergeLineHoldoutScore } from '../src/lib/server/similarity-holdout';
 
 /**
- * Do the Judgement route's two ledger readers read the day files their writers commit?
+ * Does the Judgement route's fitted-line reader read the day files its writer commits?
  *
- * The fitted merge line and the merge line's holdout score each file one
- * `<YYYY>/<MM>/<DD>.csv` a day, and the site reads only the files the
- * publication inventory names. Each case builds that tree and its inventory
- * under its own temporary folder, in the layout the writers use, and writes out
- * every value it expects (`CLAUDE.md` section 13), so nothing here reads the
- * committed archive. The days in each tree have no gaps, so the cover's count
- * of recorded days and a count of calendar days give the same answer.
+ * The fitted merge line files one `<YYYY>/<MM>/<DD>.csv` a day, and the site
+ * reads only the files the publication inventory names. Each case builds that
+ * tree and its inventory under its own temporary folder, in the layout the
+ * writer uses, and writes out every value it expects (`CLAUDE.md` section 13),
+ * so nothing here reads the committed archive. The days in each tree have no
+ * gaps, so the cover's count of recorded days and a count of calendar days give
+ * the same answer. The merge line's holdout score is saved through the ledger
+ * door instead, so `ledger-rows.spec.ts` reads it from a packed record.
  *
  * The last case binds the layout to `config/ledgers.json`, the registry the
- * backend builds each writer's path from: the folders and the suffix written
- * here are the ones it names, so a registry edit that moves either ledger turns
+ * backend builds the writer's path from: the folders and the suffix written
+ * here are the ones it names, so a registry edit that moves the ledger turns
  * this spec red rather than leaving the page to read nothing.
  */
 
 const FITTED = ['content-similarity-judge', 'fitted-thresholds'] as const;
-const SCORES = ['content-similarity-judge', 'merge-line-holdout-scores'] as const;
 const SUFFIX = '.csv';
 
 const FITTED_COLUMNS = [
@@ -32,11 +31,6 @@ const FITTED_COLUMNS = [
 	'clamp_movement', 'held_reason', 'max_down_step', 'max_up_step', 'pairs_in_band',
 	'pairs_judged', 'pairs_usable', 'disagreement_rate', 'unclear_rate',
 	'negatives_on_record', 'above_line_on_record', 'days_on_record', 'cosine_weight'
-];
-const SCORE_COLUMNS = [
-	'date', 'run_id', 'applied_line', 'labeller', 'merged_and_one_story',
-	'merged_and_two_stories', 'apart_and_one_story', 'apart_and_two_stories',
-	'pairs_unresolved', 'labelled_two_story_pairs'
 ];
 
 /** The state-root path of one day's file, in the layout its writer files it. */
@@ -125,24 +119,6 @@ const FITTED_2_OCT_RERUN = {
 	cosineWeight: 0.9
 };
 
-/** Two days of holdout scores, 20 and 21 Sep 2026, one scoring run each. */
-function writeScoreDays(root: string): string[] {
-	return [
-		writeDay(root, SCORES, '2026-09-20', SCORE_COLUMNS, [[
-			'2026-09-20', '2026-09-20-36000000001', '0.95', 'labeller-one', '70', '2', '110', '4', '1', '6'
-		]]),
-		writeDay(root, SCORES, '2026-09-21', SCORE_COLUMNS, [[
-			'2026-09-21', '2026-09-21-36000000002', '0.94', 'labeller-one', '72', '1', '113', '5', '0', '6'
-		]])
-	];
-}
-
-const SCORE_21_SEP = {
-	date: '2026-09-21', runId: '2026-09-21-36000000002', appliedLine: 0.94, labeller: 'labeller-one',
-	mergedAndOneStory: 72, mergedAndTwoStories: 1, apartAndOneStory: 113, apartAndTwoStories: 5,
-	pairsUnresolved: 0, labelledTwoStoryPairs: 6
-};
-
 test('THE ORACLE: the fitted lines are read from their YYYY/MM/DD.csv files, and a day outside the cover is not', () => {
 	withRoot((root) => {
 		writeInventory(root, writeFittedDays(root));
@@ -151,15 +127,6 @@ test('THE ORACLE: the fitted lines are read from their YYYY/MM/DD.csv files, and
 		expect(fittedLines(2, root)).toEqual([FITTED_1_OCT, FITTED_2_OCT_RERUN]);
 		// The day the cover left out is there to be read when the cover reaches it.
 		expect(fittedLines(-1, root)).toEqual([FITTED_30_SEP, FITTED_1_OCT, FITTED_2_OCT_RERUN]);
-	});
-});
-
-test('THE ORACLE: the newest holdout score is read from its YYYY/MM/DD.csv file', () => {
-	withRoot((root) => {
-		writeInventory(root, writeScoreDays(root));
-
-		expect(mergeLineHoldoutScore(2, root)).toEqual(SCORE_21_SEP);
-		expect(mergeLineHoldoutScore(1, root)).toEqual(SCORE_21_SEP);
 	});
 });
 
@@ -175,22 +142,22 @@ test('a day the inventory names inside the cover and the disk lacks stops the re
 	});
 });
 
-test('THE ORACLE: a holdout day outside the cover is not read, so the disk may lack it', () => {
+test('THE ORACLE: a fitted day outside the cover is not read, so the disk may lack it', () => {
 	withRoot((root) => {
-		const named = writeScoreDays(root);
+		const named = writeFittedDays(root);
 		rmSync(join(root, ...named[0].split('/')));
 		writeInventory(root, named);
 
-		expect(mergeLineHoldoutScore(1, root)).toEqual(SCORE_21_SEP);
-		// A cover that reaches 20 Sep stops on the same missing file, so the read
+		expect(fittedLines(2, root)).toEqual([FITTED_1_OCT, FITTED_2_OCT_RERUN]);
+		// A cover that reaches 30 Sep stops on the same missing file, so the read
 		// above answered because it never reached that day.
-		expect(() => mergeLineHoldoutScore(2, root)).toThrow(
-			'Publication inventory names missing ledger file content-similarity-judge/merge-line-holdout-scores/2026/09/20.csv.'
+		expect(() => fittedLines(3, root)).toThrow(
+			'Publication inventory names missing ledger file content-similarity-judge/fitted-thresholds/2026/09/30.csv.'
 		);
 	});
 });
 
-test('the registry files both judge ledgers one YYYY/MM/DD.csv a day, in the folders the readers open', () => {
+test('the registry files the fitted lines one YYYY/MM/DD.csv a day, in the folder the reader opens', () => {
 	const registry = JSON.parse(
 		readFileSync(join(import.meta.dirname, '..', '..', 'config', 'ledgers.json'), 'utf8')
 	) as { families: { name: string; ledgers: { name: string }[] }[] };
@@ -199,8 +166,5 @@ test('the registry files both judge ledgers one YYYY/MM/DD.csv a day, in the fol
 
 	expect(entry('fitted-thresholds')).toEqual({
 		name: 'fitted-thresholds', grain: 'day', prefix: [...FITTED], stem: null, suffix: SUFFIX
-	});
-	expect(entry('merge-line-holdout-scores')).toEqual({
-		name: 'merge-line-holdout-scores', grain: 'day', prefix: [...SCORES], stem: null, suffix: SUFFIX
 	});
 });

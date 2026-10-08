@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from idhazh import config
+from idhazh import config, crash_trace
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
 from idhazh.contracts.ledger_name import LedgerName
 from utilities.ledger_migration import phases, report_lines
@@ -115,7 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     which = (
         list(dict.fromkeys(LedgerName(value) for value in args.ledger))
         if args.ledger
-        else door_ledgers()
+        else door_ledgers(config.DEFAULT_CONFIG_DIR)
     )
 
     if args.check:
@@ -182,4 +182,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # A crash prints where it broke: a message can quote a ledger row it read.
+    crash_trace.install()
     raise SystemExit(main())

@@ -1693,9 +1693,10 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
     settings = config.load_gardener()
     declared = settings.tasks
     for which in PACKED_LEDGERS:
-        policy = declared.get(f"compact-{which.value}")
+        task = config.compaction_task(which)
+        policy = declared.get(task)
         if not isinstance(policy, CompactionPolicy):
-            raise SystemExit(f"config/gardener/compact-{which.value}.json declares no compaction")
+            raise SystemExit(f"config/gardener/{task}.json declares no compaction")
         outcome = compaction.run(
             TaskContext(
                 state_dir=state,

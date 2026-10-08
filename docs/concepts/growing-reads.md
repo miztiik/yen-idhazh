@@ -201,15 +201,15 @@ reads are here and not how many. These are `backend/`'s;
 | --- | --- | --- |
 | `ledger.persist` on `LedgerName.COUNTERFACTUAL_SCORES` | one raw file of `state/raw/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day, through `ledger.load_days` | one date |
-| `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
+| `ledger.load_story_similarity_pairs` | one day of `content-similarity-judge/scored-pairs`, through `ledger.load_days` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day, through `ledger.load_days` | one date |
 | `telemetry.silicon`'s clock step | the host-fingerprint raw files of one day, through `ledger.list_raw_files` | one date: it reads back the row its own probe filed |
 | `ledger.held_days`, `ledger.held_months` | the compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day, month or year. `source_health._recent_item_health`, `machine.publish`, `public_telemetry.publish`, `run_timeline.publish` and the `telemetry-aggregate` task ask it which days or months exist. `idhazh telemetry prune` on a door ledger asks it how many days lie outside its range, and reads the same indexes through `ledger.find_holding_files` to find the files that hold the range |
 | `similarity.holdout.score_marks` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date its rows name | the length of the hand-marked file, and nothing else. The verb that calls it is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
-| `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
-| the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
+| `gardener_publish.Checkout.committed_folders`, which names task folders | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: a wake whose checkout is empty for a named task folder can only ask the commit |
+| the `trials` task's walk of each folder the listing hands it | files under the declared case trace folders, currently `state/pipeline-tests/<case>/traces/` | only those trace folders, and its window reports old files. The configured policy is report-only. Trial ledger files remain outside those trace folders |
 | the compaction's listing of a ledger's days, `raw_files.raw_days` | the day folder names under `state/raw/<ledger>/`, never a file's contents | the raw days not compacted yet. A live compaction empties them as it goes, so it names about two raw days. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
 
 ### Unbounded, and it says so
@@ -234,7 +234,7 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, and `grader_length_bias.py` joins every row. Each is an operator pass, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
 | `pipeline_test_state_verifier.refusals` | the raw days, compact periods and indexes under the roots, ledgers and UTC months a caller names | it is a proof command for a migration or trial cutover. The caller names each root, each ledger and each month, so another committed trial root or another month on disk adds no read until the command names it. The command validates stored files through the door's raw and compact checkers rather than walking `state/` to discover cases |
-| `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/`, and any trial run's tree inside it | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. Packing reads only the named periods under roots selected by their production or trial compaction declarations. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
+| `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/` and any named trial case root | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. Packing reads only the named periods under roots selected by their production or trial compaction declarations. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on
@@ -410,25 +410,25 @@ the last day there was.
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.dayShardFiles` | the day files of the newest `days` recorded days of a ledger that files one `<YYYY>/<MM>/<DD>.csv` a day, as the publication inventory names them | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts recorded days** - see below |
-| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint or merge-line holdout score ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
-| `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
-**A day is one file, and the cover counts recorded days.** Both ledgers this
-reader serves, the fitted merge line and the merge line's holdout score, file one
-`<YYYY>/<MM>/<DD>.csv` a day: grain `day` in `config/ledgers.json`, the registry
-`backend/idhazh/ledger/paths.py` builds each writer's path from. `dayShardFiles`
+**A day is one file, and the cover counts recorded days.** The ledger this
+reader serves, the fitted merge line, files one `<YYYY>/<MM>/<DD>.csv` a day:
+grain `day` in `config/ledgers.json`, the registry
+`backend/idhazh/ledger/paths.py` builds its writer's path from. `dayShardFiles`
 keeps the newest `days` of the days the publication inventory names and opens
 one file a day, so `LEDGER_WINDOW_DAYS` bounds the read at 91 files whatever the
 ledger holds. From #1068 until 2026-10-08 the reader looked for a folder of files
-a day, which neither writer files, so the Judgement page read no row.
+a day, which no writer filed, so the Judgement page read no row.
 `frontend/tests/similarity-ledgers.spec.ts` now holds the registry and the
-reader to the one layout.
+reader to the one layout. The merge line's holdout score left this reader when it
+moved onto the ledger door; it is read with the packed records above.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -457,7 +457,7 @@ matters, because the vector block is most of what a day payload weighs.
 once to find the newest year, which costs one directory entry a year for ever.
 `readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
 which shards are newest, which costs one entry a month for ever.
-`readDayShards` is the bigger one, and both judge readers inherit it: the
+`readDayShards` is the bigger one, and the fitted-line reader inherits it: the
 inventory names one entry a recorded day, and the reader reads every entry of
 its ledger to find the newest. It looks on disk only for the files inside its
 cover and opens no other, and deriving the newest day from today's date instead

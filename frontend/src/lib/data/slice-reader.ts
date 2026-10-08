@@ -87,7 +87,9 @@ import {
 	type SliceResult
 } from './slice-shapes';
 
-function ledgerFolder(ledger: LedgerName): string {
+/** The folder a ledger's files sit in under `raw/` and `compact/`: its family's
+ *  folder and its own where `LEDGER_FOLDERS` names one, else its own name. */
+export function ledgerFolder(ledger: LedgerName): string {
 	const folders: Partial<Record<LedgerName, string>> = LEDGER_FOLDERS;
 	return folders[ledger] ?? ledger;
 }

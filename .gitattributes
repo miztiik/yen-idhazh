@@ -32,13 +32,10 @@ config/*.json text eol=lf
 # writer, so there is nothing for a union to settle. `state/published/` and
 # `state/seen/` carried one until they moved there too.
 
-# The four judge trees. A row is one measurement of one pair on one day, the
-# reader keys on the pair and takes the newest, so two runs that both judged
-# that day are not in disagreement and a repeat the union brings costs bytes
-# and moves no verdict.
-state/content-similarity-judge/metrics/**/*.csv text eol=lf merge=union
-state/content-similarity-judge/merge-line-holdout-scores/**/*.csv text eol=lf merge=union
-state/content-similarity-judge/scored-pairs/**/*.csv text eol=lf merge=union
+# The judge tree still on CSV. A row is the line one run fitted for one day,
+# and the reader keys on the day and the run, so two runs that both fitted that
+# day are not in disagreement and a repeat the union brings costs bytes and
+# moves no line.
 state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
 
 # The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
