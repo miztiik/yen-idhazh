@@ -27,8 +27,10 @@ import { paint, type ChartToken } from './theme';
 export interface StackSeries {
 	label: string;
 	token: ChartToken;
-	/** One value per column, same length as `columns`. */
-	values: number[];
+	/** One value per column, same length as `columns`. Null is a column with no
+	 * value - a day nothing was measured on - and draws no bar and a break in a
+	 * line, where a zero would draw a measured nothing. */
+	values: (number | null)[];
 }
 
 /** A line across the whole plot at one value on the value axis.
@@ -101,7 +103,9 @@ export function stacked(
 	shape: StackShape = 'bars',
 	options: StackOptions = {}
 ): Stacked {
-	const drawn = series.filter((s) => s.values.some((v) => v > 0));
+	// A series with no value but zero is left out. One only ever below zero is
+	// a reading, not an absence: an item's unclaimed time can be negative.
+	const drawn = series.filter((s) => s.values.some((v) => v !== null && v !== 0));
 	if (columns.length === 0 || drawn.length === 0) {
 		return { option: {}, totals: [], empty: true };
 	}
@@ -169,7 +173,7 @@ export function stacked(
 					? { type: 'bar' as const, stack: 'total', barMaxWidth: 26 }
 					: { type: 'line' as const, symbolSize: 5, lineStyle: { width: 1.5 } }),
 				itemStyle: { color: paint(s.token) },
-				data: columns.map((_, i) => s.values[i] ?? 0),
+				data: columns.map((_, i) => s.values[i] ?? null),
 				// On the first series only. A rule hung on each of them would be drawn
 				// once per series at the same height, which reads as a thicker line
 				// and prints its caption on top of itself.

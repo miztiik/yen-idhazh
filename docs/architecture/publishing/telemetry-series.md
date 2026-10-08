@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-08
 
 The console's interactive charts read a published projection of item health. They
 never read the item-health ledger directly.
@@ -768,7 +768,10 @@ the empty span, and `coverageSentence` writes the one line under the title.
  carried a date and a set of blanks - or worse, on the band chart, a set of
  zeros, which says every summary of that day landed nowhere. The strip prints
  one row instead: `Nothing was timed on this day`, `Nothing was summarised on
- this day`, `No item was planned on this day`.
+ this day`, `No item was planned on this day`. **A not-measured row names only
+ what its own chart lacks.** The item time split's row is `No item was timed
+ from start to finish on this day`, because such a day can still have timed
+ every item's fetch, and `Nothing was timed` would be false there.
 
 Rejected: fitting the domain to the measured days (Editor - it hides the record
 and breaks the preset); saying nothing and letting the reader see the gap

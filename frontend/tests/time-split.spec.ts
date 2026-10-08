@@ -115,6 +115,20 @@ test('a negative gap stays negative', () => {
 	expect(sum(bands)).toBe(700);
 });
 
+test('a gap that is below zero on every day drawn is still drawn', () => {
+	// The note under the chart promises that unclaimed time shows up there
+	// rather than nowhere. A window of one day whose gap is below zero has no
+	// day on which that band is above it, and the band is drawn all the same.
+	const days = timeSplit([fullyTimed({ date: '2026-09-14', item_total_ms: 700, stage_gap_ms: -50 })], {
+		start: '2026-09-14',
+		end: '2026-09-14'
+	});
+
+	const series = timeSplitChart(days).option.series as { name: string; data: (number | null)[] }[];
+
+	expect(series.find((one) => one.name === 'Unattributed')?.data).toEqual([-50]);
+});
+
 test('a day is the mean item, and the bands still add up to the bar', () => {
 	// Means, not medians, and this is the test that says why. Medians do not add:
 	// a stack of per-stage medians draws a column whose height is not the median
@@ -207,13 +221,22 @@ test('the strip prints every band with its share', () => {
 	expect(new Set(strip.series.map((one) => one.swatch)).size).toBe(TIME_BANDS.length);
 });
 
-test('a day that timed nothing prints milliseconds and no share', () => {
-	// Zero over zero is not zero percent. A share taken against a total of nothing
-	// is a number nobody measured.
-	const days = timeSplit([], { start: '2026-09-14', end: '2026-09-14' });
+test('a day that timed no item from start to finish prints that, and no milliseconds', () => {
+	// Eight zeroes would say the item took no time, where the truth is that
+	// nothing timed it - and a share taken against a total of nothing is a
+	// number nobody measured. So the day carries no value: no column on the
+	// chart, and one line in the strip, beside a day that was timed.
+	const days = timeSplit([fullyTimed({ date: '2026-09-14' })], {
+		start: '2026-09-13',
+		end: '2026-09-14'
+	});
 
 	const strip = timeSplitColumns(days);
 
-	expect(strip.series.every((one) => one.values[0] === '0 ms')).toBe(true);
-	expect(timeSplitChart(days).empty).toBe(true);
+	expect(strip.notMeasured).toBe('No item was timed from start to finish on this day');
+	expect(strip.series.map((one) => one.values[0])).toEqual(TIME_BANDS.map(() => null));
+	expect(strip.series[0].values[1]).toBe('100 ms, 13%');
+	const series = timeSplitChart(days).option.series as { data: (number | null)[] }[];
+	expect(series.every((one) => one.data[0] === null)).toBe(true);
+	expect(timeSplitChart(timeSplit([], { start: '2026-09-14', end: '2026-09-14' })).empty).toBe(true);
 });

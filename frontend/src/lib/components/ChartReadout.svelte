@@ -88,9 +88,19 @@
 		held?: boolean;
 	}
 
-	/** The widest of a series' readings, so the strip keeps room for it. */
-	function widest(values: readonly (string | null)[], missing: string): number {
-		return values.reduce((most, value) => Math.max(most, (value ?? missing).length), 0);
+	/** The widest reading a series prints, so the strip keeps room for it. A
+	 * missing reading prints the not-measured word only on a column another
+	 * series measured: a column nothing measured prints the word once, in place
+	 * of every entry, so it holds no room in any of them. */
+	function widest(
+		values: readonly (string | null)[],
+		missing: string,
+		counted: readonly boolean[]
+	): number {
+		return values.reduce(
+			(most, value, column) => Math.max(most, (value ?? (counted[column] ? missing : '')).length),
+			0
+		);
 	}
 
 	/** What the strip prints: a heading and its entries, in either shape. `one`
@@ -120,13 +130,16 @@
 			}
 			if (readout.columns.length === 0) return null;
 			const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
-			const measured = readout.series.some((one) => one.values[column] !== null);
+			const counted = readout.columns.map((_, index) =>
+				readout.series.some((one) => one.values[index] !== null)
+			);
+			const measured = counted[column] ?? false;
 			const series: Entry[] = measured
 				? readout.series.map((one) => ({
 						label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
 						value: one.values[column] ?? readout.notMeasured,
 						swatch: one.swatch,
-						reserve: widest(one.values, readout.notMeasured)
+						reserve: widest(one.values, readout.notMeasured, counted)
 					}))
 				: [{ label: readout.notMeasured, value: '', swatch: null, reserve: 0 }];
 			const events = readout.events[column] ?? [];
