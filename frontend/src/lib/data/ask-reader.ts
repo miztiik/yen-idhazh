@@ -386,11 +386,15 @@ function cutOf(plans: readonly LedgerPlan[]): CutDays[] {
 	return plans.flatMap((one) => (one.cutBefore === null ? [] : [{ ledger: one.ledger, before: one.cutBefore }]));
 }
 
-/** The first day any selected ledger's answer reads. A ledger's answer starts on `from`, the
- *  window's first day, unless its earlier days were cut or the repository could not give them;
- *  then it starts on the day `cutBefore` or `unanswered` names. */
+/** The day one ledger's answer starts on: `from`, the window's first day, unless its earlier days
+ *  were cut or the repository could not give them; then the day `cutBefore` or `unanswered` names. */
+function startDay(one: LedgerPlan, from: DateStamp): DateStamp {
+	return one.cutBefore ?? one.unanswered?.before ?? from;
+}
+
+/** The first day any selected ledger's answer reads. */
 function firstDayRead(plans: readonly LedgerPlan[], from: DateStamp): DateStamp {
-	return plans.map((one) => one.cutBefore ?? one.unanswered?.before ?? from).sort()[0] ?? from;
+	return plans.map((one) => startDay(one, from)).sort()[0] ?? from;
 }
 
 async function plan(
