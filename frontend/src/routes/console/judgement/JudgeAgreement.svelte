@@ -13,6 +13,12 @@
 	 * taken over, and two panels at two scales would still invite a comparison
 	 * and make it wrong.
 	 *
+	 * **A rate under the floor gets no dot.** The floor counts the pairs each
+	 * share is taken over, so a day can keep one dot and lose the other. That
+	 * rate's line breaks there rather than drawing a value through the day, and
+	 * the day keeps its column, so the strip still prints its counts. It is the
+	 * failure chart's rule for the same floor.
+	 *
 	 * **The axis is the two knobs and never the data.** Neither rate can reach 1
 	 * without the run holding first, so 0 to 1 would leave half the plot in a
 	 * region the data cannot enter. Fitted to the data, a healthy two percent
@@ -124,18 +130,38 @@
 		};
 	}
 
+	/** Where a share sits on the axis, or null where the pairs it is taken over
+	 * are under the floor: there it is not a measurement, and a dot at its height
+	 * would place a share the strip calls too few to report. */
+	function heightOf(share: number, pairs: number): number | null {
+		if (pairs < attemptsFloor) return null;
+		return px(yAxis.scale(Math.min(share, corridor[1])));
+	}
+
 	const marks = $derived(
 		read.map((day, index) => ({
 			date: day.date,
 			x: px(columnsX[index]),
-			disagreeY: px(yAxis.scale(Math.min(day.disagreementRate, corridor[1]))),
-			unclearY: px(yAxis.scale(Math.min(day.unclearRate, corridor[1]))),
+			disagreeY: heightOf(day.disagreementRate, day.pairsJudged),
+			unclearY: heightOf(day.unclearRate, day.pairsUsable),
 			day,
 			said: readingsOf(day)
 		}))
 	);
-	const disagreePath = $derived(marks.map((mark) => `${mark.x},${mark.disagreeY}`).join(' '));
-	const unclearPath = $derived(marks.map((mark) => `${mark.x},${mark.unclearY}`).join(' '));
+
+	/** One rate's line, broken wherever that rate has no dot: each run of
+	 * neighbouring dots is one polyline, and a dot with no neighbour stands alone.
+	 * Joined across such a day, the line would draw a value there. */
+	function runsOf(points: readonly { x: number; y: number | null }[]): string[] {
+		const runs: string[][] = [[]];
+		for (const { x, y } of points) {
+			if (y === null) runs.push([]);
+			else runs[runs.length - 1].push(`${x},${y}`);
+		}
+		return runs.filter((run) => run.length > 1).map((run) => run.join(' '));
+	}
+	const disagreeRuns = $derived(runsOf(marks.map((mark) => ({ x: mark.x, y: mark.disagreeY }))));
+	const unclearRuns = $derived(runsOf(marks.map((mark) => ({ x: mark.x, y: mark.unclearY }))));
 
 	/** How many pairs the window read altogether: what the disagreed share is
 	 * taken over, printed beside it. */
@@ -160,6 +186,21 @@
 		drawn.filter((day) => day.heldReason === 'judge_unstable' || day.heldReason === 'judge_uncertain')
 			.length
 	);
+
+	/** Why a dot is missing, said after the window sentence wherever the chart
+	 * left one out. Not while the whole window is too few for a share: that
+	 * sentence already says so. One column shows no gap, so it keeps the rule
+	 * alone. The words are Reader's. */
+	const floorNote = $derived.by(() => {
+		const leftOut = marks.some((mark) => mark.disagreeY === null || mark.unclearY === null);
+		if (!leftOut || disagreeShare === null) return null;
+		const fewer = `fewer than ${plural(attemptsFloor, 'pair', 'pairs')}`;
+		const rule = `A day has no "disagreed" dot if ${fewer} were read twice, and no "could not tell" dot if ${fewer} agreed.`;
+		if (marks.length === 1) return rule;
+		return marks.some((mark) => mark.disagreeY !== null || mark.unclearY !== null)
+			? `${rule} The chart shows a gap where a dot is left out, and that day's counts are still above.`
+			: `${rule} So the chart has no dots, and each day's counts are still above.`;
+	});
 
 	/** A day's two readings, as its strip prints them and as its marks name them:
 	 * every word of the sentence is in the strip at that day. */
@@ -265,22 +306,24 @@
 					</text>
 				{/each}
 
-				{#if marks.length > 1}
+				{#each disagreeRuns as points (points)}
 					<polyline
-						points={disagreePath}
+						{points}
 						fill="none"
 						stroke="var(--chart-1)"
 						stroke-width="2"
 						data-agreement-series="disagreement"
 					/>
+				{/each}
+				{#each unclearRuns as points (points)}
 					<polyline
-						points={unclearPath}
+						{points}
 						fill="none"
 						stroke="var(--chart-3)"
 						stroke-width="2"
 						data-agreement-series="unclear"
 					/>
-				{/if}
+				{/each}
 
 				{#each marks as mark (mark.date)}
 					<g
@@ -289,8 +332,12 @@
 						data-agreement-day={mark.date}
 						data-agreement-judged={mark.day.pairsJudged}
 					>
-						<circle cx={mark.x} cy={mark.disagreeY} r="2.5" fill="var(--chart-1)" />
-						<circle cx={mark.x} cy={mark.unclearY} r="2.5" fill="var(--chart-3)" />
+						{#if mark.disagreeY !== null}
+							<circle cx={mark.x} cy={mark.disagreeY} r="2.5" fill="var(--chart-1)" />
+						{/if}
+						{#if mark.unclearY !== null}
+							<circle cx={mark.x} cy={mark.unclearY} r="2.5" fill="var(--chart-3)" />
+						{/if}
 					</g>
 				{/each}
 
@@ -350,6 +397,9 @@
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
 					{unclearSaid} could not tell. Both rates are inside the marks.</span
 				>
+			{/if}
+			{#if floorNote !== null}
+				<span data-agreement-floor-note>{floorNote}</span>
 			{/if}
 		</p>
 	</div>
