@@ -72,6 +72,28 @@ whole state root with `run.trial_state_dirname`, so its rows land under
 without changing the production ledger's retention policy. The reason is in
 the design rationale below.
 
+**The probe reads no run plan, from 2026-10-08.** A machine reading is about the
+job rather than about the work the job did, so `idhazh fingerprint` and
+`idhazh job-clock` are handed the day and the run address by the workflow that
+already holds both. They used to read a run plan back to recover those two
+strings, which made a machine reading something only the two workflows that open
+with a plan stage could take - `digest.yml` and `measure.yml`. A gardener wake or
+a council night reached a plan nothing had written and failed the step.
+
+**What a workflow still owes to carry the probe** is a `ServerJob` member for its
+job's own id, and a commit step that stages `state/`, because a row nobody
+commits dies with its runner. `run-tasks`, `history` and `save_council_results`
+are already members, so the gardener's two task jobs and the council's settle job
+need no code change to start recording a machine.
+
+**A workflow that mints its own run name hands it over with `--run-id`.** The
+council names a night once and gives that name to every verb that writes a row,
+so a night's machine rows join its other rows on `run_id`. A workflow that names
+an execution passes `--execution` instead, and the address is computed from it
+the same way the plan stage computes it, so the probe and the plan agree by
+construction rather than by lookup. Both flags, naming different runs, is a step
+handed one of them by mistake and is refused before a row is written.
+
 **It files by day, and that is the shape the read wants.** A host record only
 earns its keep when somebody counts across many days, and a day tree is the
 shape a bounded window can read (Guardrail #12).

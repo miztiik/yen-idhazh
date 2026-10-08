@@ -736,7 +736,8 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             )
         stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT, shard=shard, shards=2)
         stage_job_clock(
-            run_plan,
+            date=run_plan.date,
+            run_id=run_plan.run_id,
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=SEED_COMMIT,
