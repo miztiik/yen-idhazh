@@ -37,7 +37,6 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
 		'console-chart-days', 'console-cuts-by-run', 'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
 		'console-stage-timing-days',
-		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
@@ -46,7 +45,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'processor-lost', 'prompt-reuse',
 		'publication',
 		'run-axis', 'run-yield',
-		'settings-moved', 'span-sentences', 'span-words', 'statement', 'raw-listed-through',
+		'settings-moved', 'similarity-ledgers', 'span-sentences', 'span-words', 'statement', 'raw-listed-through',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
 		'tokens', 'verdict-split', 'vocabulary',
 		'weights'
