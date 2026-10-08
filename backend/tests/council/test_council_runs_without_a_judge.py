@@ -74,16 +74,12 @@ JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.story_similarity_pair",
 )
 
-#: The judge contracts a council verb still reaches, and the routes they arrive
-#: on. Measured by a fresh walk on 2026-09-21, and the owner's ruling the same
-#: day is that these three may cross and nothing else may. Two more cross since
-#: the owner's directive of 2026-10-05 moved the judge's pairs and instrument
-#: rows onto the ledger door: the door table in `idhazh.ledger` names every door
-#: ledger's row contract, so the metrics row and the call stamp it inherits
-#: arrive with it.
+#: The three judge contracts a council verb still reaches, and the routes they
+#: arrive on. Measured by a fresh walk on 2026-09-21, and the owner's ruling the
+#: same day is that these three may cross and nothing else may.
 #:
 #: **Why they are here rather than cut.** Both carriers are modules the two sides
-#: genuinely share. `idhazh.ledger` is the one registry of ledger rows and the
+#: genuinely share. `idhazh.ledger` is the one registry of CSV rows and the
 #: tenancy protocol reads its row types off it; `idhazh.contracts.knobs.placement`
 #: is the knob block `app_config` composes, and `registry` loads `app_config` to
 #: ask a tenant whether it can finish the night. Cutting either means moving a
@@ -95,9 +91,7 @@ JUDGE_CONTRACT_MODULES: Final = (
 #: exception survivable: the council imports the shape, never the judge.
 JUDGE_CONTRACTS_STILL_CROSSING: Final = frozenset(
     {
-        "idhazh.contracts.content_similarity_judge_metrics",
         "idhazh.contracts.fitted_similarity_threshold",
-        "idhazh.contracts.judge_call",
         "idhazh.contracts.story_similarity_distribution",
         "idhazh.contracts.story_similarity_pair",
     }
@@ -205,17 +199,17 @@ def test_a_named_transitive_dependency_keeps_its_import_route(
 def test_the_judge_contracts_that_still_cross_cannot_grow(reached: set[str]) -> None:
     """The exception is self-limiting, or it is an invitation.
 
-    The judge contracts named above arrive through two modules both sides
-    share, and each one that crosses is named with the change that made it
-    cross. A list with no upper edge is one the next person extends, so what is
-    held here is the exact set: one more fails, and so does one that was cut
+    Three judge contracts arrive through two modules both sides share, and the
+    owner ruled on 2026-09-21 that those three may cross while the routes are
+    priced. A list with no upper edge is one the next person extends, so what is
+    held here is the exact set: a fourth fails, and so does a third that was cut
     without the list being cut with it.
     """
     crossing = reached & set(JUDGE_CONTRACT_MODULES)
 
     assert crossing == set(JUDGE_CONTRACTS_STILL_CROSSING), (
-        "the judge contracts a council verb reaches are no longer the ones named in "
-        "JUDGE_CONTRACTS_STILL_CROSSING. Added: "
+        "the judge contracts a council verb reaches are no longer the three the "
+        "owner agreed to. Added: "
         f"{sorted(crossing - JUDGE_CONTRACTS_STILL_CROSSING)}; gone: "
         f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A new one needs a "
         "ruling, and one that left needs this list shortened in the same commit."

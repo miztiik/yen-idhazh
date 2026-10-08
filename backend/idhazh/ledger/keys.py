@@ -23,7 +23,6 @@ from typing import Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
@@ -38,7 +37,6 @@ from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -134,6 +132,10 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #: the checked-out file and discard every fresh verdict, while the record
 #: counted the fresh ones - two descriptions of one day with nothing able to
 #: tell them apart.
+#:
+#: The shape these cells name is `idhazh.contracts.story_similarity_pair`, and
+#: the door table below imports it only when its ledger is asked about, for the
+#: reason the holdout score's key gives.
 STORY_SIMILARITY_PAIR_KEY: Final = (
     "date",
     "run_id",
@@ -144,7 +146,9 @@ STORY_SIMILARITY_PAIR_KEY: Final = (
 
 
 #: What makes two metrics rows the same record: one part of one council run's
-#: night, for one judged date.
+#: night, for one judged date. The door table below imports the row contract,
+#: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
+#: asked about, for the reason the holdout score's key gives.
 CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
 
 
@@ -321,12 +325,6 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
         COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: _DoorShape(
-        STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: _DoorShape(
-        CONTENT_SIMILARITY_JUDGE_METRICS_KEY, ContentSimilarityJudgeMetrics
-    ),
 }
 
 
@@ -335,6 +333,22 @@ def _merge_line_holdout_score() -> type[Contract]:
     from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 
     return MergeLineHoldoutScore
+
+
+def _story_similarity_pair() -> type[Contract]:
+    """The judged pair's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    return StorySimilarityPair
+
+
+def _content_similarity_judge_metrics() -> type[Contract]:
+    """The judge's per-part reading, imported when its ledger is first asked about."""
+    from idhazh.contracts.content_similarity_judge_metrics import (
+        ContentSimilarityJudgeMetrics,
+    )
+
+    return ContentSimilarityJudgeMetrics
 
 
 #: The door ledgers a judge writes, each with its key and the function that
@@ -350,6 +364,14 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
         MERGE_LINE_HOLDOUT_SCORE_KEY,
         _merge_line_holdout_score,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
+        STORY_SIMILARITY_PAIR_KEY,
+        _story_similarity_pair,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
+        CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
+        _content_similarity_judge_metrics,
     ),
 }
 
