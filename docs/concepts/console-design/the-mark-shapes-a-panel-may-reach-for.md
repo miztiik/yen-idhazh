@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-08
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -71,9 +71,12 @@ Five rules hold every type.
 ## When nobody wrote the panel, the columns choose the shape
 
 The Data explorer page draws an answer whose question was typed by the operator, so no
-panel author can name the right chart in advance. It chooses from the columns,
-in this order, and lets the operator switch only among shapes that still tell a
-true story about those columns.
+panel author can name the right chart in advance. It opens on the shape the columns
+choose, in this order. Every chart type the explorer draws is offered on every
+answer, in one order, and the operator may press any of them and choose the columns
+for each of its roles. A type these columns cannot support draws nothing, and its box
+says what it needs, so the page still never draws a story the columns do not tell
+(Susan, 2026-10-07).
 
 | Order | Columns in the answer | Shape |
 | --- | --- | --- |
@@ -81,7 +84,34 @@ true story about those columns.
 | 2 | one text column and one non-negative number | `rankedList` |
 | 3 | two number columns and at most one text column | `pairedScatter` |
 | 4 | one number column | `distribution` |
-| 5 | anything else | no chart, one neutral sentence |
+| 5 | anything else | no tile checked, and the box says `The page does not pick a chart for these columns. Choose one under Draw it as.` |
+
+The order opens a chart and never closes one: what it picks does not change once the
+operator can choose, and an answer it opens on the date chart whose day column the
+chart cannot use still opens there, with the box saying why. With no number column at
+all, no chart can be filled, and the box says `Nothing here to draw: the answer has no
+number in it.` whichever tile is checked.
+
+**Each chart has roles, and a role lists only the columns its family fits.** The
+operator picks a role's columns from a pill above the drawing, which opens a list of the
+answer's columns in the answer's order, with a filter at its head. Until the operator
+picks, each role holds the columns the order above always drew.
+
+| Chart | Its tile | Roles, and what each takes |
+| --- | --- | --- |
+| `dateSeries` | `Over time` | `Date`: a date or a timestamp. `Lines`: up to four numbers, one for each series colour; by default the numbers whose largest value is at least `console.explorer_series_floor_share` of the largest column's |
+| `rankedList` | `Ranked` | `Name`: any column, a text column first. `Rank by`: a number that is not `Name` |
+| `pairedScatter` | `Paired` | `Across` and `Up`: a number each. `Name`: any column, or `Row number`, which makes each row its own point and is the default where the answer has no text column |
+| `distribution` | `Spread` | `Values`: a number |
+
+A choice redraws from the rows in memory and fetches nothing. It holds across runs on
+the page while the new answer still has each column in a family its role takes, and a
+role whose column has gone takes its own default again. Choices are never saved with a
+question and never carried in a link. A chart that cannot fill its roles says what it
+needs in one sentence, the same whichever role is empty, such as `Nothing here to draw:
+Spread needs a number column for Values.`; the empty pill shows which. A ranked list
+refuses a name that is in more than one row, a value below zero, and a column that is 0
+or null on every row, each in a sentence of its own.
 
 A column counts by its type's family
 ([../console-design.md](../console-design.md#data-explorer-prints-the-engine-answer-as-written)):
@@ -102,19 +132,22 @@ says which column holds which value, as the table prints it: `Nothing here to
 draw: the column "day" holds infinity, and the chart can show only days from
 year 1 to year 9999. Keep only those days in the question to draw it over time.`
 The operator can find that text in the table and filter it out (Reader,
-2026-10-06).
+2026-10-06). Several rows on one UTC day stop it too, and the sentence names the
+column, because the operator can now pick another: `Nothing here to draw: the answer
+has several rows a UTC day in "day". Group by day in the question to draw it over
+time.`
 
 **A NULL is no value, never a zero.** The date chart breaks its line on a day
 whose number is NULL, as it does on a lost day, and the ranked, paired and spread
 charts leave that row out. A floor counts the rows that carry a number, so a NULL
 can leave a chart too few to draw, and the too-few sentence names the floor it
-missed: readings, or for the paired chart, subjects. The paired chart's main
-figure counts the points it draws, and the ranked list's last line counts every
-row it did not draw.
+missed and says it counted `in the answer`: readings, or for the paired chart,
+names. The paired chart's main figure counts the points it draws, and the ranked
+list's last line counts every row it did not draw.
 
 **A NULL day is no day, so the date chart leaves its row out and says so.** The
 chart draws every row with a day. Its floor, its main figure and the columns it
-calls too flat to draw count only those rows, and the note above the chart says
+calls too flat to draw count only those rows, and the note under the drawing says
 how many it left out: `1 row holds null in the column "day", so the chart does
 not draw it. It is in the table.` A spread of the same answer needs no day, so it
 still draws those rows. A date column that holds only NULL draws nothing and says
