@@ -91,8 +91,8 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `JudgeAgreement.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | PENDING | - | - | - |
 | L36 | Hardware's one-sided line leaves out a day whose only run was refused | L28, L29 | M | DONE | psychic-goggles | #1421 | Plan 62 row l36 |
-| L37 | Article cost names a refused shard's processor time or leaves it out | L29 | N | PENDING | - | - | - |
-| L38 | Judgement's verdict split and holdout margin name the line a build used | L30 | M | PENDING | - | - | - |
+| L37 | Article cost names a refused shard's processor time or leaves it out | L29 | N | DONE | jubilant-doodle | - | Plan 62 row l37 |
+| L38 | Judgement's verdict split and holdout margin name the line a build used | L30 | M | DONE | jubilant-memory | - | Plan 62 row l38 |
 | L39 | Judgement's "could not tell" counts against the pairs that agreed | L32, L31 (holds `merge-line.ts` as well as `merge-line.spec.ts` as well as `frontend/tests/console-window.spec.ts`) | M | DONE | crispy-goggles | #1428 | Plan 62 row l39 |
 | L40 | A day under the floor is not drawn at its shares' heights | L32, L31 (holds `frontend/tests/console-window.spec.ts`) | N | PENDING | - | - | - |
 | L41 | The Judgement route reads its committed fitted lines and holdout scores | - (plan 59's rows "The fitted merge line is saved through the door", "The merge line's holdout score is saved through the door" and "The committed judge rows move onto the door, and the old CSV files go" later replace this read) | M | DONE | friendly-engine | #1418 | Plan 62 row l41 |
@@ -1675,9 +1675,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Measure first, on rows the test builds. If the join does not keep whichever of a refused shard's two machine records comes last, the row closes with the measurement and changes nothing | Plan owner, 2026-10-08 |
-| 2 | If it does, Fowler rules whether the join leaves a refused shard's processor time out or the panel says it cannot pick (CLAUDE.md section 14) | To be ruled at dispatch (Fowler) |
-| 3 | If the panel says it cannot pick, Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Measure first, on rows the test builds. If the join does not keep whichever of a refused shard's two machine records comes last, the row closes with the measurement and changes nothing | Measured 2026-10-08: it follows the order. A refused shard's two machine records naming 4 and 8 logical processors gave 80 processor-seconds with one array order and 160 with the other, on the same article rows. The fault holds; plan owner, 2026-10-08 |
+| 2 | If it does, Fowler rules whether the join leaves a refused shard's processor time out or the panel says it cannot pick (CLAUDE.md section 14) | Fowler, 2026-10-08: the join leaves the shard's processor time out. `processorsByShard` collects every distinct count a shard's records name and emits a figure only where they agree; disagreement collapses to the same absent state as no record. No panel change: `ArticleCostPanel.svelte`'s existing dash sentence already covers both "no record" and "records disagree" truthfully |
+| 3 | If the panel says it cannot pick, Reader chooses the words (CLAUDE.md section 14) | Not reached: decision 2 kept the panel unchanged |
 | 4 | The fault is row L29's second follow-up | Row L29's report; plan owner, 2026-10-08 |
 | 5 | L37 waits for L29 (#1412), whose measurement built the refused run in `console-machine.spec.ts` | Plan owner, 2026-10-08 |
 | 6 | Level 1: one figure on one panel; a wrong version is obvious and local | Plan owner, 2026-10-08 |
@@ -1699,9 +1699,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/console/applied-line.ts` (new: the line a build used on a given day, the frontend's one copy of that rule; decision 2)
   - `frontend/tests/applied-line.spec.ts` (new, under `logic`: the Oracle)
   - `frontend/scripts/test-groups.ts` (names the new spec under `logic`)
+  - `docs/concepts/console-design/the-rules-every-console-chart-obeys.md` (its holdout section drew the axis around `floor_min`, which is the line only while the switch is off; it now names the line the newest published day was built with in both states, and links the rule; found during execution)
   - Left as they are: `frontend/src/routes/console/judgement/VerdictSplit.svelte` and `frontend/src/routes/console/judgement/HoldoutMargin.svelte`, whose `applied` prop each calls "The line the newest day was built with", which this row makes true; `frontend/src/lib/console/verdict-split.ts` and `frontend/src/lib/console/holdout.ts`, which take the line they are handed; `frontend/src/routes/console/judgement/+page.server.ts`, which hands the page `lines`, `similarity` and `configuredLine`; `frontend/tests/console-window.spec.ts`, whose four merge-line cases from row L30 hold the merge line's rule and run unchanged; `frontend/tests/console-judgement-verdict.spec.ts` and `frontend/tests/console-judgement-holdout.spec.ts`, which read the canary page, whose switch is off; `backend/idhazh/similarity/applied.py`, whose `applied_line()` is the rule a build follows
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec applied-line.spec.ts --spec console-window.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `applied-line.spec.ts`, on rows the test builds (Table D, D3), with row L30's lookback of 7 and floor of 0.94, for the newest published day: with the switch off and a line of 0.937 fitted 3 days before, the floor, 0.940; with the switch on and that line fitted 8 days before as the only fitted row, the floor, 0.940; and with the switch on and that line fitted 3 days before, 0.937. Row L30's four cases in `console-window.spec.ts` pass unchanged, so the merge line keeps its rule. On `main` the spec stops at import, because the module is new; the page's own choice, `data.lines.at(-1)?.applied`, gives 0.937 in the first two cases, which is the fault. It cannot settle that the page hands both panels what the function returns, because no test renders the Judgement page on rows it builds; review reads the two `applied` props in `+page.svelte`.
+- **Follow-ups** (found during execution):
+  - The rule reads every fitted row the site holds, and the council files the row dated the day before the newest published day at 22:00 UTC, after that day's builds ran. A site built again before the next morning's first publish, as Pages does after every CI-verified push to `main`, then names that row's line for a day whose builds could not read it. Row L30's merge line shares this limit. The run record already holds the line each build grouped at, `same_story_floor_applied` on `RunManifest` (`backend/idhazh/contracts/run_manifest.py`), and the console reads none of it; reading it would name what a build did rather than what the rule says it did. Nothing shows wrong while the switch is off. A row of its own if the owner wants it priced.
 
 **Decisions**
 
@@ -1712,6 +1715,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 3 | The panels' words do not change: each calls its line "The line the newest day was built with", which this row makes true. A sentence that must change goes to Reader (CLAUDE.md section 14) | Plan author, 2026-10-08, as row L30, decision 3 |
 | 4 | L38 waits for L30 (#1408), which built the rule | Plan owner, 2026-10-08 |
 | 5 | Level 1: the line two panels on one route are handed; it shows nothing wrong while the switch is off and every committed row applies the floor | Plan owner, 2026-10-08 |
+| 6 | The Oracle's three cases are joined by two, on rows the test writes: a line fitted 7 days before, the first day the build read (0.937), which holds the far end of the lookback in the function's own spec; and a held newest published day that kept a line fitted 14 days before (0.940), the held newest row the fault names. On `main` at 4ed116b2f the spec stops at import, and the page's own choice gives 0.937 to both panels in the first, second and fifth cases, where a build used 0.940. On this branch all five pass, and row L30's four cases in `console-window.spec.ts` pass unchanged | Found during execution (Table D, D3) |
+| 7 | No persona was asked: no word on a panel changed (decision 3), and the docs sentence only says which line the holdout axis is drawn around | Found during execution |
 
 **Rejected alternatives**
 

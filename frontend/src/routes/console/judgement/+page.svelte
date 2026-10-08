@@ -16,6 +16,7 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { findAppliedLine } from '$lib/console/applied-line';
 	import { markedApart, scoreRange } from '$lib/console/holdout';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
@@ -67,6 +68,12 @@
 	 * this route that has a date axis to draw the line walking into them. */
 	const apartSpan = $derived(markedApart(data.holdout.marks));
 	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
+
+	/** The line the newest published day was built with, which the verdict split
+	 * and the holdout margin both measure the record against. */
+	const newestDayLine = $derived(
+		findAppliedLine(data.windowDay, data.lines, data.similarity, data.configuredLine)
+	);
 </script>
 
 <svelte:head>
@@ -135,7 +142,7 @@
 
 	<VerdictSplit
 		record={data.record}
-		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		applied={newestDayLine}
 		discardShare={data.similarity.discard_share}
 		axisMultiple={data.console.precision_axis_multiple}
 		width={data.console.chart_width}
@@ -147,7 +154,7 @@
 		agreedScores={data.holdout.agreedScores}
 		skipped={data.holdout.skipped}
 		marked={data.holdout.marked}
-		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		applied={newestDayLine}
 		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
 		fitted={data.lines.length > 0}
 		weights={data.holdout.weights}
