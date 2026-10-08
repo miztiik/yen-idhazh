@@ -11,7 +11,8 @@
     "next_day_window": 1,
     "min_title_words": 3,
     "max_pairs_a_side": 8000,
-    "max_ambiguous_pairs": 4000
+    "max_ambiguous_pairs": 4000,
+    "max_related_pairs": 2000
   },
   "encode": {
     "batch_size": 32,
@@ -70,7 +71,7 @@
       "why": "The one with a different shape: a meaning vector and a weight for every word from one pass, which is two channels from one model. Carries languages this corpus never uses."
     },
     {
-      "slug": "qwen3-embedding-0.6b",
+      "slug": "qwen3-embedding-600m",
       "model_id": "Qwen/Qwen3-Embedding-0.6B",
       "prefix": "",
       "parameters_millions": 595,
