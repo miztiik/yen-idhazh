@@ -40,7 +40,7 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
@@ -123,33 +123,6 @@ def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> Host
             "cpu_model": cpu,
         }
     )
-
-
-def test_a_ledger_that_is_not_a_day_tree_is_refused_by_name(tmp_path: Path) -> None:
-    """A wrong ledger is answered at the call, not by writing a path no reader walks.
-
-    One typed name covers every ledger under `state/`, so a caller can now hand a
-    segment writer a ledger that files no segments. `published` is a day FILE, so
-    this call would have minted a directory where that ledger keeps a file. The
-    message carries the ledger because the caller passed a name, and a refusal
-    that does not repeat it leaves them reading the traceback for it.
-    """
-    row = fingerprint_row()
-
-    assert LedgerName.PUBLISHED not in DAY_TREES, "the refused ledger has to be a real one"
-
-    with pytest.raises(ValueError, match="published is not a day tree"):
-        ledger.write_segment(
-            tmp_path,
-            LedgerName.PUBLISHED,
-            [row],
-            run_id=row.run_id,
-            attempt=1,
-            job=row.job,
-            shard=row.shard,
-        )
-
-    assert not list(tmp_path.rglob("*")), "the refusal wrote nothing"
 
 
 def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySimilarityPair:
@@ -1279,11 +1252,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
-    assert not any(
-        tree.value in target.path.relative_to(tmp_path).as_posix()
-        for tree in DAY_TREES
-        for target in every
-    ), "a day tree of writer-owned files has nothing for this pass to settle"
 
 
 def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(

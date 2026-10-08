@@ -7,8 +7,8 @@ gone, and the switch it names has to exist: the gardener takes no
 `--no-dry-run`, and a task runs live when its own declaration says
 `dry_run: false`. A pass a fault stopped is told its fault's own sentence.
 
-`finished` is the event the runner logs for a task: the pass's own fields, its
-fold, and the exception that stopped it named by type and place, never by text.
+`finished` is the event the runner logs for a task: the pass's own fields and
+the exception that stopped it, named by type and place, never by text.
 
 Every pass here is a real `Pass`, built whole the way a task hands one to the
 runner. The report reads nothing else, so nothing else is built.
@@ -24,7 +24,6 @@ from idhazh.contracts.collection_prune import Recovery, StopReason
 from idhazh.contracts.gardener_events import TaskOutcome
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.gardener import report
-from idhazh.gardener.closed_day_fold import Folded
 from idhazh.gardener.one_at_a_time import Pass, Window
 
 pytestmark = pytest.mark.contract
@@ -82,47 +81,35 @@ NOTHING = dataclasses.replace(
 
 
 @pytest.mark.parametrize(
-    ("outcome", "folded", "word"),
+    ("outcome", "word"),
     [
         pytest.param(
             a_pass(dry_run=True, stopped_because=StopReason.FAILED, resume_from=NEXT),
-            None,
             TaskOutcome.FAILED,
             id="a-defect-first-even-on-a-dry-run",
         ),
         pytest.param(
             a_pass(dry_run=False, stopped_because=StopReason.DEFERRED, resume_from=NEXT),
-            None,
             TaskOutcome.DEFERRED,
             id="an-outage",
         ),
         pytest.param(
-            a_pass(dry_run=False, stopped_because=StopReason.EXHAUSTED),
-            Folded(dry_run=False, fault=GardenerFault.API_UNAVAILABLE),
-            TaskOutcome.DEFERRED,
-            id="a-fold-an-outage-stopped",
-        ),
-        pytest.param(
             a_pass(dry_run=True, stopped_because=StopReason.CEILING, resume_from=NEXT),
-            None,
             TaskOutcome.DRY_RUN,
             id="work-only-reported-before-the-ceiling",
         ),
         pytest.param(
             dataclasses.replace(NOTHING, selected=6),
-            None,
             TaskOutcome.DRY_RUN,
             id="a-live-compaction-whose-only-work-is-the-window-s-reported-drops",
         ),
         pytest.param(
             a_pass(dry_run=False, stopped_because=StopReason.CEILING, resume_from=NEXT),
-            None,
             TaskOutcome.CEILING,
             id="work-done-and-more-left",
         ),
         pytest.param(
             a_pass(dry_run=False, stopped_because=StopReason.EXHAUSTED),
-            None,
             TaskOutcome.DONE,
             id="work-done-and-nothing-left",
         ),
@@ -136,40 +123,33 @@ NOTHING = dataclasses.replace(
                 ),
                 selected=1,
             ),
-            None,
             TaskOutcome.DONE,
             id="github-refused-every-member",
         ),
         pytest.param(
             NOTHING,
-            Folded(dry_run=False),
             TaskOutcome.NOT_DUE,
             id="nothing-reached-its-line",
         ),
         pytest.param(
             dataclasses.replace(NOTHING, idle_outcome=TaskOutcome.EMPTY),
-            None,
             TaskOutcome.EMPTY,
             id="the-ledger-holds-nothing",
         ),
         pytest.param(
             dataclasses.replace(NOTHING, idle_outcome=TaskOutcome.OUTSIDE_RANGE),
-            None,
             TaskOutcome.OUTSIDE_RANGE,
             id="nothing-inside-the-range",
         ),
         pytest.param(
             dataclasses.replace(NOTHING, appended=("state/raw/visual-prunes/x.parquet",)),
-            None,
             TaskOutcome.NOT_DUE,
             id="a-report-filed-every-pass-is-not-work",
         ),
     ],
 )
-def test_a_task_ends_on_the_first_word_that_holds(
-    outcome: Pass, folded: Folded | None, word: TaskOutcome
-) -> None:
-    assert report.classify(outcome, folded) is word
+def test_a_task_ends_on_the_first_word_that_holds(outcome: Pass, word: TaskOutcome) -> None:
+    assert report.classify(outcome) is word
 
 
 def test_what_a_dry_run_is_told_next_names_the_setting_and_never_says_anything_is_gone() -> None:
@@ -202,18 +182,15 @@ def test_every_word_a_record_or_a_line_can_hold_has_a_sentence_a_person_reads() 
 
 
 def test_a_finished_task_says_what_its_pass_did_and_names_its_error_by_type_alone() -> None:
-    """THE ORACLE for the event: the pass's fields, the fold beside them, and no exception text."""
+    """THE ORACLE for the event: the pass's fields, and no exception text."""
     window = a_pass(dry_run=False, stopped_because=StopReason.FAILED, resume_from=NEXT)
     with pytest.raises(ValueError) as refused:
         Window(since="Breaking: click https://example.invalid/now")
-    folded = Folded(dry_run=True)
 
     finished = report.finished(
         window,
         task="workflow-runs",
         duration_ms=12,
-        folded=folded,
-        settled=(),
         failure=refused.value,
     )
 
@@ -228,31 +205,4 @@ def test_a_finished_task_says_what_its_pass_did_and_names_its_error_by_type_alon
     assert finished.where is not None
     assert finished.where.startswith("idhazh.gardener.one_at_a_time:")
     assert "example.invalid" not in finished.model_dump_json()
-    assert finished.fold is not None and finished.fold.dry_run
     assert finished.periods is None
-
-
-@pytest.mark.parametrize(
-    ("folded", "ended"),
-    [
-        pytest.param(None, (StopReason.EXHAUSTED, None), id="no-fold"),
-        pytest.param(Folded(dry_run=False), (StopReason.EXHAUSTED, None), id="a-fold-that-finished"),
-        pytest.param(
-            Folded(dry_run=False, fault=GardenerFault.RAISED),
-            (StopReason.FAILED, GardenerFault.RAISED),
-            id="a-fold-a-defect-stopped",
-        ),
-        pytest.param(
-            Folded(dry_run=False, fault=GardenerFault.API_UNAVAILABLE),
-            (StopReason.DEFERRED, GardenerFault.API_UNAVAILABLE),
-            id="a-fold-an-outage-stopped",
-        ),
-    ],
-)
-def test_a_task_ends_as_its_fold_ends_when_the_fold_stopped(
-    folded: Folded | None, ended: tuple[StopReason, GardenerFault | None]
-) -> None:
-    """The window finished, so the task's row says what the fold met, defect or outage."""
-    window = a_pass(dry_run=False, stopped_because=StopReason.EXHAUSTED)
-
-    assert report.ended(window, folded) == ended

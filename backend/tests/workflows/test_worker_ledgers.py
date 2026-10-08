@@ -13,7 +13,8 @@ from retention._trees import health_row
 from idhazh import ledger, path_classes, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemStage
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
@@ -395,21 +396,10 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
     stops being interesting.
     """
     one_writer = [
-        ledger.day_shard_relpath(
-            which,
-            date=SUBSTITUTED_DATE,
-            run_id=f"{SUBSTITUTED_DATE}-1",
-            attempt=1,
-            job=ServerJob.WORK,
-            shard=1,
-        )
-        for which in DAY_TREES
-    ]
-    one_writer.append(
         telemetry.committed_trace_relpath(
             run_id=f"{SUBSTITUTED_DATE}-1", attempt=1, job=ServerJob.WORK, shard=1
         )
-    )
+    ]
     shared = [
         entry if entry.endswith(".csv") else f"{entry}/2026/01/01/a.csv"
         for entry in path_classes.UNION_SAFE
@@ -482,22 +472,32 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
 
 
 def test_assemble_hands_back_no_tree_a_worker_wrote_into() -> None:
-    """Handing a day tree back would delete the rows this job is about to commit.
+    """Handing a writer's tree back would delete the rows this job is about to commit.
 
     A lost race is answered by restoring the refreshed paths from the tip and
     running the producer again. That is right for a file two runs rebuild to
-    different bytes, and it is destructive for a day tree: the restore takes the
-    tip's copy of the whole directory, so this attempt's own file in it - named
-    for this run and written by nothing else - goes with it and the producer does
-    not write it again.
+    different bytes, and it is destructive for a tree of written-once files: the
+    restore takes the tip's copy of the whole directory, so this attempt's own
+    file in it - named for this run and written by nothing else - goes with it
+    and the producer does not write it again.
 
-    Asked of every declared tree rather than of the ones a shard happens to fill
-    today, so a tree that joins the set is covered the day it is declared.
+    Asked of every tree a writer files its own file into - the trace tree and
+    each door ledger's raw folder - rather than of the ones a shard happens to
+    fill today, so a ledger that joins the door is covered the day it is
+    declared.
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+    state = Path(ledger.STATE_DIRNAME)
+    written_once = [
+        ledger.tree_root(state, LedgerName.TRACES).as_posix(),
+        *(
+            ledger.raw_root(state, which).as_posix()
+            for which in LedgerName
+            if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+        ),
+    ]
 
-    for which in DAY_TREES:
-        tree = f"{ledger.STATE_DIRNAME}/{which.value}"
+    for tree in written_once:
         covered = [path for path in refreshed if tree == path or tree.startswith(f"{path}/")]
         assert not covered, (
             f"{covered} hands back {tree}, and a writer's own file in it is deleted by "

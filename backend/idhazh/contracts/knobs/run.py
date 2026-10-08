@@ -195,16 +195,14 @@ class RunConfig(Model):
 #: which would now migrate an operator's number onto a key nothing reads.
 #: The judging shard's bound is the fourth and it did not die - it moved out of
 #: this block entirely, so its replacement is spelled as a whole path.
-#: `settled_fold_after_days` is the fifth and moved too: the gardener task that
-#: owns each CSV day tree folds its closed days now, and its declaration says
-#: when a day is closed.
+#: `settled_fold_after_days` is the fifth. It moved to the gardener's closed-day
+#: fold, and the fold went with the CSV day trees it settled, so nothing
+#: replaces it.
 SUPERSEDED_RUN_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "judge_shard_timeout_minutes": "council.shard_timeout_minutes",
         "route_budget_minutes": "",
-        "settled_fold_after_days": (
-            "fold.after_days in the declaration under config/gardener/ that owns the tree"
-        ),
+        "settled_fold_after_days": "",
         "two_calls_per_item": "",
         "visual_planner_budget_minutes": "",
     }
