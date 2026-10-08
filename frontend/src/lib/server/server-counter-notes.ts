@@ -15,6 +15,12 @@
  * that dates or names a day of the server's figures. Those cells live in the
  * machine record alone, so only that record's read bounds where they start.
  *
+ * **A run the counters refuse is judged by the same cells.** Its records do
+ * not fit together, so no figure reads it and the intro does not count it, but
+ * where its machine records hold one of those cells the server's figures were
+ * written down on its day. Leaving such a day out would have the lines say that
+ * nothing was written down on a day it was written down twice.
+ *
  * **Nothing samples the server's counters.** `observability.sample_rate` is the
  * share of runs the scorer scores, and only `observability.host_fingerprint`
  * switches the machine record off, so the counters take no rate and owe no
@@ -25,7 +31,7 @@
  */
 
 import type { ObservabilityConfig } from './config';
-import { carriesServerCounters, type MachineRun } from './machine-counters';
+import { carriesServerCounters, type MachineRun, type RefusedRun } from './machine-counters';
 import {
 	measurementOff,
 	recordingNotes,
@@ -39,6 +45,10 @@ import { nameSpan, openWithSpan } from '../console/span-words';
 export interface ServerCounterFacts {
 	/** Every run the route formed over its read, refused runs left out. */
 	runs: readonly MachineRun[];
+	/** Every run the counters refused over the read. Their machine records may
+	 * hold the server's figures, and the box under the intro names those in the
+	 * window. */
+	refused: readonly RefusedRun[];
 	/** Every day the route has a run on over its read, from either record. */
 	ran: readonly string[];
 	/** Every day the article record holds a row for over the read. */
@@ -84,9 +94,19 @@ function shareClause(runs: number, served: number): string {
  * day nothing ran. One day has no range, and "1 run in this one day" trips on
  * its two ones, so the one-day line names the day once and leads with it.
  * Reader chose the words, and Jony agreed, on 2026-10-07.
+ *
+ * Where the window holds no run the intro counts but one the box under it
+ * names, the line is a count of 0, which the box calls "the run count above":
+ * "no run on record" would deny the box's run. Reader chose those words on
+ * 2026-10-08.
  */
-function introSentence(runs: number, served: number, open: OfferedWindow): string {
+function introSentence(runs: number, served: number, refused: number, open: OfferedWindow): string {
 	const counted = `${runs} ${runs === 1 ? 'run' : 'runs'}`;
+	if (runs === 0 && refused > 0) {
+		return open.days === 1
+			? `${openWithSpan(open.days)} had 0 runs. ${open.end}.`
+			: `0 runs in ${nameSpan(open.days)}. ${open.start} to ${open.end}.`;
+	}
 	if (open.days === 1) {
 		return runs === 0
 			? `${openWithSpan(open.days)} has no run on record. ${open.end}.`
@@ -100,13 +120,20 @@ function introSentence(runs: number, served: number, open: OfferedWindow): strin
 /** The lines Hardware prints about the model server's own counters over `facts.open`. */
 export function describeServerCounters(facts: ServerCounterFacts): ServerCounterNotes {
 	const { open, observability } = facts;
-	const shown = (run: MachineRun): boolean => run.date >= open.start && run.date <= open.end;
+	const shown = (run: MachineRun | RefusedRun): boolean => run.date >= open.start && run.date <= open.end;
 	const served = facts.runs.filter(carriesServerCounters);
 	// The days the server's counters were written down, over the whole read: the
 	// off line names the newest the window shows, and the started line the first.
-	const days = [...new Set(served.map((run) => run.date))].sort();
+	// A refused run's day is one of them where its records hold the counters.
+	const written = [...served, ...facts.refused.filter(carriesServerCounters)];
+	const days = [...new Set(written.map((run) => run.date))].sort();
 	return {
-		intro: introSentence(facts.runs.filter(shown).length, served.filter(shown).length, open),
+		intro: introSentence(
+			facts.runs.filter(shown).length,
+			served.filter(shown).length,
+			facts.refused.filter(shown).length,
+			open
+		),
 		measurementOff: measurementOff({
 			enabled: observability.host_fingerprint,
 			recorded: days,

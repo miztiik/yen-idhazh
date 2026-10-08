@@ -54,9 +54,9 @@ import { processorLostOverDays } from '../src/lib/console/machine/processor-lost
 import { diskReads } from '../src/lib/console/machine/disk-reads';
 import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
-import { describeServerCounters } from '../src/lib/server/server-counter-notes';
+import { describeServerCounters, type ServerCounterNotes } from '../src/lib/server/server-counter-notes';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
-import { observabilityConfig, runConfig } from '../src/lib/server/config';
+import { observabilityConfig, runConfig, type ObservabilityConfig } from '../src/lib/server/config';
 
 /** `config/idhazh.json` read straight off disk, so a test's expectation comes
  * from the committed file rather than from the reader it is checking. */
@@ -1140,6 +1140,7 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		const open = { days: 7, start: '2026-08-29', end: '2026-09-04' };
 		const firstLine = describeServerCounters({
 			runs,
+			refused,
 			ran: ['2026-09-04'],
 			articleDays: ['2026-09-04'],
 			machineRead: {
@@ -1207,6 +1208,144 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			'has 4 rows: its rows disagree about which day the run belongs to.'
 		]);
 		expect(describeRefusedRuns([])).toBeNull();
+	});
+});
+
+test.describe("a refused run is a run the server's figures were written down for, where its records hold them", () => {
+	// One run a day, on shard 0, in the 7 days that end on 15 Jun 2030. A run is kept where its
+	// records fit together, and refused where shard 0 filed two machine records that disagree: about
+	// the server's two cells, or only about the machine. Each case hands the lines what the route
+	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run from
+	// either record, and the article record's days.
+	const OPEN = { days: 7, start: '2030-06-09', end: '2030-06-15' };
+	const OBSERVABILITY: ObservabilityConfig = {
+		cost_currency: 'USD',
+		cost_input_per_million: 0.2,
+		cost_output_per_million: 0.6,
+		evaluation_enabled: true,
+		host_fingerprint: true,
+		host_fingerprint_bandwidth_cache_multiple: 2,
+		sample_rate: 1
+	};
+	/** Shard 0's machine record for the run on `date`: the probe and the clock, and the server's two
+	 *  cells where `prompt` is a number. */
+	const machine = (date: string, prompt: number | '' = 900, fingerprint = 'f00d') =>
+		hostRow({
+			date,
+			runId: `${date}-1`,
+			shard: 0,
+			fingerprint,
+			jobSeconds: 600,
+			serverPromptTokens: prompt,
+			serverPromptSeconds: prompt === '' ? '' : prompt / 100
+		});
+	/** Two machine records shard 0 of the run on `date` filed that disagree: about the server's
+	 *  figures, both holding them, or with `server` false only about the machine, neither holding them. */
+	const disagreeing = (date: string, server: boolean) =>
+		server ? [machine(date, 900), machine(date, 901)] : [machine(date, ''), machine(date, '', 'beef')];
+	/** An article that shard 0 of the run on `date` summarised. */
+	const article = (date: string) =>
+		healthRow({ date, run_id: `${date}-1`, item_id: `${date}-item`, machine_shard: 0 });
+	/** What Hardware says about the server's figures over `open`, from the rows built. The read is
+	 *  the 7 days, whichever window is open. */
+	const hardware = (
+		hosts: Record<string, string>[],
+		articleDays: string[],
+		{ recording = true, open = OPEN }: { recording?: boolean; open?: typeof OPEN } = {}
+	) => {
+		const { runs, refused } = machineCounters(hosts, articleDays.map(article), plan(), LIMITS);
+		return describeServerCounters({
+			runs,
+			refused,
+			ran: [...new Set([...runs.map((run) => run.date), ...articleDays])].sort(),
+			articleDays,
+			machineRead: {
+				state: 'read',
+				through: OPEN.end,
+				first: OPEN.start,
+				lastRows: { period: 'daily', covers: hosts.map((row) => row.date).sort().at(-1) ?? OPEN.start },
+				lostDays: [],
+				setAside: {}
+			},
+			from: OPEN.start,
+			open,
+			offered: [...new Set([open, OPEN])],
+			observability: { ...OBSERVABILITY, host_fingerprint: recording }
+		});
+	};
+	/** Every line printed about the server's figures, apart from the first line. */
+	const printed = (notes: ServerCounterNotes): string[] =>
+		[notes.measurementOff, ...Object.values(notes.recording)].filter((line): line is string => line !== null);
+
+	test("a day whose only run was refused, while its records hold the server's figures, is not named; a day of article rows alone still is", () => {
+		// 10 Jun's run carried the server's figures. 12 Jun's only run was refused: shard 0 filed two
+		// machine records that disagree, both holding them. 13 Jun's run is article rows alone.
+		const notes = hardware(
+			[machine('2030-06-10'), ...disagreeing('2030-06-12', true)],
+			['2030-06-10', '2030-06-12', '2030-06-13']
+		);
+		// The first line counts only the runs the counters keep; the box names the refused one.
+		expect(notes.intro).toBe(
+			'2 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'No server figures were written down for 13 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+		]);
+	});
+
+	test('a day whose only run was refused, with no server figure in its records, is still named', () => {
+		// 12 Jun's only run was refused because shard 0's two records name two machines. Neither
+		// holds a cell the server wrote, so no server figures were written down that day.
+		const notes = hardware(
+			[machine('2030-06-10'), ...disagreeing('2030-06-12', false)],
+			['2030-06-10', '2030-06-12']
+		);
+		expect(printed(notes)).toEqual([
+			'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+		]);
+	});
+
+	test("the server's figures start on a refused day whose records hold them, which is not counted as a day without them", () => {
+		// Runs of article rows alone on 9, 10, 11 and 13 Jun. 12 Jun's only run was refused with the
+		// server's figures in both records, and 14 Jun's run carried them.
+		const notes = hardware(
+			[...disagreeing('2030-06-12', true), machine('2030-06-14')],
+			['2030-06-09', '2030-06-10', '2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14']
+		);
+		expect(notes.intro).toBe(
+			'5 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'Server figures started on 12 Jun 2030. Earlier in this window, 3 days had a run but no server figures.',
+			'No server figures were written down for 13 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+		]);
+	});
+
+	test("with measurement off, the newest day recorded is a refused day whose records hold the server's figures", () => {
+		// Switched off after 12 Jun, whose only run was refused with the server's figures in both
+		// records. Article rows kept forming runs on 13 and 14 Jun.
+		const notes = hardware(
+			[machine('2030-06-10'), ...disagreeing('2030-06-12', true)],
+			['2030-06-10', '2030-06-12', '2030-06-13', '2030-06-14'],
+			{ recording: false }
+		);
+		expect(printed(notes)).toEqual([
+			'Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.'
+		]);
+	});
+
+	test("a window whose only run was refused counts 0 runs, in Reader's words, and has no run on record only where the box names none", () => {
+		// 12 Jun's only run was refused, with the server's figures in both records. The box under the
+		// first line names it, and calls that line "the run count above".
+		const refusedOnly = disagreeing('2030-06-12', true);
+		expect(hardware(refusedOnly, ['2030-06-12']).intro).toBe('0 runs in these 7 days. 2030-06-09 to 2030-06-15.');
+		expect(
+			hardware(refusedOnly, ['2030-06-12'], { open: { days: 1, start: '2030-06-12', end: '2030-06-12' } }).intro
+		).toBe('This one day had 0 runs. 2030-06-12.');
+		// A run refused on 5 Jun is outside the window, so the box names no run in it.
+		expect(hardware(disagreeing('2030-06-05', true), ['2030-06-05']).intro).toBe(
+			'No run in these 7 days is on record. 2030-06-09 to 2030-06-15.'
+		);
 	});
 });
 
