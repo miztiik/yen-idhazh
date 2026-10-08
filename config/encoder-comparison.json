@@ -2,10 +2,12 @@
   "version": "2026-10-08",
   "corpus": {
     "published_articles": 15115,
-    "articles_a_day": 337
+    "articles_a_batch": 1000,
+    "batch_session_minutes": 180
   },
   "pair_build": {
     "title_overlap_floor": 0.3,
+    "sensitivity_floors": [0.25, 0.3, 0.35, 0.4],
     "ambiguous_floor": 0.1,
     "seed": 20261008,
     "next_day_window": 1,
@@ -17,7 +19,7 @@
   "encode": {
     "batch_size": 32,
     "max_sequence_length": 256,
-    "threads": 4,
+    "threads": 0,
     "checkpoint_every_articles": 512
   },
   "encoders": [
@@ -29,53 +31,57 @@
       "why": "What the search surface runs today. Every other row is read as a gain or a loss against it."
     },
     {
-      "slug": "bge-base",
-      "model_id": "BAAI/bge-base-en-v1.5",
+      "slug": "gte-small",
+      "model_id": "thenlper/gte-small",
       "prefix": "",
-      "parameters_millions": 109,
-      "why": "A widely used mid-sized English model. Packs unrelated pairs close together, which costs a fixed cut-off and not a rank score."
+      "parameters_millions": 33,
+      "why": "The same training as gte-base at the same 384 numbers an article the current encoder uses. It asks whether gte-base's lead is its training or its size, and whether the smallest useful vector can carry it."
     },
     {
       "slug": "gte-base",
       "model_id": "thenlper/gte-base",
       "prefix": "",
       "parameters_millions": 109,
-      "why": "Same size as bge-base, trained differently. The pair proves whether size or training is doing the work."
+      "why": "Best separation of the six measured, at 0.96 GB. The leader to beat, and the other half of the size-against-training question."
     },
+    {
+      "slug": "bge-base",
+      "model_id": "BAAI/bge-base-en-v1.5",
+      "prefix": "",
+      "parameters_millions": 109,
+      "why": "The same size as gte-base from a different group. One pair at one size is what separates a training difference from a size difference."
+    }
+  ],
+  "set_aside": [
     {
       "slug": "e5-base",
       "model_id": "intfloat/e5-base-v2",
-      "prefix": "query: ",
       "parameters_millions": 109,
-      "why": "Third model at the same size. It needs a prefix on its input, and leaving it off costs quality silently, so the run proves the prefix as well as the model."
+      "why_set_aside": "Measured 0.9910, last of the six. It also packs unrelated pairs at 0.736 similarity against 0.102 for the leader, which leaves the least room anywhere to put a cut."
     },
     {
       "slug": "bge-large",
       "model_id": "BAAI/bge-large-en-v1.5",
-      "prefix": "",
       "parameters_millions": 335,
-      "why": "Three times bge-base. The question is whether the extra time fits the job."
+      "why_set_aside": "Measured 0.9917 - below a model a third its size - at 2.5 GB. Three times the memory for less separation is not a trade worth a shard."
     },
     {
       "slug": "mxbai-large",
       "model_id": "mixedbread-ai/mxbai-embed-large-v1",
-      "prefix": "",
       "parameters_millions": 335,
-      "why": "Same size as bge-large, trained differently. It repeats the size-against-training control at the large end, where one pair alone would leave it untested."
+      "why_set_aside": "The size it would have tested is already answered: both 335M models measured sit below gte-base at 109M, so a third reading at that size buys a confirmation nobody needs."
     },
     {
       "slug": "bge-m3",
       "model_id": "BAAI/bge-m3",
-      "prefix": "",
       "parameters_millions": 568,
-      "why": "The one with a different shape: a meaning vector and a weight for every word from one pass, which is two channels from one model. Carries languages this corpus never uses."
+      "why_set_aside": "Measured 0.9919 against 0.9942 for a model a fifth its size, at 3.72 GB peak. The batch runs the summariser in the same 16 GB, so that figure is the constraint and the separation does not pay for it. Its one distinctive offer - a meaning vector and word weights from one pass - is worth returning to if word weights are ever wanted."
     },
     {
       "slug": "qwen3-embedding-600m",
       "model_id": "Qwen/Qwen3-Embedding-0.6B",
-      "prefix": "",
       "parameters_millions": 595,
-      "why": "The most recent design in the list. Its vector can be cut short without encoding again, so a smaller form costs nothing extra to measure."
+      "why_set_aside": "Did not finish inside the session on either attempt, so it has no reading. Nothing above it justifies the wait: six encoders span 0.9905 to 0.9942 and the largest measured sits mid-field."
     }
   ]
 }
