@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-08
 
-**Thirty-eight defects are open.** Five of them need evidence or a ruling before any code
+**Thirty-eight defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -34,8 +34,9 @@ Fowler's review of plan 60: a page names a test that two pull requests deleted.
 Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
-57 is the third that needs evidence, because one stall is not enough to find
-its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
+57 needed evidence too, because one stall is not enough to find its cause,
+until a second stall came in main's own checks on 2026-10-08. Defect 59 was
+filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
 holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
 explorer fetches each chosen ledger's three indexes twice. Defects 61 and 62
@@ -52,13 +53,12 @@ which plan 60's row 21 found. Defect 66 was filed on 2026-10-08 by a plan text
 update (#1437): the plan status utility splits a quoted row title wherever
 "and" appears in it. Defect 67 was filed the same day from the checks of plan
 62's row L37 (#1431): a browser test that failed once and passed when run
-again. It is the fourth that needs evidence, because one failure is not enough
-to find its cause. A second test in the same `reader` project failed once in
-main's own checks that day, and joins defect 67. Defect 68 was filed the same
-day from plan 62's row L40 (#1448): the merge line's hold has no floor on its
-pair count. Whether one pair may hold a run is Andre's to rule, so it is the
-fifth that needs evidence or a ruling. Defect 60 closed the same day: #1435
-made the data explorer read each index once before a run.
+again. It is the third that needs evidence, because one failure is not enough
+to find its cause. Defect 68 was filed the same day from plan 62's row L40
+(#1448): the merge line's hold has no floor on its pair count. Whether one
+pair may hold a run is Andre's to rule, so it is the fourth that needs
+evidence or a ruling. Defect 60 closed the same day: #1435 made the data
+explorer read each index once before a run.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -123,7 +123,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
 | 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
-| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - two stalls seen in CI; a row to fix it is now due** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
@@ -133,7 +133,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
 | 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
 | 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
-| 67 | Two browser tests in the `reader` project each failed once in CI, and passed on the next run | 2 | **OPEN - one failure seen in each; make each come back before changing code** |
+| 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
 | 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
 
 ## 68 - The merge line's hold has no floor on its pair count, so one pair can hold a run (OPEN)
@@ -172,7 +172,7 @@ page draws.
 Found by plan 62's row L40 (#1448), its third follow-up, and filed on
 2026-10-08.
 
-## 67 - Two browser tests in the `reader` project each failed once in CI, and passed on the next run (OPEN)
+## 67 - A browser test of a summary with a paragraph break failed once, and passed when run again (OPEN)
 
 **One browser test found no story drawn as two paragraphs, once.** "A summary
 with a paragraph break is drawn as two paragraphs"
@@ -188,37 +188,21 @@ docs page and plan 62. It did not touch that spec, or
 `frontend/src/lib/components/DigestItem.svelte`, which draws each paragraph of
 a summary.
 
-**A second `reader` test stalled once, in main's own checks.** "THE ORACLE:
-every fact is reachable without a mouse > the platform reads the figure by the
-sentence, not by its marks" (`frontend/tests/item-visual.spec.ts`, line 471)
-failed in CI run 37796300534, the checks main ran on f668b3e62 (#1439), in its
-browser job (job 113376700083) at 15:02 UTC on 2026-10-08: `page.evaluate`
-waited out the test's 180-second limit at line 123, where `drawnDay` calls
-`revealDayDrawings` (`frontend/tests/support/day-drawings.ts`), whose one
-`page.evaluate` scrolls the day and waits for two animation frames after each
-step. The next commit on main that CI ran on, 60f33fa4b (#1440, run
-37799982887), passed it. #1439 changed the Judgement route, the module it reads
-its line from, that module's test, the test group list, one docs page and plan
-62, and not that spec or its helper. That helper, in that spec, is where
-defect 57's stall stopped, and defect 57 says a second stall in CI opens a row.
-
-**Doing nothing costs a red browser job each time either comes back, and a
-re-run.** How often that is, nobody knows: each has been seen once. Each run's
+**Doing nothing costs a red browser job each time it comes back, and a
+re-run.** How often that is, nobody knows: it has been seen once. The run's
 trace is in its `playwright-traces` artifact, which expires on 2026-10-15.
 
-**The next move is a worker's: make each failure come back where it can be
-watched.** Run the paragraph test in the `reader` project a few hundred times
-with Playwright's `--repeat-each` on a canary build, and read the trace of a
-run that fails: it shows whether the story with a break had not been drawn
-yet, or was drawn as one paragraph. The spec's `open` waits for the page to
-load and for its theme, not for every story, so check the first case first.
-For the stall, defect 57's next move is the one to take. A raised timeout or a
-retry would hide the cause, not explain it (CLAUDE.md Guardrail #5). Level 2 -
-the fix may be in `DigestItem.svelte`, which every reader sees, or in the day
-page, rather than in a test.
+**The next move is a worker's: make the failure come back where it can be
+watched.** Run this one test in the `reader` project a few hundred times with
+Playwright's `--repeat-each` on a canary build, and read the trace of a run
+that fails: it shows whether the story with a break had not been drawn yet,
+or was drawn as one paragraph. The spec's `open` waits for the page to load
+and for its theme, not for every story, so check the first case first. A
+raised timeout or a retry would hide the cause, not explain it (CLAUDE.md
+Guardrail #5). Level 2 - the fix may be in `DigestItem.svelte`, which every
+reader sees, rather than in the test.
 
-Found in the checks of plan 62's row L37 (#1431), and filed on 2026-10-08. The
-second failure was added the same day, from main's checks of #1439.
+Found in the checks of plan 62's row L37 (#1431), and filed on 2026-10-08.
 
 ## 66 - The plan status utility splits a quoted row title wherever "and" appears in it (OPEN)
 
@@ -502,21 +486,37 @@ all on the red run and 361 on the green one: 7 percent less time, not more. A
 page script that never finished and a browser that stopped drawing look the
 same in this trace, so it cannot say which one happened.
 
+**A second stall came in main's own checks.** "THE ORACLE: every fact is
+reachable without a mouse > the platform reads the figure by the sentence, not
+by its marks" (`frontend/tests/item-visual.spec.ts`, line 471), another test of
+the same spec, failed in CI run 37796300534, the checks main ran on f668b3e62
+(#1439), in its browser job (job 113376700083) at 15:02 UTC on 2026-10-08.
+`page.evaluate` waited out the test's 180-second limit at line 123, where
+`drawnDay` calls `revealDayDrawings`: the step the first stall stopped in. The
+next commit on main that CI ran on, 60f33fa4b (#1440, run 37799982887), passed
+it. #1439 changed the Judgement route, the module it reads its line from, that
+module's test, the test group list, one docs page and plan 62, and not that
+spec or its helper. The two stalls meet the bar this entry set: a second stall
+in CI opens a row.
+
 **Doing nothing costs a red browser job each time it comes back, three runner
-minutes and a re-run.** How often that is, nobody knows: it has been seen once.
+minutes and a re-run.** How often that is, nobody knows: it has been seen
+twice in CI, on 2026-10-04 and on 2026-10-08.
 
 **The next move is a worker's: make the stall come back where it can be
 watched.** Run this one test a few hundred times with Playwright's
 `--repeat-each`. At 1.6 seconds a run, 400 runs take about 11 minutes, an
 estimate. A stall caught that way shows whether a page script or the browser
 stopped. If none comes back, a second stall in CI opens a row, as defect 51
-does. The run's trace is kept in its `playwright-traces` artifact until
-2026-10-11. A raised timeout or a retry would hide the stall, not explain it
-(CLAUDE.md Guardrail #5). Level 2 - the fix is in the day page or in a helper
-that three specs share.
+does. The first run's trace is kept in its `playwright-traces` artifact until
+2026-10-11, and the second run's artifact expires on 2026-10-15. A raised
+timeout or a retry would hide the stall, not explain it (CLAUDE.md
+Guardrail #5). Level 2 - the fix is in the day page or in a helper that three
+specs share.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
+different tests, and filed on 2026-10-04. Seen again on 2026-10-08 in main's
+checks of #1439.
 
 ## 56 - A byte-range test counts a correct 304 as a failure (FIXED 2026-10-06)
 
