@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-08
 
 Three surfaces stand on a full console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -135,6 +135,28 @@ radius, elevation, frame width, both ramps. The shapes they share live in
 [../../../frontend/src/styles/app.css](../../../frontend/src/styles/app.css)
 rather than in three scoped `<style>` blocks, because three copies are three
 identities that happen to agree today.
+
+## The browser's title names the route's tab
+
+Each console route sets its own page title: the words a browser shows in its tab,
+its history and a bookmark, not the `Console` heading on the page. The title is
+the route's tab label, spelled as on its tab, then `Console`, then the site's
+title from `ui.site_title`, joined by an em dash with a space each side. In a
+route's `+page.svelte` that is
+`Judgement &mdash; Console &mdash; {data.ui.site_title}`.
+
+**The route's own word comes first.** A narrow browser tab shows only the start
+of its title, and an operator may have several console routes open at once, so
+six titles that opened with `Console` would look alike. The site's other titles
+take the same order, the most specific part first and the site's name last.
+`Console` stays in the middle because a bare route word, such as `Voices`, could
+name a page for readers in a history list.
+
+**Every route sets its own title.** A tab click moves between routes inside the
+page, and a route that sets no title keeps the one the route before it set.
+[console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts) holds each
+route's title to its literal words, after a tab click and on a page load, and
+checks that no two routes share one. A new route's title takes the same pattern.
 
 ## From the wide breakpoint up the strip sticks, and it is one row
 
