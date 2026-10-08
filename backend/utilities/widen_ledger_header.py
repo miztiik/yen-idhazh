@@ -40,8 +40,9 @@ and re-files through the contract's own reader rather than cell by cell.
     python backend/utilities/widen_ledger_header.py --target <ledger>
     python backend/utilities/widen_ledger_header.py --target <ledger> --no-dry-run
 
-`<ledger>` is one word of the prune verb's list, such as
-`content-similarity-judge-fitted-thresholds`.
+`<ledger>` is one word of the prune verb's CSV list. That list is empty now: the
+judge's fitted line, the last ledger on it, moved to the ledger door, where a
+file keeps the shape it was written under and nothing re-files it.
 
 Exit code 1 when a file could not be re-filed, so a shell can gate on it.
 """

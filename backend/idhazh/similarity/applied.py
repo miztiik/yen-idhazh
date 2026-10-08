@@ -6,9 +6,15 @@ second answer nobody could reconcile with the row.
 
 **The read is bounded by a knob and never by the archive** (Guardrail #12).
 `applied_lookback_days` names the days, `day_partition.days_in_window` turns that
-into at most `applied_lookback_days + 1` file opens, and the walk stops at the
-first row carrying a line. A gap longer than the lookback means the judge has
-been down that long, and the committed config value is the honest answer.
+into exactly `applied_lookback_days + 1` days asked of the ledger door - the
+three compact indexes, the one file that serves each day, and the raw files of
+the days no index names - and the walk stops at the first row carrying a line.
+A gap longer than the lookback means the judge has been down that long, and the
+committed config value is the honest answer.
+
+A day reaches this read once the save job files it, raw, so a build reads the
+line the council fitted the night before whether or not the gardener has packed
+that day yet.
 """
 
 from __future__ import annotations
@@ -26,10 +32,10 @@ def applied_line(
     """The newest line a fit applied inside the lookback, or `None`.
 
     `None` on four counts, and every one of them is an ordinary day rather than
-    an error: the flag is off, the tree is not there, every row inside the
-    lookback was held, or the newest row carries no line. A caller reading `None`
-    publishes on `config/idhazh.json`, which is what keeps a fresh clone running
-    on the defaults (Guardrail #6).
+    an error: the flag is off, the ledger holds no row in the lookback, every row
+    inside the lookback was held, or the newest row carries no line. A caller
+    reading `None` publishes on `config/idhazh.json`, which is what keeps a fresh
+    clone running on the defaults (Guardrail #6).
 
     A held row is skipped rather than read. It carries yesterday's line in
     `applied` so the column is never empty, and taking that value would make a
