@@ -318,7 +318,7 @@ def stage_score(args: argparse.Namespace) -> None:
         model = SentenceTransformer(chosen["model_id"], device="cpu")
         model.max_seq_length = settings["encode"]["max_sequence_length"]
         reading.load_seconds = round(time.monotonic() - loading, 1)
-    except Exception as failure:  # noqa: BLE001 - a model that will not load is a reading
+    except Exception as failure:  # a model that will not load is a reading
         reading.state = ReadingState.UNAVAILABLE
         reading.reason = f"{type(failure).__name__}: {failure}"[:300]
         reading.peak_memory_gb = peak_memory_gb()
@@ -361,7 +361,7 @@ def stage_score(args: argparse.Namespace) -> None:
                 save()
                 print(f"{chosen['slug']}: {reading.articles_done}/{len(texts)} "
                       f"at {reading.articles_a_second}/s", flush=True)
-    except Exception as failure:  # noqa: BLE001 - a stopped encode is still a reading
+    except Exception as failure:  # a stopped encode is still a reading
         reading.state = ReadingState.STOPPED
         reading.reason = f"{type(failure).__name__}: {failure}"[:300]
         reading.peak_memory_gb = peak_memory_gb()
