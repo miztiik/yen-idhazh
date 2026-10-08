@@ -56,6 +56,7 @@ import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
 import { describeServerCounters, type ServerCounterNotes } from '../src/lib/server/server-counter-notes';
 import { listRunDays } from '../src/lib/server/run-days';
+import { describeMissingMarkers } from '../src/lib/console/recording';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig, runConfig, type ObservabilityConfig } from '../src/lib/server/config';
 
@@ -1370,6 +1371,27 @@ test.describe("a refused run is a run the server's figures were written down for
 		// A run refused on 5 Jun is outside the window, so the box names no run in it.
 		expect(hardware(disagreeing('2030-06-05', true), ['2030-06-05']).intro).toBe(
 			'No run in these 7 days is on record. 2030-06-09 to 2030-06-15.'
+		);
+	});
+
+	test('a day whose only run was refused and is machine records alone had a run: the started line counts it and the marker line names it', () => {
+		// Runs of article rows alone on 9 and 11 Jun. 10 Jun's only run was refused because shard 0's
+		// two machine records name two machines, and the article record holds no row that day. 13 Jun's
+		// run carried the server's figures. So 3 days before 13 Jun had a run but no server figures.
+		const hosts = [...disagreeing('2030-06-10', false), machine('2030-06-13')];
+		const articleDays = ['2030-06-09', '2030-06-11', '2030-06-13'];
+		const notes = hardware(hosts, articleDays);
+		expect(notes.intro).toBe(
+			'3 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'Server figures started on 13 Jun 2030. Earlier in this window, 3 days had a run but no server figures.'
+		]);
+		// The two charts that mark a setup change read the same days. With the score record not packed,
+		// and no run record naming what ran, they cannot show a change on any day with a run, 10 Jun too.
+		const ran = listRunDays(machineCounters(hosts, articleDays.map(article), plan(), LIMITS), articleDays);
+		expect(describeMissingMarkers({ read: { state: 'not-packed' }, ran, identified: [], open: OPEN })).toBe(
+			'This chart cannot show whether the setup changed on 9 Jun to 11 Jun and 13 Jun 2030, because the score record has not been packed yet. That is a step not yet run. This chart shows every change on the other days.'
 		);
 	});
 });

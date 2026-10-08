@@ -13,10 +13,15 @@
 
 import type { MachineCounters } from './machine-counters';
 
-/** Every day with a run, ascending: the day of each run the counters kept, and
- * each day the article record holds a row for. */
+/** Every day with a run, ascending: the day of each run the counters formed,
+ * kept or refused, and each day the article record holds a row for.
+ *
+ * A refused run's day is the day the refused-runs box files it under. Its
+ * records do not fit together, so no figure reads it, but it ran that day, and
+ * a list that left it out would count one day too few wherever a refused run of
+ * machine records alone was a day's only run.
+ */
 export function listRunDays(counters: MachineCounters, articleDays: readonly string[]): string[] {
-	return [...new Set([...counters.runs.map((run) => run.date), ...articleDays])]
-		.filter((date) => date !== '')
-		.sort();
+	const runs = [...counters.runs, ...counters.refused].map((run) => run.date);
+	return [...new Set([...runs, ...articleDays])].filter((date) => date !== '').sort();
 }
