@@ -91,7 +91,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `JudgeAgreement.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | PENDING | - | - | - |
 | L36 | Hardware's one-sided line leaves out a day whose only run was refused | L28, L29 | M | DONE | psychic-goggles | #1421 | Plan 62 row l36 |
-| L37 | Article cost names a refused shard's processor time or leaves it out | L29 | N | PENDING | - | - | - |
+| L37 | Article cost names a refused shard's processor time or leaves it out | L29 | N | DONE | jubilant-doodle | - | Plan 62 row l37 |
 | L38 | Judgement's verdict split and holdout margin name the line a build used | L30 | M | DONE | jubilant-memory | - | Plan 62 row l38 |
 | L39 | Judgement's "could not tell" counts against the pairs that agreed | L32, L31 (holds `merge-line.ts` as well as `merge-line.spec.ts` as well as `frontend/tests/console-window.spec.ts`) | M | DONE | crispy-goggles | #1428 | Plan 62 row l39 |
 | L40 | A day under the floor is not drawn at its shares' heights | L32, L31 (holds `frontend/tests/console-window.spec.ts`) | N | PENDING | - | - | - |
@@ -1675,9 +1675,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Measure first, on rows the test builds. If the join does not keep whichever of a refused shard's two machine records comes last, the row closes with the measurement and changes nothing | Plan owner, 2026-10-08 |
-| 2 | If it does, Fowler rules whether the join leaves a refused shard's processor time out or the panel says it cannot pick (CLAUDE.md section 14) | To be ruled at dispatch (Fowler) |
-| 3 | If the panel says it cannot pick, Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Measure first, on rows the test builds. If the join does not keep whichever of a refused shard's two machine records comes last, the row closes with the measurement and changes nothing | Measured 2026-10-08: it follows the order. A refused shard's two machine records naming 4 and 8 logical processors gave 80 processor-seconds with one array order and 160 with the other, on the same article rows. The fault holds; plan owner, 2026-10-08 |
+| 2 | If it does, Fowler rules whether the join leaves a refused shard's processor time out or the panel says it cannot pick (CLAUDE.md section 14) | Fowler, 2026-10-08: the join leaves the shard's processor time out. `processorsByShard` collects every distinct count a shard's records name and emits a figure only where they agree; disagreement collapses to the same absent state as no record. No panel change: `ArticleCostPanel.svelte`'s existing dash sentence already covers both "no record" and "records disagree" truthfully |
+| 3 | If the panel says it cannot pick, Reader chooses the words (CLAUDE.md section 14) | Not reached: decision 2 kept the panel unchanged |
 | 4 | The fault is row L29's second follow-up | Row L29's report; plan owner, 2026-10-08 |
 | 5 | L37 waits for L29 (#1412), whose measurement built the refused run in `console-machine.spec.ts` | Plan owner, 2026-10-08 |
 | 6 | Level 1: one figure on one panel; a wrong version is obvious and local | Plan owner, 2026-10-08 |
