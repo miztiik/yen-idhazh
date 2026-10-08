@@ -63,7 +63,7 @@ Table D - PR phases
 | D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | DONE #1405 | trial-root-compaction | #1405 | Fowler |
 | D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | DONE #1413 | nested-pipeline-test-cases | #1413 | Fowler |
 | D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | DONE | pt-row-5 | - | Fowler |
-| D6 | 6 | Path builders carry a swappable trial registry, with no production call site changed | 5 | F | DONE | pipeline-tests-tier-roots-fix | #PENDING | Fowler |
+| D6 | 6 | Path builders carry a swappable trial registry, with no production call site changed | 5 | F | DONE | pipeline-tests-tier-roots-fix | #1438 | Fowler |
 | D7 | 7 | Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root | 6 | G | IN PROGRESS | pipeline-tests-tier-roots-fix | - | Fowler |
 | D8 | 8 | Committed trial files move again, byte for byte, from root-first to tier-first | 7 | H | PENDING | pipeline-tests-tier-roots-fix | - | Fowler |
 
@@ -370,7 +370,7 @@ Table O - Corrected design
 - **Files touched:** `backend/idhazh/ledger/paths.py`; `backend/idhazh/ledger/__init__.py`; `backend/tests/contracts/test_ledger_trial_overlay.py` (new).
 - **Acceptance gates:** `ruff check`, `mypy` on both source files; the new unit tests; the full `backend/tests/test_ledger.py`, `backend/tests/contracts/test_ledger_registry.py`, `backend/tests/contracts/test_ledger_door_fixture.py`, `backend/tests/ledger/test_ledger_files.py` and `backend/tests/test_ledger_families.py` suites green with no change to their assertions.
 - **Oracle:** Outside any `use_registry` block every builder answers exactly what it answered before this row; inside one, a door ledger's segments land ahead of its prefix and a tree ledger's land behind its own top-level folder; a nested block restores the enclosing override, not `None`, on exit, including on an exception.
-- **Status:** DONE, pull request pending.
+- **Status:** DONE, pull request #1438.
 
 ### Row #7 - Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root
 
