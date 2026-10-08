@@ -55,6 +55,8 @@ import { diskReads } from '../src/lib/console/machine/disk-reads';
 import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
 import { describeServerCounters, type ServerCounterNotes } from '../src/lib/server/server-counter-notes';
+import { listRunDays } from '../src/lib/server/run-days';
+import { describeMissingMarkers } from '../src/lib/console/recording';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig, runConfig, type ObservabilityConfig } from '../src/lib/server/config';
 
@@ -1091,6 +1093,30 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		expect([both.addedBytes.from, both.addedBytes.high]).toEqual([2, 400_000_000]);
 	});
 
+	test('THE ORACLE: a refused shard whose records disagree about the processors leaves its time out', () => {
+		// Shard 0 of the refused run filed two machine records that disagree: one
+		// names 4 logical processors, the other 8. articleCost is handed the same
+		// shard's one article row (busy 50%, 40s total) with the two records in
+		// one order, then in the other. Picking whichever record came last would
+		// price the shard at 160 processor-seconds (50% of 8 over 40s) with 8
+		// named last, and 80 with 4 named last. The shard is left out in both
+		// orders and counted in `outOf`.
+		const shardArticle = [refusedRows[0]];
+		const namedLast8 = [
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 4 },
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 8 }
+		];
+		const namedLast4 = [...namedLast8].reverse();
+		const forward = articleCost(shardArticle, namedLast8);
+		const backward = articleCost(shardArticle, namedLast4);
+		for (const cost of [forward, backward]) {
+			expect(cost.processorSeconds.from).toBe(0);
+			expect(cost.processorSeconds.mid).toBeNull();
+			expect(cost.processorSeconds.outOf).toBe(1);
+			expect(cost.processors).toEqual([]);
+		}
+	});
+
 	test('the processor lost to other tenants counts it', () => {
 		const thresholds = { marked: 1, named: 10 };
 		const accepted = processorLostOverDays(acceptedRows, thresholds);
@@ -1215,8 +1241,8 @@ test.describe("a refused run is a run the server's figures were written down for
 	// One run a day, on shard 0, in the 7 days that end on 15 Jun 2030. A run is kept where its
 	// records fit together, and refused where shard 0 filed two machine records that disagree: about
 	// the server's two cells, or only about the machine. Each case hands the lines what the route
-	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run from
-	// either record, and the article record's days.
+	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run as
+	// `listRunDays` lists them for the route, and the article record's days.
 	const OPEN = { days: 7, start: '2030-06-09', end: '2030-06-15' };
 	const OBSERVABILITY: ObservabilityConfig = {
 		cost_currency: 'USD',
@@ -1257,7 +1283,7 @@ test.describe("a refused run is a run the server's figures were written down for
 		return describeServerCounters({
 			runs,
 			refused,
-			ran: [...new Set([...runs.map((run) => run.date), ...articleDays])].sort(),
+			ran: listRunDays({ runs, refused }, articleDays),
 			articleDays,
 			machineRead: {
 				state: 'read',
@@ -1345,6 +1371,27 @@ test.describe("a refused run is a run the server's figures were written down for
 		// A run refused on 5 Jun is outside the window, so the box names no run in it.
 		expect(hardware(disagreeing('2030-06-05', true), ['2030-06-05']).intro).toBe(
 			'No run in these 7 days is on record. 2030-06-09 to 2030-06-15.'
+		);
+	});
+
+	test('a day whose only run was refused and is machine records alone had a run: the started line counts it and the marker line names it', () => {
+		// Runs of article rows alone on 9 and 11 Jun. 10 Jun's only run was refused because shard 0's
+		// two machine records name two machines, and the article record holds no row that day. 13 Jun's
+		// run carried the server's figures. So 3 days before 13 Jun had a run but no server figures.
+		const hosts = [...disagreeing('2030-06-10', false), machine('2030-06-13')];
+		const articleDays = ['2030-06-09', '2030-06-11', '2030-06-13'];
+		const notes = hardware(hosts, articleDays);
+		expect(notes.intro).toBe(
+			'3 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'Server figures started on 13 Jun 2030. Earlier in this window, 3 days had a run but no server figures.'
+		]);
+		// The two charts that mark a setup change read the same days. With the score record not packed,
+		// and no run record naming what ran, they cannot show a change on any day with a run, 10 Jun too.
+		const ran = listRunDays(machineCounters(hosts, articleDays.map(article), plan(), LIMITS), articleDays);
+		expect(describeMissingMarkers({ read: { state: 'not-packed' }, ran, identified: [], open: OPEN })).toBe(
+			'This chart cannot show whether the setup changed on 9 Jun to 11 Jun and 13 Jun 2030, because the score record has not been packed yet. That is a step not yet run. This chart shows every change on the other days.'
 		);
 	});
 });

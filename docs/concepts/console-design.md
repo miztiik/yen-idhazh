@@ -70,7 +70,9 @@ count, because its words point up at it. Reader chose the words, and kept the
 place, on 2026-10-07. Where the window holds no run the count takes but one the
 box names, the first line is a count of 0 - `0 runs in these 7 days.`, or `This
 one day had 0 runs.` - and never `No run in these 7 days is on record.`, which
-would deny the run the box names. Reader chose those words on 2026-10-08.
+would deny the run the box names. Reader chose those words on 2026-10-08. Only
+the box explains a refused run: a line that leaves the run out, or that counts
+or names its day, adds no words about it (Reader, 2026-10-08).
 
 **A fixed benchmark figure never appears on the console.** It was taken on
 another machine against another workload, so a gap between it and a run reads as
@@ -164,7 +166,8 @@ record whose indexes name a day before the read may hold a day the instrument
 ran before anything the read holds, so the instrument gets no started line, and
 no day before the read is opened to learn it. The line prints in each window
 that shows the instrument's first day, names it, and counts the days of the
-window before it that had a run. An instrument whose rows begin after its record
+window before it that had a run. On Hardware, a day whose only run the box under
+the first line names is one of them. An instrument whose rows begin after its record
 did - the machine identity in the machine record - is named on its own first
 day. Once a record's first month is packed into one file, its indexes know the
 month and not the day, so when the widest window starts inside that month, after

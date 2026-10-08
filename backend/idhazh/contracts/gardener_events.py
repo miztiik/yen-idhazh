@@ -264,7 +264,8 @@ class TaskOutcome(StrEnum):
     DRY_RUN = "dry-run"
     #: It did work and more is left; `resume_from` says where the next wake starts.
     CEILING = "ceiling"
-    #: It did work and nothing is left. What it recovered does not change this.
+    #: It did work and finished its work for this wake, without stopping at its ceiling.
+    #: What it recovered, and what a monthly window that only reports kept, do not change this.
     DONE = "done"
     #: The ledger holds nothing for any step to work on.
     EMPTY = "empty"
