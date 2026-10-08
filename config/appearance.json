@@ -153,6 +153,12 @@
       3,
       4
     ],
+    "explorer_chart_note_lines": [
+      2,
+      2,
+      1,
+      1
+    ],
     "explorer_notice_ms": 6000,
     "explorer_editor_lines_shown": [
       8,
