@@ -1,8 +1,8 @@
 # Pipeline-test state nests under state/pipeline-tests, with a reusable migration tool
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-08
 **Level**: 5 for the approved root design; 2 for the first tooling phase.
-**Status**: Row 1 is done: the reusable migration tool is the package `backend/utilities/ledger_migration/`, run through `backend/utilities/migrate_to_parquet.py`. No committed data has moved. The user authorized rows 2 to 5 on 2026-10-06.
+**Status**: All five rows are complete, and the plan is ready to be distilled and closed. Row 5 moved six files byte for byte to their nested roots, deleted the four orphan span summaries, and passed the row-2 verifier for both case roots and the bench root. The user authorized rows 2 to 5 on 2026-10-06.
 
 ## 0. Operating contract
 
@@ -61,8 +61,8 @@ Table D - PR phases
 | D1 | 1 | Reusable migration operations ship | - | A | DONE #1265 | - | #1265 | phased-migration-tool |
 | D2 | 2 | Readers understand nested trial roots | 1 | B | DONE | pt-row-2 | - | Fowler |
 | D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | DONE #1405 | trial-root-compaction | #1405 | Fowler |
-| D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | OPEN | - | #1413 | Fowler |
-| D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | PENDING | - | - | - |
+| D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | DONE #1413 | nested-pipeline-test-cases | #1413 | Fowler |
+| D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | DONE | pt-row-5 | - | Fowler |
 
 ## 2. Row #1 - Reusable migration operations ship
 
@@ -333,7 +333,7 @@ Table M - Decisions
 
 | Id | Decision | Authority |
 | --- | --- | --- |
-| M1 | This row deletes the four trial span-rollup CSV files unconverted (A4); Plan 59 deletes the four production ones (B5). | User ruling 2026-10-04. |
+| M1 | This row deletes the four trial span-rollup CSV files unconverted (A4); Plan 59 row 3 deletes the four production ones. | User ruling 2026-10-04. |
 | M2 | Plan 59 row "The CSV code no ledger uses any more is deleted" does not edit `backend/utilities/pipeline_test_ledgers.py`; it deletes `DAY_TREES` after row 2 here lands (G4). This row deletes Plan 59's pointer to it once the trial files are gone. | Fowler. |
 | M3 | Roll back by reverting this row's pull request, which restores the data, the old roots' ownership and their period paths together. Rows 2 to 4 keep both layouts readable until this row merges. | Fowler. |
 | M4 | With the old sibling roots gone from `config/gardener/trials.json`, `_TRIAL_ROOT_PREFIX` and `_trial_paths` in `backend/idhazh/gardener/period_inputs.py` match no owned folder and are deleted; every C1 traces folder keeps the generic dated-tree listing (G7). | Fowler; delete what has no caller. |

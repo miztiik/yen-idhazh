@@ -52,7 +52,9 @@ RUN_ID: Final = "2026-09-27-18012345678"
 AGED: Final = "state/old-days/2026/09/19/2026-09-19.txt"
 FRESH: Final = "state/old-days/2026/09/26/2026-09-26.txt"
 #: A configured trial root and period, both named by the declaration and the wake.
-STRAY: Final = "state/pipeline-tests-production-settings/seen/2026/06/25/2026-06-25.txt"
+STRAY: Final = (
+    "state/pipeline-tests/production-settings/traces/2026/06/25/2026-06-25.txt"
+)
 #: What the fixture compaction reads before it writes its summary.
 COMPACTED: Final = "state/compact/gardener/monthly/2025/08.parquet"
 

@@ -87,18 +87,16 @@ VISUAL_DAYS: Final = {
     "2027-11-15": ("ai-0005.json",),
 }
 
-#: Files under trial roots, which no ledger family claims. Each is dated by its
-#: path: 90 days back is past the window, 89 is inside it, an undated name is
-#: kept, a month head is dated by its last day, and a day ahead of `TODAY` stays.
+#: Trial traces under declared case roots. Each is dated by its path: a day
+#: past the window is old, an undated name is kept, and a day ahead of `TODAY`
+#: stays.
 TRIAL_FILES: Final = (
-    "pipeline-tests-production-settings/seen/2027/08/17.csv",
-    "pipeline-tests-production-settings/seen/2027/08/18.csv",
-    "pipeline-tests-production-settings/segments/item-health/2027-08-01-1-1-work-0.csv",
-    "pipeline-tests-production-settings/traces/2027/11/10-0001-0.jsonl",
-    "pipeline-tests-production-settings/item-health/2027-07.csv",
-    "pipeline-tests-production-settings/notes.txt",
-    "pipeline-tests-production-settings/seen/2027/12/01.csv",
-    "pipeline-tests-no-visual-plan/seen/2026/01/01.csv",
+    "pipeline-tests/production-settings/traces/2027/08/17/old.jsonl",
+    "pipeline-tests/production-settings/traces/2027/08/18/kept.jsonl",
+    "pipeline-tests/production-settings/traces/2027/11/10/outside-range.jsonl",
+    "pipeline-tests/production-settings/traces/notes.txt",
+    "pipeline-tests/production-settings/traces/2027/12/01/future.jsonl",
+    "pipeline-tests/no-visual-plan/traces/2026/01/01/old.jsonl",
 )
 
 #: The browser's copies of the item-health months, and one whose source month is
@@ -130,7 +128,7 @@ def build(root: Path) -> Path:
         for name in visuals:
             (folder / name).write_bytes(b"x" * 1000)
     for relative in TRIAL_FILES:
-        _write(state / relative, "version,date\n")
+        _write(state / relative, "{}\n")
     for index, month in enumerate(MONTHS):
         _item_health_month(state, month, index)
     for month in PUBLIC_MONTHS:

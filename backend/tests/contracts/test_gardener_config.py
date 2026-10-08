@@ -491,15 +491,13 @@ def test_a_folder_that_only_shares_a_prefix_of_letters_is_not_nested(tmp_path: P
     assert "traces-archive" in config.load_gardener(a_garden(tmp_path, traces_archive=extra)).tasks
 
 
-def test_trials_owns_only_configured_pipeline_test_roots() -> None:
+def test_trials_owns_only_configured_pipeline_test_trace_roots() -> None:
     policy = config.load_gardener().tasks["trials"]
     tests = PipelineTestsConfig.from_json(
         (CONFIG_DIR / "pipeline-tests.json").read_text(encoding="utf-8")
     )
 
     assert policy.owns == [
-        f"state/{TRIAL_STATE_PREFIX}-{test_case.id}" for test_case in tests.test_cases
-    ] + [
         f"state/{TRIAL_STATE_PREFIX}/{test_case.id}/traces"
         for test_case in tests.test_cases
     ]

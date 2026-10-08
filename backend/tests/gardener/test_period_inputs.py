@@ -109,7 +109,7 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
 
 
 def test_a_c1_case_traces_folder_lists_each_named_day_folder(tmp_path: Path) -> None:
-    """A nested traces root uses the generic dated tree branch, not the old trial prefix."""
+    """A nested traces root uses the generic dated-tree branch."""
     policy = RetentionPolicy.model_validate(
         {
             "kind": "retention",
