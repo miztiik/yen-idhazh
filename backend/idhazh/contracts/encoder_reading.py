@@ -57,6 +57,10 @@ class PairCounts(Model):
     #: Titles sharing something but not much. Never scored right or wrong.
     ambiguous: Annotated[int, Field(ge=0)]
 
+    #: One outlet, one day, one subject: a correction or a follow-up, and a
+    #: word-overlap rule cannot say which. Never scored right or wrong.
+    related: Annotated[int, Field(ge=0)] = 0
+
 
 class EncoderReading(Contract):
     """What one encoder scored, how fast it ran, and how far it got."""
@@ -133,6 +137,13 @@ class EncoderReading(Contract):
     #: Share of uncertain pairs scored above halfway between the two means.
     #: High means this encoder joins too much; low means it fragments.
     ambiguous_lean: Annotated[float, Field(ge=0, le=1)] | None = None
+
+    #: Mean score of one outlet's second piece on one subject in one day.
+    related_mean: float | None = None
+
+    #: Share of those scored above halfway. Near one means this encoder cannot
+    #: tell a follow-up from a new story; lower means it keeps some signal.
+    related_lean: Annotated[float, Field(ge=0, le=1)] | None = None
 
     #: How far apart the two means sit. A wide spread leaves room for a cut-off.
     spread: float | None = None
