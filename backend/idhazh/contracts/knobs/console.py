@@ -602,6 +602,14 @@ class ConsoleConfig(Model):
             "breakpoint bands from narrowest to widest."
         ),
     )
+    explorer_role_slots_per_line: tuple[int, int, int, int] = Field(
+        default=(1, 2, 3, 4),
+        description=(
+            "Most role pills one line of the Data explorer's Chart tab holds, for the "
+            "four frame breakpoint bands from narrowest to widest. A line holds the "
+            "smaller of this and the most roles any chart the explorer draws has."
+        ),
+    )
     explorer_notice_ms: int = Field(
         default=6000,
         ge=0,
@@ -882,6 +890,8 @@ class ConsoleConfig(Model):
     def _explorer_editor_bounds(self) -> Self:
         if any(lines < 1 for lines in self.explorer_readout_lines):
             raise ValueError("console.explorer_readout_lines must hold four positive values")
+        if any(slots < 1 for slots in self.explorer_role_slots_per_line):
+            raise ValueError("console.explorer_role_slots_per_line must hold four positive values")
         if any(lines < 1 for lines in self.explorer_editor_lines_shown):
             raise ValueError("console.explorer_editor_lines_shown must hold two positive values")
         if (

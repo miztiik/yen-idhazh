@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -176,6 +177,20 @@ test.describe('the icon set', () => {
 		expect(errors).toHaveLength(1);
 		expect(errors[0].code).toBe(2322);
 		expect(errors[0].message).toContain('__not-a-named-icon__');
+	});
+
+	test('choice-list is Lucide chevron-down, unmodified, as PROVENANCE.md records it', () => {
+		const provenance = readFileSync(join(ICON_DIRECTORY, 'PROVENANCE.md'), 'utf8').replace(/\s+/g, ' ');
+		const version = provenance.match(/version `([\d.]+)` of `lucide-static`/)?.[1];
+		expect(version, 'PROVENANCE.md names no lucide-static version').toBeDefined();
+		const recorded = provenance.match(/`choice-list` from Lucide `chevron-down`[^.]*?SHA-256 is `([0-9a-f]{64})`/)?.[1];
+		expect(recorded, 'PROVENANCE.md does not record choice-list as chevron-down with its hash').toBeDefined();
+		const svg = readFileSync(join(SVG_DIRECTORY, 'choice-list.svg'));
+		expect(createHash('sha256').update(svg).digest('hex')).toBe(recorded);
+		const text = svg.toString('utf8');
+		expect(text.startsWith(`<!-- @license lucide-static v${version} - ISC -->`), 'the file does not carry its upstream licence line').toBe(true);
+		expect(text).toContain('class="lucide lucide-chevron-down"');
+		expect(manifestIcons()).toContain('choice-list');
 	});
 });
 

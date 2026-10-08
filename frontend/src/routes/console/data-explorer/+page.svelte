@@ -17,7 +17,9 @@
 	import CopyAnswer from '$lib/console/explorer/CopyAnswer.svelte';
 	import HistoryList from '$lib/console/explorer/HistoryList.svelte';
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
-	import { chooseExplorerShapes, type ExplorerChartType } from '$lib/console/explorer/shape';
+	import { chooseChart, type ChosenRoles, type ExplorerChartType } from '$lib/console/explorer/shape';
+	import { CHART_KINDS, MOST_ROLES, type RoleId } from '$lib/console/explorer/chart-roles';
+	import { roleRowLines, roleSlotsPerLine } from '$lib/console/explorer/role-row';
 	import { describeCutDays, describeDaysRead } from '$lib/console/explorer/days-read';
 	import { gapLines } from '$lib/console/explorer/gaps';
 	import { size, statusSentence } from '$lib/console/explorer/status';
@@ -65,7 +67,11 @@
 	let copyNotice = $state('');
 	let storageWorks = $state(true);
 	let storageNoticeDismissed = $state(false);
-	let selectedShapeType = $state<ExplorerChartType | null>(null);
+	// The reader's chart and columns, kept for as long as the page is open and never saved or linked.
+	// Until the reader presses a tile or picks a column, each answer opens on the chart its columns choose.
+	let chosenType = $state<ExplorerChartType | null>(null);
+	let chosenRoles = $state<ChosenRoles>({});
+	let shapeTiles = $state<HTMLElement | null>(null);
 	let activeResultTab = $state<'table' | 'chart'>('table');
 	let saving = $state(false);
 	let draftName = $state('');
@@ -81,6 +87,8 @@
 	const noticeText = $derived([keepNotice, copyNotice, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
 	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
+	const roleSlots = $derived(roleSlotsPerLine(MOST_ROLES, config.role_slots_per_line)[readoutBand] ?? MOST_ROLES);
+	const roleLines = $derived(roleRowLines(MOST_ROLES, config.role_slots_per_line)[readoutBand] ?? 1);
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
 	const statusText = $derived(statusLine());
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
@@ -92,11 +100,28 @@
 		bandwidthMinKinds: data.console.bandwidth_min_kinds,
 		seriesFloorShare: config.series_floor_share
 	});
-	const shapeChoices = $derived(
-		result !== null && result.state === 'ok'
-			? chooseExplorerShapes(result.columns, result.rows as Row[], shapeBounds).filter((shape) => shape.kind === 'chart')
-			: []
-	);
+	// The chart reads the answer's rows already in memory, so a choice redraws and fetches nothing.
+	const drawnAnswer = $derived(!running && result !== null && result.state === 'ok' ? result : null);
+	const chart = $derived(chooseChart(drawnAnswer?.columns ?? [], (drawnAnswer?.rows ?? []) as Row[], shapeBounds, chosenType, chosenRoles));
+
+	function chooseType(type: ExplorerChartType) {
+		chosenType = type;
+		// Keep the checked tile whole in view where the tiles are wider than their line, by moving
+		// the group's own scroll and never the page's.
+		void tick().then(() => {
+			const tile = shapeTiles?.querySelector<HTMLElement>(`[data-shape-choice="${type}"]`);
+			if (shapeTiles === null || tile === null || tile === undefined) return;
+			const group = shapeTiles.getBoundingClientRect();
+			const box = tile.getBoundingClientRect();
+			if (box.left < group.left) shapeTiles.scrollLeft -= group.left - box.left;
+			else if (box.right > group.right) shapeTiles.scrollLeft += box.right - group.right;
+		});
+	}
+
+	function chooseRole(type: ExplorerChartType, role: RoleId, values: string[]) {
+		chosenType = type;
+		chosenRoles = { ...chosenRoles, [type]: { ...chosenRoles[type], [role]: values } };
+	}
 
 	const SAVED_KEY = 'yen-idhazh:data-explorer:saved';
 	const HISTORY_KEY = 'yen-idhazh:data-explorer:history';
@@ -177,6 +202,9 @@
 		activeResultTab = tab;
 	}
 	function resultTabKey(event: KeyboardEvent) {
+		// Only a tab's own arrows move between the tabs: the open tab's controls stand in the same
+		// strip, and the chart tiles take Left and Right to choose a chart.
+		if ((event.target as HTMLElement | null)?.getAttribute('role') !== 'tab') return;
 		if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
 			event.preventDefault();
 			activeResultTab = activeResultTab === 'table' ? 'chart' : 'table';
@@ -444,7 +472,6 @@
 			// The window goes with its answer, so the lines under the answer change only on a run.
 			runSpan = nextSpan;
 			result = answer;
-			selectedShapeType = null;
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
 				lastMs = answer.read.ms;
 				lastRead = answer.read;
@@ -526,7 +553,7 @@
 
 <Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copyNotice = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
-<div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
+<div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines};--role-slots:${roleSlots};--role-lines:${roleLines}`}>
 <Panel id="data-explorer-ask" title="Your question">
 	<div class="question-panel">
 		<div data-workbench-region="questions">
@@ -588,18 +615,18 @@
 </Panel>
 
 {#snippet shapeActions()}
-	{#if shapeChoices.length > 1}
-		<fieldset class="shape-actions">
-			<legend class="sr-only">Draw it as</legend>
-			<ChoiceTiles
-				name="explorer-shape"
-				items={shapeChoices.map((shape) => ({ value: shape.type, shown: shape.option, spoken: shape.option, icon: shape.icon }))}
-				selected={selectedShapeType ?? shapeChoices[0].type}
-				tileAttribute="data-shape-choice"
-				onChange={(value) => (selectedShapeType = value)}
-			/>
-		</fieldset>
-	{/if}
+	<!-- Every chart, on every answer, in one order, and every tile can be pressed: one these columns
+	     cannot draw says what it needs inside the drawing. -->
+	<fieldset class="shape-actions" bind:this={shapeTiles}>
+		<legend class="sr-only">Draw it as</legend>
+		<ChoiceTiles
+			name="explorer-shape"
+			items={CHART_KINDS.map((kind) => ({ value: kind.type, shown: kind.option, spoken: kind.option, icon: kind.icon }))}
+			selected={chart.type}
+			tileAttribute="data-shape-choice"
+			onChange={chooseType}
+		/>
+	</fieldset>
 {/snippet}
 
 {#snippet gapNotes(gaps: readonly SpanGap[])}
@@ -648,24 +675,40 @@
 	</div>
 	<div id="data-explorer-shape" data-console-panel-id="data-explorer-shape" data-workbench-region="chart" role="tabpanel" aria-labelledby="explorer-tab-chart" hidden={activeResultTab !== 'chart'}>
 		<h2 class="sr-only">The answer, drawn</h2>
-		{#key running ? 'loading' : result?.state ?? 'idle'}
-			{#if running}
-				<div class="answer-state shimmer" data-state="loading"></div>
-			{:else if result === null}
-				<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
-			{:else if result.state === 'ok'}
-				<div class="chart-body"><ShapePanel columns={result.columns} rows={result.rows as Row[]} lostDays={result.gaps.flatMap((gap) => gap.lostDays)} bounds={shapeBounds} height={data.console.chart_height} selectedType={selectedShapeType} /></div>
-			{:else if result.state === 'quiet'}
-				<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
-			{:else if result.state === 'refused'}
-				<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
-			{:else}
-				<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
-			{/if}
-		{/key}
+		<ShapePanel
+			{chart}
+			columns={drawnAnswer?.columns ?? []}
+			rows={(drawnAnswer?.rows ?? []) as Row[]}
+			lostDays={drawnAnswer?.gaps.flatMap((gap) => gap.lostDays) ?? []}
+			bounds={shapeBounds}
+			floorHeight={data.console.chart_height}
+			slotsPerLine={roleSlots}
+			capped={drawnAnswer?.capped ?? false}
+			maxRows={config.max_rows}
+			onRoles={chooseRole}
+			placeholder={drawnAnswer === null ? chartState : null}
+		/>
 	</div>
 </div>
 </div>
+
+<!-- What the drawing holds while no answer is there to draw: each state keeps its own words, and the
+     role row above it keeps its slots. -->
+{#snippet chartState()}
+	{#key running ? 'loading' : result?.state ?? 'idle'}
+		{#if running}
+			<div class="answer-state shimmer" data-state="loading"></div>
+		{:else if result === null}
+			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
+		{:else if result.state === 'quiet'}
+			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
+		{:else if result.state === 'refused'}
+			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
+		{:else if result.state !== 'ok'}
+			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+		{/if}
+	{/key}
+{/snippet}
 
 <style>
 	/* The workbench is a tool, so it has the whole window and no card edge: the
@@ -944,10 +987,12 @@
 		font-weight: 600;
 	}
 
+	/* The strip is one line from 640 px and two below it, in both tabs: the tabs, then the open
+	   tab's own controls. Its rule is drawn inside its box, so the box is the lines alone. */
 	.result-region {
 		contain: size;
 		display: grid;
-		grid-template-rows: var(--workbench-control) minmax(0, 1fr);
+		grid-template-rows: calc(var(--workbench-control) + 2 * var(--space-1)) minmax(0, 1fr);
 		min-block-size: 0;
 		border-block-start: 1px solid var(--color-rule);
 		background: var(--color-bg);
@@ -955,15 +1000,16 @@
 
 	.result-tabs {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
+		flex-wrap: nowrap;
+		align-items: stretch;
 		gap: var(--space-2);
 		padding-inline: var(--space-3);
-		border-block-end: 1px solid var(--color-rule);
+		box-shadow: inset 0 -1px 0 var(--color-rule);
 		min-inline-size: 0;
 	}
 
 	.result-tabs > [role='tab'] {
+		flex: none;
 		min-block-size: var(--workbench-control);
 		border: 0;
 		border-block-end: 3px solid transparent;
@@ -979,10 +1025,13 @@
 		color: var(--color-text);
 	}
 
+	/* The open tab's controls take all the room after the tabs, so their box is the same whichever
+	   tab is open and only what stands in it changes. */
 	.result-actions {
-		margin-inline-start: auto;
+		flex: 1 1 auto;
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		align-self: center;
 		align-items: center;
 		justify-content: flex-end;
 		gap: var(--space-2);
@@ -992,6 +1041,7 @@
 	.result-region > [role='tabpanel'] {
 		min-block-size: 0;
 		display: grid;
+		grid-template-rows: minmax(0, 1fr);
 		background: var(--color-surface);
 	}
 
@@ -999,14 +1049,19 @@
 		display: none;
 	}
 
-	.chart-body {
-		min-block-size: 0;
-		overflow: auto;
-		padding: 0 var(--space-3) var(--space-3);
+	/* Where the tiles are wider than their line, the group scrolls sideways inside itself from its
+	   first tile, and the page never scrolls with it. */
+	.shape-actions {
+		min-inline-size: 0;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
 	}
-
-	.shape-actions { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
-	.shape-actions :global(.choice-tile) { min-block-size: var(--workbench-control); }
+	.shape-actions :global(.choice-tiles) { flex-wrap: nowrap; }
+	.shape-actions :global(.choice-tile) { flex: none; min-block-size: var(--workbench-control); }
 
 	/* From the wide breakpoint the workbench fills the window: the question
 	   above, the answer and the chart side by side below, each half taking the
@@ -1104,6 +1159,21 @@
 	}
 
 	@media (max-width: 639px) {
+		/* The strip takes two lines in both tabs: the tabs, then the open tab's own controls, which
+		   need the phone's whole width. Its box is the same whichever tab is open. */
+		.result-region {
+			grid-template-rows: calc(2 * var(--workbench-control) + 3 * var(--space-1)) minmax(0, 1fr);
+		}
+		.result-tabs {
+			display: grid;
+			grid-template-columns: auto auto minmax(0, 1fr);
+			grid-template-rows: calc(var(--workbench-control) + var(--space-1)) calc(var(--workbench-control) + 2 * var(--space-1));
+			column-gap: var(--space-2);
+		}
+		.result-actions {
+			grid-row: 2;
+			grid-column: 1 / -1;
+		}
 		/* Two lines that hold whatever face the system draws: the two short controls,
 		   Questions and History, share the first, and the long how-to link has the
 		   second to itself, so no line is filled to within a few pixels. The links

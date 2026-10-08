@@ -1,6 +1,6 @@
 # Icon provenance
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-10-08
 
 ## Source
 
@@ -24,7 +24,10 @@ Only the icons in use, as unmodified source SVG, under `svg/`. Data explorer add
 package is NOT a dependency: it was installed once to extract these files and
 removed. Data explorer density added `ledgers` from Lucide `database`,
 `query-editor` from `square-terminal` and `column-list` from `columns-3`.
-Measured 2026-10-05: 34 files, 4,226 B of marks, against the 40 KB budget in the rows
+The Data explorer's column pills added `choice-list` from Lucide `chevron-down`,
+the mark at a pill's end that says the pill opens a list; the unmodified file's
+SHA-256 is `547c967aba14e42e708e9635cac3cd98282b513e89ac18d87d0c07db3e2748da`.
+Measured 2026-10-08: 35 files, 4,251 B of marks, against the 40 KB budget in the rows
 that added them.
 
 Each file keeps Lucide's own geometry, its 24-unit box and its `currentColor`

@@ -8,6 +8,7 @@ export const ICONS = {
 	'band-high': '<circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" />',
 	'band-low': '<circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" />',
 	'band-medium': '<circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" />',
+	'choice-list': '<path d="m6 9 6 6 6-6" />',
 	'clock-alert': '<path d="M12 6v6l4 2" /><path d="M20 12v5" /><path d="M20 21h.01" /><path d="M21.25 8.2A10 10 0 1 0 16 21.16" />',
 	'column-list': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>',
 	'console': '<path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" />',

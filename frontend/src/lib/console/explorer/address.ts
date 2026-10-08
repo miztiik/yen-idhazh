@@ -1,7 +1,8 @@
 import { isDay, type LedgerName } from '../../data/slice-shapes';
+import { countDays } from '../span-words';
 
 export const UNKNOWN_LEDGER_NOTICE = (name: string): string => `The link named "${name}", which this site does not have, so it was left out.`;
-export const DAYS_NOTICE = (value: string, fallback: number): string => `The link asked for ${value} days, which this page does not offer, so it reads ${fallback} days.`;
+export const DAYS_NOTICE = (value: string, fallback: number): string => `The link asked for ${/^\d+$/.test(value) ? countDays(Number(value)) : `${value} days`}, which this page does not offer, so it reads ${countDays(fallback)}.`;
 export const DATE_SPAN_NOTICE = (from: string, end: string): string => `The link asked for ${from} to ${end}, which is not a span this page can read, so it ends today.`;
 export const UNREADABLE_QUESTION_NOTICE = 'The question in this link could not be read, so the editor is empty.';
 export const LINK_TOO_LONG_NOTICE = 'This question is too long for a link, so the link carries the ledgers and the days only.';
