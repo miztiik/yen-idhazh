@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -218,6 +218,34 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   run the same command again when the load drops:
   ```powershell
   (Get-CimInstance Win32_Processor).LoadPercentage
+  ```
+- **A console spec's check on the base commit reads as needing a canary build in the copy; its server-rendered cases need none.**
+  `frontend/playwright.config.ts` starts `frontend/scripts/verified-preview.ts`,
+  which serves only a verified canary build, so that config cannot run a console
+  spec in a copy that has none. A case whose block compiles its components
+  with `serverCompiler` from `frontend/tests/support/server-render.ts`, and
+  which opens its markup with `page.setContent`, never asks that server for a
+  page. Plan 62's row L30 ran the 8 merge-line cases of
+  `console-window.spec.ts` this way on a copy of its base commit on
+  2026-10-07. Make the copy as
+  [run-the-gates.md](../../how-to/run-the-gates.md#run-a-new-test-against-the-base-commit)
+  says, with `frontend` and `config` in the archive. Link the copy's
+  `node_modules` to an installed one with a junction and run
+  `npx svelte-kit sync` in its `frontend`, for the reasons the notes on
+  `ERR_MODULE_NOT_FOUND` and `Cannot find package '$lib'` above give. Then run a
+  throwaway config in the copy's `frontend`, shaped like
+  `playwright.logic.config.ts`: the main config with `webServer: undefined` and
+  one project whose `testMatch` names the spec, and `--grep` naming the cases.
+  Each failed case restarts the worker, so 2 failures in 8 cases took 15
+  minutes on this machine. A case can run this way when its block calls
+  `serverCompiler(` and opens no page with `page.goto`:
+  ```powershell
+  New-Item -ItemType Junction -Path <copy>\frontend\node_modules -Target (Resolve-Path frontend\node_modules).Path
+  Push-Location <copy>\frontend
+  npx svelte-kit sync
+  node node_modules/@playwright/test/cli.js test --config <throwaway>.config.ts tests/<spec>.spec.ts --grep "<cases>"
+  Pop-Location
+  cmd /c rmdir <copy>\frontend\node_modules
   ```
 
 ## Serving a build to measure it
