@@ -287,6 +287,20 @@ test('THE ORACLE: the 14-day preset cuts a ledger that began 5 days ago at its f
 	expect(archiveAsked).toEqual([]);
 });
 
+test('opened from a link, the page reads each index and listing once before a run', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(5, 0) });
+	const read: string[] = [];
+	page.on('response', (response) => {
+		const file = stateFile(response.url());
+		if (file?.endsWith('.json')) read.push(file);
+	});
+	// The link names no question, so the editor stays empty and Run stays off: wait for the cost line instead.
+	await openExplorer(page, PINNED, { address: '?ledgers=host-fingerprint&days=14', ready: false });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('Run reads', { timeout: 60_000 });
+	expect(read.length, 'the page read no index, so this test proves nothing').toBeGreaterThan(0);
+	expect(read.filter((file, at) => read.indexOf(file) !== at), 'a file was read twice before Run').toEqual([]);
+});
+
 test('THE ORACLE: an answer over two ledgers that began on different days names each with its own first day, counts the days it read, and keeps that line when the window moves before the next Run', async ({ page, context }) => {
 	// host-fingerprint is built to begin 10 days before the pinned day, on 5 Jun 2030, and seen 5 days
 	// before it, on 10 Jun, each with one row a day. The 14-day preset asks for 2 to 15 Jun.

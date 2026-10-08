@@ -201,14 +201,12 @@
 		if (question.from !== undefined && question.end !== undefined) setSpan(question.from, question.end);
 		else setWindow(presets.includes(question.days) ? question.days : windowDays);
 		sql = question.statement;
-		void updateCostAndColumns();
 	}
 	function pickRun(run: RecentRun) {
 		selected = run.ledgers.filter((name): name is LedgerName => ledgers.some((ledger) => ledger.name === name));
 		if (run.from !== undefined && run.end !== undefined) setSpan(run.from, run.end);
 		else setWindow(presets.includes(run.days) ? run.days : windowDays);
 		sql = run.statement;
-		void updateCostAndColumns();
 	}
 	function setWindow(days: number) {
 		windowDays = days;
@@ -216,11 +214,13 @@
 		fromDay = addDays(toDay, 1 - days);
 		void updateCostAndColumns();
 	}
-	async function refreshRegistry() {
+	/** Read the ledger registry, and on Refresh drop every index this page has read first. On
+	 *  open nothing is dropped: the pass a restored selection started is already reading them. */
+	async function refreshRegistry(afresh = false) {
 		refreshing = true;
 		registryError = null;
 		try {
-			await startAfresh();
+			if (afresh) await startAfresh();
 
 			registry = await fetchRegistry();
 			if (selected.length === 0) {
@@ -520,6 +520,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Data explorer &mdash; Console &mdash; {data.ui.site_title}</title>
+</svelte:head>
+
 <Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copyNotice = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
 <div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>
@@ -535,7 +539,7 @@
 		<div class="question-grid" class:wide>
 			<details data-workbench-region="ledgers" class="rail-region" bind:open={ledgersOpen}>
 				<summary>Ledgers: {selected.length}</summary>
-				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={refreshRegistry} {refreshing} />
+				<LedgerList ledgers={ledgers} selected={selected} {published} through={cost.through} spanFrom={fromDay} {filter} onToggle={toggle} onFilter={(value) => (filter = value)} onRefresh={() => refreshRegistry(true)} {refreshing} />
 			</details>
 			<div class="editor-stack">
 				{#if registryError}<p class="state warn">{registryError}</p>{/if}

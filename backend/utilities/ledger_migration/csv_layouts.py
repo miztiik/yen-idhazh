@@ -16,12 +16,17 @@ from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import (
     DROPPED_CELLS as DROPPED_HOLDOUT_SCORE_CELLS,
 )
+from idhazh.contracts.story_similarity_pair import DROPPED_CELLS as DROPPED_PAIR_CELLS
+from idhazh.contracts.story_similarity_pair import RENAMED_CELLS as RENAMED_PAIR_CELLS
 from idhazh.ledger.paths import REGISTRY_FILENAME
 from utilities.ledger_migration.refusals import RefusedError
 
 
 class CsvLedger(NamedTuple):
     """How one ledger was filed before it moved to the door, and how long it was kept.
+
+    `shorter_by` names the person's decision that let the door keep it for less
+    time than the CSV did. Without one, a compaction that keeps less is refused.
 
     `day_column` names the cell a row's UTC day is read from, for a layout whose
     path names no day: one CSV file holding every row. A layout whose path names
@@ -31,7 +36,16 @@ class CsvLedger(NamedTuple):
     old_entry: LedgerEntry
     old_window: Window
     old_headings: Mapping[str, str | None] = MappingProxyType({})
+    shorter_by: str | None = None
     day_column: str | None = None
+
+
+#: A judge ledger was kept for ever on CSV only because no task pruned it.
+EVERY_LEDGER_EXPIRES: Final = (
+    "@kumarsnaveen_microsoft approved on 2026-10-07 live packing and 36-calendar-month "
+    "yearly expiry for every ledger, superseding forever retention and accepting loss of "
+    "older history; applied on 2026-10-08 to each judge ledger moved to the door after it"
+)
 
 
 def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
@@ -90,6 +104,30 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
             ),
             ForeverWindow(unit="forever"),
             MappingProxyType(dict.fromkeys(DROPPED_HOLDOUT_SCORE_CELLS)),
+            EVERY_LEDGER_EXPIRES,
+        ),
+        # The council's save job filed the judge's pairs and its per-part readings
+        # as one shared file a day inside the judge's folder, and nothing deleted
+        # either. `shard` is read as the part it named, by the rename map both rows
+        # read, and each heading the pair row stopped naming is dropped with its
+        # filled cells. Both now expire as every ledger does.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+                ("content-similarity-judge", "scored-pairs"),
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType({**RENAMED_PAIR_CELLS, **dict.fromkeys(sorted(DROPPED_PAIR_CELLS))}),
+            EVERY_LEDGER_EXPIRES,
+        ),
+        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+                ("content-similarity-judge", "metrics"),
+            ),
+            ForeverWindow(unit="forever"),
+            RENAMED_PAIR_CELLS,
+            EVERY_LEDGER_EXPIRES,
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
@@ -97,12 +135,14 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
             _day_file(LedgerName.PUBLISHED), ForeverWindow(unit="forever")
         ),
         # A person's harvest rewrote one file in the judge's folder with every mark,
-        # each row naming the day it was marked. Nothing deleted a mark.
+        # each row naming the day it was marked. Nothing deleted a mark; the marks
+        # now expire as every ledger does.
         LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: CsvLedger(
             _flat_file(
                 LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS, ("content-similarity-judge",)
             ),
             ForeverWindow(unit="forever"),
+            shorter_by=EVERY_LEDGER_EXPIRES,
             day_column="marked_on",
         ),
     }

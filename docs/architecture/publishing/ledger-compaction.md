@@ -22,7 +22,7 @@ and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**All sixteen ledgers pack live and use the same retention chain:** days
+**All eighteen ledgers pack live and use the same retention chain:** days
 become months 45 whole days after the month ends; months become years 93 whole
 days after the year ends; indexed years expire 36 calendar months after their
 UTC end.

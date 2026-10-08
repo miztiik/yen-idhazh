@@ -79,7 +79,7 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
             "day-metrics/2026/09/18.json",
             "day-metrics/2026/09/19.json",
             "content-similarity-judge/score-distribution.json",
-            "content-similarity-judge/scored-pairs/2026/09/18.csv",
+            "content-similarity-judge/fitted-thresholds/2026/09/18.csv",
             "traces/.gitkeep",
         ),
     )
@@ -91,14 +91,14 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
             "day-metrics/2026/09/18.json",
             "day-metrics/2026/09/19.json",
             "content-similarity-judge/score-distribution.json",
-            "content-similarity-judge/scored-pairs/2026/09/18.csv",
+            "content-similarity-judge/fitted-thresholds/2026/09/18.csv",
             "traces/.gitkeep",
         ],
     )
 
     assert "  - day-metrics: 2 files" in lines
     assert "  - score-distribution: 1 file" in lines
-    assert "  - scored-pairs: 1 file" in lines
+    assert "  - fitted-thresholds: 1 file" in lines
     assert "  - traces: 0 files" in lines
     assert "  - item-health-summary under raw/: 0 files" in lines
     assert "  - item-health-summary under compact/: 0 files" in lines

@@ -109,6 +109,8 @@ YEARLY_RETENTION_DECISION: Final = (
 )
 MOVED_LEDGER_TASKS: Final = (
     "compact-content-similarity-judge-merge-line-holdout-scores",
+    "compact-content-similarity-judge-scored-pairs",
+    "compact-content-similarity-judge-metrics",
     "compact-content-similarity-judge-holdout-pairs",
 )
 MOVED_LEDGER_RETENTION_DECISION: Final = (

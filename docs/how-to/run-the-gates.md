@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -275,6 +275,11 @@ the copy's own `-q` hides that line when its settings were read.
 **A copied test that reads a workflow file needs the base commit's `.github` in
 the copy too:** add it to the archive, or the test fails on a missing file, a
 failure the base commit did not cause (2026-10-07).
+
+**In a copy of an older commit, one test module that cannot load stops the
+whole pytest run at collection:** add `--continue-on-collection-errors` so the
+cases that load still run, and name the module that did not load when you
+report the run (2026-10-08).
 
 **A canary build in the copy needs more of the tree.** Add `frontend` and the
 root `.gitignore` to the archive, run `git init` and commit the copy, and point
