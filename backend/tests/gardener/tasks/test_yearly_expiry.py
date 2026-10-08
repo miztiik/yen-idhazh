@@ -155,30 +155,33 @@ def test_boundary_toggle_and_dry_run(
 def test_a_range_that_skips_an_older_indexed_year_is_refused_there_and_deletes_nothing(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Expiry is a prefix, so a range that holds 2027 and not 2026 is refused at 2026 by name."""
+    """Expiry is a prefix, so a range that holds 2027 and not 2026 waits at 2026 for a wider one.
+
+    A person's range is not a code defect, so the pass is deferred and the job stays green.
+    """
     paths = indexed_years(tmp_path, ("2026", "2027"))
 
     with caplog.at_level(logging.INFO):
         result = run(tmp_path, date(2031, 1, 1), period_range=("2027-01", "2027-12"))
 
     assert (result.stopped_because, result.resume_from, result.fault) == (
-        StopReason.FAILED,
+        StopReason.DEFERRED,
         "2026",
-        GardenerFault.RAISED,
+        GardenerFault.RANGE_STARTS_LATE,
     )
     refused = the_event(caplog.records, PeriodRefused)
     assert (refused.ledger, refused.step, refused.period, refused.fault) == (
         VISUALS,
         CompactionStep.EXPIRE_YEARS,
         "2026",
-        GardenerFault.RAISED,
+        GardenerFault.RANGE_STARTS_LATE,
     )
     assert (refused.ledger_fault, refused.error, refused.where) == (None, None, None)
     assert [
         record.levelno
         for record in caplog.records
         if isinstance(event_log.payload(record), PeriodRefused)
-    ] == [logging.ERROR], "a refusal that fails the pass is an error"
+    ] == [logging.WARNING], "a refusal that defers the pass is a warning, never an error"
     assert events(caplog.records, ExpiredYearsChosen) == []
     assert said_as_text(caplog.records) == []
     assert all(path.exists() for path in paths.values())

@@ -550,8 +550,9 @@ policy refuses that reader.
 An operator range may expire only whole years and cannot skip an older indexed
 year. Otherwise its progress mark could hide retained entries. A range that
 would skip one is refused at the oldest indexed year, in one `period-refused`
-event with the step `expire-years` and the fault `raised`: the step takes
-nothing, and the pass ends `failed` at that year.
+event with the step `expire-years` and the fault `range-starts-late`: the step
+takes nothing, and the pass ends `deferred` at that year. A person's range is
+not a code defect, so the job stays green, and the person widens the range.
 
 Finite retention must cover every reader's window. For a day-count window the loader uses a
 conservative lower bound of 28 days per retained calendar month: 36 months

@@ -3,7 +3,9 @@
 **The step says what it chose once, before it deletes anything**, as one
 `ExpiredYearsChosen` event: the expired years this pass takes, or none. A range
 a person names that would skip an older indexed year is refused at the oldest
-indexed year (`CompactTree.refuse`), and the step takes nothing.
+indexed year (`CompactTree.refuse`), and the step takes nothing. A person's
+range is not a code defect, so the refusal defers the pass with
+`range-starts-late`, and the job stays green.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from idhazh import ledger
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.gardener_events import CompactionStep, ExpiredYearsChosen
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.gardener import event_log
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
@@ -47,7 +50,13 @@ def drop(
             if operator_range[0] <= f"{year}-01" and f"{year}-12" <= operator_range[1]
         ]
         if due and any(year < due[0] for year in tree.yearly):
-            return (tree.refuse(CompactionStep.EXPIRE_YEARS, min(tree.yearly)),)
+            return (
+                tree.refuse(
+                    CompactionStep.EXPIRE_YEARS,
+                    min(tree.yearly),
+                    fault=GardenerFault.RANGE_STARTS_LATE,
+                ),
+            )
     years = due[: policy.max_periods_per_run]
     paths = [
         ledger.compact_path(tree.state_dir, tree.ledger, Period.YEARLY, year, fmt=fmt)
