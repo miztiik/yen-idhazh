@@ -133,6 +133,14 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
 	}
 }
 
+/** A share as a whole percent, and `<1` where a share that is not zero rounds
+ * below one percent: a `0` there would say none was counted, and some was. The
+ * console's rule for every number it prints. */
+export function wholePercent(numerator: number, denominator: number): string {
+	const share = (numerator / denominator) * 100;
+	return share > 0 && share < 0.5 ? '<1' : String(Math.round(share));
+}
+
 /** The share, in type, with the denominator it is a share of.
  *
  * There is no rate line on the chart. A day publishes a few hundred stories and
@@ -145,9 +153,7 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
  */
 export function mergeRate(totals: MergeTotals, windowDays: number): string | null {
 	if (totals.days === 0 || totals.merges === 0 || totals.published === 0) return null;
-	const share = (totals.merges / totals.published) * 100;
-	const printed = share < 0.5 ? '<1' : String(Math.round(share));
-	return `That is ${printed}% of the ${grouped(totals.published)} stories ${nameSpan(windowDays)} published.`;
+	return `That is ${wholePercent(totals.merges, totals.published)}% of the ${grouped(totals.published)} stories ${nameSpan(windowDays)} published.`;
 }
 
 // --- Where the merge line sits -------------------------------------------------
@@ -412,7 +418,9 @@ export function silentTail(squares: readonly FoldSquare[]): number {
  *
  * Null under `min_attempts_for_rate`: a share over four pairs is not a
  * measurement, and printing one invites a decision the evidence cannot carry.
- * The counts still print - that is the rule `FailurePanels` already runs on.
+ * The counts still print - that is the rule `FailurePanels` already runs on. A
+ * real share that rounds away prints `<1`: a `0` would say no pair disagreed,
+ * and one did.
  */
 export function rateWithDenominator(
 	numerator: number,
@@ -420,7 +428,7 @@ export function rateWithDenominator(
 	floor: number
 ): string | null {
 	if (denominator < floor) return null;
-	return `${Math.round((numerator / denominator) * 100)}% of ${denominator} pairs`;
+	return `${wholePercent(numerator, denominator)}% of ${denominator} pairs`;
 }
 
 /** "Could not tell" in words, against the pairs whose two readings agreed: the
@@ -434,7 +442,5 @@ export function rateWithDenominator(
 export function describeUnclear(unclear: number, agreed: number, floor: number): string {
 	if (agreed === 0) return 'not counted, no pair agreed';
 	if (agreed < floor) return `${Math.round(unclear)} of the ${agreed} that agreed`;
-	const share = (unclear / agreed) * 100;
-	const printed = share > 0 && share < 0.5 ? '<1' : String(Math.round(share));
-	return `${printed}% of the ${agreed} that agreed`;
+	return `${wholePercent(unclear, agreed)}% of the ${agreed} that agreed`;
 }

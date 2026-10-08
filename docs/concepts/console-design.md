@@ -57,6 +57,19 @@ Five rules hold for every number the console prints:
  the 41 that agreed`, and `1 of the 3 that agreed` under the floor (Reader,
  2026-10-08, plan 62's row L39).
 
+**A verdict word is set by the share it judges, never by why a day was held.**
+`inside` and `past` compare a share the page prints with its own mark, the
+dashed limit the plot draws for that share: `past` when the share is above the
+mark, the test the run holds a day on, and `inside` otherwise. The run tests its
+other reasons for holding a day first, such as a record too small to fit a line
+on, so a day held for one of them can still carry a share past its mark. On
+Judgement's agreement panel, the window sentence that prints both shares ends
+`Both rates are inside the marks.` only when both are inside their marks.
+Otherwise it names the share that is past,
+`The 20% that disagreed is past its mark.` or
+`The 39% that could not tell is past its mark.`, or it ends
+`Both rates are past their marks.` (Reader, 2026-10-08, plan 62's row L39.)
+
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, a run whose rows cannot be made into one run is left out of the
 first line's run count - for example, a run where one shard filed two machine
