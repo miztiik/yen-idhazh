@@ -211,7 +211,6 @@ reads are here and not how many. These are `backend/`'s;
 | `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
 | the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
 | the compaction's listing of a ledger's days, `raw_files.raw_days` | the day folder names under `state/raw/<ledger>/`, never a file's contents | the raw days not compacted yet. A live compaction empties them as it goes, so it names about two raw days. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
-| the gardener's closed-day fold, `closed_day_fold` | the day folder and file names of each CSV day tree its task owns, then every file of each closed day that still holds a writer file, and, where the task's fold settles months, every file of each closed month that still holds a day's file | what it opens is the days closed since the last wake - about one a tree a day - plus any a failed wake left, and in a tree that settles months, the month just closed once a month and a month a late day landed in. What it lists is every day folder of the tree, the listing the task's window pass already makes over the same tree. A bounded input cannot answer it: which days still hold a writer file is a question about every day, and a day a failed wake skipped is still waiting however old it is |
 
 ### Unbounded, and it says so
 
@@ -410,7 +409,7 @@ the last day there was.
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
+| `payload.readDayShards`, `payload.dayShardFiles` | the day files of the newest `days` recorded days of a ledger that files one `<YYYY>/<MM>/<DD>.csv` a day, as the publication inventory names them | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts recorded days** - see below |
 | `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint or merge-line holdout score ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
@@ -419,29 +418,16 @@ the last day there was.
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
-**A day is a directory of writer-owned files, and the cover counts days rather
-than files.** There is no head to fold into, so the day holds one file per
-writer - `<run_id>-<attempt>-<job>-<shard>.csv`, and no two writers can name one
-file ([partitions.md](partitions.md#what-counts-as-a-day-file)).
-`dayShardFiles` groups those files by their day before it takes the newest
-`days` of them, so `LEDGER_WINDOW_DAYS` keeps meaning 91 recorded days whatever
-the ledger holds. What moves is the file count inside the window, not the window.
-
-**What that costs, said rather than implied.** A live day costs one open per
-writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that was
-20 writers for item-health and 25 for host-fingerprint, against one file each
-before the day directory landed. A day whose writers have been folded to one
-`settled.csv` costs one open again. So the read is bounded by the number of days
-still unfolded times the writers a day, plus one file for every folded day in
-the window - and by nothing in the archive behind it. The gardener folds a day
-one whole day after it ends, so the unfolded half is at most the newest two days
-rather than the whole 91-day window.
-
-**The three records the console reads most are off this path.** The item-health
-and host-fingerprint figures above were taken while those ledgers were CSV day
-trees. They moved to the ledger door with the eval ledger, and `itemHealthRows`,
-`evalRows` and `machineRecord` read packed days only: one file a packed day, or
-one a month once a compaction absorbs it, whatever a day's writers numbered.
+**A day is one file, and the cover counts recorded days.** Both ledgers this
+reader serves, the fitted merge line and the merge line's holdout score, file one
+`<YYYY>/<MM>/<DD>.csv` a day: grain `day` in `config/ledgers.json`, the registry
+`backend/idhazh/ledger/paths.py` builds each writer's path from. `dayShardFiles`
+keeps the newest `days` of the days the publication inventory names and opens
+one file a day, so `LEDGER_WINDOW_DAYS` bounds the read at 91 files whatever the
+ledger holds. From #1068 until 2026-10-08 the reader looked for a folder of files
+a day, which neither writer files, so the Judgement page read no row.
+`frontend/tests/similarity-ledgers.spec.ts` now holds the registry and the
+reader to the one layout.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -470,9 +456,10 @@ matters, because the vector block is most of what a day payload weighs.
 once to find the newest year, which costs one directory entry a year for ever.
 `readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
 which shards are newest, which costs one entry a month for ever.
-`readDayShards` is the bigger one and `fittedLines` inherits it: the walk names
-one entry a recorded day where the month tree named one a month. Neither opens a
-file it does not need, and deriving the newest stem from today's date instead
+`readDayShards` is the bigger one, and both judge readers inherit it: the
+inventory names one entry a recorded day, and the reader reads every entry of
+its ledger to find the newest. It looks on disk only for the files inside its
+cover and opens no other, and deriving the newest day from today's date instead
 would answer nothing at all for a ledger whose last run was two months ago.
 
 ### Unbounded, and it says so
@@ -663,69 +650,26 @@ Both are worth more on this page than a clean sweep would have been. A rule whos
 inventory only records the reads that bent to it teaches nothing about the ones
 that will not.
 
-## The closed-day fold is Guardrail #12 applied to a write (2026-09-22)
+## Guardrail #12 applies to a write as well as a read (2026-09-22)
 
 Every entry above is a READ whose cost grows with what the pipeline has piled
-up. This one is a write, and it is here because the guardrail's sentence does
-not say "read": a step is suspect when its cost rises because the repository
-accumulated more data, without any change to the question being answered. A
-ledger that files one file per writer per day is exactly that step.
+up. The guardrail's sentence does not say "read": a step is suspect when its
+cost rises because the repository accumulated more data, without any change to
+the question being answered. A ledger that files one file per writer per day is
+exactly that step. 99 writers a day over a 14-month retention window is about
+33,800 files at five runs a day, and `git add`, a clone and a checkout all rise
+roughly linearly with the file count, so that cost lands on every job.
 
-**The day directory ends two writers on one file, and it buys that with file
-count.** `state/<ledger>/<YYYY>/<MM>/<DD>/` holds one file per writer, so 99
-writers a day over a 14-month retention window is about 33,800 files at today's
-five runs a day, and about 169,000 at twenty-five. Nothing reads all of them -
-every reader carries a cover - but `git add`, a clone and a checkout all rise
-roughly linearly with the file count, and that cost lands on every job.
+**The CSV day trees answered it with a fold, and the ledger door answers it
+now.** The gardener's closed-day fold settled each closed CSV day into one
+`settled.csv` and deleted the writer files it read. Every ledger that filed that
+way has since moved to the ledger door, where each ledger's compaction bounds
+its files ([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md)),
+so the fold had no tree left to settle and was deleted. Its measurements are in
+git history.
 
-**So a closed day folds once into `settled.csv`, and the writer files it read are
-deleted.** Since 2026-09-28 the gardener task that owns each tree does it, and a
-day is closed one whole day after it ends - `fold.after_days` in that task's
-declaration under `config/gardener/`, the same rule a compaction reads. Of 755
-writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after its
-day ended and none after 24 hours, so a fold at that age does not race a writer,
-and a re-run that lands later costs one more fold of that day, never a row.
-Before that it was `digest.yml`'s step after each day's commit, seven days behind
-the run's own date. With the fold, `state/` settles at **about 2,750 files at
-today's five runs a day and about 3,550 at twenty-five**, against 33,800 and
-169,000 with no fold. Those two are estimates: this page's 2026-09-22 figures of
-3,200 and 6,000, with the live window moved from seven days to two. Read them as
-a ratio: the fold takes about 92 percent of the files off the tree at five runs
-a day and about 98 percent at twenty-five.
-
-**The floor is about 2,550 settled files and it does not move with the run rate
-at all.** One `settled.csv` per ledger per retained day is a function of the
-calendar and the ledger count, not of how many runs happen at once. Only the
-live window scales with the run rate - two days of unfolded writer files, where
-it was seven - so the difference between 2,750 and 3,550 is that window and
-nothing else. **That is what makes this a bounded step rather than a growing
-one**: the steady state is set by a rule and a retention period, both of which a
-person chose, and a busier day raises the window rather than the archive.
-
-**What the fold opens is bounded; what it lists is not.** It opens a closed day
-only while the day still holds a writer file - about one a tree a day, plus any
-a failed wake left - reads the files in it, writes one file and deletes the
-rest. To find those days it lists every day folder of the tree, which is the
-listing the task's window pass already makes over the same tree, and it has to:
-which days still hold a writer file is a question about every day. The listing
-reads names only, and its row is in the inventory above.
-
-**A tree nothing ever trims settles by the month.** `fold.settles_months`
-settles each closed month into one `settled.csv` in the month's own folder once
-the month's last day is closed, so a tree that keeps every file for ever grows
-by twelve files a year rather than 365. The eval ledger's ID folder was its one
-user until that folder was deleted on 2026-10-04. A settled month's rows name
-no day, so only a tree whose window keeps whole months may settle one, and the
-loader refuses the switch beside a window of days.
-
-**The item-health, summary-quality-evals and host-fingerprint ledgers have left this count.**
-They moved to the ledger door, where each ledger's compaction, not this fold,
-bounds its files. The figures above were taken with them in it, so they overstate
-what the fold holds now.
-
-Authority: Fowler and Carmack, converged, 2026-09-22. The move into the
-gardener, the one-day rule and the fold's own switch: Fowler and Carmack,
-2026-09-28.
+Authority: Fowler and Carmack, converged, 2026-09-22. The fold's removal:
+Fowler, 2026-10-08.
 
 ## What a walk over the archive costs a test
 

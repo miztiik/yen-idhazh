@@ -5,10 +5,11 @@ that makes a stale ledger unappendable, so every case here puts a stale file on
 disk, proves the append refuses it, re-files it, and proves the append lands.
 Both directions are covered: a header narrower than the contract, and one wider.
 
-**Two kinds of ledger, because the utility has two registries to ask.** A ledger
-the post-merge settlement covers declares its reader in `ledger.keyed_paths`; a
-day tree declares it in `ledger.keys._TREE_SHAPES`. Driving only the first is how
-nine of fourteen ledgers were refused for a day with every test green.
+**One registry is asked, and the census names every ledger it cannot read.** A
+ledger the post-merge settlement covers declares its reader in
+`ledger.keyed_paths`, and the utility reads no other list. Driving only one
+ledger is how nine of fourteen ledgers were refused for a day with every test
+green, so the census below asks every ledger in the vocabulary.
 
 Everything is driven from two small committed fixtures, each read inside the
 test that needs it. Nothing walks the committed ledger (`CLAUDE.md` section
@@ -60,7 +61,7 @@ NARROW = FIXTURES_DIR / "state" / "scored-pairs-before-the-stamp.csv"
 #: committed day file as it stood before that column left on 2026-09-21.
 WIDE = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
 
-#: The ledgers in the vocabulary that neither registry names a reader for.
+#: The ledgers in the vocabulary that the registry names no reader for.
 #: Named rather than counted, because a count that falls by one says a ledger lost
 #: its reader and never says which one - and that is exactly the failure this
 #: file missed on 2026-09-22, when five day trees left `ledger.keyed_paths` and
@@ -281,14 +282,14 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
     """An operator who typed a real ledger is holding a real question.
 
     The judge's metrics are in the prune vocabulary, their day files are real,
-    and neither registry names the contract that reads one of their rows. Saying
-    so beats reporting that nothing happened to a file that is plainly there.
+    and the registry names no contract that reads one of their rows. Saying so
+    beats reporting that nothing happened to a file that is plainly there.
 
-    **This target used to be `scores`, and that was the bug this commit fixes.**
-    `scores` is a day tree, so the refusal it was asserting stopped being about a
-    ledger with no reader the moment the lookup learnt to ask
-    `DAY_TREES`. A refusal is the right answer for exactly the ledgers
-    in `UNREGISTERED` below, and the census there is what keeps this one honest.
+    **This target used to be `scores`, and that was a bug.** `scores` was a day
+    tree, so the refusal it was asserting stopped being about a ledger with no
+    reader the moment the lookup learnt to ask the day trees' own table. A
+    refusal is the right answer for exactly the ledgers in `UNREGISTERED`
+    below, and the census there is what keeps this one honest.
     """
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
     day = ledger.path(tmp_path, which, "2026-09-18")

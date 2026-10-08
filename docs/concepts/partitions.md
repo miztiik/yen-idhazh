@@ -116,7 +116,7 @@ copy of.
 
 | Class | What the name means | How a race on it ends |
 | --- | --- | --- |
-| **written-once** | the filename carries `<run_id>-<attempt>-<job>-<shard>`, or is a `file_id` the ledger door mints for one writer, so it names exactly one writer. Nothing rewrites it or deletes it except retention, the closed-day fold and a compaction | two writers cannot name one file, so there is no race to settle |
+| **written-once** | the filename carries `<run_id>-<attempt>-<job>-<shard>`, or is a `file_id` the ledger door mints for one writer, so it names exactly one writer. Nothing rewrites it or deletes it except retention and a compaction | two writers cannot name one file, so there is no race to settle |
 | **derived** | the content is a function of other jobs' output. It is handed back to the tip before the rebase and rebuilt against it | the rebuild wins. It is never text-merged and never settled by who wrote it |
 | **union-safe** | append-only rows, `merge=union`, **and a named read-side property that makes a repeat change no answer** | both sides land whole, and the reader settles them |
 
@@ -179,23 +179,24 @@ month's day directories is a name no writer spells, so the walk refuses it with
 every other stray.
 
 **The settlement is a read, not a write.** `day_shards.settled_rows` runs the
-three cases a compaction ran into a head - join, supersede, repeat - and the
-gardener's closed-day fold calls the same code, so there is one fold rather than one per
+three cases a compaction ran into a head - join, supersede, repeat - and every
+reader of a CSV day calls it, so there is one settlement rather than one per
 ledger. Ascending attempt is the order, so a correction always arrives after
 what it corrects, and the tie-break is the path relative to the ledger root:
 `settled.csv` has the same basename in every day directory, and a reader
 spanning two days would otherwise have no total order at all.
 
 **`settled.csv` is the one name in a day directory that is not a writer's.** It
-is what a closed-day fold leaves behind, and it reads at attempt 0 - a writer's
-attempt is the run's own `GITHUB_RUN_ATTEMPT`, which starts at 1, so 0 is a
-place no writer can take. It is also the right place: its rows have already won
-a settlement, and a straggler beside it is later. The fold is what stops one
-file per writer per day becoming unbounded growth, and what it costs is covered
-by the fixed-size input rule in [CLAUDE.md](../../CLAUDE.md) Guardrail #12.
-A tree whose task settles months holds one more: a closed month's `settled.csv`
+is what the gardener's closed-day fold left behind while it ran, and it reads
+at attempt 0 - a writer's attempt is the run's own `GITHUB_RUN_ATTEMPT`, which
+starts at 1, so 0 is a place no writer can take. It is also the right place:
+its rows have already won a settlement, and a straggler beside it is later. The
+fold stopped one file per writer per day becoming unbounded growth, the rule
+[CLAUDE.md](../../CLAUDE.md) Guardrail #12 sets. It is retired: no ledger files
+a writer's CSV file into a day directory now, so there is nothing left to fold.
+A tree whose task settled months holds one more: a closed month's `settled.csv`
 in the month's own folder, the one file a month folder may hold. It reads at
-attempt 0 too, so a file a re-run adds to that month later is settled after it.
+attempt 0 too, so a file a re-run added to that month later is settled after it.
 
 **`before-partition.csv` is the other.** It is what the 2026-09-22 migration
 wrote, one per day, because a committed head is many runs already merged and so
@@ -369,7 +370,7 @@ has no implemented command.
 
 A row whose date falls in a month that is not the run's own. `ledger.persist`
 handles it by construction, because it files each row under the day its own
-`date` names rather than the run's. `ledger.write_segment` does the same. Every `ledger.append_*` is handed one
+`date` names rather than the run's. Every `ledger.append_*` is handed one
 date and appends to that month, so its
 caller decides: hand it a date in a closed month and it has performed a correction.
 

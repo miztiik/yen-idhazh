@@ -284,51 +284,6 @@ class _Declared(Model):
         return 0
 
 
-#: How many whole days after a UTC day ends before a fold acts on it, where the
-#: fold names no number of its own. A compaction writes its own number, as
-#: `compact_after_days`, and both are counted by the one rule in `schedule`.
-DEFAULT_CLOSED_AFTER_DAYS: Final = 1
-
-
-class FoldPolicy(Model):
-    """When a closed day of a CSV day tree becomes one file, and whether that happens yet.
-
-    A CSV day tree files one file per writer under `YYYY/MM/DD/`, so a busy day
-    holds a hundred small files. Once the day is closed, the fold settles them the
-    way every reader does and writes that answer as `settled.csv` in their place.
-    A task may ask for a closed month to become one file the same way. It changes
-    no answer a reader gets, which is why it has a switch of its own: it may run
-    live while the window beside it only reports.
-    """
-
-    after_days: int = Field(
-        default=DEFAULT_CLOSED_AFTER_DAYS,
-        ge=1,
-        description=(
-            "How many whole days after a UTC day ends before its writer files are "
-            "folded, measured from 00:00 UTC on the day after it - the rule "
-            "compact_after_days reads. Whole days, so every wake of one UTC day folds "
-            "the same days."
-        ),
-    )
-    dry_run: bool = Field(
-        description=(
-            "True reads and settles every day the fold would take and changes nothing. "
-            "The fold's own switch, apart from the window's. No default."
-        )
-    )
-    settles_months: bool = Field(
-        default=False,
-        description=(
-            "True also settles each closed month - after_days whole days after its last "
-            "day ended - into one settled.csv in the month's own folder, and deletes its "
-            "days' files; a day a re-run adds to it later is settled in at the next wake. "
-            "False keeps one settled.csv a closed day. A month's file names no day, so a "
-            "task whose window counts days may not turn it on."
-        ),
-    )
-
-
 class RetentionPolicy(_Declared):
     """A task that deletes what its window has aged out of the trees it owns."""
 
@@ -348,14 +303,6 @@ class RetentionPolicy(_Declared):
             "tree family at different ages. Absent on every other task."
         ),
     )
-    fold: FoldPolicy | None = Field(
-        default=None,
-        description=(
-            "Folds each closed day of the CSV day trees this task owns into one "
-            "settled.csv, or each closed month where settles_months asks, after the "
-            "window has run. Absent on a task that owns no such tree."
-        ),
-    )
 
     @property
     def lookback_periods(self) -> int:
@@ -366,26 +313,7 @@ class RetentionPolicy(_Declared):
             return DEFAULT_MONTH_LOOKBACK_PERIODS
         if isinstance(self.window, DaysWindow):
             return DEFAULT_DAY_LOOKBACK_PERIODS
-        if self.fold is not None:
-            return (
-                DEFAULT_MONTH_LOOKBACK_PERIODS
-                if self.fold.settles_months
-                else DEFAULT_DAY_LOOKBACK_PERIODS
-            )
         return 0
-
-    @model_validator(mode="after")
-    def _a_month_settles_only_where_the_window_keeps_whole_months(self) -> Self:
-        """A settled month's file names no day, so a window of days cannot take part of it."""
-        settles_months = self.fold is not None and self.fold.settles_months
-        if settles_months and isinstance(self.window, DaysWindow):
-            raise ValueError(
-                f"fold.settles_months is true and the window is {self.window.value} days. A "
-                "closed month settled into one file names no day, so a window of days would "
-                "take the whole month once its first day aged out, rows it keeps included. "
-                "Fold by day here, or keep whole months"
-            )
-        return self
 
 
 class CollectionTaskPolicy(_Declared):
