@@ -91,8 +91,6 @@ Each piece goes with its last user.
 | the four `merge=union` lines in `.gitattributes`, and `path_classes.UNION_SAFE` | let two writers append to one CSV file | the four ledgers above with a union driver | each of those ledgers has moved |
 | `_TARGET_LEDGERS` in `telemetry/prune.py` | name the CSV ledgers the prune verb reaches | the four ledgers above with a union driver | the four have moved |
 
-**Four CSV files belong to no ledger.** Runs that started before the span summary retired (#1189) wrote two in the `span-rollup` folder of each of two trial roots. Nothing reads or writes that folder now.
-
 `corpus/corpus.jsonl` and `corpus/corpus.meta.json` are not ledgers, have no merge driver of their own and carry no writer in their names, so a push race that conflicts on them stops the push: `backend/utilities/commit_and_push.py` keeps a conflicted file only when its name carries the job's own identity.
 
 ## What the registry refuses when it loads
