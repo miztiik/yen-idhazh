@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-08
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -116,7 +116,7 @@ Neither table repeats the other's cells.
 | `version` | date stamp | The schema generation this row was written under |
 | `date` | `YYYY-MM-DD` | The run's date |
 | `run_id` | run id | The run |
-| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime` | Which workflow job drew this machine |
+| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime`, `decide`, `migrate`, `run-tasks`, `history`, `save_council_results`, `operator` | Which workflow job drew this machine. The enum is the one job vocabulary every ledger shares, so it also names writers that record no machine, such as `decide` and `operator` |
 | `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
 | `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
 
@@ -128,12 +128,13 @@ would count nothing. Two draws of one kind of machine carry one id, which is wha
 lets a query ask "how often do we get this machine" without matching model-name
 strings by hand.
 
-**Every value of `job` is that job's own id in its workflow file, lowercase.** A
-reader goes from a row to the steps that wrote it with nothing in between, and a
-display name would drift from the thing it identifies. `visuals` is the one value
-with no producer left: `digest.yml` ran that job until 2026-09-13, and the member
-stays so the rows it wrote still read back. `runtime` is `measure.yml`'s bench
-job, and its rows are in the other ledger.
+**Every value of `job` is that job's own id in its workflow file, lowercase,
+except `operator`.** A reader goes from a row to the steps that wrote it with
+nothing in between, and a display name would drift from the thing it identifies.
+`operator` names a command a person ran on their own machine, outside a workflow.
+`visuals` is the one workflow value with no producer left: `digest.yml` ran that
+job until 2026-09-13, and the member stays so the rows it wrote still read back.
+`runtime` is `measure.yml`'s bench job, and its rows are in the other ledger.
 
 ## What the processor is
 

@@ -215,10 +215,10 @@
         },
         {
           "name": "merge-line-holdout-scores",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },

@@ -52,6 +52,7 @@ from idhazh.contracts.knobs.gardener import (
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgerEntry
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -523,6 +524,27 @@ def compaction_reaches(policy: CompactionPolicy, needed: Window) -> bool:
     return wanted is not None and reach >= wanted
 
 
+def compaction_task(
+    ledger: LedgerName,
+    *,
+    trial: bool = False,
+    registry: Mapping[LedgerName, LedgerEntry] | None = None,
+) -> str:
+    """The name of the declaration that compacts a ledger, without its `.json`.
+
+    `compact-`, then the ledger's door folder with each `/` written `-`, so a
+    ledger filed inside its family's folder is named by the whole folder and
+    never by its last name alone. `trial` names the declaration that packs the
+    trial roots. `registry` is a fixture registry, or the committed one.
+    """
+    # Imported here rather than at the top: the ledger package reads this module
+    # while it loads, so importing it back at module scope would be a cycle.
+    from idhazh.ledger.paths import door_folders
+
+    folder = "-".join(door_folders(ledger, registry=registry))
+    return f"compact-trial-{folder}" if trial else f"compact-{folder}"
+
+
 def _governing(
     ledger: LedgerName, tasks: Mapping[str, TaskPolicy]
 ) -> tuple[str, RetentionPolicy | CompactionPolicy] | None:
@@ -537,7 +559,7 @@ def _governing(
     # while it loads, so importing it back at module scope would be a cycle.
     from idhazh.ledger.paths import STATE_DIRNAME, entry
 
-    name = f"compact-{ledger.value}"
+    name = compaction_task(ledger)
     compaction = tasks.get(name)
     if isinstance(compaction, CompactionPolicy) and compaction.ledger is ledger:
         return name, compaction
@@ -847,10 +869,11 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     """
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
     ledger = policy.ledger
-    if name != f"compact-{ledger.value}":
+    expected = compaction_task(ledger)
+    if name != expected:
         raise ValueError(
-            f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
-            f"call it compact-{ledger.value}.json"
+            f"{where} compacts {ledger.value}, and a compaction is named for its ledger's "
+            f"folder: call it {expected}.json"
         )
     reach = _reach(policy)
     if ledger in app.ledger.published:
@@ -880,8 +903,8 @@ def _refuse_a_compaction_declaration(
     from idhazh import ledger
 
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
-    production_name = f"compact-{policy.ledger.value}"
-    trial_name = f"compact-trial-{policy.ledger.value}"
+    production_name = compaction_task(policy.ledger)
+    trial_name = compaction_task(policy.ledger, trial=True)
     trial = name == trial_name
     if name not in (production_name, trial_name):
         raise ValueError(

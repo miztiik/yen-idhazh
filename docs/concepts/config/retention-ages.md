@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
 a publisher reads, because a switch that stops a record being written and an age
@@ -131,7 +131,7 @@ own ages, which is a different number for a different ledger.
 the read opens is refused.** The seen ledger's compaction is held above
 `collect.seen_window_days`, counterfactual scores above `lens_weights.window_days`,
 and published addresses above `collect.published_window_days`, which is 730
-days, or two years. All fourteen ledgers follow the
+days, or two years. All fifteen ledgers follow the
 [yearly policy](idhazh-gardener.md#the-compaction-declarations-that-ship).
 A forever reader is refused while finite yearly pruning is enabled.
 Each floor belongs to the ledger and is held against

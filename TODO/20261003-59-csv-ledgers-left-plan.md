@@ -54,7 +54,7 @@ Table C - when to stop and ask
 | 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | DONE | p59-row-3 | - | Fowler |
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | PENDING | - | - | - |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
-| 6 | The merge line's holdout score is saved through the door | 2, 11 | B | PENDING | - | - | - |
+| 6 | The merge line's holdout score is saved through the door | 2, 11 | B | DONE | p59-row-6 | - | Fowler |
 | 7 | The holdout marks are saved through the door | 6 | C | PENDING | - | - | - |
 | 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
 | 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | PENDING | - | - | - |

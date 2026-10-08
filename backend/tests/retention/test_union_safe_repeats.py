@@ -1,6 +1,6 @@
 """Does a row arriving twice change any answer a union-safe tree gives?
 
-`.gitattributes` gives four committed collections `merge=union`, so a merge that
+`.gitattributes` gives three committed collections `merge=union`, so a merge that
 finds the same row on both sides keeps both copies. That is safe only where the
 row is keyed and something settles the repeat: the same key twice is one record
 recorded twice, never two records.
@@ -23,7 +23,6 @@ import pytest
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 
 pytestmark = pytest.mark.contract
@@ -37,12 +36,6 @@ AN_ADDRESS = "a" * 64
 #: so a tree added to that list without a row here fails rather than merges
 #: untested.
 _TREES = (
-    (
-        "state/content-similarity-judge/merge-line-holdout-scores",
-        MergeLineHoldoutScore,
-        ledger.MERGE_LINE_HOLDOUT_SCORE_KEY,
-        {"date": A_DATE, "run_id": A_RUN},
-    ),
     (
         "state/content-similarity-judge/scored-pairs",
         StorySimilarityPair,
@@ -64,7 +57,7 @@ def _doubled(path: Path) -> None:
 
 
 def test_every_union_safe_tree_has_a_repeat_case_beside_it() -> None:
-    """A fifth tree joins the list and arrives with nothing proving it settles.
+    """A fourth tree joins the list and arrives with nothing proving it settles.
 
     `state/content-similarity-judge/metrics` is the one entry with no case
     below. It is named here so the gap is a known one rather than a silent one.

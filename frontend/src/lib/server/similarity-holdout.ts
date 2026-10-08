@@ -29,6 +29,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in `similarity-ledger.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
+import type { TimeWindow } from '../charts/viewport';
 import {
 	cosineInt8,
 	pairScore,
@@ -36,7 +37,9 @@ import {
 	type HoldoutSkip,
 	type ScoreWeights
 } from '../console/holdout';
-import { DIGEST_ROOT, LEDGER_WINDOW_DAYS, readCsv, readDayShards, STATE_ROOT } from './payload';
+import { sliceFromDisk } from './ledger-disk';
+import { datedFirst, windowRows } from './ledger-rows';
+import { DIGEST_ROOT, readCsv, STATE_ROOT } from './payload';
 
 /** Every mark the day tree could answer for, and every one it could not. */
 export interface HoldoutReading {
@@ -50,8 +53,9 @@ export interface HoldoutReading {
 
 /** One committed reading of the line against the marks - the four cells and their line.
  *
- * `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` is
- * one row a scoring run, written by `python -m idhazh score-merge-line-holdout`.
+ * `state/compact/content-similarity-judge/merge-line-holdout-scores/` holds
+ * one row a scoring run, written by `python -m idhazh score-merge-line-holdout`
+ * through the ledger door and packed by the gardener.
  * The page reads it rather than counting the same cells again: two answers to
  * one question is what the committed row exists to stop.
  */
@@ -67,6 +71,25 @@ export interface MergeLineHoldoutScore {
 	pairsUnresolved: number;
 	labelledTwoStoryPairs: number;
 }
+
+/** The columns of `MergeLineHoldoutScore` the panel reads, in the contract's own order.
+ *
+ * The door answers only the columns it is asked for. A backend contract test
+ * fails when the contract renames or drops one of these, or when this order is
+ * not the contract's.
+ */
+export const HOLDOUT_SCORE_COLUMNS = [
+	'date',
+	'run_id',
+	'applied_line',
+	'labeller',
+	'merged_and_one_story',
+	'merged_and_two_stories',
+	'apart_and_one_story',
+	'apart_and_two_stories',
+	'pairs_unresolved',
+	'labelled_two_story_pairs'
+] as const;
 
 /** The identity a holdout row and a published item are joined on.
  *
@@ -192,24 +215,27 @@ export function holdoutReading(
 	return { marks, skipped, marked: table.rows.length, daysOpened: dates.size };
 }
 
-/** The newest committed reading of the line against the marks, or null for none.
+/** The newest committed reading of the line against the marks in `window`, or null for none.
  *
  * **Null is an ordinary state and the panel says so rather than erroring.** A
  * person types the verb that writes these rows; nothing in the daily pipeline
  * calls it, so a tree where nobody has run it yet has no row at all - and a
- * window that reaches back past the newest row has none either.
+ * window that starts after the newest row has none either. A row reaches the
+ * page once the gardener has packed its day.
  *
- * Bounded by the same window every other read on this route takes: the day files
- * a span of days reaches and no more (Guardrail #12).
+ * Bounded by the same window every other read on this route takes: the packed
+ * days inside it and no more (Guardrail #12).
  */
-export function mergeLineHoldoutScore(
-	days: number = LEDGER_WINDOW_DAYS,
+export async function mergeLineHoldoutScore(
+	window: TimeWindow,
 	root: string = STATE_ROOT
-): MergeLineHoldoutScore | null {
-	const table = readDayShards(
-		join(root, 'content-similarity-judge', 'merge-line-holdout-scores'),
-		days,
-		root
+): Promise<MergeLineHoldoutScore | null> {
+	const table = await windowRows(root, 'merge-line-holdout-scores', window, HOLDOUT_SCORE_COLUMNS, (start, end) =>
+		sliceFromDisk(root, 'merge-line-holdout-scores', {
+			columns: [...datedFirst(HOLDOUT_SCORE_COLUMNS)],
+			from: start,
+			to: end
+		})
 	);
 	let newest: MergeLineHoldoutScore | null = null;
 	for (const row of table.rows) {

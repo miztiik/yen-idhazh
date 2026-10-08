@@ -83,7 +83,6 @@ DERIVED: Final[tuple[str, ...]] = (
 #: there has one writer, so a union would have nothing to settle.
 UNION_SAFE: Final[tuple[str, ...]] = (
     "state/content-similarity-judge/metrics",
-    "state/content-similarity-judge/merge-line-holdout-scores",
     "state/content-similarity-judge/scored-pairs",
     "state/content-similarity-judge/fitted-thresholds",
 )
