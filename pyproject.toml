@@ -218,7 +218,15 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*"]
+module = [
+    "feedparser.*",
+    "onnxruntime.*",
+    "sentence_transformers.*",
+    "sklearn.*",
+    "torch.*",
+    "trafilatura.*",
+    "transformers.*",
+]
 ignore_missing_imports = true
 
 # The parquet engine ships no type stubs and no py.typed marker. Its values are
