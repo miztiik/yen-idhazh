@@ -20,9 +20,12 @@ carries it for the task's next pass to start after.
 
 **What happens next is one fixed sentence, and none says a member is gone.**
 A dry run names the setting that makes a task live: `dry_run` in the task's own
-declaration, because the gardener takes no flag for that. A pass that stopped
-for a fault says why, in the fault's own sentence. No sentence carries a value:
-the event's fields carry those, so a sentence can never disagree with them.
+declaration, because the gardener takes no flag for that. The same sentence ties
+a compaction's old months and raw days to `month_deletes_dry_run`, because a
+live compaction whose monthly window only reports ends `dry-run` too, and a page
+says each word once. A pass that stopped for a fault says why, in the fault's
+own sentence. No sentence carries a value: the event's fields carry those, so a
+sentence can never disagree with them.
 
 **Why a pass stopped, and what it recovered, are words on the row and
 sentences here.** The row stores one closed word and one note a period or
@@ -80,12 +83,16 @@ NEXT: Final[Mapping[TaskOutcome, str]] = {
     TaskOutcome.FAILED: "a code defect stopped it, and the next wake tries again",
     TaskOutcome.DEFERRED: "a cause outside the code stopped it, and the next wake resumes",
     TaskOutcome.DRY_RUN: (
-        "nothing was changed: it only named what a live pass would do. Set dry_run: false in "
-        "config/gardener/<task>.json to make the task live, or month_deletes_dry_run: false "
-        "to let a compaction drop months"
+        "nothing was changed: it only named the work it found. Set dry_run: false in "
+        "config/gardener/<task>.json to let it do that work, except that a compaction keeps "
+        "the old months and raw days it found until month_deletes_dry_run: false is set there "
+        "too"
     ),
     TaskOutcome.CEILING: "it stopped at its ceiling, and the next wake goes on from there",
-    TaskOutcome.DONE: "nothing is left, and the next wake takes what reaches its line by then",
+    TaskOutcome.DONE: (
+        "it finished its work for this wake, and the next wake takes what reaches its line by "
+        "then"
+    ),
     TaskOutcome.EMPTY: "the ledger holds nothing to work on yet",
     TaskOutcome.NOT_DUE: "nothing has reached its line yet",
     TaskOutcome.OUTSIDE_RANGE: (
