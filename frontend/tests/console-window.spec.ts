@@ -395,13 +395,16 @@ const FILLING = {
 	heldReason: 'sheet_too_small'
 };
 
-/** One day of the judge's record: nothing read and nothing held, unless a case says so. */
+/** One day of the judge's record: nothing read and nothing held, unless a case says so.
+ * A case that reads pairs writes out how many agreed, so the counts nest as the
+ * run writes them. */
 function judgeDay(date: string, over: Partial<JudgeDay> = {}): JudgeDay {
 	return {
 		date,
 		disagreementRate: 0,
 		unclearRate: 0,
 		pairsJudged: 0,
+		pairsUsable: 0,
 		negativesOnRecord: 0,
 		aboveLineOnRecord: 0,
 		daysOnRecord: 0,
@@ -467,14 +470,17 @@ const SPAN_CASES: SpanCase[] = [
 		surface: 'judge-agreement',
 		preset: 1,
 		state: 'no pair was read twice in it, though some were the day before',
-		days: [judgeDay('2030-06-14', { pairsJudged: 40, disagreementRate: 0.05 })],
+		days: [judgeDay('2030-06-14', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })],
 		words: 'No pair was read twice in this one day, so there is nothing to compare.'
 	},
 	{
 		surface: 'judge-agreement',
 		preset: 7,
 		state: 'three pairs were read twice, too few for a share',
-		days: [judgeDay('2030-06-12', { pairsJudged: 2 }), judgeDay('2030-06-15', { pairsJudged: 1 })],
+		days: [
+			judgeDay('2030-06-12', { pairsJudged: 2, pairsUsable: 2 }),
+			judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 1 })
+		],
 		words:
 			'3 pairs were read twice in these 7 days. That is too few to report a share, so the counts are above.'
 	},
@@ -482,7 +488,7 @@ const SPAN_CASES: SpanCase[] = [
 		surface: 'judge-agreement',
 		preset: 7,
 		state: 'one pair was read twice',
-		days: [judgeDay('2030-06-15', { pairsJudged: 1 })],
+		days: [judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 1 })],
 		words:
 			'1 pair was read twice in these 7 days. That is too few to report a share, so the counts are above.'
 	},
@@ -490,7 +496,7 @@ const SPAN_CASES: SpanCase[] = [
 		surface: 'judge-agreement',
 		preset: 1,
 		state: 'three pairs were read twice, too few for a share',
-		days: [judgeDay('2030-06-15', { pairsJudged: 3 })],
+		days: [judgeDay('2030-06-15', { pairsJudged: 3, pairsUsable: 3 })],
 		words:
 			'3 pairs were read twice in this one day. That is too few to report a share, so the counts are above.'
 	},
@@ -498,7 +504,7 @@ const SPAN_CASES: SpanCase[] = [
 		surface: 'judge-agreement',
 		preset: 1,
 		state: 'one pair was read twice',
-		days: [judgeDay('2030-06-15', { pairsJudged: 1 })],
+		days: [judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 1 })],
 		words:
 			'1 pair was read twice in this one day. That is too few to report a share, so the counts are above.'
 	},
@@ -507,11 +513,17 @@ const SPAN_CASES: SpanCase[] = [
 		preset: 7,
 		state: 'two days were held because the judge was unreliable',
 		days: [
-			judgeDay('2030-06-13', { pairsJudged: 40, disagreementRate: 0.2, heldReason: 'judge_unstable' }),
+			judgeDay('2030-06-13', {
+				pairsJudged: 40,
+				pairsUsable: 32,
+				disagreementRate: 0.2,
+				heldReason: 'judge_unstable'
+			}),
 			judgeDay('2030-06-15', {
 				pairsJudged: 60,
+				pairsUsable: 57,
 				disagreementRate: 0.05,
-				unclearRate: 0.4,
+				unclearRate: 23 / 57,
 				heldReason: 'judge_uncertain'
 			})
 		],
@@ -523,8 +535,13 @@ const SPAN_CASES: SpanCase[] = [
 		preset: 7,
 		state: 'one day was held because the judge was unreliable',
 		days: [
-			judgeDay('2030-06-14', { pairsJudged: 50, disagreementRate: 0.04 }),
-			judgeDay('2030-06-15', { pairsJudged: 50, disagreementRate: 0.3, heldReason: 'judge_unstable' })
+			judgeDay('2030-06-14', { pairsJudged: 50, pairsUsable: 48, disagreementRate: 0.04 }),
+			judgeDay('2030-06-15', {
+				pairsJudged: 50,
+				pairsUsable: 35,
+				disagreementRate: 0.3,
+				heldReason: 'judge_unstable'
+			})
 		],
 		words:
 			'The two readings disagreed on 17% of 100 pairs in these 7 days. No line was fitted on 1 of 7 days, because a rate was past its mark on that day.'
@@ -533,7 +550,14 @@ const SPAN_CASES: SpanCase[] = [
 		surface: 'judge-agreement',
 		preset: 1,
 		state: 'its day was held because the judge was unreliable',
-		days: [judgeDay('2030-06-15', { pairsJudged: 40, disagreementRate: 0.25, heldReason: 'judge_unstable' })],
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 40,
+				pairsUsable: 30,
+				disagreementRate: 0.25,
+				heldReason: 'judge_unstable'
+			})
+		],
 		words:
 			'The two readings disagreed on 25% of 40 pairs in this one day. No line was fitted on 1 of 1 day, because a rate was past its mark on that day.'
 	},
@@ -542,19 +566,36 @@ const SPAN_CASES: SpanCase[] = [
 		preset: 7,
 		state: 'both rates are inside the marks',
 		days: [
-			judgeDay('2030-06-10', { pairsJudged: 200, disagreementRate: 0.03, unclearRate: 0.01 }),
-			judgeDay('2030-06-15', { pairsJudged: 200, disagreementRate: 0.03, unclearRate: 0.01 })
+			judgeDay('2030-06-10', {
+				pairsJudged: 200,
+				pairsUsable: 194,
+				disagreementRate: 0.03,
+				unclearRate: 2 / 194
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 200,
+				pairsUsable: 194,
+				disagreementRate: 0.03,
+				unclearRate: 2 / 194
+			})
 		],
 		words:
-			'In these 7 days, 3% of 400 pairs disagreed with their own second reading, and 1% of 400 pairs could not tell. Both rates are inside the marks.'
+			'In these 7 days, 3% of 400 pairs disagreed with their own second reading, and 1% of the 388 that agreed could not tell. Both rates are inside the marks.'
 	},
 	{
 		surface: 'judge-agreement',
 		preset: 1,
 		state: 'both rates are inside the marks',
-		days: [judgeDay('2030-06-15', { pairsJudged: 40, disagreementRate: 0.05, unclearRate: 0.1 })],
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 40,
+				pairsUsable: 38,
+				disagreementRate: 0.05,
+				unclearRate: 4 / 38
+			})
+		],
 		words:
-			'In this one day, 5% of 40 pairs disagreed with their own second reading, and 10% of 40 pairs could not tell. Both rates are inside the marks.'
+			'In this one day, 5% of 40 pairs disagreed with their own second reading, and 11% of the 38 that agreed could not tell. Both rates are inside the marks.'
 	},
 	{
 		surface: 'record-gates',
@@ -732,13 +773,16 @@ const RULE_CASES: { state: string; enabled: boolean; days: LineDay[]; rule: stri
 
 /** The agreement strip resting on its newest day at one window: its heading, its
  * two entries as a reader is given them, the name each drawn day's dots carry,
- * and the sentence under the strip, which the strip's floor leaves as it is. A
- * day of fewer than `SHARE_FLOOR` pairs prints its counts and no share. The
- * words are Reader's, written out whole. */
+ * and the sentence under the strip. Each share is taken over its own pairs:
+ * "disagreed" over every pair read twice, "could not tell" over the pairs whose
+ * two readings agreed. Under `SHARE_FLOOR` of them a figure prints its counts
+ * and no share. The words are Reader's, written out whole. */
 const STRIP_CASES: {
 	preset: number;
 	state: string;
 	days: JudgeDay[];
+	/** The two marks, where a case moves them. */
+	limits?: { disagreementMax: number; unclearMax: number };
 	heading: string;
 	entries: string[];
 	dots: Record<string, string>;
@@ -747,7 +791,7 @@ const STRIP_CASES: {
 	{
 		preset: 1,
 		state: 'its day read 4 pairs, too few for a share',
-		days: [judgeDay('2030-06-15', { pairsJudged: 4, disagreementRate: 0.25 })],
+		days: [judgeDay('2030-06-15', { pairsJudged: 4, pairsUsable: 3, disagreementRate: 0.25 })],
 		heading: '15 Jun',
 		entries: [
 			'Disagreed with the second reading 1 of 4 pairs',
@@ -763,19 +807,23 @@ const STRIP_CASES: {
 	{
 		preset: 1,
 		state: 'its day read 5 pairs, enough for a share',
-		days: [judgeDay('2030-06-15', { pairsJudged: 5, unclearRate: 0.2 })],
+		days: [judgeDay('2030-06-15', { pairsJudged: 5, pairsUsable: 5, unclearRate: 0.2 })],
 		heading: '15 Jun',
-		entries: ['Disagreed with the second reading 0% of 5 pairs', 'Could not tell 20% of 5 pairs'],
+		entries: [
+			'Disagreed with the second reading 0% of 5 pairs',
+			'Could not tell 20% of the 5 that agreed'
+		],
 		dots: {
-			'2030-06-15': '15 Jun: 0% of 5 pairs disagreed with the second reading, and 20% could not tell.'
+			'2030-06-15':
+				'15 Jun: 0% of 5 pairs disagreed with the second reading, and 20% of the 5 that agreed could not tell.'
 		},
 		words:
-			'In this one day, 0% of 5 pairs disagreed with their own second reading, and 20% of 5 pairs could not tell. Both rates are inside the marks.'
+			'In this one day, 0% of 5 pairs disagreed with their own second reading, and 20% of the 5 that agreed could not tell. Both rates are inside the marks.'
 	},
 	{
 		preset: 1,
 		state: "its one pair's two readings disagreed, so no pair agreed",
-		days: [judgeDay('2030-06-15', { pairsJudged: 1, disagreementRate: 1 })],
+		days: [judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 0, disagreementRate: 1 })],
 		heading: '15 Jun',
 		entries: [
 			'Disagreed with the second reading 1 of 1 pair',
@@ -791,7 +839,14 @@ const STRIP_CASES: {
 	{
 		preset: 1,
 		state: 'its day read 4 pairs, and 1 of the 2 that agreed could not tell',
-		days: [judgeDay('2030-06-15', { pairsJudged: 4, disagreementRate: 0.5, unclearRate: 0.5 })],
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 4,
+				pairsUsable: 2,
+				disagreementRate: 0.5,
+				unclearRate: 0.5
+			})
+		],
 		heading: '15 Jun',
 		entries: [
 			'Disagreed with the second reading 2 of 4 pairs',
@@ -808,8 +863,8 @@ const STRIP_CASES: {
 		preset: 7,
 		state: 'its newest day read 4 pairs, while the window read enough for a share',
 		days: [
-			judgeDay('2030-06-10', { pairsJudged: 40, disagreementRate: 0.05 }),
-			judgeDay('2030-06-15', { pairsJudged: 4, disagreementRate: 0.25 })
+			judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 }),
+			judgeDay('2030-06-15', { pairsJudged: 4, pairsUsable: 3, disagreementRate: 0.25 })
 		],
 		heading: '15 Jun, the newest day',
 		entries: [
@@ -817,17 +872,21 @@ const STRIP_CASES: {
 			'Could not tell 0 of the 3 that agreed'
 		],
 		dots: {
-			'2030-06-10': '10 Jun: 5% of 40 pairs disagreed with the second reading, and 0% could not tell.',
+			'2030-06-10':
+				'10 Jun: 5% of 40 pairs disagreed with the second reading, and 0% of the 38 that agreed could not tell.',
 			'2030-06-15':
 				'15 Jun: 1 of 4 pairs disagreed with the second reading, and 0 of the 3 that agreed could not tell.'
 		},
 		words:
-			'In these 7 days, 7% of 44 pairs disagreed with their own second reading, and 0% of 44 pairs could not tell. Both rates are inside the marks.'
+			'In these 7 days, 7% of 44 pairs disagreed with their own second reading, and 0% of the 41 that agreed could not tell. Both rates are inside the marks.'
 	},
 	{
 		preset: 7,
 		state: 'the window read 3 pairs, too few for a share',
-		days: [judgeDay('2030-06-12', { pairsJudged: 2 }), judgeDay('2030-06-15', { pairsJudged: 1 })],
+		days: [
+			judgeDay('2030-06-12', { pairsJudged: 2, pairsUsable: 2 }),
+			judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 1 })
+		],
 		heading: '15 Jun, the newest day',
 		entries: [
 			'Disagreed with the second reading 0 of 1 pair',
@@ -841,6 +900,167 @@ const STRIP_CASES: {
 		},
 		words:
 			'3 pairs were read twice in these 7 days. That is too few to report a share, so the counts are above.'
+	},
+	{
+		preset: 1,
+		state: 'its day read 40 pairs, and none of the 38 that agreed could not tell',
+		days: [judgeDay('2030-06-15', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 5% of 40 pairs',
+			'Could not tell 0% of the 38 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 5% of 40 pairs disagreed with the second reading, and 0% of the 38 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 5% of 40 pairs disagreed with their own second reading, and 0% of the 38 that agreed could not tell. Both rates are inside the marks.'
+	},
+	{
+		// Row L32's smoke days. The record was too small to fit on, so no day was
+		// held because of the judge.
+		preset: 7,
+		state: '41 of the 45 pairs read twice agreed, and 1 of them could not tell',
+		days: [
+			judgeDay('2030-06-10', {
+				pairsJudged: 40,
+				pairsUsable: 38,
+				disagreementRate: 0.05,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-13', {
+				pairsJudged: 1,
+				pairsUsable: 0,
+				disagreementRate: 1,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 4,
+				pairsUsable: 3,
+				disagreementRate: 0.25,
+				unclearRate: 1 / 3,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 1 of 4 pairs',
+			'Could not tell 1 of the 3 that agreed'
+		],
+		dots: {
+			'2030-06-10':
+				'10 Jun: 5% of 40 pairs disagreed with the second reading, and 0% of the 38 that agreed could not tell.',
+			'2030-06-13':
+				'13 Jun: 1 of 1 pair disagreed with the second reading. Could not tell: not counted, no pair agreed.',
+			'2030-06-15':
+				'15 Jun: 1 of 4 pairs disagreed with the second reading, and 1 of the 3 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 9% of 45 pairs disagreed with their own second reading, and 2% of the 41 that agreed could not tell. Both rates are inside the marks.'
+	},
+	{
+		preset: 1,
+		state: 'its day read 5 pairs, and the 3 that agreed are too few for a share of them',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 5,
+				pairsUsable: 3,
+				disagreementRate: 0.4,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 40% of 5 pairs',
+			'Could not tell 0 of the 3 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 40% of 5 pairs disagreed with the second reading, and 0 of the 3 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 40% of 5 pairs disagreed with their own second reading, and 0 of the 3 that agreed could not tell. The 40% that disagreed is past its mark, and 3 is too few to report a share.'
+	},
+	{
+		preset: 7,
+		state: 'the window read 5 pairs, and the 3 that agreed are too few for a share of them',
+		days: [
+			judgeDay('2030-06-12', {
+				pairsJudged: 1,
+				pairsUsable: 0,
+				disagreementRate: 1,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 4,
+				pairsUsable: 3,
+				disagreementRate: 0.25,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 1 of 4 pairs',
+			'Could not tell 0 of the 3 that agreed'
+		],
+		dots: {
+			'2030-06-12':
+				'12 Jun: 1 of 1 pair disagreed with the second reading. Could not tell: not counted, no pair agreed.',
+			'2030-06-15':
+				'15 Jun: 1 of 4 pairs disagreed with the second reading, and 0 of the 3 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 40% of 5 pairs disagreed with their own second reading, and 0 of the 3 that agreed could not tell. The 40% that disagreed is past its mark, and 3 is too few to report a share.'
+	},
+	{
+		// The verdict follows the rate against its mark, so a mark moved past the
+		// rate turns it.
+		preset: 1,
+		state: 'the 4 that agreed are too few for a share of them, and the disagreed mark is 25%',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 5,
+				pairsUsable: 4,
+				disagreementRate: 0.2,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		limits: { disagreementMax: 0.25, unclearMax: 0.35 },
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 20% of 5 pairs',
+			'Could not tell 0 of the 4 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 20% of 5 pairs disagreed with the second reading, and 0 of the 4 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 20% of 5 pairs disagreed with their own second reading, and 0 of the 4 that agreed could not tell. The 20% that disagreed is inside its mark, and 4 is too few to report a share.'
+	},
+	{
+		preset: 1,
+		state: 'its 5 pairs all disagreed, so no pair agreed',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 5,
+				pairsUsable: 0,
+				disagreementRate: 1,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 100% of 5 pairs',
+			'Could not tell not counted, no pair agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 100% of 5 pairs disagreed with the second reading. Could not tell: not counted, no pair agreed.'
+		},
+		words:
+			'In this one day, 100% of 5 pairs disagreed with their own second reading. Could not tell: not counted, no pair agreed. The 100% that disagreed is past its mark.'
 	}
 ];
 
@@ -920,8 +1140,9 @@ test.describe('the Judgement panels name their span in every state, on days the 
 		test(`THE ORACLE: judge-agreement's strip at the ${one.preset}-day window, when ${one.state}`, async ({
 			page
 		}) => {
+			const props = propsOf({ surface: 'judge-agreement', ...one });
 			await page.setContent(
-				`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', ...one }))}</main>`
+				`<main>${drawn['judge-agreement'](one.limits ? { ...props, limits: one.limits } : props)}</main>`
 			);
 
 			expect(await said(page, '[data-readout="judge-agreement"] [data-readout-day]')).toBe(
@@ -1547,7 +1768,13 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	test('THE ORACLE: the judge chart is of this one day, and its strip heads the day alone', async ({
 		page
 	}) => {
-		await draw(page, 'JudgeAgreement', judgeProps(1, [judgeDay(JUDGED_THROUGH, { pairsJudged: 40, disagreementRate: 0.05 })]));
+		await draw(
+			page,
+			'JudgeAgreement',
+			judgeProps(1, [
+				judgeDay(JUDGED_THROUGH, { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })
+			])
+		);
 		expect(await labelOf(page, '[data-windowed="judge-agreement"] svg[aria-label]')).toBe(
 			'How often the judge disagreed with its own second reading, in this one day'
 		);
@@ -1559,8 +1786,8 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			page,
 			'JudgeAgreement',
 			judgeProps(7, [
-				judgeDay('2030-06-10', { pairsJudged: 40, disagreementRate: 0.05 }),
-				judgeDay(JUDGED_THROUGH, { pairsJudged: 40, disagreementRate: 0.05 })
+				judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 }),
+				judgeDay(JUDGED_THROUGH, { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })
 			])
 		);
 		expect(await labelOf(page, '[data-windowed="judge-agreement"] svg[aria-label]')).toBe(
