@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-08
 
 **Known noncompliance:** Existing prerendered charts do not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -47,7 +47,9 @@ deferred libraries still cost a download and still count toward the deployed sit
 work stopped, with each stage's failure rate on a fixed 0 to 100 percent axis.
 The denominator is the number that reached that stage, not the whole day.
 Print counts and denominators beside rates. Below `console.min_attempts_for_rate`,
-show counts only and break the rate line. An empty window is not a day of zeroes.
+show counts only and break the rate line, as
+[a share under the floor](#a-share-under-the-floor-gets-no-mark) requires.
+An empty window is not a day of zeroes.
 
 **Summary length against the length asked for:** show daily counts inside, below
 and above the configured target band. Print the `summarize.bands` bounds and name
@@ -60,6 +62,31 @@ lost. Show how many sources a cause affected and the denominator for each source
 Count articles, not repeated stage records. Use `console.source_rows` to bound
 the displayed list and describe its tail. Keep detailed records behind a closed
 disclosure. Do not colour a source as healthy or unhealthy without an agreed rule.
+
+## A share under the floor gets no mark
+
+Below `console.min_attempts_for_rate`, a share is not a measurement. The chart
+draws no mark for it; the readout strip and the column's accessible name print
+the counts instead.
+
+- Judge each share by the count it is taken over, so one column can keep one
+  rate's mark and lose another's.
+- Break that share's line at the column, and never join across it. A measured
+  column with no measured neighbour is a dot with no line.
+- Keep the column, so a pointer, a tap or an arrow key still selects it.
+- Do not stand in for the mark on the baseline: an open point there means a
+  measured zero.
+- When a window leaves a mark out, a caption under the panel's window sentence
+  says why, in the small grey type the failure chart's own note uses, so the
+  verdict stays the last thing in its paragraph. Leave it out where that
+  sentence already says the whole window is too few.
+
+The failure chart applies this to each stage. The judge's agreement chart
+judges "disagreed" by every pair read twice and "could not tell" by the pairs
+whose two readings agreed. Reader chose its note: `A day has no "disagreed" dot
+if fewer than 5 pairs were read twice, and no "could not tell" dot if fewer than
+5 pairs agreed.`, with the floor read from config, and on a chart of two or more
+columns a second sentence that says the counts are in the strip above.
 
 ## Every chart with a shared column carries a pointer readout
 
@@ -181,6 +208,7 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - Browser rendering follows [Telemetry Intent](../../concepts/telemetry-intent.md). Existing prerendering is work to remove, not an exception for new designs.
 - Shared coordinates and readouts make charts comparable without relearning each panel.
 - Counts and coverage distinguish sparse measurements from reliable rates. A missing sample is never evidence of zero work.
+- A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
 

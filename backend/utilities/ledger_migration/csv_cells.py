@@ -81,10 +81,15 @@ def read_csv_rows(
     key: tuple[str, ...],
     model: type[Any],
 ) -> list[dict[str, str]]:
-    """Read one day's CSV rows through its declared layout and row contract."""
+    """Read one day's CSV rows through its declared layout and row contract.
+
+    A one-file layout holds every day in one file, so only the rows whose declared
+    day cell names this day are read.
+    """
     layout = csv_layouts.require_layout(which)
     # Read through its module, so a table replaced while running is the one read.
-    old_headings = csv_layouts.CSV_LEDGERS[which].old_headings
+    held = csv_layouts.CSV_LEDGERS[which]
+    old_headings = held.old_headings
     if layout.grain is Grain.DAY_TREE:
         # The shard reader uses only from_csv_row and __name__ on this adapter.
         reader = cast("type[ledger.CsvContract]", _CsvReader(model, old_headings))
@@ -94,6 +99,8 @@ def read_csv_rows(
     rows: list[dict[str, str]] = []
     for path in files:
         for number, raw in day_shards.rows_of(path):
+            if layout.grain is Grain.FLAT and raw.get(held.day_column or "") != day:
+                continue
             try:
                 rows.append(
                     cast("ledger.CsvRecord", read_csv_cells(model, raw, old_headings)).csv_row()

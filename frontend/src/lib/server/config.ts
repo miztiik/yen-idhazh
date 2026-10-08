@@ -803,6 +803,8 @@ interface RawConfig {
 	/** Which file under `config/models/` holds the active model. The whole
 	 * model left `idhazh.json` on 2026-09-14; this names where it went. */
 	models_file?: string;
+	/** The one `similarity` knob the site reads: how far back the hand marks count. */
+	similarity?: { holdout_reach_days?: number };
 }
 
 /** The active model's own file. Only the one flag a console panel reads.
@@ -1089,6 +1091,22 @@ export function committedWeights(): { cosine_weight: number } {
 	return {
 		cosine_weight: block?.cosine_weight ?? SAME_STORY_WEIGHTS.cosine_weight
 	};
+}
+
+/** How many UTC days back from the site's newest published day the hand marks are read.
+ *
+ * Read on its own, like `shell_seed_items`: only the Judgement route's `load`
+ * reads it, and the page draws what it is handed. Both ends are named, as the
+ * backend's reader names them, so 730 reads 731 days and a mark filed before
+ * that stops counting.
+ *
+ * The fallback is the same number `SimilarityConfig.holdout_reach_days`
+ * defaults to, and `backend/tests/contracts/` fails if the two copies drift.
+ */
+const HOLDOUT_REACH_DAYS = 730;
+
+export function holdoutReachDays(): number {
+	return raw().similarity?.holdout_reach_days ?? HOLDOUT_REACH_DAYS;
 }
 
 /** The visual planner's floor, and only that.

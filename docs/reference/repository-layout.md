@@ -75,7 +75,7 @@ build copies out of it. Each of the other candidates fails on one of those three
 | `config/` | Human-edited. A machine appending to a file a person owns invites a merge conflict every run |
 | `backend/` | Source. A ledger is not code, and a Python package is not a database |
 
-**Two files under `state/` are written by a person, not a machine.**
+**One file under `state/` is written by a person, not a machine.**
 `state/labels.csv` holds human faithfulness labels, appended one keystroke at a
 time by `backend/utilities/label_queue.py`. It sits with the other ledgers
 because it is read the same way - joined to the eval ledger on
@@ -84,14 +84,14 @@ one exception to "written by a machine", and it is deliberate: the point of the
 file is that no machine wrote it. See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
-`state/content-similarity-judge/holdout-pairs.csv` is the second, and it is the same
-exception for the same reason: a labeller reads two articles and marks them one
-story or two, and that mark is the fixed floor the fitted merge line has to stay
-above. No run writes it - an operator harvests the marks into it by hand, and
-`note` says who made each one. `.gitattributes` names it `merge=text` in its own
-line rather than letting it inherit: two people editing it are disagreeing about
-the same rows rather than appending independent ones, and a reason worth reading
-is worth writing down. See
+The similarity holdout marks were the second, until a program took the writing
+over: a labeller still reads two articles and marks them one story or two, and
+that mark is the fixed floor the fitted merge line has to stay above, but
+`backend/utilities/sample_sheet.py --harvest` now saves each labelling through
+the ledger door, under `state/raw/content-similarity-judge/holdout-pairs/`, and
+the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/`.
+No workflow writes the marks - a person runs the harvest, and `note` says who
+made each mark. See
 [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md).
 
 **The text those labels judge lives under `backend/var/evidence/`, not under

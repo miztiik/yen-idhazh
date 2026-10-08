@@ -227,6 +227,7 @@ _WINDOW_FLOORS: Final[Mapping[LedgerName, str]] = MappingProxyType(
         LedgerName.SEEN: "collect.seen_window_days",
         LedgerName.COUNTERFACTUAL_SCORES: "lens_weights.window_days",
         LedgerName.PUBLISHED: "collect.published_window_days",
+        LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: "similarity.holdout_reach_days",
     }
 )
 
