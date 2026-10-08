@@ -518,7 +518,7 @@
 </script>
 
 <svelte:head>
-	<title>Console: Summaries &mdash; {data.ui.site_title}</title>
+	<title>Summaries &mdash; Console &mdash; {data.ui.site_title}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 

@@ -250,6 +250,27 @@ def test_an_old_metrics_day_reads_its_part_under_the_new_name(tmp_path: Path) ->
     assert rows == [cells]
 
 
+def test_a_named_shorter_window_is_only_on_a_ledger_the_door_keeps_for_less() -> None:
+    """Each `shorter_by` is still needed: its committed compaction keeps less than the CSV did.
+
+    A decision left on a ledger whose compaction already keeps the CSV window
+    would tell a reader of the table that history is cut when it is not.
+    """
+    registry = ledger.registry_entries(
+        LedgersConfig.from_json((CONFIG_DIR / "ledgers.json").read_text(encoding="utf-8"))
+    )
+    tasks = config.load_gardener(CONFIG_DIR).tasks
+    named = [name for name, entry in csv_layouts.CSV_LEDGERS.items() if entry.shorter_by]
+
+    assert named, "no entry names a shorter window, so nothing is checked"
+    for name in named:
+        policy = tasks[config.compaction_task(name, registry=registry)]
+        assert isinstance(policy, CompactionPolicy), name
+        assert not config.compaction_reaches(policy, csv_layouts.CSV_LEDGERS[name].old_window), (
+            name
+        )
+
+
 def test_a_ledger_with_no_declared_csv_layout_is_refused_by_name(tmp_path: Path) -> None:
     which = LedgerName.VISUAL_PRUNES
     assert which not in csv_layouts.CSV_LEDGERS
