@@ -932,16 +932,24 @@ function ranQuestions(page: Page): Promise<string[]> {
 	return page.evaluate(() => (JSON.parse(localStorage.getItem('yen-idhazh:data-explorer:history') ?? '[]') as { statement: string }[]).map((run) => run.statement));
 }
 
-/** Hold the next data file the page fetches until the returned function is called, then let it
- *  through, so a run stays in flight for as long as the test needs. */
-async function holdNextDataFile(page: Page): Promise<() => void> {
+/** Hold the next request the page makes for `pattern` until the returned function is called, then
+ *  hand it on to the routes that serve it, so a run, or the page's first read, stays in flight for
+ *  as long as the test needs. The hold sits on the context, after the routes that serve the built
+ *  ledgers: a page route that expires while it holds a request lets that request through to the
+ *  server before the context's routes can answer it. */
+async function holdNext(page: Page, pattern: string): Promise<() => void> {
 	let release!: () => void;
 	const held = new Promise<void>((resolve) => { release = resolve; });
-	await page.route('**/state/**/*.parquet*', async (route) => {
+	await page.context().route(pattern, async (route) => {
 		await held;
 		await route.fallback();
 	}, { times: 1 });
 	return release;
+}
+
+/** Hold the next data file the page fetches, so a run stays in flight. */
+function holdNextDataFile(page: Page): Promise<() => void> {
+	return holdNext(page, '**/state/**/*.parquet*');
 }
 
 // Two days, so a run fetches 14 Jun, the day choosing the ledger did not read, and that fetch can be held.
@@ -1000,12 +1008,7 @@ test('Ctrl+Enter runs nothing before the page has read its ledgers, even a quest
 	await serveBuilt(context, test.info().outputPath('state'), TWO_DAYS);
 	const statement = 'SELECT count(*) AS rows FROM "published"';
 	const link = new URL((await explorerAddress({ basePath: '/', ledgers: ['published'], days: 14, statement })).href, 'http://link.invalid');
-	let release!: () => void;
-	const held = new Promise<void>((resolve) => { release = resolve; });
-	await page.route('**/config/ledgers.json', async (route) => {
-		await held;
-		await route.fallback();
-	}, { times: 1 });
+	const release = await holdNext(page, '**/config/ledgers.json');
 	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
 	await page.goto(`/console/data-explorer/${link.search}`, { waitUntil: 'domcontentloaded' });
 	const editor = page.locator('#explorer-sql');
