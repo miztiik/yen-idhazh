@@ -127,6 +127,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   Copy-Item frontend\package.json <bare-folder>\package.json
   ```
 
+- **A spec run in a copy of the base commit stops with `Cannot find package '$lib'`,
+  which reads as a missing package; the copy has no SvelteKit paths.**
+  `git archive` leaves out the ignored `frontend/.svelte-kit/`, whose `tsconfig.json`
+  maps `$lib`, so every `$lib` import the spec reaches fails as it loads. A canary
+  build in the copy writes the folder itself; a spec run with no build does not.
+  Plan 62's row L31 met it on 2026-10-07 (Windows, Node 24.12.0). The tell is the
+  error naming a file under `frontend/src/`. Write the folder in the copy's
+  `frontend` before the run:
+  ```powershell
+  node node_modules/@sveltejs/kit/svelte-kit.js sync
+  ```
+
 ## Two heavy gates on one box
 
 - **The unlocked gate control reports a missing interval, not a failed child.**
