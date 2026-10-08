@@ -55,6 +55,7 @@ import { diskReads } from '../src/lib/console/machine/disk-reads';
 import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
 import { describeServerCounters, type ServerCounterNotes } from '../src/lib/server/server-counter-notes';
+import { listRunDays } from '../src/lib/server/run-days';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig, runConfig, type ObservabilityConfig } from '../src/lib/server/config';
 
@@ -1239,8 +1240,8 @@ test.describe("a refused run is a run the server's figures were written down for
 	// One run a day, on shard 0, in the 7 days that end on 15 Jun 2030. A run is kept where its
 	// records fit together, and refused where shard 0 filed two machine records that disagree: about
 	// the server's two cells, or only about the machine. Each case hands the lines what the route
-	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run from
-	// either record, and the article record's days.
+	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run as
+	// `listRunDays` lists them for the route, and the article record's days.
 	const OPEN = { days: 7, start: '2030-06-09', end: '2030-06-15' };
 	const OBSERVABILITY: ObservabilityConfig = {
 		cost_currency: 'USD',
@@ -1281,7 +1282,7 @@ test.describe("a refused run is a run the server's figures were written down for
 		return describeServerCounters({
 			runs,
 			refused,
-			ran: [...new Set([...runs.map((run) => run.date), ...articleDays])].sort(),
+			ran: listRunDays({ runs, refused }, articleDays),
 			articleDays,
 			machineRead: {
 				state: 'read',
