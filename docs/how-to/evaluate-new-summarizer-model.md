@@ -72,6 +72,8 @@ first dispatch, so every runner pays its own download: the same fetch in
 Which test cases run is `enabled` in `config/pipeline-tests.json`, and nothing
 else. `parallel-summarization` is off by default, because its two slots each
 hold a full window; switch it on for a model small enough to fit twice.
+Each case keeps its trial ledgers in a separate nested root, as described in the
+[workflow reference](../reference/github-actions.md#pipeline-tests).
 
 **What it settles.** Whether the weights load, whether the server serves the
 alias the config names, whether both calls come back inside the schema, and what

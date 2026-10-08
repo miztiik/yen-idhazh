@@ -18,7 +18,10 @@ def _scratch(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "models_file": "config/models/incumbent.json",
-                "run": {"trial_state_dirname": "state"},
+                "run": {
+                    "trial_state_dirname": "state",
+                    "trial_case_dirname": "case",
+                },
                 "summarize": {"truncate_chars": 6000},
             },
             indent=2,
@@ -39,6 +42,7 @@ def test_the_pointer_moves_and_so_does_the_trial_state(tmp_path: Path) -> None:
     settings = json.loads(written.read_text(encoding="utf-8"))
     assert settings["models_file"] == "config/models/candidate.json"
     assert settings["run"]["trial_state_dirname"] == "trial"
+    assert settings["run"]["trial_case_dirname"] == "case"
     assert settings["summarize"] == {"truncate_chars": 6000}, "a control the bench reads moved"
 
 
@@ -64,6 +68,15 @@ def test_a_control_the_numbers_are_read_under_cannot_be_edited(tmp_path: Path) -
     edited["summarize"]["truncate_chars"] = 12000
 
     with pytest.raises(ValueError, match=r"summarize\.truncate_chars"):
+        candidate_pointer.refuse_any_other_move(committed, edited)
+
+
+def test_a_case_slug_is_not_a_candidate_pointer(tmp_path: Path) -> None:
+    committed = json.loads((_scratch(tmp_path) / "idhazh.json").read_text(encoding="utf-8"))
+    edited = json.loads(json.dumps(committed))
+    edited["run"]["trial_case_dirname"] = "another-case"
+
+    with pytest.raises(ValueError, match=r"run\.trial_case_dirname"):
         candidate_pointer.refuse_any_other_move(committed, edited)
 
 

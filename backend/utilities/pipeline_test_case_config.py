@@ -7,7 +7,7 @@ import json
 import shutil
 from pathlib import Path
 
-from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 from idhazh.llm.server import SETTING_KEYS
 from utilities.pipeline_test_case import TEST_CASES_ROOT
 
@@ -20,8 +20,8 @@ def write_test_case(test_case: object, *, source: Path, root: Path) -> Path:
     call really sent. Apart they disagree, and the disagreement refuses articles
     that fit.
 
-    The test case also names its own trial root, so three test cases write three
-    trees and none of them shares a path with another.
+    The test case also names its own child under the shared trial root, so three
+    test cases write separate trees without changing their writer identities.
     """
     if root.exists():
         shutil.rmtree(root)
@@ -40,7 +40,8 @@ def write_test_case(test_case: object, *, source: Path, root: Path) -> Path:
         visuals["enabled_kinds"] = []
         app["visuals"] = visuals
     run = dict(app.get("run") or {})
-    run["trial_state_dirname"] = test_case.trial_state_dirname  # type: ignore[attr-defined]
+    run["trial_state_dirname"] = TRIAL_STATE_PREFIX
+    run["trial_case_dirname"] = test_case.id  # type: ignore[attr-defined]
     app["run"] = run
     app_path.write_text(json.dumps(app, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

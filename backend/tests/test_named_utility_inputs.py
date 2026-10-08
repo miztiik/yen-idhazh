@@ -12,6 +12,7 @@ from conftest import REPO_ROOT
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from utilities import (
     backfill_report,
     build_reference_dataset,
@@ -165,17 +166,17 @@ def test_prompt_loop_ignores_unnamed_articles(tmp_path: Path, article_ok: Articl
 
 def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    root = "pipeline-tests-fixture"
+    root = "fixture"
     wanted = (
         f"{root}/raw/feed-health/2026/09/01/a.parquet",
         f"{root}/traces/2026/09/01/a.jsonl",
         f"{root}/raw/published/2026/09/01/a.parquet",
     )
     for name in wanted:
-        path = state / name
+        path = state / TRIAL_STATE_PREFIX / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("one day", encoding="ascii")
-    other = state / root / "raw/feed-health/2026/09/02/a.parquet"
+    other = state / TRIAL_STATE_PREFIX / root / "raw/feed-health/2026/09/02/a.parquet"
     other.parent.mkdir(parents=True)
     other.write_bytes(b"\xff")
     tree = tmp_path / "artifact"
