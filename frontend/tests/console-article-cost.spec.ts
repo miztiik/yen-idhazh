@@ -107,6 +107,40 @@ test.describe('the three costs, as arithmetic', () => {
 		expect(cost.processorSeconds.mid).toBeCloseTo(2, 6);
 	});
 
+	test('a shard whose records agree counts once; one whose records disagree is left out, whichever order they arrive in', () => {
+		const health = [
+			itemRow({ date: '2026-08-20', run_id: 'r1', machine_shard: 0, cpu_busy_pct: 50, item_total_ms: 2000 })
+		];
+		// Two machine records for one shard that both name 4 processors: a
+		// duplicate write, not a disagreement, and the shard still counts once.
+		const agreeing = articleCost(health, [
+			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 4 },
+			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 4 }
+		]);
+		expect(agreeing.processorSeconds.from).toBe(1);
+		expect(agreeing.processorSeconds.mid).toBeCloseTo(4, 6);
+		expect(agreeing.processors).toEqual([4]);
+
+		// Two machine records that disagree, naming 4 and 8: the shard is left
+		// out of the figure, the same whichever order the two records arrive in.
+		// Picking whichever comes last would be the pick a refused run's two
+		// disagreeing records exist to refuse.
+		const forward = articleCost(health, [
+			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 4 },
+			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 8 }
+		]);
+		const backward = articleCost(health, [
+			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 8 },
+			{ date: '2026-08-20', run_id: 'r1', shard: 0, threads: 4 }
+		]);
+		for (const cost of [forward, backward]) {
+			expect(cost.processorSeconds.from).toBe(0);
+			expect(cost.processorSeconds.mid).toBeNull();
+			expect(cost.processorSeconds.outOf).toBe(1);
+			expect(cost.processors).toEqual([]);
+		}
+	});
+
 	test('model time is reading the prompt and writing the reply, added up', () => {
 		const cost = articleCost(
 			[

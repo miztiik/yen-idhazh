@@ -112,13 +112,26 @@ function figureOf(values: readonly number[], outOf: number): CostFigure {
  *
  * A record that named no count is absent here rather than present as a zero: a
  * missing count and a count of none are different facts, and only the first one
- * is true of this ledger.
+ * is true of this ledger. A shard whose machine records disagree about the
+ * count is absent for the same reason: the join cannot state one count, so it
+ * leaves the shard out rather than picking whichever record came last in the
+ * span it was handed - the pick a refused run's two disagreeing records exist
+ * to refuse. Collected per shard first, so two records that agree
+ * (a duplicate write) still count once.
  */
 function processorsByShard(hosts: readonly MachineProcessors[]): Map<string, number> {
-	const found = new Map<string, number>();
+	const named = new Map<string, Set<number>>();
 	for (const host of hosts) {
 		if (host.threads === null || host.threads <= 0) continue;
-		found.set(shardKey(host.date, host.run_id, host.shard), host.threads);
+		const key = shardKey(host.date, host.run_id, host.shard);
+		const seen = named.get(key);
+		if (seen === undefined) named.set(key, new Set([host.threads]));
+		else seen.add(host.threads);
+	}
+	const found = new Map<string, number>();
+	for (const [key, counts] of named) {
+		if (counts.size !== 1) continue;
+		found.set(key, [...counts][0]);
 	}
 	return found;
 }

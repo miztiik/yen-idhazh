@@ -1091,6 +1091,30 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		expect([both.addedBytes.from, both.addedBytes.high]).toEqual([2, 400_000_000]);
 	});
 
+	test('THE ORACLE: a refused shard whose records disagree about the processors leaves its time out', () => {
+		// Shard 0 of the refused run filed two machine records that disagree: one
+		// names 4 logical processors, the other 8. articleCost is handed the same
+		// shard's one article row (busy 50%, 40s total) with the two records in
+		// one order, then in the other. Picking whichever record came last would
+		// price the shard at 160 processor-seconds (50% of 8 over 40s) with 8
+		// named last, and 80 with 4 named last. The shard is left out in both
+		// orders and counted in `outOf`.
+		const shardArticle = [refusedRows[0]];
+		const namedLast8 = [
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 4 },
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 8 }
+		];
+		const namedLast4 = [...namedLast8].reverse();
+		const forward = articleCost(shardArticle, namedLast8);
+		const backward = articleCost(shardArticle, namedLast4);
+		for (const cost of [forward, backward]) {
+			expect(cost.processorSeconds.from).toBe(0);
+			expect(cost.processorSeconds.mid).toBeNull();
+			expect(cost.processorSeconds.outOf).toBe(1);
+			expect(cost.processors).toEqual([]);
+		}
+	});
+
 	test('the processor lost to other tenants counts it', () => {
 		const thresholds = { marked: 1, named: 10 };
 		const accepted = processorLostOverDays(acceptedRows, thresholds);
