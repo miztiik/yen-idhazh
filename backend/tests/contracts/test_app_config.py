@@ -148,10 +148,29 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     )
     assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
+    assert minimal.run.trial_case_dirname is None
     assert minimal.retention.image_months == -1, "retention ships disabled"
     assert minimal.retention.pages_hard_cap_mb == PAGES_HARD_CAP_MB, (
         "an unconfigured clone enforces the platform's own ceiling"
     )
+
+
+def test_a_trial_case_requires_a_trial_state_root() -> None:
+    with pytest.raises(ValidationError, match=r"run\.trial_case_dirname requires"):
+        AppConfig.model_validate({"run": {"trial_case_dirname": "one-case"}})
+
+
+def test_a_trial_case_may_not_reuse_a_ledger_root(tmp_path: Path) -> None:
+    """The case slug is checked against the state roots the ledger registry owns."""
+    copy_config(tmp_path)
+    path = tmp_path / "config" / "idhazh.json"
+    raw = json.loads(read_text(path))
+    raw["run"]["trial_state_dirname"] = "pipeline-tests"
+    raw["run"]["trial_case_dirname"] = "raw"
+    path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    with pytest.raises(ValueError, match=r"run\.trial_case_dirname .*'raw'"):
+        config.load(path.parent)
 
 
 def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:

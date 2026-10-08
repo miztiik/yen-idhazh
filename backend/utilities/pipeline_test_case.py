@@ -41,7 +41,7 @@ from idhazh import ledger, run_context
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import plan as plan_stage
 
@@ -104,14 +104,13 @@ def _stage(
     ]
 
 
-def _file_the_plan(drawn: RunPlan, *, trial_state_dirname: str) -> None:
+def _file_the_plan(drawn: RunPlan, *, trial_case_dirname: str) -> None:
     """File the drawn plan into one test case's trial ledger, where its stages read it.
 
-    The trial root is spelled from the working folder, as every other path here is,
-    and the workflow runs this program from the checkout `idhazh` resolves.
+    Every case shares the trial root but reads its plan beside its own ledgers.
     """
     ledger.persist(
-        Path(ledger.STATE_DIRNAME) / trial_state_dirname,
+        Path(ledger.STATE_DIRNAME) / TRIAL_STATE_PREFIX / trial_case_dirname,
         [drawn],
         ledger=LedgerName.RUN_PLAN,
         covers=drawn.date,
@@ -175,7 +174,7 @@ def run(
     shutil.rmtree(run_root, ignore_errors=True)
     shutil.rmtree(test_case_root / "run", ignore_errors=True)
     run_root.mkdir(parents=True)
-    _file_the_plan(drawn, trial_state_dirname=test_case.trial_state_dirname)
+    _file_the_plan(drawn, trial_case_dirname=test_case.id)
 
     shards = settings.shard_count()
     started = time.monotonic()

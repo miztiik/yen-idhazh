@@ -143,6 +143,19 @@ def models_path(config_dir: Path, app: AppConfig) -> Path:
     return config_dir / app.models_file
 
 
+def refuse_a_trial_case_named_for_a_claimed_root(app: AppConfig) -> None:
+    """A case slug may not reuse a child of `state/` owned by a ledger."""
+    from idhazh.ledger.paths import claimed_roots
+
+    case_dirname = app.run.trial_case_dirname
+    if case_dirname is not None and case_dirname in claimed_roots():
+        raise ValueError(
+            "config/idhazh.json is refused: run.trial_case_dirname "
+            f"{case_dirname!r} is a child of state/ already owned by the ledger "
+            "door or a ledger family"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Every tunable the run will consult, already validated."""
@@ -160,6 +173,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
+    refuse_a_trial_case_named_for_a_claimed_root(app)
     read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
     try:
         models = ModelsConfig.from_json(read[app.models_file])

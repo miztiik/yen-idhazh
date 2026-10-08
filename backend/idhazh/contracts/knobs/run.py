@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -121,12 +121,21 @@ class RunConfig(Model):
         description=(
             "Where a trial run's ledgers go, under `state/`. Null is production and is "
             "the default, so a run that says nothing writes where it always did. Set it "
-            "and every day shard this run appends lands under `state/<name>/` instead - "
-            "the seen ledger, feed health, item health, the published ledger, the traces "
-            "and the rollups, all of them, because a run that split them would put half "
-            "a trial in the published series. Owner decision, 2026-09-15: a run that "
+            "and every day shard this run appends lands under `state/<name>/`, or under "
+            "`state/<name>/<case>/` when `run.trial_case_dirname` is set - the seen "
+            "ledger, feed health, item health, the published ledger, the traces and the "
+            "rollups, all of them, because a run that split them would put half a trial "
+            "in the published series. Owner decision, 2026-09-15: a run that "
             "exists to exercise production's code path must not be readable as a "
             "production day. The gardener's trials task is what empties it again."
+        ),
+    )
+    trial_case_dirname: Slug | None = Field(
+        default=None,
+        description=(
+            "A separately validated child under `run.trial_state_dirname`. Null keeps "
+            "the trial root itself, as the bench does. A case name without a trial "
+            "root is refused, and a configured case is appended only below that root."
         ),
     )
     qualification_repeats: int = Field(
@@ -162,6 +171,15 @@ class RunConfig(Model):
             "which side produced one."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_trial_case_requires_a_trial_root(self) -> Self:
+        """A case slug is meaningful only below an explicitly named trial root."""
+        if self.trial_case_dirname is not None and self.trial_state_dirname is None:
+            raise ValueError(
+                "run.trial_case_dirname requires run.trial_state_dirname"
+            )
+        return self
 
     @model_validator(mode="before")
     @classmethod

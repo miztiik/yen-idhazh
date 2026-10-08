@@ -313,6 +313,7 @@
     "shard_timeout_minutes": 200,
     "shard_wrap_up_minutes": 12,
     "success_floor_pct": 70,
+    "trial_case_dirname": null,
     "trial_state_dirname": null
   },
   "summarize": {
