@@ -150,3 +150,37 @@ def test_two_threads_each_holding_their_own_trial_overlay_cannot_see_the_other()
     assert seen["a"] == STATE / "raw" / "pipeline-tests" / "case-a" / "item-health"
     assert seen["b"] == STATE / "raw" / "pipeline-tests" / "case-b" / "item-health"
     assert raw_root(STATE, LedgerName.ITEM_HEALTH) == STATE / "raw" / "item-health"
+
+
+def test_two_asyncio_tasks_each_holding_their_own_trial_overlay_cannot_see_the_other() -> None:
+    """The same guarantee the thread test above proves, for `asyncio.Task` instead.
+
+    A `ContextVar` copies its holder's context at the point a task is created,
+    then the task's own writes to it are invisible to every sibling task and to
+    whatever created it - unlike a thread, which starts with no inherited
+    context at all. Both still need proving apart: a task that entered its
+    override before the barrier releases its sibling, and read back after,
+    would pass even if the two secretly shared one `ContextVar` cell. The
+    barrier forces every task to be inside its own `with use_registry(...)`
+    block before any of them reads, the same way the thread test's
+    `threading.Barrier` does.
+    """
+    import asyncio
+
+    case_a = overlay_registry(("pipeline-tests", "case-a"))
+    case_b = overlay_registry(("pipeline-tests", "case-b"))
+
+    async def hold(registry: object, barrier: asyncio.Barrier) -> Path:
+        with use_registry(registry):  # type: ignore[arg-type]
+            await barrier.wait()  # both tasks are inside their own override before either reads
+            return raw_root(STATE, LedgerName.ITEM_HEALTH)
+
+    async def run() -> tuple[Path, Path]:
+        barrier = asyncio.Barrier(2)
+        return await asyncio.gather(hold(case_a, barrier), hold(case_b, barrier))
+
+    seen_a, seen_b = asyncio.run(run())
+
+    assert seen_a == STATE / "raw" / "pipeline-tests" / "case-a" / "item-health"
+    assert seen_b == STATE / "raw" / "pipeline-tests" / "case-b" / "item-health"
+    assert raw_root(STATE, LedgerName.ITEM_HEALTH) == STATE / "raw" / "item-health"

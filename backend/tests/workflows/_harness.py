@@ -701,6 +701,17 @@ COMMIT_SCRIPT_ENV: Final = {
     "bench": COMMIT_BASE_ENV,
 }
 
+#: The bench's machine row folder, tier-first: `state/raw/pipeline-tests/host-fingerprint`.
+#: The CLI reaches this same path by overlaying the registry from
+#: `settings.app.run.trial_state_dirname` (`cli.main`) rather than by passing a
+#: nested `state_dir` - so this harness overlays the same registry instead of
+#: joining `BENCH_LEDGER_ROOT` onto `raw/`, which would compute the folder the
+#: ledger door no longer writes to.
+with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
+    _BENCH_HOST_FINGERPRINT_RAW_ROOT: Final = ledger.raw_root(
+        Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT
+    )
+
 COMMIT_STAGED_PATHS: Final = {
     # `state` whole since 2026-09-17, where this was five paths named one at a
     # time. The catch-up compaction runs in this job and folds a segment into
@@ -743,7 +754,7 @@ COMMIT_STAGED_PATHS: Final = {
     # the sweep's item-health, scores and traces land under the same trial root
     # because the whole state root moved, and nothing reads them back. The
     # folder is asked of the ledger door, which files the probe's row there.
-    "bench": [ledger.raw_root(Path(BENCH_LEDGER_ROOT), LedgerName.HOST_FINGERPRINT).as_posix()],
+    "bench": [_BENCH_HOST_FINGERPRINT_RAW_ROOT.as_posix()],
 }
 
 # The step that fills the two ledgers the step above commits, and the two things
