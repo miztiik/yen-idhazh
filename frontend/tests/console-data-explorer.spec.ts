@@ -926,3 +926,99 @@ test('THE ORACLE: a question kept with a day that is not on the calendar is drop
 		'Data explorer storage yen-idhazh:data-explorer:history entry was invalid and was dropped.'
 	]);
 });
+
+/** The questions in the page's History, newest first: one for each run that answered. */
+function ranQuestions(page: Page): Promise<string[]> {
+	return page.evaluate(() => (JSON.parse(localStorage.getItem('yen-idhazh:data-explorer:history') ?? '[]') as { statement: string }[]).map((run) => run.statement));
+}
+
+/** Hold the next data file the page fetches until the returned function is called, then let it
+ *  through, so a run stays in flight for as long as the test needs. */
+async function holdNextDataFile(page: Page): Promise<() => void> {
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => { release = resolve; });
+	await page.route('**/state/**/*.parquet*', async (route) => {
+		await held;
+		await route.fallback();
+	}, { times: 1 });
+	return release;
+}
+
+// Two days, so a run fetches 14 Jun, the day choosing the ledger did not read, and that fetch can be held.
+const TWO_DAYS = { ledger: 'published', pinned: PINNED, days: everyDay(1, 0) } as const;
+
+test('Ctrl+Enter runs a question only when Run could: never while another run is in flight, and never with an empty statement', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), TWO_DAYS);
+	await openExplorer(page, PINNED);
+	const first = 'SELECT count(*) AS rows FROM "published"';
+	await chooseExplorerQuestion(page, ['published'], first);
+	const editor = page.locator('#explorer-sql');
+	const inFlight = page.locator('.run-button[aria-busy="true"]');
+
+	const release = await holdNextDataFile(page);
+	await page.getByRole('button', { name: /^Run$/ }).click();
+	await expect(inFlight, 'the run was not in flight when the shortcut was pressed').toHaveCount(1);
+	await editor.press('Control+Enter');
+	release();
+	await expect(inFlight).toHaveCount(0);
+	// A run pressed now answers after any run the shortcut started, so History would hold that one too.
+	const second = 'SELECT 2 AS second FROM "published"';
+	await editor.fill(second);
+	await runExplorer(page);
+	await expect(inFlight).toHaveCount(0);
+	expect(await ranQuestions(page), 'Ctrl+Enter started a second run while one was in flight').toEqual([second, first]);
+
+	await editor.fill('');
+	await editor.press('Control+Enter');
+	expect(await inFlight.count(), 'Ctrl+Enter started a run with an empty statement').toBe(0);
+	const third = 'SELECT 3 AS third FROM "published"';
+	await editor.fill(third);
+	await runExplorer(page);
+	await expect(inFlight).toHaveCount(0);
+	expect(await ranQuestions(page), 'Ctrl+Enter ran an empty statement').toEqual([third, second, first]);
+});
+
+test('History keeps the question a run asked, when the editor changes while its answer is on the way', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), TWO_DAYS);
+	await openExplorer(page, PINNED);
+	const asked = 'SELECT count(*) AS rows FROM "published"';
+	await chooseExplorerQuestion(page, ['published'], asked);
+	const inFlight = page.locator('.run-button[aria-busy="true"]');
+
+	const release = await holdNextDataFile(page);
+	await page.getByRole('button', { name: /^Run$/ }).click();
+	await expect(inFlight, 'the run was not in flight when the question changed').toHaveCount(1);
+	const typed = 'SELECT 1 AS typed_while_the_run_was_on_its_way';
+	await page.locator('#explorer-sql').fill(typed);
+	release();
+	await expect(inFlight).toHaveCount(0);
+	expect(await ranQuestions(page), 'History kept the text in the editor, not the question that ran').toEqual([asked]);
+	await expect(page.locator('#explorer-sql'), 'the run changed what the reader typed').toHaveValue(typed);
+});
+
+test('Ctrl+Enter runs nothing before the page has read its ledgers, even a question a link loaded', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), TWO_DAYS);
+	const statement = 'SELECT count(*) AS rows FROM "published"';
+	const link = new URL((await explorerAddress({ basePath: '/', ledgers: ['published'], days: 14, statement })).href, 'http://link.invalid');
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => { release = resolve; });
+	await page.route('**/config/ledgers.json', async (route) => {
+		await held;
+		await route.fallback();
+	}, { times: 1 });
+	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
+	await page.goto(`/console/data-explorer/${link.search}`, { waitUntil: 'domcontentloaded' });
+	const editor = page.locator('#explorer-sql');
+	const inFlight = page.locator('.run-button[aria-busy="true"]');
+	await expect(editor).toHaveValue(statement);
+	await expect(page.locator('.run-button'), 'the page had read its ledgers before the shortcut was pressed').toBeDisabled();
+
+	await editor.press('Control+Enter');
+	expect(await inFlight.count(), 'Ctrl+Enter started a run before the page had read its ledgers').toBe(0);
+	release();
+	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
+	await expect(inFlight).toHaveCount(0);
+	await runExplorer(page);
+	await expect(inFlight).toHaveCount(0);
+	expect(await ranQuestions(page), 'Ctrl+Enter ran the linked question before the page had read its ledgers').toEqual([statement]);
+});

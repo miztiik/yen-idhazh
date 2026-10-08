@@ -78,6 +78,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | DESCOPED | - | - | - |
 | 24 | The page reads each index once before a run, and the ledger list raises no accessibility warning | 10 | Q | DONE | p55fix1 | #1435 | executing owner |
 | 25 | The panel pictures open the tab that holds each Data explorer panel | 10 | Q | DONE | p55fix2 | #1453 | executing owner |
+| 27 | Ctrl+Enter runs a question only when Run could, and History keeps the question each run asked | 4 | Q | DONE | p55fix3 | - | executing owner |
 
 **One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. **Rows 19 and 20 were added on 2026-10-07 on the owner's A1+A2 ruling, specified by Susan and Jony.** **Rows 21 to 23 were added on 2026-10-07 at plan 62's request, designed by Fowler.** Rows 19 and 21 share no file and may run together. Row 20 is BLOCKED on the owner deciding whether this plan carries the small slice of plan 52 row 2 that its charts need. **Rows 22 and 23 were descoped on 2026-10-07 by the owner**, who kept the column list as it is: each ledger's columns are read from its newest file through the query engine. Row 21 stays, because it proves at each deploy that every published file carries the columns its contract declares.
 
@@ -1839,6 +1840,23 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 1 | **A test shows a panel behind a tab by pressing its tab, found by `aria-controls`**, as a reader would, never by a route's name or a tab's words | Executing owner, 2026-10-08 |
 
 - **Not in this row:** `frontend/tests/panel-sufficiency.spec.ts` presses the Chart tab by its name for `data-explorer-shape` in three places. It moves to `showPanel()` once row 19 (#1449), which edits that file, has merged.
+
+---
+
+### Row #27 - Ctrl+Enter runs a question only when Run could, and History keeps the question each run asked
+
+- **Scope:** found by Fowler for plan 62 row L48 on 2026-10-08, with a second fault found while writing this row's test. Section 2.16, row 6, says Ctrl+Enter in the editor presses Run, and that Run is disabled until a published ledger is chosen and the editor holds text, and while a run is in progress. The button kept that rule, but Ctrl+Enter reached `run()` through `QueryEditor`'s `onRun`, and `run()` checked only that a ledger was chosen. So Ctrl+Enter during a run started a second run, whose end cleared the first's running state, and History kept both. Ctrl+Enter with an empty statement ran it, and Ctrl+Enter before the page had read its ledgers ran a question a link had just loaded. The page now writes the rule once, as `canRun`: not before the page has read its ledgers, not during another run, and only with a ledger chosen and a statement in the editor. The button's state, its press and `run()` all read it, so every way in to a run asks the same question. The second fault: `run()` read the question, the ledgers and the span again when the answer arrived, so a reader who edited the question while a run was on its way found the edited text in History, beside an answer it did not produce. `run()` now reads them once, as the run starts, and the request, the link and History all use that one reading.
+- **Files touched:** `frontend/src/routes/console/data-explorer/+page.svelte`, `frontend/tests/console-data-explorer.spec.ts`, and this plan.
+- **Acceptance gates:** `console-data-explorer.spec.ts` on the canary build through `npm --prefix frontend run test:changed`, with `svelte-check`; the CLAUDE.md section 12 browser check for `/console/data-explorer/` at 390, 768 and 1440 px, light and dark, with zero new console errors and zero new 404s.
+- **Checks:** with a run in flight, held on its data file, Ctrl+Enter starts no second run: after a later run, History holds exactly that run and the first. Ctrl+Enter with an empty statement starts no run. Before the page has read its ledgers, while the ledger list is held, Ctrl+Enter starts no run, even for a question a link loaded. A question edited while its run is on the way leaves History holding the question that ran, and the editor holding what the reader typed.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **Run's rule is written once, as `canRun`, and every way in to a run reads it**, so a new way in cannot skip a check | Executing owner, 2026-10-08 |
+  | 2 | **A run reads its question, ledgers and span once, as it starts.** The request, the address and History all use that reading, so an answer and its History line always belong to the same question | Executing owner, 2026-10-08 |
+
+- **Not in this row:** a way to stop a run in flight. No row asks for one.
 
 ---
 
