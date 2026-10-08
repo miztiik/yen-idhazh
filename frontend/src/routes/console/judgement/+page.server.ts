@@ -98,6 +98,7 @@ export function load() {
 				disagreementRate: row.disagreementRate,
 				unclearRate: row.unclearRate,
 				pairsJudged: row.pairsJudged ?? 0,
+				pairsUsable: row.pairsUsable ?? 0,
 				negativesOnRecord: row.negativesOnRecord,
 				aboveLineOnRecord: row.aboveLineOnRecord,
 				daysOnRecord: row.daysOnRecord,

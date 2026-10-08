@@ -51,7 +51,11 @@ Five rules hold for every number the console prints:
  articles is not a measurement, and a column that hides its denominator
  invites a trend that is not there. Under `console.min_attempts_for_rate` a
  figure prints its counts and no share, in a strip and in a mark's name as in
- a sentence (Reader, 2026-10-07, plan 62's row L32, #1409).
+ a sentence (Reader, 2026-10-07, plan 62's row L32, #1409). The count is the
+ one the share is taken over, and the floor counts it: Judgement's "could not
+ tell" is a share of the pairs whose two readings agreed, so it prints `2% of
+ the 41 that agreed`, and `1 of the 3 that agreed` under the floor (Reader,
+ 2026-10-08, plan 62's row L39).
 
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, a run whose rows cannot be made into one run is left out of the

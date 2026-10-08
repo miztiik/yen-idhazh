@@ -19,6 +19,7 @@ import {
 	corridorOf,
 	countedDays,
 	describeEarlierRow,
+	describeUnclear,
 	findNewestRow,
 	gateNeeds,
 	heldInWords,
@@ -251,6 +252,7 @@ test.describe('the judge, and what the record still needs', () => {
 			disagreementRate: 0.05,
 			unclearRate: 0.1,
 			pairsJudged: 20,
+			pairsUsable: 19,
 			negativesOnRecord: 40,
 			aboveLineOnRecord: 6,
 			daysOnRecord: 3,
@@ -377,6 +379,20 @@ test.describe('the judge, and what the record still needs', () => {
 		// decision the evidence cannot carry. The counts still print elsewhere.
 		expect(rateWithDenominator(1, 4, 5)).toBeNull();
 		expect(rateWithDenominator(1, 20, 5)).toBe('5% of 20 pairs');
+	});
+
+	test('"could not tell" is a share of the pairs that agreed, and their counts under the floor', () => {
+		// Its share is taken over the pairs whose two readings agreed, so the count
+		// beside it is theirs and the floor counts them. The words are Reader's.
+		expect(describeUnclear(1, 41, 5)).toBe('2% of the 41 that agreed');
+		expect(describeUnclear(0, 38, 5)).toBe('0% of the 38 that agreed');
+		expect(describeUnclear(1, 5, 5)).toBe('20% of the 5 that agreed');
+		expect(describeUnclear(1, 3, 5)).toBe('1 of the 3 that agreed');
+		// A real share that rounds away prints under one: a 0 would say every pair
+		// that agreed could tell, and one could not.
+		expect(describeUnclear(1, 467, 5)).toBe('<1% of the 467 that agreed');
+		// No pair agreed, so nothing was counted and no count prints.
+		expect(describeUnclear(0, 0, 5)).toBe('not counted, no pair agreed');
 	});
 });
 
