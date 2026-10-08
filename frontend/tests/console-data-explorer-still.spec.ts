@@ -229,19 +229,22 @@ test('M8: editor head, questions and narrow rails keep their density heights', a
 			const space2 = parseFloat(css.getPropertyValue('--space-2')) * rem;
 			const space3 = parseFloat(css.getPropertyValue('--space-3')) * rem;
 			const questions = document.querySelector<HTMLElement>('[data-workbench-region="questions"]');
-			const questionGap = questions === null ? 0 : parseFloat(getComputedStyle(questions).rowGap) || 0;
+			const questionStyle = questions === null ? null : getComputedStyle(questions);
+			const questionGap = questionStyle === null ? 0 : parseFloat(questionStyle.rowGap) || 0;
+			// The region's own edge and padding, which its box holds beside its two lines.
+			const questionEdges = questionStyle === null ? 0 : ['border-top-width', 'border-bottom-width', 'padding-top', 'padding-bottom'].reduce((sum, property) => sum + (parseFloat(questionStyle.getPropertyValue(property)) || 0), 0);
 			const regions = Object.fromEntries(
 				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
 					const rect = node.getBoundingClientRect();
 					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
 				})
 			);
-			return { control, space1, space2, space3, questionGap, regions };
+			return { control, space1, space2, space3, questionGap, questionEdges, regions };
 		});
 		const oneControlRow = sizes.control + 2 * sizes.space1;
 		expect(await page.locator('[data-workbench-region="editor"] .editor-head').evaluate((node) => node.getBoundingClientRect().height), `${view.width} editor head`).toBeGreaterThanOrEqual(oneControlRow - 1);
 		if (view.width < 640) {
-			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(2 * sizes.control + sizes.questionGap, 0);
+			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(2 * sizes.control + sizes.questionGap + sizes.questionEdges, 0);
 		} else {
 			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(oneControlRow, 0);
 		}
@@ -623,19 +626,45 @@ test('no workbench control is cut off, idle or after a run, at any width', async
 						continue;
 					}
 					const both = whole.includes(name);
-					if (both && region.scrollHeight > region.clientHeight + 0.5) {
-						offenders.push(`${name}: ${region.scrollHeight - region.clientHeight}px of content is hidden`);
-					}
 					const box = region.getBoundingClientRect();
+					// A list that floats over the page - the folded questions, History's list - is
+					// a box placed out of the flow that reaches past its region. Its controls are
+					// held to the window, and the region is measured without it.
+					const floats = (node: Element, itself = false) => {
+						for (let ancestor: Element | null = itself ? node : node.parentElement; ancestor !== null && ancestor !== region; ancestor = ancestor.parentElement) {
+							const position = getComputedStyle(ancestor).position;
+							if ((position === 'absolute' || position === 'fixed') && !fitsInside(ancestor.getBoundingClientRect(), box, true)) return true;
+						}
+						return false;
+					};
+					const scrolledInside = (node: Element) => {
+						for (let ancestor = node.parentElement; ancestor !== null && ancestor !== region; ancestor = ancestor.parentElement) {
+							if (scrolls(ancestor)) return true;
+						}
+						return false;
+					};
+					if (both) {
+						// Content in the flow below the region's foot lies over the region under it,
+						// whether or not this region clips.
+						let foot = box.top;
+						for (const node of region.querySelectorAll<HTMLElement>('*')) {
+							if (!visible(node) || floats(node, true) || scrolledInside(node)) continue;
+							foot = Math.max(foot, node.getBoundingClientRect().bottom);
+						}
+						if (foot > box.bottom + 0.5) offenders.push(`${name}: ${Math.round(foot - box.bottom)}px of its content lies below it`);
+					}
+					const windowBox = new DOMRect(0, 0, document.documentElement.clientWidth, document.documentElement.clientHeight);
 					for (const control of region.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary')) {
 						const rect = control.getBoundingClientRect();
 						// checkVisibility() is false for a chip in a closed fold, which the page lays out but never draws.
 						if (!visible(control)) continue;
 						if (canScrollIntoView(control, rect, both)) continue;
-						const across = rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5;
-						const down = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
-						if (!across || (both && !down)) {
-							offenders.push(`${name}: ${label(control)} at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${Math.round(box.left)},${Math.round(box.top)}-${Math.round(box.right)},${Math.round(box.bottom)}`);
+						const floating = floats(control);
+						const frame = floating ? windowBox : box;
+						const across = rect.left >= frame.left - 0.5 && rect.right <= frame.right + 0.5;
+						const down = rect.top >= frame.top - 0.5 && rect.bottom <= frame.bottom + 0.5;
+						if (!across || ((both || floating) && !down)) {
+							offenders.push(`${name}: ${label(control)} at ${Math.round(rect.left)},${Math.round(rect.top)}-${Math.round(rect.right)},${Math.round(rect.bottom)} outside ${floating ? 'the window' : 'its region'} ${Math.round(frame.left)},${Math.round(frame.top)}-${Math.round(frame.right)},${Math.round(frame.bottom)}`);
 						}
 						if ((control.matches('button, a[href], summary') || control.classList.contains('example')) && control.scrollWidth > control.clientWidth + 1) {
 							offenders.push(`${name}: ${label(control)} cuts its text by ${control.scrollWidth - control.clientWidth}px`);

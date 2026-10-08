@@ -115,6 +115,7 @@ for (const view of [
 			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
 			const heading = document.querySelector<HTMLElement>('[data-explorer-columns] h3');
 			const box = document.querySelector<HTMLElement>('[data-explorer-column-box]');
+			// Every listed row up to the fifth: this ledger has three columns.
 			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, 5);
 			if (rail === null || heading === null || box === null) throw new Error('column rail parts missing');
 			const railBox = rail.getBoundingClientRect();
@@ -126,13 +127,13 @@ for (const view of [
 				scrollHeight: root.scrollHeight,
 				headingInside: inside(headingBox, railBox),
 				columnBoxRows: columnBox.height / rowHeight,
-				firstFiveInside: rows.length === 5 && rows.every((row) => inside(row.getBoundingClientRect(), columnBox))
+				rowsInside: rows.length === 3 && rows.every((row) => inside(row.getBoundingClientRect(), columnBox))
 			};
 		});
 		expect(at.scrollHeight, 'the wide answer stretched the page').toBe(view.height);
 		expect(at.headingInside, 'the column rail heading is cut').toBe(true);
 		expect(at.columnBoxRows, 'the column box is shorter than five rows').toBeGreaterThanOrEqual(5);
-		expect(at.firstFiveInside, 'the first five column rows are not visible inside the scroll box').toBe(true);
+		expect(at.rowsInside, 'a column row is not visible inside the scroll box').toBe(true);
 	});
 }
 
@@ -145,12 +146,13 @@ for (const view of [
 		await openExplorer(page, '2026-08-20');
 		await chooseExplorerQuestion(page, ['item-health'], 'SELECT * FROM "item-health"');
 		if (view.width < 1024) await page.locator('[data-workbench-region="columns"] summary').click();
-		const reading = await page.evaluate(() => {
+		const reading = await page.evaluate((shownRows) => {
 			const root = document.documentElement;
 			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
-			const list = document.querySelector<HTMLElement>('[data-explorer-columns]');
 			const box = document.querySelector<HTMLElement>('[data-explorer-column-box]');
-			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, 5);
+			// An open rail on a phone is as tall as the editor's lines, which holds four whole rows
+			// under its headings; from 1024 px the rail holds at least five.
+			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, shownRows);
 			const boxRect = box?.getBoundingClientRect();
 			const inside = (node: HTMLElement) => {
 				const rect = node.getBoundingClientRect();
@@ -158,25 +160,26 @@ for (const view of [
 			};
 			return {
 				columns: document.querySelectorAll('[data-explorer-columns] li code').length,
-				listScrolls: list !== null && list.scrollHeight > list.clientHeight,
+				listScrolls: box !== null && box.scrollHeight > box.clientHeight + 1,
 				pageScrollsSideways: root.scrollWidth > root.clientWidth,
 				railHeight: rail?.getBoundingClientRect().height ?? 0,
-				firstFiveInside: rows.length === 5 && rows.every(inside)
+				firstRowsInside: rows.length === shownRows && rows.every(inside)
 			};
-		});
+		}, view.width < 1024 ? 4 : 5);
 		expect(reading.columns).toBe(128);
 		expect(reading.listScrolls, 'the column list did not scroll inside the rail').toBe(true);
 		expect(reading.pageScrollsSideways, 'the column list stretched the page').toBe(false);
 		expect(reading.railHeight, 'the column rail collapsed').toBeGreaterThan(0);
-		expect(reading.firstFiveInside, 'the first five column rows are not visible inside the scroll box').toBe(true);
+		expect(reading.firstRowsInside, 'the first column rows are not visible inside the scroll box').toBe(true);
 	});
 }
 
 test('a selected ledger named in the link opens inside the visible ledger list, not by scrolling the page', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await openExplorer(page, '2026-08-20', { address: '?ledgers=published&days=14', ready: false });
-	const reading = await page.evaluate(() => {
-		const root = document.documentElement;
+	// The row's second line names its last day once the cost reading arrives, and grows the row.
+	await expect(page.locator('[data-ledger-name="published"] small')).toContainText('through');
+	const read = () => page.evaluate(() => {
 		const list = document.querySelector<HTMLElement>('[data-workbench-region="ledgers"] .ledger-options');
 		const chosen = document.querySelector<HTMLElement>('[data-ledger-name="published"]');
 		if (list === null || chosen === null) throw new Error('ledger list or selected ledger missing');
@@ -184,27 +187,45 @@ test('a selected ledger named in the link opens inside the visible ledger list, 
 		const rect = chosen.getBoundingClientRect();
 		return {
 			pageY: window.scrollY,
+			listScrolls: list.scrollHeight > list.clientHeight + 1,
+			// Where the row stands in the list's own content: past the first screen, the
+			// list had to scroll to show it.
+			belowFirstScreen: rect.bottom - box.top + list.scrollTop > list.clientHeight + 0.5,
 			inView: rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5,
 			scrollTop: list.scrollTop
 		};
 	});
+	await expect.poll(async () => (await read()).inView, { message: 'published did not come into view inside the ledger list' }).toBe(true);
+	const reading = await read();
 	expect(reading.pageY).toBe(0);
-	expect(reading.inView, `published was not visible after list scrollTop ${reading.scrollTop}`).toBe(true);
-	const jumped = await page.evaluate(() => {
-		const list = document.querySelector<HTMLElement>('[data-workbench-region="ledgers"] .ledger-options');
-		if (list === null) throw new Error('ledger list missing');
-		list.scrollTop = Math.floor(list.scrollHeight / 2);
-		const before = list.scrollTop;
-		const candidate = [...list.querySelectorAll<HTMLInputElement>('[data-ledger-name] input:not(:checked)')]
-			.find((input) => {
-				const row = input.closest<HTMLElement>('[data-ledger-name]');
-				return row !== null && row.getBoundingClientRect().top >= list.getBoundingClientRect().top;
-			});
-		if (candidate === undefined) throw new Error('no lower ledger to tick');
-		candidate.click();
-		return new Promise<{ before: number; after: number }>((resolve) => requestAnimationFrame(() => resolve({ before, after: list.scrollTop })));
+	expect(reading.listScrolls, 'the ledger list does not scroll inside the rail, so this test proves nothing').toBe(true);
+	expect(reading.belowFirstScreen, 'published starts on the list\'s first screen, so this test proves nothing').toBe(true);
+
+	// The reader scrolls the list with the wheel, then ticks a ledger they can see: the list
+	// stays where they left it.
+	const list = page.locator('[data-workbench-region="ledgers"] .ledger-options');
+	await list.hover();
+	await page.mouse.wheel(0, 120);
+	let settled = reading.scrollTop;
+	await expect.poll(async () => {
+		const now = await list.evaluate((node) => node.scrollTop);
+		const still = now === settled && now !== reading.scrollTop;
+		settled = now;
+		return still;
+	}, { message: 'the wheel did not move the list, or it never came to rest' }).toBe(true);
+	const name = await list.evaluate((node) => {
+		const box = node.getBoundingClientRect();
+		const row = [...node.querySelectorAll<HTMLElement>('[data-ledger-name][data-chosen="no"]')].find((candidate) => {
+			const rect = candidate.getBoundingClientRect();
+			return rect.top >= box.top && rect.bottom <= box.bottom;
+		});
+		return row?.getAttribute('data-ledger-name') ?? null;
 	});
-	expect(jumped.after, `ticking a second ledger moved the list from ${jumped.before} to ${jumped.after}`).toBe(jumped.before);
+	expect(name, 'no unchosen ledger is in view to tick').not.toBeNull();
+	await page.locator(`[data-ledger-name="${name}"] input`).click();
+	await expect(page.locator(`[data-ledger-name="${name}"]`)).toHaveAttribute('data-chosen', 'yes');
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+	expect(await list.evaluate((node) => node.scrollTop), `ticking ${name} moved the list from ${settled}`).toBe(settled);
 });
 
 /** Eight questions saved in this browser, each with a name the test wrote, near the 40-character cap. */

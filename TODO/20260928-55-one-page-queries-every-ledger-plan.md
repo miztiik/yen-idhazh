@@ -1100,6 +1100,12 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | R6 | **The table footer carries the run span, row count, cap and not-on-site sentence in small text.** `Show more` stays beside it | owner, 2026-10-06 |
   | R7 | **The run status says only the result and fresh read.** Answered and quiet states say `Read {f} files, {size}`; held-byte text and attributes are gone | owner, 2026-10-06 |
   | S1 | **Choice tiles reserve the bold width whether checked or not.** The checked tile keeps its weight-600 word, and pressing day tiles or `Draw it as` tiles does not move any sibling tile | Susan, 2026-10-07 |
+  | E1 | **Each rail's list is placed against the rail's own box.** A rail is a `<details>`, where a percentage height does not resolve: from 1024 px the column list collapsed to its heading, and the ledger list grew past its rail so the whole rail scrolled. Each list now fills its rail, its heading holds still and only its rows scroll | Executing owner, 2026-10-08 |
+  | E2 | **R4 removes the chart's reason, not its facts.** `Drawn ... because ...` is gone; row 17's sentence for rows with no day stands under the drawing, beside the readout | Executing owner, 2026-10-07 |
+  | E3 | **Below 640 px, Questions and History share the first line and the how-to link has the second.** History beside the how-to filled the line to within a pixel in the Windows face and overflowed it in the Linux one; this way no line depends on the face | Executing owner, 2026-10-08 |
+  | E4 | **History's edge is its summary's own, as a chip's is**, so it is exactly one control tall at every width; an edge around the whole details made it 2 px taller | Executing owner, 2026-10-08 |
+  | E5 | **The selected ledger scrolls into view once, when the page first shows a selection**, inside the list and never the page. Ticking another ledger never moves the list | Executing owner, 2026-10-07 |
+  | E6 | **The clipping check holds a floating list to the window.** A box placed out of the flow that reaches past its region - the folded questions, History's list - is checked against the window, and its region's foot is measured from the content in the flow | Executing owner, 2026-10-08 |
 
 ### Row #11 - The column rail stops overlapping, and types and the chosen ledger show in colour
 

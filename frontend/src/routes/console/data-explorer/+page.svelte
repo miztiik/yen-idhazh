@@ -839,6 +839,21 @@
 		padding: var(--space-3);
 	}
 
+	/* A rail is a <details>, and a percentage height inside one does not resolve: a list
+	   sized to the rail grew with its rows instead, and the rail scrolled heading and all.
+	   So each list is placed against the rail's own box, which takes its height from the
+	   window, and only the list's rows scroll. */
+	.rail-region {
+		position: relative;
+	}
+
+	.rail-region > :global(.ledger-list),
+	.rail-region > :global(.column-list) {
+		position: absolute;
+		inset: var(--space-3);
+		block-size: auto;
+	}
+
 	.rail-region > summary {
 		display: none;
 		min-block-size: var(--workbench-control);
@@ -1016,12 +1031,6 @@
 			grid-template-rows: auto minmax(0, 1fr);
 		}
 
-		[data-workbench-region='ledgers'] > :global(.ledger-list),
-		[data-workbench-region='columns'] > :global(.column-list) {
-			block-size: 100%;
-			min-block-size: 0;
-		}
-
 		.editor-stack {
 			display: flex;
 			flex-direction: column;
@@ -1079,6 +1088,7 @@
 
 		.rail-region[open] > :global(.ledger-list),
 		.rail-region[open] > :global(.column-list) {
+			inset: var(--workbench-control) 0 0;
 			padding: var(--space-3);
 		}
 
@@ -1090,31 +1100,35 @@
 	}
 
 	@media (max-width: 639px) {
+		/* Two lines that hold whatever face the system draws: the two short controls,
+		   Questions and History, share the first, and the long how-to link has the
+		   second to itself, so no line is filled to within a few pixels. The links
+		   group dissolves into this grid, so History's list hangs from the row's end. */
 		[data-workbench-region='questions'] {
-			flex-wrap: wrap;
-			align-items: stretch;
+			position: relative;
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) auto;
 			grid-template-rows: var(--workbench-control) var(--workbench-control);
-		}
-		:global([data-workbench-region='questions'] .question-strip) {
-			grid-column: 1 / -1;
-			inline-size: 100%;
-			flex-basis: 100%;
-		}
-		.question-links,
-		.how-to {
-			grid-column: 1 / -1;
-			min-inline-size: 0;
-			inline-size: 100%;
-			flex-basis: 100%;
+			align-items: stretch;
 		}
 		.question-links {
-			flex-wrap: nowrap;
+			display: contents;
+		}
+		:global([data-workbench-region='questions'] .question-strip) {
+			grid-area: 1 / 1;
+		}
+		:global([data-workbench-region='questions'] .history-list) {
+			grid-area: 1 / 2;
+		}
+		.question-panel :global([data-workbench-region='questions'] .history-list[open] .history-menu) {
+			inset-inline-end: var(--space-3);
+		}
+		.how-to {
+			grid-area: 2 / 1 / 3 / -1;
+			justify-self: start;
 		}
 		:global([data-workbench-region='questions'] .question-strip summary),
 		:global([data-workbench-region='questions'] .history-list summary),
-		:global([data-workbench-region='questions'] .history-list),
 		.how-to {
 			box-sizing: border-box;
 			block-size: var(--workbench-control);
