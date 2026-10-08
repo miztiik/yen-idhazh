@@ -5,6 +5,7 @@
   "shards": 5,
   "task_names": [
     "compact-candidate-models",
+    "compact-content-similarity-judge-merge-line-holdout-scores",
     "compact-council-run-records",
     "compact-counterfactual-scores",
     "compact-feed-health",

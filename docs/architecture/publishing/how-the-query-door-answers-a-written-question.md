@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -46,11 +46,15 @@ non-parquet writer file is left unlisted and the build log names that file. A
 listing that is absent inside the listed range is a file gap, not an empty day.
 
 The build hands the page each ledger's newest listed day as
-`__RAW_LISTED_THROUGH__`. A page script that sets `__RAW_LISTED_THROUGH__` to
-an empty object reads no writer's file, as the browser tests that serve a
-ledger they built do: a built ledger has no writer's files, so the build's list
-would name days of the canary's. The shipped page sets nothing, and no page
-script can name a day the build did not list.
+`__RAW_LISTED_THROUGH__`. `frontend/scripts/raw-listed-through.mjs` reads it
+from the listings staged under `frontend/static/state/raw/`, and it finds
+`frontend/static/` from its own place, not from the folder the build runs in.
+That folder is committed, so a build that cannot find it stops rather than
+handing the page an empty list. A page script that sets
+`__RAW_LISTED_THROUGH__` to an empty object reads no writer's file, as the
+browser tests that serve a ledger they built do: a built ledger has no writer's
+files, so the build's list would name days of the canary's. The shipped page
+sets nothing, and no page script can name a day the build did not list.
 
 ## Archive tier
 
@@ -121,6 +125,8 @@ The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` 
 **An archive that cannot be read degrades the answer and does not fail it** (`CLAUDE.md` section 1a). Two choices were rejected. Failing the question in the site's words blamed the site for the archive's fault (`No file on this site holds ...`, or `... has no days on this site yet.` when the archive had no index), and threw away the site's days, which were readable. Failing it in the archive's words told the truth and answered nothing. Reader and Jony chose the words on 2026-10-07. They chose `repository`, because the console never says `archive`, and on the reader site Archive is the list of past digests. They did not choose `GitHub`, because the address is a config value. `Could not read` stays true for all four faults, where `did not answer` does not. One sentence for each ledger never names a ledger the archive answered for. The retry is there because the design system gives every failed fetch one ([design-system.md](../../concepts/design-system.md)).
 
 **The column rail reads a ledger's newest file, not a day of the window.** Fowler ruled on 2026-10-07. Before, the rail asked `DESCRIBE` over the ledger's newest named day, so a ledger whose newest day was empty or lost listed no column; `candidate-models` listed none on the live site. Two choices were rejected. Describing from the newest day that holds rows would be a second rule for "the newest file", and it skips a file with zero rows, which the empty view reads. Letting `DESCRIBE` alone read the empty views would make one statement a special case of the rule that a span with no file answers `quiet`. The rail may read a file older than the window, because it returns no rows: the window chooses which rows an answer holds, and columns belong to the ledger, not to a day. The cost: when a ledger's newest file is a closed month's, the rail fetches that whole file once a page.
+
+**The build finds the staged listings from the script's own place.** Fowler ruled on 2026-10-08. Before, the script took `frontend/static` relative to the folder the build runs in, `frontend/`, so it looked in `frontend/frontend/static`, found nothing, and every build handed the page an empty list: the page read no writer's day. Two choices were rejected. Handing the script a folder from `vite.config.ts` would leave the build's own call checked only by a build, which is how the fault hid. Taking `static` relative to the working folder, as `copy-visuals.mjs` writes it, is right only while every caller runs in `frontend/`. A static folder that is not there now stops the build, because only a wrong path misses a committed folder.
 
 ## See also
 

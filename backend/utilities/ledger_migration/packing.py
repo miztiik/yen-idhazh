@@ -50,7 +50,7 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 f"to move into yet: its entry becomes {Grain.RAW_AND_COMPACT.value} in the "
                 "change that moves its writers and readers"
             )
-        task = f"compact-{name.value}"
+        task = config.compaction_task(name, registry=entries)
         policy = tasks.get(task)
         if not isinstance(policy, CompactionPolicy):
             raise RefusedError(
@@ -102,7 +102,7 @@ def policies_for_roots(
             if root_name == "state":
                 selected[state_dir][name] = production[name]
                 continue
-            trial = tasks.get(f"compact-trial-{name.value}")
+            trial = tasks.get(config.compaction_task(name, trial=True))
             if isinstance(trial, CompactionPolicy) and root_name in trial.state_roots:
                 root_owns = [
                     folder for folder in trial.owns if folder.startswith(f"{root_name}/")

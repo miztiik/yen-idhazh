@@ -20,14 +20,16 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 from pydantic import ValidationError
 
-from idhazh import day_partition, ledger
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
-from idhazh.telemetry import inventory
 
 pytestmark = pytest.mark.contract
 
@@ -141,45 +143,36 @@ def test_the_labeller_is_recorded_rather_than_checked_against_a_roster() -> None
         MergeLineHoldoutScore.model_validate(payload | {"labeller": "two\nlines"})
 
 
-def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
-    """A third level is invisible to the day inventory and the miss is silent."""
-    relpath = ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, A_DAY)
+def test_the_door_roots_keep_the_similarity_judge_folder() -> None:
+    """The ledger keeps its family nest and moves only under raw and compact."""
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    entry = ledger.entry(which)
 
-    assert relpath == "state/content-similarity-judge/merge-line-holdout-scores/2026/09/20.csv"
-    assert (
-        ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, A_DAY).as_posix()
-        == relpath
+    assert entry.grain is Grain.RAW_AND_COMPACT
+    assert entry.prefix == ("content-similarity-judge", "merge-line-holdout-scores")
+    assert ledger.raw_root(Path(ledger.STATE_DIRNAME), which).as_posix() == (
+        "state/raw/content-similarity-judge/merge-line-holdout-scores"
     )
 
-    segments = relpath.removeprefix(f"{ledger.STATE_DIRNAME}/").split("/")
-    assert segments[:2] == list(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix)
-    assert segments[2:] == ["2026", "09", "20.csv"], "the day tree gained a directory level"
 
-
-def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) -> None:
-    """A ledger this row creates is visible rather than silently absent."""
+def test_the_door_reader_finds_the_raw_file_this_store_wrote(tmp_path: Path) -> None:
+    """A ledger this row creates is visible through the door."""
     state_root = tmp_path / ledger.STATE_DIRNAME
-    for day in (A_DAY, ANOTHER_DAY):
-        path = ledger.path(state_root, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, day)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            ledger.render_file(
-                MergeLineHoldoutScore.csv_columns(),
-                [a_scoring("a-line-scored-against-the-holdout").csv_row()],
-            ),
-            encoding="utf-8",
-            newline="",
-        )
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    row = a_scoring("a-line-scored-against-the-holdout")
+    ledger.persist(
+        state_root,
+        [row],
+        ledger=which,
+        covers=A_DAY,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.OPERATOR,
+            shard=0,
+            producer="tests.contracts.test_merge_line_holdout_score",
+            git_sha=SEED_COMMIT,
+        ),
+    )
 
-    report = inventory.files(state_root, date=A_DAY)
-
-    assert any(
-        "content-similarity-judge/merge-line-holdout-scores/2026/09/20.csv" in line
-        for line in report
-    ), report
-
-    root = ledger.tree_root(state_root, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES)
-    assert [day_partition.date_of(found) for found in day_partition.day_files(root)] == [
-        A_DAY,
-        ANOTHER_DAY,
-    ]
+    assert ledger.load_days(state_root, which, [A_DAY], model=MergeLineHoldoutScore) == [row]
