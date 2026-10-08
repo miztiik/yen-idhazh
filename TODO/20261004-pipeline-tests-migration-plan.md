@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-09
 **Level**: 5 for the approved root design; 2 for the first tooling phase.
-**Status**: Rows 1 to 5 shipped a layout this plan approved and row 5 committed, but it put `raw`/`compact` inside each trial root (`state/pipeline-tests/<case>/raw/...`) instead of tier first like every other ledger (`state/raw/<ledger>/...`). The user caught this 2026-10-09 and ordered a correction: tier stays the top segment, and the trial's own bench/case names splice in after it (`state/raw/pipeline-tests/<case>/...`), with traces nesting inside their own `state/traces/` the same way. Section 7 carries the corrected design and rows 6 to 8 replace rows 2 to 5's root shape.
+**Status**: DONE. Rows 1 to 5 shipped a layout this plan approved and row 5 committed, but it put `raw`/`compact` inside each trial root (`state/pipeline-tests/<case>/raw/...`) instead of tier first like every other ledger (`state/raw/<ledger>/...`). The user caught this 2026-10-09 and ordered a correction: tier stays the top segment, and the trial's own bench/case names splice in after it (`state/raw/pipeline-tests/<case>/...`), with traces nesting inside their own `state/traces/` the same way. Section 7 carries the corrected design; rows 6 to 8 (#1443, #1438, #1465) replaced rows 2 to 5's root shape in code, config and committed data. Every pipeline-tests path builder, registry overlay, compactor, reader and the six committed trial files now resolve tier-first; no root-first address remains. Deferred: three stale `measure.yml` comments (no functional/command text) left over from the pre-#1438 model, blocked only by the merging worktree's OAuth scope, tracked for a small follow-up comment-only PR.
 
 ## 0. Operating contract
 
@@ -65,7 +65,7 @@ Table D - PR phases
 | D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | DONE | pt-row-5 | - | Fowler |
 | D6 | 6 | Path builders carry a swappable trial registry, with no production call site changed | 5 | F | DONE #1443 | pipeline-tests-tier-roots-fix-phase1 | #1443 | Fowler |
 | D7 | 7 | Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root | 6 | G | DONE #1438 | pipeline-tests-tier-roots-fix | #1438 | Fowler |
-| D8 | 8 | Committed trial files move again, byte for byte, from root-first to tier-first | 7 | H | IN PROGRESS | pipeline-tests-phase3-data-relocation | - | Fowler |
+| D8 | 8 | Committed trial files move again, byte for byte, from root-first to tier-first | 7 | H | DONE #1465 | pipeline-tests-phase3-data-relocation | #1465 | Fowler |
 
 ## 2. Row #1 - Reusable migration operations ship
 
@@ -395,7 +395,7 @@ Table O - Corrected design
   - Not moved (O5): `state/pipeline-tests/no-visual-plan/traces/2026/09/29/2026-09-29-36540131911-1-work-00.jsonl`, `...-work-01.jsonl`, `state/pipeline-tests/production-settings/traces/2026/09/29/2026-09-29-36540131911-1-work-00.jsonl`, `...-work-01.jsonl`
 - **Acceptance gates:** Local, in order: (1) confirm no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml` or `measure.yml` is queued or running, or pause and name the run; (2) `git mv` each raw/compact file, comparing SHA-256 before and after; (3) a compaction/read smoke against the new addresses using the corrected builders; (4) the full test and doc gates. CI: full merge-candidate checks.
 - **Oracle:** Each moved file has the same SHA-256 at its tier-first path; no file is left at the row-5 root-first address; the four trace files are byte-identical and untouched at their row-5 address; a read through the corrected builders at the new address returns the same rows row 5's verifier accepted.
-- **Status:** IN PROGRESS, worktree `pipeline-tests-phase3-data-relocation`. The six files are `git mv`'d (SHA-256 and git blob SHA confirmed identical pre/post against `origin/main`); gate (1) cleared (all five named workflows confirmed not queued/running). Pushed for PR. Note: three stale `measure.yml` comments (still describing the old whole-state-root-swap model) could not be included in this branch - this worktree's token lacks the `workflow` OAuth scope needed to push workflow-file changes - and are deferred to a follow-up comment-only PR from a token with that scope.
+- **Status:** DONE, pull request #1465 (squash SHA `f27df00e084caa30c24fb5384be76c3314416386`), merged into `main`. The six files are `git mv`'d (SHA-256 and git blob SHA confirmed identical pre/post against `origin/main`); gate (1) cleared (all five named workflows confirmed not queued/running); CI (scope/gates/robots/site/browser) green. Note: three stale `measure.yml` comments (still describing the old whole-state-root-swap model) could not be included in that PR - the pushing worktree's token lacked the `workflow` OAuth scope needed to push workflow-file changes - and remain deferred to a follow-up comment-only PR from a token with that scope. No functional/command text in `measure.yml` is wrong; only those three comments are stale.
 
 ## See also
 
