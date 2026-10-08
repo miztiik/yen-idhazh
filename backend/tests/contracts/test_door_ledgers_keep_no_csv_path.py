@@ -2,9 +2,9 @@
 
 A ledger moves to the door when its entry in `config/ledgers.json` switches to
 `raw-and-compact`, and that switch is the only one: every rule here reads it.
-Each test holds one place a CSV ledger is written down - the day trees'
-settlement table, the union merge driver, the prune verb's CSV targets, a
-compaction, a folder a declaration owns - to the moved ledgers. Every test reads
+Each test holds one place a CSV ledger is written down - the union merge driver,
+the prune verb's CSV targets, a compaction, a folder a declaration owns - to the
+moved ledgers. Every test reads
 the committed registry and the committed declarations under `config/gardener/`,
 never a fixture garden, which holds declarations the committed config does not.
 
@@ -24,7 +24,7 @@ from idhazh import config, ledger, path_classes
 from idhazh.contracts import file_envelope
 from idhazh.contracts.file_envelope import Tier
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.ledger import arrow_schema, keys
 from idhazh.telemetry import prune
@@ -68,14 +68,6 @@ def _door_ledgers() -> frozenset[LedgerName]:
 def _under_state(*segments: str) -> str:
     """A folder under `state/`, spelled the way a declaration's `owns` spells one."""
     return "/".join((ledger.STATE_DIRNAME, *segments))
-
-
-def test_a_door_ledger_has_no_csv_shape() -> None:
-    """A moved ledger leaves the day trees' settlement table and the day trees with it."""
-    door = _door_ledgers()
-
-    assert sorted(member.value for member in door & set(keys._TREE_SHAPES)) == []
-    assert sorted(member.value for member in door & DAY_TREES) == []
 
 
 def test_a_door_ledger_takes_no_union_driver() -> None:

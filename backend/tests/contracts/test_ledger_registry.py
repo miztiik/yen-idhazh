@@ -23,7 +23,7 @@ from pydantic import ValidationError
 
 from idhazh import assemble, ledger, telemetry
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgersConfig
 from idhazh.ledger import paths
 from idhazh.telemetry.publish import day_metrics
@@ -440,7 +440,15 @@ def test_the_two_forms_of_one_address_agree() -> None:
         assert paths.relpath(member, covers) == f"{paths.STATE_DIRNAME}/{under}"
 
 
-@pytest.mark.parametrize("member", sorted(DAY_TREES), ids=lambda m: m.value)
+@pytest.mark.parametrize(
+    "member",
+    [
+        member
+        for member in CSV_LEDGERS
+        if paths.entry(member).grain in {Grain.DAY_FILE, Grain.DAY_TREE}
+    ],
+    ids=lambda m: m.value,
+)
 def test_a_dated_ledger_handed_no_period_refuses(member: LedgerName) -> None:
     """`path` never guesses a day, because a guessed day files a row out of reach."""
     with pytest.raises(ValueError, match="needs the YYYY-MM-DD day"):
@@ -578,20 +586,19 @@ def test_a_nested_door_ledger_prefix_must_end_with_its_value() -> None:
         LedgersConfig.model_validate(a_registry([moved, *without("content-similarity-judge")]))
 
 
-def test_every_day_tree_files_as_a_day_directory() -> None:
-    """Every settled day tree is a day directory, and the two that are not settled are named.
+def test_only_the_trace_and_the_digest_fragment_file_as_a_day_directory() -> None:
+    """The two day directories are named, so a third is a decision rather than an accident.
 
     A trace is JSON lines and a run's block of a day is one JSON file, so
     neither has rows for a settlement key to repeat: both are day directories a
-    writer files into, and neither is a settled day tree. A third day directory
-    fails here until somebody decides which it is.
+    writer files into. A third day directory fails here until somebody decides
+    what settles its rows.
     """
     day_directories = {
         member for member in LedgerName if paths.entry(member).grain is Grain.DAY_TREE
     }
 
-    assert day_directories - set(DAY_TREES) == {LedgerName.TRACES, LedgerName.DIGEST_FRAGMENTS}
-    assert set(DAY_TREES) <= day_directories
+    assert day_directories == {LedgerName.TRACES, LedgerName.DIGEST_FRAGMENTS}
 
 
 def test_an_entry_that_walks_out_of_state_is_refused() -> None:

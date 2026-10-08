@@ -2,14 +2,13 @@
 
 What each ledger answers and why it files at the grain it does is
 `docs/architecture/contracts/state-ledgers.md`. This page of the contract graph
-says only which ledgers there are and which of them a writer files a segment
-into, so nothing here depends on where a file is put or how its rows are read.
+says only which ledgers there are, so nothing here depends on where a file is
+put or how its rows are read.
 """
 
 from __future__ import annotations
 
 from enum import UNIQUE, StrEnum, verify
-from typing import Final
 
 
 @verify(UNIQUE)
@@ -66,7 +65,3 @@ class LedgerName(StrEnum):
     GARDENER = "gardener"
     RUN_PLAN = "run-plan"
     COUNCIL_RUN_RECORDS = "council-run-records"
-
-
-#: Ledgers whose writers still file one CSV segment per run under a day directory.
-DAY_TREES: Final[frozenset[LedgerName]] = frozenset()

@@ -79,16 +79,6 @@ through `appended`, and must be under the wake day.
 
 **One record per shard, always.** Every task adds its row, a dry run included,
 so a shard of nothing but dry runs still writes one file and still lands it.
-
-**A task that folds folds after its window, on a switch of its own.** A
-retention task whose declaration carries a `fold` block settles the closed days
-of the CSV day trees it walks (`closed_day_fold`), once its window's pass has
-returned, skipping every day folder that pass took. What the fold writes and
-deletes is held to what the task owns like everything else, and it lands when
-the fold is live whatever the window's `dry_run` says - a live fold inside a
-dry task would otherwise change the disk and stage nothing. A window that
-stopped - failed or deferred - stops the fold for that wake: what it took is
-then a list nothing has checked, and a closed day loses nothing by waiting.
 """
 
 from __future__ import annotations
@@ -113,13 +103,12 @@ from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
     CollectionTaskPolicy,
     CompactionPolicy,
-    RetentionPolicy,
     TaskKind,
     TaskLifecycleStatus,
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import closed_day_fold, error_cause, event_log, registry, report, shards
+from idhazh.gardener import error_cause, event_log, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.error_cause import ErrorCause
@@ -270,10 +259,8 @@ class _Ran:
     #: Whether the task's row says `failed`: a code defect, the one stop that
     #: turns the shard's exit code to 1.
     failed: bool
-    #: What the task's fold did. None when it has no fold, or the fold did not run.
-    folded: closed_day_fold.Folded | None = None
-    #: The exception that stopped the task or its fold, which its event names
-    #: by type and place. None when nothing raised.
+    #: The exception that stopped the task, which its event names by type and
+    #: place. None when nothing raised.
     failure: BaseException | None = None
 
 
@@ -284,7 +271,6 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
     type and where it was raised; its text goes nowhere.
     """
     started = time.monotonic()
-    folded: closed_day_fold.Folded | None = None
     failure: BaseException | None = None
     try:
         outcome = (
@@ -298,25 +284,13 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
     except Exception as caught:
         fault = error_cause.fault_of(error_cause.classify(caught))
         outcome, failure = _nothing_reached(name, context.policy, fault), caught
-    policy = context.policy
-    stopped = outcome.stopped_because in (StopReason.FAILED, StopReason.DEFERRED)
-    if not stopped and isinstance(policy, RetentionPolicy) and policy.fold is not None:
-        try:
-            folded = closed_day_fold.run(context, policy.fold, skip=outcome.taken)
-        except closed_day_fold.FoldInterruptedError as stop:
-            folded, failure = stop.so_far, stop.__cause__
-        except Exception as caught:
-            fault = error_cause.fault_of(error_cause.classify(caught))
-            folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, fault=fault)
-            failure = caught
     elapsed = int((time.monotonic() - started) * 1000)
     return _Ran(
         name=name,
         context=context,
         outcome=outcome,
         duration_ms=elapsed,
-        failed=report.ended(outcome, folded)[0] is StopReason.FAILED,
-        folded=folded,
+        failed=outcome.stopped_because is StopReason.FAILED,
         failure=failure,
     )
 
@@ -416,8 +390,6 @@ def _said_finished(ran: _Ran) -> TaskFinished:
         ran.outcome,
         task=ran.name,
         duration_ms=ran.duration_ms,
-        folded=ran.folded,
-        settled=_fold_changes(ran)[0],
         failure=ran.failure,
         collection=policy.collection if isinstance(policy, CollectionTaskPolicy) else None,
     )
@@ -425,42 +397,23 @@ def _said_finished(ran: _Ran) -> TaskFinished:
     return finished
 
 
-def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """What a task's fold wrote and deleted, or would have, as repository paths."""
-    if ran.folded is None:
-        return (), ()
-    root = ran.context.repo_root
-    folders: tuple[closed_day_fold.SettledMonth | closed_day_fold.SettledDay, ...] = (
-        *ran.folded.months,
-        *ran.folded.days,
-    )
-    return (
-        tuple(each.settled.relative_to(root).as_posix() for each in folders),
-        tuple(path.relative_to(root).as_posix() for each in folders for path in each.replaced),
-    )
-
-
 def _touched(ran: _Ran) -> tuple[str, ...]:
-    """Every repository path a task touched: what it wrote, what it took, and what it folded."""
+    """Every repository path a task touched: what it wrote and what it took."""
     taken = () if ran.context.policy.kind == TaskKind.COLLECTION else ran.outcome.taken
-    settled, replaced = _fold_changes(ran)
-    return (*taken, *ran.outcome.written, *settled, *replaced)
+    return (*taken, *ran.outcome.written)
 
 
 def _landed(ran: _Ran) -> tuple[set[str], set[str]]:
     """What a task changed in the tree, and so lands: the paths it wrote, and the ones it deleted.
 
     A dry run's writes and deletions are only reported, so they land nowhere. A
-    report lands dry run or not, because it is what a dry run exists to produce,
-    and a fold lands on its own switch, so a live fold inside a dry task lands
-    too. What a collection task takes lives on GitHub, not in this repository.
+    report lands dry run or not, because it is what a dry run exists to produce.
+    What a collection task takes lives on GitHub, not in this repository.
     """
     live = not ran.context.policy.dry_run
-    folding = ran.folded is not None and not ran.folded.dry_run
-    settled, replaced = _fold_changes(ran) if folding else ((), ())
-    wrote = {*(ran.outcome.written if live else ()), *ran.outcome.appended, *settled}
+    wrote = {*(ran.outcome.written if live else ()), *ran.outcome.appended}
     took = ran.outcome.taken if live and ran.context.policy.kind != TaskKind.COLLECTION else ()
-    return wrote, {*took, *replaced}
+    return wrote, set(took)
 
 
 def _append_path_for(ran: _Ran, appended: str, *, today: str | None = None) -> Path | None:
@@ -533,7 +486,6 @@ def _record(
             work_ended_at=ended,
             cone_bytes=cone_bytes,
             downloaded_bytes=downloaded_bytes,
-            folded=each.folded,
         )
         for each in ran
     ]
