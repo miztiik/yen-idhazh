@@ -37,6 +37,94 @@ its choice is open. Changing one does not change the other.
 | The input | `pairs.json` - the pair set every encoder scored |
 | What each shard printed | `logs/` |
 
+## How the comparison runs
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TD
+  ARCHIVE[("Published days<br/>Title, summary, outlet, day")] --> NEIGHBOUR{"Two articles near<br/>each other in time?"}
+  NEIGHBOUR -->|"No"| SKIP["Not compared<br/>Too far apart to be one event"]
+  NEIGHBOUR -->|"Yes"| OUTLET{"Different outlets?"}
+  OUTLET -->|"No"| DROP["Dropped<br/>Could be a correction or a follow-up"]
+  OUTLET -->|"Yes"| OVERLAP{"How much of the subject<br/>do the two TITLES share?"}
+
+  OVERLAP -->|"0.30 and above"| SAMEBUCKET["Same event<br/>Should score high"]
+  OVERLAP -->|"0.10 to 0.30"| MIDBUCKET["Uncertain<br/>Never scored right or wrong"]
+  OVERLAP -->|"Below 0.10"| DIFFBUCKET["Different events<br/>Should score low"]
+
+  SAMEBUCKET --> PAIRSET[("Pair set<br/>SUMMARIES and pair numbers<br/>The titles stop here")]
+  MIDBUCKET --> PAIRSET
+  DIFFBUCKET --> PAIRSET
+
+  PAIRSET --> ENCODE["One encoder a shard<br/>Encode every summary"]
+  ENCODE --> PROGRESS[("Reading saved<br/>Every 512 articles")]
+  ENCODE --> SCORE["Score every pair<br/>Closeness of two vectors"]
+  SCORE --> TABLE[("Readings<br/>One row an encoder")]
+
+  subgraph OBSERVED["Metrics"]
+    SEPARATION["separation<br/>Chance a same-event pair<br/>outscores a different one (0 to 1)"]
+    LEAN["ambiguous_lean<br/>Share of uncertain pairs<br/>scored above halfway (0 to 1)"]
+    RATE["articles_a_second<br/>Encoding rate on the runner (count/s)"]
+  end
+
+  SCORE --- OBSERVED
+
+  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
+  classDef decision fill:#ecfeff,stroke:#0e7490,stroke-width:1.5px,color:#164e63;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#14532d;
+  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#7f1d1d;
+  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#78350f;
+  classDef data fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
+  classDef metric fill:#ffffff,stroke:#475569,stroke-width:1.5px,color:#1f2937;
+
+  class ENCODE,SCORE stage;
+  class NEIGHBOUR,OUTLET,OVERLAP decision;
+  class SAMEBUCKET yes;
+  class DIFFBUCKET no;
+  class MIDBUCKET,DROP,SKIP warn;
+  class ARCHIVE,PAIRSET,PROGRESS,TABLE data;
+  class SEPARATION,LEAN,RATE metric;
+```
+
+**The encoders read summaries. They never read a title.** A title decides which
+pairs are worth testing and is then set aside. Letting an encoder see the same
+signal that built the answer key would flatter every one of them equally.
+
+An article is encoded once however many pairs it appears in: 10,553 articles
+carry 15,034 pair comparisons, and comparing two vectors is nearly free next to
+producing one.
+
+### The same-outlet rule, and what it costs
+
+Every pair in all three buckets is from **two different outlets**. One outlet
+publishing twice about one subject on one day is usually a correction, an
+update, or a follow-up - *"Tencent leases 100,000 chips"* followed by *"What the
+Tencent chip lease means for Oracle"*. Whether those are one event or two is a
+real question with a real answer, and it is not the question this comparison
+asks.
+
+Counted over the 44 published days: **488 high-overlap pairs come from one
+outlet, against 5,517 from two.** The rule drops 8.1 percent of what it could
+have used.
+
+Dropping them is the right trade here and the wrong one later.
+
+**Right here**, because the pair set has no human judgement in it. Every pair's
+label comes from a title-overlap rule, and that rule is at its least reliable
+exactly where one outlet writes about one subject twice: the titles will share
+most of their words whether it is a correction of one event or coverage of two.
+Keeping them would put the noisiest pairs in the bucket the ranking depends on.
+
+**Wrong later**, because a correction and a follow-up are precisely what the
+pipeline has to tell apart, and this set says nothing about whether an encoder
+can. Plan 63 row R14 builds the set a person validates, and that one has no
+reason to drop same-outlet pairs - a person can say which of the two it is,
+where a word-overlap rule cannot.
+
+So this comparison ranks encoders on the question *"can you tell one event from
+another"*, and leaves *"can you tell an update from a new story"* to a set that
+can actually answer it.
+
 ## Who wrote the labels
 
 **Nobody. There are none.** This set has no human judgement in it at all, and
