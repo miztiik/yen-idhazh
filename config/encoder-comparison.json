@@ -11,7 +11,8 @@
     "next_day_window": 1,
     "min_title_words": 3,
     "max_pairs_a_side": 8000,
-    "max_ambiguous_pairs": 4000
+    "max_ambiguous_pairs": 4000,
+    "max_related_pairs": 2000
   },
   "encode": {
     "batch_size": 32,
