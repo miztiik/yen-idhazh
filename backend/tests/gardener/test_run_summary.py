@@ -151,8 +151,8 @@ def passing() -> list[TaskFinished]:
                 days_packed=["2026-09-20", "2026-09-21", "2026-09-22"], months_closed=["2026-08"]
             ),
             recovered=[
-                Recovery(note=RecoveryNote.CARRIED_OVER, subject="2026-09-20"),
-                Recovery(note=RecoveryNote.CARRIED_OVER, subject="2026-09-21"),
+                Recovery(note=RecoveryNote.REPACKED_FROM_RAW, subject="2026-09-20"),
+                Recovery(note=RecoveryNote.REPACKED_FROM_RAW, subject="2026-09-21"),
             ],
         ),
         a_task("traces", TaskOutcome.NOT_DUE),
@@ -218,8 +218,8 @@ def test_a_shard_that_passed_says_where_its_record_went_and_one_row_a_task() -> 
         "\n"
         "Handled without stopping:\n"
         "\n"
-        "- `compact-visual-prunes`, 2026-09-20 and 1 more: too many raw files for one pass, so "
-        "the newest wait for the next wake (carried-over)\n"
+        "- `compact-visual-prunes`, 2026-09-20 and 1 more: packed again from its raw files, "
+        "because no index named it (repacked-from-raw)\n"
     )
 
 
