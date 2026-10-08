@@ -205,7 +205,7 @@ reads are here and not how many. These are `backend/`'s;
 | `ledger.load_source_counts` | one item-health day, through `ledger.load_days` | one date |
 | `telemetry.silicon`'s clock step | the host-fingerprint raw files of one day, through `ledger.list_raw_files` | one date: it reads back the row its own probe filed |
 | `ledger.held_days`, `ledger.held_months` | the compact indexes of one door ledger and the names of its raw day folders, never a data file | the days and months the ledger holds. It grows by one name a raw day until a compaction packs it, and by one index entry a packed day, month or year. `source_health._recent_item_health`, `machine.publish`, `public_telemetry.publish`, `run_timeline.publish` and the `telemetry-aggregate` task ask it which days or months exist. `idhazh telemetry prune` on a door ledger asks it how many days lie outside its range, and reads the same indexes through `ledger.find_holding_files` to find the files that hold the range |
-| `similarity.holdout.score_marks` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date its rows name | the length of the hand-marked file, and nothing else. The verb that calls it is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
+| `similarity.holdout.marked_pairs`, then `similarity.holdout.score_marks` | the holdout marks filed inside `similarity.holdout_reach_days` of the scoring date, through `ledger.load_days`, then one published day payload for each distinct date those marks name | the reach and the marks inside it, and nothing else. The verb that calls them is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 | `gardener_publish.Checkout.committed_folders`, which names task folders | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: a wake whose checkout is empty for a named task folder can only ask the commit |
@@ -411,31 +411,38 @@ the last day there was.
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore`, `similarity-ledger.fittedLines` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint, merge-line holdout score or fitted merge line ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
-| `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
+| `similarity-holdout.holdoutReading` | the packed holdout marks inside the reach, through `similarity-holdout.markedPairs` and the query door's `sliceFromDisk`, then one published day payload for each distinct date those marks name | `similarity.holdout_reach_days`, 730 days that end on the site's newest published day, then the marks inside it - see below |
 | `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
-**The holdout read is the one on this page whose cover is a file rather than a
-number, and it is the one that reaches outside the window.** It asks whether the
-merge line still sits clear of every pair a person marked as two different
-stories, and that question is about those marks: a published day nothing marks
-is never opened, and a marked pair on a day the window no longer reaches still
-sets a floor the line has to stay above. So the bound cannot be a span of days
-without deleting evidence, and it cannot be a knob without a knob that means
-"how many of somebody's marks to believe".
+**The holdout read is the one on this page that reaches outside the window, and
+its cover is a reach of its own.** It asks whether the merge line still sits
+clear of every pair a person marked as two different stories, and that question
+is about those marks: a published day nothing marks is never opened, and a
+marked pair on a day the window no longer reaches still sets a floor the line has
+to stay above. So the bound is not the window preset. It is
+`similarity.holdout_reach_days`, 730 days back from the day the read is about,
+both ends named: the marks filed in those days are read and no others, and a
+mark filed before them stops counting until somebody harvests it again. The
+marks were one file a person rewrote whole, read whole, until they moved onto the
+ledger door. A door ledger gains a file with every harvest, so its read names a
+fixed number of days instead (Guardrail #12), and the loader refuses a
+compaction that keeps fewer.
 
-What it costs: at most two day payloads a marked row, de-duplicated to one read
-a distinct date. The committed file holds 200 marks naming 25 distinct dates, so
-it opens 25 files. **Another year of archive adds none of them.** Another
-hundred marks add at most a hundred, and they are added by a person or a
+What it costs: the marks' three compact indexes and the packed files of the
+reach's days that hold marks - at most about two years of day, month and year
+files - then at most two day payloads a mark, de-duplicated to one read a
+distinct date. The 200 marks harvested on 2026-09-19 name 25 distinct dates, so
+a read opens 25 day payloads. **Another year of archive adds none of them.**
+Another hundred marks add at most a hundred, and they are added by a person or a
 labelling run rather than by the pipeline - which is the distinction Guardrail
 #12 draws: cost that rises because somebody asked for more is priced where they
 asked, and cost that rises because a run appended another day is the cost this
 page exists to refuse.
 
-The read is bounded inside each file too. The addresses and the dates the file
-names are worked out before the first day is opened, so a day payload is parsed
+The read is bounded inside each file too. The addresses and the dates the marks
+name are worked out before the first day is opened, so a day payload is parsed
 once and everything outside those addresses is dropped on the way past - which
 matters, because the vector block is most of what a day payload weighs.
 

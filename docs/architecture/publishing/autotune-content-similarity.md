@@ -117,11 +117,11 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The rule is the first round hundredth above the highest-scoring pair a person marked as two stories.** That is how 0.94 was chosen, over the 11 committed days this table covers and the one marked-apart pair they held.
 
-**The margin is negative as of 2026-09-19, and the console now draws it.** `state/content-similarity-judge/holdout-pairs.csv` holds 200 marked pairs, 4 of them marked as two different stories. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sits **0.0007 above** the 0.94 floor, so the line as committed would merge two stories somebody read as two. One pair of the four is on the wrong side; the other three clear it. The 0.0083 that was measured on 2026-09-01 was the margin over the evidence that existed then, and this replaces it.
+**The margin is negative as of 2026-09-19, and the console now draws it.** The hand marks hold 200 marked pairs, 4 of them marked as two different stories. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sits **0.0007 above** the 0.94 floor, so the line as committed would merge two stories somebody read as two. One pair of the four is on the wrong side; the other three clear it. The 0.0083 that was measured on 2026-09-01 was the margin over the evidence that existed then, and this replaces it.
 
 **The way to widen it is more labels, not a higher number**, and that has not changed: 0.95 would clear all four marks and lose ten groups a person read as one story each.
 
-**The line already costs the reader on the other side, and the console draws that too.** The same file holds 196 pairs marked as ONE story. Recomputed the same way, **117 of them score below 0.94**, so the vector rule alone leaves those stories on the page twice; the identical-headline joiner catches whichever of them share a headline, and nothing catches the rest. That is not an argument for a lower line - it is the second cost of any line, and a panel reporting only the false merges reports half of what the number does. Measured 2026-09-19 on a developer machine / Node 24.12.0, over the committed day payloads at the shipped weights; deterministic, so no spread.
+**The line already costs the reader on the other side, and the console draws that too.** The same marks hold 196 pairs marked as ONE story. Recomputed the same way, **117 of them score below 0.94**, so the vector rule alone leaves those stories on the page twice; the identical-headline joiner catches whichever of them share a headline, and nothing catches the rest. That is not an argument for a lower line - it is the second cost of any line, and a panel reporting only the false merges reports half of what the number does. Measured 2026-09-19 on a developer machine / Node 24.12.0, over the committed day payloads at the shipped weights; deterministic, so no spread.
 
 **The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
 
@@ -302,7 +302,7 @@ console is where the loop is watched once it starts
 | `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? |
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
 | `content-similarity-judge/fitted-thresholds`, under `state/raw/` and `state/compact/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
-| `state/content-similarity-judge/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
+| `content-similarity-judge/holdout-pairs`, under `state/raw/` and `state/compact/` | Which pairs did a person mark, and which way? |
 | `content-similarity-judge/metrics`, under `state/raw/` and `state/compact/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 
 The fields, the types and the bounds are in
@@ -447,6 +447,8 @@ flowchart TD
 
 `/console/judgement/` draws the margin above, and to draw it the route's build-time `load` scores every hand-marked pair itself. Nothing else in the console scores anything, and the reason is narrow: **no run has ever scored these pairs**. They are a person's marks rather than judged pairs, and nothing writes a score for them anywhere, so this is the first derivation and not a second opinion about one. A judged pair is the opposite case - its score is already on its row, and recomputing that in a page would be two verdicts about one number.
 
+**The marks are a door ledger, read over a reach.** A person saves each labelling with `backend/utilities/sample_sheet.py --harvest`, as one file under `state/raw/content-similarity-judge/holdout-pairs/` for the day the marks were made, and the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/` ([label-the-similarity-holdout.md](../../how-to/label-the-similarity-holdout.md)). Both readers - the scoring verb and the page - read `similarity.holdout_reach_days` UTC days back from the day they are about, 730 in `config/idhazh.json`, and no further. So the read stays one size however long the ledger grows (Guardrail #12), and a mark older than the reach stops counting until somebody harvests it again. The marks' compaction may not delete a day inside the reach, and the gardener's loader refuses one that would. **A pair marked again is read once, with its newest mark.** The door settles each day by the two addresses and the newer `marked_on`, and both readers apply that same rule across the days of the reach, so a corrected mark replaces the one it corrects rather than counting beside it. The verb reads each day from whichever file holds it, raw or packed, so it sees a mark as soon as a harvest saves it; the page reads packed days only, so a new mark reaches the panel once the gardener has packed its day.
+
 **The four cells are the exception, and since 2026-09-21 they come off a committed row.** `python -m idhazh score-merge-line-holdout` counts what the line did to every marked pair and writes one row through the ledger door under `state/raw/content-similarity-judge/merge-line-holdout-scores/`; the gardener packs it under `state/compact/content-similarity-judge/merge-line-holdout-scores/`. The page reads that packed row and prints it; it does not count the cells again. **Two answers to one question is what the commit exists to stop** - and a reading that exists only while a page renders cannot be held against one taken a month earlier. What the page still derives is the per-pair score, because no row carries one and the panel draws a dot for each.
 
 **It scores the line, not the judge.** The marks carry no verdict and the step calls no model. A pair is joined exactly when the weighted score reaches the line, which is the one branch of the diagram above that the line decides. How well a judge agrees with the marks is a different measurement with a different budget, and no row here answers it.
@@ -455,9 +457,9 @@ flowchart TD
 
 **Counts, and never one rate.** With 196 of the 200 marks on one side, always answering "one story" scores 98 percent and measures nothing. The row carries the four cells and the negative population beside them, so every rate a reader derives is derived with the denominator it came from in view (Guardrail #10). The two directions of a mistake stay apart for the reason the Editor gives above: a missed group shows the reader one story twice, a false merge hides one of them.
 
-**The reading is refused below half the marked file.** Retention deletes published days the marked file still names, so a run can resolve almost nothing and still produce four cells that add up - and four small cells read as a line that got nearly everything right. `HOLDOUT_RESOLVED_SHARE_MIN` is a constant beside `HOLDOUT_TWO_STORY_MAX` in `backend/idhazh/contracts/knobs/placement.py` rather than a knob in `config/`, because it says what makes the reading mean anything and a share that can be tuned down is a share somebody tunes down on the morning the reading goes red (owner, 2026-09-21).
+**The reading is refused below half the marks read.** Retention deletes published days the marks still name, so a run can resolve almost nothing and still produce four cells that add up - and four small cells read as a line that got nearly everything right. `HOLDOUT_RESOLVED_SHARE_MIN` is a constant beside `HOLDOUT_TWO_STORY_MAX` in `backend/idhazh/contracts/knobs/placement.py` rather than a knob in `config/`, because it says what makes the reading mean anything and a share that can be tuned down is a share somebody tunes down on the morning the reading goes red (owner, 2026-09-21).
 
-**`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a validator cannot open a CSV; the verb retakes the reading on its way past and prints both numbers when they disagree. It writes nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
+**`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a config validator does not read a ledger; the verb retakes the reading on its way past and prints both numbers when they disagree. It writes nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
 
 **One term is reproduced and two overrides are not.** The panel and the verb both compute `cosine_weight * cosine`, which is exactly what the floor is applied to. Neither reproduces the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures, and counting them would credit the line with a merge it did not make.
 
@@ -588,7 +590,7 @@ news cluster can produce before it sets the line, and the benchmark cluster
 produced four. Two does not survive that; six does. Moved to 0.03 on 2026-09-19.
 
 **The margin the old cap guarded was withdrawn on 2026-09-19, and no line
-replaces it.** `state/content-similarity-judge/holdout-pairs.csv` now holds 200 pairs
+replaces it.** The hand marks now hold 200 pairs
 labelled by `claude-opus-4.6` reading each pair's title and summary: 196 one
 story, 4 two stories. The four score 0.9407, 0.9374, 0.9352 and 0.9343,
 recomputed from the committed day vectors as 0.940676, 0.937400, 0.935201 and
@@ -617,7 +619,7 @@ false, so nothing reads any of these knobs and the pass compares against
 of the four two-story pairs sit two published days apart and could not fold at
 any line. The fourth, at 0.9343, is same-day and sits below the floor.
 
-**What is not decided.** Whether the holdout file should become a live floor the
+**What is not decided.** Whether the hand marks should become a live floor the
 fit reads on every day - refusing to apply a line at or below the highest
 two-story mark - rather than a number copied into source. That is the structural
 fix for the class of defect this page just recorded, and it is an owner decision.

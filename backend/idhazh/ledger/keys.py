@@ -105,7 +105,7 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
 
 #: What makes two merge-line holdout rows the same record. One run scores one
-#: line against one marked file on one date, so a second row under those two
+#: line against the marks it reads on one date, so a second row under those two
 #: cells is a second attempt at one execution rather than a second answer. The
 #: marks are hand-written and the day payloads are committed, so two attempts
 #: count the same cells and the first row wins.
@@ -116,6 +116,17 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 #: imported here as the module loads would sit in the council's import closure
 #: (`backend/tests/council/test_council_runs_without_a_judge.py`).
 MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
+
+
+#: What makes two hand marks the same record: one pair of addresses, in the
+#: order the mark names them. The day is not in the key, because a pair a person
+#: marks again is the same pair with a newer mark, and a key that held the day
+#: would count it twice. `HOLDOUT_PAIR_RULE` decides which of two marks stays.
+#:
+#: The shape these two cells name is `idhazh.contracts.similarity_holdout_pair`,
+#: and the door table below imports it only when its ledger is asked about, for
+#: the reason given beside `MERGE_LINE_HOLDOUT_SCORE_KEY`.
+HOLDOUT_PAIR_KEY: Final = ("left_url", "right_url")
 
 
 #: What makes two judged-pair rows the same record. `run_id` is in the key
@@ -221,8 +232,8 @@ PUBLISHED_KEY: Final = ("url_key", "published_on", "item_id")
 
 #: Which of two rows holding one key survives the settlement. `True` means the
 #: later row replaces the one already kept. A key with no rule keeps the first
-#: row it saw, which is what every ledger but one wants: there a repeat is the
-#: same attempt written twice and the two rows agree.
+#: row it saw, which is what most ledgers want: there a repeat is the same
+#: attempt written twice and the two rows agree.
 Preference = Callable[[dict[str, str], dict[str, str]], bool]
 
 
@@ -265,6 +276,17 @@ def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     return bool(later.get("machine_job")) and not kept.get("machine_job")
 
 
+def _holdout_pair_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
+    """The newer mark wins: a later `marked_on`, or the same day filed later.
+
+    A person marks a pair again to correct the first mark, so the mark taken last
+    is the one the merge line is scored against. A later row with the same
+    `marked_on` is the same day's harvest run again, and it wins for the same
+    reason. Both cells are `YYYY-MM-DD` UTC days, so text order is day order.
+    """
+    return later.get("marked_on", "") >= kept.get("marked_on", "")
+
+
 #: The keys whose repeats can disagree, and how each one picks a winner.
 FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 
@@ -272,9 +294,13 @@ FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 ITEM_HEALTH_RULE: Final[Preference] = _item_health_rule
 
 
+HOLDOUT_PAIR_RULE: Final[Preference] = _holdout_pair_rule
+
+
 _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
     FEED_HEALTH_KEY: FEED_HEALTH_RULE,
     ITEM_HEALTH_KEY: ITEM_HEALTH_RULE,
+    HOLDOUT_PAIR_KEY: HOLDOUT_PAIR_RULE,
 }
 
 
@@ -331,6 +357,13 @@ def _merge_line_holdout_score() -> type[Contract]:
     return MergeLineHoldoutScore
 
 
+def _similarity_holdout_pair() -> type[Contract]:
+    """The hand mark's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
+
+    return SimilarityHoldoutPair
+
+
 def _story_similarity_pair() -> type[Contract]:
     """The judged pair's row contract, imported when its ledger is first asked about."""
     from idhazh.contracts.story_similarity_pair import StorySimilarityPair
@@ -367,6 +400,10 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
         MERGE_LINE_HOLDOUT_SCORE_KEY,
         _merge_line_holdout_score,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: (
+        HOLDOUT_PAIR_KEY,
+        _similarity_holdout_pair,
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
         STORY_SIMILARITY_PAIR_KEY,

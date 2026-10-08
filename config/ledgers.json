@@ -187,10 +187,10 @@
         },
         {
           "name": "holdout-pairs",
-          "grain": "flat",
-          "prefix": ["content-similarity-judge"],
-          "stem": "holdout-pairs",
-          "suffix": ".csv"
+          "grain": "raw-and-compact",
+          "prefix": ["content-similarity-judge", "holdout-pairs"],
+          "stem": null,
+          "suffix": null
         },
         {
           "name": "score-distribution",

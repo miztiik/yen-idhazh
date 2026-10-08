@@ -3,12 +3,12 @@
 Eleven console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
 reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
-busy share stopped holding the stolen half, the article, feed, holdout score and
-fitted line records' column lists, the columns the run timeline reads off every
-row, and the routes the strip draws. A copy that has fallen behind its
-contract draws a panel with a column missing from it, names a column no run
-writes, or prints a correction for the wrong day, and none of those shows up as
-an error anywhere.
+busy share stopped holding the stolen half, the article, feed, holdout score,
+holdout mark and fitted line records' column lists, the columns the run
+timeline reads off every row, and the routes the strip draws. A copy that has
+fallen behind its contract draws a panel with a column missing from it, names a
+column no run writes, or prints a correction for the wrong day, and none of
+those shows up as an error anywhere.
 
 **These six moved here from the browser suite on 2026-09-23**, where each read
 the generated `schemas/<stem>.schema.json`, or the TypeScript generated beside
@@ -38,6 +38,7 @@ from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.run_timeline import RunTimelineRow
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.telemetry.publish.console_band import ROUTES
 
 pytestmark = pytest.mark.contract
@@ -181,6 +182,24 @@ def test_the_fitted_line_asks_only_for_columns_the_contract_declares_in_its_orde
         "FittedSimilarityThreshold's columns in order. Not declared: "
         f"{[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
+    )
+
+
+def test_the_holdout_marks_ask_for_every_column_but_the_stamp_in_the_contract_order() -> None:
+    """The Judgement page reads each hand mark whole but for `version`, in the contract's order.
+
+    `similarity-holdout.ts` spells the `SimilarityHoldoutPair` columns it asks
+    the door for, because the door never offers every column. A column the
+    contract renames, adds or drops would reach the panel as an empty reading
+    rather than as an error.
+    """
+    asked = quoted_strings(read_text(SERVER / "similarity-holdout.ts"), "HOLDOUT_PAIR_COLUMNS")
+    declared = [name for name in SimilarityHoldoutPair.csv_columns() if name != "version"]
+
+    assert asked == declared, (
+        "HOLDOUT_PAIR_COLUMNS in similarity-holdout.ts is not every SimilarityHoldoutPair "
+        f"column but version, in order. Not declared: {[n for n in asked if n not in declared]}; "
+        f"not asked: {[n for n in declared if n not in asked]}."
     )
 
 

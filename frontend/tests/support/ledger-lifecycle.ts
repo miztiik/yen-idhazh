@@ -9,10 +9,12 @@
  * engine with `COPY ... TO`. A packed day may hold no row, as the compaction once packed a
  * quiet day: its file holds every column and no row. A day the list leaves out is a hole.
  * Each file holds `covers`, the UTC day a row was filed under, and `date`, the same day in
- * the cell a panel slice keeps its rows by, as every packed file does, and `n`, the row's
+ * the cell a panel slice keeps its rows by, as every dated packed file does, and `n`, the row's
  * number within its day, from 1. A test may choose more columns, each with one value every
  * row holds, typed by that value. A packed day or a lost one may name how many of its
  * writer's files the packing set aside unread.
+ * `buildRows` packs a ledger whose rows carry no `date` and differ row by row, as the hand
+ * marks of the holdout do: each row holds `covers` and the cells the test names.
  * Nothing here reads a committed fixture, so a test's expected values follow from what the
  * test built and nothing else.
  *
@@ -187,6 +189,50 @@ export async function buildLedger(root: string, built: BuiltLedger): Promise<voi
 	writeFileSync(path.join(ledgerRoot, 'index', 'daily.json'), indexText(built.ledger, 'daily', daily));
 	writeFileSync(path.join(ledgerRoot, 'index', 'monthly.json'), indexText(built.ledger, 'monthly', monthly));
 	writeFileSync(path.join(ledgerRoot, 'index', 'yearly.json'), indexText(built.ledger, 'yearly', []));
+}
+
+/** One packed day of a ledger whose rows each hold cells of their own. */
+export interface BuiltRowsDay {
+	covers: DateStamp;
+	/** Every row of the day, each naming the same columns, none of them `covers`. A day of no
+	 *  row is packed as the compaction packs a quiet day: an `empty` entry with no file. */
+	rows: readonly Readonly<Record<string, BuiltCell>>[];
+}
+
+/** Write a packed ledger under `root` whose rows carry no `date` cell, the way the hand marks of
+ *  the holdout are packed: one day file a day, each row holding `covers`, the day the door filed
+ *  it under, and its own cells, typed by their values; then the three indexes, naming every day
+ *  and no month or year. */
+export async function buildRows(root: string, ledger: LedgerName, days: readonly BuiltRowsDay[]): Promise<void> {
+	const ledgerRoot = path.join(root, 'compact', ...ledgerFolder(ledger).split('/'));
+	const engine = await nodeEngine((specifier) => resolver.resolve(specifier), engineExtensionRepository());
+	const daily: CompactEntry[] = [];
+	for (const day of [...days].sort((left, right) => left.covers.localeCompare(right.covers))) {
+		if (!DAY.test(day.covers)) throw new Error(`${day.covers} is not a UTC day`);
+		if (day.rows.length === 0) {
+			daily.push({ covers: day.covers, rows: 0, bytes: 0, state: 'empty' });
+			continue;
+		}
+		const names = Object.keys(day.rows[0]!);
+		if (names.includes('covers')) throw new Error(`a row of ${day.covers} names covers, which the builder writes`);
+		const values = day.rows.map((row) => {
+			if (Object.keys(row).join() !== names.join()) throw new Error(`a row of ${day.covers} names other columns`);
+			return `('${day.covers}', ${names.map((name) => literal(row[name]!)).join(', ')})`;
+		});
+		const [year, month, date] = day.covers.split('-');
+		const target = path.join(ledgerRoot, 'daily', year!, month!, `${date}.parquet`);
+		mkdirSync(path.dirname(target), { recursive: true });
+		const to = target.replaceAll('\\', '/').replaceAll("'", "''");
+		await engine.rows(
+			`COPY (SELECT * FROM (VALUES ${values.join(', ')}) AS rows(covers, ${names.map(quoted).join(', ')})) TO '${to}' (FORMAT parquet)`,
+			[]
+		);
+		daily.push({ covers: day.covers, rows: day.rows.length, bytes: statSync(target).size });
+	}
+	mkdirSync(path.join(ledgerRoot, 'index'), { recursive: true });
+	writeFileSync(path.join(ledgerRoot, 'index', 'daily.json'), indexText(ledger, 'daily', daily));
+	writeFileSync(path.join(ledgerRoot, 'index', 'monthly.json'), indexText(ledger, 'monthly', []));
+	writeFileSync(path.join(ledgerRoot, 'index', 'yearly.json'), indexText(ledger, 'yearly', []));
 }
 
 /** Stage under `to` the site's copy of a ledger built under `from`, trimmed by the site build's

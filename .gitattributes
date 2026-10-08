@@ -6,9 +6,9 @@
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The committed run state still filed as CSV: the day files of ledgers that now
-# file through the ledger door, which wait for their copy onto it, and the
-# hand-marked holdout pairs. CI on Linux wrote the day files and a developer on
+# The committed run state still filed as CSV: the judges' day files and the
+# hand-marked holdout pairs, whose ledgers now file through the ledger door and
+# which wait for their copy onto it. CI on Linux wrote them and a developer on
 # Windows reads them; a CRLF rewrite would show every historical row as changed.
 # `*.csv text eol=lf` near the bottom of this file is what pins them, so none of
 # them needs a line of its own for that.
@@ -32,16 +32,6 @@ config/*.json text eol=lf
 # until 2026-09-28, when both moved under `state/raw/`: every file there has one
 # writer, so there is nothing for a union to settle. `state/published/` and
 # `state/seen/` carried one until they moved there too.
-
-# The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
-# anyway, and it is written down because the reason is worth reading next to the
-# union lines this file used to carry. A person edits this file, so two edits of
-# it are two people disagreeing about the same rows rather than two runs
-# appending independent ones - and a union driver on a disagreement silently
-# keeps both marks, which is a pair marked same-story and different-story at
-# once. A text merge stops the push and asks, which is the right answer when the
-# writer is a person.
-state/content-similarity-judge/holdout-pairs.csv text eol=lf merge=text
 
 # The training window. Deliberately NOT `merge=union`: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that

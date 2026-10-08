@@ -35,7 +35,7 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<folder>/` and `state/compact/<folder>/`, where `<folder>` is the ledger's own name or, for a ledger inside a family, the family's folder and then that name: the similarity judge's scored pairs, metrics and fitted merge line file under `content-similarity-judge/scored-pairs`, `content-similarity-judge/metrics` and `content-similarity-judge/fitted-thresholds` ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). A ledger more than one job writes gives each writer its own file inside the day directory, so two writers never share a path. `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, holding that judge's hand-marked pairs, its score record and the CSV day files of its ledgers that moved to the door, which stay until the migrator moves them; `state/raw/council-run-records/` holds the council's own step records, later packed under `state/compact/council-run-records/` | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
+| `state/` | The append-only ledgers one run leaves for the next. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<folder>/` and `state/compact/<folder>/`, where `<folder>` is the ledger's own name or, for a ledger inside a family, the family's folder and then that name: the similarity judge's scored pairs, metrics, fitted merge line and hand marks file under `content-similarity-judge/scored-pairs`, `content-similarity-judge/metrics`, `content-similarity-judge/fitted-thresholds` and `content-similarity-judge/holdout-pairs` ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). A ledger more than one job writes gives each writer its own file inside the day directory, so two writers never share a path. `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, holding that judge's score record and the CSV files of its ledgers that moved to the door - the day files and the hand-marked pairs - which stay until the migrator moves them; `state/raw/council-run-records/` holds the council's own step records, later packed under `state/compact/council-run-records/` | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
 | `state/raw/<ledger>/set-aside/` | Each file a compaction could not read, moved under its old path below `state/` - a raw file, or a day or month file that could not be read when its period closed - and counted in its period's `set_aside`. No gardener step names the folder, so nothing reads a file there again or deletes it; a person reads it when the console shows a non-zero count ([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md#a-file-that-cannot-be-read)) | the gardener's compaction, in CI | **never**: the site copies only `state/compact/` |
 | `state/pipeline-tests/` | The bench and `Model validation` write here. Each pipeline test case writes below `state/pipeline-tests/<id>/`, with ledgers under the case root and traces under its `traces/` folder. Compaction declarations own their named case ledgers; the gardener's `trials` task reports files beyond its window under each declared trace folder in `config/gardener/trials.json`. Its current policy is report-only. The root also holds bench measurements and their host record | a dispatch, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
@@ -75,7 +75,7 @@ build copies out of it. Each of the other candidates fails on one of those three
 | `config/` | Human-edited. A machine appending to a file a person owns invites a merge conflict every run |
 | `backend/` | Source. A ledger is not code, and a Python package is not a database |
 
-**Two files under `state/` are written by a person, not a machine.**
+**One file under `state/` is written by a person, not a machine.**
 `state/labels.csv` holds human faithfulness labels, appended one keystroke at a
 time by `backend/utilities/label_queue.py`. It sits with the other ledgers
 because it is read the same way - joined to the eval ledger on
@@ -84,14 +84,14 @@ one exception to "written by a machine", and it is deliberate: the point of the
 file is that no machine wrote it. See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
-`state/content-similarity-judge/holdout-pairs.csv` is the second, and it is the same
-exception for the same reason: a labeller reads two articles and marks them one
-story or two, and that mark is the fixed floor the fitted merge line has to stay
-above. No run writes it - an operator harvests the marks into it by hand, and
-`note` says who made each one. `.gitattributes` names it `merge=text` in its own
-line rather than letting it inherit: two people editing it are disagreeing about
-the same rows rather than appending independent ones, and a reason worth reading
-is worth writing down. See
+The similarity holdout marks were the second, until a program took the writing
+over: a labeller still reads two articles and marks them one story or two, and
+that mark is the fixed floor the fitted merge line has to stay above, but
+`backend/utilities/sample_sheet.py --harvest` now saves each labelling through
+the ledger door, under `state/raw/content-similarity-judge/holdout-pairs/`, and
+the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/`.
+No workflow writes the marks - a person runs the harvest, and `note` says who
+made each mark. See
 [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md).
 
 **The text those labels judge lives under `backend/var/evidence/`, not under

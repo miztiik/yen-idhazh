@@ -36,7 +36,7 @@ SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 _WEIGHTS_TOLERANCE: Final = 1e-9
 
 #: The highest score the labelled set marks as TWO stories. Measured 2026-09-19
-#: over the 200 pairs in `state/content-similarity-judge/holdout-pairs.csv`, labelled by
+#: over the 200 pairs of the `holdout-pairs` ledger marked that day, labelled by
 #: claude-opus-4.6 reading each pair's title and summary; 196 one story, 4 two
 #: stories, and the four are all the same lake-renaming cluster. Counts are
 #: deterministic and have no spread.
@@ -63,7 +63,7 @@ HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 #: **A constant rather than a knob, on purpose.** It says what makes the reading
 #: mean anything, and a number that can be tuned down is a number somebody tunes
 #: down on the morning the reading goes red. It sits beside the two-story maximum
-#: because both are properties of the marked file rather than of the pipeline.
+#: because both are properties of the marks rather than of the pipeline.
 HOLDOUT_RESOLVED_SHARE_MIN: Final = 0.5
 
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the

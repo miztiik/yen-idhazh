@@ -44,6 +44,7 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 COMMITTED_DECLARATIONS: Final = (
     "compact-candidate-models.json",
     "compact-content-similarity-judge-fitted-thresholds.json",
+    "compact-content-similarity-judge-holdout-pairs.json",
     "compact-content-similarity-judge-merge-line-holdout-scores.json",
     "compact-council-run-records.json",
     "compact-counterfactual-scores.json",
