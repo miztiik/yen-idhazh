@@ -404,14 +404,7 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     settings = config.load()
     settings.app.observability.host_fingerprint = True
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
-    plan = RunPlan.model_validate(
-        {
-            "date": "2026-09-17",
-            "run_id": "2026-09-17-1",
-            "generated_at": "2026-09-17T00:00:00Z",
-            "items": [],
-        }
-    )
+    probe_day, probe_run = "2026-09-17", "2026-09-17-1"
 
     # The CLI applies this same overlay once, from `trial_state_dirname`, before
     # any stage opens a ledger (`cli.main`) - so a bench probe is driven the same
@@ -419,7 +412,8 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     # nested folder a bench no longer writes.
     with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
         silicon.stage_fingerprint(
-            plan,
+            date=probe_day,
+            run_id=probe_run,
             settings=settings,
             state_root=production_root,
             commit_sha=SEED_COMMIT,
@@ -427,7 +421,8 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
             job=ServerJob.RUNTIME,
         )
     silicon.stage_fingerprint(
-        plan,
+        date=probe_day,
+        run_id=probe_run,
         settings=settings,
         state_root=production_root,
         commit_sha=SEED_COMMIT,
@@ -441,11 +436,11 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     # that is asked rather than assumed: each root's own ledger reader, the
     # one the console panels use, returns its own row alone.
     production_rows = ledger.load_days(
-        production_root, LedgerName.HOST_FINGERPRINT, [plan.date], model=HostFingerprintRow
+        production_root, LedgerName.HOST_FINGERPRINT, [probe_day], model=HostFingerprintRow
     )
     with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
         bench_rows = ledger.load_days(
-            production_root, LedgerName.HOST_FINGERPRINT, [plan.date], model=HostFingerprintRow
+            production_root, LedgerName.HOST_FINGERPRINT, [probe_day], model=HostFingerprintRow
         )
     assert [row.job for row in production_rows] == [ServerJob.WORK], (
         "the bench's machine reached the ledger the console reads"
@@ -459,7 +454,7 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         for path in tmp_path.rglob("*")
         if path.is_file() and LedgerName.HOST_FINGERPRINT in path.parts
     }
-    day = plan.date.replace("-", "/")
+    day = probe_day.replace("-", "/")
     with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
         bench_raw = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT)
     production_raw = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT)

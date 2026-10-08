@@ -36,7 +36,6 @@ from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.run_plan import RunPlan
 from idhazh.telemetry.host import runner_name
 
 if TYPE_CHECKING:  # pragma: no cover - a type, not a runtime dependency
@@ -362,10 +361,10 @@ def read_row(
     )
 
 
-def _writer(plan: RunPlan, *, commit_sha: str, job: ServerJob, shard: int) -> WriterIdentity:
+def _writer(run_id: str, *, commit_sha: str, job: ServerJob, shard: int) -> WriterIdentity:
     """This job's writer identity, the same for its probe and its clock."""
     return WriterIdentity(
-        run_id=plan.run_id,
+        run_id=run_id,
         attempt=run_context.run_attempt(),
         job=job,
         shard=shard,
@@ -380,8 +379,9 @@ def _shown_files(state_root: Path, paths: list[Path]) -> str:
 
 
 def stage_fingerprint(
-    plan: RunPlan,
     *,
+    date: str,
+    run_id: str,
     settings: config.Settings,
     state_root: Path,
     commit_sha: str,
@@ -401,14 +401,21 @@ def stage_fingerprint(
     one run each draw a machine and each record it, and the door names each file
     for its writer, so no two jobs share a path; the attempt is in the writer's
     identity, so a re-run replaces its first try rather than colliding with it.
+
+    **The day and the run address are what this needs, and it asks for both.**
+    A machine reading is about a job rather than about the work that job did, so
+    a job that plans nothing can still take one. Reading a run plan to recover
+    two strings the caller already holds would make this probe refuse every
+    workflow that does not plan - the gardener's wakes and the council's nights
+    among them - for a payload it never opens.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
-        LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, plan.run_id)
+        LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, run_id)
         return None
     row = read_row(
-        date=plan.date,
-        run_id=plan.run_id,
+        date=date,
+        run_id=run_id,
         job=job,
         shard=shard,
         probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib,
@@ -418,8 +425,8 @@ def stage_fingerprint(
         state_root,
         [row],
         ledger=LedgerName.HOST_FINGERPRINT,
-        covers=plan.date,
-        identity=_writer(plan, commit_sha=commit_sha, job=job, shard=shard),
+        covers=date,
+        identity=_writer(run_id, commit_sha=commit_sha, job=job, shard=shard),
     )
     LOG.info(
         "fingerprint job=%s shard=%s run=%s id=%s cpu=%s family=%s model=%s stepping=%s "
@@ -427,7 +434,7 @@ def stage_fingerprint(
         "boot_seconds=%s mhz=%s file=%s",
         job,
         shard,
-        plan.run_id,
+        run_id,
         row.fingerprint,
         row.cpu_model,
         row.cpu_family,
@@ -496,8 +503,9 @@ def _with_clock(probe: HostFingerprintRow, clock: HostFingerprintRow) -> HostFin
 
 
 def stage_job_clock(
-    plan: RunPlan,
     *,
+    date: str,
+    run_id: str,
     settings: config.Settings,
     state_root: Path,
     commit_sha: str,
@@ -533,14 +541,14 @@ def stage_job_clock(
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
-        LOG.info("job clock off job=%s shard=%s run=%s", job, shard, plan.run_id)
+        LOG.info("job clock off job=%s shard=%s run=%s", job, shard, run_id)
         return None
     scraped_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     prompt_tokens, prompt_seconds = server_prompt_totals(_text_if_readable(metrics_path))
     row = HostFingerprintRow(
         version=HostFingerprintRow.schema_version(),
-        date=plan.date,
-        run_id=plan.run_id,
+        date=date,
+        run_id=run_id,
         job=job,
         shard=shard,
         model_load_ms=model_load_ms(_text_if_readable(server_log_path)),
@@ -548,14 +556,14 @@ def stage_job_clock(
         server_prompt_tokens=prompt_tokens,
         server_prompt_seconds=prompt_seconds,
     )
-    identity = _writer(plan, commit_sha=commit_sha, job=job, shard=shard)
-    probe = _own_probe(state_root, plan.date, identity)
+    identity = _writer(run_id, commit_sha=commit_sha, job=job, shard=shard)
+    probe = _own_probe(state_root, date, identity)
     whole = _with_clock(probe, row) if probe is not None else row
     landed = ledger.persist(
         state_root,
         [whole],
         ledger=LedgerName.HOST_FINGERPRINT,
-        covers=plan.date,
+        covers=date,
         identity=identity,
     )
     LOG.info(
@@ -563,7 +571,7 @@ def stage_job_clock(
         "server_prompt_tokens=%s server_prompt_seconds=%s probe=%s file=%s",
         job,
         shard,
-        plan.run_id,
+        run_id,
         row.job_seconds,
         row.model_load_ms,
         row.server_prompt_tokens,
