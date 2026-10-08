@@ -63,7 +63,10 @@ still include the articles of this run.` The head claims no more than that:
 every figure built from the window's article rows picks them by date, so each
 one counts the refused run's articles. The box stays directly under the run
 count, because its words point up at it. Reader chose the words, and kept the
-place, on 2026-10-07.
+place, on 2026-10-07. Where the window holds no run the count takes but one the
+box names, the first line is a count of 0 - `0 runs in these 7 days.`, or `This
+one day had 0 runs.` - and never `No run in these 7 days is on record.`, which
+would deny the run the box names. Reader chose those words on 2026-10-08.
 
 **A fixed benchmark figure never appears on the console.** It was taken on
 another machine against another workload, so a gap between it and a run reads as
@@ -134,11 +137,15 @@ holds the probe and the clocks and neither cell, has none. The page's first line
 counts every run in the window, then how many of them have the server's
 figures: `127 runs in these 30 days, 75 of them with figures from the model
 server itself.` The started line, the line about days the server's counters
-were not written down and the measurement-off line read the same runs. Nothing
-samples those counters - the sampling rate is the scorer's, and only the
-machine record's own switch turns them off - so Hardware prints no sampled line
-about them. Reader chose the first line's words, and Jony agreed, on 2026-10-07;
-Fowler ruled which runs count.
+were not written down and the measurement-off line read the same runs, and the
+runs the box under the first line names as well: a refused run's machine
+records can hold those cells, written twice and disagreeing, so its day is a day
+the server's figures were written down, though the first line does not count the
+run. Nothing samples those counters - the sampling rate is the scorer's, and
+only the machine record's own switch turns them off - so Hardware prints no
+sampled line about them. Reader chose the first line's words, and Jony agreed,
+on 2026-10-07; Fowler ruled which runs count, and on 2026-10-08 that a refused
+run counts by the same cells.
 
 **The started line names only a start the open window shows, and only a true
 one.** It opens on what started - `Server figures started on 20 Sep 2026.`,
@@ -378,7 +385,12 @@ draws. Reader and Jony chose the words and Fowler ruled the score claim out, on
 2026-10-07. Hardware's line names a day where no run had the server's own
 counters, not where no run was formed: a run of article rows alone has none, and
 counted as one that had them it hid the very day the line exists to name. Fowler
-ruled that the same day.
+ruled that the same day. A run the counters refuse is judged by the same cells,
+read from its own machine records. The other way was to leave out every day
+whose only run was refused. That would hide a day the line exists to name, since
+a refused run of article rows alone holds no server cell, and the started line
+and the measurement-off line would still say nothing was written down on a day
+it was written down twice. Fowler ruled that on 2026-10-08.
 
 **Hardware's first line keeps every run as its count.** Every panel below draws
 from all the runs the page read, so the first number is all of them, and the

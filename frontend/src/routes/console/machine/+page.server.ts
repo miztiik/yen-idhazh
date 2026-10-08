@@ -358,9 +358,12 @@ export async function load() {
 		// the two look alike on a chart unless the page says which one it is. Each
 		// line is handed the whole read, so it names only what this span shows and
 		// dates a start only where the read reaches back to the machine record's
-		// first day: the server's two counter cells live in that record alone.
+		// first day: the server's two counter cells live in that record alone. The
+		// refused runs go with the kept ones, because a refused run's machine
+		// records can hold those cells, and its day is then a day they were written.
 		const counterNotes = describeServerCounters({
 			runs: counters.runs,
+			refused: counters.refused,
 			ran: dates,
 			articleDays: healthDays,
 			machineRead: machine.read,
