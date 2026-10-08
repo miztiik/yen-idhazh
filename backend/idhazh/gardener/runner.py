@@ -494,7 +494,10 @@ def _record(
     )
     if len(written) != 1:
         raise ShardRefusedError(
-            f"the shard's rows went to {len(written)} files, and a shard writes one record"
+            f"the shard's rows went to {len(written)} files, and a shard writes one record. "
+            f"A write that landed nothing means the {LedgerName.GARDENER.value} family is "
+            "paused or retired, and the gardener cannot record a wake into a family that "
+            "takes no new rows"
         )
     record = written[0]
     try:
