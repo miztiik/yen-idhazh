@@ -81,6 +81,17 @@ Pipelines is the span Hardware opens on and the other way round -
 drives it both ways in one browser session, because a route that writes the key
 and never reads it passes a one-way check.
 
+**A tab click carries the span too, with no page load.** The router mounts the
+next route under the same layout and tears the last one down in the same
+update, and the control then holds the span the next route draws. The same spec
+clicks from Pipelines at 1 day to Judgement, and back at 7 days, and compares
+the control with what the panels draw, never with a number of days. The control
+used to fall back to the configured window there, disabled, while the panels
+drew the stored span, because the last route's teardown read the layout's state
+as it was before the move and emptied the slot the next route had just filled.
+[window-slot.ts](../../../frontend/src/lib/console/window-slot.ts) now keeps which
+route holds the control in a plain variable, which a teardown reads as it is.
+
 **If a telemetry month is absent or cannot be parsed, that month is a gap in the
 charts.** It is not interpolated, and it never white-screens the console.
 
