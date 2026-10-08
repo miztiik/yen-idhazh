@@ -138,12 +138,14 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 8,
+    "published_items": 78,
     "runs": [
-      {"charts_drafted": 2,"decided": 8,"decision_ms": 3,"failed": 2,"n": 1,"planned": 10,"prefiltered": 0,"run_id": "2026-10-08-37740733915","skipped": 0,"source_list_stale": false,"started_at": "2026-10-08T07:00:15Z","status": "partial","succeeded": 8}
+      {"charts_drafted": 2,"decided": 8,"decision_ms": 3,"failed": 2,"n": 1,"planned": 10,"prefiltered": 0,"run_id": "2026-10-08-37740733915","skipped": 0,"source_list_stale": false,"started_at": "2026-10-08T07:00:15Z","status": "partial","succeeded": 8},
+      {"charts_drafted": 8,"decided": 29,"decision_ms": 0,"failed": 5,"n": 2,"planned": 34,"prefiltered": 0,"run_id": "2026-10-08-37751042084","skipped": 0,"source_list_stale": false,"started_at": "2026-10-08T08:37:52Z","status": "partial","succeeded": 29},
+      {"charts_drafted": 19,"decided": 63,"decision_ms": 8,"failed": 17,"n": 3,"planned": 80,"prefiltered": 0,"run_id": "2026-10-08-37754146977","skipped": 0,"source_list_stale": false,"started_at": "2026-10-08T09:05:18Z","status": "partial","succeeded": 63}
     ],
-    "site_bytes": 39908859,
-    "site_files": 95,
+    "site_bytes": 40054888,
+    "site_files": 96,
     "version": "2026-09-09"
   }
 ]
