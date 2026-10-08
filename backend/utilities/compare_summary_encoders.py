@@ -293,14 +293,14 @@ def stage_score(args: argparse.Namespace) -> None:
         beside.replace(args.out)
 
     def peak_memory_gb() -> float | None:
-        try:
+        if sys.platform == "win32":
+            return None
+        else:
             import resource
 
             return round(
                 resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024), 2
             )
-        except (ImportError, AttributeError):
-            return None
 
     save()
     print(f"{chosen['slug']}: loading {chosen['model_id']}", flush=True)
