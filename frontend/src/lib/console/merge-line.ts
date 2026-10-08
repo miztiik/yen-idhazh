@@ -296,6 +296,37 @@ export function gateNeeds(
 	];
 }
 
+/** The row the three bars read: the newest one dated on or before `through`,
+ * the window's last day, or null where the record holds none by then.
+ *
+ * Inside the window or before it. The record is cumulative and changes only when
+ * a run writes a row - a record that empties is a run's row too - so a window
+ * with no row leaves the record as its newest earlier row counted it. Reading
+ * only the window's rows drew three bars at zero there, the picture of a record
+ * that holds nothing.
+ */
+export function findNewestRow(rows: readonly JudgeDay[], through: string): JudgeDay | null {
+	let newest: JudgeDay | null = null;
+	for (const row of rows) {
+		if (row.date <= through && (newest === null || row.date > newest.date)) newest = row;
+	}
+	return newest;
+}
+
+/** The note for a window that holds no row while an earlier day does: the day
+ * the bars stand on, the window they are not from, and that nothing ran since.
+ *
+ * "Started again" is said only where that row says so. A row of zeros alone does
+ * not prove it, so it takes the plain words. The words are Reader's.
+ */
+export function describeEarlierRow(row: JudgeDay, windowDays: number): string {
+	const what =
+		row.heldReason === 'inputs_changed'
+			? 'The record was started again'
+			: 'The bars show what the record held';
+	return `${what} on ${shortDate(row.date)}, before ${nameSpan(windowDays)}. No run has recorded anything since.`;
+}
+
 /** What one square on the strip says about one date. */
 export type FoldState = 'fitted' | 'filling' | 'held' | 'silent';
 
