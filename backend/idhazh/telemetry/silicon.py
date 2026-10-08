@@ -7,8 +7,8 @@ read once rather than sampled.
 Two steps write it, because two of its cells are only knowable at opposite ends
 of a job: `stage_fingerprint` probes the machine before the heaviest step, and
 `stage_job_clock` records the clock and the weight-load cost after the last item.
-Both go to the job's own segment and the settlement unites them: every reader
-settles a day by key, and the gardener's closed-day fold writes that answer down.
+Both are filed through the ledger door and the settlement unites them: every
+reader settles a day by key.
 
 Every reading here degrades to nothing. None of these files or services exists
 on a developer machine, and a missing instrument records an empty cell rather

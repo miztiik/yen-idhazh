@@ -1,6 +1,6 @@
 # Glossary
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The words this project uses for its own machinery, and where each one is defined.
 
@@ -37,7 +37,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **canary** | One of five planted prompt-injection attacks, run against the model to prove the sanitizer holds. The **canary day** is a published day built from them, so the browser suite can attack a real page instead of a fixture | `backend/idhazh/stages/qualify_canaries.py`, `backend/utilities/build_canary_day.py` |
 | **candidate** | A model being judged before it may replace the one in use | [qualification.md](qualification.md) |
 | **census** | A ledger that records **every** planned item, pass and fail alike, so a rate has its denominator beside its numerator. `item-health` is the census, and nothing in it is sampled - it is what every rate on every page divides by | `backend/idhazh/contracts/item_health.py` |
-| **compaction** | Merging many small files into fewer, which saves files and changes no answer. A retention task's closed-day fold settles a closed CSV day's writer files into one `settled.csv`; a gardener `compaction` task moves a door ledger's raw files into one file a day and then one file a month, and deletes what it moved | `backend/idhazh/gardener/closed_day_fold.py`; [../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md) |
+| **compaction** | Merging many small files into fewer, which saves files and changes no answer. A gardener `compaction` task moves a door ledger's raw files into one file a day and then one file a month, and deletes what it moved | [../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md) |
 | **council** | The nightly workflow where models judge borderline same-story pairs and fit the merge line | [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) |
 | **dispatch** | A workflow run somebody started by hand, rather than one the schedule started | [../reference/github-actions.md](../reference/github-actions.md) |
 | **drift gate** | Retired on 2026-09-23 with the generated layer it checked. What binds the frontend's hand copies now is three tests in `backend/tests/contracts/` | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) |

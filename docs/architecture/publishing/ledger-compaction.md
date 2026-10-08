@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -113,8 +113,7 @@ flowchart TB
 ```
 
 **The CSV day trees are not on this path.** A compaction never reads or writes
-them; their closed days are folded in place by the retention task that owns each
-tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
+them.
 
 ## One pass, in order
 

@@ -5,23 +5,9 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from idhazh import config, month_partition
+from idhazh import config
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
-
-
-def _monthly_fold_policy() -> RetentionPolicy:
-    return RetentionPolicy.model_validate(
-        {
-            "kind": "retention",
-            "lifecycle_status": "active",
-            "dry_run": True,
-            "max_deletes_per_run": None,
-            "owns": ["state/candidate-models"],
-            "window": {"unit": "forever"},
-            "fold": {"after_days": 1, "dry_run": False, "settles_months": True},
-        }
-    )
 
 
 def _ledger_reader_policy() -> RetentionPolicy:
@@ -120,32 +106,6 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
         "state/raw/item-health-summary/2026/09/20",
         "state/raw/item-health/2026/09/20",
     ]
-
-
-def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> None:
-    policy = _monthly_fold_policy()
-    assert policy.fold is not None
-    policy = policy.model_copy(
-        update={"fold": policy.fold.model_copy(update={"settles_months": True})}
-    )
-    today = date(2026, 10, 1)
-    period_range = scheduled_range("candidate-models", policy, today)
-
-    assert period_range is not None
-    months = month_partition.months_between(*period_range)
-    assert len(months) == 3
-
-    paths = paths_for_task(
-        tmp_path,
-        "candidate-models",
-        policy,
-        period_range,
-        today=today,
-    )
-    root = tmp_path / "state" / "candidate-models"
-    assert root / "2026" / "08" in paths
-    assert root / "2026" / "09" / "29" in paths
-    assert root / "2026" / "09" / "21" not in paths
 
 
 def test_a_c1_case_traces_folder_lists_each_named_day_folder(tmp_path: Path) -> None:

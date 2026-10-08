@@ -58,9 +58,6 @@ from idhazh.ledger.keys import (
     door_contract,
     door_key,
     preference_for,
-    segment_carried,
-    segment_contract,
-    segment_key,
 )
 from idhazh.ledger.ledger_files import (
     LedgerFiles,
@@ -123,9 +120,6 @@ from idhazh.ledger.rows import (
     append_published,
     append_seen,
     append_story_similarity_pairs,
-    day_shard_path,
-    day_shard_relpath,
-    extend_segment,
     load_fitted_thresholds,
     load_health,
     load_item_health_summary,
@@ -137,7 +131,6 @@ from idhazh.ledger.rows import (
     load_story_similarity_pairs,
     load_visual_prunes,
     write_item_health_summary,
-    write_segment,
 )
 from idhazh.ledger.settle import KeyedLedger, drop_repeated_rows, keyed_paths, repeated_keys
 
@@ -232,9 +225,6 @@ __all__ = [  # noqa: RUF022
     "door_contract",
     "door_key",
     "preference_for",
-    "segment_carried",
-    "segment_contract",
-    "segment_key",
     # filenames.py: what one writer's file is called.
     "BEFORE_PARTITION_NAME",
     "PRE_IDENTITY_TRACE",
@@ -262,9 +252,6 @@ __all__ = [  # noqa: RUF022
     "append_published",
     "append_seen",
     "append_story_similarity_pairs",
-    "day_shard_path",
-    "day_shard_relpath",
-    "extend_segment",
     "load_fitted_thresholds",
     "load_health",
     "load_item_health_summary",
@@ -276,7 +263,6 @@ __all__ = [  # noqa: RUF022
     "load_story_similarity_pairs",
     "load_visual_prunes",
     "write_item_health_summary",
-    "write_segment",
     # settle.py: which rows repeat a key, and what dropping them costs.
     "KeyedLedger",
     "drop_repeated_rows",
