@@ -77,6 +77,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | DESCOPED | - | - | - |
 | 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | DESCOPED | - | - | - |
 | 24 | The page reads each index once before a run, and the ledger list raises no accessibility warning | 10 | Q | DONE | p55fix1 | #1435 | executing owner |
+| 25 | The panel pictures open the tab that holds each Data explorer panel | 10 | Q | DONE | p55fix2 | #1453 | executing owner |
 
 **One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. **Rows 19 and 20 were added on 2026-10-07 on the owner's A1+A2 ruling, specified by Susan and Jony.** **Rows 21 to 23 were added on 2026-10-07 at plan 62's request, designed by Fowler.** Rows 19 and 21 share no file and may run together. Row 20 is BLOCKED on the owner deciding whether this plan carries the small slice of plan 52 row 2 that its charts need. **Rows 22 and 23 were descoped on 2026-10-07 by the owner**, who kept the column list as it is: each ledger's columns are read from its newest file through the query engine. Row 21 stays, because it proves at each deploy that every published file carries the columns its contract declares.
 
@@ -1801,6 +1802,22 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 2 | **Any press or key anywhere ends the ledger list's following**, listened for on the document, so the list carries no handlers that need a role | Executing owner, 2026-10-08 |
 
 - **Not in this row:** the `Read from {n} UTC days` line naming a last day the page did not read, which plan 62 owns (L12, #1364) and takes as a row of its own.
+
+---
+
+### Row #25 - The panel pictures open the tab that holds each Data explorer panel
+
+- **Scope:** found by plan 62 row L40's worker on 2026-10-08. Since row 10 (#1357) put the answer and the chart on two tabs, the chart panel has no box while the Table tab is open, and `frontend/tests/panel-captures.spec.ts` stopped at its first Data explorer picture with `data-explorer-shape has no box to picture`. Routine CI skips that spec, so only a local `test:changed` run met it. Before it pictures a panel, the spec now presses the tab that holds it, through `showPanel()` in `frontend/tests/support/panel-tab.ts`, which finds the tab by the panel's `aria-controls` and leaves a panel on no tab as it is.
+- **Files touched:** `frontend/tests/support/panel-tab.ts` (new), `frontend/tests/panel-captures.spec.ts`, and this plan.
+- **Acceptance gates:** `panel-captures.spec.ts`'s Data explorer pictures on the canary build, at every width and theme it takes.
+- **Checks:** every Data explorer panel - the question, the table and the chart - is pictured at every width and theme the spec takes, the chart after its tab is pressed. The pictures of every other route are unchanged, because no other panel stands in a tab.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **A test shows a panel behind a tab by pressing its tab, found by `aria-controls`**, as a reader would, never by a route's name or a tab's words | Executing owner, 2026-10-08 |
+
+- **Not in this row:** `frontend/tests/panel-sufficiency.spec.ts` presses the Chart tab by its name for `data-explorer-shape` in three places. It moves to `showPanel()` once row 19 (#1449), which edits that file, has merged.
 
 ---
 
