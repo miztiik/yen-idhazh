@@ -102,3 +102,20 @@ def test_an_unavailable_reading_says_why() -> None:
             written_at="2026-10-08T00:00:00Z",
             articles_to_encode=100,
         )
+
+
+def test_the_thread_setting_resolves_to_a_positive_count() -> None:
+    """The failure this test exists for: five shards died at once, 2026-10-08.
+
+    The setting carries zero to mean "take the machine's own count", and the
+    program handed the zero straight to a library that will only accept a
+    positive number. Every shard failed in the first second, after the pair set
+    had been built and the weights had begun downloading.
+    """
+    import os
+
+    settings = json.loads(CONFIG.read_text(encoding="utf-8"))
+    asked = settings["encode"]["threads"]
+    assert asked >= 0, "a thread count is zero for automatic, or a positive number"
+    resolved = asked or os.cpu_count() or 1
+    assert resolved >= 1, "the resolved thread count has to be positive"

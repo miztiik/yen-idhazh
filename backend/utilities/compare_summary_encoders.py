@@ -329,12 +329,16 @@ def stage_score(args: argparse.Namespace) -> None:
     # not always the number of threads a maths library will use. A rate that
     # looks slow is a different problem from a rate taken on one thread, and
     # nothing in the output told them apart.
-    torch.set_num_threads(settings["encode"]["threads"])
+    #
+    # Zero in the settings means take the machine's own count, so a bigger
+    # runner is used without anybody editing a number.
+    asked = settings["encode"]["threads"] or os.cpu_count() or 1
+    torch.set_num_threads(int(asked))
     reading.threads_used = int(torch.get_num_threads())
     reading.processors_available = os.cpu_count() or 1
     save()
-    print(f"{chosen['slug']}: asked for {settings['encode']['threads']} threads, "
-          f"using {reading.threads_used} of {reading.processors_available} "
+    print(f"{chosen['slug']}: asked for {asked} threads, using "
+          f"{reading.threads_used} of {reading.processors_available} "
           f"processors", flush=True)
 
     try:

@@ -163,18 +163,18 @@ jobs:
           HF_HOME: ${{ runner.temp }}/huggingface
           TOKENIZERS_PARALLELISM: 'false'
           PYTHONUNBUFFERED: '1'
+        run: |
+          set -euo pipefail
           # The maths libraries under the encoder read these, and they do not
           # read the thread count the program asks for. Left unset, a library
           # can pick its own number - often the physical core count rather than
-          # the processors the runner advertises. The reading records what it
-          # actually got, so a slow rate and a single-threaded rate are told
-          # apart rather than guessed at.
-          OMP_NUM_THREADS: '4'
-          MKL_NUM_THREADS: '4'
-          OPENBLAS_NUM_THREADS: '4'
-        run: |
-          set -euo pipefail
-          echo "processors the runner reports: $(nproc)"
+          # the processors the runner advertises. Taken from the machine, so a
+          # bigger runner is used without anybody editing a number.
+          PROCESSORS="$(nproc)"
+          export OMP_NUM_THREADS="$PROCESSORS"
+          export MKL_NUM_THREADS="$PROCESSORS"
+          export OPENBLAS_NUM_THREADS="$PROCESSORS"
+          echo "processors the runner reports: $PROCESSORS"
           if ! [[ "$ENCODER" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
             echo "an encoder slug is lower-case letters and digits, joined by dashes" >&2
             exit 1
