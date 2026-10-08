@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -274,9 +274,9 @@ handed to `sliceFromDisk()`.
 ## What the site holds for the door
 
 The site holds the ledgers `ledger.published` in `config/idhazh.json` names:
-`candidate-models`, `counterfactual-scores`, `host-fingerprint`, `item-health`,
-`published`, `seen` and `summary-quality-evals`. It holds nothing else of
-`state/`. The build copies each ledger's three indexes, trimmed to the widest
+`candidate-models`, `counterfactual-scores`, `gardener`, `host-fingerprint`,
+`item-health`, `published`, `seen` and `summary-quality-evals`. It holds nothing
+else of `state/`. The build copies each ledger's three indexes, trimmed to the widest
 console span, and every compact file those trimmed indexes name, to the path each
 has under `state/`: `frontend/scripts/copy-visuals.mjs` stages them into
 `frontend/static/state/`, which git ignores, and the bundler carries them into
@@ -332,11 +332,13 @@ staged tree.
   there, and the bundle gate skips the ledgers' keys. The registry still ships
   from this site, because the page reads it as the site's declaration of what it
   can show.
-- **`backend/tests/contracts/test_published_ledgers_cover_the_panels.py` holds the
-  two sides together**: every ledger a panel names in a `slice()` or
-  `ledgerReach()` call is in `ledger.published`. The door's closed set admits one
-  more, `feed-health`, which a build-time reader asks through `sliceFromDisk`
-  and no browser panel asks, so the site holds none of its files.
+- **Every ledger a panel names in a `slice()` or `ledgerReach()` call must be
+  in `ledger.published`, and no test checks it.** The test that checked it
+  scanned the frontend source tree, a read that grows with the repository, so it
+  was deleted (Guardrail #12), and the door's ledger type, `LedgerName` in
+  `frontend/src/lib/data/slice-shapes.ts`, admits every declared ledger.
+  `feed-health` is one the site does not hold: a build-time reader asks it
+  through `sliceFromDisk`, and no browser panel asks it.
   `frontend/tests/published-ledgers.spec.ts` asks the built
   site the door's own questions: every address an index names is there, at the
   size its entry gives, and nothing else of `state/` is.
@@ -346,10 +348,13 @@ ledger's declaration: `daily_keep_days` plus 31 day entries and the months its
 window keeps, or the months awaiting yearly packing. A ledger that keeps rows
 forever packs years, so the yearly index grows by one entry a year rather than by
 one month forever. Each published ledger's index directory has a
-`page_weight.payload_ceilings_bytes` key of 2,200 gzipped bytes, at least twice
-its longest bounded day or month index. The copied registry has its own
-`config/ledgers.json` key of 3,200 gzipped bytes, which is a little over twice
-the 1,469 bytes measured at gzip -5 on 2026-10-02. The bundle gate weighs all
+`page_weight.payload_ceilings_bytes` key at least twice its longest bounded day
+or month index. Most keys hold 2,200 gzipped bytes. The `gardener` key holds
+2,064, exactly twice its longest index: a day index of at most 76 entries, 45
+kept days plus one whole month of 31, weighs 1,032 bytes at gzip -5. The copied
+registry has its own
+`config/ledgers.json` key of 3,400 gzipped bytes, about 2.3 times the 1,494
+bytes measured at gzip -5 on 2026-10-08. The bundle gate weighs all
 three indexes and the registry; `backend/tests/contracts/test_page_ceilings.py`
 also fails when a day or month keep window grows past its bound. A ledger not
 packed yet has no file in the build, so the bundle gate reports its key as not

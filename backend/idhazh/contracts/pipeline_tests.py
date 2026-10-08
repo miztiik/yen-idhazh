@@ -57,10 +57,8 @@ Headline = Annotated[
     str, StringConstraints(min_length=1, max_length=UNTRUSTED_LINE_MAX, pattern=r"\S")
 ]
 
-#: What every test case's trial root is named after, and what the bench and
-#: `Model validation` already write under. One root per test case, side by side
-#: under `state/` rather than nested inside a shared parent:
-#: `run.trial_state_dirname` is a `Slug`, and a slug holds no separator.
+#: The shared root used by the bench and `Model validation`, with each pipeline
+#: test case's own validated slug beneath it.
 TRIAL_STATE_PREFIX: str = "pipeline-tests"
 
 
@@ -153,23 +151,6 @@ class PipelineTestCase(Model):
     def slots(self) -> int:
         """How many shards share one of this test case's model servers at a time."""
         return self.n_parallel or 1
-
-    @property
-    def trial_state_dirname(self) -> str:
-        """Where this test case's ledgers go under `state/`.
-
-        Derived rather than declared, because it is not a choice anybody makes:
-        the dispatch runs one plan, so every test case shares a run id, a job
-        and an attempt, and two test cases share each shard number - which is
-        the whole of a writer's filename. Without a root each, the last test
-        case to write would be the only one anybody could read.
-
-        Here rather than beside either caller: the config writer names the root
-        and the commit job checks what arrived against it, and a second spelling
-        in either would drift the day a test case id changed.
-        """
-        return f"{TRIAL_STATE_PREFIX}-{self.id}"
-
 
 class PipelineTestsConfig(Contract):
     """`config/pipeline-tests.json` - the candidate addresses and the test cases."""

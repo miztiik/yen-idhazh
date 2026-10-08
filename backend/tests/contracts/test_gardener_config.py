@@ -20,21 +20,19 @@ from conftest import CONFIG_DIR
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import TypeAdapter, ValidationError
 
-from idhazh import config, ledger
+from idhazh import config
 from idhazh.contracts.knobs.gardener import (
-    DEFAULT_CLOSED_AFTER_DAYS,
     JANUARY_DAYS,
     CollectionTaskPolicy,
     CompactionPolicy,
-    FoldPolicy,
     GardenerConfig,
     HistoryPolicy,
     MonthsWindow,
     RetentionPolicy,
     Window,
 )
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 
 pytestmark = pytest.mark.contract
 
@@ -135,10 +133,6 @@ LIVE_BY_DECISION: Final = {
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
 }
-
-#: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`
-#: is folded by the task that owns it, or it is named here with its reason.
-UNFOLDED_BY_DECISION: Final[dict[LedgerName, str]] = {}
 
 
 #: The switch a compaction's monthly window has of its own. It acts only through
@@ -329,36 +323,6 @@ def test_a_live_packing_task_that_waits_30_days_is_refused_by_name(
     assert f"config/gardener/{name}.json is refused" in message and "daily_keep_days" in message
 
 
-def test_every_csv_day_tree_is_folded_by_the_task_that_owns_it() -> None:
-    """A tree nobody folds keeps a file per writer per day for ever (Guardrail #12).
-
-    And a fold on a task that owns no such tree folds nothing, so it is a switch
-    a reviewer could believe does something.
-    """
-    tasks = config.load_gardener().tasks
-    trees = {ledger.tree_relpath(tree): tree for tree in DAY_TREES}
-    folding: dict[str, str] = {}
-    for name, policy in tasks.items():
-        if not isinstance(policy, RetentionPolicy) or policy.fold is None:
-            continue
-        owned = set(policy.owns or ()) & set(trees)
-        assert owned, f"config/gardener/{name}.json folds and owns no CSV day tree"
-        folding |= dict.fromkeys(owned, name)
-    for relpath, tree in sorted(trees.items()):
-        if tree in UNFOLDED_BY_DECISION:
-            assert relpath not in folding, f"{relpath} is folded and still excused from it"
-            continue
-        assert relpath in folding, (
-            f"{relpath} is a CSV day tree and no declaration that owns it folds it. Give "
-            "its owner a fold block, or name it in UNFOLDED_BY_DECISION with its reason"
-        )
-
-
-def test_a_fold_that_names_no_wait_closes_a_day_after_the_shared_one() -> None:
-    """A compaction writes its own wait as `compact_after_days`; both count whole days alike."""
-    assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
-
-
 #: The keys every kind shares that a declaration may leave out, plus compaction's
 #: optional lookback, whose default is two months.
 SHARED_OPTIONAL_KEYS: Final = frozenset({"reads", "appends_to"})
@@ -405,31 +369,17 @@ def test_a_compaction_that_carries_the_old_name_of_its_month_delete_switch_is_re
     assert "monthly_window_dry_run\n  Extra inputs are not permitted" in message
 
 
-def test_a_fold_settles_a_month_only_where_its_own_declaration_asks() -> None:
-    """Off by default, so a tree keeps one file a closed day unless its task says otherwise."""
-    assert FoldPolicy(dry_run=True).settles_months is False
+def test_a_retention_task_that_still_carries_a_fold_is_refused_naming_it(tmp_path: Path) -> None:
+    """No task settles a closed CSV day into one file any more, so a fold is a switch nothing reads.
 
-
-@pytest.mark.parametrize(
-    ("window", "loads"),
-    [({"unit": "days", "value": 7}, False), (MONTHS, True), ({"unit": "forever"}, True)],
-)
-def test_a_month_settles_only_beside_a_window_that_keeps_whole_months(
-    tmp_path: Path, window: dict[str, Any], loads: bool
-) -> None:
-    """A settled month's file names no day, so a window of days would take it whole.
-
-    It would take the month once the month's first day aged out, and with it the
-    rows of every later day the window still keeps.
+    A declaration that kept its `fold` block would load, run and do nothing, and
+    whoever set it would believe the days were being settled. So the key is
+    refused by name, the way any key nothing reads is.
     """
-    declared = fixture("traces", window=window, fold={"dry_run": False, "settles_months": True})
-    config_dir = a_garden(tmp_path, traces=declared)
-    if loads:
-        config.load_gardener(config_dir)
-    else:
-        message = refused(config_dir)
-        assert "config/gardener/traces.json is refused" in message
-        assert "settles_months" in message
+    declared = fixture("traces", fold={"dry_run": False})
+    message = refused(a_garden(tmp_path, traces=declared))
+    assert "config/gardener/traces.json is refused" in message
+    assert "fold\n  Extra inputs are not permitted" in message
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
@@ -548,9 +498,9 @@ def test_trials_owns_only_configured_pipeline_test_roots() -> None:
     )
 
     assert policy.owns == [
-        f"state/{test_case.trial_state_dirname}" for test_case in tests.test_cases
+        f"state/{TRIAL_STATE_PREFIX}-{test_case.id}" for test_case in tests.test_cases
     ] + [
-        f"state/pipeline-tests/{test_case.id}/traces"
+        f"state/{TRIAL_STATE_PREFIX}/{test_case.id}/traces"
         for test_case in tests.test_cases
     ]
     assert "state" not in policy.owns

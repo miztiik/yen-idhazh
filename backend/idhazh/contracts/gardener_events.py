@@ -277,6 +277,7 @@ class TaskOutcome(StrEnum):
 class CompactionStep(StrEnum):
     """Which step of a compaction pass a period's event is about."""
 
+    EXPIRE_YEARS = "expire-years"
     DROP_MONTHS = "drop-months"
     PACK_YEARS = "pack-years"
     CLOSE_MONTHS = "close-months"
@@ -362,6 +363,20 @@ class ListEndMissing(Model):
     collection: str = Field(min_length=1, description="What the walk reads.")
     page: int = Field(ge=1, description="The page the count says is the last.")
     first_count: int = Field(description="What the first page says the collection holds.")
+
+
+class ExpiredYearsChosen(Model):
+    """Which expired UTC years the yearly expiry takes on this wake, said before it takes any."""
+
+    ledger: LedgerName = Field(description="The ledger the compaction packs.")
+    years: list[YearStamp] = Field(
+        description=(
+            "The expired indexed UTC years this pass takes, oldest first: at most "
+            "`max_periods_per_run`, and only whole years inside an operator range. A live pass "
+            "deletes each year's files and its entry; a dry run only names them. Empty when no "
+            "year is due."
+        )
+    )
 
 
 class PeriodRefused(Model):
@@ -478,19 +493,6 @@ class PeriodsTaken(Model):
     yearly_mark: YearStamp | None = Field(description="The newest UTC year packed after the pass.")
 
 
-class FoldSettled(Model):
-    """What a retention task's fold settled into one file a closed day or month, or would."""
-
-    dry_run: bool = Field(description="Whether the fold only reported what it would settle.")
-    settled: list[str] = Field(
-        description="The one file each settled day or month holds, relative to the repository."
-    )
-    replaced: int = Field(ge=0, description="How many files those replaced, or would replace.")
-    fault: GardenerFault | None = Field(
-        default=None, description="Why the fold stopped part way. None when it finished."
-    )
-
-
 class TaskFinished(Model):
     """How one task ended, what it took and wrote, and what the next wake does."""
 
@@ -541,9 +543,6 @@ class TaskFinished(Model):
         default=None, ge=0, description="Pages the listing read. None for a listing with no pages."
     )
     duration_ms: int = Field(ge=0, description="How long the task ran.")
-    fold: FoldSettled | None = Field(
-        default=None, description="What the task's fold did. None when it has none or it never ran."
-    )
     periods: PeriodsTaken | None = Field(
         default=None, description="What a compaction did, period by period. None for other tasks."
     )

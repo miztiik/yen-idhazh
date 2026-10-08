@@ -192,12 +192,11 @@ UNPUBLISHABLE_DATES: Final = (
     "yesterday",
 )
 
-# The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
-# held the fan-out at four. The empty-input default below stays at four, because
-# that is what every scheduled run gets and no eight-shard run is measured yet.
+# The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs;
+# digest runs now use the full eight-worker width for automatic and manual runs.
 CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4", "5", "6", "7", "8"})
 
-CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
+CONTENT_REFRESH_SHARD_DEFAULT: Final = "8"
 
 # How long a worker may run and how many run at once. Both were literals in the
 # work job while `config/idhazh.json` declared different numbers that nothing
@@ -463,9 +462,8 @@ BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
 
 BENCH_CONFIG_STEP: Final = "Build the candidate config"
 
-#: Where a bench run's ledgers go. `run.trial_state_dirname` moves the state root
-#: for every stage of that run, so one input on the action below puts the whole
-#: bench under here and nothing of it beside the production rows.
+#: The shared trial root for a bench. It leaves `trial_case_dirname` unset, so
+#: its files stay here rather than under a pipeline-test case child.
 #:
 #: Owner decision, 2026-09-16. A bench is dispatched ad hoc, many times a day,
 #: against unmerged branches; a bench row in the ledger the console reads would
@@ -478,8 +476,9 @@ BENCH_LEDGER_ROOT: Final = f"state/{BENCH_TRIAL_STATE}"
 
 #: The flag that puts a stage on the trial root, and the step that plans the
 #: corpus. `cli` moves the state root from `run.trial_state_dirname`, which only
-#: the scratch copy carries - so a stage invoked without this flag loads the
-#: committed config and writes where the console reads. The bench's own `plan`
+#: the scratch copy carries; a case-specific config may append a separate slug.
+#: A stage invoked without this flag loads the committed config and writes where
+#: the console reads. The bench's own `plan`
 #: did exactly that until 2026-09-17: it appended to the production seen ledger,
 #: so a dispatch marked real addresses seen and the next production day skipped
 #: those stories without saying so.
@@ -587,7 +586,7 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # Keyed by a label rather than by a job, because a label names one commit step
 # wherever it lives: `bench` is a job of another workflow. Until 2026-09-28 the
 # assemble job committed twice - the day, then the closed-day fold - and the
-# fold is the gardener's now.
+# fold moved to the gardener, which no longer runs it.
 COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
 
 COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/commit_and_push.py")

@@ -570,7 +570,15 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'nothing was judged in it, though the record has a row the day before',
 		days: [judgeDay('2030-06-14', FILLING)],
 		words:
-			'Nothing was judged in this one day. The three bars are what the record needs before a line may be fitted at all.'
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+	},
+	{
+		surface: 'record-gates',
+		preset: 7,
+		state: 'nothing was judged in them, though the record has a row before them',
+		days: [judgeDay('2030-06-01', FILLING)],
+		words:
+			'The bars show what the record held on 1 Jun 2030, before these 7 days. No run has recorded anything since.'
 	},
 	{
 		surface: 'record-gates',
@@ -722,6 +730,120 @@ const RULE_CASES: { state: string; enabled: boolean; days: LineDay[]; rule: stri
 	}
 ];
 
+/** The agreement strip resting on its newest day at one window: its heading, its
+ * two entries as a reader is given them, the name each drawn day's dots carry,
+ * and the sentence under the strip, which the strip's floor leaves as it is. A
+ * day of fewer than `SHARE_FLOOR` pairs prints its counts and no share. The
+ * words are Reader's, written out whole. */
+const STRIP_CASES: {
+	preset: number;
+	state: string;
+	days: JudgeDay[];
+	heading: string;
+	entries: string[];
+	dots: Record<string, string>;
+	words: string;
+}[] = [
+	{
+		preset: 1,
+		state: 'its day read 4 pairs, too few for a share',
+		days: [judgeDay('2030-06-15', { pairsJudged: 4, disagreementRate: 0.25 })],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 1 of 4 pairs',
+			'Could not tell 0 of the 3 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 1 of 4 pairs disagreed with the second reading, and 0 of the 3 that agreed could not tell.'
+		},
+		words:
+			'4 pairs were read twice in this one day. That is too few to report a share, so the counts are above.'
+	},
+	{
+		preset: 1,
+		state: 'its day read 5 pairs, enough for a share',
+		days: [judgeDay('2030-06-15', { pairsJudged: 5, unclearRate: 0.2 })],
+		heading: '15 Jun',
+		entries: ['Disagreed with the second reading 0% of 5 pairs', 'Could not tell 20% of 5 pairs'],
+		dots: {
+			'2030-06-15': '15 Jun: 0% of 5 pairs disagreed with the second reading, and 20% could not tell.'
+		},
+		words:
+			'In this one day, 0% of 5 pairs disagreed with their own second reading, and 20% of 5 pairs could not tell. Both rates are inside the marks.'
+	},
+	{
+		preset: 1,
+		state: "its one pair's two readings disagreed, so no pair agreed",
+		days: [judgeDay('2030-06-15', { pairsJudged: 1, disagreementRate: 1 })],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 1 of 1 pair',
+			'Could not tell not counted, no pair agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 1 of 1 pair disagreed with the second reading. Could not tell: not counted, no pair agreed.'
+		},
+		words:
+			'1 pair was read twice in this one day. That is too few to report a share, so the counts are above.'
+	},
+	{
+		preset: 1,
+		state: 'its day read 4 pairs, and 1 of the 2 that agreed could not tell',
+		days: [judgeDay('2030-06-15', { pairsJudged: 4, disagreementRate: 0.5, unclearRate: 0.5 })],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 2 of 4 pairs',
+			'Could not tell 1 of the 2 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 2 of 4 pairs disagreed with the second reading, and 1 of the 2 that agreed could not tell.'
+		},
+		words:
+			'4 pairs were read twice in this one day. That is too few to report a share, so the counts are above.'
+	},
+	{
+		preset: 7,
+		state: 'its newest day read 4 pairs, while the window read enough for a share',
+		days: [
+			judgeDay('2030-06-10', { pairsJudged: 40, disagreementRate: 0.05 }),
+			judgeDay('2030-06-15', { pairsJudged: 4, disagreementRate: 0.25 })
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 1 of 4 pairs',
+			'Could not tell 0 of the 3 that agreed'
+		],
+		dots: {
+			'2030-06-10': '10 Jun: 5% of 40 pairs disagreed with the second reading, and 0% could not tell.',
+			'2030-06-15':
+				'15 Jun: 1 of 4 pairs disagreed with the second reading, and 0 of the 3 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 7% of 44 pairs disagreed with their own second reading, and 0% of 44 pairs could not tell. Both rates are inside the marks.'
+	},
+	{
+		preset: 7,
+		state: 'the window read 3 pairs, too few for a share',
+		days: [judgeDay('2030-06-12', { pairsJudged: 2 }), judgeDay('2030-06-15', { pairsJudged: 1 })],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 0 of 1 pair',
+			'Could not tell 0 of the 1 that agreed'
+		],
+		dots: {
+			'2030-06-12':
+				'12 Jun: 0 of 2 pairs disagreed with the second reading, and 0 of the 2 that agreed could not tell.',
+			'2030-06-15':
+				'15 Jun: 0 of 1 pair disagreed with the second reading, and 0 of the 1 that agreed could not tell.'
+		},
+		words:
+			'3 pairs were read twice in these 7 days. That is too few to report a share, so the counts are above.'
+	}
+];
+
 test.describe('the Judgement panels name their span in every state, on days the test builds', () => {
 	/** Each panel rendered on the server with its real children, never a stub. */
 	const drawn = {} as Record<SpanCase['surface'], (props: Record<string, unknown>) => string>;
@@ -791,6 +913,38 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			expect(await said(page, '[data-line-state]')).toBe(
 				'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
 			);
+		});
+	}
+
+	for (const one of STRIP_CASES) {
+		test(`THE ORACLE: judge-agreement's strip at the ${one.preset}-day window, when ${one.state}`, async ({
+			page
+		}) => {
+			await page.setContent(
+				`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', ...one }))}</main>`
+			);
+
+			expect(await said(page, '[data-readout="judge-agreement"] [data-readout-day]')).toBe(
+				one.heading
+			);
+			const entries = await page
+				.locator('[data-readout="judge-agreement"] [data-readout-row]')
+				.evaluateAll((nodes) =>
+					nodes.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
+				);
+			expect(entries).toEqual(one.entries);
+			const dots = await page
+				.locator('[data-agreement-day]')
+				.evaluateAll((nodes) =>
+					Object.fromEntries(
+						nodes.map((node) => [
+							node.getAttribute('data-agreement-day'),
+							node.getAttribute('aria-label')
+						])
+					)
+				);
+			expect(dots).toEqual(one.dots);
+			expect(await said(page, SAID['judge-agreement'])).toBe(one.words);
 		});
 	}
 });
@@ -1492,6 +1646,95 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			hint: 'Point at a square to read its day. Left and Right step through the days, Escape returns to the newest.'
 		});
 	});
+});
+
+/** A record panel case the bars oracle draws: its window, the days the test
+ * builds, the three counts the bars must stand at, and the note's words. */
+interface BarsCase {
+	surface: 'record-gates';
+	preset: number;
+	state: string;
+	days: JudgeDay[];
+	bars: string[];
+	words: string;
+}
+
+/** The bars stand on the record's newest row on or before the window's last day,
+ * so only a record that never held a row, or one that emptied, draws them at
+ * zero. Every count and every word is written out. */
+const BARS_CASES: BarsCase[] = [
+	{
+		surface: 'record-gates',
+		preset: 1,
+		state: 'the window holds no row, after earlier rows counted readings, days and pairs',
+		days: [
+			judgeDay('2030-06-12', { ...FILLING, negativesOnRecord: 100, daysOnRecord: 5, aboveLineOnRecord: 9 }),
+			judgeDay('2030-06-14', FILLING)
+		],
+		bars: ['120', '6', '12'],
+		words:
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+	},
+	{
+		surface: 'record-gates',
+		preset: 1,
+		state: 'the record never held a row',
+		days: [],
+		bars: ['0', '0', '0'],
+		words:
+			'Nothing was judged in this one day. The three bars are what the record needs before a line may be fitted at all.'
+	},
+	{
+		surface: 'record-gates',
+		preset: 1,
+		state: "the record emptied on the window's day",
+		days: [judgeDay('2030-06-14', FILLING), judgeDay(JUDGED_THROUGH, { heldReason: 'inputs_changed' })],
+		bars: ['0', '0', '0'],
+		words:
+			'The record has 0 of the 200 readings it needs, 0 of 10 days, and 0 of 30 pairs above the line. No line was fitted in this one day.'
+	}
+];
+
+test.describe("the record's bars stand on its newest row, on days the test builds", () => {
+	/** The record panel rendered on the server with its real children, never a stub. */
+	let drawGates: (props: Record<string, unknown>) => string = () => '';
+
+	test.beforeAll(async ({}, testInfo) => {
+		// One directory a worker: a module rewritten while another worker imports
+		// it is read half-written.
+		const compiled = serverCompiler(
+			resolve(process.cwd(), 'test-results', 'record-bars', String(testInfo.workerIndex))
+		);
+		const children: Rewrite[] = [
+			['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
+			['$lib/components/Panel.svelte', './Panel.server.mjs'],
+			['$lib/components/TargetBar.svelte', './TargetBar.server.mjs']
+		];
+		for (const child of ['ChartReadout', 'Panel', 'TargetBar']) {
+			await compiled(`src/lib/components/${child}.svelte`, child, []);
+		}
+		const module = await compiled(
+			'src/routes/console/judgement/RecordGates.svelte',
+			'RecordGates',
+			children
+		);
+		const component = (await import(pathToFileURL(module).href)).default;
+		drawGates = (props) => render(component, { props }).body;
+	});
+
+	for (const one of BARS_CASES) {
+		test(`THE ORACLE: the record's bars and note when ${one.state}`, async ({ page }) => {
+			await page.setContent(`<main>${drawGates(propsOf(one))}</main>`);
+
+			const panel = page.locator('[data-windowed="record-gates"]');
+			await expect(panel).toHaveAttribute('data-window-days', String(one.preset));
+			// Three tracks: each bar is drawn at its count, never replaced by a dash.
+			await expect(panel.locator('[data-target-cell="track"]')).toHaveCount(3);
+			const bars = await panel.locator('[data-target-cell="value"]').allTextContents();
+			expect(bars.map((bar) => bar.trim()), 'the bars stand on a different row').toEqual(one.bars);
+			expect(await said(page, SAID['record-gates'])).toBe(one.words);
+		});
+	}
 });
 
 /** The first day the Machine route says it is showing, at the open preset. */

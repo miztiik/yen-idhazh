@@ -145,13 +145,13 @@ evidence an operator opens to see one recent run step by step, and the committed
 record is the span rollup, so a trace past its window is deleted whole rather
 than folded - a fold would invent a total nobody reads. Seven days covers a week
 of runs and keeps the tree one size whatever the project's age (Guardrail #12).
-`state/<run.trial_state_dirname>/` keeps 90 days, the window of
-`config/gardener/trials.json`, and nothing reads those rows at all - no
-published series, no gate, no console band. That age is about disk and about a
-reader who opens `state/` and wonders what a directory is, so it needs no
-full-grain window, no summary and no published pair. Ninety days is the artifact
-retention this project already uses everywhere else, so a trial's rows outlive
-the run's own artifacts by nothing.
+`state/<run.trial_state_dirname>/<run.trial_case_dirname>/` keeps 90 days when a
+case slug is set, the window of `config/gardener/trials.json`. Nothing reads
+those rows at all - no published series, no gate, no console band. That age is
+about disk and about a reader who opens `state/` and wonders what a directory
+is, so it needs no full-grain window, no summary and no published pair. Ninety
+days is the artifact retention this project already uses everywhere else, so a
+trial's rows outlive the run's own artifacts by nothing.
 
 **A summary is kept forever unless a value says otherwise, and a finite value
 must sit above its own full-grain window.** The gardener loader refuses any

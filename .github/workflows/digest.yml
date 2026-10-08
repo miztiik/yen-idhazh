@@ -20,7 +20,7 @@ on:
       shards:
         description: 'Total work-shard jobs'
         type: choice
-        default: '4'
+        default: '8'
         options:
           - '1'
           - '2'
