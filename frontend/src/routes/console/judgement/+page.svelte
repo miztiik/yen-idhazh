@@ -74,6 +74,12 @@
 	const newestDayLine = $derived(
 		findAppliedLine(data.windowDay, data.lines, data.similarity, data.configuredLine)
 	);
+
+	/** The line the window's last day was built with, where the merge line draws
+	 * its rule when no fitted day is in the window. */
+	const windowEndLine = $derived(
+		findAppliedLine(viewport.end, data.lines, data.similarity, data.configuredLine)
+	);
 </script>
 
 <svelte:head>
@@ -108,7 +114,7 @@
 		width={data.console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
-		configuredLine={data.configuredLine}
+		builtWith={windowEndLine}
 		markedApart={apartAt === null
 			? null
 			: { low: apartAt.min, high: apartAt.max, count: apartSpan.length }}

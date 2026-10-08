@@ -60,6 +60,12 @@ const CASES: { state: string; enabled: boolean; rows: FittedLine[]; line: number
 		enabled: true,
 		rows: [lineOn('2030-06-01', 0.937), lineOn(DAY, 0.937, 'judge_unstable')],
 		line: 0.940
+	},
+	{
+		state: 'the switch is on, the one fitted line is 8 days before, and a day the build read was held at 0.951',
+		enabled: true,
+		rows: [lineOn('2030-06-07', 0.937), lineOn('2030-06-13', 0.951, 'judge_unstable')],
+		line: 0.940
 	}
 ];
 
