@@ -1095,6 +1095,7 @@
 			align-items: stretch;
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-rows: var(--workbench-control) var(--workbench-control);
 		}
 		:global([data-workbench-region='questions'] .question-strip) {
 			grid-column: 1 / -1;

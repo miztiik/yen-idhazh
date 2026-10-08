@@ -228,18 +228,20 @@ test('M8: editor head, questions and narrow rails keep their density heights', a
 			const space1 = parseFloat(css.getPropertyValue('--space-1')) * rem;
 			const space2 = parseFloat(css.getPropertyValue('--space-2')) * rem;
 			const space3 = parseFloat(css.getPropertyValue('--space-3')) * rem;
+			const questions = document.querySelector<HTMLElement>('[data-workbench-region="questions"]');
+			const questionGap = questions === null ? 0 : parseFloat(getComputedStyle(questions).rowGap) || 0;
 			const regions = Object.fromEntries(
 				[...document.querySelectorAll('[data-workbench-region]')].map((node) => {
 					const rect = node.getBoundingClientRect();
 					return [node.getAttribute('data-workbench-region') ?? '', rect.height];
 				})
 			);
-			return { control, space1, space2, space3, regions };
+			return { control, space1, space2, space3, questionGap, regions };
 		});
 		const oneControlRow = sizes.control + 2 * sizes.space1;
 		expect(await page.locator('[data-workbench-region="editor"] .editor-head').evaluate((node) => node.getBoundingClientRect().height), `${view.width} editor head`).toBeGreaterThanOrEqual(oneControlRow - 1);
 		if (view.width < 640) {
-			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(2 * sizes.control + sizes.space1, 0);
+			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(2 * sizes.control + sizes.questionGap, 0);
 		} else {
 			expect(sizes.regions.questions, `${view.width} questions`).toBeCloseTo(oneControlRow, 0);
 		}
