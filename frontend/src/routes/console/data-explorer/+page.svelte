@@ -667,7 +667,7 @@
 			{:else if result === null}
 				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 			{:else if result.state === 'ok'}
-				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={runSpan ? describeDaysRead(result.readFrom, runSpan.to) : ''} siteFromText={siteFromText()} unansweredText={result.unanswered.length > 0 ? explorerUnansweredNote(result.unanswered) : ''} gapLines={gapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={describeDaysRead(result.readFrom, result.readTo)} siteFromText={siteFromText()} unansweredText={result.unanswered.length > 0 ? explorerUnansweredNote(result.unanswered) : ''} gapLines={gapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
 				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, result.unanswered, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
 			{:else if result.state === 'missing'}

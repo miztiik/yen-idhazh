@@ -324,6 +324,36 @@ test('THE ORACLE: an answer over two ledgers that began on different days names 
 	await expect(note).toHaveText(read);
 });
 
+test('THE ORACLE: the line under an answer ends on the last day the explorer read, not on the window\'s last day, and keeps that day when a ledger is unticked before the next Run', async ({ page, context }) => {
+	// host-fingerprint is built from 20 days before the pinned day, 26 May 2030, to 3 days before it,
+	// 12 Jun, so 12 Jun is the newest day it lists. seen is built from 26 May to the pinned day, 15 Jun.
+	// Each holds one row a day. The 14-day preset asks for 2 to 15 Jun, so neither ledger is cut.
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(20, 3) },
+		{ ledger: 'seen', pinned: PINNED, days: everyDay(20, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
+
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT max("covers") AS last_day, count(*) AS rows FROM "host-fingerprint"');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-06-12', '11']]);
+	await expect(note).toHaveText('Read from 11 UTC days, 2 Jun 2030 to 12 Jun 2030. 1 row shown.');
+
+	await chooseExplorerQuestion(page, ['host-fingerprint', 'seen'], 'SELECT (SELECT max("covers") FROM "host-fingerprint") AS fingerprint_last, (SELECT max("covers") FROM "seen") AS seen_last');
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['2030-06-12', '2030-06-15']]);
+	const both = 'Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. 1 row shown.';
+	await expect(note).toHaveText(both);
+
+	// Unticking seen prices the next run over host-fingerprint alone; the line stays the answer's.
+	await page.locator('[data-ledger-name="seen"] input').uncheck();
+	await expect(page.locator('[data-explorer-columns]')).not.toContainText('seen.');
+	await expect(note).toHaveText(both);
+});
+
 test('THE ORACLE: when the repository host does not answer for the days the site dropped, the answer reads the site\'s days and names the ledger in the warning colour', async ({ page, context }) => {
 	// seen begins 120 days before the pinned day, on 15 Feb 2030, with one row a day and February,
 	// March and April closed. The site copy keeps the 90 days to 15 Jun 2030, from 18 Mar, so it keeps

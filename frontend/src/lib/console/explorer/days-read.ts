@@ -12,8 +12,8 @@ import { daysBetween } from '../../data/slice';
 import type { CutDays, DateStamp } from '../../data/slice-shapes';
 
 /** The line that says which days an answer read: from `from`, the first day any selected ledger's
- *  answer read, to `to`, the window's last day, both counted. An answer with rows read at least
- *  one day, so `from` is never after `to`. */
+ *  answer read, to `to`, the last day any of them read, both counted. An answer with rows read at
+ *  least one day, so `from` is never after `to`. */
 export function describeDaysRead(from: DateStamp, to: DateStamp): string {
 	const days = daysBetween(from, to).length;
 	return days === 1 ? `Read from 1 UTC day, ${shortDate(to)}.` : `Read from ${days} UTC days, ${shortDate(from)} to ${shortDate(to)}.`;
