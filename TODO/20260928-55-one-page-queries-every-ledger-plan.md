@@ -71,7 +71,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 16 | The History list opens in view and closes itself, Forget on the line keeps focus, the link limit is a knob, and a day the chart cannot place says so | 12, 15 | N | DONE | friendly-winner | #1340 | Data explorer small fixes |
 | 17 | The date chart leaves out a row whose day is NULL and says how many it left out | 16 | O | DONE | musical-umbrella | #1341 | Explorer chart skips a null day |
 | 18 | The Data explorer's panel pictures pass again at every width and theme | 12 | P | DONE | urban-goggles | - | Explorer captures fit again |
-| 19 | The reader chooses the chart and the columns it draws | 10 | Q | PENDING | - | - | - |
+| 19 | The reader chooses the chart and the columns it draws | 10 | Q | DONE | p55r19 | - | p55-row19-worker |
 | 20 | The explorer draws Side by side, Which days and Flow | 19; plan 52 row 2 | R | BLOCKED | - | - | - |
 | 21 | The site build checks that each published file carries its contract's columns | - | Q | DONE | p55r21 | #1390 | p55-row21-worker |
 | 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | DESCOPED | - | - | - |
