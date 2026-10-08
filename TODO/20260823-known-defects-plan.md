@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-08
 
-**Thirty-eight defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-eight defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -53,7 +53,12 @@ update (#1437): the plan status utility splits a quoted row title wherever
 "and" appears in it. Defect 67 was filed the same day from the checks of plan
 62's row L37 (#1431): a browser test that failed once and passed when run
 again. It is the fourth that needs evidence, because one failure is not enough
-to find its cause.
+to find its cause. A second test in the same `reader` project failed once in
+main's own checks that day, and joins defect 67. Defect 68 was filed the same
+day from plan 62's row L40 (#1448): the merge line's hold has no floor on its
+pair count. Whether one pair may hold a run is Andre's to rule, so it is the
+fifth that needs evidence or a ruling. Defect 60 closed the same day: #1435
+made the data explorer read each index once before a run.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -121,16 +126,53 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
-| 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | **OPEN - find the two callers, then share one read** |
+| 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
 | 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
 | 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
 | 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
-| 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
+| 67 | Two browser tests in the `reader` project each failed once in CI, and passed on the next run | 2 | **OPEN - one failure seen in each; make each come back before changing code** |
+| 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
 
-## 67 - A browser test of a summary with a paragraph break failed once, and passed when run again (OPEN)
+## 68 - The merge line's hold has no floor on its pair count, so one pair can hold a run (OPEN)
+
+**A day on which the judge read one pair, and its two readings disagreed, can
+hold the merge line where it was.** `set_merge_line.py`
+(`backend/idhazh/stages/set_merge_line.py`) works out the day's two rates over
+however many pairs it read: "disagreed" over the pairs read twice, and "could
+not tell" over the pairs whose two readings agreed. It hands both to `gates` in
+`backend/idhazh/similarity/fit.py`, which holds the run, as `JUDGE_UNSTABLE` or
+`JUDGE_UNCERTAIN`, when a rate passes its mark, `disagreement_max` or
+`unclear_max`. No floor counts the pairs behind the rate. The console prints no
+share for fewer than `console.min_attempts_for_rate` pairs
+(`config/appearance.json`), so the run can hold the line on a share the console
+calls too few to report. Reasoned from the code, not measured: once the record
+is large enough to pass the gate on its size, which `gates` checks first, one
+disagreeing pair on a day is enough.
+
+**The console now shows such a day as held, with its counts.** Since #1448
+(plan 62's row L40), the Judgement page's agreement chart draws no dot for a
+rate under that floor, and its strip prints the day's counts, while the merge
+line above it marks the day held.
+
+**Doing nothing costs a line that stays where it was on a day whose evidence
+is one pair, once the merge switch is on.** While
+`assemble.same_story.adaptive_dedup_threshold.enabled` in `config/idhazh.json`
+is `false`, every build groups at the committed floor, whatever the fit holds.
+
+**The next move is a ruling, not code: whether one pair should hold a run is a
+question for whoever owns the merge line's fit, Andre's area (CLAUDE.md section
+14).** If Andre rules a floor, the fix is in `gates` or in what
+`set_merge_line.py` hands it, with a test on pairs the test builds. Level 2 -
+the rule that holds the line, which the fitted rows record and the Judgement
+page draws.
+
+Found by plan 62's row L40 (#1448), its third follow-up, and filed on
+2026-10-08.
+
+## 67 - Two browser tests in the `reader` project each failed once in CI, and passed on the next run (OPEN)
 
 **One browser test found no story drawn as two paragraphs, once.** "A summary
 with a paragraph break is drawn as two paragraphs"
@@ -146,21 +188,37 @@ docs page and plan 62. It did not touch that spec, or
 `frontend/src/lib/components/DigestItem.svelte`, which draws each paragraph of
 a summary.
 
-**Doing nothing costs a red browser job each time it comes back, and a
-re-run.** How often that is, nobody knows: it has been seen once. The run's
+**A second `reader` test stalled once, in main's own checks.** "THE ORACLE:
+every fact is reachable without a mouse > the platform reads the figure by the
+sentence, not by its marks" (`frontend/tests/item-visual.spec.ts`, line 471)
+failed in CI run 37796300534, the checks main ran on f668b3e62 (#1439), in its
+browser job (job 113376700083) at 15:02 UTC on 2026-10-08: `page.evaluate`
+waited out the test's 180-second limit at line 123, where `drawnDay` calls
+`revealDayDrawings` (`frontend/tests/support/day-drawings.ts`), whose one
+`page.evaluate` scrolls the day and waits for two animation frames after each
+step. The next commit on main that CI ran on, 60f33fa4b (#1440, run
+37799982887), passed it. #1439 changed the Judgement route, the module it reads
+its line from, that module's test, the test group list, one docs page and plan
+62, and not that spec or its helper. That helper, in that spec, is where
+defect 57's stall stopped, and defect 57 says a second stall in CI opens a row.
+
+**Doing nothing costs a red browser job each time either comes back, and a
+re-run.** How often that is, nobody knows: each has been seen once. Each run's
 trace is in its `playwright-traces` artifact, which expires on 2026-10-15.
 
-**The next move is a worker's: make the failure come back where it can be
-watched.** Run this one test in the `reader` project a few hundred times with
-Playwright's `--repeat-each` on a canary build, and read the trace of a run
-that fails: it shows whether the story with a break had not been drawn yet,
-or was drawn as one paragraph. The spec's `open` waits for the page to load
-and for its theme, not for every story, so check the first case first. A
-raised timeout or a retry would hide the cause, not explain it (CLAUDE.md
-Guardrail #5). Level 2 - the fix may be in `DigestItem.svelte`, which every
-reader sees, rather than in the test.
+**The next move is a worker's: make each failure come back where it can be
+watched.** Run the paragraph test in the `reader` project a few hundred times
+with Playwright's `--repeat-each` on a canary build, and read the trace of a
+run that fails: it shows whether the story with a break had not been drawn
+yet, or was drawn as one paragraph. The spec's `open` waits for the page to
+load and for its theme, not for every story, so check the first case first.
+For the stall, defect 57's next move is the one to take. A raised timeout or a
+retry would hide the cause, not explain it (CLAUDE.md Guardrail #5). Level 2 -
+the fix may be in `DigestItem.svelte`, which every reader sees, or in the day
+page, rather than in a test.
 
-Found in the checks of plan 62's row L37 (#1431), and filed on 2026-10-08.
+Found in the checks of plan 62's row L37 (#1431), and filed on 2026-10-08. The
+second failure was added the same day, from main's checks of #1439.
 
 ## 66 - The plan status utility splits a quoted row title wherever "and" appears in it (OPEN)
 
@@ -327,7 +385,7 @@ line, and a wrong version shows on the first line.
 
 Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
 
-## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (OPEN)
+## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (CLOSED 2026-10-08)
 
 **When the data explorer opens, it fetches each chosen ledger's three indexes
 twice.** Plan 62's row L10 saw it on 2026-10-07, on the live site and on a
@@ -343,9 +401,19 @@ cost (`askCost`), then for each ledger's columns, through `askColumns` since
 **Doing nothing costs three extra small requests for each chosen ledger, every
 time the page opens.** What the page shows is not wrong.
 
-**The next move is a worker's: find the two callers and share one read.**
-Level 1 - the reads of one page, and a wrong version shows on that page at
-once.
+**Closed on 2026-10-08 by #1435**, plan 55's row "The page reads each index once
+before a run, and the ledger list raises no accessibility warning". The cause
+was not the two callers guessed above: the page keeper
+(`frontend/src/lib/data/page-keeper.ts`) keeps each index's read, so
+`askCost` and `askColumns` share one. Opened from a link or a kept run, the
+page started a cost pass for the restored selection, and `refreshRegistry()`
+then called `startAfresh()`, which dropped every index the page had read, so
+the next pass read them all again. On `origin/main` at 62da7be9a,
+`refreshRegistry` drops the page's reads only when the reader presses Refresh,
+and the test "opened from a link, the page reads each index and listing once
+before a run" in `frontend/tests/console-data-explorer.spec.ts` checks, on a
+ledger it builds, that no `.json` file under `state/` is read twice before Run.
+Level 1.
 
 Found by plan 62's row L10 (#1360), and filed on 2026-10-07.
 
