@@ -1,17 +1,25 @@
 """Which trees did a pipeline-test dispatch write, and may they be pushed?
 
-Every runner of every test case writes its ledgers under `state/`, one tree per
-test case. The job that pushes them is a separate job holding `contents: write`,
-and artifacts are the only thing between them - so this module is what moves
-the trees onto and off those artifacts, and what reads them before anything is
-staged.
+Every runner of every test case writes its ledgers tier-first under `state/`:
+a raw ledger file sits under `state/raw/pipeline-tests/<case>/`, beside every
+other ledger's own `state/raw/<ledger>`, and a trace file stays at
+`state/pipeline-tests/<case>/traces/` - exempt from that move because nesting
+it under `state/traces` would collide with production's own 7-day retention
+there (`ledger.paths.overlay_registry`). The job that pushes them is a
+separate job holding `contents: write`, and artifacts are the only thing
+between them - so this module is what moves the trees onto and off those
+artifacts, and what reads them before anything is staged. The artifact's own
+internal tree keeps one shape regardless of where each piece sits under
+`state/`: `<case>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl` and
+`<case>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>`; `gather` and
+`place` are what translate between that shape and the tier-first state layout.
 
 **The check is the control, not the job split.** Every byte here is downstream of
 text this project did not write (Guardrail #11). Two shapes may be in the tree
-and nothing else: `<root>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object
-a line, and `<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>`, one file
+and nothing else: `<case>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object
+a line, and `<case>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>`, one file
 the ledger door wrote, read row by row through the contract
-`ledger.door_contract` names. `<root>` has to be the trial root of a test case
+`ledger.door_contract` names. `<case>` has to be a test case
 `config/pipeline-tests.json` declares, and `<ledger>` a ledger the door files,
 so every directory name comes from committed config rather than from the artifact.
 A raw file also has to sit under a real UTC day, at the one path `ledger.raw_path`
@@ -175,6 +183,11 @@ def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) ->
     One fixed destination rather than a glob over `state/`, so the artifact's
     root directory is the same whichever test cases produced a file. Each
     copied directory holds one named day, never a trial root's accumulated days.
+    A raw ledger's files are read tier-first, from
+    `state/raw/pipeline-tests/<case>/<ledger>/`
+    (`ledger.paths.overlay_registry`); a trace file stays exempt from that
+    move and is read from `state/pipeline-tests/<case>/traces/`, where it
+    already sat before the tier-first registry existed.
     """
     dated = day_files(Path(), days, filename="")
     if tree.exists():
@@ -182,19 +195,26 @@ def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) ->
     tree.mkdir(parents=True)
     arrived = []
     for name in roots:
-        root = state / TRIAL_STATE_PREFIX / name
-        bases = [root / TRACES]
-        bases.extend(
-            ledger.raw_root(root, which)
-            for which in LedgerName
-            if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
-        )
         copied = False
-        for base in bases:
+        trace_base = state / TRIAL_STATE_PREFIX / name / TRACES
+        for day in dated:
+            source = trace_base / day
+            if source.is_dir():
+                destination = tree / name / TRACES / day
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(source, destination)
+                copied = True
+        with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, name))):
+            ledger_bases = {
+                which: ledger.raw_root(state, which)
+                for which in LedgerName
+                if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+            }
+        for which, base in ledger_bases.items():
             for day in dated:
                 source = base / day
                 if source.is_dir():
-                    destination = tree / name / source.relative_to(root)
+                    destination = tree / name / ledger.paths.RAW_DIRNAME / which.value / day
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copytree(source, destination)
                     copied = True
@@ -206,19 +226,27 @@ def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) ->
 def place(tree: Path, state: Path, *, roots: list[str]) -> list[str]:
     """Copy the checked trees back under `state/`, and name every root to stage.
 
-    Every declared root is created whether or not the dispatch wrote one. The
-    commit script hands its arguments straight to `git add`, which aborts on a
-    path the checkout does not hold - and an empty directory git cannot see is a
+    Every declared case's two roots - its traces root and its tier-first raw
+    root - are created whether or not the dispatch wrote one. The commit
+    script hands its arguments straight to `git add`, which aborts on a path
+    the checkout does not hold - and an empty directory git cannot see is a
     staged path that costs nothing.
     """
     staged = []
     for name in roots:
-        destination = state / TRIAL_STATE_PREFIX / name
-        destination.mkdir(parents=True, exist_ok=True)
-        source = tree / name
-        if source.is_dir():
-            shutil.copytree(source, destination, dirs_exist_ok=True)
-        staged.append(destination.as_posix())
+        trace_destination = state / TRIAL_STATE_PREFIX / name
+        trace_destination.mkdir(parents=True, exist_ok=True)
+        trace_source = tree / name / TRACES
+        if trace_source.is_dir():
+            shutil.copytree(trace_source, trace_destination / TRACES, dirs_exist_ok=True)
+        staged.append(trace_destination.as_posix())
+
+        raw_destination = state / ledger.paths.RAW_DIRNAME / TRIAL_STATE_PREFIX / name
+        raw_destination.mkdir(parents=True, exist_ok=True)
+        raw_source = tree / name / ledger.paths.RAW_DIRNAME
+        if raw_source.is_dir():
+            shutil.copytree(raw_source, raw_destination, dirs_exist_ok=True)
+        staged.append(raw_destination.as_posix())
     return staged
 
 

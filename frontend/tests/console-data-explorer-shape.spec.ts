@@ -1,9 +1,14 @@
 import { expect, test } from '@playwright/test';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 
-import { chooseDateSeriesDays, chooseExplorerShape, chooseExplorerShapes, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chartNotes, chooseChart, chooseDateSeriesDays, openingType, resolveRoles, type ChosenRoles, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { AT_MOST_SENTENCE, CHART_KINDS, MOST_ROLES, SERIES_TOKENS, chartKind, pillFace, pillName, roleOptions } from '../src/lib/console/explorer/chart-roles';
+import { roleRowLines, roleSlotsPerLine } from '../src/lib/console/explorer/role-row';
+import { tooFewSentence } from '../src/lib/console/waiting';
+import { iconsConfig } from '../src/lib/server/config';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
 import { inZone } from './support/in-zone';
 import { serverCompiler } from './support/server-render';
@@ -18,8 +23,15 @@ const bounds: ExplorerShapeBounds = {
 	seriesFloorShare: 0.05
 };
 
+/** What the Chart tab's box draws for an answer before the reader chooses anything. */
 function shape(columns: readonly Column[], rows: readonly Row[]) {
-	return chooseExplorerShape(columns, rows, bounds);
+	return chooseChart(columns, rows, bounds).shape;
+}
+
+/** The chart an answer opens on, and the columns each of its roles holds, by role word. */
+function opened(columns: readonly Column[], rows: readonly Row[], type: ExplorerChartType | null = null, roles: ChosenRoles = {}) {
+	const chart = chooseChart(columns, rows, bounds, type, roles);
+	return { type: chart.type, roles: Object.fromEntries(chart.roles.map((state) => [state.role.word, state.chosen])) };
 }
 
 test('the five documented answer cases choose their chart type or neutral sentence', () => {
@@ -113,7 +125,7 @@ test('cells arrive as text, as the door returns them, and still give each chart 
 	]), 'a negative number in text is negative, so the answer is not ranked').toMatchObject({ type: 'distribution' });
 });
 
-test('a date answer with several rows on one UTC day draws no date chart and says why', () => {
+test('a date answer with several rows on one UTC day draws no date chart and says why, naming the column', () => {
 	expect(shape([
 		{ name: 'day', type: 'TIMESTAMP' },
 		{ name: 'items', type: 'INTEGER' },
@@ -124,7 +136,7 @@ test('a date answer with several rows on one UTC day draws no date chart and say
 	])).toEqual({
 		kind: 'none',
 		code: 'several-rows-per-day',
-		reason: 'Nothing here to draw: the answer has several rows a UTC day. Group by day in the question to draw it over time.'
+		reason: 'Nothing here to draw: the answer has several rows a UTC day in "day". Group by day in the question to draw it over time.'
 	});
 });
 
@@ -209,26 +221,26 @@ test('a row whose day is NULL is left out of the date chart, and every figure co
 });
 
 test('a date column that holds only NULL draws no chart and says so', () => {
-	expect(chooseExplorerShapes([
+	expect(shape([
 		{ name: 'day', type: 'DATE' },
 		{ name: 'items', type: 'INTEGER' }
 	], [
 		{ day: null, items: '1' },
 		{ day: null, items: '2' }
-	], bounds)).toEqual([{
+	])).toEqual({
 		kind: 'none',
 		code: 'no-day',
 		reason: 'Nothing here to draw: the column "day" holds only null. Give "day" a date in the question to draw it over time.'
-	}]);
+	});
 
-	expect(chooseExplorerShapes([
+	expect(shape([
 		{ name: 'at', type: 'TIMESTAMP WITH TIME ZONE' },
 		{ name: 'items', type: 'BIGINT' }
-	], [{ at: null, items: '1' }], bounds)).toEqual([{
+	], [{ at: null, items: '1' }])).toEqual({
 		kind: 'none',
 		code: 'no-day',
 		reason: 'Nothing here to draw: the column "at" holds only null. Give "at" a date in the question to draw it over time.'
-	}]);
+	});
 });
 
 test('date charts draw four number columns and name columns that would draw flat', () => {
@@ -249,7 +261,6 @@ test('date charts draw four number columns and name columns that would draw flat
 		kind: 'chart',
 		type: 'dateSeries',
 		seriesColumns: ['a', 'b', 'c', 'd'],
-		omittedColumns: ['e'],
 		flatColumns: [{ name: 'tiny', share: 0.03, largestColumn: 'a' }]
 	});
 });
@@ -310,47 +321,34 @@ test('a timestamp with a time zone sits on the date axis by its UTC day, not the
 	});
 });
 
-test('no-chart reasons follow the first matching documented case', () => {
+test('where the page picks no chart, the box says the reader can choose one, in place of the old advice to drop columns', () => {
+	// Three number columns, and two number columns with two text columns, were the old "too many"
+	// cases. The reader can now choose a chart and its columns, so the box says so (Susan's B3).
+	const notPicked = {
+		kind: 'none',
+		code: 'not-picked',
+		reason: 'The page does not pick a chart for these columns. Choose one under Draw it as.'
+	};
 	expect(shape([
 		{ name: 'a', type: 'INTEGER' },
 		{ name: 'b', type: 'INTEGER' },
 		{ name: 'c', type: 'INTEGER' }
-	], [{ a: 1, b: 2, c: 3 }])).toEqual({
-		kind: 'none',
-		code: 'too-many-numbers',
-		reason: 'Nothing here to draw: 3 number columns are more than one chart can show. Keep one or two in the question.'
-	});
+	], [{ a: 1, b: 2, c: 3 }])).toEqual(notPicked);
 
 	expect(shape([
 		{ name: 'x', type: 'INTEGER' },
 		{ name: 'y', type: 'INTEGER' },
 		{ name: 'name', type: 'VARCHAR' },
 		{ name: 'family', type: 'VARCHAR' }
-	], [{ x: 1, y: 2, name: 'a', family: 'b' }])).toEqual({
-		kind: 'none',
-		code: 'too-many-text-columns',
-		reason: 'Nothing here to draw: two number columns pair up with at most one text column naming each point, and this answer has 2.'
-	});
+	], [{ x: 1, y: 2, name: 'a', family: 'b' }])).toEqual(notPicked);
+	expect(chooseChart([{ name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }, { name: 'c', type: 'INTEGER' }], [{ a: 1, b: 2, c: 3 }], bounds).type, 'a tile was checked').toBeNull();
 });
 
-test('an answer can qualify for more than one chart type for the operator switch', () => {
-	const result = chooseExplorerShapes([
-		{ name: 'source', type: 'VARCHAR' },
-		{ name: 'items', type: 'INTEGER' }
-	], [
-		{ source: 'a', items: 5 },
-		{ source: 'b', items: 2 },
-		{ source: 'c', items: 1 }
-	], bounds);
-	expect(result.map((shape) => shape.kind === 'chart' ? shape.type : shape.code)).toEqual(['rankedList', 'distribution']);
-	expect(chooseExplorerShape([
-		{ name: 'source', type: 'VARCHAR' },
-		{ name: 'items', type: 'INTEGER' }
-	], [
-		{ source: 'a', items: 5 },
-		{ source: 'b', items: 2 },
-		{ source: 'c', items: 1 }
-	], bounds)).toMatchObject({ kind: 'chart', type: 'rankedList' });
+test('an answer the page ranks can be drawn as a spread on the reader\'s press, with nothing fetched', () => {
+	const columns: Column[] = [{ name: 'source', type: 'VARCHAR' }, { name: 'items', type: 'INTEGER' }];
+	const rows: Row[] = [{ source: 'a', items: 5 }, { source: 'b', items: 2 }, { source: 'c', items: 1 }];
+	expect(chooseChart(columns, rows, bounds)).toMatchObject({ type: 'rankedList', shape: { kind: 'chart', type: 'rankedList' } });
+	expect(chooseChart(columns, rows, bounds, 'distribution')).toMatchObject({ type: 'distribution', shape: { kind: 'chart', type: 'distribution', valueColumn: 'items' } });
 });
 
 test('a timestamp of any precision is a day column, so a TIMESTAMP_NS day column draws over time', () => {
@@ -427,7 +425,8 @@ test('a NULL is no reading: the spread and paired floors, the paired figure and 
 });
 
 test.describe('the chart panel draws a NULL as no value, never as zero', () => {
-	let draw: (columns: readonly Column[], rows: readonly Row[], selectedType: ExplorerChartType) => string;
+	let draw: (columns: readonly Column[], rows: readonly Row[], selectedType: ExplorerChartType | null, roles?: ChosenRoles, capped?: boolean) => string;
+	let pick: (props: Record<string, unknown>) => string;
 
 	/** The path of the date chart's first series: one `M` for each run of days it joins. */
 	function dateLine(body: string): string {
@@ -439,7 +438,14 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		return body.match(new RegExp(`class="${part}[^"]*"[^>]*>([^<]*)<`))?.[1];
 	}
 
+	/** Every note the foot under the drawing prints, in order. */
+	function footNotes(body: string): string[] {
+		return [...body.matchAll(/class="shape-foot[^"]*"[^>]*>([^<]*)</g)].map((note) => note[1]);
+	}
+
 	test.beforeAll(async ({}, testInfo) => {
+		// The build defines the icon line weight from config (`vite.config.ts`); a component rendered outside the build needs the same global.
+		Object.assign(globalThis, { __ICON_STROKE_PX__: iconsConfig().stroke_px });
 		// One directory a worker: a module rewritten while another worker imports it is read half-written.
 		const compiled = serverCompiler(path.join(frontend, 'test-results', 'explorer-shape-panel', String(testInfo.workerIndex)));
 		await compiled('src/lib/components/Reserved.svelte', 'Reserved', []);
@@ -452,16 +458,27 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 			]);
 		}
 		await compiled('src/lib/components/RankedList.svelte', 'RankedList', []);
+		await compiled('src/lib/icons/Icon.svelte', 'Icon', [['./generated', '$lib/icons/generated']]);
+		await compiled('src/lib/console/explorer/ColumnType.svelte', 'ColumnType', []);
+		const picker = await compiled('src/lib/console/explorer/ColumnPicker.svelte', 'ColumnPicker', [
+			['$lib/icons/Icon.svelte', './Icon.server.mjs'],
+			['$lib/console/explorer/ColumnType.svelte', './ColumnType.server.mjs']
+		]);
 		const panel = await compiled('src/lib/console/explorer/ShapePanel.svelte', 'ShapePanel', [
 			['$lib/charts/d3/DateSeries.svelte', './DateSeries.server.mjs'],
 			['$lib/charts/d3/Distribution.svelte', './Distribution.server.mjs'],
 			['$lib/charts/d3/PairedScatter.svelte', './PairedScatter.server.mjs'],
 			['$lib/components/RankedList.svelte', './RankedList.server.mjs'],
+			['$lib/console/explorer/ColumnPicker.svelte', './ColumnPicker.server.mjs'],
 			['./shape', '$lib/console/explorer/shape'],
 			['./answer', '$lib/console/explorer/answer']
 		]);
 		const component = (await import(pathToFileURL(panel).href)).default;
-		draw = (columns, rows, selectedType) => render(component, { props: { columns, rows, lostDays: [], bounds, height: 200, selectedType } }).body;
+		draw = (columns, rows, selectedType, roles = {}, capped = false) => render(component, {
+			props: { chart: chooseChart(columns, rows, bounds, selectedType, roles), columns, rows, lostDays: [], bounds, floorHeight: 200, capped, maxRows: 1000, onRoles: () => {} }
+		}).body;
+		const pickerComponent = (await import(pathToFileURL(picker).href)).default;
+		pick = (props) => render(pickerComponent, { props: { onChange: () => {}, ...props } }).body;
 	});
 
 	test('the ranked list leaves the NULL row out and says it is in the table', () => {
@@ -516,7 +533,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 			{ latency: '20' },
 			{ latency: null },
 			{ latency: '30' }
-		], 'distribution')).toContain('Only 3 of the 4 readings this chart needs are in this window, so it is not drawn.');
+		], 'distribution')).toContain('Only 3 of the 4 readings this chart needs are in the answer, so it is not drawn.');
 
 		expect(draw([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
 			{ host: 'a', ms: '10', tokens: '100' },
@@ -524,7 +541,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 			{ host: 'b', ms: '30', tokens: '120' },
 			{ host: 'b', ms: '40', tokens: '90' },
 			{ host: 'c', ms: null, tokens: '60' }
-		], 'pairedScatter')).toContain('Only 2 of the 3 subjects this chart needs are in this window, so it is not drawn.');
+		], 'pairedScatter')).toContain('Only 2 of the 3 names this chart needs are in the answer, so it is not drawn.');
 	});
 
 	test('the date chart draws every row with a day, and its note says how many rows hold null in the day column', () => {
@@ -553,7 +570,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 			{ day: '2026-08-17', rows: '3' },
 			{ day: null, rows: '4' },
 			{ day: '2026-08-18', rows: '5' }
-		], 'dateSeries'), 'the floor counted the row with no day as a day').toContain('Only 2 of the 3 UTC days this chart needs are in this window, so it is not drawn.');
+		], 'dateSeries'), 'the floor counted the row with no day as a day').toContain('Only 2 of the 3 UTC days this chart needs are in the answer, so it is not drawn.');
 	});
 
 	test('beside a row with no day, a NULL number still breaks the line on its own day and is still no reading in the spread', () => {
@@ -571,7 +588,8 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		expect(dateLine(body).match(/M/g)?.length, 'the line joined the days either side of the NULL number').toBe(2);
 		expect(printed(body, 'shape-foot')).toBe('1 row holds null in the column "day", so the chart does not draw it. It is in the table.');
 		// The spread needs no day, so it draws the row with no day, and the NULL number is still no reading.
-		expect(chooseExplorerShapes(columns, rows, bounds)).toMatchObject([{ type: 'dateSeries', days: 5, rowsWithNoDay: 1 }, { type: 'distribution', readings: 5 }]);
+		expect(chooseChart(columns, rows, bounds).shape).toMatchObject({ type: 'dateSeries', days: 5, rowsWithNoDay: 1 });
+		expect(chooseChart(columns, rows, bounds, 'distribution').shape).toMatchObject({ type: 'distribution', readings: 5 });
 	});
 
 	test('a date column that holds only NULL puts its sentence in the chart room and draws no chart', () => {
@@ -582,4 +600,177 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		expect(printed(body, 'shape-none')).toBe('Nothing here to draw: the column "day" holds only null. Give "day" a date in the question to draw it over time.');
 		expect(body).not.toContain('data-chart-type');
 	});
+
+	test('T3: Lines holds four columns at most, so the unchecked boxes say so without being disabled, and the list foot says why', () => {
+		const lines = chartKind('dateSeries').roles[1];
+		const options = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => ({ value: name, name, type: 'BIGINT' }));
+		const four = pick({ role: lines, options, chosen: ['a', 'b', 'c', 'd'], max: SERIES_TOKENS.length });
+		const boxes = [...four.matchAll(/<input[^>]*data-line[^>]*>/g)].map((input) => input[0]);
+		expect(boxes, 'the list is not six checkboxes').toHaveLength(6);
+		expect(boxes.every((input) => input.includes('type="checkbox"'))).toBe(true);
+		expect(boxes.map((input) => /aria-disabled="true"/.test(input))).toEqual([false, false, false, false, true, true]);
+		expect(four, 'a box was disabled, which a keyboard skips').not.toMatch(/<input[^>]* disabled/);
+		expect(four).toContain('Four at most. Uncheck one to choose another.');
+		const three = pick({ role: lines, options, chosen: ['a', 'b', 'c'], max: SERIES_TOKENS.length });
+		expect(three).not.toContain('aria-disabled="true"');
+		expect(three).not.toContain('Four at most.');
+	});
+
+	test('T3: the checked lines draw in the answer\'s order, the first in the first series colour, whatever order they were checked in', () => {
+		const body = draw([{ name: 'day', type: 'DATE' }, { name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }, { name: 'c', type: 'INTEGER' }], [
+			{ day: '2026-08-17', a: '3', b: '4', c: '5' },
+			{ day: '2026-08-18', a: '5', b: '6', c: '7' },
+			{ day: '2026-08-19', a: '8', b: '9', c: '10' }
+		], 'dateSeries', { dateSeries: { lines: ['c', 'a'] } });
+		expect([...body.matchAll(/stroke="var\((--chart-\d)\)"/g)].map((line) => line[1])).toEqual(['--chart-1', '--chart-2']);
+		expect([...body.matchAll(/data-readout-row="([^"]*)"/g)].map((row) => row[1])).toEqual(['a', 'c']);
+		expect(body).toContain('aria-label="Over time: day, a, c"');
+		expect(printed(body, 'shape-lede'), 'the main figure reads the first checked line').toBe('8 a on 2026-08-19');
+	});
+
+	test('T4: the boxes for a chart the answer cannot fill, a chart the page does not pick, and no number say Susan\'s words', () => {
+		const words: Column[] = [{ name: 'host', type: 'VARCHAR' }, { name: 'kind', type: 'VARCHAR' }];
+		const one: Column[] = [{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }];
+		const oneRow = [{ host: 'a', ms: '1' }];
+		expect(printed(draw(one, oneRow, 'dateSeries'), 'shape-none')).toBe('Nothing here to draw: Over time needs a date or timestamp column for Date, and a number column for Lines. The ledgers keep their dates as text: CAST(date AS DATE) in the question makes a date column.');
+		expect(printed(draw([{ name: 'ms', type: 'DOUBLE' }], [{ ms: '1' }], 'rankedList'), 'shape-none')).toBe('Nothing here to draw: Ranked needs a number column to rank by, and one more column for Name.');
+		expect(printed(draw(one, oneRow, 'pairedScatter'), 'shape-none')).toBe('Nothing here to draw: Paired needs two number columns, one for Across and one for Up.');
+		for (const type of CHART_KINDS.map((kind) => kind.type)) {
+			expect(printed(draw(words, [{ host: 'a', kind: 'b' }], type), 'shape-none'), `${type} with no number`).toBe('Nothing here to draw: the answer has no number in it.');
+		}
+		expect(printed(draw(words, [{ host: 'a', kind: 'b' }], null), 'shape-none')).toBe('Nothing here to draw: the answer has no number in it.');
+		expect(printed(draw([{ name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }, { name: 'c', type: 'INTEGER' }], [{ a: '1', b: '2', c: '3' }], null), 'shape-none')).toBe('The page does not pick a chart for these columns. Choose one under Draw it as.');
+	});
+
+	test('T4: the foot names the flat lines while they are the page\'s own, the rows with no day, and a capped answer, and no reason for the chart', () => {
+		const columns: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'a', type: 'INTEGER' }, { name: 'tiny', type: 'INTEGER' }, { name: 'small', type: 'INTEGER' }];
+		const rows: Row[] = [
+			{ day: '2026-08-17', a: '100', tiny: '1', small: '2' },
+			{ day: '2026-08-18', a: '90', tiny: '1', small: '3' },
+			{ day: null, a: '80', tiny: '1', small: '2' },
+			{ day: '2026-08-19', a: '80', tiny: '2', small: '4' }
+		];
+		expect(footNotes(draw(columns.slice(0, 3), rows, 'dateSeries', {}, true))).toEqual([
+			'"tiny" is left out: it is under 5% of "a", so it would draw flat.',
+			'1 row holds null in the column "day", so the chart does not draw it. It is in the table.',
+			'Drawn from the first 1000 rows.'
+		]);
+		expect(footNotes(draw(columns, rows, 'dateSeries'))[0]).toBe('2 number columns are left out: each is under 5% of "a", so each would draw flat.');
+		const picked = draw(columns, rows, 'dateSeries', { dateSeries: { lines: ['a'] } });
+		expect(footNotes(picked), 'the flat-line note stayed after the reader picked the lines').toEqual(['1 row holds null in the column "day", so the chart does not draw it. It is in the table.']);
+		expect(picked).not.toContain('Drawn over time because');
+		expect(picked).not.toContain('Drawn: the first four number columns');
+	});
+});
+
+test('T1: every answer the existing cases draw opens on the same chart with the same columns', () => {
+	expect(opened([{ name: 'day', type: 'DATE' }, { name: 'scored', type: 'INTEGER' }], [
+		{ day: '2026-10-01', scored: 3 },
+		{ day: '2026-10-02', scored: 5 },
+		{ day: '2026-10-03', scored: 8 }
+	])).toEqual({ type: 'dateSeries', roles: { Date: ['day'], Lines: ['scored'] } });
+	expect(opened([{ name: 'source', type: 'VARCHAR' }, { name: 'items', type: 'INTEGER' }], [
+		{ source: 'a', items: 5 },
+		{ source: 'b', items: 2 }
+	])).toEqual({ type: 'rankedList', roles: { Name: ['source'], 'Rank by': ['items'] } });
+	expect(opened([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
+		{ host: 'a', ms: 10, tokens: 100 }
+	])).toEqual({ type: 'pairedScatter', roles: { Across: ['ms'], Up: ['tokens'], Name: ['host'] } });
+	expect(opened([{ name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [{ ms: 10, tokens: 100 }]), 'with no text column each row is its own point')
+		.toEqual({ type: 'pairedScatter', roles: { Across: ['ms'], Up: ['tokens'], Name: [''] } });
+	expect(opened([{ name: 'latency', type: 'DOUBLE' }], [{ latency: 10 }])).toEqual({ type: 'distribution', roles: { Values: ['latency'] } });
+	// A date chart the page refuses still opens as the date chart, holding that date column (Susan's B2).
+	for (const day of ['infinity', null]) {
+		expect(opened([{ name: 'day', type: 'DATE' }, { name: 'items', type: 'INTEGER' }], [{ day, items: '1' }]), String(day)).toEqual({ type: 'dateSeries', roles: { Date: ['day'], Lines: ['items'] } });
+	}
+	expect(opened([{ name: 'source', type: 'VARCHAR' }], [{ source: 'a' }]), 'no number checks no tile').toEqual({ type: null, roles: {} });
+});
+
+test('T2: each role lists exactly the columns of its family, in the answer\'s order, named as the engine names them', () => {
+	const columns: Column[] = [
+		{ name: 'label', type: 'VARCHAR' },
+		{ name: 'n', type: 'BIGINT' },
+		{ name: 'clock', type: 'TIME' },
+		{ name: 'shares', type: 'BIGINT[]' },
+		{ name: 'day', type: 'DATE' },
+		{ name: 'f', type: 'DOUBLE' },
+		{ name: 'stamped', type: 'TIMESTAMP_NS' },
+		{ name: 'zoned', type: 'TIMESTAMP WITH TIME ZONE' },
+		{ name: 'ok', type: 'BOOLEAN' }
+	];
+	const listed = (type: ExplorerChartType, index: number) => roleOptions(chartKind(type).roles[index], columns).map((option) => option.name);
+	expect(listed('dateSeries', 0), 'Date').toEqual(['day', 'stamped', 'zoned']);
+	expect(listed('dateSeries', 1), 'Lines').toEqual(['n', 'f']);
+	expect(listed('rankedList', 0), 'Name').toEqual(columns.map((column) => column.name));
+	expect(listed('rankedList', 1), 'Rank by').toEqual(['n', 'f']);
+	expect(listed('pairedScatter', 0), 'Across').toEqual(['n', 'f']);
+	expect(listed('pairedScatter', 1), 'Up').toEqual(['n', 'f']);
+	expect(listed('pairedScatter', 2), 'Paired Name').toEqual(['Row number', ...columns.map((column) => column.name)]);
+	expect(listed('distribution', 0), 'Values').toEqual(['n', 'f']);
+	expect(roleOptions(chartKind('dateSeries').roles[0], columns).map((option) => option.type)).toEqual(['DATE', 'TIMESTAMP_NS', 'TIMESTAMP WITH TIME ZONE']);
+});
+
+test('T3: a several-column role keeps at most one column for each series colour, and a choice keeps only the columns the answer still has', () => {
+	const columns: Column[] = [{ name: 'day', type: 'DATE' }, ...['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, type: 'INTEGER' }))];
+	const rows: Row[] = [{ day: '2026-08-17', a: '1', b: '1', c: '1', d: '1', e: '1' }];
+	const lines = (chosen: readonly string[]) => resolveRoles('dateSeries', columns, rows, bounds, { lines: chosen }).find((state) => state.role.id === 'lines');
+	expect(lines(['a', 'b', 'c', 'd', 'e'])?.chosen).toEqual(['a', 'b', 'c', 'd']);
+	expect(lines(['e', 'b'])?.chosen, 'not in the answer\'s order').toEqual(['b', 'e']);
+	expect(lines(['b', 'gone'])).toMatchObject({ chosen: ['b'], byReader: true });
+	expect(lines(['gone']), 'a role whose columns are all gone takes its default').toMatchObject({ chosen: ['a', 'b', 'c', 'd'], byReader: false });
+	expect(lines([]), 'unchecking every line is a choice too').toMatchObject({ chosen: [], byReader: true });
+	expect(SERIES_TOKENS).toHaveLength(4);
+});
+
+test('T4: every sentence for a pick that cannot draw is Susan\'s, word for word, from the smallest answer that causes it', () => {
+	const day = (type: ExplorerChartType | null, columns: readonly Column[], rows: readonly Row[], roles: ChosenRoles = {}) => chooseChart(columns, rows, bounds, type, roles).shape;
+	const dated: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'a', type: 'INTEGER' }];
+	expect(day('dateSeries', dated, [{ day: '2026-08-17', a: '1' }], { dateSeries: { lines: [] } })).toMatchObject({ code: 'no-line-checked', reason: 'Nothing here to draw: Over time needs a column checked under Lines.' });
+	expect(day('dateSeries', dated, [{ day: '2026-08-17', a: null }])).toMatchObject({ code: 'lines-all-null', reason: 'Nothing here to draw: every line you checked is null on every day.' });
+	expect(day('dateSeries', dated, [{ day: '2026-08-17', a: '1' }, { day: '2026-08-17', a: '2' }])).toMatchObject({ reason: 'Nothing here to draw: the answer has several rows a UTC day in "day". Group by day in the question to draw it over time.' });
+	const named: Column[] = [{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'BIGINT' }];
+	expect(day('rankedList', named, [{ host: 'a', ms: '1' }, { host: 'a', ms: '2' }])).toMatchObject({ code: 'repeated-name', reason: 'Nothing here to draw: "a" is in more than one row of "host", and each row here needs its own name. Group by "host" in the question to draw it.' });
+	expect(day('rankedList', named, [{ host: null, ms: '1' }, { host: null, ms: '2' }]), 'a NULL name is the name null').toMatchObject({ reason: 'Nothing here to draw: "null" is in more than one row of "host", and each row here needs its own name. Group by "host" in the question to draw it.' });
+	expect(day('rankedList', named, [{ host: 'a', ms: '3' }, { host: 'b', ms: '-12345' }])).toMatchObject({ code: 'below-zero', reason: 'Nothing here to draw: "ms" holds -12,345, below zero, and this chart measures from zero.' });
+	expect(day('rankedList', named, [{ host: 'a', ms: '0' }, { host: 'b', ms: null }])).toMatchObject({ code: 'all-zero', reason: 'Nothing here to draw: every value in "ms" is 0 or null.' });
+	expect(day('distribution', [{ name: 'host', type: 'VARCHAR' }, { name: 'day', type: 'DATE' }, { name: 'ms', type: 'BIGINT' }], [{ host: 'a', day: '2026-08-17', ms: '1' }], { distribution: { values: ['day'] } }), 'a date is never offered to a number role').toMatchObject({ type: 'distribution', valueColumn: 'ms' });
+	// The floors: every too-few sentence says where it counted, and no other caller's words change.
+	expect(tooFewSentence(1, 3, 'UTC days', 'in the answer')).toBe('Only 1 of the 3 UTC days this chart needs is in the answer, so it is not drawn.');
+	expect(tooFewSentence(2, 160, 'readings')).toBe('Only 2 of the 160 readings this chart needs are in this window, so it is not drawn.');
+	// The closed face of a several-column pill (pill A1 to A5), and the accessible name that holds every name whole.
+	const options = ['summary_ms', 'b', 'c', 'd'].map((name) => ({ value: name, name, type: 'BIGINT' }));
+	expect([0, 1, 2, 3, 4].map((count) => pillFace(options, options.slice(0, count).map((option) => option.value)))).toEqual([
+		{ name: 'None', more: '' },
+		{ name: 'summary_ms', more: '' },
+		{ name: 'summary_ms', more: ', 1 more' },
+		{ name: 'summary_ms', more: ', 2 more' },
+		{ name: 'summary_ms', more: ', 3 more' }
+	]);
+	expect(pillName(chartKind('dateSeries').roles[1], options, ['summary_ms', 'c'])).toBe('Lines: summary_ms, c');
+	expect(pillName(chartKind('dateSeries').roles[0], [], [])).toBe('Date: None');
+	expect(pillFace(roleOptions(chartKind('pairedScatter').roles[2], []), [''])).toEqual({ name: 'Row number', more: '' });
+	expect(chartNotes({ kind: 'none', code: 'no-number', reason: '' }, bounds, true, 1000), 'a box that draws nothing has no notes').toEqual([]);
+});
+
+test('every role word fits the eight characters a pill gives it, and the role table holds three roles at most', () => {
+	const words = CHART_KINDS.flatMap((kind) => kind.roles.map((role) => role.word));
+	expect(words.filter((word) => word.length > 8)).toEqual([]);
+	expect(CHART_KINDS.map((kind) => kind.option)).toEqual(['Over time', 'Ranked', 'Paired', 'Spread']);
+	expect(MOST_ROLES).toBe(3);
+	expect(openingType([{ name: 'x', type: 'DOUBLE' }], [{ x: '1' }])).toBe('distribution');
+});
+
+test('the role row\'s lines by band follow the most roles any chart has, against the slots a line holds', () => {
+	expect(roleRowLines(4, [1, 2, 3, 4])).toEqual([4, 2, 2, 1]);
+	expect(roleRowLines(3, [1, 2, 3, 4])).toEqual([3, 2, 1, 1]);
+	expect(roleSlotsPerLine(3, [1, 2, 3, 4])).toEqual([1, 2, 3, 3]);
+	expect(roleSlotsPerLine(4, [1, 2, 3, 4])).toEqual([1, 2, 3, 4]);
+});
+
+test('T5: no file under the explorer\'s folder imports a d3 package, so d3 does the maths and Svelte draws', () => {
+	const folder = path.join(frontend, 'src', 'lib', 'console', 'explorer');
+	const files = readdirSync(folder).filter((name) => /\.(ts|svelte)$/.test(name));
+	expect(files.length, 'the explorer folder was not read').toBeGreaterThan(10);
+	const importing = files.filter((name) => /from\s+['"]d3(-[a-z-]+)?['"]/.test(readFileSync(path.join(folder, name), 'utf8')));
+	expect(importing).toEqual([]);
 });

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import random
 import re
@@ -293,14 +294,14 @@ def stage_score(args: argparse.Namespace) -> None:
         beside.replace(args.out)
 
     def peak_memory_gb() -> float | None:
-        try:
+        if sys.platform == "win32":
+            return None
+        else:
             import resource
 
             return round(
                 resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024), 2
             )
-        except (ImportError, AttributeError):
-            return None
 
     save()
     print(f"{chosen['slug']}: loading {chosen['model_id']}", flush=True)
@@ -309,7 +310,18 @@ def stage_score(args: argparse.Namespace) -> None:
     import torch
     from sklearn.metrics import roc_auc_score
 
+    # Asked for, then read back. The two can differ: the libraries underneath
+    # read their own environment settings, and a runner's processor count is
+    # not always the number of threads a maths library will use. A rate that
+    # looks slow is a different problem from a rate taken on one thread, and
+    # nothing in the output told them apart.
     torch.set_num_threads(settings["encode"]["threads"])
+    reading.threads_used = int(torch.get_num_threads())
+    reading.processors_available = os.cpu_count() or 1
+    save()
+    print(f"{chosen['slug']}: asked for {settings['encode']['threads']} threads, "
+          f"using {reading.threads_used} of {reading.processors_available} "
+          f"processors", flush=True)
 
     try:
         from sentence_transformers import SentenceTransformer
@@ -427,17 +439,37 @@ def stage_score(args: argparse.Namespace) -> None:
 def stage_collect(args: argparse.Namespace) -> None:
     """Merge the readings into one table and one manifest.
 
-    The readings directory holds one file a shard, each written by this run, so
-    listing it is bounded by the matrix and not by the repository.
+    The readings come from one run's downloaded artifacts, so the search is
+    bounded by that run's own matrix and not by the repository (CLAUDE.md
+    Guardrail #12). Each shard uploads `readings/<slug>.json` inside an
+    artifact named for itself, so the file sits one or two directories down
+    depending on whether the artifacts were merged on download.
     """
     settings = read_config(args.config)
     pairs = json.loads(args.pairs.read_text(encoding="utf-8"))
 
+    def find_reading(slug: str) -> Path | None:
+        """Where this shard's reading landed, however the download nested it.
+
+        An artifact downloaded on its own keeps the directories the shard
+        uploaded; several merged into one directory lose the outer name. Both
+        layouts are known, so both are tried rather than guessed at.
+        """
+        root: Path = args.readings_from
+        for candidate in (
+            root / f"{slug}.json",
+            root / f"reading-{slug}" / "readings" / f"{slug}.json",
+            root / "readings" / f"{slug}.json",
+        ):
+            if candidate.is_file():
+                return candidate
+        return None
+
     readings = []
     for encoder in settings["encoders"]:
-        reading_path = args.readings_from / f"{encoder['slug']}.json"
-        if reading_path.is_file():
-            readings.append(json.loads(reading_path.read_text(encoding="utf-8")))
+        found = find_reading(encoder["slug"])
+        if found is not None:
+            readings.append(json.loads(found.read_text(encoding="utf-8")))
         else:
             readings.append(
                 {"slug": encoder["slug"], "model_id": encoder["model_id"],

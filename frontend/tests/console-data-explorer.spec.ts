@@ -758,6 +758,92 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 	expect(height, 'the no-chart sentence did not keep the chart room').toBeGreaterThanOrEqual(consoleConfig().chart_height);
 });
 
+/** One answer every chart can draw: a row a UTC day, a name a row, and three number columns. */
+const EVERY_CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other FROM range(0, 170) AS t(i)";
+const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution'] as const;
+
+/** Open a role's pill on the Chart tab and pick the line for `column` in its list. */
+async function pickColumn(page: Page, role: string, column: string) {
+	await page.locator(`[data-chart-roles] .column-picker[data-role="${role}"] summary`).click();
+	await page.locator(`[data-chart-roles] .column-picker[data-role="${role}"] [data-column="${column}"] input`).click();
+}
+
+test('T6: Draw it as is radio tiles for every chart on every answer, none disabled, none checked before an answer or a press, and Tab lands on the first', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	const group = page.getByRole('group', { name: 'Draw it as' });
+	const tiles = group.locator('input[type="radio"]');
+	const expectEveryTile = async (label: string) => {
+		await expect(tiles, label).toHaveCount(4);
+		expect(await tiles.evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)), label).toEqual([...CHART_TYPES]);
+		for (const tile of await tiles.all()) await expect(tile, label).toBeEnabled();
+	};
+	await expectEveryTile('before any answer');
+	for (const tile of await tiles.all()) await expect(tile, 'a tile was checked before any answer or press').not.toBeChecked();
+	await page.getByRole('tab', { name: 'Chart' }).focus();
+	await page.keyboard.press('Tab');
+	await expect(tiles.first()).toBeFocused();
+	await page.keyboard.press('Shift+Tab');
+	await expect(page.getByRole('tab', { name: 'Chart' })).toBeFocused();
+	for (const sql of [EVERY_CHART_SQL, "SELECT * FROM (VALUES ('a', 9), ('b', 4)) AS t(name, rows)", "SELECT 'x' AS word", 'SELECT 1 AS a, 2 AS b, 3 AS c']) {
+		await chooseExplorerQuestion(page, ['published'], sql);
+		await runExplorer(page);
+		await expectEveryTile(sql);
+	}
+	// The page picks no chart for three number columns: no tile is checked, and Tab still lands on the first.
+	for (const tile of await tiles.all()) await expect(tile).not.toBeChecked();
+	await page.getByRole('tab', { name: 'Chart' }).focus();
+	await page.keyboard.press('Tab');
+	await expect(tiles.first()).toBeFocused();
+});
+
+test('T7: choosing a chart or a column fetches nothing and leaves the table\'s rows as they were', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES ('a', 9, 1), ('b', 4, 2), ('c', 2, 3)) AS t(name, rows, extra)");
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	const rows = await tableRows(page);
+	const requested: string[] = [];
+	page.on('request', (request) => requested.push(request.url()));
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	for (const type of ['distribution', 'rankedList', 'dateSeries', 'pairedScatter'] as const) {
+		await page.locator(`[data-shape-choice="${type}"]`).click();
+		await expect(page.locator(`[data-shape-choice="${type}"] input`)).toBeChecked();
+	}
+	await pickColumn(page, 'across', 'extra');
+	await expect(page.locator('[data-chart-roles] .column-picker[data-role="across"] [data-pill-name]')).toHaveText('extra');
+	await page.locator('[data-shape-choice="distribution"]').click();
+	await pickColumn(page, 'values', 'extra');
+	await expect(page.locator('[data-chart-roles] .column-picker[data-role="values"] [data-pill-name]')).toHaveText('extra');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-state="too-few"]')).toHaveText(`Only 3 of the ${consoleConfig().fleet_min_rows} readings this chart needs are in the answer, so it is not drawn.`);
+	await page.getByRole('tab', { name: 'Table' }).click();
+	expect(requested, 'a choice fetched something').toEqual([]);
+	expect(await tableRows(page)).toEqual(rows);
+});
+
+test('T8: the reader\'s chart and columns hold across a second run of the question, and a role whose column has gone takes its default', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	const values = page.locator('[data-chart-roles] .column-picker[data-role="values"] [data-pill-name]');
+	const spread = page.locator('[data-shape-choice="distribution"] input');
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES ('a', 9, 1), ('b', 4, 2), ('c', 2, 3)) AS t(name, rows, extra)");
+	await runExplorer(page);
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	await expect(page.locator('[data-shape-choice="pairedScatter"] input'), 'the page did not open on its own chart').toBeChecked();
+	await page.locator('[data-shape-choice="distribution"]').click();
+	await pickColumn(page, 'values', 'extra');
+	await expect(values).toHaveText('extra');
+	await runExplorer(page);
+	await expect(spread, 'the chosen chart did not hold across the run').toBeChecked();
+	await expect(values, 'the chosen column did not hold across the run').toHaveText('extra');
+	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES ('a', 9, 1), ('b', 4, 2)) AS t(name, rows, other)");
+	await runExplorer(page);
+	await expect(spread).toBeChecked();
+	await expect(values, 'a column the answer no longer has was kept').toHaveText('rows');
+});
+
 test('THE ORACLE: Save, recent runs and Markdown copy preserve text without running a saved question', async ({ page, context }) => {
 	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });

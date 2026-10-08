@@ -15,12 +15,12 @@
   },
   "month_deletes_dry_run": true,
   "owns": [
-    "state/pipeline-tests/production-settings/raw/item-health",
-    "state/pipeline-tests/production-settings/compact/item-health",
-    "state/pipeline-tests/no-visual-plan/raw/item-health",
-    "state/pipeline-tests/no-visual-plan/compact/item-health",
-    "state/pipeline-tests/parallel-summarization/raw/item-health",
-    "state/pipeline-tests/parallel-summarization/compact/item-health"
+    "state/raw/pipeline-tests/production-settings/item-health",
+    "state/compact/pipeline-tests/production-settings/item-health",
+    "state/raw/pipeline-tests/no-visual-plan/item-health",
+    "state/compact/pipeline-tests/no-visual-plan/item-health",
+    "state/raw/pipeline-tests/parallel-summarization/item-health",
+    "state/compact/pipeline-tests/parallel-summarization/item-health"
   ],
   "prune_refusal": "Trial item-health data is not a production prune target.",
   "state_roots": [
