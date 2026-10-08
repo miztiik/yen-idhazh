@@ -8,6 +8,7 @@ import { openExplorer, runExplorer } from './support/explorer-answer';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
+import { showPanel } from './support/panel-tab';
 import { newestDate } from './support/published';
 import { viewsOf } from './support/views';
 
@@ -191,6 +192,8 @@ interface Shot {
 
 /** One panel, padded by half the gap to its neighbour, checked whole and written. */
 async function shot(page: Page, id: string, file: string): Promise<Shot> {
+	// A panel behind a tab, as the Data explorer's chart is, has no box until its tab is open.
+	await showPanel(page, id);
 	const panel = page.locator(selectorOf(id));
 	const pad = await panel.evaluate((node) => Math.floor((parseFloat(getComputedStyle(node).marginTop) || 0) / 2));
 	// Placed with its top one band below the window's top, not centred:
