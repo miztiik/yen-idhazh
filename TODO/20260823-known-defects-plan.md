@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-08
 
-**Thirty-six defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-eight defects are open.** Four of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -25,15 +25,16 @@ fixes it. Defect 48 was filed the same day, while plan 51's row 5 merged: GitHub
 its squash merges in local time, and one account setting is the first thing to
 try. Defects 49 to 52 were filed on 2026-09-30, when plan 50 closed, from what
 its workers found outside their own rows. Defect 50 was already fixed that day;
-defect 51 is the third that needs evidence, because one abort is not enough to
-find its cause. Defects 53 and 54 were filed the same day from two findings plan
+defect 51 needed evidence, because one abort is not enough to find its cause,
+until a second abort reproduced it on 2026-10-08. Defects 53 and 54 were filed
+on 2026-09-30 as well, from two findings plan
 50's rows wrote down and never filed, and 54 has a date: the first squash that
 rewrites history is due on 2026-10-29. Defect 55 was filed on 2026-10-04 from
 Fowler's review of plan 60: a page names a test that two pull requests deleted.
 Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
-57 is the fourth that needs evidence, because one stall is not enough to find
+57 is the third that needs evidence, because one stall is not enough to find
 its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
 holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
@@ -47,7 +48,12 @@ that is not true. Defects 64 and 65 were filed the same day by the plan text
 update after plan 60's row 21: the canary's telemetry step refuses a
 repository path spelled with a short name, which plan 62's row L25 met, and a
 retention task run over a person's range that finds nothing ends `not-due`,
-which plan 60's row 21 found.
+which plan 60's row 21 found. Defect 66 was filed on 2026-10-08 by a plan text
+update (#1437): the plan status utility splits a quoted row title wherever
+"and" appears in it. Defect 67 was filed the same day from the checks of plan
+62's row L37 (#1431): a browser test that failed once and passed when run
+again. It is the fourth that needs evidence, because one failure is not enough
+to find its cause.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -106,7 +112,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
 | 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
-| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - not reproduced; a second abort opens a row** |
+| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - reproduced twice; a row to fix it is now due** |
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
@@ -121,6 +127,65 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
 | 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+| 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
+| 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
+
+## 67 - A browser test of a summary with a paragraph break failed once, and passed when run again (OPEN)
+
+**One browser test found no story drawn as two paragraphs, once.** "A summary
+with a paragraph break is drawn as two paragraphs"
+(`frontend/tests/item-card.spec.ts`, line 318), in the `reader` project,
+failed in CI run 37779056528, attempt 1, at 12:49 UTC on 2026-10-08, in the
+checks of #1431 (browser job 113317369182). The page drew stories, so the
+check at line 334 passed, but none of them drew more than one paragraph, so
+the check at line 336, "the canary story with a break drew one paragraph",
+found none where the canary gives exactly one. A re-run of the job, attempt 2
+(job 113323035071), passed. #1431 changed the cost of one article on Hardware
+(`frontend/src/lib/console/machine/article-cost.ts`), two console specs, one
+docs page and plan 62. It did not touch that spec, or
+`frontend/src/lib/components/DigestItem.svelte`, which draws each paragraph of
+a summary.
+
+**Doing nothing costs a red browser job each time it comes back, and a
+re-run.** How often that is, nobody knows: it has been seen once. The run's
+trace is in its `playwright-traces` artifact, which expires on 2026-10-15.
+
+**The next move is a worker's: make the failure come back where it can be
+watched.** Run this one test in the `reader` project a few hundred times with
+Playwright's `--repeat-each` on a canary build, and read the trace of a run
+that fails: it shows whether the story with a break had not been drawn yet,
+or was drawn as one paragraph. The spec's `open` waits for the page to load
+and for its theme, not for every story, so check the first case first. A
+raised timeout or a retry would hide the cause, not explain it (CLAUDE.md
+Guardrail #5). Level 2 - the fix may be in `DigestItem.svelte`, which every
+reader sees, rather than in the test.
+
+Found in the checks of plan 62's row L37 (#1431), and filed on 2026-10-08.
+
+## 66 - The plan status utility splits a quoted row title wherever "and" appears in it (OPEN)
+
+**A Depends-on cell that quotes another row's title loses a piece of that
+title to the parser, whenever the title itself contains the word "and".**
+`backend/utilities/plan_status.py`, line 343, reads a Depends-on cell with
+`for piece in re.split(r",|;| and ", text):`, which splits on the literal
+substring " and " anywhere in the cell, including inside a quoted title. Plan
+62's row L48 depends on plan 55's row "The reader chooses the chart and the
+columns it draws"; the parser splits that title at its own " and ", so it
+looks for a row named `plan 55's row "The reader chooses the chart` and a row
+named `the columns it draws" (holds ...)`, finds neither, and reports two
+false `dependency-not-found` findings for L48 (seen on a direct run against
+`origin/main`, and carried by #1432).
+
+**The next move is a worker's: stop splitting inside a quoted title**, such as
+by matching a quoted span first and splitting only the text outside it, or by
+reading the Depends-on cell's row references with a dedicated small parser
+instead of a blanket `re.split`. Level 1 - one regular expression in one
+function; a wrong version shows as a spurious finding against a row whose
+dependency is in fact present, which a reader can confirm from the cell
+itself.
+
+Found on 2026-10-08, confirmed on `origin/main` by a direct run of
+`plan_status.py --plan` against plan 62.
 
 ## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
 
@@ -605,7 +670,14 @@ so a second one opens a row to reproduce and fix it. A retry in
 parquet, so it is not the fix (CLAUDE.md Guardrail #5). Level 2 - the canary
 build, and every browser group behind it, read this program's answer.
 
-Found on 2026-09-30 by plan 50's row 9, on the merge of #1166.
+**A second abort reproduced it.** In PR #1428's first browser job (CI run
+37773872779, attempt 1, job 113299900513), the same step printed its whole
+answer and then aborted the same way, on 2026-10-08; attempt 2 passed. The two
+occurrences now meet the bar this entry set: a second abort opens a row to
+reproduce and fix it.
+
+Found on 2026-09-30 by plan 50's row 9, on the merge of #1166. Reproduced on
+2026-10-08 in PR #1428's first browser job.
 
 ## 50 - A publisher link on the home page named a story the page did not draw, so a news run's site build failed (CLOSED 2026-09-30)
 

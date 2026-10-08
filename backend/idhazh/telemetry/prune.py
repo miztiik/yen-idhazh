@@ -112,25 +112,17 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: walker its suffix, which is where the question belongs. A ledger leaves this
 #: list in the change that moves it under `state/raw/` through the ledger door,
 #: as `visual-prunes`, `item-health`, `summary-quality-evals`, `host-fingerprint`,
-#: `counterfactual-scores`, `candidate-models` and `feed-health` have: a target
-#: that walked its old folder would select nothing for ever, and on the door it is
-#: a target of the other kind.
+#: `counterfactual-scores`, `candidate-models`, `feed-health`, and the judge's
+#: `scored-pairs`, `metrics` and `merge-line-holdout-scores` have: a target that
+#: walked its old folder would select nothing for ever, and on the door it is a
+#: target of the other kind.
 #:
-#: **`content-similarity-judge-scored-pairs` and
-#: `content-similarity-judge-fitted-thresholds` are
-#: not a pair.** The pairs are folded into `score-distribution.json` once and
-#: never read again, so deleting a day of them takes nothing away from the fit;
-#: deleting a fitted row takes a day out of the guard's median and out of what
-#: step 4 compares against. Either can go on its own.
-#:
-#: The three `content-similarity-judge` ledgers still on CSV are here before
-#: their first row for the same reason: a ledger an operator cannot name is a
-#: ledger a day cannot be taken out of. What a reading is about decides where
-#: it is filed, never what executed it.
+#: The one `content-similarity-judge` ledger still on CSV is here for the same
+#: reason: a ledger an operator cannot name is a ledger a day cannot be taken
+#: out of. What a reading is about decides where it is filed, never what
+#: executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(

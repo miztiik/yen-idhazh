@@ -1,0 +1,81 @@
+{
+  "version": "2026-10-08",
+  "corpus": {
+    "published_articles": 15115,
+    "articles_a_day": 337
+  },
+  "pair_build": {
+    "title_overlap_floor": 0.3,
+    "ambiguous_floor": 0.1,
+    "seed": 20261008,
+    "next_day_window": 1,
+    "min_title_words": 3,
+    "max_pairs_a_side": 8000,
+    "max_ambiguous_pairs": 4000,
+    "max_related_pairs": 2000
+  },
+  "encode": {
+    "batch_size": 32,
+    "max_sequence_length": 256,
+    "threads": 4,
+    "checkpoint_every_articles": 512
+  },
+  "encoders": [
+    {
+      "slug": "minilm-l6",
+      "model_id": "sentence-transformers/all-MiniLM-L6-v2",
+      "prefix": "",
+      "parameters_millions": 22,
+      "why": "What the search surface runs today. Every other row is read as a gain or a loss against it."
+    },
+    {
+      "slug": "bge-base",
+      "model_id": "BAAI/bge-base-en-v1.5",
+      "prefix": "",
+      "parameters_millions": 109,
+      "why": "A widely used mid-sized English model. Packs unrelated pairs close together, which costs a fixed cut-off and not a rank score."
+    },
+    {
+      "slug": "gte-base",
+      "model_id": "thenlper/gte-base",
+      "prefix": "",
+      "parameters_millions": 109,
+      "why": "Same size as bge-base, trained differently. The pair proves whether size or training is doing the work."
+    },
+    {
+      "slug": "e5-base",
+      "model_id": "intfloat/e5-base-v2",
+      "prefix": "query: ",
+      "parameters_millions": 109,
+      "why": "Third model at the same size. It needs a prefix on its input, and leaving it off costs quality silently, so the run proves the prefix as well as the model."
+    },
+    {
+      "slug": "bge-large",
+      "model_id": "BAAI/bge-large-en-v1.5",
+      "prefix": "",
+      "parameters_millions": 335,
+      "why": "Three times bge-base. The question is whether the extra time fits the job."
+    },
+    {
+      "slug": "mxbai-large",
+      "model_id": "mixedbread-ai/mxbai-embed-large-v1",
+      "prefix": "",
+      "parameters_millions": 335,
+      "why": "Same size as bge-large, trained differently. It repeats the size-against-training control at the large end, where one pair alone would leave it untested."
+    },
+    {
+      "slug": "bge-m3",
+      "model_id": "BAAI/bge-m3",
+      "prefix": "",
+      "parameters_millions": 568,
+      "why": "The one with a different shape: a meaning vector and a weight for every word from one pass, which is two channels from one model. Carries languages this corpus never uses."
+    },
+    {
+      "slug": "qwen3-embedding-600m",
+      "model_id": "Qwen/Qwen3-Embedding-0.6B",
+      "prefix": "",
+      "parameters_millions": 595,
+      "why": "The most recent design in the list. Its vector can be cut short without encoding again, so a smaller form costs nothing extra to measure."
+    }
+  ]
+}
