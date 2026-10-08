@@ -100,7 +100,7 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         # as one shared file a day inside the judge's folder, and nothing deleted
         # either. `shard` is read as the part it named, by the rename map both rows
         # read, and each heading the pair row stopped naming is dropped with its
-        # filled cells.
+        # filled cells. Both now expire as every ledger does.
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: CsvLedger(
             _day_file(
                 LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
@@ -108,6 +108,7 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
             ),
             ForeverWindow(unit="forever"),
             MappingProxyType({**RENAMED_PAIR_CELLS, **dict.fromkeys(sorted(DROPPED_PAIR_CELLS))}),
+            EVERY_LEDGER_EXPIRES,
         ),
         LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: CsvLedger(
             _day_file(
@@ -116,6 +117,7 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
             ),
             ForeverWindow(unit="forever"),
             RENAMED_PAIR_CELLS,
+            EVERY_LEDGER_EXPIRES,
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
