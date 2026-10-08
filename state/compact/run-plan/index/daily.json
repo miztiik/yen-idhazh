@@ -1,0 +1,10 @@
+{
+  "entries": [
+    {"bytes": 57598,"covers": "2026-10-04","lost_days": [],"rows": 3,"set_aside": 0,"state": "packed"},
+    {"bytes": 86791,"covers": "2026-10-05","lost_days": [],"rows": 4,"set_aside": 0,"state": "packed"},
+    {"bytes": 121836,"covers": "2026-10-06","lost_days": [],"rows": 12,"set_aside": 0,"state": "packed"}
+  ],
+  "ledger": "run-plan",
+  "period": "daily",
+  "version": "2026-10-07"
+}
