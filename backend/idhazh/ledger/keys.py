@@ -28,9 +28,6 @@ from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.fitted_similarity_threshold import (
-    DROPPED_CELLS as DROPPED_FIT_CELLS,
-)
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
@@ -99,6 +96,11 @@ COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 #: execution rather than a second answer. Both attempts read the same score
 #: record and walk the same counts, so the first row wins and there is nothing
 #: for a preference rule to choose between.
+#:
+#: The shape these two cells name is
+#: `idhazh.contracts.fitted_similarity_threshold`, and the door table below
+#: imports it only when its ledger is asked about, for the reason the holdout
+#: score's key gives.
 STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
 
@@ -312,12 +314,6 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
     return _PREFERENCES.get(key)
 
 
-#: The headings a day file an earlier run wrote still carries that the current
-#: fitted-line row no longer names. A dropped heading has no replacement - the
-#: file still re-files, and the cell goes, which is the point of dropping it.
-FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
-
-
 class _DoorShape(NamedTuple):
     """One door ledger's answer to "what settles two of its rows, and who reads one"."""
 
@@ -384,6 +380,13 @@ def _content_similarity_judge_metrics() -> type[Contract]:
     return ContentSimilarityJudgeMetrics
 
 
+def _fitted_similarity_threshold() -> type[Contract]:
+    """The fitted line's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
+
+    return FittedSimilarityThreshold
+
+
 #: The door ledgers a judge writes, each with its key and the function that
 #: imports the contract one of its rows is read by. The rest of the door table
 #: imports its contracts as this module loads. A judge's waits for the first
@@ -409,6 +412,10 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
         CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
         _content_similarity_judge_metrics,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: (
+        STORY_SIMILARITY_THRESHOLD_KEY,
+        _fitted_similarity_threshold,
     ),
 }
 

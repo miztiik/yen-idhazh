@@ -449,6 +449,10 @@ export function horizonRate(articlesPerDay: number, windowDays: number): string 
  * grouped bars answer "how big is each" while losing it. The same array also
  * draws as lines - see `ShapeSwitch` - which answers the other half, what one
  * stage did on its own.
+ *
+ * A day nothing was planned on carries no value, so it draws no column and
+ * breaks a line. A zero there would say the day ran and nothing failed, which
+ * is a different fact; a day that ran clean is the real zero.
  */
 export function failureMix(series: readonly StageFailureSeries[], shape: StackShape = 'bars') {
 	// The same date grammar the hand-written axes print. `08-25` is how the
@@ -459,13 +463,54 @@ export function failureMix(series: readonly StageFailureSeries[], shape: StackSh
 		series.map((s, i) => ({
 			label: s.label,
 			token: MIX_TOKENS[i % MIX_TOKENS.length],
-			values: s.days.map((d) => d.failures)
+			values: s.days.map((d) => (d.planned > 0 ? d.failures : null))
 		})),
 		shape
 	);
 }
 
 const MIX_TOKENS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
+
+/** What the failure mix's window holds: the items it planned and how many of
+ * them failed at any of the three stages.
+ *
+ * The panel decides whether it has a chart to draw from these, never from the
+ * series' length. A series built over a window has a column for every day of it
+ * whether or not anything ran, so a length check would hand the engine a chart
+ * with nothing on it - a blank box over a strip of zeroes.
+ */
+export function failureTotals(series: readonly StageFailureSeries[]): {
+	planned: number;
+	failures: number;
+} {
+	return {
+		planned: (series[0]?.days ?? []).reduce((sum, day) => sum + day.planned, 0),
+		failures: series.reduce(
+			(sum, stage) => sum + stage.days.reduce((count, day) => count + day.failures, 0),
+			0
+		)
+	};
+}
+
+/** The failure mix, for a reader who cannot see it, over the window it draws.
+ *
+ * Its bars draw no column for a day nothing was planned on and none for a day
+ * nothing failed on, and only the strip tells the two apart, so the label says
+ * so. A window of one day has no second day to tell apart from it. */
+export function failureMixLabel(windowDays: number): string {
+	return windowDays === 1
+		? `Failures by stage in ${nameSpan(windowDays)}. The column's height is the day's failures, and the bands are the stages they stopped at. Drawn as lines instead, each stage is its own count and the total is not shown.`
+		: `Failures per day by stage, over ${countDays(windowDays)}. One column is one day, its height is that day's failures, and the bands are the stages they stopped at. A day with no column is a day on which nothing was planned or nothing failed, and the numbers below the chart say which. Drawn as lines instead, each stage is its own count a day and the total is not shown.`;
+}
+
+/** What the failure mix says in its chart's place when its window holds no
+ * failure. Nothing planned and nothing failed are different news, and so are
+ * none of 4 and none of 4,000, so the sentence says which, and out of how many. */
+export function failureMixAbsent(windowDays: number, planned: number): string {
+	return planned === 0
+		? `No item was planned in ${nameSpan(windowDays)}, so nothing could fail.`
+		: `Nothing failed in ${nameSpan(windowDays)}, out of ${grouped(planned)} ${planned === 1 ? 'item' : 'items'} planned.`;
+}
 
 /** One token per band of the item-time stack, in `TIME_BANDS` order.
  *
@@ -495,6 +540,10 @@ const TIME_TOKENS: readonly ChartToken[] = [
  * The same array draws as lines, which answers the other half - what one step
  * did on its own, which a stack hides when one band halves while its neighbour
  * doubles. Nothing is reshaped between the two shapes.
+ *
+ * A day that timed no item carries no value in any band, so it draws no column
+ * and breaks a line. Eight zeroes there would say the item took no time, where
+ * the truth is that nothing timed it.
  */
 export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape = 'bars') {
 	const columns = days.map((day) => dayMonth(day.date));
@@ -503,7 +552,7 @@ export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape 
 		TIME_BANDS.map((band, index) => ({
 			label: band.label,
 			token: TIME_TOKENS[index % TIME_TOKENS.length],
-			values: days.map((day) => Math.round(day.ms[index] ?? 0))
+			values: days.map((day) => (day.items > 0 ? Math.round(day.ms[index] ?? 0) : null))
 		})),
 		shape
 	);
@@ -514,7 +563,10 @@ export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape 
  * A stack is the hardest shape to read one band off, so the strip prints all
  * eight at the hovered column. Each carries its share of the day's total in the
  * same line as its milliseconds, because a band's size is the question and a
- * reader should not have to divide two numbers off a chart to answer it.
+ * reader should not have to divide two numbers off a chart to answer it. A day
+ * that timed no item from start to finish prints the strip's not-measured words
+ * once, in place of the bands. They name only what this chart lacks: such a day
+ * can still have timed every item's fetch, which another chart draws.
  */
 export function timeSplitColumns(days: readonly TimeSplitDay[]): Readout {
 	return readoutOf({
@@ -523,22 +575,47 @@ export function timeSplitColumns(days: readonly TimeSplitDay[]): Readout {
 		series: TIME_BANDS.map((band, index) => ({
 			label: band.label,
 			swatch: `var(${TIME_TOKENS[index % TIME_TOKENS.length]})`,
-			values: days.map((day) => Math.round(day.ms[index] ?? 0)),
+			values: days.map((day) => (day.items > 0 ? Math.round(day.ms[index] ?? 0) : null)),
 			format: (ms: number, column: number) => {
 				const total = days[column]?.total ?? 0;
 				return total > 0 ? `${ms} ms, ${Math.round((100 * ms) / total)}%` : `${ms} ms`;
 			}
 		})),
-		notMeasured: 'Nothing was timed on this day',
+		notMeasured: 'No item was timed from start to finish on this day',
 		resting: 'last'
 	});
+}
+
+/** The bands of the item time split, bottom first, as its label names them. */
+const TIME_SPLIT_BANDS =
+	'The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed.';
+
+/** The item time split, for a reader who cannot see it, over the window it
+ * draws. A day that timed no item from start to finish draws no column, and the
+ * label says so; a window of one day draws its one column or no chart at all. */
+export function timeSplitLabel(windowDays: number): string {
+	return windowDays === 1
+		? `Mean milliseconds an item spent in each step, in ${nameSpan(windowDays)}. The column's height is the mean item's whole clock. ${TIME_SPLIT_BANDS} Drawn as lines instead, each step is its own milliseconds and the whole clock is not shown.`
+		: `Mean milliseconds an item spent in each step, per day, over ${countDays(windowDays)}. One column is one day and its height is the mean item's whole clock. A day with no column is a day on which no item was timed from start to finish. ${TIME_SPLIT_BANDS} Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown.`;
+}
+
+/** What the item time split says in its chart's place when no item in its
+ * window was timed from start to finish. The cause decides what an operator
+ * checks - a pipeline that planned nothing, or an instrument that did not
+ * reach the items - so the sentence names which one it is. */
+export function timeSplitAbsent(windowDays: number, planned: number): string {
+	return planned === 0
+		? `No item was planned in ${nameSpan(windowDays)}, so there is no time to split.`
+		: `No item was timed from start to finish in ${nameSpan(windowDays)}, so there is no time to split.`;
 }
 
 /** Every stage's failure count on one day, for the strip under the chart.
  *
  * A stack is the hardest shape to read one band off, so the band a reader
  * wants is the one the eye cannot measure. The strip prints all four at the
- * hovered column, which is what turns four hovers into one.
+ * hovered column, which is what turns four hovers into one. A day nothing was
+ * planned on prints the strip's not-measured words, because a column of zeroes
+ * would say the day ran clean.
  */
 export function failureMixColumns(series: readonly StageFailureSeries[]): Readout {
 	const dates = series[0]?.days.map((d) => d.date) ?? [];
@@ -548,7 +625,10 @@ export function failureMixColumns(series: readonly StageFailureSeries[]): Readou
 		series: series.map((stage, position) => ({
 			label: stage.label,
 			swatch: `var(${MIX_TOKENS[position % MIX_TOKENS.length]})`,
-			values: dates.map((_, index) => stage.days[index]?.failures ?? 0),
+			values: dates.map((_, index) => {
+				const day = stage.days[index];
+				return day === undefined || day.planned === 0 ? null : day.failures;
+			}),
 			format: (value: number) => String(value)
 		})),
 		notMeasured: 'No item was planned on this day',

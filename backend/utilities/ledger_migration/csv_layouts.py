@@ -9,6 +9,7 @@ from typing import Final, NamedTuple
 
 from idhazh import ledger
 from idhazh.contracts.eval_row import RENAMED_CELLS
+from idhazh.contracts.fitted_similarity_threshold import DROPPED_CELLS as DROPPED_FIT_CELLS
 from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
 from idhazh.contracts.ledger_name import LedgerName
@@ -127,6 +128,19 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
             ),
             ForeverWindow(unit="forever"),
             RENAMED_PAIR_CELLS,
+            EVERY_LEDGER_EXPIRES,
+        ),
+        # The same job filed the fitted line as one shared file a day inside the
+        # judge's folder, and nothing deleted it. The one heading the row stopped
+        # naming is dropped with its filled cells. It now expires as every ledger
+        # does.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+                ("content-similarity-judge", "fitted-thresholds"),
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType(dict.fromkeys(sorted(DROPPED_FIT_CELLS))),
             EVERY_LEDGER_EXPIRES,
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),

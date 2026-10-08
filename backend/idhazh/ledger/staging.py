@@ -162,11 +162,12 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: LedgerStaging(
         writer=(
-            "idhazh.ledger.rows.append_fitted_thresholds, called by "
-            "idhazh.stages.set_merge_line - the content-similarity judge's tenant "
-            "module, resolved from config rather than dispatched from a `digest.yml` job"
+            "idhazh.stages.set_merge_line.stage_set_merge_line, through the ledger door, "
+            "called from the council's tenant module in the job that saves the night's "
+            "results - resolved from config at call time rather than dispatched from a "
+            "`digest.yml` job"
         ),
-        symbol="idhazh.ledger.rows.append_fitted_thresholds",
+        symbol="idhazh.stages.set_merge_line.stage_set_merge_line",
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: LedgerStaging(

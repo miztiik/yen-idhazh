@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 import pytest
 from pydantic import ValidationError
@@ -21,13 +21,32 @@ from idhazh.contracts.encoder_reading import EncoderReading, PairCounts, Reading
 CONFIG = Path(__file__).resolve().parents[3] / "config" / "encoder-comparison.json"
 
 
-def encoders() -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = json.loads(CONFIG.read_text(encoding="utf-8"))["encoders"]
-    return entries
+class NamedEncoder(TypedDict):
+    """One row of `config/encoder-comparison.json`, as its readers use it.
+
+    Written down rather than read as a bag of anything, because this test
+    exists to catch a config and a contract disagreeing before a runner spends
+    an hour on it. A row whose parameter count arrived as text would pass a
+    read that promises nothing about its fields, and fail on the runner.
+    """
+
+    slug: str
+    model_id: str
+    prefix: str
+    parameters_millions: int
+    why: str
 
 
-@pytest.mark.parametrize("encoder", encoders(), ids=lambda e: str(e["slug"]))
-def test_every_named_encoder_can_open_a_reading(encoder: dict[str, Any]) -> None:
+def encoders() -> list[NamedEncoder]:
+    """The encoders the comparison names, in the order the config lists them."""
+    settings: dict[str, list[NamedEncoder]] = json.loads(
+        CONFIG.read_text(encoding="utf-8")
+    )
+    return settings["encoders"]
+
+
+@pytest.mark.parametrize("encoder", encoders(), ids=lambda e: e["slug"])
+def test_every_named_encoder_can_open_a_reading(encoder: NamedEncoder) -> None:
     reading = EncoderReading(
         slug=encoder["slug"],
         model_id=encoder["model_id"],

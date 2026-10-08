@@ -11,18 +11,21 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 from test_same_story import block, item, unit
 from test_similarity_fit import a_written_row
 
 from idhazh import assemble, config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
     FittedSimilarityThreshold,
     HeldReason,
 )
 from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.similarity import applied
 from utilities import build_canary_day
@@ -49,10 +52,28 @@ def a_held_row(*, date: str, previous: float = 0.94) -> FittedSimilarityThreshol
 
 
 def a_tree(tmp_path: Path, rows: list[FittedSimilarityThreshold]) -> Path:
-    """The rows on disk, through the real appender, one day file each."""
+    """The rows on disk, filed through the ledger door the way the save job files a fit.
+
+    Each row under its own run, as the council's save job names it, with the
+    fitting stage as the producer. The days stay raw: a build reads a fitted
+    line before the gardener packs its day.
+    """
     state = tmp_path / "state"
     for row in rows:
-        ledger.append_fitted_thresholds(state, row.date, [row])
+        ledger.persist(
+            state,
+            [row],
+            ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+            covers=row.date,
+            identity=WriterIdentity(
+                run_id=row.run_id,
+                attempt=1,
+                job=ServerJob.SAVE_COUNCIL_RESULTS,
+                shard=0,
+                producer="stages.set_merge_line",
+                git_sha=SEED_COMMIT,
+            ),
+        )
     return state
 
 

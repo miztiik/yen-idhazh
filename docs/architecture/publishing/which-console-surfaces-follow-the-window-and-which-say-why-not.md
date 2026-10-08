@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -150,6 +150,13 @@ and that oracle is stronger for being exact. A panel outside the list proves it
 honours the control in its own spec, by driving the control to each preset and
 reading the control's own attribute back against the panel's.
 
+**Ten surfaces on Pipelines declare it**, among them `What is failing, by stage`
+and `Where an item's time went`. Both draw exactly the window's days and move
+with a pan, as `Run health` and `Failure rate against volume` do, and each names
+its span in its own accessible label. A day with nothing to draw keeps its
+column, empty, and a window with nothing to draw prints one sentence in the
+chart's room ([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#what-is-failing-by-stage)).
+
 ## The model-change markers read the window as well
 
 `pipelineChanges`, which draws the model-change markers on `/console/` and
@@ -244,6 +251,22 @@ panel would change height with the window). So bars at zero mean one thing: the
 record holds nothing, because it never held a row or because it emptied. The
 note says the record `was started again` only where that row's own hold reason
 says so; a row of zeros alone does not prove it.
+
+**The failure mix and the item time split follow the window rather than saying
+why not.** Both used to draw every day of every telemetry month the browser had
+fetched, so the days they drew depended on what the operator had opened earlier
+in the session. They could even draw a day after the window's last day. And the
+page counted one window's failures over two spans. A sentence saying why they
+drew more would have described this browser's fetches, not the data. So both
+draw the window's days, pan included, and neither trims an end: a window that
+shrank to the days that timed something would draw a span the control never
+named. A day with no row, or on the time split no item timed from start to
+finish, draws no column and a break in a line, never a zero, and the strip says
+what that day lacks. What the reader gives up: the extra fetched days, which a
+wider preset gives back; and on the failure mix's bars, a day nothing was
+planned on and a day nothing failed on look alike until he points at one. No
+tint tells them apart, because `Run health` and `Failure rate against volume`
+already shade the days nothing was planned on.
 
 ## See also
 
