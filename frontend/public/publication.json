@@ -231,7 +231,8 @@
     {"bytes": 21246,"items": 0,"path": "raw/feed-health/2026/10/08/01a11c3e-d288-867e-acd0-3db321b60b64.parquet","root": "state"},
     {"bytes": 21240,"items": 0,"path": "raw/feed-health/2026/10/08/01a11c8e-29f3-829c-9634-c6e3cb93e85f.parquet","root": "state"},
     {"bytes": 21236,"items": 0,"path": "raw/feed-health/2026/10/08/01a11d1c-13c0-89bc-ad48-c71bcdd71e56.parquet","root": "state"},
-    {"bytes": 21227,"items": 0,"path": "raw/feed-health/2026/10/08/01a11d49-2434-826f-aa16-cad5ee0220af.parquet","root": "state"}
+    {"bytes": 21227,"items": 0,"path": "raw/feed-health/2026/10/08/01a11d49-2434-826f-aa16-cad5ee0220af.parquet","root": "state"},
+    {"bytes": 21218,"items": 0,"path": "raw/feed-health/2026/10/08/01a11dda-3a43-8324-9fc0-2512bf54f091.parquet","root": "state"}
   ],
   "total_bytes": 56617473,
   "total_items": 16126,
