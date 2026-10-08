@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -49,7 +49,9 @@ Five rules hold for every number the console prints:
  was free.
 - **The item count sits beside every quality figure.** A share over four
  articles is not a measurement, and a column that hides its denominator
- invites a trend that is not there.
+ invites a trend that is not there. Under `console.min_attempts_for_rate` a
+ figure prints its counts and no share, in a strip and in a mark's name as in
+ a sentence (Reader, 2026-10-07, plan 62's row L32, #1409).
 
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, a run whose rows cannot be made into one run is left out of the
