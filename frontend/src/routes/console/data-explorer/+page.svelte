@@ -503,6 +503,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Data explorer &mdash; Console &mdash; {data.ui.site_title}</title>
+</svelte:head>
+
 <Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copyNotice = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
 <div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines}`}>

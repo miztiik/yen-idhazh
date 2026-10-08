@@ -97,7 +97,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L40 | A day under the floor is not drawn at its shares' heights | L32, L31 (holds `frontend/tests/console-window.spec.ts`) | N | PENDING | - | - | - |
 | L41 | The Judgement route reads its committed fitted lines and holdout scores | - (plan 59's rows "The fitted merge line is saved through the door", "The merge line's holdout score is saved through the door" and "The committed judge rows move onto the door, and the old CSV files go" later replace this read) | M | DONE | friendly-engine | - | Plan 62 row l41 |
 | L42 | The days control shows the window the panels draw after moving between console routes | L31 (holds `frontend/tests/console-window.spec.ts` as well as `which-console-surfaces-follow-the-window-and-which-say-why-not.md`) | O | PENDING | - | - | - |
-| L43 | Every console route sets its own page title | - | N | PENDING | - | - | - |
+| L43 | Every console route sets its own page title | - | N | DONE | upgraded-telegram | - | Plan 62 row l43 |
 
 ## 2. Shared declarations
 
@@ -1861,7 +1861,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/routes/console/voices/+page.svelte` (sets no title)
   - `frontend/src/routes/console/data-explorer/+page.svelte` (sets no title; plan 55's row "The Data explorer reaches the reference's density" (#1357), still open, edits this file too; decision 3)
   - `frontend/tests/console-nav.spec.ts` (the Oracle; no test reads a page title today)
-  - Left as they are, unless Reader changes their words: `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte` and `frontend/src/routes/console/model/+page.svelte`, which set "Console: Pipelines", "Console: Hardware" and "Console: Summaries", each followed by `&mdash;` and the site's title. No page under `docs/` names them
+  - `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte` and `frontend/src/routes/console/model/+page.svelte`, which set "Console: Pipelines", "Console: Hardware" and "Console: Summaries", each followed by `&mdash;` and the site's title. Listed to be left as they were unless Reader changed their words; Reader did (decision 1), so each title line changes (found during execution)
+  - `docs/architecture/publishing/what-sits-above-every-console-route.md` (no page under `docs/` named the titles; Reader asked for the pattern to be written down, and this page owns what every console route shares; found during execution)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-nav.spec.ts`; `npm --prefix frontend run check`; the browser smoke of each console route by a page load and by a tab click from Pipelines, reading the browser's title. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-nav.spec.ts`: each console route's title names that route, in Reader's words, on a page load and after a tab click from another route, and no two routes share a title. A title names the route, not what it draws, so the check holds for any data (Table D, D3). On `main` the Judgement route's title after a tab click from Pipelines reads "Console: Pipelines", which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 1).
 
@@ -1869,9 +1870,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the words of the three titles, and whether the three that exist keep theirs (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Reader chooses the words of the three titles, and whether the three that exist keep theirs (CLAUDE.md section 14) | Reader, 2026-10-08: every console route's title is its tab label, then `Console`, then the site's title, joined by `&mdash;` (`Judgement &mdash; Console &mdash; {data.ui.site_title}`), so Pipelines, Hardware and Summaries change too. A narrow browser tab shows only the start of a title, and the site's other titles put the most specific part first |
 | 2 | The fault is in row L31's report; the search found two more routes with no title, Voices and Data explorer | Row L31's report; plan owner, 2026-10-08 |
-| 3 | L43 does not wait for plan 55's row "The Data explorer reaches the reference's density" (#1357), though both edit the data explorer page. Row L21 waits for that row because it rewrites the line #1357 reshapes and whose words plan 55 declares; a page title shares neither, so whichever of the two merges second merges `main` into its branch and takes the other's change (CLAUDE.md section 8) | Plan author, 2026-10-08 |
+| 3 | L43 does not wait for plan 55's row "The Data explorer reaches the reference's density" (#1357), though both edit the data explorer page. Row L21 waits for that row because it rewrites the line #1357 reshapes and whose words plan 55 declares; a page title shares neither, so whichever of the two merges second merges `main` into its branch and takes the other's change (CLAUDE.md section 8) | Plan author, 2026-10-08. Plan 55's owner, 2026-10-08: ship now; #1357 takes the block |
 | 4 | Level 1: one line in the head of three routes; a wrong version is obvious and local | Plan owner, 2026-10-08 |
 
 **Rejected alternatives**
