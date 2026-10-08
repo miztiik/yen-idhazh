@@ -439,7 +439,7 @@ argument or a local, because a message can quote what GitHub's API or a file
 returned (Guardrail #11). `__main__` in a frame is the program the step ran. The
 exit code is still Python's own, 1, and the squash prints the same trace when a
 run cannot be recorded, then exits 2. Each program installs the printer,
-`backend/utilities/crash_trace.py`, before it calls its `main`, so an exception
+`backend/idhazh/crash_trace.py`, before it calls its `main`, so an exception
 raised while a program imports its own modules still prints Python's own trace;
 nothing those imports run reads fetched text. A refusal a program ends on with
 a sentence of its own, as the due check does, keeps its words.
@@ -1045,11 +1045,18 @@ returned. A frame is `module:line`, the form an event's `where` takes, and no
 function name is added: a module and a line at the commit the job checked out
 point to exactly one line. The printer reads each name only when it is a plain
 string, because a printer that raised would make Python print its own trace,
-text included. It sits beside the programs in `backend/utilities/` and is the
-standard library alone, because the plan job checks out only `config` and that
-folder and installs nothing. Each program imports it inside its `__main__`
-block, so the three programs held to standard-library imports at the top of the
-file stay that way (Fowler, 2026-10-07, on the owner's ruling of the same day).
+text included. It sits in the package, as `backend/idhazh/crash_trace.py`,
+because the `idhazh` commands that run gardener code install it too, and the
+package imports nothing from `backend/utilities/`. It and the package's
+`__init__.py` are the standard library alone, because the planner imports them
+with nothing installed, which is why the plan job checks out `backend/idhazh`
+beside `config` and `backend/utilities`. A module directly in `backend/` was
+rejected: the package would import a file its wheel does not hold, and the plan
+job would get that file only through git's rule that a sparse checkout also
+writes the files directly inside each listed folder's parent folders. Each
+program imports the printer inside its `__main__` block, so the three programs
+held to standard-library imports at the top of the file stay that way (Fowler,
+2026-10-07 and 2026-10-08, on the owner's ruling of 2026-10-07).
 
 ## See also
 

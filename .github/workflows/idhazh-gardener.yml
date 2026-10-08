@@ -103,8 +103,11 @@ jobs:
       matrix: ${{ steps.shards.outputs.matrix }}
       run_id: ${{ steps.run.outputs.run_id }}
     steps:
-      # The two folders the planner reads and nothing else: it runs before any
-      # install, and it opens nothing outside `config/`.
+      # The planner and the crash printer it imports, and nothing else: it runs
+      # before any install and opens nothing outside `config/`. The printer,
+      # `backend/idhazh/crash_trace.py`, and the package's `__init__.py` are the
+      # standard library alone, so `backend/idhazh` is checked out and never
+      # installed.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -112,6 +115,7 @@ jobs:
           sparse-checkout: |
             config
             backend/utilities
+            backend/idhazh
 
       # Which shard runs which task, from the declarations alone. Three lines for
       # $GITHUB_OUTPUT: whether any task runs, how many shards, and the matrix.
