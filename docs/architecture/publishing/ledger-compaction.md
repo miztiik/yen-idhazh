@@ -22,7 +22,7 @@ and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**All fifteen ledgers pack live and use the same retention chain:** days
+**All sixteen ledgers pack live and use the same retention chain:** days
 become months 45 whole days after the month ends; months become years 93 whole
 days after the year ends; indexed years expire 36 calendar months after their
 UTC end.
@@ -1066,7 +1066,7 @@ deleted year. The manual prune refusal still protects recent history; scheduled
 expiry follows the reviewed yearly policy. A ledger moved onto the door since
 takes the same chain with it, because the owner directed on 2026-10-05 that a
 moved ledger takes its retention and upkeep with it; the merge line's holdout
-score is one.
+score is one, and the hand marks a person harvests for it are another.
 
 `telemetry-aggregate` stays report-only. No item-health summaries have been
 generated yet, because its source months must first age past 14 months.

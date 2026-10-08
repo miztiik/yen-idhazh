@@ -170,11 +170,12 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: LedgerStaging(
         writer=(
-            "a person, typing the marks, or the labelling loop in "
-            "backend/utilities/sample_sheet.py harvesting them back - no job stages it "
-            "because no job writes it"
+            "a person, running `backend/utilities/sample_sheet.py --harvest` to file the "
+            "marks of one labelling through the ledger door. A person labels when they "
+            "choose rather than when a day publishes, so no job writes it and no job "
+            "stages it"
         ),
-        symbol=None,
+        symbol="utilities.sample_sheet.harvest",
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION: LedgerStaging(

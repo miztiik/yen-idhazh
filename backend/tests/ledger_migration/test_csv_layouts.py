@@ -19,6 +19,7 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy, ForeverWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.contracts.seen import PublishedRow
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from utilities.ledger_migration import (
     csv_files,
     csv_layouts,
@@ -108,6 +109,53 @@ def test_the_holdout_score_is_read_where_the_recorded_registry_filed_it(tmp_path
     assert csv_layouts.CSV_LEDGERS[which].old_entry == recorded[which]
     assert csv_layouts.CSV_LEDGERS[which].old_headings == {"key_point_weight": None}
     assert csv_files.left(state, [which], months=["2026-09"]) == [committed]
+
+
+def test_the_holdout_marks_are_read_from_the_one_file_the_recorded_registry_named(
+    tmp_path: Path,
+) -> None:
+    """One file in the judge's folder held every mark, and each row named its own day.
+
+    The file's path names no day, so the table names the column the day is read
+    from. A check of a month finds the file while it holds a row of that month,
+    and names the file once however many days it holds.
+    """
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS
+    recorded = ledger.registry_entries(
+        LedgersConfig.from_json((PRE_YEARLY_CONFIG / "ledgers.json").read_text(encoding="utf-8"))
+    )
+    state = tmp_path / "state"
+    committed = state / "content-similarity-judge" / "holdout-pairs.csv"
+    committed.parent.mkdir(parents=True)
+    committed.write_text(
+        "marked_on,note\n2026-09-19,a\n2026-09-20,b\n2026-10-02,c\n", encoding="utf-8", newline=""
+    )
+
+    assert csv_layouts.CSV_LEDGERS[which].old_entry == recorded[which]
+    assert csv_layouts.CSV_LEDGERS[which].day_column == "marked_on"
+    assert "marked_on" in SimilarityHoldoutPair.model_fields
+    assert csv_files.csv_days(state, which, months=["2026-09"]) == {
+        "2026-09-19": [committed],
+        "2026-09-20": [committed],
+    }
+    assert csv_files.left(state, [which], months=["2026-09", "2026-10"]) == [committed]
+    assert csv_files.left(state, [which], months=["2026-08"]) == []
+
+
+def test_a_one_file_layout_is_read_only_where_the_table_names_its_day_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file whose path names no day cannot be placed on a day without a column that does."""
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS
+    undated = csv_layouts.CSV_LEDGERS[which]._replace(day_column=None)
+    monkeypatch.setattr(
+        csv_layouts,
+        "CSV_LEDGERS",
+        MappingProxyType(dict(csv_layouts.CSV_LEDGERS) | {which: undated}),
+    )
+
+    with pytest.raises(refusals.RefusedError, match="unsupported CSV layout flat"):
+        csv_layouts.csv_root(tmp_path, which)
 
 
 def test_every_unmoved_table_entry_is_the_registry_entry() -> None:

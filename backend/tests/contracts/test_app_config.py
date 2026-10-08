@@ -34,6 +34,7 @@ from idhazh.contracts.knobs.placement import (
     SimilarityThresholdConfig,
 )
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
+from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.story_similarity_distribution import (
@@ -962,6 +963,20 @@ def test_the_leading_block_is_a_knob_the_frontend_agrees_with() -> None:
     mirrored = re.search(r"const LEADING_STORIES = (\d+);", reader)
     assert mirrored is not None, "the frontend dropped its leading_stories fallback"
     assert int(mirrored.group(1)) == UiConfig().leading_stories
+
+
+def test_the_holdout_reach_is_a_knob_the_frontend_agrees_with() -> None:
+    """The two readers of the hand marks open one reach, so a page and a reading count alike.
+
+    The scoring verb reads `similarity.holdout_reach_days` off the contract and
+    the Judgement route reads it off the file, falling back to its own copy on a
+    clone with no `config/`. A drift between the two copies would let the panel
+    draw marks the reading never counted.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"const HOLDOUT_REACH_DAYS = (\d+);", reader)
+    assert mirrored is not None, "the frontend dropped its holdout_reach_days fallback"
+    assert int(mirrored.group(1)) == SimilarityConfig().holdout_reach_days
 
 
 def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> None:

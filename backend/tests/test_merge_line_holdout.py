@@ -11,17 +11,16 @@ and a full unresolved count, which is a run that scored nothing reading as a
 line that merged nothing.
 
 **No test here walks committed data** (CLAUDE.md section 13). Every reading is
-taken over a marked file and two published days this test writes into its own
-tree. That tree is fixed in size, it cannot be moved by a run, and it carries
-the case the committed archive has never produced: a marked pair whose day
-retention has deleted.
+taken over marks and two published days this test writes into its own tree.
+That tree is fixed in size, it cannot be moved by a run, and it carries the case
+the committed archive has never produced: a marked pair whose day retention has
+deleted.
 
 Nothing calls a model and nothing opens a socket, because the step does neither.
 """
 
 from __future__ import annotations
 
-import csv
 import math
 from collections import Counter
 from pathlib import Path
@@ -40,6 +39,7 @@ from idhazh.contracts.digest_day import (
     DigestVerticalRef,
 )
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.placement import HOLDOUT_RESOLVED_SHARE_MIN
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -57,6 +57,10 @@ ANOTHER_DAY: Final = "2026-09-18"
 #: The marked row names its own two dates, so the reading's date is the day it
 #: was taken and nothing else.
 SCORED_ON: Final = "2026-09-20"
+
+#: The day the marks were made and filed under: the day before the reading, so
+#: the reading's reach holds them.
+MARKED_ON: Final = "2026-09-19"
 
 A_RUN: Final = "2026-09-20-35534060762"
 
@@ -140,21 +144,27 @@ def mark(
         left_title=left.title,
         right_title=right.title,
         same_story=same,
-        marked_on="2026-09-19",
+        marked_on=MARKED_ON,
         note=f"{A_LABELLER} at score 0.9403",
     )
 
 
-def write_marks(state: Path, marks: list[SimilarityHoldoutPair]) -> Path:
-    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = SimilarityHoldoutPair.csv_columns()
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        for one in marks:
-            writer.writerow(one.csv_row())
-    return path
+def write_marks(state: Path, marks: list[SimilarityHoldoutPair]) -> None:
+    """File the marks through the ledger door, under the day they were marked, as a harvest does."""
+    ledger.persist(
+        state,
+        marks,
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
+        covers=MARKED_ON,
+        identity=WriterIdentity(
+            run_id=f"{MARKED_ON}-1",
+            attempt=1,
+            job=ServerJob.OPERATOR,
+            shard=0,
+            producer="tests.test_merge_line_holdout",
+            git_sha=SEED_COMMIT,
+        ),
+    )
 
 
 def committed_rows(state: Path, date: str) -> list[MergeLineHoldoutScore]:
@@ -450,7 +460,11 @@ def test_a_pair_whose_day_is_gone_is_counted_unresolved_rather_than_dropped(
         path.unlink()
 
     reading = holdout.score_marks(
-        holdout.marked_pairs(state),
+        holdout.marked_pairs(
+            state,
+            today=SCORED_ON,
+            reach_days=committed_settings().app.similarity.holdout_reach_days,
+        ),
         digest_root=digest,
         cosine_weight=1.0,
     )

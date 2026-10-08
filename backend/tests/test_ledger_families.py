@@ -69,7 +69,7 @@ def test_each_family_prints_its_status_its_day_and_what_it_holds(tmp_path: Path)
 def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> None:
     """A folder counts every file below it; a one-file ledger counts that file alone.
 
-    The judge's holdout file sits in the same folder as the judge's day
+    The judge's score distribution sits in the same folder as the judge's day
     directories, so a count that walked the folder for it would take theirs too.
     A dot file is a placeholder and holds no rows.
     """
@@ -78,7 +78,7 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
         (
             "day-metrics/2026/09/18.json",
             "day-metrics/2026/09/19.json",
-            "content-similarity-judge/holdout-pairs.csv",
+            "content-similarity-judge/score-distribution.json",
             "content-similarity-judge/scored-pairs/2026/09/18.csv",
             "traces/.gitkeep",
         ),
@@ -90,14 +90,14 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
         [
             "day-metrics/2026/09/18.json",
             "day-metrics/2026/09/19.json",
-            "content-similarity-judge/holdout-pairs.csv",
+            "content-similarity-judge/score-distribution.json",
             "content-similarity-judge/scored-pairs/2026/09/18.csv",
             "traces/.gitkeep",
         ],
     )
 
     assert "  - day-metrics: 2 files" in lines
-    assert "  - holdout-pairs: 1 file" in lines
+    assert "  - score-distribution: 1 file" in lines
     assert "  - scored-pairs: 1 file" in lines
     assert "  - traces: 0 files" in lines
     assert "  - item-health-summary under raw/: 0 files" in lines

@@ -7,11 +7,15 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from idhazh import config, ledger
-from utilities.ledger_migration.csv_layouts import csv_root
+from idhazh.contracts.ledgers import Grain
+from utilities.ledger_migration.csv_files import flat_file_days
+from utilities.ledger_migration.csv_layouts import csv_file, csv_root, require_layout
 from utilities.ledger_migration.inputs import MigrationInputs
 from utilities.ledger_migration.packing import pack, packs_here
+from utilities.ledger_migration.path_labels import label_path
 from utilities.ledger_migration.planning import Moved, RootPlan, collect_reports, plan_roots
 from utilities.ledger_migration.proof import prove
+from utilities.ledger_migration.refusals import NotProvenError
 
 
 def write_roots(plans: Sequence[RootPlan], *, raw_only: bool = False) -> list[tuple[Path, Moved]]:
@@ -87,13 +91,36 @@ def _drop_empty_parents(path: Path, root: Path) -> None:
         folder = folder.parent
 
 
+def _refuse_a_file_holding_unnamed_months(plans: Sequence[RootPlan]) -> None:
+    """A one-file layout is deleted only when every month it holds was named and proved.
+
+    The one file holds every day of its ledger, so deleting it after a run that
+    named some of its months would delete the rows of the months it did not name,
+    which nothing has copied. Asked of every root before any file is deleted.
+    """
+    for plan in plans:
+        for name in plan.planned:
+            if require_layout(name).grain is not Grain.FLAT:
+                continue
+            held = {day[:7] for day in flat_file_days(plan.state_dir, name)}
+            unnamed = sorted(held - set(plan.inputs.months))
+            if unnamed:
+                raise NotProvenError(
+                    f"{label_path(plan.state_dir)}: {name.value}: "
+                    f"{csv_file(plan.state_dir, name).name} also holds rows of "
+                    f"{', '.join(unnamed)}, so it is deleted only once every month it holds "
+                    "is named"
+                )
+
+
 def _delete_sources(plans: Sequence[RootPlan]) -> None:
+    _refuse_a_file_holding_unnamed_months(plans)
     for plan in plans:
         for name, days in plan.planned.items():
-            for held in days.values():
-                for path in held.files:
-                    path.unlink()
-                    _drop_empty_parents(path, csv_root(plan.state_dir, name))
+            sources = dict.fromkeys(path for held in days.values() for path in held.files)
+            for path in sources:
+                path.unlink()
+                _drop_empty_parents(path, csv_root(plan.state_dir, name))
 
 
 def retire_roots(inputs: MigrationInputs) -> list[tuple[Path, Moved]]:

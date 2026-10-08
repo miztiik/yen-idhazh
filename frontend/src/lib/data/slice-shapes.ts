@@ -23,6 +23,7 @@ export type LedgerName = (typeof LEDGER_NAMES)[number];
 
 /** Door ledger folders that differ from the ledger's value. */
 export const LEDGER_FOLDERS = {
+	'holdout-pairs': 'content-similarity-judge/holdout-pairs',
 	'merge-line-holdout-scores': 'content-similarity-judge/merge-line-holdout-scores'
 } as const satisfies Partial<Record<LedgerName, string>>;
 

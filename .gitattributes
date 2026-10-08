@@ -40,16 +40,6 @@ state/content-similarity-judge/metrics/**/*.csv text eol=lf merge=union
 state/content-similarity-judge/scored-pairs/**/*.csv text eol=lf merge=union
 state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
 
-# The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
-# anyway, and it is written down because the reason is worth reading next to the
-# union lines above. A person edits this file, so two edits of it are
-# two people disagreeing about the same rows rather than two runs appending
-# independent ones - and a union driver on a disagreement silently keeps both
-# marks, which is a pair marked same-story and different-story at once. A text
-# merge stops the push and asks, which is the right answer when the writer is a
-# person.
-state/content-similarity-judge/holdout-pairs.csv text eol=lf merge=text
-
 # The training window. Deliberately NOT `merge=union`: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that
 # holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest

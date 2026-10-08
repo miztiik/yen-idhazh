@@ -109,6 +109,7 @@ YEARLY_RETENTION_DECISION: Final = (
 )
 MOVED_LEDGER_TASKS: Final = (
     "compact-content-similarity-judge-merge-line-holdout-scores",
+    "compact-content-similarity-judge-holdout-pairs",
 )
 MOVED_LEDGER_RETENTION_DECISION: Final = (
     "@kumarsnaveen_microsoft directed on 2026-10-05 that each ledger moved onto the door "
@@ -640,6 +641,35 @@ def test_the_lens_window_is_held_against_the_counterfactual_compaction(
         message = refused(config_dir)
         assert "compact-counterfactual-scores.json reaches back 73 days" in message
         assert "lens_weights.window_days reads 90 days back" in message
+
+
+@pytest.mark.parametrize(
+    ("monthly", "loads"),
+    [({"unit": "months", "value": 1}, False), ({"unit": "forever"}, True)],
+)
+def test_the_holdout_reach_is_held_against_the_marks_compaction(
+    tmp_path: Path, monthly: dict[str, Any], loads: bool
+) -> None:
+    """Both readers of the hand marks open `similarity.holdout_reach_days`, so nothing deletes inside it.
+
+    The scoring verb and the Judgement page read the reach, and a mark the
+    compaction deleted inside it would be a mark the reader looks for and finds
+    gone. One month reaches back 73 days, far under the committed 730.
+    """
+    folder = "content-similarity-judge/holdout-pairs"
+    compaction = a_compaction(
+        "holdout-pairs",
+        owns=[f"state/raw/{folder}", f"state/compact/{folder}"],
+        monthly_window=monthly,
+    )
+    config_dir = a_garden(tmp_path, compact_content_similarity_judge_holdout_pairs=compaction)
+    reach = config.load(CONFIG_DIR).app.similarity.holdout_reach_days
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "compact-content-similarity-judge-holdout-pairs.json reaches back 73 days" in message
+        assert f"similarity.holdout_reach_days reads {reach} days back" in message
 
 
 @pytest.mark.parametrize(

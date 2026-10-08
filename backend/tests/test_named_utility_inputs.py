@@ -8,7 +8,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import REPO_ROOT, SEED_COMMIT
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
@@ -79,9 +79,14 @@ def test_backfill_report_reads_only_requested_days(
 
 def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> None:
     digests = tmp_path / "digest"
-    a_digest(digests, "2026-09-01")
+    named = a_digest(digests, "2026-09-01")
     a_digest(digests, "2026-09-02").write_bytes(b"\xff")
+    # A second article on the named day, so the drawn pair is two articles.
+    payload = json.loads(named.read_text(encoding="ascii"))
+    payload["items"].append({"source_url": "https://example.org/tunnel", "title": "A tunnel"})
+    named.write_text(json.dumps(payload), encoding="ascii", newline="\n")
     key = derive_url_key("https://example.org/bridge")
+    other = derive_url_key("https://example.org/tunnel")
     draw = tmp_path / "draw.csv"
     with draw.open("w", encoding="ascii", newline="") as handle:
         writer = csv.DictWriter(
@@ -94,7 +99,7 @@ def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> No
                 "date": "2026-09-01",
                 "pair_key": "pair",
                 "left_url_key": key,
-                "right_url_key": key,
+                "right_url_key": other,
                 "composite_score": "0.95",
             }
         )
@@ -109,11 +114,13 @@ def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> No
     assert (
         sample_sheet.harvest(
             tmp_path,
-            tmp_path / "holdout.csv",
+            tmp_path / "state",
             pairs,
             labeller="fixture",
             labelled_on="2026-09-03",
             batches=["labels.json"],
+            run_id="2026-09-03-1",
+            commit_sha=SEED_COMMIT,
         )
         == 1
     )

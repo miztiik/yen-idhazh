@@ -3,6 +3,7 @@ import {
 	committedFloor,
 	committedWeights,
 	consoleConfig,
+	holdoutReachDays,
 	similarityConfig
 } from '$lib/server/config';
 import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
@@ -10,7 +11,7 @@ import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
 import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
-import { holdoutReading, mergeLineHoldoutScore } from '$lib/server/similarity-holdout';
+import { holdoutReading, markReach, mergeLineHoldoutScore } from '$lib/server/similarity-holdout';
 import { windowDay } from '$lib/server/window-day';
 
 export const prerender = true;
@@ -67,11 +68,12 @@ export async function load() {
 		cosineWeight: newest?.cosineWeight ?? committed.cosine_weight,
 		fittedOn: newest === null ? null : newest.date
 	};
-	// One hand-typed file, plus one published day per distinct date it names. The
-	// bound is that file's length and not the archive's, and the days it opens
-	// sit outside the window preset - so it has an entry of its own in
+	// The packed hand marks inside their own reach, which ends on the same day as
+	// every window here, plus one published day per distinct date they name. The
+	// bound is the reach and not the archive, and the days it opens sit outside
+	// the window preset - so it has an entry of its own in
 	// `docs/concepts/growing-reads.md`.
-	const holdout = holdoutReading(weights);
+	const holdout = await holdoutReading(weights, markReach(day, holdoutReachDays()));
 	// How the line stood against the marks, off the committed row rather than
 	// counted again here. Null where nobody has run the verb that writes it, where
 	// its day is not packed yet, or where the newest row is older than the widest

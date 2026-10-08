@@ -35,8 +35,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 
@@ -65,17 +63,12 @@ class Finding:
 def seeded_ledgers() -> tuple[Ledger, ...]:
     """The ledgers whose header ships with the contract, read off the contract.
 
-    The feed retirements were the other one until 2026-09-28, when they moved
-    under `state/raw/`: a writer there creates its own file, and the step that
-    commits it stages `state` whole, so no path has to exist on day one.
+    None is left. The feed retirements were one until 2026-09-28, and the
+    similarity holdout marks were the other until they moved onto the ledger
+    door: a writer there creates its own file, and the step that commits it
+    stages `state` whole, so no path has to exist on day one.
     """
-    return (
-        Ledger(
-            name="similarity holdout pairs",
-            relpath=ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS),
-            columns=SimilarityHoldoutPair.csv_columns(),
-        ),
-    )
+    return ()
 
 
 def audit(repo_root: Path) -> list[Finding]:
