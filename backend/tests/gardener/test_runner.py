@@ -218,20 +218,21 @@ def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
             }
         )
         expected[case] = row
-        ledger.persist(
-            repo_root / "state" / "pipeline-tests" / case,
-            [row],
-            ledger=LedgerName.ITEM_HEALTH,
-            covers=day,
-            identity=WriterIdentity(
-                run_id=f"{day}-{number}",
-                attempt=1,
-                job=ServerJob.WORK,
-                shard=0,
-                producer="work",
-                git_sha="a" * 40,
-            ),
-        )
+        with ledger.use_registry(ledger.overlay_registry(("pipeline-tests", case))):
+            ledger.persist(
+                repo_root / "state",
+                [row],
+                ledger=LedgerName.ITEM_HEALTH,
+                covers=day,
+                identity=WriterIdentity(
+                    run_id=f"{day}-{number}",
+                    attempt=1,
+                    job=ServerJob.WORK,
+                    shard=0,
+                    producer="work",
+                    git_sha="a" * 40,
+                ),
+            )
 
     outcome = runner.run(
         ["compact-trial-item-health"],
@@ -251,21 +252,24 @@ def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
     task_row = rows_of(outcome.record)["compact-trial-item-health"]
     assert task_row.selected > 0, task_row.model_dump_json()
     for case, row in expected.items():
-        root = repo_root / "state" / "pipeline-tests" / case
-        daily_index = ledger.compact_index_path(
-            root, LedgerName.ITEM_HEALTH, Period.DAILY
-        )
-        assert daily_index.is_file()
-        assert day in {
-            entry.covers for entry in CompactIndex.read(daily_index).entries
-        }
-        assert ledger.load_days(root, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow) == [row]
-        compact = ledger.compact_file(root, LedgerName.ITEM_HEALTH, Period.DAILY, day)
-        assert compact is not None and compact.is_file()
-        envelope = ledger.read_envelope(compact)
-        assert envelope.identity.run_id == "2026-10-04-9001"
-        assert envelope.identity.job is ServerJob.RUN_TASKS
-        assert envelope.identity.git_sha == "b" * 40
+        root = repo_root / "state"
+        with ledger.use_registry(ledger.overlay_registry(("pipeline-tests", case))):
+            daily_index = ledger.compact_index_path(
+                root, LedgerName.ITEM_HEALTH, Period.DAILY
+            )
+            assert daily_index.is_file()
+            assert day in {
+                entry.covers for entry in CompactIndex.read(daily_index).entries
+            }
+            assert ledger.load_days(
+                root, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow
+            ) == [row]
+            compact = ledger.compact_file(root, LedgerName.ITEM_HEALTH, Period.DAILY, day)
+            assert compact is not None and compact.is_file()
+            envelope = ledger.read_envelope(compact)
+            assert envelope.identity.run_id == "2026-10-04-9001"
+            assert envelope.identity.job is ServerJob.RUN_TASKS
+            assert envelope.identity.git_sha == "b" * 40
 
     assert production_raw.read_bytes() == production_bytes
     assert not ledger.compact_index_path(

@@ -136,7 +136,8 @@ def test_a_qualification_hands_on_the_trial_folder_its_plan_is_filed_in(tmp_path
     outputs = dict(
         line.split("=", 1) for line in written.read_text(encoding="utf-8").splitlines() if line
     )
-    expected = ledger.raw_root(Path(ledger.STATE_DIRNAME) / str(trial), LedgerName.RUN_PLAN)
+    with ledger.use_registry(ledger.overlay_registry((str(trial),))):
+        expected = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.RUN_PLAN)
     assert outputs["plan_dir"] == expected.joinpath(*outputs["date"].split("-")).as_posix()
 
 
