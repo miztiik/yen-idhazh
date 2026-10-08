@@ -129,8 +129,12 @@ jobs:
           PYTHONUNBUFFERED: '1'
         run: |
           set -euo pipefail
-          if ! [[ "$ENCODER" =~ ^[a-z0-9.-]+$ ]]; then
-            echo "an encoder slug is lower-case letters, digits, dots and dashes" >&2
+          # The same shape `Slug` enforces in the contract. They disagreed
+          # once: this check allowed a dot, the contract did not, and the shard
+          # named for a model with a dot in its version failed after the
+          # weights had already downloaded.
+          if ! [[ "$ENCODER" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "an encoder slug is lower-case letters and digits, joined by dashes" >&2
             exit 1
           fi
           mkdir -p readings logs
