@@ -187,8 +187,8 @@
 			.length
 	);
 
-	/** Why a dot is missing, said after the window sentence wherever the chart
-	 * left one out. Not while the whole window is too few for a share: that
+	/** Why a dot is missing, as a caption under the window sentence wherever the
+	 * chart left one out. Not while the whole window is too few for a share: that
 	 * sentence already says so. One column shows no gap, so it keeps the rule
 	 * alone. The words are Reader's. */
 	const floorNote = $derived.by(() => {
@@ -398,10 +398,10 @@
 					{unclearSaid} could not tell. Both rates are inside the marks.</span
 				>
 			{/if}
-			{#if floorNote !== null}
-				<span data-agreement-floor-note>{floorNote}</span>
-			{/if}
 		</p>
+		{#if floorNote !== null}
+			<p class="floor-note" data-agreement-floor-note>{floorNote}</p>
+		{/if}
 	</div>
 </Panel>
 
@@ -411,5 +411,14 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
+	}
+
+	/* A rule for reading the chart is a caption, so the verdict above it stays
+	   the last thing in its own paragraph. */
+	.floor-note {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-xs);
+		line-height: var(--leading-sm);
+		color: var(--color-text-tertiary);
 	}
 </style>

@@ -76,8 +76,10 @@ the counts instead.
 - Keep the column, so a pointer, a tap or an arrow key still selects it.
 - Do not stand in for the mark on the baseline: an open point there means a
   measured zero.
-- When a window leaves a mark out, one note after the panel's window sentence
-  says why, unless that sentence already says the whole window is too few.
+- When a window leaves a mark out, a caption under the panel's window sentence
+  says why, in the small grey type the failure chart's own note uses, so the
+  verdict stays the last thing in its paragraph. Leave it out where that
+  sentence already says the whole window is too few.
 
 The failure chart applies this to each stage. The judge's agreement chart
 judges "disagreed" by every pair read twice and "could not tell" by the pairs
