@@ -501,18 +501,18 @@ export function readDayShards(
 	return { rows, columns };
 }
 
-/** One shard of a day-grain ledger: the date it is filed under, and its path.
- *
- * Several entries carry one date. A day is a `<DD>/` directory of writer-owned
- * files, one per job that wrote the ledger that day, and every one of them is
- * the same day to every reader here. */
+/** One day file of a day-grain ledger: the date it is filed under, and its path. */
 export interface DayShard {
 	date: string;
 	path: string;
 }
 
-/** Named writer files grouped by recorded day, oldest first.
- * The cover counts days, not files. A missing named file fails the build. */
+/** The day files the publication inventory names under `dir`, oldest first.
+ *
+ * A day-grain ledger files one `<YYYY>/<MM>/<DD>.csv` a day: grain `day` in
+ * `config/ledgers.json`, the path `backend/idhazh/ledger/paths.py` builds for its
+ * writer. A name in any other layout is skipped. The cover counts recorded days,
+ * and a missing named file fails the build. */
 export function dayShardFiles(
 	dir: string,
 	days: number = LEDGER_WINDOW_DAYS,
@@ -524,7 +524,7 @@ export function dayShardFiles(
 	const grouped = new Map<string, DayShard[]>();
 	for (const file of stateFiles(inventoryRoot).sort()) {
 		if (!file.startsWith(prefix)) continue;
-		const name = /^(\d{4})\/(\d{2})\/(\d{2})\/[^/]+\.csv$/.exec(file.slice(prefix.length));
+		const name = /^(\d{4})\/(\d{2})\/(\d{2})\.csv$/.exec(file.slice(prefix.length));
 		if (!name) continue;
 		const date = `${name[1]}-${name[2]}-${name[3]}`;
 		const path = join(stateRoot, ...file.split('/'));

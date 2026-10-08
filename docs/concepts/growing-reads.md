@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -410,7 +410,7 @@ the last day there was.
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
+| `payload.readDayShards`, `payload.dayShardFiles` | the day files of the newest `days` recorded days of a ledger that files one `<YYYY>/<MM>/<DD>.csv` a day, as the publication inventory names them | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts recorded days** - see below |
 | `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health or host-fingerprint ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
@@ -420,29 +420,16 @@ the last day there was.
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
-**A day is a directory of writer-owned files, and the cover counts days rather
-than files.** There is no head to fold into, so the day holds one file per
-writer - `<run_id>-<attempt>-<job>-<shard>.csv`, and no two writers can name one
-file ([partitions.md](partitions.md#what-counts-as-a-day-file)).
-`dayShardFiles` groups those files by their day before it takes the newest
-`days` of them, so `LEDGER_WINDOW_DAYS` keeps meaning 91 recorded days whatever
-the ledger holds. What moves is the file count inside the window, not the window.
-
-**What that costs, said rather than implied.** A live day costs one open per
-writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that was
-20 writers for item-health and 25 for host-fingerprint, against one file each
-before the day directory landed. A day whose writers have been folded to one
-`settled.csv` costs one open again. So the read is bounded by the number of days
-still unfolded times the writers a day, plus one file for every folded day in
-the window - and by nothing in the archive behind it. The gardener folds a day
-one whole day after it ends, so the unfolded half is at most the newest two days
-rather than the whole 91-day window.
-
-**The three records the console reads most are off this path.** The item-health
-and host-fingerprint figures above were taken while those ledgers were CSV day
-trees. They moved to the ledger door with the eval ledger, and `itemHealthRows`,
-`evalRows` and `machineRecord` read packed days only: one file a packed day, or
-one a month once a compaction absorbs it, whatever a day's writers numbered.
+**A day is one file, and the cover counts recorded days.** Both ledgers this
+reader serves, the fitted merge line and the merge line's holdout score, file one
+`<YYYY>/<MM>/<DD>.csv` a day: grain `day` in `config/ledgers.json`, the registry
+`backend/idhazh/ledger/paths.py` builds each writer's path from. `dayShardFiles`
+keeps the newest `days` of the days the publication inventory names and opens
+one file a day, so `LEDGER_WINDOW_DAYS` bounds the read at 91 files whatever the
+ledger holds. From #1068 until 2026-10-08 the reader looked for a folder of files
+a day, which neither writer files, so the Judgement page read no row.
+`frontend/tests/similarity-ledgers.spec.ts` now holds the registry and the
+reader to the one layout.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -471,10 +458,12 @@ matters, because the vector block is most of what a day payload weighs.
 once to find the newest year, which costs one directory entry a year for ever.
 `readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
 which shards are newest, which costs one entry a month for ever.
-`readDayShards` is the bigger one and `fittedLines` inherits it: the walk names
-one entry a recorded day where the month tree named one a month. Neither opens a
-file it does not need, and deriving the newest stem from today's date instead
-would answer nothing at all for a ledger whose last run was two months ago.
+`readDayShards` is the bigger one, and both judge readers inherit it: the
+inventory names one entry a recorded day, and the reader reads every entry of
+its ledger and checks each named file exists before it keeps the newest. It
+opens no file outside its cover, and deriving the newest day from today's date
+instead would answer nothing at all for a ledger whose last run was two months
+ago.
 
 ### Unbounded, and it says so
 
