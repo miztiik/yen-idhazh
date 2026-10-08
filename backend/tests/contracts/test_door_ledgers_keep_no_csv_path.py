@@ -115,8 +115,9 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
         _under_state(*ledger.entry(member).prefix) for member in LedgerName if member not in door
     } | {_under_state(tier.value, *ledger.entry(member).prefix) for member in door for tier in Tier}
     tasks = config.load_gardener().tasks
+    state_prefix = f"{ledger.STATE_DIRNAME}/"
     declared_trial_folders = {
-        f"{root}/{tier}/{'/'.join(ledger.door_folders(policy.ledger))}"
+        _under_state(tier, root[len(state_prefix) :], *ledger.door_folders(policy.ledger))
         for name, policy in tasks.items()
         if name.startswith("compact-trial-") and isinstance(policy, CompactionPolicy)
         for root in policy.state_roots

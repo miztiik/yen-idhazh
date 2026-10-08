@@ -41,6 +41,7 @@ the router does not contain.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import sys
 import time
@@ -51,6 +52,7 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    ledger,
     path_classes,
 )
 from idhazh.contracts.base import WORK_JOB, ServerJob
@@ -551,14 +553,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
-    # the only way to guarantee that for every ledger at once is to move the
-    # root they all hang off (Guardrail #6).
-    if settings.app.run.trial_state_dirname:
-        common.STATE_ROOT = common.state_root_of(settings, base=common.STATE_ROOT)
-        logging.getLogger(__name__).warning(
-            "trial run: every ledger goes to %s and no published series reads it",
-            common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
+    # the only way to guarantee that for every ledger at once is to overlay
+    # the registry every door file resolves through (Guardrail #6). This
+    # leaves `common.STATE_ROOT` meaning `state/` for every stage; the
+    # overlay rewrites the tier-first path a door file resolves to, so a
+    # stage that writes `state/raw/<ledger>/...` ends up at
+    # `state/raw/<trial-segments>/<ledger>/...` without reading its own root
+    # differently.
+    trial_segments = tuple(
+        part
+        for part in (
+            settings.app.run.trial_state_dirname,
+            settings.app.run.trial_case_dirname,
         )
+        if part is not None
+    )
+    with contextlib.ExitStack() as trial_registry:
+        if trial_segments:
+            trial_registry.enter_context(
+                ledger.use_registry(ledger.overlay_registry(trial_segments))
+            )
+            logging.getLogger(__name__).warning(
+                "trial run: every ledger goes to state/<tier>/%s and no published "
+                "series reads it",
+                Path(*trial_segments).as_posix(),
+            )
+        return _dispatch(parser, args, settings)
+
+
+def _dispatch(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
+) -> int:
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs

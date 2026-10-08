@@ -15,8 +15,8 @@
   },
   "month_deletes_dry_run": true,
   "owns": [
-    "state/pipeline-tests/raw/candidate-models",
-    "state/pipeline-tests/compact/candidate-models"
+    "state/raw/pipeline-tests/candidate-models",
+    "state/compact/pipeline-tests/candidate-models"
   ],
   "prune_refusal": "Trial candidate-models data is not a production prune target.",
   "state_roots": [
