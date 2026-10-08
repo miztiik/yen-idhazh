@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -20,12 +21,13 @@ from idhazh.contracts.encoder_reading import EncoderReading, PairCounts, Reading
 CONFIG = Path(__file__).resolve().parents[3] / "config" / "encoder-comparison.json"
 
 
-def encoders() -> list[dict[str, object]]:
-    return json.loads(CONFIG.read_text(encoding="utf-8"))["encoders"]
+def encoders() -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = json.loads(CONFIG.read_text(encoding="utf-8"))["encoders"]
+    return entries
 
 
 @pytest.mark.parametrize("encoder", encoders(), ids=lambda e: str(e["slug"]))
-def test_every_named_encoder_can_open_a_reading(encoder: dict[str, object]) -> None:
+def test_every_named_encoder_can_open_a_reading(encoder: dict[str, Any]) -> None:
     reading = EncoderReading(
         slug=encoder["slug"],
         model_id=encoder["model_id"],
