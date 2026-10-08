@@ -41,6 +41,7 @@
 		agreementCorridor,
 		describeUnclear,
 		rateWithDenominator,
+		wholePercent,
 		type AgreementLimits,
 		type JudgeDay
 	} from '$lib/console/merge-line';
@@ -177,11 +178,30 @@
 	);
 	const disagreeShare = $derived(rateWithDenominator(disagreed, judged, attemptsFloor));
 	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor));
-	/** The disagreed share against its mark, read off the share itself and never
-	 * off why a day was held, for the sentences that judge that share alone. */
+	/** Each share against its own mark, read off the share itself and never off
+	 * why a day was held: the run first checks whether the record holds enough
+	 * to fit on, so a day held for that can carry a share past its mark. A share
+	 * is past its mark when it is above it, the test the run holds a day on. */
+	const disagreedPast = $derived(judged > 0 && disagreed / judged > limits.disagreementMax);
+	const unclearPast = $derived(agreed > 0 && unclear / agreed > limits.unclearMax);
+	/** The disagreed share against its mark, for the sentences that judge that
+	 * share alone. The words are Reader's. */
 	const disagreedVerdict = $derived(
-		judged > 0 && disagreed / judged > limits.disagreementMax ? 'past' : 'inside'
+		`The ${wholePercent(disagreed, judged)}% that disagreed is ${disagreedPast ? 'past' : 'inside'} its mark`
 	);
+	/** Where the sentence prints both shares, the verdict on the two: the state
+	 * it names and the words that close the sentence. The words are Reader's. */
+	const bothVerdict = $derived.by(() => {
+		if (disagreedPast && unclearPast)
+			return { state: 'both-past', said: 'Both rates are past their marks.' };
+		if (disagreedPast) return { state: 'disagreed-past', said: `${disagreedVerdict}.` };
+		if (unclearPast)
+			return {
+				state: 'unclear-past',
+				said: `The ${wholePercent(unclear, agreed)}% that could not tell is past its mark.`
+			};
+		return { state: 'inside', said: 'Both rates are inside the marks.' };
+	});
 	const heldByJudge = $derived(
 		drawn.filter((day) => day.heldReason === 'judge_unstable' || day.heldReason === 'judge_uncertain')
 			.length
@@ -231,7 +251,7 @@
 
 <Panel
 	title="Whether the judge agrees with itself"
-	note="Every pair is read twice, with the two summaries swapped. One line is how often the two readings differed. The other is how often the reading could not tell. The two rules are where a run stops moving the line."
+	note={`Every pair is read twice, with the two summaries swapped. A "disagreed" dot shows how often a pair's two readings disagreed. A "could not tell" dot shows how often the pairs whose two readings agreed could not tell. When a day's rate is past its own dashed mark, the run does not move the merge line that day.`}
 >
 	<div
 		data-windowed="judge-agreement"
@@ -301,8 +321,8 @@
 						data-agreement-marker-label={rule.name}
 					>
 						{rule.name === 'disagreement'
-							? `${percent(rule.at)} - the run stops moving the line`
-							: `${percent(rule.at)} - the run stops here too`}
+							? `${percent(rule.at)} - the "disagreed" mark`
+							: `${percent(rule.at)} - the "could not tell" mark`}
 					</text>
 				{/each}
 
@@ -383,19 +403,18 @@
 			{:else if agreed === 0}
 				<span data-agreement-state="none-agreed"
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading.
-					Could not tell: {unclearSaid}. The {percent(disagreed / judged)} that disagreed is
-					{disagreedVerdict} its mark.</span
+					Could not tell: {unclearSaid}. {disagreedVerdict}.</span
 				>
 			{:else if agreed < attemptsFloor}
 				<span data-agreement-state="few-agreed"
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearSaid} could not tell. The {percent(disagreed / judged)} that disagreed is
-					{disagreedVerdict} its mark, and {agreed} is too few to report a share.</span
+					{unclearSaid} could not tell. {disagreedVerdict}, and {agreed} is too few to report a
+					share.</span
 				>
 			{:else}
-				<span data-agreement-state="inside"
+				<span data-agreement-state={bothVerdict.state}
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearSaid} could not tell. Both rates are inside the marks.</span
+					{unclearSaid} could not tell. {bothVerdict.said}</span
 				>
 			{/if}
 		</p>
