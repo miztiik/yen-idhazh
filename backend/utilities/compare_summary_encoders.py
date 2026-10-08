@@ -142,6 +142,7 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
 
     same: list[tuple[int, int]] = []
     ambiguous: list[tuple[int, int]] = []
+    related: list[tuple[int, int]] = []
     for day, members in sorted(by_day.items()):
         later: list[int] = []
         for ahead in range(1, reach + 1):
@@ -151,12 +152,18 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
             if len(items[left]["words"]) < least_words:
                 continue
             for right in members[position + 1:] + later:
-                if items[left]["domain"] == items[right]["domain"]:
-                    continue
                 if len(items[right]["words"]) < least_words:
                     continue
                 union = items[left]["words"] | items[right]["words"]
                 shared = len(items[left]["words"] & items[right]["words"]) / len(union)
+                if items[left]["domain"] == items[right]["domain"]:
+                    # One outlet writing twice about one subject on one day.
+                    # Usually a correction or a follow-up, and a word-overlap
+                    # rule cannot say which - the titles match either way. Kept
+                    # out of the scored buckets and reported on its own.
+                    if shared >= floor:
+                        related.append((left, right))
+                    continue
                 if shared >= floor:
                     same.append((left, right))
                 elif shared >= middle:
@@ -165,8 +172,10 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
     rng = random.Random(settings["seed"])
     rng.shuffle(same)
     rng.shuffle(ambiguous)
+    rng.shuffle(related)
     same = same[:cap]
     ambiguous = ambiguous[:middle_cap]
+    related = related[:settings["max_related_pairs"]]
 
     days = [day for day, members in by_day.items() if len(members) > 1]
     different: list[tuple[int, int]] = []
@@ -183,7 +192,7 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
         if len(items[left]["words"] & items[right]["words"]) / len(union) < middle:
             different.append((left, right))
 
-    every_pair = same + different + ambiguous
+    every_pair = same + different + ambiguous + related
     touched = sorted({index for pair in every_pair for index in pair})
     slot_of = {index: slot for slot, index in enumerate(touched)}
     return {
@@ -191,9 +200,7 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
         "same": [[slot_of[a], slot_of[b]] for a, b in same],
         "different": [[slot_of[a], slot_of[b]] for a, b in different],
         "ambiguous": [[slot_of[a], slot_of[b]] for a, b in ambiguous],
-        "ambiguous_urls": [
-            [items[a]["url"], items[b]["url"]] for a, b in ambiguous
-        ],
+        "related": [[slot_of[a], slot_of[b]] for a, b in related],
     }
 
 
@@ -217,6 +224,7 @@ def stage_pairs(args: argparse.Namespace) -> None:
                 "same_pairs": len(built["same"]),
                 "different_pairs": len(built["different"]),
                 "ambiguous_pairs": len(built["ambiguous"]),
+                "related_pairs": len(built["related"]),
                 "pair_build": settings["pair_build"],
                 **built,
             },
@@ -230,6 +238,7 @@ def stage_pairs(args: argparse.Namespace) -> None:
     print(f"likely-same pairs   {len(built['same'])}")
     print(f"likely-different    {len(built['different'])}")
     print(f"uncertain middle    {len(built['ambiguous'])}")
+    print(f"same outlet again   {len(built['related'])}")
     print(f"wrote               {args.out}")
 
 
@@ -272,6 +281,7 @@ def stage_score(args: argparse.Namespace) -> None:
             same=len(pairs["same"]),
             different=len(pairs["different"]),
             ambiguous=len(pairs.get("ambiguous", [])),
+            related=len(pairs.get("related", [])),
         ),
     )
 
@@ -390,11 +400,20 @@ def stage_score(args: argparse.Namespace) -> None:
     # is never scored right or wrong - it reports a lean. An encoder that puts
     # the middle band up against the matching pairs will join too much; one
     # that puts it down among the mismatches will leave one story in pieces.
+    halfway = (float(same_scores.mean()) + float(different_scores.mean())) / 2
     if pairs.get("ambiguous"):
         middle = score(pairs["ambiguous"])
-        halfway = (float(same_scores.mean()) + float(different_scores.mean())) / 2
         reading.ambiguous_mean = round(float(middle.mean()), 3)
         reading.ambiguous_lean = round(float((middle > halfway).mean()), 3)
+
+    # One outlet's second piece on one subject in one day. A different question
+    # from the one separation answers, and kept out of it for that reason: an
+    # encoder scoring these as high as genuine matches cannot tell a follow-up
+    # from a new story.
+    if pairs.get("related"):
+        second = score(pairs["related"])
+        reading.related_mean = round(float(second.mean()), 3)
+        reading.related_lean = round(float((second > halfway).mean()), 3)
 
     reading.peak_memory_gb = peak_memory_gb()
     reading.state = ReadingState.MEASURED
@@ -456,11 +475,15 @@ def stage_collect(args: argparse.Namespace) -> None:
         "encoder will join too much; low means it will leave one story in "
         "pieces.",
         "",
+        "**Second-piece lean** is the same reading for one outlet's second "
+        "article on one subject in one day - a correction or a follow-up. Near "
+        "one means this encoder cannot tell an update from a new story.",
+        "",
         "| Encoder | Numbers | Size | Separation | Spread | Same | Different | "
-        "Middle | Middle lean | Articles a second | 15,122 take | A day takes | "
-        "Peak memory |",
+        "Middle | Middle lean | Second piece | Second-piece lean | "
+        "Articles a second | 15,122 take | A day takes | Peak memory |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-        "---: | ---: | ---: |",
+        "---: | ---: | ---: | ---: | ---: |",
     ]
     for reading in ordered:
         if reading.get("state") != "measured":
@@ -469,17 +492,23 @@ def stage_collect(args: argparse.Namespace) -> None:
             progress = f"{got}/{asked}" if asked else ""
             lines.append(
                 f"| `{reading['slug']}` | | | {reading.get('state', '?')} "
-                f"{progress} | | | | | | | | | |"
+                f"{progress} | | | | | | | | | | | |"
             )
             continue
         memory = f"{reading['peak_memory_gb']} GB" if reading.get("peak_memory_gb") else ""
+
+        def shown(value: object) -> str:
+            return f"{value:.3f}" if isinstance(value, (int, float)) else ""
+
         lines.append(
             f"| `{reading['slug']}` | {reading['numbers_an_article']} | "
             f"{reading['parameters_millions']}M | **{reading['separation']:.4f}** | "
             f"{reading['spread']:.3f} | {reading['same_mean']:.3f} | "
             f"{reading['different_mean']:.3f} | "
-            f"{reading.get('ambiguous_mean', float('nan')):.3f} | "
-            f"{reading.get('ambiguous_lean', float('nan')):.3f} | "
+            f"{shown(reading.get('ambiguous_mean'))} | "
+            f"{shown(reading.get('ambiguous_lean'))} | "
+            f"{shown(reading.get('related_mean'))} | "
+            f"{shown(reading.get('related_lean'))} | "
             f"{reading['articles_a_second']:.1f} | "
             f"{reading['minutes_for_whole_archive']:.1f} min | "
             f"{reading['minutes_for_one_day']:.2f} min | {memory} |"
