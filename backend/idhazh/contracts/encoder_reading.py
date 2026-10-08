@@ -151,6 +151,13 @@ class EncoderReading(Contract):
     #: Articles encoded a second, on the runner's four threads.
     articles_a_second: Annotated[float, Field(ge=0)] | None = None
 
+    #: Threads the encoder reported using, read back after they were set.
+    #: Asking for four and getting one is a four-fold cost nothing else shows.
+    threads_used: Annotated[int, Field(ge=1)] | None = None
+
+    #: Processors the machine reports. Four on the runner.
+    processors_available: Annotated[int, Field(ge=1)] | None = None
+
     #: Minutes to encode every published article once, at that rate.
     minutes_for_whole_archive: Annotated[float, Field(ge=0)] | None = None
 
