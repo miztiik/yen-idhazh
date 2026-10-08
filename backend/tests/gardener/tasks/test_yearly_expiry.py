@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from idhazh import config, ledger
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Format, Period
+from idhazh.contracts.gardener_events import CompactionStep, ExpiredYearsChosen, PeriodRefused
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
     CompactionPolicy,
     DaysWindow,
@@ -18,11 +23,13 @@ from idhazh.contracts.knobs.gardener import (
     MonthsWindow,
 )
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
+from idhazh.gardener import event_log
 from idhazh.gardener.one_at_a_time import Pass
 from idhazh.gardener.tasks import compaction
 from idhazh.gardener.tasks._yearly_expiry import expires_at
 from idhazh.telemetry.door_prune import take_days
 
+from .._events import events, the_event
 from ._marks import marks_on_disk
 from ._task import context_for
 from .test_compaction_years import (
@@ -56,8 +63,17 @@ def indexed_years(root: Path, years: tuple[str, ...]) -> dict[str, Path]:
     return paths
 
 
-def run(root: Path, today: date = date(2030, 1, 1), **changed: object) -> Pass:
-    context = context_for(TASK, root, today=today, wake=True)
+def run(
+    root: Path,
+    today: date = date(2030, 1, 1),
+    *,
+    period_range: tuple[str, str] | None = None,
+    **changed: object,
+) -> Pass:
+    """One pass at a scheduled wake on `today`, or over the range a person names."""
+    context = context_for(
+        TASK, root, today=today, period_range=period_range, wake=period_range is None
+    )
     policy = CompactionPolicy.model_validate(
         {
             **context.policy.model_dump(mode="json"),
@@ -72,6 +88,15 @@ def run(root: Path, today: date = date(2030, 1, 1), **changed: object) -> Pass:
     return compaction.run(replace(context, policy=policy))
 
 
+def said_as_text(records: Iterable[logging.LogRecord]) -> list[str]:
+    """What the expiry logged with no event on it, each a line the handler wraps as text."""
+    return [
+        record.getMessage()
+        for record in records
+        if record.name == expires_at.__module__ and event_log.payload(record) is None
+    ]
+
+
 def test_exact_calendar_expiry_uses_year_end_and_utc() -> None:
     due = expires_at("2026", 36)
     assert due == datetime(2030, 1, 1, tzinfo=UTC)
@@ -80,21 +105,42 @@ def test_exact_calendar_expiry_uses_year_end_and_utc() -> None:
     assert datetime(2030, 1, 1, 2, tzinfo=timezone(timedelta(hours=2))) == due
 
 
+def test_the_years_a_pass_takes_are_one_event_and_never_text(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """2026 expires at 00:00 UTC on 2030-01-01, and the pass says so as `expired-years-chosen`."""
+    indexed_years(tmp_path, ("2026",))
+
+    with caplog.at_level(logging.INFO):
+        run(tmp_path)
+
+    assert said_as_text(caplog.records) == []
+    chosen = the_event(caplog.records, ExpiredYearsChosen)
+    assert (chosen.ledger, chosen.years) == (VISUALS, ["2026"])
+
+
 @pytest.mark.parametrize(
-    ("today", "changed", "deleted"),
+    ("today", "changed", "deleted", "chosen"),
     [
-        (date(2029, 12, 31), {}, False),
-        (date(2030, 1, 1), {}, True),
-        (date(2030, 1, 1), {"yearly_prune_enable": False}, False),
-        (date(2030, 1, 1), {"dry_run": True}, False),
-        (date(2030, 1, 1), {"yearly_keep_months": 37}, False),
+        (date(2029, 12, 31), {}, False, []),
+        (date(2030, 1, 1), {}, True, ["2026"]),
+        (date(2030, 1, 1), {"yearly_prune_enable": False}, False, None),
+        (date(2030, 1, 1), {"dry_run": True}, False, ["2026"]),
+        (date(2030, 1, 1), {"yearly_keep_months": 37}, False, []),
     ],
 )
 def test_boundary_toggle_and_dry_run(
-    tmp_path: Path, today: date, changed: dict[str, object], deleted: bool
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    today: date,
+    changed: dict[str, Any],
+    deleted: bool,
+    chosen: list[str] | None,
 ) -> None:
+    """With the expiry on, a pass says which years it takes, none included; with it off, nothing."""
     paths = indexed_years(tmp_path, ("2026", "2027"))
-    result = run(tmp_path, today, **changed)
+    with caplog.at_level(logging.INFO):
+        result = run(tmp_path, today, **changed)
     assert paths["2026"].exists() is not deleted
     assert paths["2027"].exists()
     held = CompactIndex.read(ledger.compact_index_path(state(tmp_path), VISUALS, Period.YEARLY))
@@ -102,6 +148,41 @@ def test_boundary_toggle_and_dry_run(
     if changed.get("dry_run"):
         assert paths["2026"].relative_to(tmp_path).as_posix() in result.taken
     assert not set(result.taken) & set(result.written)
+    said = [event.years for event in events(caplog.records, ExpiredYearsChosen)]
+    assert said == ([] if chosen is None else [chosen])
+
+
+def test_a_range_that_skips_an_older_indexed_year_is_refused_there_and_deletes_nothing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Expiry is a prefix, so a range that holds 2027 and not 2026 is refused at 2026 by name."""
+    paths = indexed_years(tmp_path, ("2026", "2027"))
+
+    with caplog.at_level(logging.INFO):
+        result = run(tmp_path, date(2031, 1, 1), period_range=("2027-01", "2027-12"))
+
+    assert (result.stopped_because, result.resume_from, result.fault) == (
+        StopReason.FAILED,
+        "2026",
+        GardenerFault.RAISED,
+    )
+    refused = the_event(caplog.records, PeriodRefused)
+    assert (refused.ledger, refused.step, refused.period, refused.fault) == (
+        VISUALS,
+        CompactionStep.EXPIRE_YEARS,
+        "2026",
+        GardenerFault.RAISED,
+    )
+    assert (refused.ledger_fault, refused.error, refused.where) == (None, None, None)
+    assert [
+        record.levelno
+        for record in caplog.records
+        if isinstance(event_log.payload(record), PeriodRefused)
+    ] == [logging.ERROR], "a refusal that fails the pass is an error"
+    assert events(caplog.records, ExpiredYearsChosen) == []
+    assert said_as_text(caplog.records) == []
+    assert all(path.exists() for path in paths.values())
+    assert not result.taken
 
 
 def test_cap_empty_entries_and_restart_after_every_entry_is_deleted(tmp_path: Path) -> None:

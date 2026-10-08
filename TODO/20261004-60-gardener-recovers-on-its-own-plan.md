@@ -74,7 +74,7 @@ Table A - what is out
 | 32 | The explorer's date chart breaks its line at a lost day | 31 | E | DONE | symmetrical-parakeet | #1318 | Plan 60 row 32 |
 | 33 | A log line never quotes a ledger row's values | 21 | E | DONE | fictional-telegram | #1393 | Plan 60 row 33 |
 | 34 | A gardener crash prints where it broke, never the error's text | 22 | E | DONE | upgraded-meme | #1404 | Plan 60 row 34 |
-| 35 | The yearly expiry logs an event of its own | 21 | G | PENDING | - | - | - |
+| 35 | The yearly expiry logs an event of its own | 21 | G | DONE | super-fiesta | - | Plan 60 row 35 |
 | 36 | The plan job's config refusals keep their sentence | 34 | G | DONE | turbo-guide | - | Plan 60 row 36 |
 | 37 | Operator gardener commands print where they broke, never the error's text | 34 | H | PENDING | - | - | - |
 
@@ -1487,20 +1487,26 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `backend/tests/gardener/tasks/test_yearly_expiry.py` (reads the event off the record with `backend/tests/gardener/_events.py`)
   - `docs/architecture/publishing/idhazh-gardener.md` (the table of events under "What a shard logs")
   - `docs/architecture/publishing/ledger-compaction.md` ("Yearly expiry", which names no event)
-  - Read, no change: `backend/idhazh/gardener/tasks/compaction.py`, which runs the expiry before it emits `periods-chosen`; `backend/idhazh/gardener/event_log.py`, whose `emit` writes an event and whose handler wraps a line of text as `logged-text`
+  - Read, no change: `backend/idhazh/gardener/tasks/compaction.py`, which runs the expiry before it emits `periods-chosen`; `backend/idhazh/gardener/event_log.py`, whose `emit` writes an event and whose handler wraps a line of text as `logged-text`; `backend/idhazh/gardener/tasks/_compact_tree.py`, whose `refuse` the range refusal now calls (found during execution)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/tasks/test_yearly_expiry.py`; ruff; mypy; `doc_load.py` on the two pages. CI: the full suite.
 - **Oracle:** in `test_yearly_expiry.py`, on a tree the test builds under `tmp_path`: a pass at 2030-01-01 UTC over an indexed 2026 logs the new event once, with 2026 as the year it chose, and no `logged-text` line from `idhazh.gardener.tasks._yearly_expiry`. On `origin/main` the same pass logs one `logged-text` line whose message starts `yearly expiry ledger=`, which is what lets this check fail. It cannot settle how a person reads the event in GitHub's log viewer; row 22's summary is the view for a person.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Fowler rules the event's fields; whether a pass with no year due logs it; and whether the range refusal's `error` line becomes `period-refused` (Table E, E11), whose `CompactionStep` names no expiry step today | To be ruled at dispatch (Fowler) |
-| 2 | Before dispatch, ask the session that wrote #1382, the ledger-retention-policy session, whether it is still changing `_yearly_expiry.py` | Plan owner, 2026-10-07 |
+| 1 | The event is `ExpiredYearsChosen`, whose line is `expired-years-chosen`, with two fields: `ledger`, and `years`, the expired indexed UTC years the pass takes, oldest first, at most `max_periods_per_run` and only whole years inside an operator range. A live pass deletes each year's files and its entry; a dry run only names them, so the name says what was chosen, never that anything is gone (row 2). It is emitted where the `info` line was, after the range check and the cap and before any delete, at `info`, and the module's logger goes. No other field: `task-planned` carries the knobs, `dry_run` and the range, and `task-finished` the stop. Not a field on `PeriodsChosen`: the expiry chooses and acts before `choose` runs, and `StepChoice` cannot hold B0's `failed` stop | Fowler, 2026-10-07 (row 35 worker's consult) |
+| 2 | Before dispatch, ask the session that wrote #1382, the ledger-retention-policy session, whether it is still changing `_yearly_expiry.py` | Plan owner, 2026-10-07: the #1382 session is archived; no open PR touches the module |
 | 3 | The plan owner adds the event to Table E (section 2.5) when the row lands, as for rows 21 and 22 | Plan owner, 2026-10-07 |
 | 4 | Level 1: one line of text becomes one event, and it carries no fetched text, so it is not ESCALATE trigger 3 | Plan owner, 2026-10-07 |
+| 5 | A pass with no year due logs the event with `years: []`, as `window-chosen` and `periods-chosen` are logged on every pass, so the line still fires when the text line did. A declaration without both knobs logs neither line, and a pass the range refuses logs `period-refused` instead | Fowler, 2026-10-07 (row 35 worker's consult) |
+| 6 | The range refusal is `period-refused`, through `CompactTree.refuse`, with the new step word `expire-years`, declared first in `CompactionStep` because it is step 0 (Table B, B0), and the fault `raised`, so the pass still ends `failed` as B0 says. The record's `fault` goes from null to `raised`, the only word section 2.4, D3 pairs with `failed`, and `next` becomes `report.WHY[raised]`; the outcome, `resume_from`, the `error` level and the job's colour do not change. `CompactionStep` is read only by events, so its new word is not ESCALATE trigger 1 | Fowler, 2026-10-07 (row 35 worker's consult) |
+| 7 | Expired years in `PeriodsTaken` (Table E, E4) and in the job summary stay out of this row: the summary's words are Reader's, so that is a Level 2 row of its own (Found during execution) | Fowler, 2026-10-07 (row 35 worker's consult) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | As today | Each compaction pass that sets the expiry writes a line that no test reads by its fields, against row 21's rule that every gardener line is one event | Nothing to build; one line of text on each such pass | Plan owner, 2026-10-07 (row 23 report) |
+| 2 | Name the event `years-expired` | A dry run takes the same years and deletes none, and a line that says they expired would say something is gone (row 2) | Nothing | Fowler, 2026-10-07 (row 35 worker's consult) |
+| 3 | The expiry's choice as a field of `PeriodsChosen` | The expiry chooses and acts before `choose` runs, and `StepChoice` cannot hold the `failed` stop B0 requires | Moving the expiry's choice into `_compaction_periods` and a new kind of `StepChoice` | Fowler, 2026-10-07 (row 35 worker's consult) |
+| 4 | End the range refusal `deferred`, with the fault `range-starts-late`, as every other step's range refusal ends | It changes B0, which the owner approved with #1382, so it is the owner's to decide (Found during execution) | One argument in `_yearly_expiry.py`, and its test | Fowler, 2026-10-07 (row 35 worker's consult) |
 
 ### Row #36 - The plan job's config refusals keep their sentence
 

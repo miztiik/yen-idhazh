@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -493,7 +493,9 @@ The expiry step reads the yearly index, not the history tree. It selects due
 entries oldest first, at most `max_periods_per_run`, and lists each year's exact
 file path in every supported format. It deletes by those names without reading
 rows. An empty entry expires too. The yearly index stays on disk even when no
-entries remain.
+entries remain. Before it deletes anything, it says what it chose once, as one
+`expired-years-chosen` event: the ledger and the expired years it takes, oldest
+first, or none when no year is due.
 
 Expiry counts calendar months from 00:00 UTC on the January after the year.
 With `yearly_keep_months: 36`, 2026 expires on 2030-01-01 at 00:00 UTC, not
@@ -546,7 +548,10 @@ retention declarations stay unchanged. A separate test proves that the current
 policy refuses that reader.
 
 An operator range may expire only whole years and cannot skip an older indexed
-year. Otherwise its progress mark could hide retained entries.
+year. Otherwise its progress mark could hide retained entries. A range that
+would skip one is refused at the oldest indexed year, in one `period-refused`
+event with the step `expire-years` and the fault `raised`: the step takes
+nothing, and the pass ends `failed` at that year.
 
 Finite retention must cover every reader's window. For a day-count window the loader uses a
 conservative lower bound of 28 days per retained calendar month: 36 months
