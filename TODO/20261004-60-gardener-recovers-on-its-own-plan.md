@@ -1,6 +1,6 @@
 # Plan 60 - The gardener chooses its own work and recovers on its own
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 **Level**: 5 (CLAUDE.md section 6). Rows 8, 10, 19 and 20 change persisted contracts (section 2.4). The owner approved each shape on 2026-10-04.
 
@@ -67,16 +67,17 @@ Table A - what is out
 | 25 | The retired raw listings code goes | 15 | F | COLLAPSED #1267 | - | - | - |
 | 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | #1285 | Plan 60 row 26: doc_load web links |
 | 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | DONE | urban-spoon | #1291 | Plan 60 row 27: no stale landing |
-| 28 | The console can read the gardener ledger | 23 | F | DONE | solid-goggles | - | Plan 60 row 28 |
+| 28 | The console can read the gardener ledger | 23 | F | DONE | solid-goggles | #1419 | Plan 60 row 28 |
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | #1289 | Plan 60 row 29: doc_load every page |
 | 30 | Every reader and rewriter of a compact index keeps an entry's state | 8 | D | DONE | psychic-guide | #1293 | Plan 60 row 30: index readers keep state |
 | 31 | Panels say which days have no record | 8 | E | DONE | congenial-waddle | #1301 | Plan 60 row 31: panels show lost days |
 | 32 | The explorer's date chart breaks its line at a lost day | 31 | E | DONE | symmetrical-parakeet | #1318 | Plan 60 row 32 |
 | 33 | A log line never quotes a ledger row's values | 21 | E | DONE | fictional-telegram | #1393 | Plan 60 row 33 |
 | 34 | A gardener crash prints where it broke, never the error's text | 22 | E | DONE | upgraded-meme | #1404 | Plan 60 row 34 |
-| 35 | The yearly expiry logs an event of its own | 21 | G | DONE | super-fiesta | - | Plan 60 row 35 |
-| 36 | The plan job's config refusals keep their sentence | 34 | G | DONE | turbo-guide | - | Plan 60 row 36 |
+| 35 | The yearly expiry logs an event of its own | 21 | G | DONE | super-fiesta | #1417 | Plan 60 row 35 |
+| 36 | The plan job's config refusals keep their sentence | 34 | G | DONE | turbo-guide | #1411 | Plan 60 row 36 |
 | 37 | Operator gardener commands print where they broke, never the error's text | 34 | H | PENDING | - | - | - |
+| 38 | An expired year reaches the job summary | 35 | H | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -161,7 +162,7 @@ Table D - contract changes
 
 ### 2.5 Events and outcome words
 
-Each event is a `Model` in `backend/idhazh/contracts/gardener_events.py` (not persisted; section 11 does not apply), and `backend/idhazh/gardener/event_log.py` writes it as one line. The owner approved E1 to E6 on 2026-10-04. Fowler added E7 to E15 on 2026-10-07, one small model for each fact (row 21, decision 4). What each line tells a person is in [idhazh-gardener.md](../docs/architecture/publishing/idhazh-gardener.md#what-a-shard-logs).
+Each event is a `Model` in `backend/idhazh/contracts/gardener_events.py` (not persisted; section 11 does not apply), and `backend/idhazh/gardener/event_log.py` writes it as one line. The owner approved E1 to E6 on 2026-10-04. Fowler added E7 to E15 on 2026-10-07, one small model for each fact (row 21, decision 4), and E16 on the same day (row 35, decision 1). What each line tells a person is in [idhazh-gardener.md](../docs/architecture/publishing/idhazh-gardener.md#what-a-shard-logs).
 
 Table E - events. Beside each model is the name its line carries, the model's name in kebab case. E4 is never a line of its own, and E6 is row 22's. After where an event is emitted comes its line's `level`.
 
@@ -177,11 +178,12 @@ Table E - events. Beside each model is the name its line carries, the model's na
 | E8 | PageOutOfOrder, `page-out-of-order` | `_ArtifactWalk` in `github_collections.py`, when a page holds a member from a day before one on a page read earlier; `warning` | collection, page. Every page is read |
 | E9 | PageCountChanged, `page-count-changed` | `_ArtifactWalk`, when a page counts other than the first page less the walk's deletes; `warning` | collection, page, counted, expected. The mark stays |
 | E10 | ListEndMissing, `list-end-missing` | `_ArtifactWalk`, when the list does not end where the first page's count says; `warning` | collection, page, first_count. The mark stays |
-| E11 | PeriodRefused, `period-refused` | A compaction step, through `CompactTree.refuse`, when it will not take a period; `error` when `fault` is `raised`, `warning` otherwise | ledger, step, period, fault (the record's `GardenerFault` word), ledger_fault (the ledger's own `LedgerFault` word, when a file is missing), error, where. Two keys, so the record's word and the ledger's word never share one |
+| E11 | PeriodRefused, `period-refused` | A compaction step, through `CompactTree.refuse`, when it will not take a period; `error` when `fault` is `raised`, `warning` otherwise. The yearly expiry emits it at `warning`, with `range-starts-late`, at the oldest indexed year when a person's range would skip it (plan owner, 2026-10-08, from the owner's ruling of 2026-10-04) | ledger, step (row 35 added `expire-years`, the yearly expiry's word), period, fault (the record's `GardenerFault` word), ledger_fault (the ledger's own `LedgerFault` word, when a file is missing), error, where. Two keys, so the record's word and the ledger's word never share one |
 | E12 | DownloadOverBudget, `download-over-budget` | A compaction step, through `stop_over_budget`, where what it would download no longer fits the shard's budget; `error` when the period is larger than the whole budget (`failed`), `info` when a later wake has room (`ceiling`) | ledger, resume_from, needed_bytes, room_bytes, max_downloaded_mb, stopped_because |
 | E13 | LedgerFaultMet, `ledger-fault-met` | The drop step, when a dropped month's file is already gone; `warning` | ledger, step, period, ledger_fault |
 | E14 | RawFileSkipped, `raw-file-skipped` | `named_trees.raw_days`, for a file under a ledger's raw folder that sits in no UTC day folder, so no step reads it; `warning` | path |
 | E15 | LoggedText, `logged-text` | `OneJsonLine` in `event_log.py`, for a record another module logs as text while a task runs; the record's own level | logger, message (as that module said it), error, where |
+| E16 | ExpiredYearsChosen, `expired-years-chosen` | The yearly expiry (`_yearly_expiry.drop`, Table B, B0), after the range check and the cap and before any delete, on every pass whose declaration sets `yearly_prune_enable` and `yearly_keep_months`, unless it refuses a person's range (E11); `info` | ledger, years (the expired indexed UTC years the pass takes, oldest first: at most the cap, only whole years inside an operator range; empty when none is due). Fowler, 2026-10-07 (row 35) |
 
 Each event is one line of JSON: `event` (the name beside its model above), then `at` (the instant the record was made, in UTC, ISO-8601 to the millisecond with `Z`), then `level` (`info`, `warning` or `error`), then the model's fields in the order it declares them, with `None` left out and a nested model kept nested. No event declares a field named `event`, `at` or `level`. The record's message is the same JSON, so a command that writes its records as text still prints the event, and `install` is `logging.basicConfig`, so a second call adds no second handler. No field holds an exception's text, because the text can carry a ledger row fetched from the open web (Guardrail #11): `error` is the exception's type and `where` the deepest `module:line` of this package it passed through, both checked by pattern. A `logged-text` line keeps another module's message as that module said it; row 21's Found during execution names the two places in `idhazh.ledger` whose message carries an exception's text (ESCALATE trigger 3). A task's ending is said once, in `task-finished`: the runner's printed per-task report was a second rendering of it (decision T3) and is gone, and the shard's own printed lines stay for row 22. The line is ASCII only and goes to stderr through the standard `logging` module (CLAUDE.md section 1b). GitHub's runner reads workflow commands from stderr as well as stdout (`actions/runner`, `src/Runner.Worker/Handlers/ScriptHandler.cs`, read 2026-10-04), so nothing moves to stdout, and JSON escapes every line break, so no text inside an event can start a line GitHub reads as a workflow command. Tests read the payload on the log record, never the text. Fowler, 2026-10-07 (row 21).
 
@@ -1580,3 +1582,33 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | As today | A crash in any of the three prints Python's own trace, and a message in it can quote a ledger row or what GitHub's API returned (Guardrail #11), to whoever ran the command, a person or an agent | Nothing to build | Plan owner, 2026-10-07 (row 34 report) |
+
+### Row #38 - An expired year reaches the job summary
+
+- **Scope:** `PeriodsTaken` gains `years_expired`, the UTC years the yearly expiry took on the pass, or would take on a dry run, and the job summary counts them, so a pass whose only work is an expired year no longer says it did nothing. Level 2.
+- **The gap** (row 35's Found during execution; Fowler's proposal, 2026-10-07): `PeriodsTaken` in `backend/idhazh/contracts/gardener_events.py` (Table E, E4) lists no expired year, and the job summary, `backend/idhazh/gardener/run_summary.py`, counts what a compaction did from `PeriodsTaken` alone. So a live pass whose only work is to expire a year ends `done`, and its summary row says "nothing", although the pass deleted that year's files. All 14 committed declarations that switch the expiry on keep years 36 months, so the first year expires on 2030-01-01 UTC, and this row must land before then. `PeriodsTaken` belongs to the `task-finished` log event (E5) and is not persisted: the gardener's record, `CollectionPruneRow` in `backend/idhazh/contracts/collection_prune.py`, has no field that holds it, and `row` in `backend/idhazh/gardener/report.py`, which builds the record, does not read `periods` (checked on `origin/main` at f2ccfa46d). So the new field is not a persisted-shape change, and neither CLAUDE.md section 11 nor ESCALATE trigger 1 applies.
+- **Files touched** (from a search on `origin/main` at f2ccfa46d for `PeriodsTaken`, `years_packed`, `periods_taken`, `_periods_work`, `dropped_months` and `_yearly_expiry`; search again at dispatch):
+  - `backend/idhazh/contracts/gardener_events.py` (`PeriodsTaken`, which gains `years_expired`)
+  - `backend/idhazh/gardener/tasks/_yearly_expiry.py` (`drop` deletes each expired year's files and its entry, and keeps no list of the years it took)
+  - `backend/idhazh/gardener/tasks/_compact_tree.py` (`periods_taken` builds `PeriodsTaken` from the indexes the pass read and from the lists the steps keep, such as `dropped_months`; an expired year leaves no entry to compare, so it needs a list of its own)
+  - `backend/idhazh/gardener/run_summary.py` (`_periods_work`, the counts in the "What it did" cell, names no expired year, so `_did` says "nothing")
+  - `backend/tests/gardener/tasks/test_yearly_expiry.py` (the Oracle)
+  - `backend/tests/gardener/test_run_summary.py` (`periods` names every field of `PeriodsTaken`; a case for the summary's words)
+  - `backend/tests/gardener/test_event_log.py` (builds a `PeriodsTaken` with every field)
+  - `docs/architecture/publishing/idhazh-gardener.md` (under "What a person reads on the job page", what a task did names days, months and years, and no expired year)
+  - Read, no change: `backend/idhazh/gardener/runner.py`, whose `_run_compaction_roots` merges each list field of `PeriodsTaken` by name, so a new list joins with no edit; `backend/idhazh/gardener/report.py`, whose `finished` hands `periods` to `TaskFinished`; `backend/idhazh/gardener/tasks/compaction.py`, which hands the pass `tree.periods_taken(read)`; `backend/tests/gardener/tasks/test_compaction_years.py`, which reads `years_packed`
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/tasks/test_yearly_expiry.py backend/tests/gardener/test_run_summary.py backend/tests/gardener/test_event_log.py`; ruff; mypy; `doc_load.py` on the page. The sufficiency checks in `docs/concepts/design-system.md` apply to the summary, as for row 22. CI: the full suite.
+- **Oracle:** in `test_yearly_expiry.py`, on a tree the test builds under `tmp_path`: a live pass at 2030-01-01 UTC over an indexed 2026 ends `done`, its `task-finished` event lists 2026 in `periods.years_expired`, and the row `run_summary` renders from that event says, in Reader's words, that the pass expired one year, not "nothing"; a dry run over the same tree lists the year the same way, and its row says only that the pass would. On `origin/main` the same pass's `periods` names no expired year and its row says "nothing", which is what lets this check fail. It cannot settle how GitHub draws the summary; the first wake on or after 2030-01-01 UTC shows it.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | `PeriodsTaken` gains `years_expired`, and the job summary counts it. Expired years stayed out of row 35 because the summary's words are Reader's, so this is a row of its own | Fowler, 2026-10-07 (row 35, decision 7, and its Found during execution) |
+| 2 | Not a persisted-shape change: `PeriodsTaken` belongs to the `task-finished` log event, and the persisted record, `CollectionPruneRow`, holds no `periods` (read in `collection_prune.py` and in `report.row` on `origin/main` at f2ccfa46d) | Plan owner, 2026-10-08 |
+| 3 | Reader chooses the summary's words for an expired year, on a live pass and on a dry run | To be ruled at dispatch (Reader) |
+| 4 | It lands before 2030-01-01 UTC, the first day any year expires: each of the 14 committed declarations that switch the expiry on keeps years 36 months (counted again on `origin/main` at f2ccfa46d) | Fowler, 2026-10-07 (row 35's Found during execution); plan owner, 2026-10-08 |
+| 5 | Level 2: the job summary and the `task-finished` event already read `PeriodsTaken`, so the dependants to check by name are `run_summary.py`, `report.finished` and `runner._run_compaction_roots` | Plan owner, 2026-10-08 |
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | From 2030-01-01 UTC, a live pass whose only work is to expire a year ends `done`, and its summary says it did nothing, although it deleted that year's files | Nothing to build, and a summary that hides a delete | Fowler, 2026-10-07 (row 35's Found during execution) |
+| 2 | Count the expired years in row 35 | The summary's words are Reader's, and row 35 turned one log line into one event | Row 35 waiting for Reader's words | Fowler, 2026-10-07 (row 35, decision 7) |
