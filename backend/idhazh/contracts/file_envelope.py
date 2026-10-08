@@ -222,6 +222,11 @@ class FileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-06",
+            change="Writer identity `job` may name `operator`.",
+            why="A person-run command now writes a door ledger.",
+        ),
+        ChangelogEntry(
             version="2026-10-01T16:50",
             change="Remove the retired aggregate from the ledger vocabulary.",
             why="Only declared families may reach a ledger file; surviving fields are unchanged.",
@@ -238,11 +243,6 @@ class FileEnvelope(Contract):
         ),
         ChangelogEntry(
             version="2026-09-28",
-            change="built_from is filled for the first time, on each file the compaction writes.",
-            why="A compact file says how many files it read, so its rebuild can be checked.",
-        ),
-        ChangelogEntry(
-            version="2026-09-25",
             change="Earlier changes are in this file's git history.",
             why="The changelog keeps the four newest changes and one history pointer.",
         ),

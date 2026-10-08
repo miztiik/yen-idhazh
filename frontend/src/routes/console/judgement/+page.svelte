@@ -69,6 +69,10 @@
 	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
 </script>
 
+<svelte:head>
+	<title>Judgement &mdash; Console &mdash; {data.ui.site_title}</title>
+</svelte:head>
+
 <div data-console-panels="judgement">
 	<!-- The title, the strip, the band and the days control are the shell and
 	     live in `../+layout.svelte`. The window stays here because it governs

@@ -1,11 +1,11 @@
 """Does every hand-written list in the console still name what its contract declares?
 
-Nine console modules carry a value that has to match what a Pydantic contract
+Ten console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
 reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
-busy share stopped holding the stolen half, the article and feed records'
-column lists, the columns the run timeline reads off every row, and the routes
-the strip draws. A copy that has fallen behind its
+busy share stopped holding the stolen half, the article, feed and holdout score
+records' column lists, the columns the run timeline reads off every row, and the
+routes the strip draws. A copy that has fallen behind its
 contract draws a panel with a column missing from it, names a column no run
 writes, or prints a correction for the wrong day, and none of those shows up as
 an error anywhere.
@@ -35,6 +35,7 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.telemetry.publish.console_band import ROUTES
 
@@ -138,6 +139,26 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
     assert [name for name in declared if name in asked] == asked, (
         "FEED_HEALTH_COLUMNS in ledger-rows.ts is not part of FeedHealthRow's columns in "
         f"order. Not declared: {[name for name in asked if name not in declared]}. "
+        "If that is empty, only the order differs: write them in the contract's order."
+    )
+
+
+def test_the_holdout_score_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
+    """The Judgement page reads part of the holdout score, so its list is a part, in order.
+
+    `similarity-holdout.ts` spells the `MergeLineHoldoutScore` columns the panel
+    reads, because the door never offers every column. A column the contract
+    renames or drops would reach the panel as an empty reading rather than as an
+    error.
+    """
+    asked = quoted_strings(read_text(SERVER / "similarity-holdout.ts"), "HOLDOUT_SCORE_COLUMNS")
+    declared = list(MergeLineHoldoutScore.csv_columns())
+
+    assert asked, "HOLDOUT_SCORE_COLUMNS in similarity-holdout.ts names no column"
+    assert [name for name in declared if name in asked] == asked, (
+        "HOLDOUT_SCORE_COLUMNS in similarity-holdout.ts is not part of "
+        "MergeLineHoldoutScore's columns in order. Not declared: "
+        f"{[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
     )
 

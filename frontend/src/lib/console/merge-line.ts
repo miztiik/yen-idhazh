@@ -226,11 +226,16 @@ export interface JudgeDay {
 	date: string;
 	/** What share of the judged pairs the two readings disagreed about. */
 	disagreementRate: number;
-	/** What share of the agreed readings were UNCLEAR. */
+	/** What share of the agreed readings were UNCLEAR: a share of `pairsUsable`,
+	 * never of `pairsJudged`. */
 	unclearRate: number;
-	/** How many pairs a judging shard actually read. The denominator both rates
-	 * are a share of, so a panel can print it in the same sentence. */
+	/** How many pairs a judging shard actually read. The denominator of
+	 * `disagreementRate`, so a panel can print it in the same sentence. */
 	pairsJudged: number;
+	/** How many of those got two readings that agreed: the denominator of
+	 * `unclearRate`. The fitted row's own count, never worked out from the
+	 * disagreed share, so every figure on a panel names one agreed count. */
+	pairsUsable: number;
 	negativesOnRecord: number;
 	aboveLineOnRecord: number;
 	daysOnRecord: number;
@@ -416,4 +421,20 @@ export function rateWithDenominator(
 ): string | null {
 	if (denominator < floor) return null;
 	return `${Math.round((numerator / denominator) * 100)}% of ${denominator} pairs`;
+}
+
+/** "Could not tell" in words, against the pairs whose two readings agreed: the
+ * only pairs its share is taken over, so the count beside it is theirs.
+ *
+ * The floor counts those pairs too. Under it the counts print and no share, and
+ * where no pair agreed nothing was counted, so a 0 would claim a reading nobody
+ * took. A real share that rounds away prints `<1`, as the merge share does. The
+ * words are Reader's.
+ */
+export function describeUnclear(unclear: number, agreed: number, floor: number): string {
+	if (agreed === 0) return 'not counted, no pair agreed';
+	if (agreed < floor) return `${Math.round(unclear)} of the ${agreed} that agreed`;
+	const share = (unclear / agreed) * 100;
+	const printed = share > 0 && share < 0.5 ? '<1' : String(Math.round(share));
+	return `${printed}% of the ${agreed} that agreed`;
 }

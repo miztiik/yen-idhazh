@@ -1,6 +1,6 @@
 """What one pass of a ledger's compaction does, in which order, and what its record says.
 
-One task a ledger, declared as `config/gardener/compact-<ledger>.json` and
+One task a ledger, declared as `config/gardener/compact-<folder>.json` and
 served by this module through its kind, so a ledger joins the compaction with
 one declaration and no Python. A pass runs five steps in one process, and the
 shard lands all of them in one commit:

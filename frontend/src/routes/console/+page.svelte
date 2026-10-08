@@ -636,7 +636,7 @@
 </script>
 
 <svelte:head>
-	<title>Console: Pipelines &mdash; {data.ui.site_title}</title>
+	<title>Pipelines &mdash; Console &mdash; {data.ui.site_title}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
