@@ -78,7 +78,7 @@ Table A - what is out
 | 36 | The plan job's config refusals keep their sentence | 34 | G | DONE | turbo-guide | #1411 | Plan 60 row 36 |
 | 37 | Operator gardener commands print where they broke, never the error's text | 34 | H | DONE | cuddly-carnival | #1426 | Plan 60 row 37 |
 | 38 | An expired year reaches the job summary | 35 | H | DONE | silver-train | #1434 | Plan 60 row 38 |
-| 39 | The job summary says plainly when nothing is left and what a dry run holds back | 38 | I | DONE | fuzzy-barnacle | - | Plan 60 row 39 |
+| 39 | The job summary says plainly when nothing is left and what a dry run holds back | 38 | I | DONE | fuzzy-barnacle | #1440 | Plan 60 row 39 |
 
 ## 2. Shared declarations
 
@@ -196,7 +196,7 @@ Table F - outcome words. `report.classify` picks the first that holds, in this o
 | F2 | `deferred` | Stopped for a cause outside the code: GitHub's API was unavailable (`api-unavailable`), or a period waits for a range that starts earlier or for a person (`range-starts-late`, `no-month-to-reopen`, `packed-file-unreadable`, row 20). The job stays green, and the next wake resumes |
 | F3 | `dry-run` | Found work and only reported it |
 | F4 | `ceiling` | Did work, and more is left; `resume_from` says where the next wake starts |
-| F5 | `done` | Did work, and nothing is left. Recovered notes do not change this |
+| F5 | `done` | Did work, and finished its work for this wake without stopping at its ceiling; the next wake takes what reaches its line by then. What it recovered, and what a monthly window that only reports kept, do not change this (row 39) |
 | F6 | `empty` | The ledger has nothing to work on |
 | F7 | `not-due` | Nothing has reached its line yet. The default idle outcome |
 | F8 | `outside-range` | Nothing eligible is inside the operator range, and nothing before the range blocks it. When a step's first period is ready and the range starts after it, the range is refused at that period instead (row 12) |

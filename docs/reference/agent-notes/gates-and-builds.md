@@ -11,6 +11,27 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
 - A fresh worktree has no `.venv` and no `frontend/node_modules`, and setting both up is the slowest step: on 2026-10-07, on the shared Windows machine, `npm ci` took 513 s and `pip install -e ".[dev]"` took 1,583 s after one package-feed timeout and a retry (plan 62's row L19), and 114 s and 991 s in another worktree the same day. Start both before the first check needs them, and wait rather than calling either hung.
+- **`pip install -e ".[dev]"` stops because it cannot fetch `hatchling` from the package feed; the project is fine, and the same install can pass on the next try.**
+  `hatchling` is the build backend `pyproject.toml` names, and an editable
+  install fetches it first, under `Installing build dependencies`, before it
+  collects any of the project's own packages. On 2026-10-08, on the shared
+  Windows machine, this happened in two worktrees. The tell is the failure
+  under that step, before any `Collecting` line. Run the same install again
+  first: once a retry worked, and only a finished install covers every gate,
+  ruff, mypy and pytest included. If it still fails,
+  `backend/utilities/doc_load.py` and `backend/utilities/plan_status.py` need
+  no install: they import only the standard library and `backend/utilities/`,
+  so any supported Python runs them with `PYTHONPATH` set to `backend`. That
+  covers those utilities, and nothing that imports a third-party package. It
+  also helps with a `.venv` copied from another worktree: the copy's editable
+  install still points `idhazh` at the other worktree's code, and `PYTHONPATH`
+  comes first, so `idhazh` resolves to this worktree:
+  ```powershell
+  .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+  $env:PYTHONPATH = 'backend'
+  python backend/utilities/plan_status.py --plan TODO/<plan>.md
+  Remove-Item Env:PYTHONPATH
+  ```
 - **`pytest -m contract -q` ends on a `FAILED` line with no count after it, which reads as a run that stopped; it finished, and the extra `-q` hid the count.**
   `addopts` in `pyproject.toml` already carries `-q`, so one more is `-qq`, and
   pytest 9.1.1 then drops the `N passed, M failed` line (2026-10-06). The tell
