@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {"bytes": 13130,"covers": "2026-09-19","lost_days": [],"rows": 1,"set_aside": 0,"state": "packed"},
+    {"bytes": 0,"covers": "2026-09-20","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-09-21","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-09-22","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-09-23","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-09-24","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-09-25","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-09-26","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
+  ],
+  "ledger": "host-fingerprint",
+  "period": "daily",
+  "version": "2026-10-07"
+}
