@@ -107,11 +107,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv",
         "state/content-similarity-judge/fitted-thresholds",
     ),
-    "CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS": (
-        "state/content-similarity-judge/holdout-pairs.csv",
-        "state/content-similarity-judge/holdout-pairs.csv",
-        None,
-    ),
     "CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION": (
         None,
         "state/content-similarity-judge/score-distribution.json",
@@ -453,7 +448,7 @@ def test_a_dated_ledger_handed_no_period_refuses(member: LedgerName) -> None:
 def test_a_flat_ledger_handed_a_period_refuses() -> None:
     """One file has no period, so a caller passing one has the wrong ledger."""
     with pytest.raises(ValueError, match="names no period"):
-        paths.path(STATE, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS, A_DAY)
+        paths.path(STATE, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION, A_DAY)
 
 
 def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> None:

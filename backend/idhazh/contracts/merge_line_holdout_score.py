@@ -21,8 +21,9 @@ reader never learns it existed. Both get their own cell, because a single error
 count would add them together.
 
 **The read behind this row is bounded by the holdout and not by the archive**
-(Guardrail #12). Each holdout row names its own two days, so the hand-marked
-file is the bound on what has to be opened.
+(Guardrail #12). Each holdout row names its own two days, so the marks inside
+their reach, `similarity.holdout_reach_days`, are the bound on what has to be
+opened.
 
 The ledger is filed through the ledger door under
 `state/raw/content-similarity-judge/merge-line-holdout-scores/` and packed under

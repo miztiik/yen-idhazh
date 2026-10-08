@@ -205,7 +205,7 @@ def _folder(held: LedgerEntry) -> tuple[str, ...]:
     """The folder a ledger has to itself under `state/`, one segment at a time.
 
     A flat file has none. It shares its folder with other files -
-    `holdout-pairs.csv` sits beside the similarity judge's other ledgers - so a
+    `score-distribution.json` sits beside the similarity judge's other ledgers - so a
     walk handed that folder would read files that are not this ledger's. A
     ledger under the two roots has two folders rather than one, so it is refused
     too.

@@ -502,6 +502,7 @@ def test_every_ledger_the_registry_files_under_the_two_roots_has_a_key_and_a_rea
     for member in door:
         assert ledger.door_key(member), member
         assert ledger.door_contract(member).__schema_stem__, member
-    # A person edits the holdout file by hand, so it stays CSV and the door has no row for it.
+    # The judge's score distribution is one document rewritten whole, so it stays
+    # off the door and the door has no row for it.
     with pytest.raises(ValueError, match="has no key and no row contract"):
-        ledger.door_key(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
+        ledger.door_key(LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)

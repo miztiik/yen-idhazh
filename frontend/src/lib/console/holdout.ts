@@ -1,6 +1,6 @@
 /** The pairs a person marked apart, and how much room the merge line has left.
  *
- * The holdout file is the floor every fitted line has to stay above. Nothing in
+ * The holdout marks are the floor every fitted line has to stay above. Nothing in
  * the pipeline has ever scored those marks - they are a person's reading, not a
  * judged pair - so the score is derived here and this is the first derivation
  * rather than a second opinion about one the run already wrote.
