@@ -19,26 +19,31 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import read_text, seed_publication_inventory
+from conftest import SEED_COMMIT, read_text
+from gardener.tasks._task import run_task
 from test_same_story import at, block, item, unit
 from test_similarity_selection import MANIFEST_FIXTURE
 
 from idhazh import assemble, atomic_write, cli, config, ledger
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
     FittedSimilarityThreshold,
     HeldReason,
 )
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.council.run_identity import council_run_id
-from idhazh.similarity import counting, fit
+from idhazh.similarity import applied, counting, fit
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
 from idhazh.stages import common
 from idhazh.stages.common import _load_day
-from idhazh.stages.set_merge_line import merge_count, stage_set_merge_line
+from idhazh.stages.set_merge_line import PRODUCER, merge_count, stage_set_merge_line
 
 DATE: Final = "2026-09-18"
 
@@ -59,6 +64,10 @@ COUNCIL_RUN: Final = f"{COUNCIL_DAY}-{PLATFORM_RUN}"
 #: slot edge falls - and a band invented for the test would put it somewhere the
 #: pipeline never puts it.
 KNOBS: Final = SimilarityThresholdConfig()
+
+#: The fitted line's ledger, and the gardener task that packs it.
+FITTED: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+PACKS_FITTED: Final = config.compaction_task(FITTED)
 
 
 def a_scorer() -> ScorerStamp:
@@ -566,10 +575,32 @@ def a_published_day(root: Path, *, date: str = DATE) -> None:
         items=items,
         embeddings=block({one.item_id: unit(index * 12.0) for index, one in enumerate(items)}),
     )
-    seed_publication_inventory(root.parent)
     target = assemble.day_dir(root, date)
     atomic_write.write_atomic(target / "digest.json", day.to_json())
     atomic_write.write_atomic(target / "run.json", manifest.to_json())
+
+
+def a_council_writer(run_id: str = COUNCIL_RUN) -> WriterIdentity:
+    """The writer the council hands a tenant: the job that saves the night's results."""
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=1,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="council.session",
+        git_sha=SEED_COMMIT,
+    )
+
+
+def a_filed_line(state: Path, row: FittedSimilarityThreshold) -> None:
+    """One fitted row filed through the door the way the stage files one, under its own run."""
+    ledger.persist(
+        state,
+        [row],
+        ledger=FITTED,
+        covers=row.date,
+        identity=a_council_writer(row.run_id).model_copy(update={"producer": PRODUCER}),
+    )
 
 
 def test_a_row_is_written_on_a_day_nothing_moved(
@@ -589,7 +620,12 @@ def test_a_row_is_written_on_a_day_nothing_moved(
     settings = config.load(config.REPO_ROOT / "config")
 
     row = stage_set_merge_line(
-        DATE, run_id=COUNCIL_RUN, settings=settings, state_dir=state, digest_root=digest_root
+        DATE,
+        run_id=COUNCIL_RUN,
+        settings=settings,
+        identity=a_council_writer(),
+        state_dir=state,
+        digest_root=digest_root,
     )
 
     assert row is not None
@@ -600,26 +636,29 @@ def test_a_row_is_written_on_a_day_nothing_moved(
     assert row.proposed is None and row.after_damping is None
 
     written = ledger.load_fitted_thresholds(state, today=DATE, within_days=1)
-    assert [one.date for one in written] == [DATE], "the row survives the CSV round trip"
+    assert written == [row], "the row survives the trip through the door"
     assert written[0].held_reason is HeldReason.SHARDS_MISSING
 
 
 def test_a_day_that_never_published_is_not_a_run_to_fail(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No merges to count is a day that did not happen."""
+    """No merges to count is a day that did not happen, and the door files nothing."""
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
+    state = tmp_path / "state"
 
     assert (
         stage_set_merge_line(
             DATE,
             run_id=COUNCIL_RUN,
             settings=config.load(config.REPO_ROOT / "config"),
-            state_dir=tmp_path / "state",
+            identity=a_council_writer(),
+            state_dir=state,
             digest_root=tmp_path / "digest",
         )
         is None
     )
+    assert not ledger.raw_root(state, FITTED).exists()
 
 
 def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(
@@ -647,12 +686,112 @@ def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(
         DATE,
         run_id=minted,
         settings=config.load(config.REPO_ROOT / "config"),
+        identity=a_council_writer(minted),
         state_dir=state,
         digest_root=digest_root,
     )
 
     written = ledger.load_fitted_thresholds(state, today=DATE, within_days=1)
     assert [one.run_id for one in written] == [minted]
+
+
+def test_a_fixture_night_is_filed_through_the_door_and_read_back_once_it_is_packed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """THE ORACLE for the move: a night's fitted line, filed raw, packed, and read back.
+
+    The night before holds a line a fit applied, filed through the door the way
+    this stage files one, so tonight's fit reads it back through the door as
+    yesterday's line. Tonight is held - nothing was counted - and its row is
+    filed under the council's writer identity with this stage as its producer,
+    under the judge's own folder of the door's raw root, and nothing lands where
+    the ledger filed CSV. Then the gardener's shipped compaction packs both days
+    under `tmp_path`, and both readers read the packed rows: the fit's look back,
+    and the line a build applies.
+
+    What it cannot settle is the site's reading of the packed files. The
+    frontend's `similarity-ledgers.spec.ts` reads files this same night writes.
+    """
+    digest_root = tmp_path / "digest"
+    a_published_day(digest_root)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    state = tmp_path / ledger.STATE_DIRNAME
+    the_night_before = (date_type.fromisoformat(DATE) - timedelta(days=1)).isoformat()
+    moved = a_written_row(date=the_night_before, proposed=0.93, previous=0.94, applied=0.93)
+    a_filed_line(state, moved)
+
+    row = stage_set_merge_line(
+        DATE,
+        run_id=COUNCIL_RUN,
+        settings=config.load(config.REPO_ROOT / "config"),
+        identity=a_council_writer(),
+        state_dir=state,
+        digest_root=digest_root,
+    )
+
+    assert row is not None
+    assert (row.previous, row.applied) == (0.93, 0.93), "the fit read yesterday's line"
+    (filed,) = ledger.list_raw_files(state, FITTED, days=[DATE])
+    assert filed.envelope.identity == a_council_writer().model_copy(
+        update={"producer": "stages.set_merge_line"}
+    )
+    assert filed.path.parent == ledger.raw_root(state, FITTED).joinpath(*DATE.split("-"))
+    assert ledger.raw_root(state, FITTED).relative_to(state).as_posix() == (
+        "raw/content-similarity-judge/fitted-thresholds"
+    )
+    assert not (state / "content-similarity-judge" / "fitted-thresholds").exists()
+
+    packed = run_task(
+        PACKS_FITTED,
+        tmp_path,
+        today=date_type.fromisoformat(DATE) + timedelta(days=2),
+        dry_run=False,
+    )
+
+    assert packed.stopped_because is StopReason.EXHAUSTED, packed
+    assert ledger.list_raw_files(state, FITTED) == [], "a raw day was left unpacked"
+    for day in (the_night_before, DATE):
+        found = ledger.compact_file(state, FITTED, Period.DAILY, day)
+        assert found is not None, f"{day} was not packed into a daily file"
+        assert found.parent.relative_to(state).as_posix() == (
+            f"compact/content-similarity-judge/fitted-thresholds/daily/{day[:4]}/{day[5:7]}"
+        )
+    assert ledger.load_fitted_thresholds(state, today=DATE, within_days=1) == [moved, row]
+    assert applied.applied_line(
+        state, date=DATE, knobs=SimilarityThresholdConfig(enabled=True)
+    ) == pytest.approx(0.93), "a held night applies the line the night before fitted"
+
+
+def test_a_second_run_of_a_night_keeps_its_own_row_and_a_retry_replaces_its_first_try(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two runs fitted two records and both are facts; two tries at one run are one record.
+
+    Each run files its own raw file under its own work unit, so a second run of
+    one night sits beside the first. A retry of one run is the same work unit at
+    a higher attempt, so the door keeps the retry's row in place of the first
+    try's, which is the repeat the day file's settlement used to drop.
+    """
+    digest_root = tmp_path / "digest"
+    a_published_day(digest_root)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    state = tmp_path / "state"
+    settings = config.load(config.REPO_ROOT / "config")
+    again = council_run_id(opened_on=COUNCIL_DAY, platform_run_id=f"{int(PLATFORM_RUN) + 1}")
+
+    for run_id, attempt in ((COUNCIL_RUN, 1), (again, 1), (again, 2)):
+        stage_set_merge_line(
+            DATE,
+            run_id=run_id,
+            settings=settings,
+            identity=a_council_writer(run_id).model_copy(update={"attempt": attempt}),
+            state_dir=state,
+            digest_root=digest_root,
+        )
+
+    written = ledger.load_fitted_thresholds(state, today=DATE, within_days=0)
+    assert sorted(one.run_id for one in written) == sorted((COUNCIL_RUN, again))
+    assert len(ledger.list_raw_files(state, FITTED, days=[DATE])) == 3, "each try filed a file"
 
 
 def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given() -> None:

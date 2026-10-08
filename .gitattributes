@@ -6,11 +6,12 @@
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The committed run state still filed as CSV: the eval ledger's ID folder and
-# the judge's and the council's day files. Rows are appended by CI on Linux and
-# read by a developer on Windows; a CRLF rewrite would show every historical row
-# as changed. `*.csv text eol=lf` near the bottom of this file is what pins them,
-# so none of them needs a line of its own for that.
+# The committed run state still filed as CSV: the judges' day files and the
+# hand-marked holdout pairs, whose ledgers now file through the ledger door and
+# which wait for their copy onto it. CI on Linux wrote them and a developer on
+# Windows reads them; a CRLF rewrite would show every historical row as changed.
+# `*.csv text eol=lf` near the bottom of this file is what pins them, so none of
+# them needs a line of its own for that.
 #
 # Every CSV file under `state/` took `merge=union` until 2026-09-19, and that is
 # what a lost push race used to stack. A job's checkout is pinned to the commit
@@ -19,8 +20,8 @@ config/*.json text eol=lf
 # a file every reader of it assumes holds each key once. A tree with more than
 # one writer now gives each writer its own file inside the day directory, named
 # for its run, attempt, job and shard, so there is nothing for a union to settle
-# and nothing to sweep up after one. Only the trees below keep the driver,
-# because two of their writers appending never disagree.
+# and nothing to sweep up after one. No tree keeps the driver now: the judge's
+# fitted line was the last, until it moved under `state/raw/` as well.
 #
 # The feed-health record took NO union driver from that day on. Two plan jobs of
 # one night each hold a verdict on every feed, and those two verdicts can
@@ -31,12 +32,6 @@ config/*.json text eol=lf
 # until 2026-09-28, when both moved under `state/raw/`: every file there has one
 # writer, so there is nothing for a union to settle. `state/published/` and
 # `state/seen/` carried one until they moved there too.
-
-# The judge tree still on CSV. A row is the line one run fitted for one day,
-# and the reader keys on the day and the run, so two runs that both fitted that
-# day are not in disagreement and a repeat the union brings costs bytes and
-# moves no line.
-state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
 
 # The training window. Deliberately NOT `merge=union`: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that

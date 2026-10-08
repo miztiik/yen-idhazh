@@ -115,7 +115,7 @@ def migrate_header(
 
     **It reads line 1 and stops there when the header is already the
     contract's**, whatever the file's size. That is the ordinary case on every
-    append, and it is complete rather than optimistic: `extend_ledger_file` writes rows into
+    append, and it is complete rather than optimistic: a CSV append writes rows into
     a file that exists and a header only into one that does not, so an append
     cannot put a second header in a file. A union merge resolve could, and every
     day file under `state/` carried that driver until 2026-09-19; the files it
@@ -144,11 +144,11 @@ def migrate_header(
     is how a header line is told from a row - every contract here opens on
     `version`, whose values are date stamps and never the word.
 
-    Rewriting the file makes the next union merge repeat rows rather than
-    headers, and a repeated row is a question this ledger already answers:
-    `drop_repeated_rows` settles it after the merge, from the commit step, first
-    row winning. Trading a shape nothing settles for a shape something does is
-    the whole of what this buys.
+    Rewriting the file made the next union merge repeat rows rather than
+    headers, and a repeated row was a question the post-merge settlement
+    answered, first row winning. Trading a shape nothing settles for a shape
+    something does was the whole of what this bought. No tree under `state/`
+    keeps a union driver now, so neither shape can arrive by a merge.
     """
     if not path.exists():
         return 0

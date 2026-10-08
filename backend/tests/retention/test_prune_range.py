@@ -36,6 +36,7 @@ from collections.abc import Callable, Iterable, Mapping
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 import pytest
@@ -98,19 +99,19 @@ def prune_range(
     )
 
 
-#: Where one day of each ledger this prunes lands. The test below holds this
-#: against `prune.TARGETS`, so a target added to the vocabulary without a ledger
-#: that files by day fails here rather than by quietly selecting nothing.
-#:
-#: Keyed the way an operator types it - the registry prefix joined by hyphens -
-#: and valued with the typed name the builder takes. That pairing is the whole of
-#: what makes a nested ledger prunable, so it is the pairing this file holds.
-DAY_PATHS: Final[dict[str, LedgerName]] = {
-    "-".join(ledger.entry(name).prefix): name
-    for name in (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-    )
-}
+#: The CSV ledger every range test below prunes: one `<DD>.csv` a day, two folders
+#: deep as a family files one, and the word an operator types for it. No ledger
+#: files CSV days now - the judge's fitted line, the last on the verb's CSV word
+#: list, moved to the ledger door - so the CSV branch is driven through a word
+#: list this file hands it, a real mapping in place of the committed empty one.
+CSV_FOLDER: Final = "a-family/a-day-tree"
+TARGET: Final = CSV_FOLDER.replace("/", "-")
+
+
+@pytest.fixture(autouse=True)
+def a_csv_word_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The verb's CSV word list, naming the one CSV ledger this file builds."""
+    monkeypatch.setattr(prune, "TARGETS", MappingProxyType({TARGET: CSV_FOLDER}))
 
 
 #: The seven days every range test is drawn on. Wide enough that a boundary off
@@ -123,17 +124,12 @@ DAYS: Final = tuple(
 )
 
 
-#: The ledger every range test below prunes: one `<DD>.csv` a day, filed by the
-#: judge's own writer, and the name an operator types for it.
-THRESHOLDS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-TARGET: Final = "-".join(ledger.entry(THRESHOLDS).prefix)
-
-
 def a_threshold_record(state_root: Path, days: Iterable[str] = DAYS) -> Path:
-    """One fitted-threshold day per day, written through the judge's own writer.
+    """One CSV day file per day, each holding a fitted line the way its CSV writer filed one.
 
-    Real rows rather than invented text: the prune walks a ledger the pipeline
-    writes, and a tree assembled by hand could be a shape no run produces.
+    Real rows rather than invented text: the contract's own fixture, rendered
+    through the one CSV renderer, so the tree is a shape the fitted line's CSV
+    writer produced before it moved to the door.
     """
     fixture = CONTRACT_FIXTURES_DIR / "fitted-similarity-threshold"
     base = FittedSimilarityThreshold.from_json(
@@ -143,13 +139,19 @@ def a_threshold_record(state_root: Path, days: Iterable[str] = DAYS) -> Path:
         row = FittedSimilarityThreshold.model_validate(
             {**base.model_dump(), "date": day, "run_id": f"{day}-1"}
         )
-        ledger.append_fitted_thresholds(state_root, day, [row])
+        path = state_root.joinpath(*CSV_FOLDER.split("/"), day[:4], day[5:7], f"{day[8:10]}.csv")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            ledger.render_file(FittedSimilarityThreshold.csv_columns(), [row.csv_row()]),
+            encoding="utf-8",
+            newline="",
+        )
     return state_root
 
 
 def the_day_file(day: str) -> str:
     """The one file `a_threshold_record` leaves for a day, POSIX and relative."""
-    return ledger.relpath(THRESHOLDS, day)
+    return f"{ledger.STATE_DIRNAME}/{CSV_FOLDER}/{day[:4]}/{day[5:7]}/{day[8:10]}.csv"
 
 
 def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
@@ -182,19 +184,11 @@ def fingerprints(root: Path) -> dict[str, str]:
     }
 
 
-def a_day_on_disk(name: LedgerName, state_root: Path, day: str) -> Path:
-    """Put one file where the registry says the day goes, and name it."""
-    where = ledger.path(state_root, name, day)
-    where.parent.mkdir(parents=True, exist_ok=True)
-    where.write_text("version\n", encoding="utf-8", newline="\n")
-    return where
-
-
 def dates_on_disk(state_root: Path) -> list[str]:
     """Which days the pruned ledger still holds, through the prune's own walk."""
     return [
         day_partition.date_of(path)
-        for path in day_partition.day_files(ledger.tree_root(state_root, THRESHOLDS))
+        for path in day_partition.day_files(state_root.joinpath(*CSV_FOLDER.split("/")))
     ]
 
 
@@ -320,7 +314,7 @@ def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
 
     prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[2], dry_run=False)
 
-    ledger_root = ledger.tree_root(state, THRESHOLDS)
+    ledger_root = state.joinpath(*CSV_FOLDER.split("/"))
     assert not (ledger_root / "2026" / "07").exists(), "an emptied month directory was left behind"
     assert (ledger_root / "2026" / "08").is_dir(), "the month that still holds days was removed"
 
@@ -328,29 +322,29 @@ def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
 # --- The vocabulary ------------------------------------------------------------
 
 
-def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
-    """The vocabulary and the ledgers are held against each other, both ways.
+def test_no_csv_ledger_is_left_and_the_fitted_line_is_a_target_on_the_door() -> None:
+    """The committed CSV word list is empty, and the fitted line's word names its door ledger.
 
-    A target with no day-filing ledger would select nothing for every range an
-    operator ever names - a command that reports success and removes nothing.
+    A word that stayed on the CSV list after its ledger moved would walk a folder
+    nothing writes, and select nothing for every range an operator names - a
+    command that reports success and removes nothing.
     """
-    assert set(prune.TARGETS) == set(DAY_PATHS), (
-        "the prune vocabulary and the ledgers that file by day disagree: "
-        f"{sorted(set(prune.TARGETS) ^ set(DAY_PATHS))}"
-    )
+    fitted = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+    word = "-".join(ledger.entry(fitted).prefix)
 
-    for target, name in DAY_PATHS.items():
-        state = tmp_path / target
-        path = a_day_on_disk(name, state, DAYS[3])
+    assert prune._TARGET_LEDGERS == ()
+    assert prune.DOOR_LEDGERS[word] is fitted
+    assert prune.resolve(word, committed_tasks()) == word
 
-        outcome = prune_range(
-            state, target=target, since=DAYS[3], until=DAYS[3], dry_run=False
-        )
 
-        assert outcome.removed == (
-            f"{ledger.STATE_DIRNAME}/{path.relative_to(state).as_posix()}",
-        ), f"{target} did not select the day file its own module files at"
-        assert not path.exists(), f"{target} reported a removal that did not happen"
+def test_the_built_word_selects_the_day_file_its_folder_holds(tmp_path: Path) -> None:
+    """The CSV branch reads a word's folder off the word list and nothing else."""
+    state = a_threshold_record(tmp_path / "state", days=[DAYS[3]])
+
+    outcome = prune_range(state, target=TARGET, since=DAYS[3], until=DAYS[3], dry_run=False)
+
+    assert outcome.removed == (the_day_file(DAYS[3]),)
+    assert dates_on_disk(state) == [], f"{TARGET} reported a removal that did not happen"
 
 
 #: The ledgers whose rows must never be forgotten, so a range of them is refused
@@ -550,7 +544,7 @@ def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> 
 
     prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[1], dry_run=False)
 
-    assert [entry.name for entry in state.iterdir()] == [ledger.entry(THRESHOLDS).prefix[0]]
+    assert [entry.name for entry in state.iterdir()] == [CSV_FOLDER.split("/")[0]]
     assert not list(state.glob(".prune-*")), "a scratch directory appeared from somewhere"
 
 

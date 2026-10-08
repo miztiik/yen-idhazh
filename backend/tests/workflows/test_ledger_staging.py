@@ -42,7 +42,6 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger.keys import STORY_SIMILARITY_THRESHOLD_KEY
 from idhazh.ledger.staging import REGISTRY, staged_path
 
 from ._harness import (
@@ -65,12 +64,9 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 TRIAL_WORKFLOW: Final = "measure.yml"
 
 #: A ledger's CSV settlement key, declared by hand beside the places `keyed_paths`
-#: names it. Door ledgers use `ledger.keys._DOOR_SHAPES` instead.
-LEDGER_KEYS: Final[Mapping[LedgerName, tuple[str, ...]]] = MappingProxyType(
-    {
-        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: STORY_SIMILARITY_THRESHOLD_KEY,
-    }
-)
+#: names it. Door ledgers use `ledger.keys._DOOR_SHAPES` instead. Empty: the judge's
+#: fitted line, the last ledger settled after a merge, moved to the door.
+LEDGER_KEYS: Final[Mapping[LedgerName, tuple[str, ...]]] = MappingProxyType({})
 
 
 def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:

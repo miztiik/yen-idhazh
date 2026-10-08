@@ -211,10 +211,11 @@ class ContentSimilarityJudge:
         has to leave a row on the days it stayed put, or a reader cannot tell a
         day the evidence refused from a day nothing ran.
 
-        Both stages write under the state root the council handed over, and the
-        counting stage files its rows through the ledger door under the council's
-        writer identity. The fit reads the day's pairs back from that same root,
-        so the two cannot part company on where tonight's rows went.
+        Both stages write under the state root the council handed over, and both
+        file their rows through the ledger door under the council's writer
+        identity, each naming itself as the producer. The fit reads the day's pairs
+        back from that same root, so the two cannot part company on where tonight's
+        rows went.
         """
         settings = config.load()
         counted = count_verdicts.stage_count_verdicts(
@@ -231,6 +232,7 @@ class ContentSimilarityJudge:
             date,
             run_id=run_id,
             settings=settings,
+            identity=identity,
             state_dir=state_dir,
             digest_root=common.PUBLIC_ROOT,
         )

@@ -300,7 +300,8 @@ council run, `job` `save_council_results`, `shard` 0, the run's attempt, and the
 passes it to each tenant's `Tenant.settle`. A tenant names its own producer and
 changes nothing else, so every raw file the night commits says which run, job
 and commit wrote it. The similarity judge's `count_verdicts` files its scored
-pairs and its metrics this way.
+pairs and its metrics this way, and its `set_merge_line` files the night's
+fitted merge line.
 
 There is no regeneration command on that call. The council is the only writer of
 a tenant's own ledger and `concurrency` runs one council at a time, so a lost
@@ -617,9 +618,9 @@ case where more than one job commits into one ledger file - the digest pipeline
 has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
 carrying the run id, which is the property a segment exists to provide. The
-council's record, the scored pairs and the judge's metrics now file through the
-ledger door, where each write is a raw file named for its writer, so only the
-fitted line still appends to a day file.
+council's record, the scored pairs, the judge's metrics and the fitted merge
+line now all file through the ledger door, where each write is a raw file named
+for its writer, so no council write appends to a day file.
 
 **The second reason went with the staging ledger on 2026-09-22.** A compaction
 verb used to fold every waiting segment of every ledger and delete what it read,

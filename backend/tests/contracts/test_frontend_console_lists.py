@@ -1,14 +1,14 @@
 """Does every hand-written list in the console still name what its contract declares?
 
-Ten console modules carry a value that has to match what a Pydantic contract
+Eleven console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary, the doubt
 reasons, the bandwidth margin, the prompt-reuse column grammar, the date the
-busy share stopped holding the stolen half, the article, feed, holdout score and
-holdout mark records' column lists, the columns the run timeline reads off every
-row, and the routes the strip draws. A copy that has fallen behind its
-contract draws a panel with a column missing from it, names a column no run
-writes, or prints a correction for the wrong day, and none of those shows up as
-an error anywhere.
+busy share stopped holding the stolen half, the article, feed, holdout score,
+holdout mark and fitted line records' column lists, the columns the run
+timeline reads off every row, and the routes the strip draws. A copy that has
+fallen behind its contract draws a panel with a column missing from it, names a
+column no run writes, or prints a correction for the wrong day, and none of
+those shows up as an error anywhere.
 
 **These six moved here from the browser suite on 2026-09-23**, where each read
 the generated `schemas/<stem>.schema.json`, or the TypeScript generated beside
@@ -32,6 +32,7 @@ from idhazh.contracts.console_band import RouteId
 from idhazh.contracts.eval_row import BandReason, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -159,6 +160,26 @@ def test_the_holdout_score_asks_only_for_columns_the_contract_declares_in_its_or
     assert [name for name in declared if name in asked] == asked, (
         "HOLDOUT_SCORE_COLUMNS in similarity-holdout.ts is not part of "
         "MergeLineHoldoutScore's columns in order. Not declared: "
+        f"{[name for name in asked if name not in declared]}. "
+        "If that is empty, only the order differs: write them in the contract's order."
+    )
+
+
+def test_the_fitted_line_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
+    """The Judgement page reads part of the fitted line, so its list is a part, in order.
+
+    `similarity-ledger.ts` spells the `FittedSimilarityThreshold` columns the
+    merge line, the agreement strip and the record read, because the door never
+    offers every column. A column the contract renames or drops would reach a
+    panel as an empty reading rather than as an error.
+    """
+    asked = quoted_strings(read_text(SERVER / "similarity-ledger.ts"), "FITTED_LINE_COLUMNS")
+    declared = list(FittedSimilarityThreshold.csv_columns())
+
+    assert asked, "FITTED_LINE_COLUMNS in similarity-ledger.ts names no column"
+    assert [name for name in declared if name in asked] == asked, (
+        "FITTED_LINE_COLUMNS in similarity-ledger.ts is not part of "
+        "FittedSimilarityThreshold's columns in order. Not declared: "
         f"{[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
     )

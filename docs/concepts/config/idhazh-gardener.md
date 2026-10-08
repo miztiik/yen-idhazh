@@ -29,9 +29,9 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty-nine ship today:
-five `retention` tasks, two `collection` tasks, twenty-one `compaction` tasks -
-eighteen for ledgers and three for trial roots (below) - and `corpus-squash`,
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Thirty ship today:
+five `retention` tasks, two `collection` tasks, twenty-two `compaction` tasks -
+nineteen for ledgers and three for trial roots (below) - and `corpus-squash`,
 the one `history` task (below).
 There is no `name` key inside a declaration. Both plan writers open the same
 named list, so adding an unrelated file cannot change a wake's plan.
@@ -78,7 +78,7 @@ Why each tree gets the age it has is
 
 ## The compaction declarations that ship
 
-All eighteen ledger declarations pack live. They keep day files until 45 whole days
+All nineteen ledger declarations pack live. They keep day files until 45 whole days
 after their month ends, then month files until 93 whole days after their year
 ends. Indexed year files expire 36 calendar months after that UTC year ends.
 For example, 2026 expires on 2030-01-01 at 00:00 UTC. Each declaration has
@@ -90,12 +90,13 @@ Each declaration owns `state/raw/<folder>` and `state/compact/<folder>`, where
 `<folder>` is its ledger's door folder: the ledger's name, or the family's
 folder and then that name for a ledger filed inside its family's folder, such as
 `content-similarity-judge/merge-line-holdout-scores` for the holdout score,
-`content-similarity-judge/scored-pairs` for the judge's scored pairs and
+`content-similarity-judge/scored-pairs` for the judge's scored pairs,
+`content-similarity-judge/fitted-thresholds` for the fitted merge line and
 `content-similarity-judge/holdout-pairs` for the hand marks. Each is called
 `compact-<folder>` with `/` written `-`.
 The raw-day packing wait remains one whole day for every ledger.
 
-Table A. All eighteen declarations use the same packing and expiry settings.
+Table A. All nineteen declarations use the same packing and expiry settings.
 
 | ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
 | --- | --- | --- |
@@ -117,6 +118,7 @@ Table A. All eighteen declarations use the same packing and expiry settings.
 | A16 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
 | A17 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
 | A18 | `compact-content-similarity-judge-holdout-pairs` | 45 days / 93 days / 36 calendar months |
+| A19 | `compact-content-similarity-judge-fitted-thresholds` | 45 days / 93 days / 36 calendar months |
 
 `item-health-summary` has a declaration but no generated rows yet.
 `telemetry-aggregate` remains `dry_run: true`; it produces summaries only for

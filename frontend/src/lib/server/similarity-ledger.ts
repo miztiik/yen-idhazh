@@ -1,14 +1,16 @@
 /** Where the merge line sat each day, read at build time from `state/`.
  *
- * `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` is one row a
- * run: what the line was, what the evidence proposed, what the run applied, and
- * which clamp shaped it. Nothing on the published site reads it, and nothing
- * here is fetched by a browser - the route inlines what it needs and the window
- * control filters what is already in the document.
+ * `state/compact/content-similarity-judge/fitted-thresholds/` holds one row a
+ * run, filed through the ledger door by the council's save job and packed by
+ * the gardener: what the line was, what the evidence proposed, what the run
+ * applied, and which clamp shaped it. Nothing on the published site reads it,
+ * and nothing here is fetched by a browser - the route inlines what it needs
+ * and the window control filters what is already in the document.
  *
- * **Bounded, like every other read on this route.** It takes the day files a
- * window reaches and no more, so another judged day adds a file this call never
- * opens once the cover is filled (`CLAUDE.md` Guardrail #12).
+ * **Bounded, like every other read on this route.** It asks the query door for
+ * the packed days a window reaches and no more, so another judged day adds a
+ * file this call never opens once the window is filled (`CLAUDE.md` Guardrail
+ * #12). A day reaches the page once the gardener has packed it.
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
  * to bundle it for a browser, the same place and for the same reason as
@@ -19,8 +21,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in `machine-counters.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
+import type { TimeWindow } from '../charts/viewport';
 import type { ScoreRecord } from '../console/verdict-split';
-import { LEDGER_WINDOW_DAYS, readDayShards, STATE_ROOT } from './payload';
+import { sliceFromDisk } from './ledger-disk';
+import { datedFirst, windowRows } from './ledger-rows';
+import { STATE_ROOT } from './payload';
 
 /** One run's fit. Absence is null, never zero - a held day proposed nothing,
  * which is a different fact from a day that proposed the line it already had. */
@@ -70,6 +75,35 @@ export interface FittedLine {
 	cosineWeight: number | null;
 }
 
+/** The columns of `FittedSimilarityThreshold` this reader reads, in the contract's own order.
+ *
+ * The door answers only the columns it is asked for. A backend contract test
+ * fails when the contract renames or drops one of these, or when this order is
+ * not the contract's.
+ */
+export const FITTED_LINE_COLUMNS = [
+	'date',
+	'run_id',
+	'previous',
+	'proposed',
+	'after_damping',
+	'applied',
+	'clamp_kind',
+	'clamp_movement',
+	'held_reason',
+	'max_down_step',
+	'max_up_step',
+	'pairs_in_band',
+	'pairs_judged',
+	'pairs_usable',
+	'disagreement_rate',
+	'unclear_rate',
+	'negatives_on_record',
+	'above_line_on_record',
+	'days_on_record',
+	'cosine_weight'
+] as const;
+
 function text(cell: string | undefined): string | null {
 	const trimmed = (cell ?? '').trim();
 	return trimmed === '' ? null : trimmed;
@@ -82,7 +116,7 @@ function figure(cell: string | undefined): number | null {
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** The newest `days` day files of the fitted record, oldest first.
+/** The packed fitted rows inside `window`, oldest day first.
  *
  * A row with no applied value is skipped rather than refused. The panel degrades
  * to the days it can draw, and a refusal here would take a console route down
@@ -91,12 +125,18 @@ function figure(cell: string | undefined): number | null {
  * At most one row a date survives, and it is the newest run of that date: two
  * runs of one day fitted two records and the chart draws one column a day, so
  * drawing both would put two marks on one x with nothing saying which is which.
+ *
+ * **No row is an ordinary state.** A record the gardener has not packed yet,
+ * and a window that starts after its newest packed day, both read no row.
  */
-export function fittedLines(
-	days: number = LEDGER_WINDOW_DAYS,
-	root: string = STATE_ROOT
-): FittedLine[] {
-	const table = readDayShards(join(root, 'content-similarity-judge', 'fitted-thresholds'), days, root);
+export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT): Promise<FittedLine[]> {
+	const table = await windowRows(root, 'fitted-thresholds', window, FITTED_LINE_COLUMNS, (start, end) =>
+		sliceFromDisk(root, 'fitted-thresholds', {
+			columns: [...datedFirst(FITTED_LINE_COLUMNS)],
+			from: start,
+			to: end
+		})
+	);
 	const newest = new Map<string, FittedLine>();
 	for (const row of table.rows) {
 		const date = text(row.date);

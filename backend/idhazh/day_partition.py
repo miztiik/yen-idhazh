@@ -13,8 +13,8 @@ here before it was imported from seven places. That is the shape
 carrying their own answer to "is this name a month", and one file left alone in
 one ledger and deleted in another. The cleanup record and the published record
 have since moved under `state/raw/`, where a day is a folder of writer files that
-`ledger/raw_files.py` walks, so the similarity judge's and the council's day
-files are what this walks now.
+`ledger/raw_files.py` walks, and so has the similarity judge's fitted line, the
+last ledger this walked. The prune verb's CSV branch still walks with it.
 
 **Nothing inside a day tree is skipped.** A name this cannot place stops the
 read. A glob answers "what matched" and says nothing about what did not, so a

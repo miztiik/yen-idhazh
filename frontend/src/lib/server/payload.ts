@@ -14,8 +14,8 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, relative, resolve } from 'node:path';
-import { publicFiles, stateFiles } from './publication';
+import { basename, join, resolve } from 'node:path';
+import { publicFiles } from './publication';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
 import { dayKey, monthsInWindow, toDay, type TimeWindow } from '../charts/viewport';
@@ -482,65 +482,6 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 			.sort();
 	}
 	return { rows, columns };
-}
-
-/** Read the newest recorded days named by the producer, oldest first. */
-export function readDayShards(
-	dir: string,
-	days: number = LEDGER_WINDOW_DAYS,
-	stateRoot: string = resolve(dir, '..'),
-	publicationRoot?: string
-): CsvTable {
-	const rows: Record<string, string>[] = [];
-	let columns: string[] = [];
-	for (const shard of dayShardFiles(dir, days, stateRoot, publicationRoot)) {
-		const table = readCsv(shard.path);
-		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
-		rows.push(...table.rows);
-	}
-	return { rows, columns };
-}
-
-/** One day file of a day-grain ledger: the date it is filed under, and its path. */
-export interface DayShard {
-	date: string;
-	path: string;
-}
-
-/** The day files the publication inventory names under `dir`, oldest first.
- *
- * A day-grain ledger files one `<YYYY>/<MM>/<DD>.csv` a day: grain `day` in
- * `config/ledgers.json`, the path `backend/idhazh/ledger/paths.py` builds for its
- * writer. A name in any other layout is skipped. The cover counts recorded days.
- * Only a file inside the cover is looked for on disk, so a day the cover leaves
- * out costs nothing, and a missing one inside it fails the build. */
-export function dayShardFiles(
-	dir: string,
-	days: number = LEDGER_WINDOW_DAYS,
-	stateRoot: string = resolve(dir, '..'),
-	publicationRoot?: string
-): DayShard[] {
-	const inventoryRoot = publicationRoot ?? (stateRoot === STATE_ROOT ? PUBLIC_ROOT : stateRoot);
-	const prefix = `${relative(stateRoot, dir).replaceAll('\\', '/')}/`;
-	const grouped = new Map<string, DayShard[]>();
-	for (const file of stateFiles(inventoryRoot).sort()) {
-		if (!file.startsWith(prefix)) continue;
-		const name = /^(\d{4})\/(\d{2})\/(\d{2})\.csv$/.exec(file.slice(prefix.length));
-		if (!name) continue;
-		const date = `${name[1]}-${name[2]}-${name[3]}`;
-		const shards = grouped.get(date) ?? [];
-		shards.push({ date, path: join(stateRoot, ...file.split('/')) });
-		grouped.set(date, shards);
-	}
-	const recorded = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, files]) => files);
-	const kept = (unbounded(days) ? recorded : recorded.slice(Math.max(0, recorded.length - days))).flat();
-	for (const shard of kept) {
-		if (!existsSync(shard.path)) {
-			const file = relative(stateRoot, shard.path).replaceAll('\\', '/');
-			throw new Error(`Publication inventory names missing ledger file ${file}.`);
-		}
-	}
-	return kept;
 }
 
 /** The counts a run settled about one day.

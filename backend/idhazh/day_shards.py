@@ -380,10 +380,9 @@ def settle(
     from. It has to: a feed read that carried entries beats one that carried
     none however late the empty one ran, and a retry that came back with nothing
     describes the retry rather than the feed.
-    `contracts.feed_health.supersedes` says so, and `ledger.drop_repeated_rows`,
-    `discover.settled` and the page all apply it with no notion of attempts at
-    all. Attempt order here would be a fourth answer to a question three other
-    modules have already settled.
+    `contracts.feed_health.supersedes` says so, and `discover.settled` and the
+    page both apply it with no notion of attempts at all. Attempt order here
+    would be another answer to a question those modules have already settled.
 
     **Attempt order** - something is filled in both and the key declares
     nothing. The higher attempt wins each contested cell, because attempt 2

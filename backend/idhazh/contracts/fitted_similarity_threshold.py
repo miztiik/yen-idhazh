@@ -38,10 +38,10 @@ from idhazh.contracts.story_similarity_pair import JudgeModelId, ScorerModelId
 #: that nothing replaced. `key_point_weight` went with the key points
 #: themselves: the term shipped at a weight of 0.0, so it never moved a fit.
 #:
-#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
-#: heading that is neither a current column nor one the reader carries, so a
-#: column deleted below without an entry here leaves every committed day file
-#: unrepairable. `ledger.keyed_paths` hands this set to that repair.
+#: **This is a contract, not a courtesy.** The migrator refuses a filled cell
+#: under a heading nobody declared, so a column deleted below without an entry
+#: here leaves every committed day file unable to move onto the ledger door. The
+#: migrator's entry for this ledger maps each of these headings to nothing.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset({"key_point_weight"})
 
 #: How far two lines may sit apart and still count as the same line. The applied
@@ -422,9 +422,9 @@ class FittedSimilarityThreshold(Contract):
     def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
         """The read-side migration `CLAUDE.md` section 11 owes a removed column.
 
-        The keys come from `DROPPED_CELLS`, which `ledger.keyed_paths` also hands
-        the header repair, so the CSV side and the JSON side cannot name
-        different sets.
+        The keys come from `DROPPED_CELLS`, which the migrator's entry for this
+        ledger also maps to nothing, so the CSV side and the JSON side cannot
+        name different sets.
         """
         return without_retired_keys(data, *DROPPED_CELLS)
 

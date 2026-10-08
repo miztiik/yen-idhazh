@@ -29,7 +29,7 @@ Documentation-only changes run a whitespace check, not either application suite.
 | Group | What it checks | Preparation |
 | --- | --- | --- |
 | `backend` | Named module and integration tests, or the full backend for shared or unknown inputs; ruff and mypy | Existing Python development environment |
-| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium |
+| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. One spec, `similarity-ledgers.spec.ts`, runs the Python backend |
 | `reader` | Reading pages, layout, filters, themes and read state | Canary build |
 | `console` | The operator dashboards | Canary build |
 | `panels` | A picture of every console panel that carries an id, at three widths in both themes; the sufficiency gates' witness panel; the panels `console.judged_panel_ids` opts in | Canary build |
@@ -60,6 +60,10 @@ Keep the section 12 browser smoke for a published-site change.
 The launcher checks the dependencies the selection needs before waiting for a
 test slot. A logic-only run does not probe Python packages or run pytest. It
 uses the existing Python standard-library lock helper for coordination only.
+One logic spec still runs the backend: `similarity-ledgers.spec.ts` files a
+fixture night through the ledger door and packs it, so the Python the launcher
+names needs the backend installed, as CI's site job installs it before
+`test:logic`.
 The tooling self-tests run when the test infrastructure changes, or with
 `--group all`; they are not added to every frontend run. Browser preparation
 still needs the Python producer. The launcher honors `IDHAZH_PYTHON` or

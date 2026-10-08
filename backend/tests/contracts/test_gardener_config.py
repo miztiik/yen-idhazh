@@ -112,6 +112,7 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-content-similarity-judge-scored-pairs",
     "compact-content-similarity-judge-metrics",
     "compact-content-similarity-judge-holdout-pairs",
+    "compact-content-similarity-judge-fitted-thresholds",
 )
 MOVED_LEDGER_RETENTION_DECISION: Final = (
     "@kumarsnaveen_microsoft directed on 2026-10-05 that each ledger moved onto the door "

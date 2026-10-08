@@ -25,7 +25,8 @@ test('one generated run inventories named drawings and current ledger files', ()
 		write('state/raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet', 'raw');
 		write('state/compact/feed-health/daily/2026/08/20.parquet', 'packed');
 		write('state/compact/feed-health/index/daily.json', '{}');
-		write('state/content-similarity-judge/fitted-thresholds/2026/08/20.csv', 'utc_date\n2026-08-20\n');
+		// The fitted line's reader asks the compact index, never the inventory.
+		write('state/raw/content-similarity-judge/fitted-thresholds/2026/08/20/file.parquet', 'raw');
 		write('state/raw/content-similarity-judge/merge-line-holdout-scores/2026/08/20/file.parquet', 'raw');
 		write('state/compact/content-similarity-judge/merge-line-holdout-scores/daily/2026/08/20.parquet', 'packed');
 		write('state/unrelated/2026/08/20.csv', 'utc_date\n2026-08-20\n');
@@ -39,7 +40,6 @@ test('one generated run inventories named drawings and current ledger files', ()
 				'compact/content-similarity-judge/merge-line-holdout-scores/daily/2026/08/20.parquet',
 				'compact/feed-health/daily/2026/08/20.parquet',
 				'compact/feed-health/index/daily.json',
-				'content-similarity-judge/fitted-thresholds/2026/08/20.csv',
 				'raw/content-similarity-judge/merge-line-holdout-scores/2026/08/20/file.parquet',
 				'raw/feed-health/2026/08/20/01a10188-bb60-854b-8ec1-bd104a03b0d6.parquet'
 			]

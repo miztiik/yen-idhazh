@@ -1,289 +1,29 @@
-"""Can a ledger whose contract MOVED its columns be appended to again, and is the pass repeatable?
+"""Which ledgers can the header widener be pointed at, and how does it say no?
 
-The oracle is the append. A read-only check cannot see the header equality test
-that makes a stale ledger unappendable, so every case here puts a stale file on
-disk, proves the append refuses it, re-files it, and proves the append lands.
-Both directions are covered: a header narrower than the contract, and one wider.
+`utilities.widen_ledger_header` re-files a CSV day file under the column list its
+contract holds now, so an append can land again. Its vocabulary is the prune
+verb's CSV word list, and the contract that reads a row comes from
+`ledger.keyed_paths`, the ledgers the post-merge settlement covers. Both are
+empty now: the judge's fitted line, the last ledger either named, moved to the
+ledger door, where a file keeps the shape it was written under and nothing
+re-files it. So no ledger is left for the widener to re-file, and the tests
+that re-filed fitted-line days left with that ledger's CSV path.
 
-**One registry is asked, and the census names every ledger it cannot read.** A
-ledger the post-merge settlement covers declares its reader in
-`ledger.keyed_paths`, and the utility reads no other list. Driving only one
-ledger is how nine of fourteen ledgers were refused for a day with every test
-green, so the census below asks every ledger in the vocabulary.
-
-Everything is driven from two small committed fixtures, each read inside the
-test that needs it. Nothing walks the committed ledger (`CLAUDE.md` section
-13) - the question is what the utility does to a file, and a fixture holds a
-header the archive can no longer produce.
+What is left here is how the utility refuses: a word that is not a ledger, and
+a ledger the registry names no reader for. Nothing walks the committed ledger
+(`CLAUDE.md` section 13).
 """
 
 from __future__ import annotations
 
-import csv
-import shutil
 from pathlib import Path
 from types import MappingProxyType
-from typing import Final
 
 import pytest
-from conftest import FIXTURES_DIR
 
 from idhazh import ledger
-from idhazh.contracts.fitted_similarity_threshold import (
-    DROPPED_CELLS,
-    FittedSimilarityThreshold,
-)
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import prune
 from utilities import widen_ledger_header
-
-DATE = "2026-09-18"
-TARGET = "content-similarity-judge-fitted-thresholds"
-
-#: The ledger every re-file below is driven through: the judge's fitted line,
-#: the one ledger the post-merge settlement still covers.
-FITTED: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-
-#: The three judge-stamp columns the narrow fixture leaves off its tail.
-STAMP: Final = ("judge_model", "prompt_digest", "grammar_digest")
-
-#: The day the census below files each ledger's one header-only file under.
-CENSUS_DATE = "2026-09-16"
-
-
-def test_relative_state_root_refiles_the_named_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    a_narrow_day(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    relative = widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=Path()
-    )
-    absolute = widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path
-    )
-    assert relative == absolute
-
-
-#: A fitted day three columns narrower than the contract: the committed day
-#: below with the judge stamp left off its tail, the shape a file has when
-#: columns are appended to the contract after it was written.
-NARROW = FIXTURES_DIR / "state" / "fitted-thresholds-before-the-judge-stamp.csv"
-
-#: The header it carried while `key_point_weight` was a column, taken off the
-#: committed day file as it stood before that column left on 2026-09-24.
-WIDE = FIXTURES_DIR / "state" / "fitted-thresholds-carrying-the-key-point-weight.csv"
-
-#: The ledgers in the vocabulary that the registry names no reader for: none,
-#: since every judge ledger but the fitted line moved to the door and left the
-#: vocabulary. Named rather than counted, because a count that falls by one says
-#: a ledger lost its reader and never says which one - and that is exactly the
-#: failure this file missed on 2026-09-22, when five day trees left
-#: `ledger.keyed_paths` and the only test watching a refusal was watching a
-#: ledger that had just joined them.
-UNREGISTERED: Final[frozenset[str]] = frozenset()
-
-
-def a_narrow_day(state_dir: Path) -> Path:
-    """One day file at the pre-widening header, where the ledger's own path helper puts it."""
-    path = ledger.path(state_dir, FITTED, DATE)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(NARROW, path)
-    return path
-
-
-def a_wide_day(state_dir: Path) -> Path:
-    """One day file still carrying the column this contract stopped naming."""
-    path = ledger.path(state_dir, FITTED, DATE)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(WIDE, path)
-    return path
-
-
-def a_fresh_threshold(path: Path) -> FittedSimilarityThreshold:
-    """A row this build would write, built off a row the fixture already holds.
-
-    Under a run of its own, because the settlement keys on the date and the
-    run, and a row that kept the fixture's run would be dropped as a repeat
-    rather than tell the append anything.
-    """
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        first = next(csv.DictReader(handle))
-    return FittedSimilarityThreshold.from_csv_row(first).model_copy(
-        update={"run_id": f"{DATE}-9"}
-    )
-
-
-def test_a_narrow_day_refuses_the_append_that_the_widened_one_takes(tmp_path: Path) -> None:
-    """The load-bearing half. A read-only check cannot see the header equality test.
-
-    `require_matching_header` compares the committed header to the contract's
-    columns and raises rather than write, so the ledger is dead to the next run
-    until the file on disk carries the new header.
-    """
-    path = a_narrow_day(tmp_path)
-    fresh = a_fresh_threshold(path)
-
-    with pytest.raises(ValueError, match="Migrate the ledger"):
-        ledger.append_fitted_thresholds(tmp_path, DATE, [fresh])
-
-    widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-
-    assert ledger.append_fitted_thresholds(tmp_path, DATE, [fresh]) == 1
-    assert ledger.read_header(path) == FittedSimilarityThreshold.csv_columns()
-
-
-def test_widening_keeps_every_cell_the_narrow_header_named(tmp_path: Path) -> None:
-    """A column appended at the tail leaves every historical value where it was.
-
-    Read by name rather than by position, because that is the promise the tail
-    rule makes: a cell inserted in the middle would pass a position check on the
-    columns before it and put the wrong name over every value after it.
-
-    A cell the row has stopped naming is the one exception, and it is named as
-    the survivors rather than counted: a check that only asserted the count fell
-    would pass whichever cells went.
-    """
-    path = a_narrow_day(tmp_path)
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        before = list(csv.DictReader(handle))
-
-    widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        after = list(csv.DictReader(handle))
-    assert len(after) == len(before)
-    for old, new in zip(before, after, strict=True):
-        carried = {name: value for name, value in old.items() if name not in DROPPED_CELLS}
-        assert set(old) - set(new) == DROPPED_CELLS & set(old)
-        # The appended stamp is empty: these rows were fitted before it existed.
-        assert {name: new[name] for name in carried} == carried
-        assert [new[name] for name in STAMP] == ["", "", ""]
-
-
-def test_a_second_pass_over_a_widened_store_writes_nothing(tmp_path: Path) -> None:
-    """A widener that cannot be run twice is a widener nobody can re-run after a failure."""
-    path = a_narrow_day(tmp_path)
-
-    first = widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-    settled = path.read_bytes()
-    second = widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-
-    assert [entry.changed for entry in first] == [True]
-    assert [entry.changed for entry in second] == [False]
-    assert path.read_bytes() == settled
-
-
-def test_a_day_still_carrying_a_dropped_column_refuses_the_append_until_it_is_re_filed(
-    tmp_path: Path,
-) -> None:
-    """The other direction, and the one a deletion needs.
-
-    `require_matching_header` compares widths, so a file one column WIDER than
-    the contract is as dead to the next append as one that is narrower - and the
-    raise costs the run its whole commit step, every ledger staged beside this
-    one included.
-    """
-    path = a_wide_day(tmp_path)
-    fresh = a_fresh_threshold(path)
-    assert set(ledger.read_header(path)) - set(FittedSimilarityThreshold.csv_columns()) == DROPPED_CELLS
-
-    with pytest.raises(ValueError, match="Migrate the ledger"):
-        ledger.append_fitted_thresholds(tmp_path, DATE, [fresh])
-
-    widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-
-    assert ledger.append_fitted_thresholds(tmp_path, DATE, [fresh]) == 1
-    assert ledger.read_header(path) == FittedSimilarityThreshold.csv_columns()
-
-
-def test_without_the_carried_entry_the_same_file_refuses_to_re_file(tmp_path: Path) -> None:
-    """The bite proof for the test above, and the reason the entry ships in this commit.
-
-    `migrate_header` refuses any heading it cannot place rather than dropping
-    cells silently, so a column deleted from the contract without an entry in
-    `FITTED_SIMILARITY_THRESHOLD_CARRIED` leaves every committed day file unappendable
-    AND unrepairable at once.
-
-    The carried set is passed empty here rather than edited, which is the same
-    call the re-file makes with the entry missing.
-    """
-    path = a_wide_day(tmp_path)
-    before = path.read_bytes()
-
-    with pytest.raises(ValueError, match="cannot place"):
-        ledger.migrate_header(
-            path,
-            FittedSimilarityThreshold.csv_columns(),
-            ledger.refiler(FittedSimilarityThreshold),
-            carried=(),
-        )
-
-    assert path.read_bytes() == before, "the refusal moves nothing"
-    assert DROPPED_CELLS <= ledger.FITTED_SIMILARITY_THRESHOLD_CARRIED, (
-        "the entry that makes the re-file above succeed"
-    )
-
-
-def test_re_filing_a_dropped_column_away_keeps_every_cell_the_contract_still_names(
-    tmp_path: Path,
-) -> None:
-    """A dropped cell goes and nothing beside it moves.
-
-    Read by name, so a row that lost the wrong cell fails here rather than
-    passing a width check that only counts columns.
-    """
-    path = a_wide_day(tmp_path)
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        before = list(csv.DictReader(handle))
-
-    widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        after = list(csv.DictReader(handle))
-    assert len(after) == len(before)
-    for old, new in zip(before, after, strict=True):
-        assert set(old) - set(new) == DROPPED_CELLS
-        assert new == {name: cell for name, cell in old.items() if name not in DROPPED_CELLS}
-
-
-def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: Path) -> None:
-    """The report is the deliverable of a dry run, so it has to be the live run's report."""
-    path = a_narrow_day(tmp_path)
-    untouched = path.read_bytes()
-
-    dry = widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=False
-    )
-
-    assert path.read_bytes() == untouched
-    assert [(e.path, e.columns_before, e.columns_after, e.rows, e.changed) for e in dry] == [
-        (
-            f"content-similarity-judge/fitted-thresholds/{DATE.replace('-', '/')}.csv",
-            len(FittedSimilarityThreshold.csv_columns()) - len(STAMP) + len(DROPPED_CELLS),
-            len(FittedSimilarityThreshold.csv_columns()),
-            1,
-            True,
-        )
-    ]
-
-    live = widen_ledger_header.widen(
-        TARGET, names=[DATE.replace("-", "/") + ".csv"], state_dir=tmp_path, write=True
-    )
-
-    assert live == dry
 
 
 def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(
@@ -291,19 +31,17 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(
 ) -> None:
     """An operator who typed a real ledger is holding a real question.
 
-    Every ledger in the vocabulary has a reader today, so the case is built: a
-    word for the folder the judge's scored pairs filled as CSV before they moved
-    to the door. Its day files are real, and the registry names no contract that
-    reads one of their rows. Saying so beats reporting that nothing happened to
-    a file that is plainly there.
+    No ledger in the vocabulary has a reader now, so the case is built: a word
+    for the folder the judge's fitted line filled as CSV before it moved to the
+    door. Its day files are real, and the registry names no contract that reads
+    one of their rows. Saying so beats reporting that nothing happened to a file
+    that is plainly there.
 
     **This target used to be `scores`, and that was a bug.** `scores` was a day
     tree, so the refusal it was asserting stopped being about a ledger with no
-    reader the moment the lookup learnt to ask the day trees' own table. A
-    refusal is the right answer for exactly the ledgers in `UNREGISTERED`
-    below, and the census there is what keeps this one honest.
+    reader the moment the lookup learnt to ask the day trees' own table.
     """
-    folder = "content-similarity-judge/scored-pairs"
+    folder = "content-similarity-judge/fitted-thresholds"
     word = folder.replace("/", "-")
     monkeypatch.setattr(
         widen_ledger_header,
@@ -329,48 +67,17 @@ def test_the_utility_names_exactly_the_prune_verbs_csv_ledgers() -> None:
     assert dict(widen_ledger_header.LEDGERS) == dict(prune.TARGETS)
 
 
-def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: Path) -> None:
-    """Every ledger in the vocabulary is named before its first writer lands.
+def test_no_ledger_is_left_for_the_widener_to_re_file(tmp_path: Path) -> None:
+    """The vocabulary and the readers are both empty, so the fitted line is refused as a word.
 
-    There is no header on disk to disagree with the contract, so there is
-    nothing to re-file - and a refusal there would say a ledger was broken when
-    it was only new.
+    A ledger that returned to CSV would join both lists, and this fails until
+    the change that brings it back says what reads its rows.
     """
-    with pytest.raises(FileNotFoundError):
-        widen_ledger_header.widen(TARGET, names=["2026/09/18.csv"], state_dir=tmp_path)
-
-
-def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
-    tmp_path: Path,
-) -> None:
-    """The census. A ledger that quietly loses its reader is named here, not counted.
-
-    This is the test the file did not have on 2026-09-22, when five day trees
-    left `ledger.keyed_paths` and the door started refusing them. Nine of
-    fourteen ledgers were dead and every test was green, because the only refusal
-    under test was one the file asserted was correct.
-
-    Asserted as set equality in both directions at once, so it is red when a
-    ledger loses its reader AND red when an unregistered ledger gains one. Either way
-    the diff names the ledger.
-
-    One header-only file per ledger, because `widen` reports nothing for a ledger
-    with no file and the question here is the lookup, not the re-file.
-    """
-    refused: set[str] = set()
-    for name, relpath in widen_ledger_header.LEDGERS.items():
-        day = tmp_path / relpath / CENSUS_DATE.replace("-", "/")
-        day.parent.mkdir(parents=True, exist_ok=True)
-        day.with_suffix(".csv").write_text("version\n", encoding="utf-8", newline="")
-        try:
-            widen_ledger_header.widen(
-                name, names=[CENSUS_DATE.replace("-", "/") + ".csv"], state_dir=tmp_path
-            )
-        except ValueError as refusal:
-            assert "names a reader for" in str(refusal)
-            refused.add(name)
-
-    assert refused == UNREGISTERED
-    assert len(widen_ledger_header.LEDGERS) - len(refused) == 1, (
-        "the one ledger in the vocabulary has CSV headers"
-    )
+    assert widen_ledger_header.LEDGERS == {}
+    assert ledger.keyed_paths(tmp_path, date=None) == []
+    with pytest.raises(ValueError, match="re-files a ledger"):
+        widen_ledger_header.widen(
+            "content-similarity-judge-fitted-thresholds",
+            names=["2026/09/18.csv"],
+            state_dir=tmp_path,
+        )

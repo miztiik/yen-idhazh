@@ -28,7 +28,6 @@ from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJ
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -169,14 +168,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             lambda: source_health.file_retirements(
                 s, [_first(FeedRetirementRow)], _identity(ServerJob.PLAN)
             ),
-        ),
-    ),
-    "append_fitted_thresholds": (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_fitted_thresholds(s, A_DAY, [_first(FittedSimilarityThreshold)]),
         ),
     ),
     "score_merge_line_holdout": (
