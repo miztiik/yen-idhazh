@@ -884,7 +884,7 @@ def test_the_fingerprint_job_reaches_the_stage_as_the_enum_it_is_declared_for() 
     `stage_fingerprint` is declared `job: ServerJob`, and the bench passes
     `--job runtime` on the command line. Nothing converted it, so the stage got
     a bare string - harmless until a segment name asked it for `.value`, which
-    is what `write_segment` began doing. Every test of this stage called it with
+    is what the CSV segment writer began doing. Every test of this stage called it with
     the enum directly, so all of them passed while the one caller that matters
     was broken.
 

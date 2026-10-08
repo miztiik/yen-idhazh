@@ -113,8 +113,7 @@ flowchart TB
 ```
 
 **The CSV day trees are not on this path.** A compaction never reads or writes
-them; their closed days are folded in place by the retention task that owns each
-tree, in [the closed-day fold](idhazh-gardener.md#the-closed-day-fold).
+them.
 
 ## One pass, in order
 

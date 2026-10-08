@@ -5,9 +5,8 @@
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
 shard checks before and after its tasks run, what each line of its log says and
-what its job page says, how its one record lands on `main` however many shards
-race it, and how a retention task folds the closed days of a CSV day tree into
-one file each. What each knob means is
+what its job page says, and how its one record lands on `main` however many
+shards race it. What each knob means is
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md);
 the workflow that wakes it is `.github/workflows/idhazh-gardener.yml`, once a
 day at 00:40 UTC or when a person dispatches it.
@@ -405,7 +404,7 @@ the log record (`event_log.payload`), never its text.
 | 4 | `expired-years-chosen` | Before a compaction's yearly expiry deletes anything, when its declaration sets `yearly_prune_enable` and `yearly_keep_months` | The ledger, and the expired UTC years the pass takes, oldest first, or none ([ledger-compaction.md](ledger-compaction.md#yearly-expiry)) |
 | 5 | `periods-chosen` | Before a compaction's steps run | Which periods each step may take, and why they start where they do ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)) |
 | 6 | `period-refused`, `download-over-budget`, `ledger-fault-met`, `raw-file-skipped` | When a compaction step refuses a period, stops at the download budget, passes a month file already gone, or meets a raw file outside a day folder | The ledger, the step, the period or path, and the words that say why |
-| 7 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, what its fold did, and what a compaction did period by period |
+| 7 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, and what a compaction did period by period |
 | 8 | `logged-text` | When a module outside the gardener logs text while a task runs | The logger and the message as it was said |
 | 9 | `shard-published` | Once a shard, when it ends, whatever ended it | The tasks it ran and the ones that failed, how its commit came to rest on main or why it never did, the try, the record, the downloads against their budget, the exit code and what it means, and the type and place of an exception that stopped it |
 
@@ -413,8 +412,8 @@ the log record (`event_log.payload`), never its text.
 `failed`, `deferred`, `dry-run`, `ceiling`, `done`, and otherwise the pass's
 own idle word - `outside-range` when a person named a range, `empty` when the
 ledger holds nothing for any step to start from, and `not-due` for everything
-else. A pass found work when its window held a member, it wrote or would write
-a file, or its fold found a closed day or month. A pass that found work and
+else. A pass found work when its window held a member, or it wrote or would
+write a file. A pass that found work and
 carried none of it out ends `dry-run`, so a live compaction whose only work is
 the months a report-only monthly window names ends `dry-run` too. A report a
 task files on every pass is not work. `next` is one fixed sentence for the word, or the
@@ -525,7 +524,7 @@ none: it never runs as a step on GitHub.
 `backend/utilities/gardener_publish.py` is the only code that pushes. It is the
 entry point a shard runs: it reads the commit the checkout is at, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
-shard's live tasks and live folds wrote and deleted, every report any of its
+shard's live tasks wrote and deleted, every report any of its
 tasks filed, and the commit message. Each attempt fetches `main` and builds the
 commit in an index file of its own: `main`'s tree read in, each write's new
 content set, each deletion taken out by its name. So a file the checkout never
@@ -739,70 +738,6 @@ order, stops at the first root that needs another wake, and writes one record
 row for the task. Production compactions keep their existing single-root path
 and remain the authority for production retention and prune refusals.
 
-## The closed-day fold
-
-**A CSV day tree files one file per writer, and a closed day folds into one.**
-`state/<tree>/<YYYY>/<MM>/<DD>/` holds one CSV per writer -
-`<run_id>-<attempt>-<job>-<shard>.csv` - which is what lets two jobs push at
-once, and it leaves about a hundred small files in a busy day. Once the day is
-closed, `backend/idhazh/gardener/closed_day_fold.py` reads it through the
-settlement every reader uses, writes the answer as `settled.csv`, and deletes
-the files it read. It changes no answer a reader gets
-([../../concepts/partitions.md](../../concepts/partitions.md)).
-
-**The retention task that owns each tree folds it**, when its declaration
-carries a `fold` block. No current task carries one: feed-health now uses the
-ledger door, so it is not a CSV day tree. A future fold can run only for
-a ledger registered in `DAY_TREES`, and the task that owns that tree must own
-its folder. Which trees a task folds is read from the folders it walks, so one
-job writes each tree a wake and no tree is checked out twice. Other ledgers
-under `state/raw/` are packed by their own compaction tasks.
-
-**A task may settle a closed month whole.** With `fold.settles_months`, once a
-month's last day is closed - `fold.after_days` whole days after the month ends -
-the fold settles every file of that month, each day's writer files and settled
-files alike, into one `settled.csv` in the month's own folder,
-`state/<tree>/<YYYY>/<MM>/settled.csv`, and deletes what it read. A day of a
-closed month is the month's from then on, and a file a re-run adds to it later
-is settled in at the next wake. No current task enables this option.
-A month's rows name no day, so the loader refuses the switch beside a window of
-days, which would take the month's file whole once its first day aged out.
-
-| Step | What happens |
-| --- | --- |
-| 1 | The task's window runs first, dry or live, and returns what it took |
-| 2 | The runner calls the fold, unless the window failed - then the fold waits a wake, and the row's fold cells stay empty |
-| 3 | The fold lists only its fixed day and month windows, then takes each closed period that still holds a writer file. `fold.after_days` sets when a period closes; `fold.settles_months` settles a closed month whole and leaves its days to it |
-| 4 | It skips a day folder the window took, or would take on a dry run, and a month holding one: a shard refuses a path it both writes and deletes |
-| 5 | It settles each month, then each day, writes `settled.csv` in its folder and deletes the rest - or, on a dry run, reads and settles each one and changes nothing |
-
-**The fold lands on its own switch.** `fold.dry_run` is the fold's, apart from
-the window's `dry_run`, and the runner lands the fold's writes and deletions
-whenever the fold is live - a live fold inside a dry task would otherwise change
-the disk and stage nothing. Every path the fold touches is held to what the task
-owns, like every other. The feed-health fold runs live while its age-deletion
-window only reports.
-
-**The row says what the fold did.** `fold_dry_run`, `folded_days`,
-`folded_months` and `folded_files` sit on the task's own row beside the window's
-`dry_run`, `deleted` and `bytes_freed`, and are empty when the fold did not run.
-`folded_months` counts the closed months settled whole, 0 where none was, and
-`folded_files` counts every file a month or a day replaced. A fold that stops
-part way - a row that will not read, a stray file - keeps the months and days it
-settled, and its fault decides the task's row: `failed`, fault `raised`, for a
-defect, and the task exits 1; `deferred`, fault `api-unavailable`, when a
-download it needed did not answer. A window that stopped either way stops the
-fold for that wake.
-
-**A re-run that lands after a fold is folded in at the next wake.** Its writer
-file sits beside the day's `settled.csv`, or in a day of a settled month, and the
-next fold reads it with the settled file it joins. One that
-lands while the fold's push is still trying survives too: each try stages the
-fold's own paths on the new tip, and the re-run's file is not one of them.
-Staging names a deleted file as deleted even where git would call the pair a
-rename - a day of one writer file settles to nearly the same bytes, and a
-deletion read as a move would look unstaged and stop the shard.
-
 ## Design rationale
 
 **2026-09-27: `attempts` must be above `shards`.** Every shard of one wake pushes
@@ -969,17 +904,14 @@ the reader would fetch them and fail. So the listing takes in each task's writes
 and deletions, and a fetch widens the checkout only by the folders that bring a
 file it lacks.
 
-**2026-09-28: the task that owns each CSV day tree folds it, on a switch of its
-own.** A fifth task kind was considered and dropped: it would put five of six
-folds in a different shard from the tree they fold, so a tree would be checked
-out twice. One switch for window and fold was dropped too: the fold runs live
-and every window reports, so one `dry_run` would record a deletion as a dry run.
-The runner calls the fold rather than each task module, so a module cannot
-forget a fold its declaration asks for, and a failed window stops that wake's
-fold, because what it took is then a list nothing has checked (Fowler and
-Carmack). A day is closed one whole day after it ends, the compaction's rule: of
-755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
-its day ended (Carmack's reading).
+**2026-10-08: the closed-day fold is gone, and so is the `fold` block of a
+retention declaration.** No ledger has filed a writer's CSV file into a day
+folder since feed health moved to the ledger door, and no declaration asked
+for a fold, so the fold, its switch and its event were deleted rather than
+kept for a tree that no writer fills. A declaration that still carries `fold`
+is refused by name when it loads. The gardener's row keeps its four fold
+cells, because rows written while a fold ran still carry them, and removing a
+persisted field needs a migration that buys nothing here (Fowler).
 
 **2026-10-07: only a code defect turns a run red, and every stop says why in one
 word.** A stop for a cause outside the code - GitHub's API not answering, a
@@ -997,7 +929,7 @@ already does and nothing yet says how often its API is unavailable; how often
 `deferred` appears on the record is what would price a retry library (Fowler
 review, 2026-10-04). One function, `error_cause.classify`, reads every error a
 pass meets, in a module of its own rather than the GitHub driver, because the
-walk, the runner, the fold, the ledger prune and the compaction's download
+walk, the runner, the ledger prune and the compaction's download
 budget all ask it, and the walk could not import the driver that imports it
 (Fowler, 2026-10-07). A missing packed file a re-run or a late file would be
 settled into takes the word an unreadable one does, `packed-file-unreadable`,

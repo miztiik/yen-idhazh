@@ -28,7 +28,6 @@ from idhazh import config
 from idhazh.config import GardenerSettings
 from idhazh.contracts.collection_prune import Recovery, StopReason
 from idhazh.contracts.gardener_events import (
-    FoldSettled,
     PeriodsTaken,
     ShardPublished,
     ShardStop,
@@ -410,15 +409,6 @@ def test_downloads_are_read_against_the_budget_and_said_over_it_as_a_defect() ->
             a_task("old-days", TaskOutcome.DONE, taken=["a", "b"], bytes_freed=3 * 1024 // 2),
             "deleted 2 files, freed 1.5 KB",
             id="a-retention-task-deletes-files",
-        ),
-        pytest.param(
-            a_task(
-                "traces",
-                TaskOutcome.DONE,
-                fold=FoldSettled(dry_run=False, settled=["state/t/2026-09.csv"], replaced=12),
-            ),
-            "merged 1 finished day or month into one file each, replacing 12 files",
-            id="a-live-fold",
         ),
         pytest.param(
             a_task(

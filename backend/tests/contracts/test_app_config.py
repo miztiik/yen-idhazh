@@ -1394,13 +1394,16 @@ def test_a_config_still_spelling_the_judging_bound_under_run_is_refused() -> Non
 
 
 def test_a_config_still_spelling_the_fold_cover_under_run_is_refused() -> None:
-    """The closed-day fold is the gardener's now, and so is the rule for when a day is closed.
+    """The closed-day fold this number tuned is gone, and so is every rule for when it ran.
 
     A number left under `run` would be read by nothing, and whoever set it would
-    believe they had moved a line that did not move - so it is refused, naming
-    where the rule lives now.
+    believe they had moved a line that did not move - so it is refused, saying
+    that nothing replaces it rather than pointing at a knob that no longer exists.
     """
-    with pytest.raises(ValidationError, match=re.escape("fold.after_days")):
+    with pytest.raises(
+        ValidationError,
+        match=re.escape("run.settled_fold_after_days is gone and nothing replaces it"),
+    ):
         AppConfig.model_validate({"run": {"settled_fold_after_days": 7}})
 
 

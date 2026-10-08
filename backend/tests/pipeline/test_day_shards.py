@@ -229,12 +229,12 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 #:
 #: The cleanup passes left `retention.py` for the gardener's tasks, so their walk
 #: is named where it runs now, each with the day-file call it would be if it
-#: went back.
+#: went back. The gardener's closed-day fold walked the shards too, and it is
+#: gone with the CSV day trees it settled.
 #:
 #: Written out rather than discovered. A discovered list passes on a module
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
-    ("backend/idhazh/gardener/closed_day_fold.py", "day_files(root)", "shard_files("),
     ("backend/idhazh/gardener/retention_files.py", "day_files(tree)", "shards_by_month("),
 )
 

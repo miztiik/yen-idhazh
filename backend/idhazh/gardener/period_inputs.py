@@ -9,14 +9,12 @@ its steps names the periods it chooses as it runs.
 from __future__ import annotations
 
 import calendar
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path, PurePosixPath
 
 from idhazh import ledger, month_partition
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.knobs.gardener import (
-    DEFAULT_DAY_LOOKBACK_PERIODS,
-    DEFAULT_MONTH_LOOKBACK_PERIODS,
     CompactionPolicy,
     DaysWindow,
     MonthsWindow,
@@ -25,25 +23,9 @@ from idhazh.contracts.knobs.gardener import (
 )
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.gardener import ledger_marks, schedule
+from idhazh.gardener import ledger_marks
 
 _TRIAL_ROOT_PREFIX = "state/pipeline-tests-"
-
-
-def _month_shift(month: str, count: int) -> str:
-    """Move a real month stem by a signed number of calendar months."""
-    year, number = map(int, month.split("-"))
-    total = year * 12 + number - 1 + count
-    return f"{total // 12:04d}-{total % 12 + 1:02d}"
-
-
-def _newest_eligible_month(today: date, after_days: int) -> str:
-    """The newest closed month old enough at 00:00 UTC on this day."""
-    now = datetime.combine(today, datetime.min.time(), tzinfo=UTC)
-    cursor = _month_shift(today.strftime("%Y-%m"), -1)
-    while not schedule.is_month_eligible(cursor, now=now, after_days=after_days):
-        cursor = _month_shift(cursor, -1)
-    return cursor
 
 
 def _day_window(name: str, policy: RetentionPolicy, today: date) -> tuple[str, str]:
@@ -69,37 +51,6 @@ def _month_window(policy: RetentionPolicy, today: date) -> tuple[str, str]:
     return first[0], first[-1]
 
 
-def _fold_day_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None:
-    """The closed day periods a task's independent fold may settle."""
-    if policy.fold is None:
-        return None
-    lookback = policy.lookback or DEFAULT_DAY_LOOKBACK_PERIODS
-    newest_day = schedule.newest_eligible(
-        now=datetime.combine(today, datetime.min.time(), tzinfo=UTC),
-        after_days=policy.fold.after_days,
-    )
-    first_day = newest_day - timedelta(days=lookback)
-    return first_day.isoformat(), newest_day.isoformat()
-
-
-def _fold_month_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None:
-    """The closed month periods a task's independent fold may settle."""
-    if policy.fold is None or not policy.fold.settles_months:
-        return None
-    lookback = policy.lookback or DEFAULT_MONTH_LOOKBACK_PERIODS
-    newest = _newest_eligible_month(today, policy.fold.after_days)
-    first_month = _month_shift(newest, -lookback)
-    months = month_partition.months_between(first_month, newest)
-    return months[0], months[-1]
-
-
-def _fold_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None:
-    """The main fixed period range for a task's independent fold."""
-    if policy.fold is None:
-        return None
-    return _fold_month_window(policy, today) or _fold_day_window(policy, today)
-
-
 def scheduled_range(
     name: str, policy: TaskPolicy, today: date
 ) -> tuple[str, str] | None:
@@ -114,7 +65,7 @@ def scheduled_range(
         return _day_window(name, policy, today)
     if isinstance(policy.window, MonthsWindow):
         return _month_window(policy, today)
-    return _fold_window(policy, today)
+    return None
 
 
 def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], tuple[str, ...]]:
@@ -319,22 +270,4 @@ def paths_for_task(
                 paths.update(_ledger_paths(folder, repo_root, which, days, months, monthly=monthly))
             continue
         paths.update(_dated_paths(root, days, months, monthly=monthly))
-    if isinstance(policy, RetentionPolicy) and policy.fold is not None:
-        fold_ranges = (
-            (_fold_month_window(policy, today), True),
-            (_fold_day_window(policy, today), False),
-        )
-        for fold_range, fold_monthly in fold_ranges:
-            if fold_range is None or fold_range == period_range:
-                continue
-            fold_days, fold_months = periods_in_range(fold_range)
-            for folder in policy.owns or ():
-                paths.update(
-                    _dated_paths(
-                        repo_root / folder,
-                        fold_days,
-                        fold_months,
-                        monthly=fold_monthly,
-                    )
-                )
     return tuple(sorted(paths))

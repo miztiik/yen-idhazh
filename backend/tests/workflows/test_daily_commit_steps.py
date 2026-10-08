@@ -80,7 +80,7 @@ ANOTHER_EXECUTION: Final = "40000000002"
 #: name rather than only at the front.
 THE_DAY: Final = "2026-09-22"
 
-#: What `ledger.day_shard_path` is given, as opposed to what GitHub allocates.
+#: The run a writer's file names, as opposed to what GitHub allocates.
 THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
 ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
 

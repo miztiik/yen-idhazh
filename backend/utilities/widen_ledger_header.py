@@ -14,12 +14,11 @@ This is the operator's door onto it.
 
 The ledger is named from the prune verb's own word list, so one set of words means
 one set of ledgers wherever an operator types one. The contract that reads a row
-comes off the two registries that already pair a committed file with its reader -
-`ledger.keys._TREE_SHAPES` through `segment_contract` for a day tree, and
-`ledger.keyed_paths` for a ledger the post-merge settlement still covers. No list
-is restated here, so none can drift from this one. A word outside the vocabulary
-and a ledger neither registry names a reader for are two different refusals, and
-each says which it is.
+comes off the registry that already pairs a committed file with its reader,
+`ledger.keyed_paths`, the ledgers the post-merge settlement still covers. No
+list is restated here, so none can drift from that one. A word outside the
+vocabulary and a ledger the registry names no reader for are two different
+refusals, and each says which it is.
 
 **The dry run is the default, as it is for the prune verb.** Writing takes a word
 nobody types by accident. Both modes migrate a copy in a temporary directory and
@@ -57,7 +56,6 @@ from types import MappingProxyType
 from typing import Final
 
 from idhazh import config, ledger
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.ledger import CsvContract
 from idhazh.telemetry import prune
 
@@ -149,24 +147,13 @@ def _refile(
 def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozenset[str]]:
     """The contract that reads one row of this ledger, and the headings it carries.
 
-    **Two registries, asked in turn, and neither one restated here.** A day tree
-    declares its reader in `ledger.keys._TREE_SHAPES`, reached through
-    `segment_contract` and `segment_carried`; every other ledger declares it in
-    `ledger.keyed_paths`, where a committed file is paired with the contract the
-    post-merge settlement reads it with. A ledger is in one or the other, so the
-    order only decides which answer arrives first.
+    **One registry, and it is not restated here.** `ledger.keyed_paths` pairs a
+    committed file with the contract the post-merge settlement reads it with.
+    The carried set travels with the reader from that same entry: a ledger
+    whose retired headings were looked up separately is a ledger where the two
+    lists can disagree.
 
-    Asking both is the whole point. Five day trees left `keyed_paths` on
-    2026-09-22 when each became a day directory whose writers cannot collide, and
-    a door that knew only that registry refused them from that morning on -
-    silently, because refusing a ledger that has no reader is also the correct
-    answer for a ledger that genuinely has none.
-
-    The carried set travels with the reader, from whichever registry answered: a
-    ledger whose retired headings were looked up separately is a ledger where the
-    two lists can disagree.
-
-    A ledger neither registry names a reader for is refused with the reason rather
+    A ledger the registry names no reader for is refused with the reason rather
     than skipped: an operator who typed it is holding a real question, and
     "nothing happened" is not the answer to it.
 
@@ -177,23 +164,14 @@ def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozens
     exist: the dated cover joins one path per ledger rather than opening anything,
     and only the parents of that path are read here.
     """
-    try:
-        tree = LedgerName(root.relative_to(state_dir).as_posix())
-    except ValueError:
-        pass
-    else:
-        if tree in DAY_TREES:
-            return ledger.segment_contract(tree), ledger.segment_carried(tree)
-
     today = datetime.now(UTC).date().isoformat()
     for entry in ledger.keyed_paths(state_dir, date=today):
         if root == entry.path.parent or root in entry.path.parents:
             return entry.model, entry.carried
     raise ValueError(
-        f"{root.name} holds files that neither `DAY_TREES` nor "
-        "`ledger.keyed_paths` names a reader for, so nothing here knows which "
-        "contract writes its header. Register the shape in one of them, or re-file "
-        "the ledger from the code that owns it."
+        f"{root.name} holds files that `ledger.keyed_paths` never names a reader for, "
+        "so nothing here knows which contract writes its header. Register the shape "
+        "there, or re-file the ledger from the code that owns it."
     )
 
 

@@ -7,8 +7,8 @@ import inspect
 
 import pytest
 
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.ledger import keys, paths, rows, staging
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.ledger import paths, rows, staging
 
 pytestmark = pytest.mark.contract
 
@@ -36,19 +36,6 @@ def _path_builders(tree: ast.Module) -> tuple[set[str], set[str]]:
         target = generic if LedgerName.__name__ in annotations else naming
         target.add(node.name)
     return generic, naming
-
-
-def test_the_day_trees_are_exactly_the_ledgers_with_a_settlement_shape() -> None:
-    """The subset and the table it keys have to be the same set.
-
-    A member of the subset with no shape is a segment call that raises on a
-    lookup nobody wrote a message for; a shape for a ledger outside the subset is
-    a settlement rule the refusal makes unreachable. This is the coverage test
-    the widened argument rests on: the type now admits every ledger under
-    `state/`, so the set that says which of them a writer files into is the only
-    thing left saying no.
-    """
-    assert set(keys._TREE_SHAPES) == DAY_TREES
 
 
 def test_every_path_under_state_is_built_from_a_name_this_vocabulary_declares() -> None:

@@ -2,8 +2,7 @@
 
 Checks over named files or a single fixed interpreter run do not scan the
 package tree. What each one has to be able to fail is the property the move
-could break: the facade shape, the write-path composition, the load order and
-the pyarrow probe.
+could break: the facade shape, the load order and the pyarrow probe.
 
 A caller reaching a name the facade does not bind is a mypy `attr-defined`
 error, not a check here. A module outside this package importing the writer-name
@@ -24,28 +23,12 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
-from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.ledger import filenames, paths
 
 pytestmark = [pytest.mark.contract, pytest.mark.slow]
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 BACKEND: Final = REPO_ROOT / "backend"
 PACKAGE: Final = BACKEND / "idhazh" / "ledger"
-
-#: One fixed writer, so the composition and the old inline rule are compared on
-#: the same four identity cells rather than on two sets that happen to agree.
-A_DAY: Final = "2026-09-18"
-A_RUN: Final = "2026-09-18-1"
-AN_ATTEMPT: Final = 2
-A_JOB: Final = ServerJob.WORK
-A_SHARD: Final = 7
-
-#: Every tree a writer files a segment into, in one fixed order.
-WRITTEN_INTO: Final[tuple[LedgerName, ...]] = tuple(
-    sorted(DAY_TREES, key=lambda member: member.value)
-)
 
 
 def _fresh_interpreter(body: str) -> subprocess.CompletedProcess[str]:
@@ -109,32 +92,6 @@ def test_the_facade_names_its_exports_once() -> None:
     assert len(declared) == 1, f"the facade declares __all__ {len(declared)} times"
     for name in ledger.__all__:
         assert hasattr(ledger, name), f"__all__ names {name} and the facade does not bind it"
-
-
-# --- the day-shard write path composes to the address it always had ----------
-
-
-@pytest.mark.parametrize(
-    "tree", WRITTEN_INTO, ids=[member.value for member in WRITTEN_INTO]
-)
-def test_a_writers_day_shard_is_the_day_directory_plus_the_writers_name(
-    tree: LedgerName, tmp_path: Path
-) -> None:
-    """The one write path rewritten rather than moved, so nothing else covers it.
-
-    `day_shard_path` used to hold the join in its own body. It now composes the
-    day directory from the registry with the writer's name from the filename
-    grammar, and this says the two spell the same address - in both forms, for
-    every tree a writer files into.
-    """
-    name = filenames.segment_name(run_id=A_RUN, attempt=AN_ATTEMPT, job=A_JOB, shard=A_SHARD)
-    built = ledger.day_shard_path(
-        tmp_path, tree, date=A_DAY, run_id=A_RUN, attempt=AN_ATTEMPT, job=A_JOB, shard=A_SHARD
-    )
-    assert built == paths.path(tmp_path, tree, A_DAY) / name
-    assert ledger.day_shard_relpath(
-        tree, date=A_DAY, run_id=A_RUN, attempt=AN_ATTEMPT, job=A_JOB, shard=A_SHARD
-    ) == f"{paths.relpath(tree, A_DAY)}/{name}"
 
 
 # --- the package and day_shards stay acyclic ---------------------------------

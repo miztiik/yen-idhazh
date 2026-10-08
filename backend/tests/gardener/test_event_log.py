@@ -37,7 +37,6 @@ from idhazh.contracts.base import Model
 from idhazh.contracts.collection_prune import Recovery, StopReason
 from idhazh.contracts.gardener_events import (
     DownloadOverBudget,
-    FoldSettled,
     LoggedText,
     PeriodsChosen,
     PeriodsTaken,
@@ -92,7 +91,6 @@ def finished() -> TaskFinished:
         recovered=[Recovery(note=RecoveryNote.CARRIED_OVER, subject="2026-09-20")],
         next="it stopped at its ceiling, and the next wake goes on from there",
         duration_ms=31,
-        fold=FoldSettled(dry_run=True, settled=[], replaced=0),
         periods=PeriodsTaken(
             days_packed=["2026-09-20"],
             days_retaken=[],

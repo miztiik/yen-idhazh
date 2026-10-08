@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -171,8 +171,8 @@ of the day and the day's own metrics.
 writer filed into `state/segments/` and a later fold read it into a `<DD>.csv`
 head, which left every ledger with one path two runs of one day both computed
 bytes for. Now the day directory is the ledger. The gardener's closed-day fold
-still runs, but only over a day no run will write again: it folds that day's
-writer files into one `settled.csv` to save files, and it changes no answer.
+settled a day no run would write again into one `settled.csv` to save files,
+and changed no answer, until no ledger was left filing writer files that way.
 
 The item-health, summary-quality-evals and host-fingerprint ledgers have since moved to the
 ledger door: each writer's file is a raw file under `state/raw/<ledger>/`, and a

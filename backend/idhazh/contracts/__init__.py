@@ -59,7 +59,7 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -195,7 +195,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
 
 __all__ = [
     "CONTRACTS",
-    "DAY_TREES",
     "AppConfig",
     "Article",
     "ArticleStatus",

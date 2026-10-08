@@ -54,15 +54,14 @@ is what the shard's owned folders weighed at the commit it checked out, and
 Both are the same on every row of one record, so where the weight sits is read
 off the record rather than measured again.
 
-**A task that folds says so on the same row.** `dry_run`, `deleted` and
-`bytes_freed` describe the task's window. A retention task that owns a CSV day
-tree also folds its closed days into one file each, and its closed months too
-where its declaration asks, on a switch of its own, and `fold_dry_run`,
-`folded_days`, `folded_months` and `folded_files` say what that fold did. They
-are empty when the task has no fold, and when its fold did not run because the
-window failed first: empty says "did not run", where 0 says "ran and found
-nothing". `folded_months` is empty on a row written before a fold could settle
-a month, too.
+**Four cells record a fold that no longer runs.** `dry_run`, `deleted` and
+`bytes_freed` describe the task's window. A retention task that owned a CSV day
+tree once also folded its closed days into one file each, and its closed months
+too where its declaration asked, on a switch of its own, and `fold_dry_run`,
+`folded_days`, `folded_months` and `folded_files` say what that fold did. No
+task folds now, so a row written today leaves all four empty: empty says "did
+not run", where 0 says "ran and found nothing". The cells stay so that a row
+which carries them still reads.
 """
 
 from __future__ import annotations

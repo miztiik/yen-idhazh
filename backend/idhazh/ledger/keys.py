@@ -5,10 +5,10 @@ settles one: the append that runs from the commit step, the fold a reader takes
 over a day directory, and the compaction. A second copy of a key is how two
 readers start disagreeing about what one file holds.
 
-Two tables pair a key with the contract that reads a row: one for the CSV day
-trees, and one for the ledgers the door in `ledger/persist.py` files under
-`state/raw/` and `state/compact/`. The second also holds each ledger still on
-CSV that is ready to move, so moving one is a switch of its registry grain.
+One table pairs a key with the contract that reads a row: the ledgers the door
+in `ledger/persist.py` files under `state/raw/` and `state/compact/`. It also
+holds each ledger still on CSV that is ready to move, so moving one is a switch
+of its registry grain.
 
 Where a ledger's file lives is a different question with its own home, which is
 why `paths` imports nothing from here and this module imports nothing from it.
@@ -17,7 +17,7 @@ why `paths` imports nothing from here and this module imports nothing from it.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final, NamedTuple
+from typing import Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
@@ -32,7 +32,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
@@ -41,15 +41,9 @@ from idhazh.contracts.story_similarity_pair import (
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
-if TYPE_CHECKING:
-    # The row protocol is a typing fact here and never a value, so it is read at
-    # check time only. It keeps this module's runtime imports to the contracts.
-    from idhazh.ledger.csv_file import CsvContract
-
-
-#: The column every day tree except the score index routes a row by. Named once
-#: here because the router reads it out of a contract's own cells, and a second
-#: spelling of it would file a row under a day nobody can find it in.
+#: The column the door files a dated row under, read out of the row's own cells.
+#: Named once here because a second spelling of it would file a row under a day
+#: nobody can find it in.
 DATE_CELL: Final = "date"
 
 
@@ -289,57 +283,6 @@ STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
 
 #: The same again, for the fitted line's day files.
 FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
-
-
-class _TreeShape(NamedTuple):
-    """One day tree's answer to "what settles two of its rows, and who reads one"."""
-
-    key: tuple[str, ...]
-    model: type[CsvContract]
-    carried: frozenset[str] = frozenset()
-
-
-#: What settles two rows of one day tree, and the contract that reads one. A
-#: declared table rather than a rule a reader re-derives: the key is a fact about
-#: the ledger and a second copy of it is how two readers start disagreeing.
-_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {}
-
-
-def _refuse_outside_day_trees(ledger: LedgerName) -> None:
-    """Refuse a ledger no writer files a segment into, naming it.
-
-    `LedgerName` spans every ledger under `state/`, and only a day tree holds one
-    file per writer under a day directory. So a caller can now name a ledger that
-    is the wrong shape for a segment - `scored-pairs` is a day file where this
-    would mint a directory - and a wrong call has to be answered at the call
-    rather than by writing a path no reader walks.
-    """
-    if ledger not in DAY_TREES:
-        raise ValueError(f"{ledger.value} is not a day tree, so it holds no writer's segment")
-
-
-def segment_contract(ledger: LedgerName) -> type[CsvContract]:
-    """The model that reads one of this ledger's rows.
-
-    Asked before a file is named, because a file is named for the writer and a
-    row is routed by its own date cell - and a date cell is only a date once the
-    contract has read it. Naming a file from an unread cell is how a path is
-    built out of something nobody validated.
-    """
-    _refuse_outside_day_trees(ledger)
-    return _TREE_SHAPES[ledger].model
-
-
-def segment_key(ledger: LedgerName) -> tuple[str, ...]:
-    """What makes two of this ledger's rows the same record."""
-    _refuse_outside_day_trees(ledger)
-    return _TREE_SHAPES[ledger].key
-
-
-def segment_carried(ledger: LedgerName) -> frozenset[str]:
-    """The retired headings this ledger's reader can still place."""
-    _refuse_outside_day_trees(ledger)
-    return _TREE_SHAPES[ledger].carried
 
 
 class _DoorShape(NamedTuple):
