@@ -277,6 +277,7 @@ class TaskOutcome(StrEnum):
 class CompactionStep(StrEnum):
     """Which step of a compaction pass a period's event is about."""
 
+    EXPIRE_YEARS = "expire-years"
     DROP_MONTHS = "drop-months"
     PACK_YEARS = "pack-years"
     CLOSE_MONTHS = "close-months"
@@ -362,6 +363,20 @@ class ListEndMissing(Model):
     collection: str = Field(min_length=1, description="What the walk reads.")
     page: int = Field(ge=1, description="The page the count says is the last.")
     first_count: int = Field(description="What the first page says the collection holds.")
+
+
+class ExpiredYearsChosen(Model):
+    """Which expired UTC years the yearly expiry takes on this wake, said before it takes any."""
+
+    ledger: LedgerName = Field(description="The ledger the compaction packs.")
+    years: list[YearStamp] = Field(
+        description=(
+            "The expired indexed UTC years this pass takes, oldest first: at most "
+            "`max_periods_per_run`, and only whole years inside an operator range. A live pass "
+            "deletes each year's files and its entry; a dry run only names them. Empty when no "
+            "year is due."
+        )
+    )
 
 
 class PeriodRefused(Model):
