@@ -4,10 +4,12 @@ The summary is Markdown that GitHub shows on the shard's job page. It is built
 from the shard's own events, so most of what it says is pinned here on events
 built by hand: the one heading, where the record went or why nothing landed,
 the downloads against their budget, one row a task, what each word means, and
-what the tasks handled without stopping. The rest runs a real shard end to end
-through `backend/utilities/gardener_publish.py`, against a bare repository
-standing in for origin, with real fixture tasks: one whose service is down and
-one whose code is wrong, whose exception quotes a row the way fetched text could.
+what the tasks handled without stopping. What `done` and `dry-run` mean is also
+read under a compaction pass the runner runs over a tree whose only due work is
+an expired year. The rest runs a real shard end to end through
+`backend/utilities/gardener_publish.py`, against a bare repository standing in
+for origin, with real fixture tasks: one whose service is down and one whose
+code is wrong, whose exception quotes a row the way fetched text could.
 
 **Nothing a shard prints may repeat an exception's text** (Guardrail #11): not
 a printed line, not a log line with GitHub's commands beside it, and not the
@@ -61,6 +63,7 @@ from ._garden import (
     quiet_git,
     task_package,
 )
+from .tasks.test_yearly_expiry import caught_up, run_by_the_runner, summary_of
 
 WAKE: Final = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 RUN_ID: Final = "2026-09-27-18012345678"
@@ -74,6 +77,23 @@ AGED: Final = "state/old-days/2026/09/19/2026-09-19.txt"
 #: it no line a shard prints may hold.
 FETCHED: Final = "Breaking: click https://example.invalid/now"
 PLANTED: Final = "example.invalid"
+
+#: What `done` means, as the page shows it under the table: the work is finished
+#: for this wake, which says nothing about what data is left.
+DONE_LINE: Final = (
+    "- *done*: it finished its work for this wake, and the next wake takes what reaches its "
+    "line by then"
+)
+
+#: What `dry-run` means, as the page shows it under the table: `dry_run` lets a
+#: task do the work it found, an expired year included, and `month_deletes_dry_run`
+#: holds back only a compaction's old months and raw days.
+DRY_RUN_LINE: Final = (
+    "- *dry-run*: nothing was changed: it only named the work it found. Set dry\\_run: false "
+    "in config/gardener/&lt;task&gt;.json to let it do that work, except that a compaction "
+    "keeps the old months and raw days it found until month\\_deletes\\_dry\\_run: false is "
+    "set there too"
+)
 
 
 def a_task(task: str, outcome: TaskOutcome, **changed: Any) -> TaskFinished:
@@ -209,10 +229,8 @@ def test_a_shard_that_passed_says_where_its_record_went_and_one_row_a_task() -> 
         "\n"
         "What the words mean, and what happens next:\n"
         "\n"
-        "- *dry-run*: nothing was changed: it only named what a live pass would do. Set "
-        "dry\\_run: false in config/gardener/&lt;task&gt;.json to make the task live, or "
-        "month\\_deletes\\_dry\\_run: false to let a compaction drop months\n"
-        "- *done*: nothing is left, and the next wake takes what reaches its line by then\n"
+        f"{DRY_RUN_LINE}\n"
+        f"{DONE_LINE}\n"
         "- *not-due*: nothing has reached its line yet\n"
         "- *api-unavailable*: GitHub's API did not answer, so the next wake asks again\n"
         "\n"
@@ -248,7 +266,7 @@ def test_a_shard_a_code_defect_failed_names_the_task_in_its_heading() -> None:
         "What the words mean, and what happens next:\n"
         "\n"
         "- *raised*: a code defect stopped it, and the log names the error\n"
-        "- *done*: nothing is left, and the next wake takes what reaches its line by then\n"
+        f"{DONE_LINE}\n"
     )
 
 
@@ -475,6 +493,73 @@ def test_what_a_task_did_names_the_thing_it_took_and_what_stopped_it(
 
     (row,) = [line for line in page.splitlines() if line.startswith(f"| `{task.task}` |")]
     assert row.rsplit(" | ", 1)[1] == f"{did} |"
+
+
+def test_both_kinds_of_dry_run_share_one_line_tying_each_switch_to_what_it_holds_back() -> None:
+    """A dry run and a live compaction whose monthly window only reports end on one word.
+
+    A page says each word once, so its one line has to be true beside both rows:
+    `dry_run` lets a task do the work it found, an expired year included, and
+    `month_deletes_dry_run` holds back only a compaction's old months and raw days.
+    """
+    tasks = [
+        a_task("compact-published", TaskOutcome.DRY_RUN, periods=periods(years_expired=["2026"])),
+        a_task(
+            "compact-trial-item-health",
+            TaskOutcome.DRY_RUN,
+            dry_run=False,
+            periods=periods(
+                months_dropped=["2026-05", "2026-06"], raw_days_dropped=["2026-06-30"]
+            ),
+        ),
+    ]
+
+    page = run_summary.markdown(a_shard(tasks), tasks)
+
+    assert [line for line in page.splitlines() if line.startswith(("| `", "- *"))] == [
+        "| `compact-published` | dry-run | would delete 1 expired year |",
+        "| `compact-trial-item-health` | dry-run | found 2 old months and 1 old raw day past "
+        "the keep line |",
+        DRY_RUN_LINE,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("dry_run", "row", "meant"),
+    [
+        pytest.param(
+            False,
+            "| `compact-visual-prunes` | done | deleted 1 expired year |",
+            DONE_LINE,
+            id="live",
+        ),
+        pytest.param(
+            True,
+            "| `compact-visual-prunes` | dry-run | would delete 1 expired year |",
+            DRY_RUN_LINE,
+            id="dry-run",
+        ),
+    ],
+)
+def test_beside_an_expired_year_done_claims_no_data_and_dry_run_names_the_switch_that_lets_it_go(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, dry_run: bool, row: str, meant: str
+) -> None:
+    """THE ORACLE: the runner's pass over a tree whose only due work is to expire 2026.
+
+    A live pass deletes the year and ends `done`, and the line under its row
+    says the work for this wake is finished, which claims nothing about what
+    data is left; it once said "nothing is left". A dry run keeps the year and
+    ends `dry-run`, and its line names `dry_run`, the one switch that lets the
+    year go, and ties `month_deletes_dry_run` to old months and raw days alone;
+    it once offered that switch as another way to let the work happen.
+    """
+    caught_up(tmp_path)
+
+    with caplog.at_level(logging.INFO):
+        outcome = run_by_the_runner(tmp_path, dry_run=dry_run)
+
+    page = summary_of(tmp_path, outcome, the_event(caplog.records, TaskFinished))
+    assert [line for line in page.splitlines() if line.startswith(("| `", "- *"))] == [row, meant]
 
 
 def test_a_sentence_shows_as_written_whatever_markup_it_holds() -> None:
