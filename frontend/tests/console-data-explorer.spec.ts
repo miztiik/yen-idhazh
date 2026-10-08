@@ -79,7 +79,7 @@ test('THE ORACLE: Data explorer opens as the sixth tab and renders its two panel
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
-	await expect(page.locator('[data-explorer-action-line]')).toContainText('This page holds');
+	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('This page holds');
 });
 
 test('THE ORACLE: console chrome resolves to console unless the route asks for workbench', () => {
@@ -162,29 +162,30 @@ for (const view of [
 	});
 }
 
-test('THE ORACLE: Data explorer puts the span and the dates in the toolbar, and Run beside Save and Copy link', async ({ page }) => {
+test('THE ORACLE: Data explorer puts the span, dates and Run in the editor head', async ({ page }) => {
 	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
-	const toolbar = page.locator('[data-workbench-region="toolbar"]');
-	await expect(toolbar).toHaveCount(1);
+	await expect(page.locator('[data-workbench-region="toolbar"]')).toHaveCount(0);
+	const head = page.locator('[data-workbench-region="editor"] .editor-head');
 	await expect(page.locator('[data-window-control]')).toHaveCount(1);
-	await expect(toolbar.locator('[data-window-control]')).toHaveCount(1);
-	await expect(toolbar.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
-	await expect(toolbar.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
-	await expect(toolbar.getByRole('button', { name: /^Run$/ })).toHaveCount(0);
-	await expect(page.locator('[data-workbench-region="editor"] [data-explorer-actions]').getByRole('button', { name: /^Run$/ })).toHaveCount(1);
+	await expect(head.locator('[data-window-control]')).toHaveCount(1);
+	await expect(head.getByRole('textbox', { name: 'From (UTC)' })).toHaveCount(1);
+	await expect(head.getByRole('textbox', { name: 'To (UTC)' })).toHaveCount(1);
+	await expect(head.getByRole('button', { name: /^Run$/ })).toHaveCount(1);
 });
 
-test('THE ORACLE: before a run the column rail names the selected ledger\'s own columns', async ({ page, context }) => {
+test('THE ORACLE: the column rail always names the selected ledger\'s own columns', async ({ page, context }) => {
 	// A built ledger's files hold three columns: covers, date and n.
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(2, 0) });
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT * FROM "host-fingerprint"');
 	const rail = page.locator('[data-explorer-columns] li code');
+	const before = await page.locator('[data-explorer-columns]').innerText();
 	await expect(rail).toHaveText(['host-fingerprint.covers', 'host-fingerprint.date', 'host-fingerprint.n']);
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
-	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Answer columns');
-	await expect(rail).toHaveText(['covers', 'date', 'n']);
+	await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+	await expect(rail).toHaveText(['host-fingerprint.covers', 'host-fingerprint.date', 'host-fingerprint.n']);
+	expect(await page.locator('[data-explorer-columns]').innerText()).toBe(before);
 });
 
 test('THE ORACLE: a ledger whose newest two named days are empty lists its columns in the rail from the packed day before them, and the window stays as selected', async ({ page, context }) => {
@@ -239,7 +240,9 @@ test('THE ORACLE: with no archive prefix, an old custom span reads from the site
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	const panel = page.locator('[data-console-panel-id="data-explorer-rows"]');
-	await expect(panel.locator('.answer-note')).toHaveText('Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. Days of the published record before 5 Jun 2030 are not on this site.');
+	await expect(panel.locator('.answer-note')).toHaveText(
+		'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the published record before 5 Jun 2030 are not on this site.'
+	);
 	await expect(panel.locator('.warn')).toHaveCount(0);
 	expect(await tableRows(page)).toEqual([['2030-06-05', '11']]);
 });
@@ -272,14 +275,14 @@ test('THE ORACLE: the 14-day preset cuts a ledger that began 5 days ago at its f
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['2030-06-10', '6']]);
-	await expect(note).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
+	await expect(note).toHaveText('Read from 6 UTC days, 10 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 10 Jun 2030 are not on this site.');
 
 	const fetched = fetchedFiles(page);
 	await chooseExplorerQuestion(page, ['seen'], 'SELECT min("covers") AS first_day, count(*) AS rows FROM "seen"');
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['2030-06-02', '14']]);
-	await expect(note).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030.');
+	await expect(note).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. 1 row shown.');
 	expect(fetched.sort()).toEqual(daysBetween('2030-06-02', PINNED).map((day) => `compact/seen/daily/${day.replaceAll('-', '/')}.parquet`));
 	expect(archiveAsked).toEqual([]);
 });
@@ -297,7 +300,7 @@ test('THE ORACLE: an answer over two ledgers that began on different days names 
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['11', '6']]);
 	const note = page.locator('[data-console-panel-id="data-explorer-rows"] .answer-note');
-	const read = 'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. Days of the host-fingerprint record before 5 Jun 2030 are not on this site. Days of the seen record before 10 Jun 2030 are not on this site.';
+	const read = 'Read from 11 UTC days, 5 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 5 Jun 2030 are not on this site. Days of the seen record before 10 Jun 2030 are not on this site.';
 	await expect(note).toHaveText(read);
 	await expect(note.locator('.warn')).toHaveCount(0);
 
@@ -340,7 +343,7 @@ test('THE ORACLE: when the repository host does not answer for the days the site
 		'Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
 	);
 	await expect(note).toHaveText(
-		'Read from 107 UTC days, 1 Mar 2030 to 15 Jun 2030. Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
+		'Read from 107 UTC days, 1 Mar 2030 to 15 Jun 2030. 1 row shown. Days of the seen record before 1 Mar 2030 are not in this answer, because this page could not read them from the repository. Press Refresh, then Run, to try again.'
 	);
 	expect([...archiveAsked]).toEqual([`${archive}/state/compact/seen/index/daily.json`]);
 	expect(archiveAnswered).toEqual([]);
@@ -496,7 +499,7 @@ test('THE ORACLE: every Data explorer answer state renders distinct words, tint 
 	expect(seen.size).toBe(9);
 });
 
-test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', async ({ page, context }) => {
+test('THE ORACLE: a refused run after a fetch does not show held-byte text', async ({ page, context }) => {
 	// The page is opened on published alone, built with one day, so the one file it holds is that day's.
 	const root = test.info().outputPath('state');
 	await serveBuilt(context, root, { ledger: 'published', pinned: PINNED, days: [{ ago: 0, rows: 3 }] });
@@ -509,11 +512,20 @@ test('THE ORACLE: a refused run after a fetch still shows the page-held bytes', 
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([['3']]);
 	const line = page.locator('[data-explorer-action-line]');
-	await expect(line).toHaveAttribute('data-held-bytes', size);
+	await expect(line).toContainText('Answered in');
+	await expect(line).not.toContainText('Read 0 files, 0.0 MB.');
+	await expect(line).not.toHaveAttribute('data-held-bytes');
+	await page.locator('#explorer-sql').fill('SELECT * FROM "published" WHERE false');
+	await runExplorer(page);
+	await expectAnswer(page, 'quiet');
+	await expect(line).toContainText('Ran in');
+	await expect(line).toContainText('matched no rows.');
+	await expect(line).not.toContainText('Read 0 files, 0.0 MB.');
 	await page.locator('#explorer-sql').fill('SELECT 1; SELECT 2');
 	await runExplorer(page);
 	await expectAnswer(page, 'refused');
-	await expect(line).toHaveAttribute('data-held-bytes', size);
+	await expect(line).not.toContainText('This page holds');
+	await expect(line).not.toHaveAttribute('data-held-bytes');
 });
 
 test('THE ORACLE: Data explorer does not scroll sideways at phone width', async ({ page }) => {
@@ -679,6 +691,7 @@ test('THE ORACLE: a count by day across a lost day breaks its line there, and th
 	expect(await tableRows(page), 'the answer is not the built days with rows').toEqual([['2030-06-12', '1'], ['2030-06-13', '2'], ['2030-06-15', '3']]);
 
 	const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+	await page.getByRole('tab', { name: 'Chart' }).click();
 	const plot = panel.locator('[data-chart-type="dateSeries"]');
 	await expect(plot).toHaveCount(1);
 	const line = panel.locator('[data-date-series-marks="data-explorer-shape"] path');
@@ -711,6 +724,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 		await chooseExplorerQuestion(page, ['published'], sql);
 		await runExplorer(page);
 		await expectAnswer(page, 'table');
+		await page.getByRole('tab', { name: 'Chart' }).click();
 		if (await page.locator(`[data-shape-choice="${type}"] input`).count()) {
 			await page.locator(`[data-shape-choice="${type}"] input`).check();
 		}

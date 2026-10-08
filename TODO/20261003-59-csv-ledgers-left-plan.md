@@ -52,7 +52,7 @@ Table C - when to stop and ask
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The first upkeep run after feed health moved is read | - | A | DONE | p59-main-read | - | Fowler |
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
-| 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
+| 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | DONE | p59-row-3 | - | Fowler |
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | PENDING | - | - | - |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
 | 6 | The merge line's holdout score is saved through the door | 2, 11 | B | PENDING | - | - | - |
@@ -209,6 +209,9 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 2 | `DAY_TREES` goes only after the pipeline-tests plan's row "Readers understand nested trial roots" lands, because that row deletes the day-tree branch of the utility that still names it | Fowler, 2026-10-04 |
+| 3 | The private helpers that served only the named writers go with them: `day_shard_path`, `_dated_rows`, `_TreeShape`, `_refuse_outside_day_trees`, `segment_contract`, `segment_key` and `segment_carried`. Each refused every ledger once `DAY_TREES` was empty | Fowler, 2026-10-08 |
+| 4 | The fold's switch goes with the fold: `FoldPolicy`, the `fold` block of a retention declaration, its period windows in `gardener/period_inputs.py`, its month rule in the gardener CLI, `FoldSettled`, `TaskFinished.fold` and the run summary's fold line. A knob nothing obeys is a number somebody believes (Guardrail #6), so a declaration that still carries `fold` is refused by name, and `run.settled_fold_after_days` now says nothing replaces it | Fowler, 2026-10-08 |
+| 5 | `CollectionPruneRow` keeps `fold_dry_run`, `folded_days`, `folded_files` and `folded_months`, empty on every new row. Removing a persisted field needs a read-side migration (CLAUDE.md section 11) that this Level 2 deletion does not carry, and committed gardener rows still carry the cells | Fowler, 2026-10-08 |
 
 ### Row #4 - The judge's scored pairs and its metrics are saved through the door
 
@@ -244,6 +247,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 ### Row #5 - The fitted merge line is saved through the door
 
 - **Scope:** D3 by section 2.6. `set_merge_line` persists with E3's identity; `applied.applied_line` reads through `ledger.load_days` over its lookback; `frontend/src/lib/server/similarity-ledger.ts` reads through `sliceFromDisk`. Level 3.
+- **Closes plan 62's L44, a fault on the console's Judgement page.** That page's fitted-line read, `readDayShards` in `frontend/src/lib/server/payload.ts`, takes its list of days from `frontend/public/publication.json`. The council never commits that file, so the page shows no fitted day after 2026-10-02, and it falls one more day behind after each council night. `sliceFromDisk` reads the compact index the gardener publishes and never reads that file, so moving the read removes the fault. The page shows the full history once row 9's copy of this ledger is packed. Plan 62 marks L44 COLLAPSED when this row merges, and re-reads its row L45's third fault after that pack.
 - **Files touched** (search at dispatch for `CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS`, `fitted-thresholds`, `append_fitted_thresholds`, `load_fitted_thresholds`, `readDayShards`): the shared files of row 4's list that name this ledger; `backend/idhazh/contracts/fitted_similarity_threshold.py` (`DROPPED_CELLS` stays for the migrator until row 10); `backend/idhazh/stages/set_merge_line.py`; `backend/idhazh/similarity/applied.py`; `config/gardener/compact-content-similarity-judge-fitted-thresholds.json` (new); `frontend/src/lib/server/similarity-ledger.ts`; its spec under `frontend/tests/`; the console panel's spec that reads the fitted line.
 - **Acceptance gates:** local: the backend tests that name the ledger, `npm --prefix frontend run test:changed` selection; the browser smoke of the console page that shows the fitted line, with and without a compact file; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a fixture night writes a fitted line through the door, compacts it into `tmp_path`, and the frontend reader returns the same values. It fails today. It cannot settle the days between a write and the gardener's next pack; decision 1 prices that.

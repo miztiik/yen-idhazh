@@ -11,23 +11,23 @@ behind.
 ledger here files a day that way, so a `<DD>.csv` beside a month's day
 directories is a name no writer spells and the walk refuses it with every other
 stray. The one file a month folder may hold is its own `settled.csv`: a closed
-month the gardener's fold settled whole, for a tree whose task asks for that
-(`closed_day_fold`). Its rows name no day, so a walk reads it beside the month's
-days, and a reader that asks for one day at a time is refused it
-(`dates_by_month`).
+month the gardener's closed-day fold settled whole while that fold still ran.
+Its rows name no day, so a walk reads it beside the month's days, and a reader
+that asks for one day at a time is refused it (`dates_by_month`).
 
 **This reader is CSV-only.** A parquet or JSON-lines file under `state/raw/` or
 `state/compact/` is read through `ledger.load`, never here: one reader taught two
 formats is how a tree ends up with two grammars.
 
-**The fold is the compaction's, moved rather than copied.** `settle` runs the
-identical three cases the closed-day fold writes into a day's settled file -
-join, supersede, repeat - and the gardener's `closed_day_fold` calls this one.
-Six ledgers with six read-side folds would be six answers to one question, and
-a reader that forgot to call one would read double-counted rows.
+**One settlement for every reader.** `settle` runs the three cases the
+gardener's closed-day fold wrote into a day's settled file - join, supersede,
+repeat - so a day read from its writer files and the same day read from its
+settled file give one answer. Six ledgers with six read-side folds would be six
+answers to one question, and a reader that forgot to call one would read
+double-counted rows.
 
 **Three names here are reserved rather than a writer's.** `settled.csv` is what
-a fold leaves behind in a closed day or a closed month, `before-partition.csv`
+the fold left behind in a closed day or a closed month, `before-partition.csv`
 is what a committed head already held before writes carried identity, and
 `repair-<stamp>.csv` is an operator's one add. All three sort below every
 writer file: a writer's attempt
@@ -66,7 +66,7 @@ from idhazh import day_partition, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.ledger import CsvContract
 
-#: What a closed-day fold leaves beside the writer files it read.
+#: What the closed-day fold left beside the writer files it read.
 SETTLED_NAME: Final = "settled.csv"
 
 #: Where `settled.csv` reads in. Lower than every writer file, because a run's

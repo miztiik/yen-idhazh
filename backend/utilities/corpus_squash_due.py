@@ -153,10 +153,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    # A crash prints where it broke, never what it said. Nothing installs
-    # `utilities`, so it is imported from this checkout's `backend/` folder.
+    # A crash prints where it broke, never what it said. Nothing installs the
+    # package here, so the printer is imported from this checkout's `backend/`.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from utilities import crash_trace
+    from idhazh import crash_trace
 
     crash_trace.install()
     raise SystemExit(main())

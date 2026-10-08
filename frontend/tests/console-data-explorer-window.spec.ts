@@ -55,54 +55,178 @@ for (const view of [
 }
 
 for (const view of [
+	{ width: 1024, height: 768 },
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
 	test(`the regions tile a window that holds them, and the page does not scroll, at ${view.width} x ${view.height}`, async ({ page }) => {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
-		const at = await measure(page, ['ledgers', 'columns', 'answer', 'chart']);
+		const at = await measure(page, ['ledgers', 'columns', 'answer']);
 		expect(at.scrollHeight, 'the page scrolls under a workbench that fits the window').toBe(view.height);
 
-		// A rail at each side, and the answer and the chart side by side along the window's foot.
-		const { ledgers, columns, answer, chart } = at.regions;
+		// A rail at each side, and one tabbed result region along the window's foot.
+		const { ledgers, columns, answer } = at.regions;
 		expect(ledgers.left).toBeCloseTo(0, 0);
 		expect(columns.right).toBeCloseTo(view.width, 0);
 		expect(answer.left).toBeCloseTo(0, 0);
-		expect(answer.right).toBeCloseTo(chart.left, 0);
-		expect(chart.right).toBeCloseTo(view.width, 0);
-		expect(answer.top).toBeCloseTo(chart.top, 0);
+		expect(answer.right).toBeCloseTo(view.width, 0);
 		expect(answer.bottom).toBeCloseTo(view.height, 0);
-		expect(chart.bottom).toBeCloseTo(view.height, 0);
 	});
 }
 
-/** A question whose answer has `count` columns, each named under a ledger, so the column rail lists them as that ledger's. */
+for (const view of [
+	{ width: 1024, height: 768 },
+	{ width: 1440, height: 900 },
+	{ width: 1920, height: 1080 }
+] as const) {
+	test(`rails and status reach the result region at ${view.width} x ${view.height}`, async ({ page }) => {
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		const at = await measure(page, ['ledgers', 'columns', 'status', 'answer']);
+		const top = at.regions.answer.top;
+		expect(at.regions.ledgers.bottom, 'ledger rail bottom').toBeCloseTo(top, 0);
+		expect(at.regions.columns.bottom, 'column rail bottom').toBeCloseTo(top, 0);
+		expect(at.regions.status.bottom, 'status bottom').toBeCloseTo(top, 0);
+	});
+}
+
+/** A question whose answer has `count` columns; the column rail still lists the selected ledger's own columns. */
 function prefixedColumns(count: number): string {
 	return `SELECT ${Array.from({ length: count }, (_, index) => `${index + 1} AS "published.c${String(index + 1).padStart(2, '0')}"`).join(', ')}`;
 }
 
 for (const view of [
+	{ width: 1024, height: 768 },
 	{ width: 1440, height: 900 },
 	{ width: 1920, height: 1080 }
 ] as const) {
-	test(`a long list of a ledger's columns scrolls inside the column rail and never stretches the page, at ${view.width} x ${view.height}`, async ({ page, context }) => {
+	test(`a wide answer does not stretch the column rail or the page, at ${view.width} x ${view.height}`, async ({ page, context }) => {
 		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		await chooseExplorerQuestion(page, ['published'], prefixedColumns(80));
 		await runExplorer(page);
 		await expectAnswer(page, 'table');
-		await expect(page.locator('[data-explorer-columns] li')).toHaveCount(80);
+		await expect(page.locator('[data-explorer-columns] h3')).toHaveText('Ledger columns');
+		await expect(page.locator('[data-explorer-columns] li code')).toHaveText(['published.covers', 'published.date', 'published.n']);
 		const at = await page.evaluate(() => {
-			const list = document.querySelector('[data-explorer-column-box]') as HTMLElement;
 			const root = document.documentElement;
-			return { scrollHeight: root.scrollHeight, listScrolls: list.scrollHeight > list.clientHeight };
+			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
+			const heading = document.querySelector<HTMLElement>('[data-explorer-columns] h3');
+			const box = document.querySelector<HTMLElement>('[data-explorer-column-box]');
+			// Every listed row up to the fifth: this ledger has three columns.
+			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, 5);
+			if (rail === null || heading === null || box === null) throw new Error('column rail parts missing');
+			const railBox = rail.getBoundingClientRect();
+			const headingBox = heading.getBoundingClientRect();
+			const columnBox = box.getBoundingClientRect();
+			const inside = (inner: DOMRect, outer: DOMRect) => inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5 && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5;
+			const rowHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--workbench-row')) * parseFloat(getComputedStyle(document.documentElement).fontSize);
+			return {
+				scrollHeight: root.scrollHeight,
+				headingInside: inside(headingBox, railBox),
+				columnBoxRows: columnBox.height / rowHeight,
+				rowsInside: rows.length === 3 && rows.every((row) => inside(row.getBoundingClientRect(), columnBox))
+			};
 		});
-		expect(at.listScrolls, 'the 80 columns did not scroll inside the rail').toBe(true);
-		expect(at.scrollHeight, 'the column list stretched the page').toBe(view.height);
+		expect(at.scrollHeight, 'the wide answer stretched the page').toBe(view.height);
+		expect(at.headingInside, 'the column rail heading is cut').toBe(true);
+		expect(at.columnBoxRows, 'the column box is shorter than five rows').toBeGreaterThanOrEqual(5);
+		expect(at.rowsInside, 'a column row is not visible inside the scroll box').toBe(true);
 	});
 }
+
+for (const view of [
+	{ width: 1440, height: 900 },
+	{ width: 390, height: 844 }
+] as const) {
+	test(`the selected ledger's many columns scroll inside the rail and do not stretch the page, at ${view.width}`, async ({ page }) => {
+		await page.setViewportSize(view);
+		await openExplorer(page, '2026-08-20');
+		await chooseExplorerQuestion(page, ['item-health'], 'SELECT * FROM "item-health"');
+		if (view.width < 1024) await page.locator('[data-workbench-region="columns"] summary').click();
+		const reading = await page.evaluate((shownRows) => {
+			const root = document.documentElement;
+			const rail = document.querySelector<HTMLElement>('[data-workbench-region="columns"]');
+			const box = document.querySelector<HTMLElement>('[data-explorer-column-box]');
+			// An open rail on a phone is as tall as the editor's lines, which holds four whole rows
+			// under its headings; from 1024 px the rail holds at least five.
+			const rows = [...document.querySelectorAll<HTMLElement>('[data-explorer-column-box] li')].slice(0, shownRows);
+			const boxRect = box?.getBoundingClientRect();
+			const inside = (node: HTMLElement) => {
+				const rect = node.getBoundingClientRect();
+				return boxRect !== undefined && rect.left >= boxRect.left - 0.5 && rect.right <= boxRect.right + 0.5 && rect.top >= boxRect.top - 0.5 && rect.bottom <= boxRect.bottom + 0.5;
+			};
+			return {
+				columns: document.querySelectorAll('[data-explorer-columns] li code').length,
+				listScrolls: box !== null && box.scrollHeight > box.clientHeight + 1,
+				pageScrollsSideways: root.scrollWidth > root.clientWidth,
+				railHeight: rail?.getBoundingClientRect().height ?? 0,
+				firstRowsInside: rows.length === shownRows && rows.every(inside)
+			};
+		}, view.width < 1024 ? 4 : 5);
+		expect(reading.columns).toBe(128);
+		expect(reading.listScrolls, 'the column list did not scroll inside the rail').toBe(true);
+		expect(reading.pageScrollsSideways, 'the column list stretched the page').toBe(false);
+		expect(reading.railHeight, 'the column rail collapsed').toBeGreaterThan(0);
+		expect(reading.firstRowsInside, 'the first column rows are not visible inside the scroll box').toBe(true);
+	});
+}
+
+test('a selected ledger named in the link opens inside the visible ledger list, not by scrolling the page', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, '2026-08-20', { address: '?ledgers=published&days=14', ready: false });
+	// The row's second line names its last day once the cost reading arrives, and grows the row.
+	await expect(page.locator('[data-ledger-name="published"] small')).toContainText('through');
+	const read = () => page.evaluate(() => {
+		const list = document.querySelector<HTMLElement>('[data-workbench-region="ledgers"] .ledger-options');
+		const chosen = document.querySelector<HTMLElement>('[data-ledger-name="published"]');
+		if (list === null || chosen === null) throw new Error('ledger list or selected ledger missing');
+		const box = list.getBoundingClientRect();
+		const rect = chosen.getBoundingClientRect();
+		return {
+			pageY: window.scrollY,
+			listScrolls: list.scrollHeight > list.clientHeight + 1,
+			// Where the row stands in the list's own content: past the first screen, the
+			// list had to scroll to show it.
+			belowFirstScreen: rect.bottom - box.top + list.scrollTop > list.clientHeight + 0.5,
+			inView: rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5,
+			scrollTop: list.scrollTop
+		};
+	});
+	await expect.poll(async () => (await read()).inView, { message: 'published did not come into view inside the ledger list' }).toBe(true);
+	const reading = await read();
+	expect(reading.pageY).toBe(0);
+	expect(reading.listScrolls, 'the ledger list does not scroll inside the rail, so this test proves nothing').toBe(true);
+	expect(reading.belowFirstScreen, 'published starts on the list\'s first screen, so this test proves nothing').toBe(true);
+
+	// The reader scrolls the list with the wheel, then ticks a ledger they can see: the list
+	// stays where they left it.
+	const list = page.locator('[data-workbench-region="ledgers"] .ledger-options');
+	await list.hover();
+	await page.mouse.wheel(0, 120);
+	let settled = reading.scrollTop;
+	await expect.poll(async () => {
+		const now = await list.evaluate((node) => node.scrollTop);
+		const still = now === settled && now !== reading.scrollTop;
+		settled = now;
+		return still;
+	}, { message: 'the wheel did not move the list, or it never came to rest' }).toBe(true);
+	const name = await list.evaluate((node) => {
+		const box = node.getBoundingClientRect();
+		const row = [...node.querySelectorAll<HTMLElement>('[data-ledger-name][data-chosen="no"]')].find((candidate) => {
+			const rect = candidate.getBoundingClientRect();
+			return rect.top >= box.top && rect.bottom <= box.bottom;
+		});
+		return row?.getAttribute('data-ledger-name') ?? null;
+	});
+	expect(name, 'no unchosen ledger is in view to tick').not.toBeNull();
+	await page.locator(`[data-ledger-name="${name}"] input`).click();
+	await expect(page.locator(`[data-ledger-name="${name}"]`)).toHaveAttribute('data-chosen', 'yes');
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+	expect(await list.evaluate((node) => node.scrollTop), `ticking ${name} moved the list from ${settled}`).toBe(settled);
+});
 
 /** Eight questions saved in this browser, each with a name the test wrote, near the 40-character cap. */
 const SAVED = Array.from({ length: 8 }, (_, index) => ({
@@ -172,22 +296,23 @@ for (const view of [
 	});
 }
 
-test('the chart heading line holds still and the drawing scrolls in its own box beneath it', async ({ page, context }) => {
+test('the chart tab action line holds still and the drawing scrolls in its own box beneath it', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1024, height: 768 });
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3, 5), (DATE '2026-08-19', 5, 4), (DATE '2026-08-20', 8, 9)) AS t(date, a, b)");
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
-	const chart = page.locator('[data-workbench-region="chart"]');
-	await expect(chart.locator('[data-shape-choice]').first()).toBeVisible();
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	const chart = page.locator('#data-explorer-shape');
+	const tabs = page.locator('.result-tabs');
+	await expect(tabs.locator('[data-shape-choice]').first()).toBeVisible();
 	const body = chart.locator('.chart-body');
-	const line = chart.locator(':scope > .region-bar');
-	const before = await line.boundingBox();
+	const before = await tabs.boundingBox();
 	await body.evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
-	const found = await chart.evaluate((region) => {
-		const bar = region.querySelector(':scope > .region-bar') as HTMLElement;
-		const drawing = region.querySelector('.chart-body') as HTMLElement;
+	const found = await page.evaluate(() => {
+		const bar = document.querySelector('.result-tabs') as HTMLElement;
+		const drawing = document.querySelector('#data-explorer-shape .chart-body') as HTMLElement;
 		const tiles = [...bar.querySelectorAll('[data-shape-choice]')] as HTMLElement[];
 		return {
 			scrolled: drawing.scrollTop > 0,
@@ -208,7 +333,7 @@ test('the chart heading line holds still and the drawing scrolls in its own box 
 	expect(found.below, 'the drawing starts above the heading line').toBe(true);
 	expect(found.tilesInLine, 'a shape tile stands outside the heading line').toBe(true);
 	expect(found.tilesOnTop, 'something is drawn over a shape tile').toBe(true);
-	const after = await line.boundingBox();
+	const after = await tabs.boundingBox();
 	expect(after?.y).toBeCloseTo(before?.y ?? -1, 0);
 });
 
@@ -292,7 +417,7 @@ for (const view of [
 		await openExplorer(page, PINNED);
 		const group = page.locator('[data-explorer-actions]');
 		await expect(group).toHaveCount(1);
-		await expect(page.locator('[data-workbench-region="toolbar"] .run-button')).toHaveCount(0);
+		await expect(page.locator('[data-workbench-region="toolbar"]')).toHaveCount(0);
 		await page.locator('#explorer-sql').fill('SELECT 1 AS one');
 
 		const read = () => group.evaluate((node) => {
@@ -551,7 +676,7 @@ for (const view of [
 		await chooseExplorerQuestion(page, ['published'], 'SELECT 1 AS one');
 		await runExplorer(page);
 		await expectAnswer(page, 'table');
-		const head = page.locator('[data-workbench-region="answer"] [data-explorer-answer-head]');
+		const head = page.locator('[data-workbench-region="answer"] .result-tabs');
 		await expect(head.getByRole('button', { name: /^Copy as JSON$/ })).toBeVisible();
 		await expect(head.getByRole('button', { name: /^Copy as table$/ })).toBeVisible();
 		const found = await head.evaluate((line) => {
@@ -563,19 +688,18 @@ for (const view of [
 			const buttons = [...line.querySelectorAll('button')].map(box);
 			const answer = line.closest('[data-workbench-region="answer"]') as Element;
 			const others = [...document.querySelectorAll('[data-workbench-region]')].filter((region) => region !== answer);
-			const note = answer.querySelector('.answer-note');
 			return {
 				count: buttons.length,
 				onTheLine: buttons.every((button) => inside(button, box(line))),
 				lineInAnswer: inside(box(line), box(answer)),
 				overlaps: others.flatMap((region) => buttons.some((button) => meets(button, box(region))) ? [region.getAttribute('data-workbench-region')] : []),
-				aboveTheNote: note === null || buttons.every((button) => button.bottom <= box(note).top + 0.5)
+				abovePanel: buttons.every((button) => button.bottom <= answer.getBoundingClientRect().bottom + 0.5)
 			};
 		});
-		expect(found.count).toBe(2);
-		expect(found.onTheLine, 'a copy button stands outside the heading line').toBe(true);
+		expect(found.count).toBe(4);
+		if (view.width >= 640) expect(found.onTheLine, 'a copy button stands outside the heading line').toBe(true);
 		expect(found.lineInAnswer, 'the heading line stands outside the answer').toBe(true);
 		expect(found.overlaps, 'a copy button lies over another region').toEqual([]);
-		expect(found.aboveTheNote, 'a copy button lies over the line under it').toBe(true);
+		expect(found.abovePanel, 'a copy button lies outside the result region').toBe(true);
 	});
 }

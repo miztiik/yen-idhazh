@@ -586,7 +586,7 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # Keyed by a label rather than by a job, because a label names one commit step
 # wherever it lives: `bench` is a job of another workflow. Until 2026-09-28 the
 # assemble job committed twice - the day, then the closed-day fold - and the
-# fold is the gardener's now.
+# fold moved to the gardener, which no longer runs it.
 COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
 
 COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/commit_and_push.py")
@@ -657,7 +657,7 @@ PRUNE_PUSH_CALL: Final = (
 SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_due.py"
 
 #: The gardener's plan job's one program: it splits the tasks into shards on a
-#: checkout of two folders, before anything of this project is installed.
+#: sparse checkout, before anything of this project is installed.
 GARDENER_PLAN_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 
 #: The gardener's shard program: it runs one shard's tasks and lands its record.
@@ -665,7 +665,11 @@ GARDENER_SHARD_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_p
 
 #: What every gardener program prints when an exception ends it. Two of those
 #: programs run before any install, so it is held to the standard library too.
-CRASH_TRACE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "crash_trace.py"
+CRASH_TRACE_MODULE: Final = REPO_ROOT / "backend" / "idhazh" / "crash_trace.py"
+
+#: The package's `__init__.py`, which Python runs before the printer whenever a
+#: program imports it, so it is held to the standard library as well.
+PACKAGE_INIT_MODULE: Final = REPO_ROOT / "backend" / "idhazh" / "__init__.py"
 
 #: The Pages workflow's one program: whether to publish and which commit, run on
 #: a bare checkout before anything is installed.
