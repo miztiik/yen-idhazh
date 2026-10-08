@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
@@ -38,6 +39,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
 )
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -130,18 +132,27 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #: the fold picks the newest run itself, over the whole day, rather than letting
 #: a line-by-line rewrite decide.
 #:
+#: `work_part_index` follows `run_id`, because a judge row about one part of the
+#: split is keyed on its part: two parts of one run never settle into one record.
+#:
 #: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
 #: published the day, so two judging runs over one date write the identical
 #: string there. Without this cell the settlement would keep the row already in
 #: the checked-out file and discard every fresh verdict, while the record
 #: counted the fresh ones - two descriptions of one day with nothing able to
 #: tell them apart.
-STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
+STORY_SIMILARITY_PAIR_KEY: Final = (
+    "date",
+    "run_id",
+    "work_part_index",
+    "pair_key",
+    "judged_by_run_id",
+)
 
 
-#: What makes two metrics rows the same record while the CSV ledger still spells
-#: the split unit `shard`. The row that moves the ledger renames that field.
-CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "shard")
+#: What makes two metrics rows the same record: one part of one council run's
+#: night, for one judged date.
+CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
 
 
 #: What makes two retirement rows the same record. The address and nothing else:
@@ -374,6 +385,12 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
     LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
         COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: _DoorShape(
+        STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: _DoorShape(
+        CONTENT_SIMILARITY_JUDGE_METRICS_KEY, ContentSimilarityJudgeMetrics
     ),
 }
 

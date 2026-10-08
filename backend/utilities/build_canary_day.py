@@ -70,7 +70,7 @@ from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.gardener import CompactionPolicy
+from idhazh.contracts.knobs.gardener import CompactionPolicy, compaction_name
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.ledger_name import LedgerName
@@ -1693,9 +1693,10 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
     settings = config.load_gardener()
     declared = settings.tasks
     for which in PACKED_LEDGERS:
-        policy = declared.get(f"compact-{which.value}")
+        task = compaction_name(ledger.door_folders(which))
+        policy = declared.get(task)
         if not isinstance(policy, CompactionPolicy):
-            raise SystemExit(f"config/gardener/compact-{which.value}.json declares no compaction")
+            raise SystemExit(f"config/gardener/{task}.json declares no compaction")
         outcome = compaction.run(
             TaskContext(
                 state_dir=state,

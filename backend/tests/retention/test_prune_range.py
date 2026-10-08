@@ -55,7 +55,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
-from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
+from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy, compaction_name
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
@@ -109,9 +109,7 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
     "-".join(ledger.entry(name).prefix): name
     for name in (
         LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
     )
 }
 
@@ -644,7 +642,7 @@ def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
 
 def compaction_of(tasks: Mapping[str, TaskPolicy], which: LedgerName) -> CompactionPolicy:
     """The production compaction declaration that governs a ledger."""
-    found = tasks.get(f"compact-{which.value}")
+    found = tasks.get(compaction_name(ledger.door_folders(which)))
     assert isinstance(found, CompactionPolicy)
     return found
 

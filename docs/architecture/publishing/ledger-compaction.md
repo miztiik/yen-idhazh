@@ -12,7 +12,8 @@ it moved.** Where its declaration asks, it then packs each finished year's month
 files into one file a year. A raw file holds one writer's rows for one day, so a
 ledger gains a file on every run, and at a few rows a file a parquet file is
 mostly its footer.
-One task a ledger does the move: `config/gardener/compact-<ledger>.json`, served
+One task a ledger does the move: `config/gardener/compact-<folder>.json`, where
+`<folder>` is the ledger's door folder with `/` written `-`, served
 by `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another
 ledger is one declaration and no Python. The declarations that ship are in
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-compaction-declarations-that-ship).
@@ -21,7 +22,7 @@ and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**All fourteen ledgers pack live and use the same retention chain:** days
+**All sixteen ledgers pack live and use the same retention chain:** days
 become months 45 whole days after the month ends; months become years 93 whole
 days after the year ends; indexed years expire 36 calendar months after their
 UTC end.

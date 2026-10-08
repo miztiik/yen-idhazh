@@ -48,6 +48,7 @@ from idhazh.contracts.knobs.gardener import (
     RetentionPolicy,
     TaskPolicy,
     Window,
+    compaction_name,
 )
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
@@ -537,7 +538,7 @@ def _governing(
     # while it loads, so importing it back at module scope would be a cycle.
     from idhazh.ledger.paths import STATE_DIRNAME, entry
 
-    name = f"compact-{ledger.value}"
+    name = compaction_name(entry(ledger).prefix)
     compaction = tasks.get(name)
     if isinstance(compaction, CompactionPolicy) and compaction.ledger is ledger:
         return name, compaction
@@ -845,12 +846,16 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     series that still summarises the ledger's months; the floors a reader's knob,
     the console and the machine shard set are checked where those are.
     """
+    # Imported here for the reason `_governing` gives.
+    from idhazh.ledger.paths import door_folders
+
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
     ledger = policy.ledger
-    if name != f"compact-{ledger.value}":
+    expected = compaction_name(door_folders(ledger))
+    if name != expected:
         raise ValueError(
-            f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
-            f"call it compact-{ledger.value}.json"
+            f"{where} compacts {ledger.value}, and a compaction is named for its ledger's "
+            f"folder: call it {expected}.json"
         )
     reach = _reach(policy)
     if ledger in app.ledger.published:
@@ -880,8 +885,8 @@ def _refuse_a_compaction_declaration(
     from idhazh import ledger
 
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
-    production_name = f"compact-{policy.ledger.value}"
-    trial_name = f"compact-trial-{policy.ledger.value}"
+    production_name = compaction_name(ledger.door_folders(policy.ledger))
+    trial_name = compaction_name(ledger.door_folders(policy.ledger), trial=True)
     trial = name == trial_name
     if name not in (production_name, trial_name):
         raise ValueError(

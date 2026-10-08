@@ -53,7 +53,7 @@ Table C - when to stop and ask
 | 1 | The first upkeep run after feed health moved is read | - | A | DONE | p59-main-read | - | Fowler |
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
 | 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
-| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | PENDING | - | - | - |
+| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | DONE | p59-row-4 | - | Fowler |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
 | 6 | The merge line's holdout score is saved through the door | 2, 11 | B | PENDING | - | - | - |
 | 7 | The holdout marks are saved through the door | 6 | C | PENDING | - | - | - |
@@ -233,6 +233,14 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | 1 | Two commits: (1) behavioural: declare, write and read through the door; (2) structural, Remove Dead Code: the CSV writer, loader and settlement entries | Fowler, 2026-10-05 |
 | 2 | The rename of `shard` ships here, not earlier ([judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)) | The owner, 2026-10-04 |
 | 3 | Does not wait for row 3. Both edit `rows.py`, `keys.py` and `ledger-registry.md`, but neither reads what the other writes, so whichever is ready first merges first and the other merges `main` | Fowler, 2026-10-06 |
+| 4 | The CSV settlement entries in `keyed_paths`, the two `_TARGET_LEDGERS` and `UNION_SAFE` entries and the tests that built a CSV path for these ledgers leave in the behaviour commit. The registry switch makes every CSV path builder refuse a door ledger by name, so code left asking would raise. The dead-code commit removes what nothing calls after the switch: `append_story_similarity_pairs` and `STORY_SIMILARITY_PAIR_CARRIED`. The widener's tests, which re-filed scored-pairs days, re-file fitted-line days instead | Fowler, 2026-10-08 |
+| 5 | `Tenant.settle` takes the council's state root as well as its writer identity, so the count, the fit and the council's own record write and read under one root. A trial configuration's root now holds the judge's rows too, where they used to land in production `state/` | Fowler, 2026-10-08 |
+| 6 | `Tenant.committed_paths` is read off the registry, one staged path for each ledger the judge writes, instead of the one `state/content-similarity-judge` prefix. A moved ledger is staged under `state/raw/`, and its old CSV folder is not staged at all | Fowler, 2026-10-08 |
+| 7 | `similarity/applied.py` reads no scored pair and no metrics row, so no reader moved there. `set_merge_line` is the one reader of the scored pairs, and nothing reads the metrics | Fowler, 2026-10-08 |
+| 8 | The door table in `ledger/keys.py` names each door ledger's row contract, so the metrics contract and the call stamp it inherits now reach a council verb. `JUDGE_CONTRACTS_STILL_CROSSING` grows from the three the owner allowed on 2026-09-21 to five, under the owner's directive of 2026-10-05 that these ledgers move. The owner may reverse it; the price is a door table that loads row contracts lazily | Fowler, 2026-10-08 |
+| 9 | A compaction is named for its ledger's door folder, `compact-<folder>` with `/` written `-` (D9). One helper, `compaction_name`, spells it for the loader, the prune verb, the migrator and the canary builder | Fowler, 2026-10-08 |
+| 10 | With no `--ledger`, the migrator takes the door ledgers of the registry beside the declarations it packs with, not the registry this build loaded. The two are one file in production; a test that packs with recorded declarations then never takes a ledger those declarations cannot move | Fowler, 2026-10-08 |
+| 11 | The migrator entries declare `ForeverWindow`, the window these CSV days were kept under. A 36-month yearly expiry does not reach it, so `packing.declared` refuses to copy these two ledgers today. Row 9 needs the owner's ruling, or a reach rule that accepts the approved expiry, before it copies them | Fowler, 2026-10-08 |
 
 **Rejected alternatives**
 

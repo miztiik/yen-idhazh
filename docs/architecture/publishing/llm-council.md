@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -288,7 +288,18 @@ the settle runs anyway and keeps everything the surviving units produced.
 never commits a second tenant's output, so the paths come back from
 `committed_paths` on the protocol and reach the commit step as one job output. A
 night with no tenant registered stages nothing, and the step is skipped: `git
-add` with no path is an error rather than a no-op.
+add` with no path is an error rather than a no-op. A ledger that files through
+the door is named by its folder under `state/raw/`, because the collecting job
+writes only raw files and the gardener packs them later.
+
+**The collecting job hands each tenant the identity it files under.**
+`council.session.settle` builds one writer identity for the night: `run_id` the
+council run, `job` `save_council_results`, `shard` 0, the run's attempt, and the
+`--commit` the job checked out. It files the council's own record with it and
+passes it to each tenant's `Tenant.settle`. A tenant names its own producer and
+changes nothing else, so every raw file the night commits says which run, job
+and commit wrote it. The similarity judge's `count_verdicts` files its scored
+pairs and its metrics this way.
 
 There is no regeneration command on that call. The council is the only writer of
 a tenant's own ledger and `concurrency` runs one council at a time, so a lost
@@ -445,8 +456,9 @@ judge although the council is what runs it, is
 ## A unit uploads what it measured, and the collecting job commits it
 
 Each unit writes one file on its own runner, the workflow uploads that
-directory, and the collecting job downloads every one of them and appends each
-row to the ledger the tenant named.
+directory, and the collecting job downloads every one of them and files each
+row through the ledger door, into the ledger the tenant named, under the date
+it judged.
 
 **An artifact rather than a commit, and the reason is that a commit would not
 reach the reader.** Every checkout in this workflow names no ref, so each job is
@@ -603,7 +615,10 @@ council does not, and one reason survives.
 case where more than one job commits into one ledger file - the digest pipeline
 has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
-carrying the run id, which is the property a segment exists to provide.
+carrying the run id, which is the property a segment exists to provide. The
+council's record, the scored pairs and the judge's metrics now file through the
+ledger door, where each write is a raw file named for its writer, so only the
+fitted line still appends to a day file.
 
 **The second reason went with the staging ledger on 2026-09-22.** A compaction
 verb used to fold every waiting segment of every ledger and delete what it read,

@@ -6,11 +6,16 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.knobs.gardener import CompactionPolicy, ForeverWindow, Window
+from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
+    ForeverWindow,
+    Window,
+    compaction_name,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgersConfig
 from idhazh.gardener.context import TaskContext
@@ -49,7 +54,7 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 f"to move into yet: its entry becomes {Grain.RAW_AND_COMPACT.value} in the "
                 "change that moves its writers and readers"
             )
-        task = f"compact-{name.value}"
+        task = compaction_name(entries[name].prefix)
         policy = tasks.get(task)
         if not isinstance(policy, CompactionPolicy):
             raise RefusedError(
@@ -97,7 +102,7 @@ def policies_for_roots(
             if root_name == "state":
                 selected[state_dir][name] = production[name]
                 continue
-            trial = tasks.get(f"compact-trial-{name.value}")
+            trial = tasks.get(compaction_name(ledger.door_folders(name), trial=True))
             if isinstance(trial, CompactionPolicy) and root_name in trial.state_roots:
                 root_owns = [
                     folder for folder in trial.owns if folder.startswith(f"{root_name}/")

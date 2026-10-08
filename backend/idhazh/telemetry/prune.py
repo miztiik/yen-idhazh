@@ -31,8 +31,9 @@ writers left or in a daily, monthly or yearly file that holds other days as
 well, so `door_prune` takes the day out of each of those instead. Whether this
 may take any day of such a ledger is its compaction declaration's
 `prune_refusal`, beside the windows a person reads in
-`config/gardener/compact-<ledger>.json`: null lets it, and a sentence refuses
-the ledger with that sentence. A live pass there rewrites files, and each names
+`config/gardener/compact-<folder>.json`, where `<folder>` is the ledger's door
+folder with each `/` written `-`: null lets it, and a sentence refuses the
+ledger with that sentence. A live pass there rewrites files, and each names
 the run and the commit that wrote it, so `--no-dry-run` there needs `--run-id`
 and `--commit`.
 
@@ -78,7 +79,7 @@ from typing import Final
 from idhazh import day_partition, ledger
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN, ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
+from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy, compaction_name
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.gardener import one_at_a_time
@@ -111,26 +112,17 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: walker its suffix, which is where the question belongs. A ledger leaves this
 #: list in the change that moves it under `state/raw/` through the ledger door,
 #: as `visual-prunes`, `item-health`, `summary-quality-evals`, `host-fingerprint`,
-#: `counterfactual-scores`, `candidate-models` and `feed-health` have: a target
-#: that walked its old folder would select nothing for ever, and on the door it is
-#: a target of the other kind.
+#: `counterfactual-scores`, `candidate-models`, `feed-health`, and the judge's
+#: `scored-pairs` and `metrics` have: a target that walked its old folder would
+#: select nothing for ever, and on the door it is a target of the other kind.
 #:
-#: **`content-similarity-judge-scored-pairs` and
-#: `content-similarity-judge-fitted-thresholds` are
-#: not a pair.** The pairs are folded into `score-distribution.json` once and
-#: never read again, so deleting a day of them takes nothing away from the fit;
-#: deleting a fitted row takes a day out of the guard's median and out of what
-#: step 4 compares against. Either can go on its own.
-#:
-#: The four `content-similarity-judge` ledgers are here before their first row
-#: for the same reason: a ledger an operator cannot name is a ledger a day
-#: cannot be taken out of. What a reading is about decides where it is filed,
+#: The `content-similarity-judge` ledgers still on CSV are here before their
+#: first row for the same reason: a ledger an operator cannot name is a ledger a
+#: day cannot be taken out of. What a reading is about decides where it is filed,
 #: never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
@@ -171,7 +163,7 @@ def door_refusals(tasks: Mapping[str, TaskPolicy]) -> dict[str, str]:
     """
     refused: dict[str, str] = {}
     for word, name in DOOR_LEDGERS.items():
-        policy = tasks.get(f"compact-{name.value}")
+        policy = tasks.get(compaction_name(ledger.door_folders(name)))
         if not isinstance(policy, CompactionPolicy) or policy.ledger is not name:
             policy = None
         if policy is None:

@@ -39,8 +39,8 @@ from ._fixtures import (
     TODAY,
     compaction_identity,
     config_beside,
-    entry_back_on_csv,
     feed_row,
+    file_back_on_csv,
     file_hashes,
     item_row,
     read_back,
@@ -73,14 +73,7 @@ def test_a_ledger_still_on_csv_is_refused(tmp_path: Path) -> None:
         [item_row(OLD, "ai-01", machine=True).csv_row()],
     )
     config_dir = config_beside(state)
-    registry_path = config_dir / "ledgers.json"
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
-    for family in registry["families"]:
-        family["ledgers"] = [
-            entry_back_on_csv(ON_CSV) if held["name"] == ON_CSV.value else held
-            for held in family["ledgers"]
-        ]
-    registry_path.write_text(json.dumps(registry), encoding="ascii")
+    file_back_on_csv(config_dir, ON_CSV)
     (config_dir / "gardener" / f"compact-{ON_CSV.value}.json").unlink()
     knobs_path = config_dir / "idhazh_gardener.json"
     knobs = json.loads(knobs_path.read_text(encoding="ascii"))

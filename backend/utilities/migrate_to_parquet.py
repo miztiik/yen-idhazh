@@ -115,7 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     which = (
         list(dict.fromkeys(LedgerName(value) for value in args.ledger))
         if args.ledger
-        else door_ledgers()
+        else door_ledgers(config.DEFAULT_CONFIG_DIR)
     )
 
     if args.check:

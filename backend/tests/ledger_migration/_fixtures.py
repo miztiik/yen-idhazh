@@ -8,6 +8,7 @@ reads committed state (CLAUDE.md section 13).
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
@@ -234,6 +235,18 @@ def entry_back_on_csv(which: LedgerName) -> dict[str, Any]:
         "stem": None,
         "suffix": None,
     }
+
+
+def file_back_on_csv(config_dir: Path, which: LedgerName) -> None:
+    """Rewrite the registry in `config_dir` to file one ledger as it was filed before it moved."""
+    registry_path = config_dir / "ledgers.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    for family in registry["families"]:
+        family["ledgers"] = [
+            entry_back_on_csv(which) if held["name"] == which.value else held
+            for held in family["ledgers"]
+        ]
+    registry_path.write_text(json.dumps(registry), encoding="ascii")
 
 
 def compaction_identity() -> WriterIdentity:

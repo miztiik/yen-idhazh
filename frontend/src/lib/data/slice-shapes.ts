@@ -22,7 +22,10 @@ export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerp
 export type LedgerName = (typeof LEDGER_NAMES)[number];
 
 /** Door ledger folders that differ from the ledger's value. */
-export const LEDGER_FOLDERS = {} as const satisfies Partial<Record<LedgerName, string>>;
+export const LEDGER_FOLDERS = {
+	'scored-pairs': 'content-similarity-judge/scored-pairs',
+	'metrics': 'content-similarity-judge/metrics'
+} as const satisfies Partial<Record<LedgerName, string>>;
 
 /** A structured filter, never raw SQL. The door binds `value` as a query parameter,
  *  so no text a panel passes can become SQL (Guardrail #11). */

@@ -109,6 +109,15 @@ YEARLY_RETENTION_DECISION: Final = (
     "@kumarsnaveen_microsoft approved live packing and 36-calendar-month yearly expiry "
     "for all fourteen ledgers on 2026-10-07, accepting loss of older history"
 )
+MOVED_LEDGER_TASKS: Final = (
+    "compact-content-similarity-judge-scored-pairs",
+    "compact-content-similarity-judge-metrics",
+)
+MOVED_LEDGER_RETENTION_DECISION: Final = (
+    "@kumarsnaveen_microsoft directed on 2026-10-05 that each ledger moved onto the door "
+    "takes its retention and upkeep with it, and approved on 2026-10-07 live packing and "
+    "36-calendar-month yearly expiry for every ledger, accepting loss of older history"
+)
 TRIAL_PACKING_DECISION: Final = (
     "@kumarsnaveen_microsoft approved live packing of declared trial roots on 2026-10-04; "
     "monthly deletion remains report-only and yearly expiry stays disabled"
@@ -117,6 +126,11 @@ LIVE_BY_DECISION: Final = {
     **{
         (f"compact-{name}", switch): YEARLY_RETENTION_DECISION
         for name in RETENTION_LEDGERS
+        for switch in ("dry_run", "yearly_prune_enable")
+    },
+    **{
+        (task, switch): MOVED_LEDGER_RETENTION_DECISION
+        for task in MOVED_LEDGER_TASKS
         for switch in ("dry_run", "yearly_prune_enable")
     },
     **{
@@ -235,16 +249,16 @@ def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None
 
 
 def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
-    """All fourteen declarations activate real packing and finite yearly deletion."""
+    """The fourteen declarations and every ledger moved since pack live and expire yearly."""
     tasks = config.load_gardener().tasks
+    approved = (*(f"compact-{name}" for name in RETENTION_LEDGERS), *MOVED_LEDGER_TASKS)
     assert {
         name
         for name, policy in tasks.items()
         if isinstance(policy, CompactionPolicy) and name.startswith("compact-")
         and not name.startswith("compact-trial-")
-    } == {f"compact-{name}" for name in RETENTION_LEDGERS}
-    for ledger_name in RETENTION_LEDGERS:
-        name = f"compact-{ledger_name}"
+    } == set(approved)
+    for name in approved:
         policy = tasks[name]
         assert isinstance(policy, CompactionPolicy), name
         assert (
@@ -865,6 +879,27 @@ def test_a_task_that_summarises_whole_months_carries_no_ceiling(tmp_path: Path, 
 def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:
     config_dir = a_garden(tmp_path, compact_gardener=None, compact_old=a_compaction("gardener"))
     assert "call it compact-gardener.json" in refused(config_dir)
+
+
+def test_a_compaction_of_a_nested_ledger_is_named_for_its_whole_folder(tmp_path: Path) -> None:
+    """A ledger nested in a family is named for its folder, so two siblings never share a name.
+
+    The judge's `metrics` sits under `content-similarity-judge/`, and a name
+    built from the value alone would be `compact-metrics` - a name any family's
+    `metrics` ledger could claim.
+    """
+    folder = "content-similarity-judge/scored-pairs"
+    nested = a_compaction("scored-pairs") | {
+        "owns": [f"state/raw/{folder}", f"state/compact/{folder}"]
+    }
+
+    by_value = a_garden(tmp_path / "by-value", compact_scored_pairs=nested)
+    by_folder = a_garden(
+        tmp_path / "by-folder", compact_content_similarity_judge_scored_pairs=nested
+    )
+
+    assert "call it compact-content-similarity-judge-scored-pairs.json" in refused(by_value)
+    assert "compact-content-similarity-judge-scored-pairs" in config.load_gardener(by_folder).tasks
 
 
 def test_a_collection_task_is_named_for_its_collection(tmp_path: Path) -> None:

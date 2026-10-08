@@ -29,6 +29,7 @@ vocabulary of their own here.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal, Self
@@ -440,6 +441,17 @@ GITHUB_LARGE_FILE_BYTES: Final = 50 * 1024 * 1024
 JANUARY_DAYS: Final = 31
 
 
+def compaction_name(folders: Sequence[str], *, trial: bool = False) -> str:
+    """The name a ledger's compaction is declared under, from the ledger's door folder.
+
+    `compact-`, then `trial-` for the compaction of named trial roots, then the
+    folder with each `/` written `-`. The folder rather than the ledger's value,
+    so a ledger nested in a family is named for its whole address, and a ledger
+    that is its own family keeps `compact-<value>`.
+    """
+    return f"compact-{'trial-' if trial else ''}{'-'.join(folders)}"
+
+
 class CompactionPolicy(_Declared):
     """A task that rolls one ledger's raw files into its daily and monthly periods.
 
@@ -469,7 +481,8 @@ class CompactionPolicy(_Declared):
     ledger: LedgerName = Field(
         description=(
             "The ledger this task compacts. Typed rather than read off the file's name, "
-            "and the declaration must be called compact-<ledger> or compact-trial-<ledger>."
+            "and the declaration must be called compact-<folder> or compact-trial-<folder>, "
+            "where <folder> is the ledger's door folder with each / written -."
         )
     )
     state_roots: list[RelPath] = Field(

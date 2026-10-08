@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -16,7 +16,7 @@ state/compact/<folders>/yearly/<YYYY>/<YYYY>.parquet      only where the compact
 state/compact/<folders>/index/<period>.json
 ```
 
-`<folders>` is the registry `prefix` for that ledger inside the door root. Today every door ledger's prefix is its `LedgerName` value, so the path bytes stay as they were. A nested family can later file, for example, under `content-similarity-judge/scored-pairs` while the file envelope still says `scored-pairs`. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
+`<folders>` is the registry `prefix` for that ledger inside the door root. Most door ledgers' prefix is their `LedgerName` value. A ledger inside a family files under the family's folder: the similarity judge's scored pairs file under `content-similarity-judge/scored-pairs` while the file envelope still says `scored-pairs`. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
@@ -25,8 +25,9 @@ Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells t
 The repository's production root is `state/`. A trial compaction may name
 additional state roots in `CompactionPolicy.state_roots`; below each one, the
 same builders write `raw/<folders>/` and `compact/<folders>/`. A
-`compact-trial-<ledger>` declaration owns exactly those two folders for its
-ledger. The production `compact-<ledger>` declaration still governs production
+`compact-trial-<folder>` declaration owns exactly those two folders for its
+ledger, where `<folder>` is the ledger's door folder with `/` written `-`. The
+production `compact-<folder>` declaration still governs production
 retention and prune refusals.
 
 `.gitattributes` gives every data file and index under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
@@ -198,7 +199,7 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 
 ## Moving a ledger onto the door
 
-Thirteen ledgers now file through the door, with their writers and readers moving together. Two moved on 2026-09-28: `state/feed-retirements.csv` and the `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` day files. Their registry entries switched to `raw-and-compact`, and their `merge=union` lines in `.gitattributes` and `path_classes.UNION_SAFE` went, because a file with one writer has nothing for a union to settle. The next three are the ledgers the console reads: the `state/item-health/`, `state/scores/` and `state/host-fingerprint/` day trees, which filed one CSV per writer under each day and were settled on every read. Their registry entries switched to `raw-and-compact` as well. The next five moved between 2026-10-01 and 2026-10-03 through the program below: `counterfactual-scores` and `candidate-models`, which no reader depended on; `seen` and `published`, whose union drivers went with them; and `feed-health`, which the Voices page reads from its packed files. `run-plan` is the plan-stage handoff ledger. The council now files `council-run-records` through the door in its save job. The ledgers still on CSV, and what blocks each one, are in [ledger-registry.md](ledger-registry.md#ledgers-outside-raw-and-compact).
+Fifteen ledgers now file through the door, with their writers and readers moving together. Two moved on 2026-09-28: `state/feed-retirements.csv` and the `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` day files. Their registry entries switched to `raw-and-compact`, and their `merge=union` lines in `.gitattributes` and `path_classes.UNION_SAFE` went, because a file with one writer has nothing for a union to settle. The next three are the ledgers the console reads: the `state/item-health/`, `state/scores/` and `state/host-fingerprint/` day trees, which filed one CSV per writer under each day and were settled on every read. Their registry entries switched to `raw-and-compact` as well. The next five moved between 2026-10-01 and 2026-10-03 through the program below: `counterfactual-scores` and `candidate-models`, which no reader depended on; `seen` and `published`, whose union drivers went with them; and `feed-health`, which the Voices page reads from its packed files. `run-plan` is the plan-stage handoff ledger. The council now files `council-run-records` through the door in its save job, and the similarity judge's scored pairs and metrics followed it into that job. The ledgers still on CSV, and what blocks each one, are in [ledger-registry.md](ledger-registry.md#ledgers-outside-raw-and-compact).
 
 | Ledger | Writer now | Reader now | Files under |
 | --- | --- | --- | --- |
@@ -214,19 +215,23 @@ Thirteen ledgers now file through the door, with their writers and readers movin
 | feed health | `stages.plan`, through `ledger.persist` | `ledger.load_health`, and the Voices page through `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` | the day its `date` names |
 | run plans | `stages.plan`, through `ledger.persist` | `stages.common._load_plan`, through `ledger.load_days` for one named UTC day, keeping the plan of the run `--execution` names | the day its `date` names |
 | council run records | `council.session._collect`, through `ledger.persist` in the `save_council_results` job | the Records explorer, through the ledger door | the judged day its `date` names |
+| similarity judge's scored pairs | `stages.count_verdicts`, through `ledger.persist` in the `save_council_results` job, under the council's writer identity | `stages.set_merge_line`, through `ledger.load_story_similarity_pairs` for the judged day | the judged day its `date` names |
+| similarity judge's metrics | `council.metrics_sink.collect_judge_metrics`, called by `stages.count_verdicts` in the same job and under the same identity | nothing yet | the judged day its `date` names |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. `backend/tests/workflows/test_ledger_door_jobs.py` holds that for every step that runs an `idhazh` command. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 
 `council-settle` passes its workflow commit SHA to `council.session._collect`.
 The save job records its workflow attempt, job name and council run in the file
 envelope, while the row names the judged date, tenant, step and part. A retry's
-later attempt wins when the reader settles rows by `unit_id`.
+later attempt wins when the reader settles rows by `unit_id`. The same identity
+reaches each tenant through `Tenant.settle`, and a tenant changes only the
+producer, so the judge's files name the same run, attempt and commit.
 
 **The first two ledgers' committed CSV moved once, on 2026-09-28, through a one-shot migration.** It read the CSV, wrote one file per day through the door, read each file back field for field and cell for cell against the CSV row it came from, and only then deleted the CSV. The files it wrote carry `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, which is why `ServerJob` keeps `migrate`: a reader names those files' writer from it. No CSV of either ledger is left on `main`, and a run that checked out the CSV layout cannot push its append over the deleted file, so the program had nothing left to move and was deleted on 2026-09-28; git history holds it.
 
-**One command moves named months of a ledger's CSV onto the door: `backend/utilities/migrate_to_parquet.py`.** The `CSV_LEDGERS` table in `backend/utilities/ledger_migration/csv_layouts.py` records each old path and retention window. It reads both the per-writer day tree and the shared `YYYY/MM/DD.csv` layout in required, repeated `--month YYYY-MM` inputs. The other modules of `backend/utilities/ledger_migration/` validate each selected row, file it through the door, and prove the CSV's filled cells before any CSV is deleted. `backend/idhazh/ledger/stored_output.py` checks actual raw files and relevant indexed compact periods. The command accepts repeated `--state-dir` roots. The repository's `state/` root packs only those months through the production `compact-<ledger>` declaration; packing is live and the monthly deletion window only reports. A trial root packs only when `compact-trial-<ledger>` names that exact root in `state_roots`; otherwise the migrator files it raw. Year packing requires all twelve months to be named. The reusable move procedure and completion checks are in [Move a ledger to Parquet](../../how-to/move-a-ledger-to-parquet.md).
+**One command moves named months of a ledger's CSV onto the door: `backend/utilities/migrate_to_parquet.py`.** The `CSV_LEDGERS` table in `backend/utilities/ledger_migration/csv_layouts.py` records each old path and retention window. It reads both the per-writer day tree and the shared `YYYY/MM/DD.csv` layout in required, repeated `--month YYYY-MM` inputs. The other modules of `backend/utilities/ledger_migration/` validate each selected row, file it through the door, and prove the CSV's filled cells before any CSV is deleted. `backend/idhazh/ledger/stored_output.py` checks actual raw files and relevant indexed compact periods. The command accepts repeated `--state-dir` roots. The repository's `state/` root packs only those months through the production `compact-<folder>` declaration; packing is live and the monthly deletion window only reports. A trial root packs only when `compact-trial-<folder>` names that exact root in `state_roots`; otherwise the migrator files it raw. Year packing requires all twelve months to be named. The reusable move procedure and completion checks are in [Move a ledger to Parquet](../../how-to/move-a-ledger-to-parquet.md).
 
-**It refuses a ledger that cannot move yet, before it reads a file**, with exit 1 and the reason: a ledger the registry still files as CSV, which has no door to move into; a ledger with no `compact-<ledger>` declaration, so nothing says which days are packed; and one whose compaction keeps less than its CSV was kept, which would delete at its first live pass days the CSV still held. `--ledger` repeats. With none named, a run or a `--check` takes every ledger in the table that the registry files as `raw-and-compact`, so a check passes while the ledgers still on CSV keep writing it.
+**It refuses a ledger that cannot move yet, before it reads a file**, with exit 1 and the reason: a ledger the registry still files as CSV, which has no door to move into; a ledger with no `compact-<folder>` declaration, so nothing says which days are packed; and one whose compaction keeps less than its CSV was kept, which would delete at its first live pass days the CSV still held. `--ledger` repeats. With none named, a run or a `--check` takes every ledger in the table that the registry files as `raw-and-compact`, so a check passes while the ledgers still on CSV keep writing it.
 
 Running it again is safe. Every raw file carries `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_to_parquet`, so the same run id replaces its earlier write. A late CSV file in a named month is folded onto the rows the door already holds and is proven again. `--check` exits 1 while a CSV file of a named ledger remains in any supplied root and month. **The table, program and tests are deleted when no ledger a program writes is left on CSV**: the map in [ledger-registry.md](ledger-registry.md#ledgers-outside-raw-and-compact) lists none, and the owner's named-month checks find no remaining CSV. A file a person edits by hand, such as `holdout-pairs.csv`, does not hold the program back.
 

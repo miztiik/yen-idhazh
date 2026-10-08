@@ -13,8 +13,6 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import LedgerEntry
-from idhazh.ledger import paths
 from utilities import migrate_to_parquet as command
 from utilities.ledger_migration import (
     csv_files,
@@ -36,8 +34,8 @@ from ._fixtures import (
     ByKey,
     clock_row,
     config_beside,
-    entry_back_on_csv,
     feed_row,
+    file_back_on_csv,
     file_hashes,
     item_row,
     plan_named_roots,
@@ -77,9 +75,11 @@ def test_check_reads_moved_ledgers_unless_named(
     """With no `--ledger`, a check reads the table ledgers the registry files through the door.
 
     A ledger still on CSV writes a CSV file on every run, so a check that read
-    it unasked could never pass: handed a registry entry that files one ledger
-    the way it was filed before it moved, the check leaves that ledger's file
-    alone. Named, it is read, and `--ledger` repeats.
+    it unasked could never pass: handed a registry that files one ledger the way
+    it was filed before it moved, the check leaves that ledger's file alone. The
+    registry is the one beside the declarations the command packs with, so the
+    list it takes unasked and the refusal of a ledger with no door read one file.
+    Named, it is read, and `--ledger` repeats.
     """
     state = tmp_path / "state"
     feed = write_csv(state, ON_CSV, OLD, writer_file_name(OLD, 1, ServerJob.PLAN), [feed_row(OLD).csv_row()])
@@ -91,8 +91,10 @@ def test_check_reads_moved_ledgers_unless_named(
         "1 CSV file(s) left",
     ]
 
+    back_on_csv = config_beside(state)
+    file_back_on_csv(back_on_csv, ON_CSV)
     with monkeypatch.context() as patched:
-        patched.setitem(paths._REGISTRY, ON_CSV, LedgerEntry.model_validate(entry_back_on_csv(ON_CSV)))
+        patched.setattr(config, "DEFAULT_CONFIG_DIR", back_on_csv)
         assert command.main([*MONTH_ARGS, *argv]) == command.EXIT_MIGRATED
     assert capsys.readouterr().out.splitlines() == ["0 CSV file(s) left"]
 

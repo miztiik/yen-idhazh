@@ -10,10 +10,11 @@ and writes nothing into a paused or retired family; `append_seen` and
 `write_item_health_summary` does not ask: it folds rows already recorded, and the
 ageing step reads that fold back before it deletes anything.
 
-Seven readers here read a ledger that lives under `state/raw/` and
+Eight readers here read a ledger that lives under `state/raw/` and
 `state/compact/` rather than in a CSV tree - `load_seen`, `load_published`,
-`load_health`, `load_retirements`, `load_visual_prunes`, and the two item-health
-readers `load_settled_failures` and `load_source_counts` - and all seven read it
+`load_health`, `load_retirements`, `load_visual_prunes`, the two item-health
+readers `load_settled_failures` and `load_source_counts`, and the judge's
+`load_story_similarity_pairs` - and all eight read it
 through `ledger/ledger_files.py`, which reads the yearly files, then the monthly
 files, then the daily files, then the raw days no compact index names, each date
 from exactly one of them. Two of their writers are here, `append_seen` and
@@ -282,21 +283,25 @@ def append_story_similarity_pairs(
 
 
 def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
-    """One named day's judged pairs, and never a second file.
+    """One named day's judged pairs, read through the ledger door, and never a second day.
 
     **Guardrail #12 declaration, and it is the whole point of this ledger's
     shape.** The fold counts one date into the record and the record is then the
-    only thing the fit reads, so this opens the file the date names and stops.
-    It costs the same on the thousandth day as on the third whatever the tree
-    holds beside it.
+    only thing the fit reads, so this asks the door for the day the date names
+    and stops: the three compact indexes, the one file that serves the day, and
+    that day's raw files. It costs the same on the thousandth day as on the third
+    whatever the ledger holds beside it.
 
-    A row that no longer parses stops the read rather than being skipped. A
-    report may drop a day it cannot read; this is evidence being counted into a
-    record that is rewritten whole, and a silently short count is a record that
-    cannot be told from a quiet day.
+    A file this build cannot read is skipped with a warning naming it, the way
+    the door reads every ledger, so a short day is said in the log rather than
+    silently counted as a quiet one.
     """
-    pairs = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
-    return [StorySimilarityPair.from_csv_row(raw) for raw in _read_rows(pairs)]
+    return ledger_files.load_days(
+        state_dir,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+        [date],
+        model=StorySimilarityPair,
+    )
 
 
 def append_fitted_thresholds(

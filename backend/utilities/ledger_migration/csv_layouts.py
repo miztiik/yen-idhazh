@@ -12,7 +12,9 @@ from idhazh.contracts.eval_row import RENAMED_CELLS
 from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain, LedgerEntry
+from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
+from idhazh.contracts.story_similarity_pair import DROPPED_CELLS as PAIR_DROPPED_CELLS
+from idhazh.contracts.story_similarity_pair import RENAMED_CELLS as PAIR_RENAMED_CELLS
 from utilities.ledger_migration.refusals import RefusedError
 
 
@@ -29,9 +31,14 @@ def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
     return LedgerEntry(name=name, grain=Grain.DAY_TREE, prefix=(folder or name.value,))
 
 
-def _day_file(name: LedgerName) -> LedgerEntry:
-    """One shared CSV file a day, under the ledger's own name."""
-    return LedgerEntry(name=name, grain=Grain.DAY_FILE, prefix=(name.value,), suffix=".csv")
+def _day_file(name: LedgerName, folder: str | None = None) -> LedgerEntry:
+    """One shared CSV file a day, under the ledger's own name unless it sat elsewhere."""
+    return LedgerEntry(
+        name=name,
+        grain=Grain.DAY_FILE,
+        prefix=tuple((folder or name.value).split("/")),
+        suffix=".csv",
+    )
 
 
 CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
@@ -65,6 +72,24 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         LedgerName.PUBLISHED: CsvLedger(
             _day_file(LedgerName.PUBLISHED), ForeverWindow(unit="forever")
         ),
+        # The judge's day files sit in its family folder, and nothing deleted them.
+        # `shard` is read as the part it named, and each heading the pair row
+        # stopped naming is dropped with its filled cells.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+                "content-similarity-judge/scored-pairs",
+            ),
+            ForeverWindow(unit="forever"),
+            MappingProxyType({**PAIR_RENAMED_CELLS, **dict.fromkeys(sorted(PAIR_DROPPED_CELLS))}),
+        ),
+        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: CsvLedger(
+            _day_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, "content-similarity-judge/metrics"
+            ),
+            ForeverWindow(unit="forever"),
+            PAIR_RENAMED_CELLS,
+        ),
     }
 )
 # Removal condition: delete this package and its command when no program-written CSV
@@ -89,6 +114,20 @@ def csv_root(state_dir: Path, which: LedgerName) -> Path:
     return state_dir.joinpath(*require_layout(which).prefix)
 
 
-def door_ledgers() -> list[LedgerName]:
-    """Every ledger in the table that `config/ledgers.json` files through the door now."""
-    return [name for name in CSV_LEDGERS if ledger.entry(name).grain is Grain.RAW_AND_COMPACT]
+def door_ledgers(config_dir: Path | None = None) -> list[LedgerName]:
+    """Every ledger in the table that a registry files through the door now.
+
+    The registry under `config_dir` when one is named, so a command takes by
+    default only the ledgers the declarations it packs with can move; the
+    committed `config/ledgers.json` otherwise.
+    """
+    entries = (
+        {name: ledger.entry(name) for name in CSV_LEDGERS}
+        if config_dir is None
+        else ledger.registry_entries(
+            LedgersConfig.from_json(
+                (config_dir / ledger.paths.REGISTRY_FILENAME).read_text(encoding="utf-8")
+            )
+        )
+    )
+    return [name for name in CSV_LEDGERS if entries[name].grain is Grain.RAW_AND_COMPACT]
