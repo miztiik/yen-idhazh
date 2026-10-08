@@ -21,17 +21,18 @@ CONFIG = Path(__file__).resolve().parents[3] / "config" / "encoder-comparison.js
 
 
 def encoders() -> list[dict[str, object]]:
-    return json.loads(CONFIG.read_text(encoding="utf-8"))["encoders"]
+    raw: list[dict[str, object]] = json.loads(CONFIG.read_text(encoding="utf-8"))["encoders"]
+    return raw
 
 
 @pytest.mark.parametrize("encoder", encoders(), ids=lambda e: str(e["slug"]))
 def test_every_named_encoder_can_open_a_reading(encoder: dict[str, object]) -> None:
     reading = EncoderReading(
-        slug=encoder["slug"],
-        model_id=encoder["model_id"],
-        parameters_millions=encoder["parameters_millions"],
-        prefix=encoder["prefix"],
-        why=encoder["why"],
+        slug=str(encoder["slug"]),
+        model_id=str(encoder["model_id"]),
+        parameters_millions=int(encoder["parameters_millions"]),  # type: ignore[call-overload]
+        prefix=str(encoder["prefix"]),
+        why=str(encoder["why"]),
         state=ReadingState.LOADING,
         written_at="2026-10-08T00:00:00Z",
         articles_to_encode=1,
