@@ -368,6 +368,20 @@ wording can change with no migration. A row written before 2026-10-07 has no
 `fault` and no `recovered`, and reads as one that named none; on such a row
 `failed` means any stop for an error.
 
+**The record is published.** `gardener` is in `ledger.published` in
+`config/idhazh.json`, so the site holds its packed indexes, the files they name
+and the raw days not packed yet, and the console's Data explorer can ask it why
+a ledger is behind and what a pass recovered
+([what the site holds](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
+Every cell can be published as it is: a closed word, a count, a flag, a UTC day
+or instant, the identity of the run that wrote the row, a task's name from
+`config/gardener/`, or a member. A member is a UTC period, a path under `state/`
+that this project named, or the number GitHub gives a workflow run or an
+artifact; the name GitHub gives one never reaches the row, and
+`MEMBER_ID_PATTERN` refuses a space, a colon and a query string, so no member
+can be a web address. The explorer shows the words; the sentence a person reads
+for each is written by `report.py` and is not on the site.
+
 ## What a shard logs
 
 **Every line a task logs is one event: one line of JSON on stderr.** Each event
@@ -387,11 +401,12 @@ the log record (`event_log.payload`), never its text.
 | 1 | `task-planned` | Before each task runs | The task, its kind, shard, run and attempt, the wake's day, a range a person named, every knob of its declaration, and the declared folders the commit does not hold yet |
 | 2 | `window-chosen` | Before a pass that deletes one member at a time lists one | The window it holds members to, its ceiling, whether it is a dry run, and the mark it walks after |
 | 3 | `member-out-of-order`, `page-out-of-order`, `page-count-changed`, `list-end-missing` | When a walk's check fails ([below](#the-collection-tasks)) | What the check saw; the mark stays where it was |
-| 4 | `periods-chosen` | Before a compaction's steps run | Which periods each step may take, and why they start where they do ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)) |
-| 5 | `period-refused`, `download-over-budget`, `ledger-fault-met`, `raw-file-skipped` | When a compaction step refuses a period, stops at the download budget, passes a month file already gone, or meets a raw file outside a day folder | The ledger, the step, the period or path, and the words that say why |
-| 6 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, and what a compaction did period by period |
-| 7 | `logged-text` | When a module outside the gardener logs text while a task runs | The logger and the message as it was said |
-| 8 | `shard-published` | Once a shard, when it ends, whatever ended it | The tasks it ran and the ones that failed, how its commit came to rest on main or why it never did, the try, the record, the downloads against their budget, the exit code and what it means, and the type and place of an exception that stopped it |
+| 4 | `expired-years-chosen` | Before a compaction's yearly expiry deletes anything, when its declaration sets `yearly_prune_enable` and `yearly_keep_months` | The ledger, and the expired UTC years the pass takes, oldest first, or none ([ledger-compaction.md](ledger-compaction.md#yearly-expiry)) |
+| 5 | `periods-chosen` | Before a compaction's steps run | Which periods each step may take, and why they start where they do ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)) |
+| 6 | `period-refused`, `download-over-budget`, `ledger-fault-met`, `raw-file-skipped` | When a compaction step refuses a period, stops at the download budget, passes a month file already gone, or meets a raw file outside a day folder | The ledger, the step, the period or path, and the words that say why |
+| 7 | `task-finished` | The moment each task returns | How it ended in one word, what it took and wrote, why it stopped, what it recovered, what happens next, how long it ran, and what a compaction did period by period |
+| 8 | `logged-text` | When a module outside the gardener logs text while a task runs | The logger and the message as it was said |
+| 9 | `shard-published` | Once a shard, when it ends, whatever ended it | The tasks it ran and the ones that failed, how its commit came to rest on main or why it never did, the try, the record, the downloads against their budget, the exit code and what it means, and the type and place of an exception that stopped it |
 
 **How a task ended is one word.** `report.classify` takes the first that holds:
 `failed`, `deferred`, `dry-run`, `ceiling`, `done`, and otherwise the pass's
