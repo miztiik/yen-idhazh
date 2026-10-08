@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -154,8 +154,8 @@ items and current committed state.
 
 **`DERIVED` names what the rebuild owns, and after 2026-09-22 that is almost
 nothing under `state/`.** It carries the day's `digest.json` and `run.json`, the
-published projections under `frontend/public/`, `state/day-metrics` and the
-closed-day fold. The list lives in
+published projections under `frontend/public/`, `state/day-metrics` and
+`settled.csv`, the file the gardener's closed-day fold left in a CSV day. The list lives in
 [`backend/idhazh/path_classes.py`](../../../backend/idhazh/path_classes.py) and the
 `Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
 it was a space-split string in the workflow, under a header warning that no path
@@ -176,7 +176,7 @@ and immutable input batches let preparation recreate only the accepted rows.
 **`state/day-metrics` remains a shared daily projection.** It is one whole-file-per-day JSON that
 assemble rewrites from the day's rows, so two runs of one day do land on one
 path, a text merge of two JSON objects is not JSON, and the rebuild answers the
-race in milliseconds. The closed-day fold stays for the same reason and is the
+race in milliseconds. `settled.csv` is derived for the same reason and is the
 one entry the rebuild command leaves out: `idhazh assemble` re-emits no fold, so
 a job that handed it back would delete it rather than rebuild it.
 
@@ -267,16 +267,15 @@ case needs a second read of the index to catch. Git's spelling for keeping one
 side of a conflict exits 0 and changes nothing when the side it is asked for is
 the deleted one, so the path is left unmerged with no error anywhere and a
 return code of zero walks straight past it into a rebase that cannot continue.
-Nothing but retention, the closed-day fold or a person can have taken a file
+Nothing but retention or a person can have taken a file
 named for this job, so putting it back is not a resolution this program may make.
 The message prints one identity, because one is all there is: a second field
 would always be empty.
 
-**No job here commits a closed-day fold any more, and a conflicted one would be
-refused whole.** The gardener now folds each CSV day tree and lands
-the fold through its own commit loop
-([idhazh-gardener.md](idhazh-gardener.md#the-closed-day-fold)), so this program
-never writes a `settled.csv`. If one ever reached the resolver it carries no
+**No job commits a closed-day fold any more, and a conflicted one would be
+refused whole.** The gardener's fold is retired, because no ledger files a
+writer's CSV file into a day folder now, so nothing writes a `settled.csv`.
+If one ever reached the resolver it carries no
 writer's name, so the rule above answers no and the push stops - and that is the
 right answer rather than a gap. Settling it per path is what loses rows: taking
 the tip's copy leaves this job's *deletion* of a straggler file standing - a
@@ -353,11 +352,13 @@ exist until after the push.
 
 Git reads a directory whose files all moved away as having been RENAMED to
 wherever they went, and applies that guess to a file the other side added into
-the emptied directory. The closed-day fold drains a day directory every time it
-runs, so a sibling writing a brand-new file into that day is read as writing
-into a directory that no longer exists, and the rebase stops with
+the emptied directory. The closed-day fold drained a day directory every time it
+ran, so a sibling writing a brand-new file into that day was read as writing
+into a directory that no longer existed, and the rebase stopped with
 `CONFLICT (file location)` over a tree that was correct. The segment ledger was
-the first place this bit; deleting it moved the drain rather than removing it.
+the first place this bit and the fold the second. Neither drains a directory
+now; the flag stays because it loses nothing, and a pass that moves a
+directory's files elsewhere would meet the same guess.
 
 So every rebase in the program runs with `-c merge.directoryRenames=false`. Proved
 in a scratch repository on 2026-09-22: the same replay conflicts with the guess

@@ -7,9 +7,6 @@ import json
 import threading
 import time
 from collections.abc import Iterable, Iterator
-from datetime import UTC, datetime, timedelta
-from datetime import date as date_type
-from datetime import time as time_type
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
@@ -30,9 +27,8 @@ from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary
@@ -42,7 +38,6 @@ from idhazh.elements import element_table
 from idhazh.evals import writer as eval_writer
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.gardener import closed_day_fold
 from idhazh.llm.server import TurnMarkers, server_argv
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
@@ -261,26 +256,6 @@ def seed_scores(
         state_dir,
         rows,
         identity=writer_identity(run_id, attempt=attempt, job=job, shard=shard),
-    )
-
-
-def fold(state_dir: Path, date: str) -> closed_day_fold.Folded:
-    """Fold `date` and every earlier day of every tree into one settled file each.
-
-    A test writes a day and wants it folded in the next line. Production only
-    folds a day already closed, so this asks at a later instant rather than
-    moving `after_days` to zero - a zero there would fold a day a shard could
-    still be writing, which is not a shape a run can reach.
-    """
-    after_days = DEFAULT_CLOSED_AFTER_DAYS
-    closed = date_type.fromisoformat(date) + timedelta(days=after_days + 1)
-    return closed_day_fold.fold(
-        state_dir,
-        DAY_TREES,
-        now=datetime.combine(closed, time_type.min, tzinfo=UTC),
-        after_days=after_days,
-        dry_run=False,
-        period_paths=[ledger.tree_root(state_dir, tree) for tree in DAY_TREES],
     )
 
 

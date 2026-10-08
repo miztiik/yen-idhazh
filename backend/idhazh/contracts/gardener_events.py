@@ -493,19 +493,6 @@ class PeriodsTaken(Model):
     yearly_mark: YearStamp | None = Field(description="The newest UTC year packed after the pass.")
 
 
-class FoldSettled(Model):
-    """What a retention task's fold settled into one file a closed day or month, or would."""
-
-    dry_run: bool = Field(description="Whether the fold only reported what it would settle.")
-    settled: list[str] = Field(
-        description="The one file each settled day or month holds, relative to the repository."
-    )
-    replaced: int = Field(ge=0, description="How many files those replaced, or would replace.")
-    fault: GardenerFault | None = Field(
-        default=None, description="Why the fold stopped part way. None when it finished."
-    )
-
-
 class TaskFinished(Model):
     """How one task ended, what it took and wrote, and what the next wake does."""
 
@@ -556,9 +543,6 @@ class TaskFinished(Model):
         default=None, ge=0, description="Pages the listing read. None for a listing with no pages."
     )
     duration_ms: int = Field(ge=0, description="How long the task ran.")
-    fold: FoldSettled | None = Field(
-        default=None, description="What the task's fold did. None when it has none or it never ran."
-    )
     periods: PeriodsTaken | None = Field(
         default=None, description="What a compaction did, period by period. None for other tasks."
     )

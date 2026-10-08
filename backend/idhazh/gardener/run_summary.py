@@ -34,7 +34,6 @@ from collections.abc import Mapping, Sequence
 from typing import Final
 
 from idhazh.contracts.gardener_events import (
-    FoldSettled,
     PeriodsTaken,
     ShardPublished,
     ShardStop,
@@ -203,7 +202,7 @@ def _ended(each: TaskFinished) -> str:
 
 def _did(each: TaskFinished) -> str:
     """What a task did, or would do on a dry run, and what stopped it."""
-    actions = [*_work(each), *_folded(each.fold)]
+    actions = _work(each)
     found = [] if each.periods is None else _found(each.periods)
     said = "; ".join(part for part in (", ".join(actions), ", ".join(found)) if part)
     stop = _stop(each)
@@ -265,15 +264,6 @@ def _found(periods: PeriodsTaken) -> list[str]:
         if listed
     ]
     return [f"found {' and '.join(named)} past the keep line"] if named else []
-
-
-def _folded(fold: FoldSettled | None) -> list[str]:
-    """What a retention task's fold merged, on its own switch."""
-    if fold is None or not fold.settled:
-        return []
-    merged = "would merge" if fold.dry_run else "merged"
-    days = _count(len(fold.settled), "finished day or month", "finished days or months")
-    return [f"{merged} {days} into one file each, replacing {_count(fold.replaced, 'file')}"]
 
 
 def _stop(each: TaskFinished) -> str | None:

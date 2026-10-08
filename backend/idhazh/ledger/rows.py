@@ -24,13 +24,11 @@ its rows to `persist` itself.
 from __future__ import annotations
 
 import csv
-import os
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable
 from pathlib import Path
 from typing import Final
 
 from idhazh import day_partition
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -44,18 +42,12 @@ from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files, lifecycle, paths
 from idhazh.ledger.csv_file import (
-    CsvRecord,
     _read_rows,
     extend_ledger_file,
-    render_file,
 )
-from idhazh.ledger.filenames import segment_name
 from idhazh.ledger.keys import (
-    _TREE_SHAPES,
-    DATE_CELL,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
-    _refuse_outside_day_trees,
 )
 from idhazh.ledger.persist import persist
 from idhazh.ledger.settle import drop_repeated_rows
@@ -378,164 +370,6 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     return ledger_files.load_ledger_rows(
         state_dir, LedgerName.VISUAL_PRUNES, model=VisualPruneRow
     )
-
-
-def day_shard_path(
-    state_dir: Path,
-    ledger: LedgerName,
-    *,
-    date: str,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-) -> Path:
-    """Where this writer puts this date's rows. Nobody else writes this path.
-
-    `state/<tree>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
-    date supplies the three directory segments, the way every sibling helper in
-    this module takes one; the four identity elements are what make the file
-    this writer's own. Two jobs of one run cannot collide, and neither can two
-    attempts - which is the difference between a lost push race costing a merge
-    and costing the rows.
-
-    The day comes off the row rather than off the clock, so rows a run left
-    behind three days ago land under that day rather than under today.
-    """
-    _refuse_outside_day_trees(ledger)
-    name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return paths.path(state_dir, ledger, date) / name
-
-
-def day_shard_relpath(
-    ledger: LedgerName,
-    *,
-    date: str,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-) -> str:
-    """The POSIX form of `day_shard_path`, for a log line (CLAUDE.md section 2)."""
-    _refuse_outside_day_trees(ledger)
-    name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return f"{paths.relpath(ledger, date)}/{name}"
-
-
-def _dated_rows(
-    ledger: LedgerName, rows: Sequence[CsvRecord], date: str | None
-) -> dict[str, list[dict[str, str]]]:
-    """This writer's rows, grouped by the day each one belongs under.
-
-    `date` is for the one tree whose rows carry no date cell. The score index is
-    a stamp and a digest - the record of what the rows beside it are - so it is
-    filed beside them rather than dated itself, and its writer already knows the
-    day because it is the first ten characters of the run id. Every other tree
-    routes each row by its own `date` cell, so a writer holding two days' rows
-    writes two files.
-    """
-    columns = _TREE_SHAPES[ledger].model.csv_columns()
-    grouped: dict[str, list[dict[str, str]]] = {}
-    for row in rows:
-        cells = row.csv_row()
-        day = date if date is not None else cells[DATE_CELL]
-        grouped.setdefault(day, []).append({name: cells.get(name, "") for name in columns})
-    return grouped
-
-
-def write_segment(
-    state_dir: Path,
-    ledger: LedgerName,
-    rows: Sequence[CsvRecord],
-    *,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-    date: str | None = None,
-) -> int:
-    """This writer's slice of one ledger, written whole. Nobody else writes these paths.
-
-    Whole rather than appended, because each file is this writer's alone: there
-    is no earlier row in it to keep and no header to agree with. That is what the
-    day directory buys - two jobs of one run, and two attempts at one job, never
-    open one file, so a lost push race costs a merge rather than the rows.
-
-    One file a day. The rows carry the tree's own columns and the tree's own
-    contract; a writer file gets no shape of its own, because a second shape for
-    the same rows is the thing that drifts.
-
-    Written through a temp file and a rename, so a writer killed mid-write leaves
-    nothing rather than half a row for a reader to refuse. The temp file sits at
-    the tree's own top rather than inside the day directory, which every reader
-    walks and refuses a name it cannot place.
-
-    Returns how many rows it wrote, so a caller can log the count.
-    """
-    _refuse_outside_day_trees(ledger)
-    if not rows:
-        return 0
-    if not lifecycle.accepts_new_rows(ledger, len(rows)):
-        return 0
-    columns = _TREE_SHAPES[ledger].model.csv_columns()
-    written = 0
-    for day, cells in _dated_rows(ledger, rows, date).items():
-        path = day_shard_path(
-            state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        scratch = paths.tree_root(state_dir, ledger) / f"{path.stem}.{day}.{os.getpid()}.tmp"
-        scratch.write_text(render_file(columns, cells), encoding="utf-8", newline="")
-        scratch.replace(path)
-        written += len(cells)
-    return written
-
-
-def extend_segment(
-    state_dir: Path,
-    ledger: LedgerName,
-    rows: Sequence[CsvRecord],
-    *,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-    date: str | None = None,
-) -> int:
-    """Add rows to this writer's own files, keeping the ones it wrote earlier.
-
-    `write_segment` is for a step that has everything its job will ever say. This
-    is for a job that learns something later: the machine probe runs before the
-    heaviest step because the bandwidth reading wants an idle host, and the job's
-    own clock is only known once the job is over. Two steps, one writer, one file
-    a day - the grammar in `day_shard_path` names the job and not the step, so a
-    second file is not something this tree can express.
-
-    The earlier rows are read and written back unchanged. Nothing is edited and
-    nothing is settled here: the arriving row carries the cells it has, the
-    earlier row keeps the cells it had, and `day_shards.settled_rows` is the one
-    place that decides what two rows of one key mean.
-
-    Returns how many rows it added, so a caller can log the count.
-    """
-    _refuse_outside_day_trees(ledger)
-    if not rows:
-        return 0
-    if not lifecycle.accepts_new_rows(ledger, len(rows)):
-        return 0
-    columns = _TREE_SHAPES[ledger].model.csv_columns()
-    added = 0
-    for day, cells in _dated_rows(ledger, rows, date).items():
-        path = day_shard_path(
-            state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
-        scratch = paths.tree_root(state_dir, ledger) / f"{path.stem}.{day}.{os.getpid()}.tmp"
-        scratch.write_text(render_file(columns, held + cells), encoding="utf-8", newline="")
-        scratch.replace(path)
-        added += len(cells)
-    return added
 
 
 def write_item_health_summary(path: Path, rows: list[ItemHealthSummaryRow]) -> int:

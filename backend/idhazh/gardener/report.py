@@ -18,11 +18,6 @@ folders weighed and what it downloaded are the runner's to say, so the runner
 hands them in. The day a walk handled through is the pass's own, and the row
 carries it for the task's next pass to start after.
 
-**A task's fold is said beside its pass.** It has a switch of its own, so the
-event says whether it was live, and a fold that stopped part way turns the
-task's stop to the one its fault ends a pass with - the task stopped, whichever
-half of it did.
-
 **What happens next is one fixed sentence, and none says a member is gone.**
 A dry run names the setting that makes a task live: `dry_run` in the task's own
 declaration, because the gardener takes no flag for that. A pass that stopped
@@ -40,12 +35,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
-from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
-from idhazh.contracts.gardener_events import FoldSettled, TaskFinished, TaskOutcome
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import PrunableCollection
 from idhazh.gardener import event_log
-from idhazh.gardener.closed_day_fold import Folded
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
@@ -101,33 +95,22 @@ NEXT: Final[Mapping[TaskOutcome, str]] = {
 }
 
 
-def ended(outcome: Pass, folded: Folded | None) -> tuple[StopReason, GardenerFault | None]:
-    """How a task ended, and why: its fold's stop when the fold stopped, else its pass's."""
-    if folded is not None and folded.fault is not None:
-        return stop_for(folded.fault), folded.fault
-    return outcome.stopped_because, outcome.fault
-
-
-def classify(outcome: Pass, folded: Folded | None = None) -> TaskOutcome:
+def classify(outcome: Pass) -> TaskOutcome:
     """The one word for how a task ended: the first of the outcome words that holds.
 
     A fault first, then work only reported, then the ceiling, then work done.
-    Work was found when the window held a member, the pass wrote or would write
-    a file, or the fold found a closed day or month; it was carried out when a
-    live pass took, wrote or recovered something, or a live fold settled one.
-    A report the task files every pass is not work. Otherwise the pass's own
-    idle word.
+    Work was found when the window held a member, or the pass wrote or would
+    write a file; it was carried out when a live pass took, wrote or recovered
+    something. A report the task files every pass is not work. Otherwise the
+    pass's own idle word.
     """
-    stopped, _fault = ended(outcome, folded)
+    stopped = outcome.stopped_because
     if stopped is StopReason.FAILED:
         return TaskOutcome.FAILED
     if stopped is StopReason.DEFERRED:
         return TaskOutcome.DEFERRED
-    folded_any = folded is not None and bool(folded.months or folded.days)
-    found = outcome.selected > 0 or bool(outcome.written) or folded_any
-    carried = (
-        not outcome.dry_run and bool(outcome.taken or outcome.written or outcome.recovered)
-    ) or (folded is not None and folded_any and not folded.dry_run)
+    found = outcome.selected > 0 or bool(outcome.written)
+    carried = not outcome.dry_run and bool(outcome.taken or outcome.written or outcome.recovered)
     if found and not carried:
         return TaskOutcome.DRY_RUN
     if stopped is StopReason.CEILING:
@@ -147,21 +130,17 @@ def finished(
     *,
     task: str,
     duration_ms: int,
-    folded: Folded | None,
-    settled: tuple[str, ...],
     failure: BaseException | None,
     collection: PrunableCollection | None = None,
 ) -> TaskFinished:
     """The pass as the event that says how its task ended.
 
-    `settled` is every file the fold settled, or would settle, relative to the
-    repository. `failure` is the exception that stopped the task, if one did:
-    the event names its type and its place in this package's code, never its
-    text. `collection` is the GitHub collection a collection task takes from,
-    which says that `taken` holds its member ids rather than files.
+    `failure` is the exception that stopped the task, if one did: the event
+    names its type and its place in this package's code, never its text.
+    `collection` is the GitHub collection a collection task takes from, which
+    says that `taken` holds its member ids rather than files.
     """
-    stopped, fault = ended(outcome, folded)
-    word = classify(outcome, folded)
+    word = classify(outcome)
     error, where = event_log.cause_of(failure)
     return TaskFinished(
         task=task,
@@ -173,24 +152,16 @@ def finished(
         taken=list(outcome.taken),
         written=list(outcome.written),
         bytes_freed=outcome.bytes_freed,
-        stopped_because=stopped,
+        stopped_because=outcome.stopped_because,
         resume_from=outcome.resume_from,
         handled_through=outcome.handled_through,
-        fault=fault,
+        fault=outcome.fault,
         error=error,
         where=where,
         recovered=list(outcome.recovered),
-        next=next_step(word, fault),
+        next=next_step(word, outcome.fault),
         pages_read=outcome.pages_read,
         duration_ms=duration_ms,
-        fold=None
-        if folded is None
-        else FoldSettled(
-            dry_run=folded.dry_run,
-            settled=list(settled),
-            replaced=folded.files,
-            fault=folded.fault,
-        ),
         periods=outcome.periods,
     )
 
@@ -204,10 +175,8 @@ def row(
     work_ended_at: str,
     cone_bytes: int | None,
     downloaded_bytes: int | None,
-    folded: Folded | None = None,
 ) -> CollectionPruneRow:
     """The pass as the persisted shape, under the name and identity of the run that took it."""
-    stopped, fault = ended(outcome, folded)
     return CollectionPruneRow(
         version=CollectionPruneRow.schema_version(),
         date=context.today.isoformat(),
@@ -224,8 +193,8 @@ def row(
         selected=outcome.selected,
         deleted=len(outcome.taken),
         bytes_freed=outcome.bytes_freed,
-        stopped_because=stopped,
-        fault=fault,
+        stopped_because=outcome.stopped_because,
+        fault=outcome.fault,
         recovered=list(outcome.recovered),
         resume_from=outcome.resume_from,
         handled_through=outcome.handled_through,
@@ -233,8 +202,4 @@ def row(
         work_ended_at=work_ended_at,
         cone_bytes=cone_bytes,
         downloaded_bytes=downloaded_bytes,
-        fold_dry_run=None if folded is None else folded.dry_run,
-        folded_days=None if folded is None else len(folded.days),
-        folded_files=None if folded is None else folded.files,
-        folded_months=None if folded is None else len(folded.months),
     )
