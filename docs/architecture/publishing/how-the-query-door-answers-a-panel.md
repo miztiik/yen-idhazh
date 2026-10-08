@@ -332,11 +332,13 @@ staged tree.
   there, and the bundle gate skips the ledgers' keys. The registry still ships
   from this site, because the page reads it as the site's declaration of what it
   can show.
-- **`backend/tests/contracts/test_published_ledgers_cover_the_panels.py` holds the
-  two sides together**: every ledger a panel names in a `slice()` or
-  `ledgerReach()` call is in `ledger.published`. The door's closed set admits one
-  more, `feed-health`, which a build-time reader asks through `sliceFromDisk`
-  and no browser panel asks, so the site holds none of its files.
+- **Every ledger a panel names in a `slice()` or `ledgerReach()` call must be
+  in `ledger.published`, and no test checks it.** The test that checked it
+  scanned the frontend source tree, a read that grows with the repository, so it
+  was deleted (Guardrail #12), and the door's ledger type, `LedgerName` in
+  `frontend/src/lib/data/slice-shapes.ts`, admits every declared ledger.
+  `feed-health` is one the site does not hold: a build-time reader asks it
+  through `sliceFromDisk`, and no browser panel asks it.
   `frontend/tests/published-ledgers.spec.ts` asks the built
   site the door's own questions: every address an index names is there, at the
   size its entry gives, and nothing else of `state/` is.
@@ -351,8 +353,8 @@ or month index. Most keys hold 2,200 gzipped bytes. The `gardener` key holds
 2,064, exactly twice its longest index: a day index of at most 76 entries, 45
 kept days plus one whole month of 31, weighs 1,032 bytes at gzip -5. The copied
 registry has its own
-`config/ledgers.json` key of 3,200 gzipped bytes, which is a little over twice
-the 1,469 bytes measured at gzip -5 on 2026-10-02. The bundle gate weighs all
+`config/ledgers.json` key of 3,400 gzipped bytes, about 2.3 times the 1,494
+bytes measured at gzip -5 on 2026-10-08. The bundle gate weighs all
 three indexes and the registry; `backend/tests/contracts/test_page_ceilings.py`
 also fails when a day or month keep window grows past its bound. A ledger not
 packed yet has no file in the build, so the bundle gate reports its key as not

@@ -909,6 +909,7 @@ test.describe("THE ORACLE: Hardware dates the server's figures from the machine 
 		const said = offered.map((open) => {
 			const notes = describeServerCounters({
 				runs,
+				refused: [],
 				ran: articleDays,
 				articleDays,
 				machineRead: machine.read,
