@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -395,9 +395,14 @@ as of 2026-09-19 while the scores it sits between run from 0.73 to 0.99. A panel
 that draws the population cannot draw the distance.
 
 **So the axis is the line and one day's legal fall, never the band.** It runs
-from two days' fall below the line to one day's fall above it - one fall cap
-either side of `floor_min`, both off `config/idhazh.json`, so the window is the
-same width every day and two days of this panel compare. The cap is not a score
+from two days' fall below the line to one day's fall above it. The line is the
+one the newest published day was built with. With
+`adaptive_dedup_threshold.enabled` off, that is `floor_min`. With it on, it is
+the newest line a fit applied in the days a build looks back over, or
+`floor_min` if no fit applied one
+([autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md#what-chose-094-measured-on-the-cosine-alone)).
+The fall cap is off `config/idhazh.json`, so the window is the same width every
+day and two days of this panel compare. The cap is not a score
 in the config: it is `max_down_bins` slots of `bin_width`, and the contract
 derives the score from them, so the panel multiplies the same two numbers.
 Measured on the built page at 1440: the margin drew at **5.8 px of a 1033 px

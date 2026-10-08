@@ -31,7 +31,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-voices-sources', 'console-voices', 'console-window-claims', 'console-window'
 	],
 	logic: [
-		'appearance-config', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
+		'appearance-config', 'applied-line', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'console-data-explorer-address', 'console-data-explorer-cells', 'console-data-explorer-examples', 'console-data-explorer-gaps', 'console-data-explorer-keep', 'console-data-explorer-shape',
 		'explorer-column-groups', 'explorer-strip-fit', 'explorer-type-colour', 'explorer-type-family',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
