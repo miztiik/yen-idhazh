@@ -42,6 +42,7 @@ import {
 	DEFAULT_COST_SHAPE
 } from '../src/lib/charts/cost';
 import {
+	carriesServerCounters,
 	machineCounters,
 	machineLimits,
 	type MachineLimits,
@@ -1017,6 +1018,30 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		expect(runs.map((run) => run.runId)).toEqual([ACCEPTED]);
 	});
 
+	test("a refused run whose machine records hold the server's own figures carries them", () => {
+		// Shard 1's two records disagree, and each of them holds the server's two cells.
+		const { refused } = machineCounters(hosts, bothRuns, plan([REFUSED, 2], [ACCEPTED, 1]), LIMITS);
+		expect(refused.map((run) => [run.runId, run.serverCountersWritten])).toEqual([[REFUSED, true]]);
+		expect(carriesServerCounters(refused[0])).toBe(true);
+	});
+
+	test('a refused run whose records disagree only about the machine carries no server figure', () => {
+		// Shard 0 filed two records that name two machines, and neither holds a cell the server wrote.
+		const { runs, refused } = machineCounters(
+			[
+				hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, fingerprint: 'f00d' }),
+				hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, fingerprint: 'beef' })
+			],
+			refusedRows,
+			plan([REFUSED, 2]),
+			LIMITS
+		);
+		expect(runs).toEqual([]);
+		expect(refused.map((run) => [run.runId, run.serverCountersWritten])).toEqual([[REFUSED, false]]);
+		expect(refused[0].why).toContain('shard 0 filed two machine records that disagree');
+		expect(carriesServerCounters(refused[0])).toBe(false);
+	});
+
 	test('what a run reads against what it writes counts it', () => {
 		expect(readAgainstWritten(acceptedRows).runs.map((run) => run.runId)).toEqual([ACCEPTED]);
 		const view = readAgainstWritten(bothRuns);
@@ -1158,12 +1183,19 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 
 	test('the box reads right for several runs and for a run of one row, and is absent with none', () => {
 		const box = describeRefusedRuns([
-			{ runId: REFUSED, date: '2026-09-04', rows: 1, why: 'neither ledger holds a shard for this run' },
+			{
+				runId: REFUSED,
+				date: '2026-09-04',
+				rows: 1,
+				why: 'neither ledger holds a shard for this run',
+				serverCountersWritten: false
+			},
 			{
 				runId: '2026-09-03-1',
 				date: '2026-09-03',
 				rows: 4,
-				why: 'its rows disagree about which day the run belongs to'
+				why: 'its rows disagree about which day the run belongs to',
+				serverCountersWritten: false
 			}
 		]);
 		expect(box?.head).toBe(
