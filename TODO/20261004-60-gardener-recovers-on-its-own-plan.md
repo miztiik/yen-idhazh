@@ -77,7 +77,8 @@ Table A - what is out
 | 35 | The yearly expiry logs an event of its own | 21 | G | DONE | super-fiesta | #1417 | Plan 60 row 35 |
 | 36 | The plan job's config refusals keep their sentence | 34 | G | DONE | turbo-guide | #1411 | Plan 60 row 36 |
 | 37 | Operator gardener commands print where they broke, never the error's text | 34 | H | DONE | cuddly-carnival | #1426 | Plan 60 row 37 |
-| 38 | An expired year reaches the job summary | 35 | H | DONE | silver-train | - | Plan 60 row 38 |
+| 38 | An expired year reaches the job summary | 35 | H | DONE | silver-train | #1434 | Plan 60 row 38 |
+| 39 | The job summary says plainly when nothing is left and what a dry run holds back | 38 | I | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -171,7 +172,7 @@ Table E - events. Beside each model is the name its line carries, the model's na
 | E1 | TaskPlanned, `task-planned` | The runner, before the task; `info` | task, kind, shard, run_id, attempt, today, operator_range (the range a person named, never the scheduled window), declared: the declaration as it dumps, leaving out `kind`, `owns`, `reads`, `appends_to` and the prose of `prune_refusal`, with a null knob kept null; absent: the declared folders the commit does not hold yet |
 | E2 | WindowChosen, `window-chosen` | `one_at_a_time.take`, at its top, before the listing is read, so a walk that fails at once has already said its window; `info` | collection, since, until, ceiling, dry_run, mark (the `handled_through` it starts from). The pages read are known only at the end, so the pass counts them and E5 reports them |
 | E3 | PeriodsChosen, `periods-chosen` | Compaction, after it chooses and before the steps run; `info` | ledger; marks before; age lines (newest eligible day, newest closable month, keep line, year line); for each step, the span or none, where it stops and resumes when the cap or a late range stops it, and the start reason (mark, oldest-indexed, oldest-raw-day, operator-range, keep-line, none); cap; operator range; month deletes live or report-only; the re-run span |
-| E4 | PeriodsTaken | Compaction. It travels on `Pass.periods` and is nested inside E5 as `periods` | Packed and re-taken days; closed months; packed years; dropped months and raw days; periods written `empty`; days recorded lost; files set aside, by path; marks after. Built from the indexes the pass read compared with the end, plus the lists the drop steps and `set_aside` keep |
+| E4 | PeriodsTaken | Compaction. It travels on `Pass.periods` and is nested inside E5 as `periods` | Packed and re-taken days; closed months; packed years; years expired, oldest first (row 38; a pass over several roots lists each year once, merged by `runner._run_compaction_roots`); dropped months and raw days; periods written `empty`; days recorded lost; files set aside, by path; marks after. Built from the indexes the pass read compared with the end, plus the lists the drop steps and `set_aside` keep |
 | E5 | TaskFinished, `task-finished` | The runner, after the task; `error` for `failed`, `warning` for `deferred`, `info` otherwise | task, outcome (Table F), dry_run, seen, selected, collection (what `taken` holds: the member ids of `workflow-runs` or `workflow-artifacts`, and none when it holds files), taken, written, bytes_freed, stopped_because, resume_from, handled_through, fault, error, where, recovered, next (one fixed sentence for each outcome word, or the fault's own sentence; none carries a value or says a member is gone), pages_read, duration_ms, fold (what the task's fold settled), periods (E4). `collection`: Fowler, 2026-10-07 (row 22) |
 | E6 | ShardPublished, `shard-published` | The publisher, once for every ending, a crash included (`run_and_land` in `backend/utilities/gardener_publish.py`); `error` when the exit code is not 0, `warning` for `stale` or `lost`, `info` otherwise | shard, run_id, attempt, tasks, failed_tasks; landing (the words in `backend/idhazh/contracts/shard_landing.py`, row 27: landed, already-on-main, stale, lost, refused) or stopped_because (`ShardStop`, declared beside the event: listing-failed, check-refused, crashed), exactly one of the two; push_try (the try a landing came to rest on) and push_tries (`attempts` in the publisher's config); record; stale_paths (exactly when `landing` is `stale`); downloaded_bytes, over_budget and max_downloaded_mb; exit_code and means (its sentence from `MEANS` in `backend/idhazh/gardener/outcome.py`); error and where (exactly when a listing failed or a crash stopped the shard). Fowler, 2026-10-07 (row 22) |
 | E7 | MemberOutOfOrder, `member-out-of-order` | `one_at_a_time.take`, when a walk from a mark meets a member from an earlier day than one before it; `warning` | collection, day, after. The mark stays |
@@ -1643,3 +1644,24 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- | --- | --- |
 | 1 | As today | From 2030-01-01 UTC, a live pass whose only work is to expire a year ends `done`, and its summary says it did nothing, although it deleted that year's files | Nothing to build, and a summary that hides a delete | Fowler, 2026-10-07 (row 35's Found during execution) |
 | 2 | Count the expired years in row 35 | The summary's words are Reader's, and row 35 turned one log line into one event | Row 35 waiting for Reader's words | Fowler, 2026-10-07 (row 35, decision 7) |
+
+### Row #39 - The job summary says plainly when nothing is left and what a dry run holds back
+
+- **Scope:** The job summary's two fixed sentences read plainly: the `done` sentence no longer admits "no data is left" as a second reading, and the `dry-run` sentence, on a pass that would delete a year, names a switch that actually holds that delete back. Level 1.
+- **The gap** (row 38's report, Reader, 2026-10-08): two of the fixed sentences in `NEXT`, `backend/idhazh/gardener/report.py`, are shared by every gardener task through `runner.py`'s single call to `report.finished`, so every task that ends `done` or `dry-run` prints them today. (a) `TaskOutcome.DONE`'s sentence, "nothing is left, and the next wake takes what reaches its line by then", can read for a moment as "no data is left", where it means only that nothing has reached its line yet. (b) `TaskOutcome.DRY_RUN`'s sentence offers one switch to make a dry run live, `month_deletes_dry_run: false`, but that switch holds back a month's delete only, never a year's: from 2030-01-01 UTC (row 38), a dry run whose only held-back work is an expired year names a switch that does not hold that delete back.
+- **Files touched** (found by a search on `origin/main` at 350988cf0 for `nothing is left`, `month_deletes_dry_run` and the `NEXT` mapping under `backend/idhazh/gardener/`; search again at dispatch):
+  - `backend/idhazh/gardener/report.py` (`NEXT`: the `TaskOutcome.DONE` and `TaskOutcome.DRY_RUN` sentences)
+  - `backend/tests/gardener/test_run_summary.py` (the Oracle; pins both sentences, the `done` one twice and the `dry-run` one once)
+- **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/gardener/test_run_summary.py`; ruff; mypy. CI: the full suite.
+- **Oracle:** in `test_run_summary.py`, on a tree the test builds under `tmp_path`: a dry run whose only held-back work is an expired year renders, in Reader's words, a sentence that names the switch that would let the year go; a `done` pass renders a sentence that cannot be misread as a claim about data. On `origin/main` the dry-run sentence still offers only `month_deletes_dry_run: false`, and the `done` sentence still reads "nothing is left" plain, which is what lets this check fail. It cannot settle the exact words, which Reader chooses.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Reader chooses the words for both sentences | To be ruled at dispatch (Reader) |
+| 2 | Part (b) must land before 2030-01-01 UTC, the first day any year expires (row 38, decision 4) | Plan owner, 2026-10-08 |
+| 3 | Level 1: two fixed sentences in one mapping, shared by every task through one call site; a wrong version is obvious and local | Plan owner, 2026-10-08 |
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | As today | The `done` sentence can be misread, and from 2030-01-01 UTC the `dry-run` sentence can name a switch that does not hold back the delete it is read beside | Nothing to build, and two sentences that can mislead a reader of the job page | Row 38's report (Reader, 2026-10-08) |
+| 2 | Fold it into row 38 | Row 38 merged before Reader raised these; both follow-ups were explicitly left for a row of their own | Reopening a merged row, #1434 | Row 38's report (Reader, 2026-10-08) |
