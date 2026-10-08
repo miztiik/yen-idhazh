@@ -407,6 +407,7 @@
     "host_fingerprint": false,
     "host_fingerprint_bandwidth_cache_multiple": 3,
     "host_fingerprint_bandwidth_floor_mib": 256,
+    "host_fingerprint_bandwidth_jobs": ["work"],
     "public_day_metrics_keep_months": 21,
     "public_machine_keep_months": 22,
     "public_run_days_keep_months": 19,

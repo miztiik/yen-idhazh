@@ -408,17 +408,24 @@ def stage_fingerprint(
     two strings the caller already holds would make this probe refuse every
     workflow that does not plan - the gardener's wakes and the council's nights
     among them - for a payload it never opens.
+    **The bandwidth reading is taken only by the jobs config names.** It wants a
+    gigabyte and an idle machine, so a job that takes it anywhere but the bench
+    measures its own run rather than the host. A job outside the list is handed a
+    floor of zero, which is the caller saying do not probe, and the row carries
+    `memcpy_probe_mib` of zero beside an empty rate - the reading was not taken,
+    rather than a machine that could not copy.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
         LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, run_id)
         return None
+    reads_bandwidth = job in knobs.host_fingerprint_bandwidth_jobs
     row = read_row(
         date=date,
         run_id=run_id,
         job=job,
         shard=shard,
-        probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib,
+        probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib if reads_bandwidth else 0,
         probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
     )
     landed = ledger.persist(

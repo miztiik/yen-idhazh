@@ -256,6 +256,7 @@
     "host_fingerprint": true,
     "host_fingerprint_bandwidth_cache_multiple": 2,
     "host_fingerprint_bandwidth_floor_mib": 512,
+    "host_fingerprint_bandwidth_jobs": ["runtime"],
     "public_day_metrics_keep_months": 14,
     "public_machine_keep_months": 14,
     "public_run_days_keep_months": 14,
