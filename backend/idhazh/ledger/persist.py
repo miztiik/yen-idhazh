@@ -49,7 +49,7 @@ from pydantic import ValidationError
 
 from idhazh import atomic_write, config
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.base import MAINTENANCE_JOBS, Contract, PeriodStamp
+from idhazh.contracts.base import Contract, PeriodStamp
 from idhazh.contracts.file_envelope import (
     Compression,
     FileEnvelope,
@@ -332,10 +332,12 @@ def persist(
     is filed under the day it names. `fmt` of `None` means `config/idhazh.json`'s
     `ledger.format`, and nothing else.
 
-    A write into a paused or retired family from a pipeline job writes nothing
-    and returns an empty list, with one warning. A write from a job in
-    `MAINTENANCE_JOBS` is never skipped: it files rows again that were already
-    recorded.
+    A write into a paused or retired family writes nothing and returns an empty
+    list, with one warning. Every raw write is gated that way, whatever job it
+    carries: a row nothing recorded before is a new row even when the job that
+    writes it maintains other rows. The compact tier is the exemption, and
+    `persist_period` is where it is stated - repacking a day that is already
+    recorded records nothing new.
 
     Every file is built before the first is written, so a row refused on its
     third day leaves no file for the first two. The paths come back ascending by
@@ -345,7 +347,7 @@ def persist(
     if not rows:
         return []
     model = _one_contract(rows)
-    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(ledger, len(rows)):
+    if not lifecycle.accepts_new_rows(ledger, len(rows)):
         return []
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
