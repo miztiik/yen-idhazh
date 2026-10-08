@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-08
 
 Checks before trusting a browser result. Follow the [browser smoke procedure](../../how-to/run-the-gates.md).
 
@@ -17,6 +17,7 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
 - Use fresh browser contexts for cold-load cases. Distinguish full navigation, client-side routing and fragment-only changes.
 - Prove that a failure test reached its target request. Account for service workers, caches and data already in the document; zero interceptions do not exercise a network failure.
 - Register a browser-context route before navigation to serve a dedicated worker's add-on from a local file. In Playwright 1.62.1 with Chromium 151, this also intercepted requests forwarded by a pass-through service worker; such a request has no page frame. Verify the production service worker separately.
+- **To hold a request and then let it through, hold it on the browser context, after the routes that serve it, and fall back to them.** In Playwright 1.62.1 with Chromium 151, a page route with `times: 1` that held a data file and then called `route.fallback()` let the request through to the server, a 404, before the context route that served the file could answer, and that route's `fulfill` threw `Route is already handled!`. A page route that aborts what it held does not race.
 - Routing disables HTTP caching. A context that intercepts an add-on can prove offline test delivery, but cannot certify browser-cache behavior. Keep cache-sensitive checks separate and count actual requests.
 
 ## Driving components
