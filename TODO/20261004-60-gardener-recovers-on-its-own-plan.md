@@ -67,7 +67,7 @@ Table A - what is out
 | 25 | The retired raw listings code goes | 15 | F | COLLAPSED #1267 | - | - | - |
 | 26 | doc_load.py reads a web address as a web address | - | A | DONE | stunning-garbanzo | #1285 | Plan 60 row 26: doc_load web links |
 | 27 | A shard lands nothing stale, and says why when it cannot land | 3, 9 | C | DONE | urban-spoon | #1291 | Plan 60 row 27: no stale landing |
-| 28 | The console can read the gardener ledger | 23 | F | PENDING | - | - | - |
+| 28 | The console can read the gardener ledger | 23 | F | DONE | solid-goggles | - | Plan 60 row 28 |
 | 29 | doc_load.py measures every named Markdown page | 26 | A | DONE | effective-carnival | #1289 | Plan 60 row 29: doc_load every page |
 | 30 | Every reader and rewriter of a compact index keeps an entry's state | 8 | D | DONE | psychic-guide | #1293 | Plan 60 row 30: index readers keep state |
 | 31 | Panels say which days have no record | 8 | E | DONE | congenial-waddle | #1301 | Plan 60 row 31: panels show lost days |
@@ -1261,16 +1261,25 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `shard-published` (Table E, E6) is not persisted, so the console can show only the record rows, not landings or exit codes. The sentences for each fault and note word (`report.WHY` and `report.NOTED` in `backend/idhazh/gardener/report.py`) and the phrase for each task's work (`backend/idhazh/gardener/run_summary.py`) are Python, so a console panel needs its own copies, and Jony and Susan rule on that panel (Table A, A6); found during execution (row 22 report), owner 2026-10-07.
   - The precondition above should hold once the wake of 2026-10-08 lands, because that wake is the first live pass of `compact-gardener`; found during execution (row 23 report), owner 2026-10-07.
 - **Files touched:**
-  - `config/idhazh.json` (`gardener` in `ledger.published`, and the key `"state/compact/gardener/index/": 2200` in `page_weight.payload_ceilings_bytes`)
-  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (the list of published ledgers)
-  - `docs/architecture/publishing/idhazh-gardener.md`
+  - `config/idhazh.json` (`gardener` in `ledger.published`, and the key `"state/compact/gardener/index/": 2064` in `page_weight.payload_ceilings_bytes`. 2,064 is what the rule of `test_every_published_ledger_bounds_its_indexes_at_twice_their_longest` gives for `compact-gardener.json`: twice its longest index, a day index of 45 + 31 = 76 entries that weighs 1,032 bytes at gzip -5, where 17 month entries weigh 374. Not 2,200 as first written; found during execution)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (the list of published ledgers, and the sentence that gave every index key 2,200 bytes; the second found during execution)
+  - `docs/architecture/publishing/idhazh-gardener.md` (the record is published, and what each of its cells can hold)
+  - `TODO/20261004-60-gardener-recovers-on-its-own-plan.md` (this row's line in the Status Reckoner, and decision 2's Authority)
 - **Acceptance gates:** local: `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/contracts/test_page_ceilings.py`; `npm --prefix frontend run test:changed -- --list` and the checks it selects; `npm run bundle-gate` from `frontend/`; the browser smoke in [run-the-gates.md](../docs/how-to/run-the-gates.md) on one console page (CLAUDE.md section 12); `doc_load.py` on the two pages. CI: the full suite.
 - **Oracle:** `test_every_published_ledger_bounds_its_indexes_at_twice_their_longest` in `backend/tests/contracts/test_page_ceilings.py` fails on a half revert: the ledger published without its key, or the key without the ledger. No new test: this is one config value, and its readers are tested for every published ledger. It cannot settle whether the console shows the notes; that panel is out of scope (Table A, A6).
+- **Found during execution:**
+  - The key's value comes from the test's own rule, applied to `compact-gardener.json`: 45 + 31 = 76 day entries weigh 1,032 bytes at gzip -5, and 12 + 5 = 17 month entries weigh 374, so the key is 2 x 1,032 = 2,064. Node 24.12.0 and Node 22.23.3, the major CI installs, give the same sizes. With the key at 2,063 the test fails with `assert 2063 >= (2 * 1032)`.
+  - Oracle, on this branch: with the ledger published and no key, and with the key and the ledger not published, the test fails at its key-set assertion; with both, `test_page_ceilings.py` passes 9 tests.
+  - Column check, ESCALATE trigger 3: none fires. The site serves 31 columns: the 28 of `CollectionPruneRow`, its `version` included, and `ledger`, `covers` and `unit_id` from `RowIdentity`. Each holds a closed word, a count, a flag, a UTC day or instant, the identity of the run that wrote the row, a task's name from `config/gardener/`, or a member. A member (`resume_from`, and each `recovered` note's `subject`) is a UTC period, a path under `state/` that the code names, or the number GitHub gives a workflow run or artifact (`str(raw["id"])` in `github_collections.py`). The name GitHub gives one (`Member.label`) is read by no code and never reaches the row, and `MEMBER_ID_PATTERN` refuses a space, a colon and `?`, so no member can be a web address.
+  - The canary holds no gardener row. Its packing writes the ledger's three indexes empty (Rule L), so the canary publishes an empty gardener ledger, and `frontend/tests/published-ledgers.spec.ts`, which plan 62's Table B, B7 says expects all three indexes of every published ledger, finds them.
+  - No question in `explorer_examples` in `config/appearance.json` reads the gardener ledger, so the smoke typed one. An example question is a console change, for Jony and Susan with the panel (Table A, A6).
+  - The site build stages the raw days after each published ledger's newest packed day, and no browser reads them. `frontend/vite.config.ts` bakes `__RAW_LISTED_THROUGH__` from `rawListedThrough()` in `frontend/scripts/raw-listed-through.mjs`, whose default folder, `frontend/static`, is read from the build's working folder, `frontend/`, so every build bakes `{}`: this branch's client bundle holds `var br={}`. The smoke's explorer read the 7 packed days, 169 rows, asked for none of the 12 raw files of 7 and 8 October, and said it read through 8 October. It predates this row (plan 55 row 2, #1201) and lies outside its files, so it is not fixed here: a Level 2 row resolves the default from the module's own address, with a test that reads the baked value.
+  - `how-the-query-door-answers-a-panel.md` names `backend/tests/contracts/test_published_ledgers_cover_the_panels.py`, which #1228 deleted, and gives the registry key 3,200 bytes, where `config/idhazh.json` sets 3,400. Neither is changed here.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Publish the existing ledger through the existing door; no new payload | Fowler review, 2026-10-04 |
-| 2 | Dispatch waits until the gardener's indexes are on main | Fowler review, 2026-10-04 |
+| 2 | Dispatch waits until the gardener's indexes are on main | Fowler review, 2026-10-04. It held at dispatch: the first live pass of `compact-gardener` ran in gardener run 37738488838 at 06:35 UTC on 2026-10-08, and `state/compact/gardener/index/daily.json`, `monthly.json` and `yearly.json` were on `origin/main` at 7a9361d69, `daily.json` holding 7 packed days, 2026-09-30 to 2026-10-06, 169 rows (plan owner, 2026-10-08) |
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |

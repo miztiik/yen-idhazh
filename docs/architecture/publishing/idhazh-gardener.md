@@ -369,6 +369,20 @@ wording can change with no migration. A row written before 2026-10-07 has no
 `fault` and no `recovered`, and reads as one that named none; on such a row
 `failed` means any stop for an error.
 
+**The record is published.** `gardener` is in `ledger.published` in
+`config/idhazh.json`, so the site holds its packed indexes, the files they name
+and the raw days not packed yet, and the console's Data explorer can ask it why
+a ledger is behind and what a pass recovered
+([what the site holds](how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
+Every cell can be published as it is: a closed word, a count, a flag, a UTC day
+or instant, the identity of the run that wrote the row, a task's name from
+`config/gardener/`, or a member. A member is a UTC period, a path under `state/`
+that this project named, or the number GitHub gives a workflow run or an
+artifact; the name GitHub gives one never reaches the row, and
+`MEMBER_ID_PATTERN` refuses a space, a colon and a query string, so no member
+can be a web address. The explorer shows the words; the sentence a person reads
+for each is written by `report.py` and is not on the site.
+
 ## What a shard logs
 
 **Every line a task logs is one event: one line of JSON on stderr.** Each event
