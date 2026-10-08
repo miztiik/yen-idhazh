@@ -23,6 +23,7 @@ export type LedgerName = (typeof LEDGER_NAMES)[number];
 
 /** Door ledger folders that differ from the ledger's value. */
 export const LEDGER_FOLDERS = {
+	'holdout-pairs': 'content-similarity-judge/holdout-pairs',
 	'merge-line-holdout-scores': 'content-similarity-judge/merge-line-holdout-scores',
 	'scored-pairs': 'content-similarity-judge/scored-pairs',
 	'metrics': 'content-similarity-judge/metrics'

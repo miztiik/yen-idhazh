@@ -1,8 +1,7 @@
 """The sample sheet's arithmetic: which band a pair is in, and which pairs are chosen.
 
 `backend/utilities/` is outside `testpaths`, so nothing there is collected by
-pytest. Its pure functions are still owed tests, and this is where they live -
-the same arrangement `test_check_seeded_ledgers.py` uses.
+pytest. Its pure functions are still owed tests, and this is where they live.
 
 Every case here is built in the test. Nothing reads the draw tree, the published
 days or the committed sheet, so none of it gets slower as the archive grows
@@ -25,8 +24,11 @@ CORRIDOR = 0.02
 
 
 def _pair(score: float, key: str) -> Pair:
-    side = Article(
-        url=f"https://e.test/{key}", title=key, summary="", source="e", date="2026-09-01"
+    left, right = (
+        Article(
+            url=f"https://{side}.test/{key}", title=key, summary="", source=side, date="2026-09-01"
+        )
+        for side in ("left", "right")
     )
     return Pair(
         date="2026-09-01",
@@ -35,8 +37,8 @@ def _pair(score: float, key: str) -> Pair:
         cosine=score,
         headline=False,
         band=band_of(score, LINE, corridor=CORRIDOR),
-        left=side,
-        right=side,
+        left=left,
+        right=right,
     )
 
 
@@ -122,9 +124,10 @@ def test_a_harvested_row_says_who_labelled_it() -> None:
     rows = as_holdout_rows(
         [_pair(0.9606, "a1")], {"a1": False}, labelled_on="2026-09-19", labeller="a-judge"
     )
-    assert rows[0]["same_story"] == "false"
-    assert "a-judge" in rows[0]["note"]
-    assert "0.9606" in rows[0]["note"]
+    assert rows[0].same_story is False
+    assert rows[0].marked_on == "2026-09-19"
+    assert "a-judge" in rows[0].note
+    assert "0.9606" in rows[0].note
 
 
 def test_a_mark_survives_the_sheet_that_surfaced_it() -> None:

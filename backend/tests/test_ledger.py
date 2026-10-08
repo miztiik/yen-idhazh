@@ -1019,22 +1019,20 @@ def test_the_two_ledgers_on_the_door_file_under_the_raw_root() -> None:
     assert ledger.raw_root(state, LedgerName.VISUAL_PRUNES) == Path("state/raw/visual-prunes")
 
 
-def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> None:
-    """The one seeded header left, and it needs one for a reason of its own.
+def test_the_hand_marks_file_inside_the_judges_folder_under_both_door_roots() -> None:
+    """The holdout marks keep the judge's folder and move only under raw and compact.
 
-    A person types this file, so on a fresh clone it holds nothing but its
-    header - and `git add` on a path that is not there aborts the commit step and
-    takes every ledger staged in the same call with it. Whether the checkout
-    carries the file is `backend/utilities/check_seeded_ledgers.py`'s question
-    (`CLAUDE.md` section 13); what stays here is the path the commit step is
-    handed.
+    A harvest files a file of its own under `state/raw/`, so no header-only file
+    has to exist before the first mark, and the gardener packs it under
+    `state/compact/`. What is asserted is the folder each reader opens, which is
+    the part a code change can break.
     """
-    assert (
-        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-        == "state/content-similarity-judge/holdout-pairs.csv"
-    )
-    assert ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS) == Path(
-        "state/content-similarity-judge/holdout-pairs.csv"
+    state = Path("state")
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS
+
+    assert ledger.raw_root(state, which) == Path("state/raw/content-similarity-judge/holdout-pairs")
+    assert ledger.compact_folder(state, which) == Path(
+        "state/compact/content-similarity-judge/holdout-pairs"
     )
 
 

@@ -456,6 +456,9 @@
     "trial_case_dirname": "a-case-nobody-runs",
     "trial_state_dirname": "a-trial-nobody-runs"
   },
+  "similarity": {
+    "holdout_reach_days": 365
+  },
   "summarize": {
     "asks_for_a_visual_plan": false,
     "bands": [

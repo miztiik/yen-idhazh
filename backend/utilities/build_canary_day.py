@@ -136,8 +136,13 @@ FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, .
 }
 
 #: The ledgers the console reads from packed files, so the fixture packs them.
-#: Feed health is read at build time and never published, so it is added by name.
-PACKED_LEDGERS: Final = (*config.load().app.ledger.published, LedgerName.FEED_HEALTH)
+#: Feed health and the hand marks are read at build time and never published, so
+#: they are added by name.
+PACKED_LEDGERS: Final = (
+    *config.load().app.ledger.published,
+    LedgerName.FEED_HEALTH,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
+)
 
 #: The UTC day the fixture's packing pass runs on: two days after the attack
 #: day, the first day the declared rule admits it. A fixed day rather than the
@@ -1131,11 +1136,12 @@ def health(state: Path) -> int:
 
 
 def holdout(state: Path, day: DigestDay) -> int:
-    """The hand-marked holdout pairs, as a fixture for the panel's shapes.
+    """The hand-marked holdout pairs, filed through the ledger door as a fixture for the panel.
 
-    Four rows, for four of the things the panel has to do: draw the closest
+    Four marks, for four of the things the panel has to do: draw the closest
     marked-apart pair, draw one that is nowhere near the line, draw a pair marked
-    as one story, and count a mark whose day the tree cannot answer for.
+    as one story, and count a mark whose day the tree cannot answer for. The
+    Judgement page reads packed days only, so `pack_fixture_ledgers` packs them.
 
     **It does not reach the panel's worst state, and it cannot.** That state is a
     line that has fallen below a pair somebody read as two different stories.
@@ -1199,42 +1205,36 @@ def holdout(state: Path, day: DigestDay) -> int:
     if len(scored) > 2:
         rows.append(pair(scored[1][1], scored[1][2], same=True, why="fixture: one story"))
     # A mark whose day the tree cannot answer for. The panel counts the skip and
-    # its reason rather than drawing a dot that would say the margin is fine.
+    # its reason rather than drawing a dot that would say the margin is fine. Its
+    # two addresses are its own: the ledger keeps one mark a pair, so a pair the
+    # marks above name would read as that pair marked again.
     rows.append(
         SimilarityHoldoutPair(
             version=SimilarityHoldoutPair.schema_version(),
-            left_url=scored[0][1].source_url,
-            right_url=scored[0][2].source_url,
+            left_url="https://canary.example.com/holdout/unpublished-left",
+            right_url="https://canary.example.com/holdout/unpublished-right",
             left_date="2020-01-01",
             right_date="2020-01-01",
-            left_title=scored[0][1].title,
-            right_title=scored[0][2].title,
+            left_title="Canary story from a day the tree does not hold",
+            right_title="Another canary story from that day",
             same_story=False,
             marked_on=DATE,
             note="fixture: a day the tree does not hold",
         )
     )
 
-    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = SimilarityHoldoutPair.csv_columns()
-    lines = [",".join(columns)]
-    for row in rows:
-        cells = row.csv_row()
-        lines.append(",".join(_csv_cell(cells[name]) for name in columns))
-    write_atomic(path, "\n".join(lines) + "\n")
+    ledger.persist(
+        state,
+        rows,
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
+        covers=DATE,
+        identity=_fixture_writer(SCORE_RUN_ID),
+    )
     return len(rows)
 
 
 def _vector_norm(vector: array[int]) -> float:
     return math.sqrt(sum(value * value for value in vector)) or 1.0
-
-
-def _csv_cell(value: str) -> str:
-    """One cell, quoted where a headline carries a comma or a quotation mark."""
-    if any(mark in value for mark in ',"\n'):
-        return '"' + value.replace('"', '""') + '"'
-    return value
 
 
 def _fixture_digest(*parts: str) -> str:
@@ -1892,8 +1892,10 @@ def main() -> int:
         f"filed {checks} feed results into {LedgerName.FEED_HEALTH.value} "
         "through the ledger door"
     )
-    marked = ledger.path(args.state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-    print(f"wrote {marked.as_posix()}: {marks} hand-marked pairs")
+    print(
+        f"filed {marks} hand-marked pairs into "
+        f"{LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS.value} through the ledger door"
+    )
     print(
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"

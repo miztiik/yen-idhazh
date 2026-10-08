@@ -706,6 +706,20 @@ test.describe('the statement, and the values it hands back', () => {
 		expect(sql).not.toContain('drop table');
 	});
 
+	test('a ledger whose rows carry no date is placed in the span by the day each row was filed under', () => {
+		// The hand marks have no `date` cell. Placed by a null day, every row would
+		// fall outside every span and the panel would read no mark at all.
+		const request = checkedRequest({ columns: ['covers', 'left_url'], from: '2026-09-01', to: '2026-09-02' });
+		const dateless = statementFor("['door/1.parquet']", new Set(['covers', 'left_url']), request, '2026-09-02');
+		expect(dateless.sql).toBe(
+			`SELECT "covers", "left_url" FROM read_parquet(['door/1.parquet'], union_by_name = true) ` +
+				`WHERE "covers" >= ? AND "covers" <= ? ORDER BY ALL`
+		);
+		// Where a file holds both, `date` places the row, as it always has.
+		const dated = statementFor("['door/1.parquet']", new Set(['date', 'covers', 'left_url']), request, '2026-09-02');
+		expect(dated.sql).toContain(`WHERE "date" >= ? AND "date" <= ?`);
+	});
+
 	test('a 64-bit integer comes back as a number, and one a number cannot hold exactly is refused by name', () => {
 		expect(cellOf('shard', 3n)).toBe(3);
 		expect(cellOf('rows', BigInt(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER);

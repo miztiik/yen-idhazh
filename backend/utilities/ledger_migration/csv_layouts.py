@@ -27,12 +27,17 @@ class CsvLedger(NamedTuple):
 
     `shorter_by` names the person's decision that let the door keep it for less
     time than the CSV did. Without one, a compaction that keeps less is refused.
+
+    `day_column` names the cell a row's UTC day is read from, for a layout whose
+    path names no day: one CSV file holding every row. A layout whose path names
+    the day leaves it unset.
     """
 
     old_entry: LedgerEntry
     old_window: Window
     old_headings: Mapping[str, str | None] = MappingProxyType({})
     shorter_by: str | None = None
+    day_column: str | None = None
 
 
 #: A judge ledger was kept for ever on CSV only because no task pruned it.
@@ -57,6 +62,11 @@ def _day_file(name: LedgerName, folders: tuple[str, ...] = ()) -> LedgerEntry:
     return LedgerEntry(
         name=name, grain=Grain.DAY_FILE, prefix=folders or (name.value,), suffix=".csv"
     )
+
+
+def _flat_file(name: LedgerName, folders: tuple[str, ...]) -> LedgerEntry:
+    """One CSV file named for the ledger, holding every row, in a folder it shared."""
+    return LedgerEntry(name=name, grain=Grain.FLAT, prefix=folders, stem=name.value, suffix=".csv")
 
 
 CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
@@ -124,6 +134,17 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
         LedgerName.PUBLISHED: CsvLedger(
             _day_file(LedgerName.PUBLISHED), ForeverWindow(unit="forever")
         ),
+        # A person's harvest rewrote one file in the judge's folder with every mark,
+        # each row naming the day it was marked. Nothing deleted a mark; the marks
+        # now expire as every ledger does.
+        LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: CsvLedger(
+            _flat_file(
+                LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS, ("content-similarity-judge",)
+            ),
+            ForeverWindow(unit="forever"),
+            shorter_by=EVERY_LEDGER_EXPIRES,
+            day_column="marked_on",
+        ),
     }
 )
 # Removal condition: delete this package and its command when no program-written CSV
@@ -131,11 +152,17 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
 
 
 def require_layout(which: LedgerName) -> LedgerEntry:
-    """The old layout the table declares for this ledger, or a refusal naming it."""
+    """The old layout the table declares for this ledger, or a refusal naming it.
+
+    A day tree and a shared day file name the day in their path. One file holding
+    every row is read only where the table names the column its day comes from.
+    """
     if which not in CSV_LEDGERS:
         raise RefusedError(f"{which.value}: no supported CSV layout in CSV_LEDGERS")
-    entry = CSV_LEDGERS[which].old_entry
-    if not entry.prefix or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
+    held = CSV_LEDGERS[which]
+    entry = held.old_entry
+    dated = entry.grain is Grain.FLAT and held.day_column is not None
+    if not entry.prefix or not (dated or entry.grain in (Grain.DAY_TREE, Grain.DAY_FILE)):
         raise RefusedError(
             f"{which.value}: unsupported CSV layout {entry.grain.value} "
             f"under {'/'.join(entry.prefix)}"
@@ -146,6 +173,14 @@ def require_layout(which: LedgerName) -> LedgerEntry:
 def csv_root(state_dir: Path, which: LedgerName) -> Path:
     """Where this ledger's CSV sat under a state root: the prefix its old entry names."""
     return state_dir.joinpath(*require_layout(which).prefix)
+
+
+def csv_file(state_dir: Path, which: LedgerName) -> Path:
+    """The one CSV file a flat layout held every row in, or a refusal for any other layout."""
+    entry = require_layout(which)
+    if entry.grain is not Grain.FLAT:
+        raise RefusedError(f"{which.value}: its CSV layout {entry.grain.value} is not one file")
+    return csv_root(state_dir, which) / f"{entry.stem}{entry.suffix}"
 
 
 def door_ledgers(config_dir: Path) -> list[LedgerName]:

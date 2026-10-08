@@ -1,8 +1,8 @@
 """Score the merge line in force against the hand-marked holdout, and record it.
 
 One stage, one module. A person types the verb; nothing in the daily pipeline
-calls it, because the marked file changes when somebody labels more pairs rather
-than when a day publishes.
+calls it, because the marks change when somebody labels more pairs rather than
+when a day publishes.
 
 It calls no model and opens no socket. The arithmetic is in
 `idhazh.similarity.holdout`; this module reads the line, asks for the cells,
@@ -88,14 +88,14 @@ def _warn_on_an_unseen_labeller(marks: list[SimilarityHoldoutPair], labeller: st
 
     The column is free text because the committed labels name a model from
     outside this repository's registry, so nothing can refuse a wrong name. What
-    this catches is the typo: a reading filed under a labeller the file has never
+    this catches is the typo: a reading filed under a labeller the marks have never
     heard of is a reading nobody can argue with later.
     """
     if any(labeller in mark.note for mark in marks):
         return
     LOG.warning(
         "labeller=%s appears in none of the %d marks' notes, so this row will "
-        "name somebody the marked file does not",
+        "name somebody the marks do not",
         labeller,
         len(marks),
     )
@@ -113,9 +113,10 @@ def stage_score_merge_line_holdout(
 ) -> MergeLineHoldoutScore | None:
     """Count the four cells at the line in force, and write the day's row.
 
-    **Every read is bounded** (Guardrail #12). The hand-marked file, then one
-    published day payload for each distinct date its rows name. Nothing walks a
-    collection a run appends to, and another year of archive adds no read.
+    **Every read is bounded** (Guardrail #12). The marks filed inside
+    `similarity.holdout_reach_days` of `date`, then one published day payload
+    for each distinct date those marks name. Nothing walks a collection a run
+    appends to, and another year of archive adds no read.
 
     **The line is the one the build would apply on this date**, which is the
     fitted line where a fit has run inside the lookback and the committed floor
@@ -123,18 +124,21 @@ def stage_score_merge_line_holdout(
     line the day was not grouped at.
 
     Returns the row it wrote, or `None` where there was nothing worth writing -
-    an absent marked file, or a reading that resolved too few pairs to mean
+    no mark inside the reach, or a reading that resolved too few pairs to mean
     anything. Both print what they found.
     """
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
     same_story = settings.app.assemble.same_story
+    reach_days = settings.app.similarity.holdout_reach_days
 
-    marks = holdout.marked_pairs(state)
+    marks = holdout.marked_pairs(state, today=date, reach_days=reach_days)
     if not marks:
         LOG.warning(
-            "score-merge-line-holdout found no marked pairs in %s, so there is "
-            "nothing to score the line against",
-            ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS),
+            "score-merge-line-holdout found no marked pairs in the %s ledger within %d "
+            "days of %s, so there is nothing to score the line against",
+            LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS.value,
+            reach_days,
+            date,
         )
         return None
     _warn_on_an_unseen_labeller(marks, labeller)

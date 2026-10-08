@@ -55,7 +55,7 @@ Table C - when to stop and ask
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | DONE | p59-row-4 | - | Fowler |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
 | 6 | The merge line's holdout score is saved through the door | 2, 11 | B | DONE | p59-row-6 | - | Fowler |
-| 7 | The holdout marks are saved through the door | 6 | C | PENDING | - | - | - |
+| 7 | The holdout marks are saved through the door | 6 | C | DONE | p59-row-7 | - | Fowler |
 | 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
 | 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | PENDING | - | - | - |
 | 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
@@ -299,6 +299,14 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | The marks move: a program writes them, and the owner's directive leaves no CSV ledger | Fowler, 2026-10-05, under the owner's directive of 2026-10-05 |
 | 2 | A reach of 730 days, not "for ever": a read that grows with the archive is refused (Guardrail #12). A mark older than the reach stops counting until a person re-marks it or widens the knob | Fowler, 2026-10-05 |
+| 3 | C3 does not trigger. The door's preference table holds "the newest `marked_on` wins" for the pair key, the later row winning a tie. `load_days` settles each day on its own, so both readers fold the days they read by the same rule | Fowler, 2026-10-08 |
+| 4 | The query door places a row by its `date` cell, and a mark has none, so a ledger with no `date` column is placed by `covers`, the day the door filed it under | Fowler, 2026-10-08 |
+| 5 | The reach is a reader floor on the marks' compaction, as `collect.published_window_days` is on the published addresses, so no declaration can delete a mark the readers still reach | Fowler, 2026-10-08 |
+| 6 | `--harvest` becomes a switch, `--state-root` names the state folder, and `--labelled-on`, `--run-id` and `--commit` are checked when parsed. The producer is `utilities.sample_sheet`. A row's `version` is the contract's stamp, no longer the labelled-on day | Fowler, 2026-10-08 |
+| 7 | The scoring command's reach ends on the date it scores; the console's ends on the site's newest published day, the day its other panels read to | Fowler, 2026-10-08 |
+| 8 | The canary files its four marks through the door and packs them. Its unscorable mark names two addresses of its own, because under the pair key it would otherwise replace a scored mark | Fowler, 2026-10-08 |
+| 9 | The one-file layout deletes its file only once every month the file holds is named, since a file holding many months cannot lose one | Fowler, 2026-10-08 |
+| 10 | `check_seeded_ledgers.py` and its test are deleted: the marks were the last ledger it checked, and no workflow or page runs it | Fowler, 2026-10-08 |
 
 **Rejected alternatives**
 

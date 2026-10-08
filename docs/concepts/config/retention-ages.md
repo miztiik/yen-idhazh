@@ -127,11 +127,12 @@ the two knobs with them. A config file still spelling either is refused by name
 rather than ignored, and it is sent nowhere: the two ledgers above keep their
 own ages, which is a different number for a different ledger.
 
-**Three more ledgers are bounded by a read, and a declaration that deletes what
+**Four more ledgers are bounded by a read, and a declaration that deletes what
 the read opens is refused.** The seen ledger's compaction is held above
 `collect.seen_window_days`, counterfactual scores above `lens_weights.window_days`,
-and published addresses above `collect.published_window_days`, which is 730
-days, or two years. All fifteen ledgers follow the
+published addresses above `collect.published_window_days`, and the similarity
+holdout's hand marks above `similarity.holdout_reach_days`; the last two are 730
+days, or two years. All sixteen ledgers follow the
 [yearly policy](idhazh-gardener.md#the-compaction-declarations-that-ship).
 A forever reader is refused while finite yearly pruning is enabled.
 Each floor belongs to the ledger and is held against

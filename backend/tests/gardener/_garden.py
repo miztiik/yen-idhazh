@@ -43,6 +43,7 @@ COMMITTED_FILES: Final = ("idhazh.json", "appearance.json", "idhazh_gardener.jso
 #: The task declarations these integration fixtures exercise, not a directory census.
 COMMITTED_DECLARATIONS: Final = (
     "compact-candidate-models.json",
+    "compact-content-similarity-judge-holdout-pairs.json",
     "compact-content-similarity-judge-merge-line-holdout-scores.json",
     "compact-council-run-records.json",
     "compact-counterfactual-scores.json",

@@ -25,9 +25,9 @@ import { datedFirst, evalRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } 
 import { machineCounters } from '../src/lib/server/machine-counters';
 import { listManifestDays } from '../src/lib/server/model-work';
 import { describeServerCounters } from '../src/lib/server/server-counter-notes';
-import { HOLDOUT_SCORE_COLUMNS, mergeLineHoldoutScore } from '../src/lib/server/similarity-holdout';
+import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/similarity-holdout';
 import { windowDay } from '../src/lib/server/window-day';
-import { buildLedger, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
+import { buildLedger, buildRows, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
 import { publishedSite } from './support/published-site';
 import { serverCompiler } from './support/server-render';
 
@@ -352,6 +352,64 @@ test.describe('a record filed inside its family folder', () => {
 		});
 
 		expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), state)).toBeNull();
+	});
+});
+
+test.describe('the hand marks, once a pair over their reach', () => {
+	/** One hand mark of two articles, as a harvest files it. */
+	const mark = (key: string, sameStory: boolean, markedOn: string) => ({
+		left_url: `https://left.test/${key}`,
+		right_url: `https://right.test/${key}`,
+		left_date: '2030-06-01',
+		right_date: '2030-06-01',
+		left_title: `Left story ${key}`,
+		right_title: `Right story ${key}`,
+		same_story: sameStory,
+		marked_on: markedOn,
+		note: 'a-labeller at score 0.9500'
+	});
+	/** Each read mark as the panel reads it: the left address, the mark and its day. */
+	const read = (rows: Record<string, string>[]) =>
+		rows.map((row) => [row.left_url, row.same_story, row.marked_on]).sort();
+
+	test('THE ORACLE: a pair marked again on a later day reads once, with its second mark', async () => {
+		// Packed under compact/content-similarity-judge/holdout-pairs/, with no `date` cell:
+		// two marks on 10 Jun 2030, a quiet 11 Jun, and one of them marked again on 12 Jun.
+		const state = test.info().outputPath('state');
+		await buildRows(state, 'holdout-pairs', [
+			{ covers: '2030-06-10', rows: [mark('corrected', true, '2030-06-10'), mark('kept', true, '2030-06-10')] },
+			{ covers: '2030-06-11', rows: [] },
+			{ covers: '2030-06-12', rows: [mark('corrected', false, '2030-06-12')] }
+		]);
+
+		expect(read(await markedPairs(markReach(PINNED, 730), state))).toEqual([
+			['https://left.test/corrected', 'False', '2030-06-12'],
+			['https://left.test/kept', 'True', '2030-06-10']
+		]);
+	});
+
+	test('the reach names both its ends, and a mark filed before it is not read', async () => {
+		// One mark filed 31 days before the pinned day, outside a 30-day reach, and another
+		// filed 30 days before it, on the reach's first day.
+		const state = test.info().outputPath('state');
+		await buildRows(state, 'holdout-pairs', [
+			{ covers: daysBefore(PINNED, 31), rows: [mark('a-pair', true, daysBefore(PINNED, 31))] },
+			{ covers: daysBefore(PINNED, 30), rows: [mark('another-pair', false, daysBefore(PINNED, 30))] }
+		]);
+
+		expect(markReach(PINNED, 30)).toEqual({ start: daysBefore(PINNED, 30), end: PINNED });
+		expect(read(await markedPairs(markReach(PINNED, 30), state))).toEqual([
+			['https://left.test/another-pair', 'False', daysBefore(PINNED, 30)]
+		]);
+	});
+
+	test('no packed mark reads as none, rather than an error', async () => {
+		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unmarked-'));
+		try {
+			expect(await markedPairs(markReach(PINNED, 730), root)).toEqual([]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 

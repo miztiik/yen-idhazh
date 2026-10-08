@@ -16,7 +16,7 @@ A move is complete only when every applicable part below holds.
 | --- | --- | --- |
 | Registry | The ledger has the intended entry in `config/ledgers.json`. | `backend/tests/contracts/test_ledger_registry.py` |
 | Door table | `backend/idhazh/ledger/keys.py` declares the ledger, and neither legacy tree table names it. | The registry and door-shape tests in `backend/tests/ledger/` |
-| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<folder>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` naming its old day-tree or shared-day-file layout, retention window and `old_headings` map from old headings to current columns. Reuse the contract's rename map. Declared prefixes may contain more than one folder. Month files and all other layouts are refused by name for now. | `backend/tests/ledger_migration/test_csv_layouts.py` |
+| CSV layout | To add another ledger, give its contract `csv_row()` and, for a day tree, `from_csv_row()`; declare its door key in `backend/idhazh/ledger/keys.py`, registry grain `raw-and-compact`, and `compact-<folder>` declaration listed in `task_names` of `config/idhazh_gardener.json`. Add one `CsvLedger` entry to `CSV_LEDGERS` in `backend/utilities/ledger_migration/csv_layouts.py` naming its old day-tree, shared-day-file or one-file layout, retention window and `old_headings` map from old headings to current columns. A one-file layout also names `day_column`, the cell each row's day is read from. Reuse the contract's rename map. Declared prefixes may contain more than one folder. Month files and all other layouts are refused by name for now. | `backend/tests/ledger_migration/test_csv_layouts.py` |
 | Writers | Every writer uses `ledger.persist` with its writer identity. Each workflow command that writes passes `--commit`. | `backend/tests/workflows/test_ledger_door_jobs.py` |
 | Backend readers | Each reader uses the door and keeps its existing answer. | The ledger's row tests |
 | Console readers | Every declared ledger is already in `LEDGER_NAMES`; a page may read one once `ledger.published` names it. | `backend/tests/contracts/test_frontend_index_shapes.py` |
@@ -82,17 +82,21 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the eleven layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the twelve layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
 `counterfactual-scores`, `candidate-models`, `feed-health`, `seen`,
-`published`, and three of the similarity judge's ledgers, each one shared file
+`published`, three of the similarity judge's ledgers, each one shared file
 a day inside its family's folder:
 `content-similarity-judge/merge-line-holdout-scores`,
-`content-similarity-judge/scored-pairs` and `content-similarity-judge/metrics`.
+`content-similarity-judge/scored-pairs` and `content-similarity-judge/metrics`,
+and the judge's hand marks, one file holding every row:
+`content-similarity-judge/holdout-pairs.csv`.
 This tool does not migrate `council-run-records`, `span-rollup` or an
 undeclared CSV layout. Moving another shape requires its own contract and
 reader design first. The reader supports a declared day tree or shared day file
-under a multi-folder prefix. It does not infer an undeclared layout.
+under a multi-folder prefix, and one file holding every row, whose day it reads
+from a declared column - `marked_on` for the holdout marks, the only ledger that
+declares it. It does not infer an undeclared layout.
 `item-health-summary` moved without a migrator entry because no committed file
 existed.
 
@@ -140,7 +144,7 @@ months' existing raw or compact files packed.
 
 The listing names the selected months' raw and daily folders, their monthly and yearly files, and the three index files, whether each is there or not, and weighs what it finds under them. It never discovers other years or months, and a question about a path it did not name stops the pass. A gap after the daily mark, the newest day the indexes give, is refused: include the intervening months instead of moving the mark past unprocessed days. The monthly and yearly marks cannot skip older periods that still need packing either. Name those months too; a completed indexed period outside the selection remains untouched.
 
-The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, or a shared day file, `YYYY/MM/DD.csv`. A row with a date must name the day in its path. A row without a date uses the day in its path. Any other layout or invalid row stops the run. The migrator reads back every named day through the ledger door and compares every cell with the planned rows. It deletes no CSV in any root until every day in every root passes.
+The migrator reads each layout it declares: a day tree, `YYYY/MM/DD/*.csv`, a shared day file, `YYYY/MM/DD.csv`, or one file holding every row. A row with a date must name the day in its path. A row without a date uses the day in its path, or, in one file, the day in its declared column; a cell there that is not a `YYYY-MM-DD` day stops the run. Any other layout or invalid row stops the run. The migrator reads back every named day through the ledger door and compares every cell with the planned rows. It deletes no CSV in any root until every day in every root passes, and it deletes one file holding every row only when every month that file holds is named.
 
 ## Retire CSV after the old writer is retired
 

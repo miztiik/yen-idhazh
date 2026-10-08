@@ -13,6 +13,10 @@
  * every row, the same answer, and the console says which column that was - a
  * name nobody wrote would otherwise look exactly like a reading nobody took.
  *
+ * **A row is placed in the span by its `date` cell**, or, in a ledger whose rows
+ * carry none, by `covers`, the day the door filed it under. Every packed row
+ * carries `covers`, and where a row has a `date` the two hold the same day.
+ *
  * **An integer comes back as a `number`.** The engine hands a 64-bit integer
  * back as a `BigInt`, and one outside the safe range is refused by name rather
  * than rounded, because a rounded count is a wrong count nobody can see.
@@ -22,8 +26,14 @@
 
 import type { DateStamp, Predicate, Row, SliceOptions } from './slice-shapes';
 
-/** The cell every compacted row carries its UTC day in: `ledger.keys.DATE_CELL`. */
+/** The cell a compacted row carries its UTC day in, where its contract has one:
+ *  `ledger.keys.DATE_CELL`. */
 export const DATE_COLUMN = 'date';
+
+/** The UTC day the door filed a row under, which every packed row carries. A row
+ *  whose contract has no `date` - the hand marks of the holdout - is placed in a
+ *  span by this instead; for every other row the two cells hold the same day. */
+export const FILED_DAY_COLUMN = 'covers';
 
 /** A value a statement binds. */
 export type Bound = string | number;
@@ -85,6 +95,14 @@ function clause(predicate: Predicate, present: ReadonlySet<string>, params: Boun
 	return `${column} ${predicate.op} ?`;
 }
 
+/** The column a statement places a row in its span by: `date` where the files hold
+ *  one, else the day the door filed the row under, else nothing. */
+function dayColumn(present: ReadonlySet<string>): string | null {
+	if (present.has(DATE_COLUMN)) return DATE_COLUMN;
+	if (present.has(FILED_DAY_COLUMN)) return FILED_DAY_COLUMN;
+	return null;
+}
+
 /** The one statement a slice runs, and the values it binds, in order. `until` is
  *  the last day asked for, already clamped to the newest day compacted. */
 export function statementFor(
@@ -97,7 +115,8 @@ export function statementFor(
 	const select = request.columns
 		.map((column) => (present.has(column) ? quoted(column) : `NULL AS ${quoted(column)}`))
 		.join(', ');
-	const day = present.has(DATE_COLUMN) ? quoted(DATE_COLUMN) : 'NULL';
+	const placed = dayColumn(present);
+	const day = placed === null ? 'NULL' : quoted(placed);
 	const where = [`${day} >= ?`, `${day} <= ?`, ...request.where.map((p) => clause(p, present, params))];
 	// Sorted by every requested column, left to right, so the same files give the
 	// same rows in the same order whichever engine read them and however it split
@@ -130,9 +149,12 @@ export async function rowsFor(
 	const files = listOf(names);
 	const described = await engine.rows(`DESCRIBE SELECT * FROM ${source(files)}`, []);
 	const present = new Set(described.map((row) => String(row.column_name)));
-	const named = new Set([...request.columns, ...request.where.map((p) => p.column), DATE_COLUMN]);
+	const named = new Set([...request.columns, ...request.where.map((p) => p.column)]);
 	for (const column of named) {
 		if (!present.has(column)) warn(`no file in this span holds the column ${column}, so it reads as null`);
+	}
+	if (dayColumn(present) === null) {
+		warn(`no file in this span holds the column ${DATE_COLUMN} or ${FILED_DAY_COLUMN}, so no row is placed in the span`);
 	}
 	const { sql, params } = statementFor(files, present, request, until);
 	const raw = await engine.rows(sql, params);

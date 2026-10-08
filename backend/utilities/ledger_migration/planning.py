@@ -133,11 +133,13 @@ def plan_roots(inputs: MigrationInputs) -> list[RootPlan]:
         }
         reports = {name: Moved(which=name, days=len(days)) for name, days in planned.items()}
         for name, days in planned.items():
-            for held in days.values():
-                report = reports[name]
-                report.csv_files += len(held.files)
-                report.csv_bytes += sum(path.stat().st_size for path in held.files)
-                report.rows += len(held.rows)
+            report = reports[name]
+            # A one-file layout names its one file under every day it holds, so a
+            # file is counted once whatever number of days it serves.
+            files = dict.fromkeys(path for held in days.values() for path in held.files)
+            report.csv_files = len(files)
+            report.csv_bytes = sum(path.stat().st_size for path in files)
+            report.rows = sum(len(held.rows) for held in days.values())
         plans.append(RootPlan(root, planned, reports, policies[root], identity, inputs))
     return plans
 

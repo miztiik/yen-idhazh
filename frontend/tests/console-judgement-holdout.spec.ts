@@ -162,10 +162,10 @@ test.describe('the pairs a person marked apart', () => {
 	});
 
 	test('every mark is on the plot, labelled or titled, and none is invented', async ({ page }) => {
-		// Four marks in the committed file and three scored ones in the canary. A
-		// mark off the scale is counted at the edge it left, never pinned to a
-		// place it is not - a dot sitting at the axis floor would say a pair scores
-		// there when it does not.
+		// Four marks the canary saved through the ledger door, and three of them
+		// scored. A mark off the scale is counted at the edge it left, never
+		// pinned to a place it is not - a dot sitting at the axis floor would say
+		// a pair scores there when it does not.
 		await open(page);
 
 		const domain = ((await page.locator(PANEL).getAttribute('data-holdout-domain')) ?? '')

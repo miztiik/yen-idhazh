@@ -318,6 +318,9 @@
     "trial_case_dirname": null,
     "trial_state_dirname": null
   },
+  "similarity": {
+    "holdout_reach_days": 730
+  },
   "summarize": {
     "asks_for_a_visual_plan": true,
     "bands": [

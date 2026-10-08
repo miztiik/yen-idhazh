@@ -29,9 +29,9 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty-eight ship today:
-five `retention` tasks, two `collection` tasks, twenty `compaction` tasks -
-seventeen for ledgers and three for trial roots (below) - and `corpus-squash`,
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty-nine ship today:
+five `retention` tasks, two `collection` tasks, twenty-one `compaction` tasks -
+eighteen for ledgers and three for trial roots (below) - and `corpus-squash`,
 the one `history` task (below).
 There is no `name` key inside a declaration. Both plan writers open the same
 named list, so adding an unrelated file cannot change a wake's plan.
@@ -78,7 +78,7 @@ Why each tree gets the age it has is
 
 ## The compaction declarations that ship
 
-All seventeen ledger declarations pack live. They keep day files until 45 whole days
+All eighteen ledger declarations pack live. They keep day files until 45 whole days
 after their month ends, then month files until 93 whole days after their year
 ends. Indexed year files expire 36 calendar months after that UTC year ends.
 For example, 2026 expires on 2030-01-01 at 00:00 UTC. Each declaration has
@@ -89,12 +89,13 @@ until yearly packing; it does not mean years survive forever.
 Each declaration owns `state/raw/<folder>` and `state/compact/<folder>`, where
 `<folder>` is its ledger's door folder: the ledger's name, or the family's
 folder and then that name for a ledger filed inside its family's folder, such as
-`content-similarity-judge/merge-line-holdout-scores` for the holdout score and
-`content-similarity-judge/scored-pairs` for the judge's scored pairs. Each is
-called `compact-<folder>` with `/` written `-`.
+`content-similarity-judge/merge-line-holdout-scores` for the holdout score,
+`content-similarity-judge/scored-pairs` for the judge's scored pairs and
+`content-similarity-judge/holdout-pairs` for the hand marks. Each is called
+`compact-<folder>` with `/` written `-`.
 The raw-day packing wait remains one whole day for every ledger.
 
-Table A. All seventeen declarations use the same packing and expiry settings.
+Table A. All eighteen declarations use the same packing and expiry settings.
 
 | ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
 | --- | --- | --- |
@@ -115,6 +116,7 @@ Table A. All seventeen declarations use the same packing and expiry settings.
 | A15 | `compact-content-similarity-judge-merge-line-holdout-scores` | 45 days / 93 days / 36 calendar months |
 | A16 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
 | A17 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
+| A18 | `compact-content-similarity-judge-holdout-pairs` | 45 days / 93 days / 36 calendar months |
 
 `item-health-summary` has a declaration but no generated rows yet.
 `telemetry-aggregate` remains `dry_run: true`; it produces summaries only for
@@ -254,7 +256,7 @@ names the file an operator edits and the rule it broke.
 | Two tasks that own one folder, or a folder inside the other's, whatever their status | Both would delete in it. A retired task keeps its claim |
 | More than one task using the complement form | Each would claim what the other claims |
 | An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
-| The declaration that governs `seen`, `counterfactual-scores` or `published` keeping less than the days `collect.seen_window_days`, `lens_weights.window_days` or `collect.published_window_days` reads back: its retention task while the ledger is on CSV, its compaction once it moves | A reader still opens those days. `collect.published_window_days` is 730, or two years. A negative value reads every day and is refused under enabled finite pruning. A ledger no declaration governs is deleted by nothing, so it meets every floor |
+| The declaration that governs `seen`, `counterfactual-scores`, `published` or `holdout-pairs` keeping less than the days `collect.seen_window_days`, `lens_weights.window_days`, `collect.published_window_days` or `similarity.holdout_reach_days` reads back: its retention task while the ledger is on CSV, its compaction once it moves | A reader still opens those days. `collect.published_window_days` and `similarity.holdout_reach_days` are 730, or two years. A negative value reads every day and is refused under enabled finite pruning. A ledger no declaration governs is deleted by nothing, so it meets every floor |
 | `telemetry-aggregate` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
 | A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
 | An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |

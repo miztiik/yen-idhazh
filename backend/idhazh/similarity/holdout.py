@@ -20,23 +20,23 @@ reduction all come from `idhazh.assemble`, which is the module the published day
 was built by. A second spelling here would be a reading of a line this pipeline
 does not apply.
 
-**What it reads, and what bounds it** (Guardrail #12). The hand-marked file,
-then one published day payload for each distinct date that file's rows name. The
-bound is the length of the marked file: a published day nothing marks is never
-opened, and another year of archive adds no read at all. The days it opens are
-outside any window a knob sets, because a mark on a day the window no longer
-reaches still says something about the line.
+**What it reads, and what bounds it** (Guardrail #12). The marks a person filed
+through the ledger door inside `similarity.holdout_reach_days` of the day the
+read is about, then one published day payload for each distinct date those
+marks name. The bound is the reach and the number of marks inside it: a
+published day nothing marks is never opened, and another year of archive adds
+no read at all. The days it opens are outside any window a knob sets, because a
+mark on a day the window no longer reaches still says something about the line.
 """
 
 from __future__ import annotations
 
-import csv
 import math
 from array import array
 from dataclasses import dataclass
 from pathlib import Path
 
-from idhazh import assemble, ledger
+from idhazh import assemble, day_partition, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.knobs.placement import HOLDOUT_RESOLVED_SHARE_MIN
@@ -65,7 +65,7 @@ class Reading:
     """Every mark the day tree could answer for, and how many it could not."""
 
     scored: tuple[ScoredMark, ...]
-    #: How many rows the marked file holds, scored or not.
+    #: How many marks were read, scored or not.
     marked: int
     #: How many of those rows name a day or an article the tree no longer has.
     unresolved: int
@@ -100,30 +100,40 @@ class Cells:
         )
 
 
-def marked_pairs(state_dir: Path) -> list[SimilarityHoldoutPair]:
-    """Every row of the hand-marked file, or nothing where the file is absent.
+def marked_pairs(state_dir: Path, *, today: str, reach_days: int) -> list[SimilarityHoldoutPair]:
+    """Every pair marked inside the reach, once each, carrying its newest mark.
 
-    An absent file is an ordinary state - a fresh clone has no marks - and it is
-    the caller that decides what to do with a reading of nothing.
+    The marks are a door ledger, and the read opens the `reach_days` UTC days
+    before `today` and `today` itself. The door settles each day on its own, under
+    the ledger's key and the preference beside it in `ledger/keys.py`: the newest
+    mark wins. A pair a person marked again on a later day is in two days, so the
+    same preference is applied once more across the days, oldest first, and the
+    pair is read once with the mark it was given last.
 
-    A row that does not parse stops the read rather than being skipped. This is
-    the evidence a floor is set from, and a silently short count reads as a
-    smaller holdout rather than as a broken one.
+    No mark at all is an ordinary state - a fresh clone has none - and it is the
+    caller that decides what a reading of nothing means. A file this build cannot
+    read is skipped with a warning naming it, as every door read is.
     """
-    path = ledger.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return [SimilarityHoldoutPair.from_csv_row(row) for row in csv.DictReader(handle)]
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS
+    days = day_partition.days_in_window(today, reach_days)
+    key = ledger.door_key(which)
+    prefers = ledger.preference_for(key)
+    kept: dict[tuple[str, ...], SimilarityHoldoutPair] = {}
+    for mark in ledger.load_days(state_dir, which, days, model=SimilarityHoldoutPair):
+        record = tuple(str(getattr(mark, name)) for name in key)
+        held = kept.get(record)
+        if held is None or (prefers is not None and prefers(mark.csv_row(), held.csv_row())):
+            kept[record] = mark
+    return list(kept.values())
 
 
 def _day_articles(
     date: str, digest_root: Path, wanted: frozenset[str]
 ) -> dict[str, _Article] | None:
-    """The items of one published day that the marked file actually names.
+    """The items of one published day that the marks actually name.
 
     `None` where the day is no longer published, which is a designed state
-    rather than a failure: retention deletes days the marked file still names.
+    rather than a failure: retention deletes days the marks still name.
 
     Everything the marks do not name is dropped on the way past. The day payload
     is the biggest file this read opens and the vector block is most of it, so
@@ -227,7 +237,7 @@ def count_cells(reading: Reading, *, line: float) -> Cells:
 def resolved_floor(marked: int) -> int:
     """How many pairs a reading has to have counted before its cells mean anything.
 
-    Half the marked file, rounded up. Below it the four cells still add up and
+    Half the marks read, rounded up. Below it the four cells still add up and
     still look like a reading, while most of what was marked went uncounted -
     and four small cells read as a line that got almost everything right rather
     than as a comparison that has mostly vanished.

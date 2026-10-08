@@ -612,11 +612,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "score-merge-line-holdout":
         # Above the fetcher for the reason check-publication is: it reads the
-        # marked file and the published days that file names, and starting a
+        # marks and the published days they name, and starting a
         # fetcher to do it would read every host's robots.txt for nothing.
         #
-        # A person types this verb. Nothing schedules it, because the marked file
-        # changes when somebody labels more pairs and not when a day publishes.
+        # A person types this verb. Nothing schedules it, because the marks
+        # change when somebody labels more pairs and not when a day publishes.
         if args.labeller is None:
             parser.error(
                 "score-merge-line-holdout needs --labeller: the row records who marked "

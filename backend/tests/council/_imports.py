@@ -47,6 +47,7 @@ MODULE_NAMES = (
     "idhazh.contracts.knobs.removed",
     "idhazh.contracts.knobs.retention",
     "idhazh.contracts.knobs.run",
+    "idhazh.contracts.knobs.similarity",
     "idhazh.contracts.knobs.summarize",
     "idhazh.contracts.knobs.ui",
     "idhazh.contracts.knobs.visuals",

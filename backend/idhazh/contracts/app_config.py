@@ -53,6 +53,7 @@ from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, 
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -110,6 +111,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-08",
+            change="similarity.holdout_reach_days added, additive.",
+            why="The hand marks moved onto the ledger door, and their read needs a bound.",
+        ),
+        ChangelogEntry(
             version="2026-10-03T14:45",
             change="console.data_explorer_tab removed; Data explorer knobs and panel group added.",
             why="The Data explorer page is live and draws its own controls.",
@@ -126,11 +132,6 @@ class AppConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-28",
-            change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
-            why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
-        ),
-        ChangelogEntry(
-            version="2026-09-27T22:00",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
@@ -162,6 +163,7 @@ class AppConfig(Contract):
     assemble: AssembleConfig = Field(default_factory=AssembleConfig)
     placement: PlacementConfig = Field(default_factory=PlacementConfig)
     lens_weights: LensWeightsConfig = Field(default_factory=LensWeightsConfig)
+    similarity: SimilarityConfig = Field(default_factory=SimilarityConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
