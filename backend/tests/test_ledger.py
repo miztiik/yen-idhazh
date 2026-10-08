@@ -1077,22 +1077,41 @@ def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from(tmp_path:
     )
 
 
-def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
-    """Its sibling's layout, because the guard reads a window of days across both.
+def fitted_row(*, on: str) -> FittedSimilarityThreshold:
+    """One fitted line, read from the committed contract fixture and re-dated."""
+    return FittedSimilarityThreshold.from_json(
+        read_text(
+            CONTRACT_FIXTURES_DIR
+            / "fitted-similarity-threshold"
+            / "the-clamp-held-a-fall-back-to-the-step.json"
+        )
+    ).model_copy(update={"date": on, "run_id": f"{on}-1"})
+
+
+def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for(tmp_path: Path) -> None:
+    """Its sibling's nest, because the guard reads a window of days across both.
 
     The step-change guard takes a median over the newest fourteen written rows,
-    which `day_partition` answers by walking days backwards. A month file would
-    make that read open weeks it did not ask for.
+    which the reader answers by asking the door for a window of days backwards.
+    Everything this judge files hangs off `content-similarity-judge/`, in each
+    of the door's two roots, so a helper that quietly dropped the nest would file
+    a ledger nothing else can find.
     """
-    date = "2026-09-18"
-    state = Path("state")
-
-    assert (
-        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
-        == "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
+    fitted_on = "2026-09-18"
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+    identity = judge_identity(run_id=f"{fitted_on}-1").model_copy(
+        update={"producer": "stages.set_merge_line"}
     )
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date) == Path(
-        "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
+
+    (filed,) = ledger.persist(
+        tmp_path, [fitted_row(on=fitted_on)], ledger=which, covers=fitted_on, identity=identity
+    )
+
+    assert filed.parent.relative_to(tmp_path).as_posix() == (
+        "raw/content-similarity-judge/fitted-thresholds/2026/09/18"
+    )
+    assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
+        "compact/content-similarity-judge/fitted-thresholds"
     )
 
 
@@ -1230,41 +1249,34 @@ def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(
 # --- The pass that runs after the merge ------------------------------------
 
 
-def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
-    """Everything here says what makes two of its rows one record, and is settled.
+def test_the_keyed_set_names_no_ledger_now(tmp_path: Path) -> None:
+    """Everything that said what makes two of its rows one record has left, and the set is empty.
 
-    Five trees left this set on 2026-09-22 and they are the ones to look for if
-    this list ever looks short. Each became a day directory where every writer
-    holds its own file, so two files nobody else can write need no settlement to
-    tell them apart and the repeat this pass existed to drop is one they can no
-    longer make. The feed retirements, the cleanup record and the judged pairs
-    left for the same reason when they moved under `state/raw/`.
+    Five trees left this set on 2026-09-22. Each became a day directory where
+    every writer holds its own file, so two files nobody else can write need no
+    settlement to tell them apart and the repeat this pass existed to drop is one
+    they can no longer make. The feed retirements, the cleanup record, the judged
+    pairs and the fitted line left for the same reason when they moved under
+    `state/raw/`.
 
-    Both covers name the same ledgers on a tree with one day of each in it. What
-    separates them is what a second day would add: to the operator's pass, a
-    file; to a run's pass, nothing.
-
-    `state/content-similarity-judge/fitted-thresholds/` is registered before
-    anything writes it, which is why it is built here by hand rather than by an
-    append call.
+    Both covers name nothing on a tree that holds a fitted day filed through the
+    door: neither a run's own date nor the operator's full pass reaches a door
+    ledger's files.
     """
-    fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
-    fitted.parent.mkdir(parents=True, exist_ok=True)
-    fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
-    named = [
-        (
-            f"content-similarity-judge/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.STORY_SIMILARITY_THRESHOLD_KEY,
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+    ledger.persist(
+        tmp_path,
+        [fitted_row(on=DATE)],
+        ledger=which,
+        covers=DATE,
+        identity=judge_identity(run_id=RUN_ID).model_copy(
+            update={"producer": "stages.set_merge_line"}
         ),
-    ]
+    )
 
-    every = ledger.keyed_paths(tmp_path, date=None)
-    this_run = ledger.keyed_paths(tmp_path, date=DATE)
-
-    assert [(target.path.relative_to(tmp_path).as_posix(), target.key) for target in every] == named
-    assert [
-        (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
-    ] == named
+    assert ledger.list_raw_files(tmp_path, which, days=[DATE]), "the tree holds no fitted day"
+    assert ledger.keyed_paths(tmp_path, date=None) == []
+    assert ledger.keyed_paths(tmp_path, date=DATE) == []
 
 
 def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(

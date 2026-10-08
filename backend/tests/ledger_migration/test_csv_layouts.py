@@ -19,6 +19,8 @@ from gardener._historical_config import PRE_YEARLY_CONFIG
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.fitted_similarity_threshold import DROPPED_CELLS as FIT_DROPPED_CELLS
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.knobs.gardener import CompactionPolicy, ForeverWindow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
@@ -51,10 +53,16 @@ pytestmark = pytest.mark.contract
 
 PAIRS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
 METRICS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+FITTED: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
 
 #: One committed scored-pairs day as it stood before `decode_digest` left: the
 #: `shard` heading, and filled cells under every heading the pair row dropped.
 OLD_PAIRS: Final = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
+
+#: One committed fitted day as it stood before `key_point_weight` left, its cell
+#: filled, and the same day as it stood before the judge stamp was appended.
+OLD_FIT: Final = FIXTURES_DIR / "state" / "fitted-thresholds-carrying-the-key-point-weight.csv"
+UNSTAMPED_FIT: Final = FIXTURES_DIR / "state" / "fitted-thresholds-before-the-judge-stamp.csv"
 
 
 def test_a_declared_shared_day_file_is_read_under_two_folders(
@@ -143,13 +151,13 @@ def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
 def test_the_ledgers_a_run_takes_by_default_are_the_ones_its_own_config_moved() -> None:
     """A run held against the recorded config takes what that config had moved, and no more.
 
-    The holdout score moved after the config was recorded, so the committed
-    registry files it through the door and the recorded one still files it as CSV.
+    The holdout score and the fitted line moved after the config was recorded, so
+    the committed registry files each through the door and the recorded one still
+    files each as CSV.
     """
-    holdout = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
-
-    assert holdout in csv_layouts.door_ledgers(CONFIG_DIR)
-    assert holdout not in csv_layouts.door_ledgers(PRE_YEARLY_CONFIG)
+    for which in (LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, FITTED):
+        assert which in csv_layouts.door_ledgers(CONFIG_DIR), which
+        assert which not in csv_layouts.door_ledgers(PRE_YEARLY_CONFIG), which
 
 
 def test_every_moved_ledger_kept_its_old_window_before_yearly_expiry() -> None:
@@ -176,16 +184,100 @@ def test_every_moved_ledger_kept_its_old_window_before_yearly_expiry() -> None:
     assert short == []
 
 
-def test_the_judges_two_ledgers_are_read_from_their_shared_day_files(tmp_path: Path) -> None:
+def test_the_judges_ledgers_are_read_from_their_shared_day_files(tmp_path: Path) -> None:
     """Each sat as one CSV file a day in the judge's family folder, and nothing deleted it."""
     state = tmp_path / "state"
-    for which in (PAIRS, METRICS):
+    for which in (PAIRS, METRICS, FITTED):
         entry = csv_layouts.require_layout(which)
 
         assert (entry.grain, entry.suffix) == (Grain.DAY_FILE, ".csv"), which
         assert csv_layouts.csv_root(state, which) == state.joinpath(*ledger.door_folders(which))
         assert isinstance(csv_layouts.CSV_LEDGERS[which].old_window, ForeverWindow), which
         assert which in csv_layouts.door_ledgers(CONFIG_DIR), which
+
+
+def test_the_fitted_line_is_read_where_the_recorded_registry_filed_it(tmp_path: Path) -> None:
+    """The table's old layout is the one the registry gave the fitted line before it moved.
+
+    So a check finds the files the council's save job committed, and only the
+    one heading the row dropped is declared to go.
+    """
+    recorded = ledger.registry_entries(
+        LedgersConfig.from_json((PRE_YEARLY_CONFIG / "ledgers.json").read_text(encoding="utf-8"))
+    )
+    state = tmp_path / "state"
+    committed = state / "content-similarity-judge" / "fitted-thresholds" / "2026" / "09" / "18.csv"
+    committed.parent.mkdir(parents=True)
+    shutil.copyfile(OLD_FIT, committed)
+
+    assert csv_layouts.CSV_LEDGERS[FITTED].old_entry == recorded[FITTED]
+    assert csv_layouts.CSV_LEDGERS[FITTED].old_headings == dict.fromkeys(FIT_DROPPED_CELLS)
+    assert csv_layouts.CSV_LEDGERS[FITTED].shorter_by == csv_layouts.EVERY_LEDGER_EXPIRES
+    assert csv_files.left(state, [FITTED], months=["2026-09"]) == [committed]
+
+
+def test_an_old_fitted_day_drops_the_weight_the_row_stopped_naming(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The committed shape: `key_point_weight`, filled, the one heading the fitted row dropped.
+
+    Its cell goes by declaration and every other cell reads back as it was
+    written. The same file under a table that declares nothing is refused, so no
+    cell is lost without a line saying so.
+    """
+    state = tmp_path / "state"
+    day = "2026-09-18"
+    path = csv_layouts.csv_root(state, FITTED) / day[:4] / day[5:7] / f"{day[8:10]}.csv"
+    path.parent.mkdir(parents=True)
+    shutil.copyfile(OLD_FIT, path)
+    with OLD_FIT.open(encoding="utf-8", newline="") as handle:
+        old = list(csv.DictReader(handle))
+
+    assert csv_files.csv_days(state, FITTED, months=[day[:7]]) == {day: [path]}
+    rows = csv_cells.read_csv_rows(
+        state, FITTED, day, [path], ledger.door_key(FITTED), FittedSimilarityThreshold
+    )
+
+    assert rows == [
+        {name: cell for name, cell in cells.items() if name not in FIT_DROPPED_CELLS}
+        for cells in old
+    ]
+    assert any(cells[name] for cells in old for name in FIT_DROPPED_CELLS), (
+        "the fixture holds no filled cell under the dropped heading, so the drop is unproved"
+    )
+
+    nothing_declared = csv_layouts.CSV_LEDGERS[FITTED]._replace(old_headings=MappingProxyType({}))
+    monkeypatch.setattr(
+        csv_layouts,
+        "CSV_LEDGERS",
+        MappingProxyType(dict(csv_layouts.CSV_LEDGERS) | {FITTED: nothing_declared}),
+    )
+    with pytest.raises(ValueError, match="is not declared"):
+        csv_cells.read_csv_rows(
+            state, FITTED, day, [path], ledger.door_key(FITTED), FittedSimilarityThreshold
+        )
+
+
+def test_an_old_fitted_day_written_before_the_judge_stamp_reads_with_the_stamp_empty(
+    tmp_path: Path,
+) -> None:
+    """A day fitted before the three judge-stamp columns existed reads them as unrecorded."""
+    state = tmp_path / "state"
+    day = "2026-09-18"
+    path = csv_layouts.csv_root(state, FITTED) / day[:4] / day[5:7] / f"{day[8:10]}.csv"
+    path.parent.mkdir(parents=True)
+    shutil.copyfile(UNSTAMPED_FIT, path)
+
+    (row,) = csv_cells.read_csv_rows(
+        state, FITTED, day, [path], ledger.door_key(FITTED), FittedSimilarityThreshold
+    )
+
+    assert [row[name] for name in ("judge_model", "prompt_digest", "grammar_digest")] == [
+        "",
+        "",
+        "",
+    ]
+    assert (row["date"], row["held_reason"], row["applied"]) == (day, "sheet_too_small", "0.94")
 
 
 def test_an_old_scored_pairs_day_reads_its_part_and_drops_what_the_row_stopped_naming(

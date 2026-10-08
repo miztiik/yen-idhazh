@@ -12,16 +12,8 @@ import csv
 from pathlib import Path
 from typing import NamedTuple
 
-from idhazh import day_partition
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import paths
 from idhazh.ledger.csv_file import CsvContract, _read_rows
-from idhazh.ledger.keys import (
-    _PREFERENCES,
-    FITTED_SIMILARITY_THRESHOLD_CARRIED,
-    STORY_SIMILARITY_THRESHOLD_KEY,
-)
+from idhazh.ledger.keys import _PREFERENCES
 
 
 class KeyedLedger(NamedTuple):
@@ -77,34 +69,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     read
     (`ledger/raw_files.py`).
 
-    `state/content-similarity-judge/fitted-thresholds/` is registered before
-    anything writes it: the settlement runs over whatever it finds, a missing
-    file settles to nothing, and registering the shape rather than its first
-    writer is what stops two stale checkouts leaving one date fitted twice. Its
-    sibling `scored-pairs/` left when it moved under `state/raw/`, for the reason
-    the trees above did.
-
+    **No ledger is left here.** The judge's scored pairs left when they moved
+    under `state/raw/`, and its fitted line, the last, followed them for the
+    reason the trees above did. The answer is empty whatever `state_dir` and
+    `date` name.
     """
-    if date is not None:
-        return [
-            KeyedLedger(
-                paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date),
-                STORY_SIMILARITY_THRESHOLD_KEY,
-                FittedSimilarityThreshold,
-                FITTED_SIMILARITY_THRESHOLD_CARRIED,
-            ),
-        ]
-    return [
-        KeyedLedger(
-            file,
-            STORY_SIMILARITY_THRESHOLD_KEY,
-            FittedSimilarityThreshold,
-            FITTED_SIMILARITY_THRESHOLD_CARRIED,
-        )
-        for file in day_partition.day_files(
-            paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS)
-        )
-    ]
+    return []
 
 
 def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:

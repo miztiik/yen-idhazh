@@ -82,13 +82,14 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the eleven layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the twelve layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
 `counterfactual-scores`, `candidate-models`, `feed-health`, `seen`,
-`published`, and three of the similarity judge's ledgers, each one shared file
+`published`, and four of the similarity judge's ledgers, each one shared file
 a day inside its family's folder:
 `content-similarity-judge/merge-line-holdout-scores`,
-`content-similarity-judge/scored-pairs` and `content-similarity-judge/metrics`.
+`content-similarity-judge/scored-pairs`, `content-similarity-judge/metrics` and
+`content-similarity-judge/fitted-thresholds`.
 This tool does not migrate `council-run-records`, `span-rollup` or an
 undeclared CSV layout. Moving another shape requires its own contract and
 reader design first. The reader supports a declared day tree or shared day file
@@ -102,6 +103,7 @@ column. Empty cells under unknown headings are allowed. A dropped heading
 requires an explicit `old_headings` entry mapped to `None`, added by a person
 in a reviewed commit. The scored-pairs entry has three: `decode_digest`,
 `key_point` and `key_point_weight`, the headings its contract stopped naming.
+The fitted-thresholds entry has one, `key_point_weight`, for the same reason.
 There are no such declarations for `runner_name`,
 `cgroup_peak_bytes`, `max_output_tokens`, `coverage` or `new_fact_rate`.
 Their filled CSV cells are refused, even if the contract's legacy reader

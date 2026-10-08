@@ -10,6 +10,7 @@ import {
 	writeFileSync
 } from 'node:fs';
 import path from 'node:path';
+import { backendPython } from './support/backend-python';
 import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/day-loader';
 
 /**
@@ -148,24 +149,9 @@ function brokenShapes(day: Day): Record<string, string> {
 	};
 }
 
-/** Which python runs the command.
- *
- * A runner installs the backend onto the interpreter on `PATH`, and the
- * documented local setup is a `.venv` at the repository root. `IDHAZH_PYTHON`
- * is the escape for a worktree borrowing another checkout's environment, which
- * is how several agents share one machine
- * ([docs/reference/agent-notes.md](../../docs/reference/agent-notes.md)).
- */
+/** Which python runs the command: the one rule every spec that runs the backend shares. */
 function python(): string {
-	const named = process.env.IDHAZH_PYTHON;
-	if (named) return named;
-	for (const candidate of [
-		path.join(REPO, '.venv', 'Scripts', 'python.exe'),
-		path.join(REPO, '.venv', 'bin', 'python')
-	]) {
-		if (existsSync(candidate)) return candidate;
-	}
-	return 'python';
+	return backendPython(REPO);
 }
 
 /** One day on disk and in the publication inventory the command reads.

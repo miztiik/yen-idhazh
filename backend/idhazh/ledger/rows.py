@@ -10,11 +10,11 @@ and writes nothing into a paused or retired family; `append_seen` and
 `write_item_health_summary` does not ask: it folds rows already recorded, and the
 ageing step reads that fold back before it deletes anything.
 
-Eight readers here read a ledger that lives under `state/raw/` and
+Nine readers here read a ledger that lives under `state/raw/` and
 `state/compact/` rather than in a CSV tree - `load_seen`, `load_published`,
 `load_health`, `load_retirements`, `load_visual_prunes`, the two item-health
 readers `load_settled_failures` and `load_source_counts`, and the judge's
-`load_story_similarity_pairs` - and all eight read it
+`load_story_similarity_pairs` and `load_fitted_thresholds` - and all nine read it
 through `ledger/ledger_files.py`, which reads the yearly files, then the monthly
 files, then the daily files, then the raw days no compact index names, each date
 from exactly one of them. Two of their writers are here, `append_seen` and
@@ -296,12 +296,13 @@ def append_fitted_thresholds(
 def load_fitted_thresholds(
     state_dir: Path, *, today: str, within_days: int
 ) -> list[FittedSimilarityThreshold]:
-    """Every fitted row in the window, oldest day first.
+    """Every fitted row in the window, read through the ledger door, oldest day first.
 
     **Guardrail #12 declaration.** `day_partition.days_in_window` names both
-    ends, so a cover of `n` days opens at most `n + 1` files and reads exactly
-    those days. The tree is never walked, so the read costs the same on the
-    thousandth day as on the third.
+    ends, so a cover of `n` days asks the door for exactly `n + 1` days: the
+    three compact indexes, the one file that serves each day, and the raw files
+    of the days no index names. The ledger is never walked, so the read costs the
+    same on the thousandth day as on the third.
 
     **The window is in days and the guard's median is in rows, and the caller is
     what reconciles them.** One missed run leaves thirteen rows inside a
@@ -310,16 +311,18 @@ def load_fitted_thresholds(
     for `max(settled_window_days, step_change_window_rows * 2)` days and takes the
     newest rows it finds - a bound set by two knobs rather than by the archive.
 
-    A day the fit never ran has no file, which is not a fault. A row that no
-    longer parses stops the read rather than being skipped: the guard takes a
-    median over these rows, and a silently short list moves that median instead
-    of costing a decision some evidence.
+    A day the fit never ran has no row, which is not a fault. Two runs of one
+    date both keep their row, the later run's last, because the door keeps the
+    order its writers filed in. A file this build cannot read is skipped with a
+    warning naming it, the way the door reads every ledger, so a short window is
+    said in the log rather than silently read as a quiet one.
     """
-    rows: list[FittedSimilarityThreshold] = []
-    for day in reversed(day_partition.days_in_window(today, within_days)):
-        fitted = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, day)
-        rows.extend(FittedSimilarityThreshold.from_csv_row(raw) for raw in _read_rows(fitted))
-    return rows
+    return ledger_files.load_days(
+        state_dir,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+        day_partition.days_in_window(today, within_days),
+        model=FittedSimilarityThreshold,
+    )
 
 
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:

@@ -33,11 +33,14 @@ reading its own declared table of them; all three count, because all three die
 with the runner. It names no ledger itself, so a thirteenth one is covered the
 day its writer lands rather than the day somebody remembers to add it to a list.
 
-The same file holds the second half of that. A ledger that declares a key must be
-in `ledger.keyed_paths`, the registry that pairs each ledger with what makes two
-of its rows one record, and a ledger that declares none must be absent from it.
-The two sides are compared as sets rather than as a subset, so the registry's one
-deliberate absence has to stay the one its own docstring claims.
+The same file holds the second half of that, and it has nothing to compare now.
+A ledger that declared a CSV settlement key had to be in `ledger.keyed_paths`,
+the registry that paired each ledger with what makes two of its rows one record,
+and a ledger that declared none had to be absent from it. The fitted merge line
+was the last ledger in it, and it left when it moved to the ledger door, so both
+sides are empty. They are still compared as sets rather than as a subset, so a
+ledger that registers a CSV settlement key again fails there until it is
+declared on both sides.
 
 **A rebase refuses to start while a tracked file is modified.** A file committed
 with CRLF against a `text eol=lf` attribute is the trap: every Linux checkout
@@ -114,7 +117,9 @@ the commit its run was triggered at. A settling pass ran after each rebase to
 take the repeats back out. Both are gone: the union driver is off every head, no
 commit step settles CSV day trees, and a second attempt that really does race its own
 first attempt now stops at the rebase instead of landing a row twice.
-`path_classes.UNION_SAFE` lists every tree that still keeps a union driver.
+`path_classes.UNION_SAFE` lists every tree that still keeps a union driver, and
+it lists none now: the fitted merge line's day files were the last, and lost
+theirs when that ledger moved under `state/raw/`.
 `state/visual-prunes/**` lost its driver on 2026-09-28, and `state/published/**`
 and `state/seen/**` lost theirs when those ledgers moved under `state/raw/`,
 where every run files a file of its own. Two runs of one day that both meet a

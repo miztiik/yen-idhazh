@@ -99,6 +99,11 @@ COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 #: execution rather than a second answer. Both attempts read the same score
 #: record and walk the same counts, so the first row wins and there is nothing
 #: for a preference rule to choose between.
+#:
+#: The shape these two cells name is
+#: `idhazh.contracts.fitted_similarity_threshold`, and the door table below
+#: imports it only when its ledger is asked about, for the reason the holdout
+#: score's key gives.
 STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
 
@@ -351,6 +356,13 @@ def _content_similarity_judge_metrics() -> type[Contract]:
     return ContentSimilarityJudgeMetrics
 
 
+def _fitted_similarity_threshold() -> type[Contract]:
+    """The fitted line's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
+
+    return FittedSimilarityThreshold
+
+
 #: The door ledgers a judge writes, each with its key and the function that
 #: imports the contract one of its rows is read by. The rest of the door table
 #: imports its contracts as this module loads. A judge's waits for the first
@@ -372,6 +384,10 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
         CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
         _content_similarity_judge_metrics,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: (
+        STORY_SIMILARITY_THRESHOLD_KEY,
+        _fitted_similarity_threshold,
     ),
 }
 

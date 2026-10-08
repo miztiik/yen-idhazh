@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import csv
 import shutil
-from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
@@ -22,7 +21,6 @@ import pytest
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.validation_row import ValidationRow
 
 pytestmark = pytest.mark.contract
@@ -212,9 +210,8 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 
 #: Every reader of a writer-owned CSV day tree: the module, the day-file call it
 #: would make if it went back to the one-file-a-day walk, and the `day_shards`
-#: call it makes instead. A module keeps its other day-file walks - the judge
-#: trees and the council's outcomes still file one file a day - so the
-#: claim is about the named call and never about the file.
+#: call it makes instead. The claim is about the named call and never about the
+#: file.
 #:
 #: The entry point differs by what the reader wants. `shard_files` hands back
 #: every file, which is what a census needs. `settled_rows`, `settled_day` and
@@ -238,21 +235,10 @@ MOVED: Final = (
     ("backend/idhazh/gardener/retention_files.py", "day_files(tree)", "shards_by_month("),
 )
 
-#: A ledger that keeps the day-file walk, and the reader that walks it: the judge's
-#: fitted line, walked by the post-merge settlement. `day_partition.day_files`
-#: refusing a directory is the tripwire that catches a twelfth tree arriving
-#: without a plan. `state/visual-prunes/` and `state/published/` were walked this
-#: way until each moved under `state/raw/`.
-#:
-#: The reader is called rather than read, so what is checked is that the refusal
-#: still reaches a caller - a walk swapped for one that skips what it cannot
-#: place fails here even when the call still spells `day_files`.
-KEPT: Final = (
-    (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        lambda state_dir: ledger.keyed_paths(state_dir, date=None),
-    ),
-)
+# No ledger keeps the day-file walk now. The judge's fitted line was the last,
+# walked by the post-merge settlement, until it moved under `state/raw/` as
+# `state/visual-prunes/` and `state/published/` had before it, so the tripwire
+# that refused a day directory in its tree has nothing left to trip it.
 
 
 def _squeezed(relpath: str) -> str:
@@ -279,26 +265,3 @@ def test_every_named_reader_walks_the_shards_and_not_the_day_files(
         f"{relpath} still walks day files at `{was}`. A ledger sharded by run identity "
         f"is read through day_shards.{reaches[:-1]}, which reads a day directory too."
     )
-
-
-@pytest.mark.parametrize(("which", "read"), KEPT, ids=[which.value for which, _ in KEPT])
-def test_a_ledger_that_keeps_the_day_file_walk_still_refuses_a_day_directory(
-    which: LedgerName, read: Callable[[Path], object], tmp_path: Path
-) -> None:
-    """The tripwire is only a tripwire while something still trips it.
-
-    A day directory is what a tree that gained writer-owned files looks like from
-    a reader that was never told. This reader must stop rather than return a
-    short answer, because a report that quietly drops a day is a report of the
-    wrong series.
-
-    The tree is built from the registry, so this cannot drift from where the
-    ledger actually lives, and it holds one directory whatever `state/` grows to
-    (Guardrail #12).
-    """
-    state_dir = tmp_path / "state"
-    root = ledger.tree_root(state_dir, which)
-    (root / "2026" / "09" / "18").mkdir(parents=True)
-
-    with pytest.raises(ValueError, match=f"{root.parent.name}/{root.name} holds 2026/09/18"):
-        read(state_dir)

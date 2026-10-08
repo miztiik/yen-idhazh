@@ -180,10 +180,10 @@
         },
         {
           "name": "fitted-thresholds",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "fitted-thresholds"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         },
         {
           "name": "holdout-pairs",
