@@ -1,12 +1,13 @@
-"""Count one day's verdict files into the record, and commit the rows they carry.
+"""Count one day's verdict files into the record, and file the rows they carry.
 
 One stage, one module. The router does not name it: the council reaches it
 through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
 sharpest case").
 
 It calls no model and opens no socket. The counting arithmetic is in
-`idhazh.similarity.counting`; this module reads the shards' files, appends the
-day's rows, and decides whether the record can be counted at all.
+`idhazh.similarity.counting`; this module reads the shards' files, files the
+day's rows through the ledger door, and decides whether the record can be
+counted at all.
 """
 
 from __future__ import annotations
@@ -15,9 +16,11 @@ import csv
 import io
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from idhazh import atomic_write, config, ledger
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
@@ -25,6 +28,9 @@ from idhazh.council import metrics_sink
 from idhazh.similarity import counting
 from idhazh.similarity.stamps import judge_inputs, scorer_inputs
 from idhazh.stages.common import LOG
+
+#: What every file this stage files names as the module that wrote it.
+PRODUCER: Final = __name__.partition(".")[2]
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,12 +73,13 @@ def stage_count_verdicts(
     shipped_root: Path,
     verdicts_dir: Path,
     settings: config.Settings,
+    identity: WriterIdentity,
     state_dir: Path | None = None,
 ) -> CountReport:
-    """Append the day's verdicts, then count them into the record if every shard reported.
+    """File the day's verdicts, then count them into the record if every shard reported.
 
     **A day with a missing shard is not counted at all.** Every row that did arrive
-    is still appended, so nothing a shard produced is lost, but the date stays out
+    is still filed, so nothing a shard produced is lost, but the date stays out
     of `counted_dates`. Counting three shards of four cannot be repaired later: the
     record counts a date once and refuses the same date twice, so the fourth
     shard's verdicts would be unreachable for ever. Refusing costs one day of
@@ -97,8 +104,15 @@ def stage_count_verdicts(
     directories hold one tenant's files, so what this counts is never a second
     tenant's work.
 
+    **`identity` is the council's own, for the job that saves the night's
+    results.** The pairs and the instrument rows go through the ledger door under
+    it, with this stage named as their producer, so each file says which run,
+    which attempt and which commit filed it. The rows keep the cells the draw
+    and the units stamped: `run_id` is the council run, and `work_part_index` the
+    part that judged the row.
+
     **`run_id` is the council's own, and this verb writes it into no cell.** The
-    rows it appends were stamped by the draw and the record carries no run at
+    rows it files were stamped by the draw and the record carries no run at
     all, so what the name buys here is that this job's own report and log line
     say which night counted the day. Without it a count cannot be tied to the run
     that produced it at all.
@@ -106,11 +120,21 @@ def stage_count_verdicts(
     knobs = settings.app.assemble.same_story.judging_knobs()
     shards = settings.app.council.shards
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
+    writer = WriterIdentity.model_validate(identity.model_dump() | {"producer": PRODUCER})
 
     present = sorted(path for path in verdicts_dir.glob("*.csv") if path.is_file())
     rows = [row for path in present for row in _verdict_rows(path)]
-    appended = ledger.append_story_similarity_pairs(state, date, rows)
-    metrics = _collect_metrics(date, state=state, shipped_root=shipped_root, judge_id=judge_id)
+    filed = ledger.persist(
+        state,
+        rows,
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+        covers=date,
+        identity=writer,
+    )
+    appended = len(rows) if filed else 0
+    metrics = _collect_metrics(
+        date, state=state, shipped_root=shipped_root, judge_id=judge_id, identity=writer
+    )
 
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
     record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
@@ -180,16 +204,18 @@ def stage_count_verdicts(
     return report
 
 
-def _collect_metrics(date: str, *, state: Path, shipped_root: Path, judge_id: str) -> int:
-    """Append what the units shipped to this judge's own metrics ledger.
+def _collect_metrics(
+    date: str, *, state: Path, shipped_root: Path, judge_id: str, identity: WriterIdentity
+) -> int:
+    """File what the units shipped into this judge's own metrics ledger.
 
-    Through the council's shipping capability, which renders and reads a row by
-    the contract it is handed - so the venue names no column of this ledger and
-    this module opens no shipped file itself.
+    Through the council's shipping capability, which reads a row by the contract
+    it is handed and files it through the ledger door - so the venue names no
+    column of this ledger and this module opens no shipped file itself.
 
     What it reads is one file per unit of tonight's split, so it costs what the
     night fanned out to rather than what the archive has piled up (Guardrail
-    #12). A run whose units shipped nothing appends nothing and says so.
+    #12). A run whose units shipped nothing files nothing and says so.
     """
     if not shipped_root.exists():
         return 0
@@ -198,5 +224,7 @@ def _collect_metrics(date: str, *, state: Path, shipped_root: Path, judge_id: st
         judge_id=judge_id,
         contract=ContentSimilarityJudgeMetrics,
         which=LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-        into=ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, date),
+        state_dir=state,
+        covers=date,
+        identity=identity,
     )

@@ -52,7 +52,7 @@ Table C - when to stop and ask
 | 1 | The first upkeep run after feed health moved is read | - | A | DONE | p59-main-read | - | Fowler |
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
 | 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | DONE | p59-row-3 | - | Fowler |
-| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | PENDING | - | - | - |
+| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | DONE | p59-row-4 | - | Fowler |
 | 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
 | 6 | The merge line's holdout score is saved through the door | 2, 11 | B | DONE | p59-row-6 | - | Fowler |
 | 7 | The holdout marks are saved through the door | 6 | C | PENDING | - | - | - |
@@ -235,6 +235,14 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | 1 | Two commits: (1) behavioural: declare, write and read through the door; (2) structural, Remove Dead Code: the CSV writer, loader and settlement entries | Fowler, 2026-10-05 |
 | 2 | The rename of `shard` ships here, not earlier ([judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)) | The owner, 2026-10-04 |
 | 3 | Does not wait for row 3. Both edit `rows.py`, `keys.py` and `ledger-registry.md`, but neither reads what the other writes, so whichever is ready first merges first and the other merges `main` | Fowler, 2026-10-06 |
+| 4 | The CSV settlement entries in `keyed_paths`, the two `_TARGET_LEDGERS` and `UNION_SAFE` entries and the tests that built a CSV path for these ledgers leave in the behaviour commit. The registry switch makes every CSV path builder refuse a door ledger by name, so code left asking would raise. The dead-code commit removes what nothing calls after the switch: `append_story_similarity_pairs` and `STORY_SIMILARITY_PAIR_CARRIED`. The widener's tests, which re-filed scored-pairs days, re-file fitted-line days instead | Fowler, 2026-10-08 |
+| 5 | `Tenant.settle` takes the council's state root as well as its writer identity, so the count, the fit and the council's own record write and read under one root. A trial configuration's root now holds the judge's rows too, where they used to land in production `state/` | Fowler, 2026-10-08 |
+| 6 | `Tenant.committed_paths` is read off the registry, one staged path for each ledger the judge writes, instead of the one `state/content-similarity-judge` prefix. A moved ledger is staged under `state/raw/`, and its old CSV folder is not staged at all. A raw folder holds files only between a save and the compaction that packs it, so the workflow check that every tenant path exists in a fresh checkout now accepts exactly the raw folders the registry builds for door ledgers; the commit helper already skips a named path with nothing on disk or tracked | Fowler, 2026-10-08 |
+| 7 | `similarity/applied.py` reads no scored pair and no metrics row, so no reader moved there. `set_merge_line` is the one reader of the scored pairs, and nothing reads the metrics | Fowler, 2026-10-08 |
+| 8 | The door table in `ledger/keys.py` imports the scored-pair and metrics contracts only when one of their ledgers is asked about, as it imports the holdout score's since row 6. So the council's import closure keeps exactly the three judge contracts the owner allowed on 2026-09-21. An earlier draft of this row widened that list to five; an agent may not widen an owner's ruling, so the draft was reverted | Fowler, 2026-10-08, on the plan owner's instruction |
+| 9 | A compaction is named for its ledger's door folder, `compact-<folder>` with `/` written `-` (D9), and every name is built by `config.compaction_task`, the one helper `main` has had since row 6. This row's own helper for the same name was dropped, so one rule has one spelling | Fowler, 2026-10-08, on the plan owner's instruction |
+| 10 | With no `--ledger`, the migrator takes the door ledgers of the registry beside the declarations it packs with, as `main` does since row 6, so a test that packs with recorded declarations never takes a ledger those declarations cannot move | Fowler, 2026-10-08 |
+| 11 | The migrator entries declare `ForeverWindow`, the window these CSV days were kept under. A 36-month yearly expiry does not reach it, so each entry also names the owner's decision to let a ledger be kept for less than its CSV was, `shorter_by=EVERY_LEDGER_EXPIRES`, as the holdout score's entry does. With it, `migrate_to_parquet.py --plan` accepts both ledgers | Fowler, 2026-10-08, on the plan owner's instruction |
 
 **Rejected alternatives**
 
