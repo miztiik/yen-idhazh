@@ -292,6 +292,17 @@ that recorded both a busy share and a clock on 2026-09-21, 371 belong to runs
 the machine record never reached, so the panel prints both counts rather than
 quietly dropping the difference. Authority: Susan, Row #12 decision 5.
 
+**A shard whose two machine records disagree about the processor count is
+absent too, the same dash as a shard no record reached.** A refused run can
+carry two host records for one shard, naming different processor counts.
+Picking whichever one came last in the handed-in order would print a figure
+that changes with that order and not with anything the run did - measured
+2026-10-08, the same shard priced at 80 processor-seconds with one record last
+and 160 with the other, nothing about the run having moved between the two.
+The join leaves the shard out instead, the same absence a missing record
+already produces, rather than add a second dash sentence for a case the panel's
+existing one already covers truthfully. Authority: Fowler, Row #L37.
+
 **What the panel cannot answer, it names.** The memory step belongs to the
 model's work, and nothing in the ledger says which half of it - the prompt the
 server read or the reply it wrote. The measurement that would settle it is a
