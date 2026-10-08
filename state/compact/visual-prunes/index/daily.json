@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {"bytes": 8998,"covers": "2026-09-06","lost_days": [],"rows": 4,"set_aside": 0,"state": "packed"},
+    {"bytes": 9045,"covers": "2026-09-07","lost_days": [],"rows": 5,"set_aside": 0,"state": "packed"},
+    {"bytes": 9028,"covers": "2026-09-08","lost_days": [],"rows": 4,"set_aside": 0,"state": "packed"},
+    {"bytes": 9046,"covers": "2026-09-09","lost_days": [],"rows": 5,"set_aside": 0,"state": "packed"},
+    {"bytes": 9046,"covers": "2026-09-10","lost_days": [],"rows": 5,"set_aside": 0,"state": "packed"},
+    {"bytes": 9046,"covers": "2026-09-11","lost_days": [],"rows": 5,"set_aside": 0,"state": "packed"},
+    {"bytes": 9045,"covers": "2026-09-12","lost_days": [],"rows": 5,"set_aside": 0,"state": "packed"},
+    {"bytes": 9038,"covers": "2026-09-13","lost_days": [],"rows": 2,"set_aside": 0,"state": "packed"}
+  ],
+  "ledger": "visual-prunes",
+  "period": "daily",
+  "version": "2026-10-07"
+}
