@@ -41,6 +41,7 @@ the router does not contain.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import sys
 import time
@@ -51,6 +52,7 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    ledger,
     path_classes,
 )
 from idhazh.contracts.base import WORK_JOB, ServerJob
@@ -135,6 +137,36 @@ def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None)
             f"{stage} needs --run-id: the council mints its own in its planning job, "
             "and a row filed under a digest run's id claims a machine and a clock "
             "this night never drew"
+        )
+    return given
+
+
+def _machine_run(
+    parser: argparse.ArgumentParser,
+    *,
+    date: str,
+    given: str | None,
+    execution: int | None,
+) -> str:
+    """The run a machine row is filed under: the one it was handed, or this execution's.
+
+    A workflow that mints its own name hands it over with `--run-id`, so that a
+    night's rows cannot arrive under two addresses (`_council_run` above). A
+    digest run names an execution instead, and the address is computed from it
+    exactly as the plan stage computes it, so the probe and the plan agree by
+    construction rather than by lookup.
+
+    Both, naming different runs, is a step that was handed one of them by
+    mistake. Filing under either would put a machine on a run that never drew
+    it, which is the one reading this ledger exists to make, so it is refused
+    here instead.
+    """
+    if given is None:
+        return plan_stage._run_id(date, execution)
+    if execution is not None and given != plan_stage._run_id(date, execution):
+        parser.error(
+            f"--run-id {given} and --execution {execution} name different runs, so "
+            "the machine row would claim a run that never drew it"
         )
     return given
 
@@ -351,10 +383,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--run-id",
         default=None,
         help=(
-            "Which run this is, for the council's verbs. The council mints its own "
-            "name once in its planning job and hands it to every verb that writes a "
-            "row, so a night's rows cannot arrive under two addresses. A digest run "
-            "computes its own from --execution instead."
+            "Which run this is, for the council's verbs and for the two that record "
+            "a machine. A workflow that mints its own name hands it to every verb "
+            "that writes a row, so a night's rows cannot arrive under two addresses. "
+            "A digest run computes its own from --execution instead."
         ),
     )
     parser.add_argument(
@@ -551,14 +583,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
-    # the only way to guarantee that for every ledger at once is to move the
-    # root they all hang off (Guardrail #6).
-    if settings.app.run.trial_state_dirname:
-        common.STATE_ROOT = common.state_root_of(settings, base=common.STATE_ROOT)
-        logging.getLogger(__name__).warning(
-            "trial run: every ledger goes to %s and no published series reads it",
-            common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
+    # the only way to guarantee that for every ledger at once is to overlay
+    # the registry every door file resolves through (Guardrail #6). This
+    # leaves `common.STATE_ROOT` meaning `state/` for every stage; the
+    # overlay rewrites the tier-first path a door file resolves to, so a
+    # stage that writes `state/raw/<ledger>/...` ends up at
+    # `state/raw/<trial-segments>/<ledger>/...` without reading its own root
+    # differently.
+    trial_segments = tuple(
+        part
+        for part in (
+            settings.app.run.trial_state_dirname,
+            settings.app.run.trial_case_dirname,
         )
+        if part is not None
+    )
+    with contextlib.ExitStack() as trial_registry:
+        if trial_segments:
+            trial_registry.enter_context(
+                ledger.use_registry(ledger.overlay_registry(trial_segments))
+            )
+            logging.getLogger(__name__).warning(
+                "trial run: every ledger goes to state/<tier>/%s and no published "
+                "series reads it",
+                Path(*trial_segments).as_posix(),
+            )
+        return _dispatch(parser, args, settings)
+
+
+def _dispatch(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
+) -> int:
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs
@@ -802,9 +857,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
+    # The two telemetry verbs take the run address rather than the run's plan:
+    # a machine reading is about the job and not about the work, so a job that
+    # plans nothing can still take one (`idhazh.telemetry.silicon`).
     if args.stage == "fingerprint":
         silicon.stage_fingerprint(
-            _planned(date, args.execution),
+            date=date,
+            run_id=_machine_run(
+                parser, date=date, given=args.run_id, execution=args.execution
+            ),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
@@ -815,7 +876,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "job-clock":
         silicon.stage_job_clock(
-            _planned(date, args.execution),
+            date=date,
+            run_id=_machine_run(
+                parser, date=date, given=args.run_id, execution=args.execution
+            ),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,

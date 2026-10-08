@@ -80,10 +80,9 @@ DERIVED: Final[tuple[str, ...]] = (
 #: rather than remove it. The feed-health record was the tree that said so - two
 #: plan jobs of one night can hold different verdicts on one feed - and it took
 #: no driver before it moved. Nothing under `state/raw/` takes one: every file
-#: there has one writer, so a union would have nothing to settle.
-UNION_SAFE: Final[tuple[str, ...]] = (
-    "state/content-similarity-judge/fitted-thresholds",
-)
+#: there has one writer, so a union would have nothing to settle. The judge's
+#: fitted line was the last collection here, until it moved there too.
+UNION_SAFE: Final[tuple[str, ...]] = ()
 
 
 def is_written_once(relpath: str) -> bool:

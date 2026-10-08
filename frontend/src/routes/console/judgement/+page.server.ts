@@ -43,8 +43,9 @@ export async function load() {
 	const widestDays = Math.max(...console.window_presets);
 	// Every window on this route ends on the site's newest published day.
 	const day = windowDay();
-	// The widest span the window control offers, as a window: the holdout score
-	// is read inside it, and the squares strip draws every day of it.
+	// The widest span the window control offers, as a window: the fitted lines and
+	// the holdout score are read inside it, and the squares strip draws every day
+	// of it.
 	const readSpan = windowOfDays(day, widestDays, console.today_anchor);
 	const merges: MergeDay[] = publishedDates(undefined, widestDays)
 		.sort()
@@ -53,12 +54,13 @@ export async function load() {
 			return { date, ...mergeCountsOf(day?.items ?? []) };
 		});
 	// One read, three panels. The fitted row carries the line, both judge rates
-	// and all three gate counts, so asking the ledger twice would be two reads of
-	// one file that could disagree about which run of a date they took. It also
-	// holds the days the rule a build follows looks back over while
-	// `applied_lookback_days` is under the widest preset, because no row is dated
-	// after the newest published day.
-	const rows = fittedLines(widestDays);
+	// and all three gate counts, so asking the ledger twice would be two reads
+	// that could disagree about which run of a date they took. It also holds the
+	// days the rule a build follows looks back over while `applied_lookback_days`
+	// is under the widest preset, because no row is dated after the newest
+	// published day. The rows come from the packed record, read inside the widest
+	// span, so a fitted day reaches the page once the gardener has packed it.
+	const rows = await fittedLines(readSpan);
 	const similarity = similarityConfig();
 	// The record is cumulative and the counts are per day, so the newest row is
 	// what both the split and the figures strip are about.

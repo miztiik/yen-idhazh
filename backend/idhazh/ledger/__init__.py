@@ -16,7 +16,6 @@ from idhazh.ledger import paths
 from idhazh.ledger.csv_file import (
     CsvContract,
     CsvRecord,
-    extend_ledger_file,
     read_header,
     render_file,
     require_matching_header,
@@ -43,7 +42,6 @@ from idhazh.ledger.keys import (
     FEED_HEALTH_KEY,
     FEED_HEALTH_RULE,
     FEED_RETIREMENT_KEY,
-    FITTED_SIMILARITY_THRESHOLD_CARRIED,
     HOLDOUT_PAIR_KEY,
     HOLDOUT_PAIR_RULE,
     HOST_FINGERPRINT_KEY,
@@ -82,6 +80,7 @@ from idhazh.ledger.paths import (
     door_folders,
     door_ledger_at,
     entry,
+    overlay_registry,
     path,
     raw_path,
     raw_root,
@@ -90,6 +89,7 @@ from idhazh.ledger.paths import (
     set_aside_path,
     tree_relpath,
     tree_root,
+    use_registry,
 )
 from idhazh.ledger.persist import (
     FileFooter,
@@ -117,7 +117,6 @@ from idhazh.ledger.raw_files import (
 )
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
-    append_fitted_thresholds,
     append_published,
     append_seen,
     load_fitted_thresholds,
@@ -132,7 +131,7 @@ from idhazh.ledger.rows import (
     load_visual_prunes,
     write_item_health_summary,
 )
-from idhazh.ledger.settle import KeyedLedger, drop_repeated_rows, keyed_paths, repeated_keys
+from idhazh.ledger.settle import KeyedLedger, keyed_paths, repeated_keys
 
 # Grouped by the module that holds each name, so this list reads as the index of
 # the package. A reader following `ledger.X` has one extra hop to make, and this
@@ -153,6 +152,7 @@ __all__ = [  # noqa: RUF022
     "door_folders",
     "door_ledger_at",
     "entry",
+    "overlay_registry",
     "path",
     "paths",
     "raw_path",
@@ -162,6 +162,7 @@ __all__ = [  # noqa: RUF022
     "set_aside_path",
     "tree_relpath",
     "tree_root",
+    "use_registry",
     # persist.py: the one door a contract payload takes to disk, and back.
     "FileFooter",
     "PeriodFile",
@@ -210,7 +211,6 @@ __all__ = [  # noqa: RUF022
     "FEED_HEALTH_KEY",
     "FEED_HEALTH_RULE",
     "FEED_RETIREMENT_KEY",
-    "FITTED_SIMILARITY_THRESHOLD_CARRIED",
     "HOLDOUT_PAIR_KEY",
     "HOLDOUT_PAIR_RULE",
     "HOST_FINGERPRINT_KEY",
@@ -240,7 +240,6 @@ __all__ = [  # noqa: RUF022
     # csv_file.py: how rows are read out of and written into a CSV.
     "CsvContract",
     "CsvRecord",
-    "extend_ledger_file",
     "read_header",
     "render_file",
     "require_matching_header",
@@ -249,7 +248,6 @@ __all__ = [  # noqa: RUF022
     "refiler",
     # rows.py: how a caller puts rows in and gets them back.
     "HEALTH_WINDOW_DAYS",
-    "append_fitted_thresholds",
     "append_published",
     "append_seen",
     "load_fitted_thresholds",
@@ -263,9 +261,8 @@ __all__ = [  # noqa: RUF022
     "load_story_similarity_pairs",
     "load_visual_prunes",
     "write_item_health_summary",
-    # settle.py: which rows repeat a key, and what dropping them costs.
+    # settle.py: which ledgers a CSV settlement covers, and which rows repeat a key.
     "KeyedLedger",
-    "drop_repeated_rows",
     "keyed_paths",
     "repeated_keys",
 ]

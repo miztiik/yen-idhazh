@@ -26,7 +26,8 @@ export const LEDGER_FOLDERS = {
 	'holdout-pairs': 'content-similarity-judge/holdout-pairs',
 	'merge-line-holdout-scores': 'content-similarity-judge/merge-line-holdout-scores',
 	'scored-pairs': 'content-similarity-judge/scored-pairs',
-	'metrics': 'content-similarity-judge/metrics'
+	'metrics': 'content-similarity-judge/metrics',
+	'fitted-thresholds': 'content-similarity-judge/fitted-thresholds'
 } as const satisfies Partial<Record<LedgerName, string>>;
 
 /** A structured filter, never raw SQL. The door binds `value` as a query parameter,
