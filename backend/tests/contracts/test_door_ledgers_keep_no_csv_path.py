@@ -51,6 +51,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.PUBLISHED: frozenset(),
     LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: frozenset({"run_id"}),
     LedgerName.RUN_PLAN: frozenset({"run_id"}),
+    LedgerName.COUNCIL_RUN_RECORDS: frozenset({"run_id"}),
 }
 
 
@@ -118,19 +119,33 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
     built = {
         _under_state(*ledger.entry(member).prefix) for member in LedgerName if member not in door
     } | {_under_state(tier.value, *ledger.entry(member).prefix) for member in door for tier in Tier}
+    tasks = config.load_gardener().tasks
+    declared_trial_folders = {
+        f"{root}/{tier}/{'/'.join(ledger.door_folders(policy.ledger))}"
+        for name, policy in tasks.items()
+        if name.startswith("compact-trial-") and isinstance(policy, CompactionPolicy)
+        for root in policy.state_roots
+        for tier in ("raw", "compact")
+    }
 
     stray = sorted(
         f"config/gardener/{name}.json owns {folder}"
-        for name, policy in config.load_gardener().tasks.items()
+        for name, policy in tasks.items()
         for folder in policy.owns or ()
         if folder.split("/")[0] == ledger.STATE_DIRNAME
         and folder not in built
+        and folder not in declared_trial_folders
         and (name, folder)
         not in {
             ("trials", "state/pipeline-tests-production-settings"),
             ("trials", "state/pipeline-tests-no-visual-plan"),
             ("trials", "state/pipeline-tests-parallel-summarization"),
         }
+        and not (
+            name == "trials"
+            and folder.startswith("state/pipeline-tests/")
+            and folder.endswith("/traces")
+        )
     )
 
     assert stray == [], (
@@ -138,21 +153,23 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
     )
 
 
-@pytest.mark.parametrize("member", list(keys._DOOR_SHAPES), ids=lambda member: member.value)
+@pytest.mark.parametrize(
+    "member", sorted(keys.door_table_ledgers()), ids=lambda member: member.value
+)
 def test_every_door_key_names_fields_its_contract_declares(member: LedgerName) -> None:
     """A key cell the contract lacks settles nothing, and an unmapped field stops the write."""
-    shape = keys._DOOR_SHAPES[member]
-    fields = list(shape.model.model_fields)
+    model = keys.door_contract(member)
+    fields = list(model.model_fields)
 
-    assert sorted(set(shape.key) - set(fields)) == []
-    assert [column.name for column in arrow_schema.columns_of(shape.model)] == fields
+    assert sorted(set(keys.door_key(member)) - set(fields)) == []
+    assert [column.name for column in arrow_schema.columns_of(model)] == fields
 
 
 def test_every_door_field_with_an_envelope_name_is_listed() -> None:
     named = set(file_envelope._KEYS)
     found = {
-        member: frozenset(set(shape.model.model_fields) & named)
-        for member, shape in keys._DOOR_SHAPES.items()
+        member: frozenset(set(keys.door_contract(member).model_fields) & named)
+        for member in keys.door_table_ledgers()
     }
 
     assert found == dict(ENVELOPE_NAMED_FIELDS)

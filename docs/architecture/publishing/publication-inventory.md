@@ -1,6 +1,6 @@
 # Publication Inventory
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-08
 
 How does a static build find source days and files without walking the archive?
 

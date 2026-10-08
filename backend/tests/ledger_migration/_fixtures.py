@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Final, cast
 
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, SEED_COMMIT
-from gardener._garden import a_config
+from gardener._historical_config import PRE_YEARLY_CONFIG, copy_pre_yearly_config
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
@@ -215,12 +215,12 @@ def file_hashes(root: Path) -> dict[str, str]:
 
 
 def config_beside(state: Path) -> Path:
-    """A config folder beside this state tree, holding every committed declaration.
+    """A config folder beside this state tree, holding recorded pre-expiry declarations.
 
     Only the state tree beside its config folder is packed, so a case that wants
     packing builds one, as a checkout holds one beside `state/`.
     """
-    config_dir = a_config(state.parent, CONFIG_DIR / "gardener")
+    config_dir = copy_pre_yearly_config(state.parent)
     (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
     return config_dir
 
@@ -248,7 +248,7 @@ def compaction_identity() -> WriterIdentity:
 
 
 def run_migration(state: Path, *which: LedgerName, today: date = TODAY) -> list[planning.Moved]:
-    """The migration of these ledgers, run on the wake `today` with the committed declarations."""
+    """Migrate these ledgers on `today` with recorded pre-expiry declarations."""
     return [
         report
         for _, report in phases.migrate_roots(
@@ -273,6 +273,7 @@ def plan_named_roots(roots: Sequence[Path], *which: LedgerName) -> list[planning
             run_id=RUN,
             git_sha=SEED_COMMIT,
             today=TODAY,
+            config_dir=PRE_YEARLY_CONFIG,
             months=MONTHS,
         )
     )

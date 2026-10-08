@@ -439,6 +439,16 @@ export function pipelineChanges(
 	return changes;
 }
 
+/** The days a run manifest names what ran, so a change marker on them needs no score row.
+ *
+ * Read by the rule `pipelineChanges` reads a manifest by, so a page that asks which
+ * days the score record alone could mark and the markers themselves cannot
+ * disagree about what a manifest identifies.
+ */
+export function listManifestDays(runs: readonly RecordedRunDay[]): string[] {
+	return [...identitiesByDate([], runs).keys()].sort();
+}
+
 /** The model id each date's score rows name, for the days that name one.
  *
  * The candle needs it to know when two days ran on different models and must
@@ -594,20 +604,18 @@ export const SOURCE_CUT_ROWS = 10;
  * of 6 above one with 17 of 38 - and it is the seventeen that cost the digest
  * the articles.
  *
- * The window ends on the newest day the ledger holds rather than on the build
- * clock, so the table says the same thing on a rebuild of an old tree as it did
- * the day that tree was written. That is also why panning the telemetry
- * viewport does not move this table: it follows the window's length, and the
- * section says so.
+ * The page hands over the window, which ends on the newest day the site
+ * published rather than on the build clock, so the table says the same thing on
+ * a rebuild of an old tree as it did the day that tree was written. It is one
+ * window a preset, so panning the telemetry viewport does not move this table:
+ * it follows the window's length, and the section says so.
  */
 export function sourceCuts(
 	health: Record<string, string>[],
-	options: { days: number; limit: number }
+	window: DayWindow,
+	options: { limit: number }
 ): SourceCuts {
-	const dates = health.map((row) => row.date ?? '').filter((date) => date !== '');
-	const newest = dates.length === 0 ? '' : dates.reduce((a, b) => (a > b ? a : b));
-	const first = windowStart(newest, options.days);
-	const inWindow = health.filter((row) => (row.date ?? '') >= first && (row.date ?? '') <= newest);
+	const inWindow = within(health, window);
 
 	const articles = new Map<string, Article>();
 	for (const row of inWindow) {
@@ -682,7 +690,7 @@ export function sourceCuts(
 		// Over every article in the window, including the sources the list did not
 		// reach: the cut point is a fact about the window, not about ten rows.
 		caps: capPoints([...articles.values()]),
-		days: options.days,
+		days: window.days,
 		articles: articles.size
 	};
 }
@@ -726,13 +734,6 @@ function spread(values: number[]): LengthRange {
 		median: middle === null ? 0 : Math.round(middle),
 		max: sorted[sorted.length - 1] ?? 0
 	};
-}
-
-function windowStart(end: string, days: number): string {
-	if (end === '') return '';
-	const at = new Date(`${end}T00:00:00Z`);
-	at.setUTCDate(at.getUTCDate() - (days - 1));
-	return at.toISOString().slice(0, 10);
 }
 
 /** A span of days, named once and passed to every panel that draws it.

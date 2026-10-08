@@ -1,0 +1,35 @@
+{
+  "attempt": 1,
+  "bytes_freed": 13940,
+  "candidates_seen": 13,
+  "cone_bytes": 0,
+  "date": "2026-10-05",
+  "deleted": 9,
+  "downloaded_bytes": 352914,
+  "dry_run": false,
+  "duration_ms": 5120,
+  "fault": null,
+  "fold_dry_run": null,
+  "folded_days": null,
+  "folded_files": null,
+  "folded_months": null,
+  "handled_through": "2026-09-05",
+  "job": "run-tasks",
+  "max_deletes_per_run": 50,
+  "recovered": [
+    {
+      "note": "not-deletable",
+      "subject": "9472586502"
+    }
+  ],
+  "resume_from": null,
+  "run_id": "2026-10-05-18212345678",
+  "selected": 10,
+  "shard": 2,
+  "since": null,
+  "stopped_because": "exhausted",
+  "task": "workflow-artifacts",
+  "until": "2026-09-05",
+  "version": "2026-10-07",
+  "work_ended_at": "2026-10-05T00:47:02Z"
+}

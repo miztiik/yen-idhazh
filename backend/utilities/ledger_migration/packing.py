@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from idhazh import config, ledger
+from idhazh import config
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -49,7 +49,7 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
                 f"to move into yet: its entry becomes {Grain.RAW_AND_COMPACT.value} in the "
                 "change that moves its writers and readers"
             )
-        task = f"compact-{'-'.join(entries[name].prefix)}"
+        task = config.compaction_task(name, registry=entries)
         policy = tasks.get(task)
         if not isinstance(policy, CompactionPolicy):
             raise RefusedError(
@@ -66,20 +66,64 @@ def declared(which: Sequence[LedgerName], config_dir: Path) -> dict[LedgerName, 
             )
         # Validated, because model_copy(update=...) is not: a misspelt key there would be
         # kept beside the real one, and the declaration's own month deletes would run.
-        declared[name] = CompactionPolicy.model_validate(
-            {**policy.model_dump(), "dry_run": False, "month_deletes_dry_run": True}
-        )
+        declared[name] = packing_policy(policy)
     return declared
 
 
-def packs_here(state_dir: Path, config_dir: Path) -> bool:
-    """Whether this root is the state tree the declarations in `config_dir` govern.
+def packing_policy(policy: CompactionPolicy) -> CompactionPolicy:
+    """Pack live while keeping every monthly deletion report-only."""
+    return CompactionPolicy.model_validate(
+        {**policy.model_dump(), "dry_run": False, "month_deletes_dry_run": True}
+    )
 
-    Only `state/` beside `config/` is packed. Any other root - a trial run's tree
-    inside it - is filed raw: nothing reads a packed trial root, and the trials
-    task empties it.
-    """
-    return state_dir.resolve() == (config_dir.parent / ledger.STATE_DIRNAME).resolve()
+
+def policies_for_roots(
+    which: Sequence[LedgerName],
+    roots: Sequence[Path],
+    config_dir: Path,
+) -> dict[Path, dict[LedgerName, CompactionPolicy | None]]:
+    """Select each explicitly governed root after requiring every production declaration."""
+    production = declared(which, config_dir)
+    tasks = config.load_gardener(config_dir).tasks
+    config_root = config_dir.parent.resolve()
+    selected: dict[Path, dict[LedgerName, CompactionPolicy | None]] = {}
+    for state_dir in roots:
+        try:
+            root_name = state_dir.resolve().relative_to(config_root).as_posix()
+        except ValueError:
+            root_name = ""
+        selected[state_dir] = {}
+        for name in which:
+            if root_name == "state":
+                selected[state_dir][name] = production[name]
+                continue
+            trial = tasks.get(config.compaction_task(name, trial=True))
+            if isinstance(trial, CompactionPolicy) and root_name in trial.state_roots:
+                root_owns = [
+                    folder for folder in trial.owns if folder.startswith(f"{root_name}/")
+                ]
+                selected[state_dir][name] = CompactionPolicy.model_validate(
+                    {
+                        **packing_policy(trial).model_dump(),
+                        "owns": root_owns,
+                        "state_roots": [root_name],
+                    }
+                )
+            else:
+                selected[state_dir][name] = None
+    return selected
+
+
+def packs_here(state_dir: Path, config_dir: Path) -> bool:
+    """Whether any compaction declaration names this root for packing."""
+    try:
+        root_name = state_dir.resolve().relative_to(config_dir.parent.resolve()).as_posix()
+    except ValueError:
+        return False
+    return any(
+        isinstance(policy, CompactionPolicy) and root_name in policy.state_roots
+        for policy in config.load_gardener(config_dir).tasks.values()
+    )
 
 
 def pack(
@@ -87,22 +131,24 @@ def pack(
     which: LedgerName,
     identity: WriterIdentity,
     *,
+    repo_root: Path,
     policy: CompactionPolicy,
     today: date,
     months: Sequence[str],
+    first_ledger_year: str,
 ) -> tuple[list[str], list[str], list[str]]:
     """Pack only the named months until a pass writes and deletes no selected period.
 
     The first and last named month are each pass's range, as a person's `--from`
-    and `--to` would be.
+    and `--to` would be. `first_ledger_year` is `config/idhazh_gardener.json`'s,
+    which a pass that rebuilds an absent index looks from.
     """
-    repo_root = state_dir.parent
     context = f"{label_path(state_dir)}: {which.value}"
-    folders = tuple(policy.owns or ())
     written: list[str] = []
     deleted: list[str] = []
     packed: set[str] = set()
     while True:
+        folders = tuple(folder for folder in policy.owns if (repo_root / folder).is_dir())
         try:
             outcome = compaction.run(
                 TaskContext(
@@ -117,8 +163,9 @@ def pack(
                     git_sha=identity.git_sha,
                     owned_folders=folders,
                     listing=FileListing.from_disk(
-                        repo_root, folders, paths=packing_paths(state_dir, which, months)
+                        repo_root, policy.owns, paths=packing_paths(state_dir, which, months)
                     ),
+                    first_ledger_year=first_ledger_year,
                     period_range=(min(months), max(months)),
                 ),
             )
@@ -136,9 +183,10 @@ def pack(
                         parts[index + 3].removesuffix(".parquet"),
                     )
                     packed.add(date.fromisoformat("-".join(day_parts)).isoformat())
-        if outcome.stopped_because is StopReason.FAILED:
+        if outcome.fault is not None:
             raise NotProvenError(
-                f"{context}: the compaction refused at {outcome.resume_from}; CSV files are kept"
+                f"{context}: the compaction refused at {outcome.resume_from} "
+                f"({outcome.fault.value}); CSV files are kept"
             )
         if outcome.written or outcome.taken:
             continue

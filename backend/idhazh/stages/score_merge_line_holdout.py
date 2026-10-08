@@ -39,13 +39,12 @@ _MAX_DRIFT_TOLERANCE = 0.00005
 def _append(
     state_dir: Path, date: str, row: MergeLineHoldoutScore, *, commit_sha: str
 ) -> list[Path]:
-    """Put the row through the ledger door and return the raw files written.
+    """Put the row through the ledger door and return the raw files it wrote.
 
-    The writer lives here rather than in `idhazh.ledger` because the ledger may
-    not import a judge's contract: a council verb reaches that module for its own
-    row types, and a judge contract arriving through it would put a judge in the
-    council's import closure. The path and the settlement key are the ledger's,
-    which is where a path belongs.
+    A person runs this verb, so the file's writer is `operator`, at attempt 1
+    and shard 0: no workflow job, retry or matrix cell ran it. The run is the
+    one `--run-id` names, and the commit is the code that took the reading. The
+    path and the settlement key are the ledger's, which is where a path belongs.
     """
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
     return ledger.persist(

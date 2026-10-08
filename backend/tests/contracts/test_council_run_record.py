@@ -1,21 +1,11 @@
-"""Does the council's run record name its step, and read every row the first shape filed?
-
-The record names a step and a part where the first shape filed one `shard`
-number, because the ledger door writes its own `shard` cell on every row. Each
-row the first shape filed has to read into the new shape with no cell lost, and
-a row that cannot be placed has to be refused rather than read as a guess.
-
-What it cannot settle is whether a committed file holds a value outside the set
-read here. The migration's plan pass reads every committed row; these tests read
-rows they build, so what they cost does not move as the archive grows (CLAUDE.md
-Guardrail #12).
-"""
+"""Does the council's run record name its step and refuse retired CSV headings?"""
 
 from __future__ import annotations
 
 import csv
 import io
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Final
 
 import pytest
@@ -23,8 +13,10 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep
-from idhazh.contracts.file_envelope import RowIdentity
+from idhazh.contracts.file_envelope import Format, Period, RowIdentity, WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
 
 from ._fixtures import FIXTURE_FILES
 
@@ -34,16 +26,6 @@ FIXTURES = CONTRACT_FIXTURES_DIR / "council-run-record"
 
 #: The stamp on every row the first shape filed, which a migrated row keeps.
 FIRST_SHAPE_STAMP: Final = "2026-09-21T12:00"
-
-#: One part, and four: the count on every row the first shape filed.
-WIDTHS: Final = (1, 4)
-
-#: The first shape read backwards: the number each once-a-date step was filed
-#: under. A part was filed under its own number.
-OLD_NUMBER_OF: Final = {
-    EvaluationStep.SELECT_JUDGE_WORK: -1,
-    EvaluationStep.COMBINE_JUDGE_RESULTS: -2,
-}
 
 #: The cells a step that ran no model, and has no part, leaves empty.
 ABSENT: Final = ("work_part_index", "model_calls", "tokens_in", "tokens_out", "model_seconds")
@@ -64,11 +46,7 @@ def a_record(name: str) -> CouncilRunRecord:
 
 
 def an_old_row(**cells: str) -> dict[str, str]:
-    """One row the first shape filed, as the migrator hands it over.
-
-    Every heading that shape wrote except `host_model`: the migrator drops that
-    heading while it is empty, and refuses the row when it is not.
-    """
+    """One retired CSV shape without its unused host column."""
     return {
         "version": FIRST_SHAPE_STAMP,
         "date": "2026-09-20",
@@ -86,64 +64,20 @@ def an_old_row(**cells: str) -> dict[str, str]:
     } | cells
 
 
-def the_old_number(record: CouncilRunRecord) -> int:
-    """A step and its part, mapped back to the one number the first shape filed them under."""
-    if record.evaluation_step is EvaluationStep.EVALUATE_WORK_PART:
-        assert record.work_part_index is not None
-        return record.work_part_index
-    assert record.work_part_index is None
-    return OLD_NUMBER_OF[record.evaluation_step]
+@pytest.mark.parametrize("number", ["-2", "-1", "0", "3", "", "-3", "first"])
+def test_every_retired_shard_heading_is_refused(number: str) -> None:
+    with pytest.raises(ValidationError, match="shard"):
+        CouncilRunRecord.from_csv_row(an_old_row(shard=number))
 
 
-@pytest.mark.parametrize("width", WIDTHS)
-def test_every_old_number_reads_as_its_own_step_and_part_and_maps_back(width: int) -> None:
-    """The oracle: each number the first shape filed names one step and part, and no other.
-
-    It fails if an old value is lost, merged with another, or read as the wrong
-    step.
-    """
-    numbers = [-1, -2, *range(width)]
-
-    read = {
-        number: CouncilRunRecord.from_csv_row(an_old_row(shard=str(number), shards=str(width)))
-        for number in numbers
-    }
-
-    pairs = [(record.evaluation_step, record.work_part_index) for record in read.values()]
-    assert len(set(pairs)) == len(numbers), f"two old numbers read as one step and part: {pairs}"
-    assert {record.work_part_count for record in read.values()} == {width}
-    assert {number: the_old_number(record) for number, record in read.items()} == {
-        number: number for number in numbers
-    }
-
-
-@pytest.mark.parametrize(
-    ("cells", "named"),
-    [
-        ({"shard": "-3"}, "shard"),
-        ({"shard": ""}, "shard"),
-        ({"shard": "first"}, "shard"),
-        ({"shard": "4"}, "work_part_index"),
-        ({"shard": "1", "evaluation_step": "evaluate_work_part"}, "two shapes"),
-        ({"shard": "1", "work_part_index": "1"}, "two shapes"),
-        ({"work_part_count": "4"}, "two shapes"),
-    ],
-    ids=[
-        "below-the-two-steps",
-        "empty",
-        "not-a-number",
-        "the-count-itself",
-        "beside-a-named-step",
-        "beside-a-part-index",
-        "beside-a-part-count",
-    ],
-)
-def test_an_old_row_the_reader_cannot_place_is_refused_by_name(
-    cells: dict[str, str], named: str
+@pytest.mark.parametrize("heading", ["shard", "shards"])
+@pytest.mark.parametrize("value", ["", "0"])
+def test_a_retired_heading_beside_a_current_row_is_refused(
+    heading: str, value: str
 ) -> None:
-    """A row read as its nearest guess is a night recorded wrong, so it stops the read."""
-    with pytest.raises(ValueError, match=named):
-        CouncilRunRecord.from_csv_row(an_old_row(**cells))
+    current = a_record("a-part-that-ran-the-model").csv_row()
+    with pytest.raises(ValidationError, match=heading):
+        CouncilRunRecord.from_csv_row(current | {heading: value})
 
 
 @pytest.mark.parametrize(
@@ -209,14 +143,12 @@ def test_every_recorded_step_round_trips_through_one_csv_file() -> None:
     assert {name: selection[name] for name in ABSENT} == dict.fromkeys(ABSENT, "")
 
 
-def test_a_row_the_first_shape_filed_reads_as_the_migrated_row() -> None:
-    """Every cell of a real filed row survives the read, its stamp included."""
+def test_a_filed_legacy_csv_row_is_refused_without_changing_its_migrated_fixture() -> None:
     [filed] = csv.DictReader(io.StringIO(A_FILED_COUNT))
-    assert filed.pop("host_model") == "", "the migrator refuses a filled host_model"
-
-    migrated = CouncilRunRecord.from_csv_row(filed)
-
-    assert migrated == a_record("a-migrated-count-that-had-nothing-to-do")
+    with pytest.raises(ValidationError, match="shard"):
+        CouncilRunRecord.from_csv_row(filed)
+    migrated = a_record("a-migrated-count-that-had-nothing-to-do")
+    assert CouncilRunRecord.from_csv_row(migrated.csv_row()) == migrated
     assert migrated.version == FIRST_SHAPE_STAMP
 
 
@@ -234,6 +166,30 @@ def test_a_migrated_row_keeps_a_stamp_the_changelog_describes() -> None:
     stamps = [entry.version for entry in CouncilRunRecord.__changelog__]
 
     assert FIRST_SHAPE_STAMP in stamps[1:], "the first shape's stamp is not an older entry"
+
+
+@pytest.mark.parametrize("fmt", [Format.PARQUET, Format.JSON])
+def test_a_migrated_old_stamp_round_trips_through_raw_and_compact(
+    tmp_path: Path, fmt: Format,
+) -> None:
+    row = a_record("a-migrated-count-that-had-nothing-to-do")
+    identity = WriterIdentity(
+        run_id=row.run_id, attempt=1, job=ServerJob.SAVE_COUNCIL_RESULTS, shard=0,
+        producer="council.session", git_sha="a" * 40,
+    )
+    raw = ledger.persist(
+        tmp_path, [row], ledger=LedgerName.COUNCIL_RUN_RECORDS,
+        covers=row.date, identity=identity, fmt=fmt,
+    )
+    assert ledger.load(raw, model=CouncilRunRecord) == [row]
+    stored = ledger.load_stored(raw, model=CouncilRunRecord)
+    compact = ledger.persist_period(
+        tmp_path, stored, model=CouncilRunRecord, ledger=LedgerName.COUNCIL_RUN_RECORDS,
+        period=Period.DAILY, covers=row.date, fmt=fmt,
+        identity=identity.model_copy(update={"job": ServerJob.RUN_TASKS}), built_from=1,
+    )
+    assert ledger.load([compact], model=CouncilRunRecord) == [row]
+    assert ledger.load_stored([compact], model=CouncilRunRecord) == stored
 
 
 def test_the_row_shares_one_name_with_the_ledger_door_and_it_means_the_council_run() -> None:

@@ -26,6 +26,7 @@
 		type LabelAlign
 	} from '$lib/charts/run-history';
 	import { HEALTH_FILL, type DayColumn } from '$lib/console/run-square';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -48,6 +49,18 @@
 
 	/** The square under the chart, or null where the strip has to be drawn. */
 	const under = $derived(narrow ? null : slotCellFor(slots.slot));
+
+	/** What the keys are told the squares are. One day has no other day for Left
+	 * and Right to reach, so at one day the label names the day instead. */
+	const keysLabel = $derived(
+		days.length === 1
+			? `Run health, one column for ${nameSpan(days.length)}.`
+			: 'Run health, one column a day. Left and Right read a day, Escape returns to the newest.'
+	);
+	/** The strip's name. At one day only the runs stacked in its one column have an order. */
+	const stripLabel = $derived(
+		`Run health history over ${countDays(days.length)}, ${days.length === 1 ? 'runs ' : ''}oldest to newest`
+	);
 
 	/** How tall a day's stack is, from the ground to its last run's top edge. */
 	function stackHeight(runs: number, cell: number, gap: number): number {
@@ -133,7 +146,7 @@
 		style="width: {slots.width}px; height: {tallest}px"
 		tabindex="0"
 		role="group"
-		aria-label="Run health, one column a day. Left and Right read a day, Escape returns to the newest."
+		aria-label={keysLabel}
 		data-run-history="under-chart"
 		data-grid="days"
 		use:pointerReadout={{
@@ -173,7 +186,7 @@
 		class="run-squares overflow-x-auto pb-1"
 		role="region"
 		tabindex="0"
-		aria-label="Run health history over {days.length} days, oldest to newest"
+		aria-label={stripLabel}
 		bind:this={strip}
 		data-run-history="strip"
 	>
@@ -186,7 +199,7 @@
 			data-strip-pad={stripPad}
 			tabindex="0"
 			role="group"
-			aria-label="Run health, one column a day. Left and Right read a day, Escape returns to the newest."
+			aria-label={keysLabel}
 			use:pointerReadout={{
 				marks: stripMarks,
 				width: strip_.width,

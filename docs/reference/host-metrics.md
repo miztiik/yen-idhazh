@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-08
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -27,7 +27,7 @@ set is still operator-only: the console reads it at build time under
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
-| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its compaction; `state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
+| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/pipeline-tests/compact/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
 | Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job files its own row through `ledger.persist`, and nothing else writes the ledger |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
@@ -68,7 +68,9 @@ one is read.
 
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
 whole state root with `run.trial_state_dirname`, so its rows land under
-`state/pipeline-tests/`. The reason is in the design rationale below.
+`state/pipeline-tests/`. The trial compaction declaration packs that root
+without changing the production ledger's retention policy. The reason is in
+the design rationale below.
 
 **It files by day, and that is the shape the read wants.** A host record only
 earns its keep when somebody counts across many days, and a day tree is the
@@ -114,7 +116,7 @@ Neither table repeats the other's cells.
 | `version` | date stamp | The schema generation this row was written under |
 | `date` | `YYYY-MM-DD` | The run's date |
 | `run_id` | run id | The run |
-| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime`, `decide`, `migrate`, `run-tasks`, `history`, `operator` | Which workflow job drew this machine, or `operator` for a person-run command |
+| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime`, `decide`, `migrate`, `run-tasks`, `history`, `save_council_results`, `operator` | Which workflow job drew this machine. The enum is the one job vocabulary every ledger shares, so it also names writers that record no machine, such as `decide` and `operator` |
 | `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
 | `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
 
@@ -515,7 +517,9 @@ got before. Authority: Fowler, 2026-09-17.
 
 **A bench dispatch writes the same way.** `measure.yml` has no `assemble` job,
 and it needs none: its probe writes its own file under the day and the commit
-stages `state/pipeline-tests/raw/host-fingerprint`. When this was decided it was
+stages `state/pipeline-tests/raw/host-fingerprint`; the gardener packs that
+root under `state/pipeline-tests/compact/host-fingerprint` through
+`compact-trial-host-fingerprint`. When this was decided it was
 the one state writer with
 no concurrency group
 at all, which is why it got its own file rather than being left on the shared

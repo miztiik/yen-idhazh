@@ -2,8 +2,8 @@
 
 A test case run files its item-health, scores and host-fingerprint rows through
 the ledger door, so the tree the commit job checks holds
-`<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>` files beside the day
-trees and traces. The check in `backend/utilities/pipeline_test_ledgers.py` is
+`<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>` files beside traces.
+The check in `backend/utilities/pipeline_test_ledgers.py` is
 the control for everything downstream of fetched text (Guardrail #11), so every
 tree here is built by the door itself under a trial root the committed config
 declares, and then one file at a time is put where no door writer puts it.
@@ -35,6 +35,7 @@ from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from idhazh.telemetry import traces
 from utilities import pipeline_test_ledgers
 
@@ -55,7 +56,14 @@ def _a_trial_tree(tmp_path: Path) -> tuple[Path, Path, frozenset[str]]:
     """
     roots = pipeline_test_ledgers._roots(CONFIG_DIR)
     tree = tmp_path / ledger.STATE_DIRNAME
-    return tree, tree / roots[0], frozenset(roots)
+    return tree, tree / TRIAL_STATE_PREFIX / roots[0], frozenset(roots)
+
+
+def _artifact_tree(tmp_path: Path, root: Path, case_id: str) -> Path:
+    """Copy one case root into the artifact's case-labelled tree."""
+    tree = tmp_path / "artifact"
+    shutil.copytree(root, tree / case_id)
+    return tree
 
 
 def _census_row(number: int) -> ItemHealthRow:
@@ -158,32 +166,87 @@ def test_the_check_passes_the_raw_files_a_test_case_run_files(
     assert pipeline_test_ledgers.refusals(gathered, roots=roots) == []
 
 
+def test_equal_writer_identities_gather_check_and_place_under_separate_case_roots(
+    tmp_path: Path,
+) -> None:
+    """Two case roots keep their own rows when all writer identity cells match."""
+    roots = pipeline_test_ledgers._roots(CONFIG_DIR)[:2]
+    assert len(roots) == 2
+    state = tmp_path / ledger.STATE_DIRNAME
+    case_roots = [state / TRIAL_STATE_PREFIX / name for name in roots]
+    expected_item_ids = ["ai-0000000001", "ai-0000000002"]
+
+    for number, (item_id, case_root) in enumerate(
+        zip(expected_item_ids, case_roots, strict=True), start=1
+    ):
+        assert item_id == f"ai-{number:010d}"
+        seed_item_health(case_root, DAY, [_census_row(number)])
+
+    envelopes = [
+        ledger.read_envelope(ledger.list_raw_files(root, LedgerName.ITEM_HEALTH)[0].path)
+        for root in case_roots
+    ]
+    identities = [
+        (envelope.identity.run_id, envelope.identity.job, envelope.identity.shard)
+        for envelope in envelopes
+    ]
+    assert identities[0] == identities[1], "the two writers must share run, job and shard"
+
+    gathered = tmp_path / "trial-ledgers"
+    assert pipeline_test_ledgers.gather(state, gathered, roots=roots, days=[DAY]) == roots
+    assert pipeline_test_ledgers.refusals(gathered, roots=frozenset(roots)) == []
+
+    staged = pipeline_test_ledgers.place(gathered, state, roots=roots)
+
+    assert staged == [root.as_posix() for root in case_roots]
+    for root, item_id in zip(case_roots, expected_item_ids, strict=True):
+        files = ledger.list_raw_files(root, LedgerName.ITEM_HEALTH)
+        rows = ledger.load_stored([raw_file.path for raw_file in files], model=ItemHealthRow)
+        assert [row.row.item_id for row in rows] == [item_id]
+
+
 def test_a_trace_still_passes_beside_the_door_files(tmp_path: Path) -> None:
     """A trace remains allowed beside raw ledger files."""
-    tree, root, roots = _a_trial_tree(tmp_path)
+    _, root, roots = _a_trial_tree(tmp_path)
     assert _file_census(root)
     assert _file_machine(root)
-    trace = traces.committed_trace_path(
-        root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0
-    )
+    trace = traces.committed_trace_path(root, run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=0)
     trace.parent.mkdir(parents=True, exist_ok=True)
     trace.write_bytes(b'{"kind":"span","name":"item","duration_ms":1}\n')
 
-    assert pipeline_test_ledgers.refusals(tree, roots=roots) == []
+    artifact = _artifact_tree(tmp_path, root, root.name)
+    assert pipeline_test_ledgers.refusals(artifact, roots=roots) == []
+
+
+def test_a_legacy_day_tree_file_is_not_accepted(tmp_path: Path) -> None:
+    """The check accepts traces and door raw files, not retired day-tree shards."""
+    _, root, roots = _a_trial_tree(tmp_path)
+    legacy = root / "feed-health" / "2026" / "09" / "22" / "fixture.csv"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text("version,date\n2026-09-22,2026-09-22\n", encoding="ascii")
+
+    artifact = _artifact_tree(tmp_path, root, root.name)
+    refused = pipeline_test_ledgers.refusals(artifact, roots=roots)
+
+    assert refused == [
+        f"{root.name}/{legacy.relative_to(root).as_posix()} names feed-health, "
+        "which a test case run does not write"
+    ]
 
 
 def test_a_door_file_under_a_root_no_test_case_declares_is_refused(tmp_path: Path) -> None:
     """A good raw file does not make its folder a trial root: the root is checked first."""
-    tree, root, roots = _a_trial_tree(tmp_path)
+    _, root, roots = _a_trial_tree(tmp_path)
     assert _file_census(root)
-    stray = tree / "a-tenant"
-    shutil.copytree(root, stray)
+    artifact = _artifact_tree(tmp_path, root, root.name)
+    stray = artifact / "a-tenant"
+    shutil.copytree(artifact / root.name, stray)
     [copied] = [path for path in stray.rglob("*") if path.is_file()]
 
-    refused = pipeline_test_ledgers.refusals(tree, roots=roots)
+    refused = pipeline_test_ledgers.refusals(artifact, roots=roots)
 
     assert len(refused) == 1, refused
-    assert copied.relative_to(tree).as_posix() in refused[0], refused
+    assert copied.relative_to(artifact).as_posix() in refused[0], refused
 
 
 def _moved(source: Path, destination: Path) -> Path:
@@ -226,10 +289,10 @@ def _under_another_door_ledger(root: Path, filed: Path) -> Path:
 
 
 def _under_a_day_file_ledger(root: Path, filed: Path) -> Path:
-    """A copy under `raw/shard-outcomes/`, a ledger that files one CSV file a day."""
+    """A copy under `raw/metrics/`, a ledger that files one CSV file a day."""
     return _copied(
         filed,
-        ledger.raw_path(root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DAY, uuid.UUID(filed.stem)),
+        ledger.raw_path(root, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DAY, uuid.UUID(filed.stem)),
     )
 
 
@@ -308,7 +371,7 @@ def test_the_check_refuses_a_file_the_door_did_not_put_there(
     compaction writes, or holding a row its contract refuses. The check has to
     name that file, and only that file, so the good file beside it still passes.
     """
-    tree, root, roots = _a_trial_tree(tmp_path)
+    _, root, roots = _a_trial_tree(tmp_path)
     [filed] = ledger.persist(
         root,
         [_census_row(1)],
@@ -318,7 +381,8 @@ def test_the_check_refuses_a_file_the_door_did_not_put_there(
     )
     offending = misplace(root, filed).relative_to(root).as_posix()
 
-    refused = pipeline_test_ledgers.refusals(tree, roots=roots)
+    artifact = _artifact_tree(tmp_path, root, root.name)
+    refused = pipeline_test_ledgers.refusals(artifact, roots=roots)
 
     assert len(refused) == 1, refused
     assert offending in refused[0], refused

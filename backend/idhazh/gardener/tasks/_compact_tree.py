@@ -1,10 +1,10 @@
 """What one ledger's compact periods hold as a compaction pass finds them, and what it changes.
 
-A pass reads the three watermarks, the three period indexes and the names of the
-raw day folders once, then decides period by period what to write and what to
-delete. File decisions are `Change` records; indexes and watermarks stay
-pending until `finish` serializes each final value once. The resulting order
-is data, indexes from coarsest to finest, deletions, then watermarks.
+A pass reads the three period indexes and the names of the raw day folders
+once, works out from the indexes how far each period is packed, then decides
+period by period what to write and what to delete. File decisions are `Change`
+records; indexes stay pending until `finish` serializes each final value once.
+The resulting order is data, indexes from coarsest to finest, then deletions.
 Nothing touches the disk until
 `apply`, which a dry run never calls. So a dry run and a live run make the same
 decisions from the same reads, and the list a dry run reports is the list a
@@ -12,16 +12,25 @@ live run carries out, file for file. A file a monthly window would delete while
 that window only reports is no change at all: the pass names it with `spare`,
 so the record can count it, and keeps it.
 
+**The marks are worked out from the indexes, and then only move forward.** The
+daily, monthly and yearly marks are worked out (`ledger_marks.work_out_marks`)
+when the tree is built, and again after an absent index is rebuilt from the
+files of its periods, before any step runs (`_absent_indexes`). After that
+each step moves its mark forward as it finishes a period, and nothing moves one
+back: the drop step taking months out of the monthly index moves no mark.
+
 **Names come from the task's listing, and content is fetched before it is
 read.** The raw day folders, which compact files exist and what
-each weighs are all read off the listing. The watermarks and the indexes are
-fetched once, before they are read, and each step fetches the day or month
+each weighs are all read off the listing. The indexes are fetched once, before
+they are read, and each step fetches the day or month
 folders it opens before it opens one. The drop, year, month and day steps
 choose their periods as they run, so each names what it reads of them first,
 through `name_drops`, `name_years`, `name_months` and `name_days`, and the
 listing then answers for them from the same commit. A day step with no mark
 looks back over months no step has named yet, and the pass names those through
-`name_raw_months` before it chooses.
+`name_raw_months` before it chooses. An absent index is rebuilt from the files
+in the year folders the rebuild names through `name_year_folders`, one folder
+a year.
 
 **No pass writes a path it deletes, or deletes a path it writes.** The shard
 that lands the pass refuses a path on both lists, so one pass that did either
@@ -41,42 +50,66 @@ built from gives its oldest, and the rest wait in its folder for the next wake.
 gives the longest run of a step's periods, oldest first, whose fetch fits what
 is left of it, read off the listing's own sizes, and `fetch` fetches that run
 in one download. The first period that does not fit stops the step
-(`stop_over_budget`): `ceiling` when a later wake has room for it, `failed` by
-name when the period alone is larger than the whole budget, which only a person
-can raise.
+(`stop_over_budget`), as `error_cause` reads the budget: `ceiling` when a later
+wake has room for it, `failed` by name, fault `raised`, when the period alone
+is larger than the whole budget, which only a person can raise. Either way the
+pass logs one `DownloadOverBudget` event with the bytes and the budget.
 
-The watermarks and the indexes are read by `ledger_marks`, which stops the pass
-on one this build cannot trust, rather than read it as absent, and says why.
+**A period a step will not take is said once, by name** (`refuse`): one
+`PeriodRefused` event with the step, the record's fault word, the ledger's own
+fault word when a file is missing, and the type and place of the exception
+that refused it - an error for a defect, a warning for every other word.
+
+**What the pass recovered goes on its record.** `note_recovery` keeps each note
+- the word and the period it is about - in the order the pass met it, and the
+pass hands them on in `recovered`. A step that stops for a fault says which in
+its `Stop`, and the pass's record names it. **What it did, period by period,
+goes on its finished event** (`periods_taken`): the entries it wrote, compared
+with the indexes it read, the months and raw days it dropped or named for a
+window that only reports, the files it moved aside, and where each mark ended.
+
+The indexes are read by `ledger_marks`, which stops the pass on one this build
+cannot trust, rather than read it as absent, and says why.
 
 **A ledger's three indexes exist together.** Whatever writes one writes each of
-the others the ledger has none of yet, and those are empty: a period with no
-watermark was never packed, so an empty list is the truth about it. A reader
-that finds `index/daily.json` can then tell a lost `index/monthly.json` or
-`index/yearly.json` from a period never packed, and asks for no file that is not
-there.
+the others the ledger has none of yet. Each of those holds what the rebuild of
+an absent index found for its periods, which is nothing when no file was there,
+so an empty list is the truth about it as far as those periods reach. A reader
+that finds `index/daily.json` can then tell a lost
+`index/monthly.json` or `index/yearly.json` from a period never packed, and
+asks for no file that is not there.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, assert_never
 
 from idhazh import atomic_write, day_partition, ledger
 from idhazh.contracts.base import Contract
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import Recovery, StopReason, stop_for
 from idhazh.contracts.file_envelope import Format, Period
-from idhazh.contracts.gardener_fault import RecoveryNote
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.gardener_events import (
+    CompactionStep,
+    DownloadOverBudget,
+    PeriodRefused,
+    PeriodsTaken,
+)
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
+from idhazh.contracts.ledger_fault import LedgerFault
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import ledger_marks, named_trees
+from idhazh.gardener import error_cause, event_log, ledger_marks, named_trees
+from idhazh.gardener.error_cause import ErrorCause
 from idhazh.gardener.file_listing import FileListing, OverBudgetError
 from idhazh.ledger import StoredRow
 from idhazh.site_weight import BYTES_PER_MB
 
-logger = logging.getLogger(__name__)
+#: Each period's index as a pass holds it, by what each entry covers.
+Entries = Mapping[Period, Mapping[str, CompactEntry]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +133,9 @@ class Stop:
     because: StopReason
     #: The day, month or year the next pass takes first.
     resume_from: str
+    #: Why a fault stopped the step: `raised` beside `failed`, every other word
+    #: beside `deferred`. None for a stop at the cap or the budget.
+    fault: GardenerFault | None = None
 
 
 class PeriodFetch(NamedTuple):
@@ -115,39 +151,41 @@ class RawDay[C: Contract]:
 
     #: Each file the day is built from, oldest first, beside its rows.
     taken: list[tuple[Path, list[StoredRow[C]]]]
-    #: Each file this build cannot read, beside why, for the pass to move aside.
-    unreadable: list[tuple[Path, str]]
+    #: Each file this build cannot read, for the pass to move aside.
+    unreadable: list[Path]
     #: How many readable files wait in the folder, past the most one period is built from.
     carried: int
 
 
-def stop_over_budget(which: LedgerName, covers: str, *, needed: int, budget: int) -> Stop:
+def stop_over_budget(which: LedgerName, covers: str, spent: OverBudgetError) -> Stop:
     """Where a period whose download does not fit stops its step, said once by name.
 
-    `needed` is what fetching the period alone downloads, and `budget` the
-    shard's whole budget, both in bytes. `ceiling` when a later wake, with its
-    whole budget, has room for the period; `failed` when the period alone is
+    `spent.needed` is what fetching the period alone downloads, and
+    `spent.budget` the shard's whole budget, both in bytes. `error_cause`
+    decides by its one rule: `ceiling` when a later wake, with its whole budget,
+    has room for the period; `failed`, fault `raised`, when the period alone is
     larger than the whole budget, because no wake could ever take it and only a
-    person can raise `max_downloaded_mb`.
+    person can raise `max_downloaded_mb`. The event is an error then, and
+    information otherwise.
     """
-    if needed > budget:
-        logger.error(
-            "a period is larger than the shard's whole download budget, so no wake can take "
-            "it ledger=%s period=%s bytes=%s max_downloaded_mb=%s",
-            which.value,
-            covers,
-            needed,
-            budget // BYTES_PER_MB,
-        )
-        return Stop(StopReason.FAILED, covers)
-    logger.info(
-        "a period waits for a wake with room in the shard's download budget "
-        "ledger=%s period=%s bytes=%s",
-        which.value,
-        covers,
-        needed,
+    failed = error_cause.classify(spent) is ErrorCause.RAISED
+    stop = (
+        Stop(StopReason.FAILED, covers, GardenerFault.RAISED)
+        if failed
+        else Stop(StopReason.CEILING, covers)
     )
-    return Stop(StopReason.CEILING, covers)
+    event_log.emit(
+        DownloadOverBudget(
+            ledger=which,
+            resume_from=covers,
+            needed_bytes=spent.needed,
+            room_bytes=spent.room,
+            max_downloaded_mb=spent.budget // BYTES_PER_MB,
+            stopped_because=stop.because,
+        ),
+        level=logging.ERROR if failed else logging.INFO,
+    )
+    return stop
 
 
 @dataclass(slots=True)
@@ -159,10 +197,6 @@ class CompactTree:
     #: The files under the folders the compaction owns, which is where every
     #: name the pass decides from comes from.
     listing: FileListing
-    #: The newest day, month and year compacted, or None when that period never has been.
-    daily_through: str | None
-    monthly_through: str | None
-    yearly_through: str | None
     #: Each period's index, by what each entry covers.
     daily: dict[str, CompactEntry]
     monthly: dict[str, CompactEntry]
@@ -173,6 +207,7 @@ class CompactTree:
     listed: int = 0
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
+    expired_through: str | None = None
     changes: list[Change] = field(default_factory=list)
     #: Every file the pass read or weighed.
     looked: set[Path] = field(default_factory=set)
@@ -180,11 +215,27 @@ class CompactTree:
     #: the window only reports. It is not a change, so `apply` never sees it.
     spares: list[Path] = field(default_factory=list)
     pending_indexes: set[Period] = field(default_factory=set)
-    pending_watermarks: dict[Period, Watermark] = field(default_factory=dict)
+    #: Every fault the pass recorded instead of stopping, in the order it met them.
+    recovered: list[Recovery] = field(default_factory=list)
+    #: The months the drop step took, or named and kept for a window that only reports.
+    dropped_months: list[str] = field(default_factory=list)
+    #: The raw days past the keep line the pass dropped, or named and kept.
+    dropped_raw_days: list[str] = field(default_factory=list)
+    #: Each file moved to the set-aside folder, by the repository path it had.
+    set_aside_paths: list[str] = field(default_factory=list)
+    #: The newest day, month and year packed, or None when nothing of that period
+    #: is: worked out from the entries (`work_out_marks`), then moved forward by
+    #: the steps as they finish periods.
+    daily_through: str | None = field(init=False)
+    monthly_through: str | None = field(init=False)
+    yearly_through: str | None = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.work_out_marks()
 
     @classmethod
     def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
-        """The three watermarks, the three indexes and the raw day folder names, read once."""
+        """The three indexes and the raw day folder names, read once, and the marks they give."""
         marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
         # A wake names no raw folder: each step names the raw folders it reads.
         raw_days = (
@@ -196,16 +247,28 @@ class CompactTree:
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
-            daily_through=marks.through[Period.DAILY],
-            monthly_through=marks.through[Period.MONTHLY],
-            yearly_through=marks.through[Period.YEARLY],
             daily=dict(marks.entries[Period.DAILY]),
             monthly=dict(marks.entries[Period.MONTHLY]),
             yearly=dict(marks.entries[Period.YEARLY]),
             raw_days=raw_days,
             listed=len(raw_days),
             indexed=marks.indexed,
+            expired_through=marks.expired_through,
         )
+
+    def work_out_marks(self) -> None:
+        """Set each mark to what the entries the pass holds now say, as `ledger_marks` works it out.
+
+        Called when the tree is built and after an absent index is rebuilt,
+        before any step runs; after that only the steps move a mark.
+        """
+        through = ledger_marks.work_out_marks(
+            {Period.DAILY: self.daily, Period.MONTHLY: self.monthly, Period.YEARLY: self.yearly},
+            expired_through=self.expired_through,
+        )
+        self.daily_through = through[Period.DAILY]
+        self.monthly_through = through[Period.MONTHLY]
+        self.yearly_through = through[Period.YEARLY]
 
     def raw_day_folder(self, day: str) -> Path:
         """The raw folder one UTC day's writer files sit in."""
@@ -285,6 +348,23 @@ class CompactTree:
         """
         self._name([], months=months)
 
+    def name_year_folders(self, period: Period, covers: Sequence[str]) -> None:
+        """Name the folder of each year these periods fall in, and no raw folder.
+
+        An absent index is rebuilt from the files of these periods
+        (`_absent_indexes`). Naming one folder a year, rather than each
+        period's file, keeps the paths a rebuild names to one more a year;
+        every file inside each is listed from the commit now.
+        """
+        self._name(
+            sorted(
+                {
+                    ledger.compact_root(self.state_dir, self.ledger, period) / each[:4]
+                    for each in covers
+                }
+            )
+        )
+
     def name_days(self, days: Sequence[str]) -> None:
         """Name what the day step reads of these days, and take in each that holds raw files.
 
@@ -361,33 +441,28 @@ class CompactTree:
                     f"{path.name} in the raw folder of {day} is not a file, so it cannot be "
                     "moved aside"
                 )
-        unreadable = list(folder.unreadable)
+        unreadable = [path for path, _why in folder.unreadable]
         taken: list[tuple[Path, list[StoredRow[C]]]] = []
         for held in folder.files[:most]:
             try:
                 taken.append((held.path, self.load(held.path, model=model)))
-            except ValueError as refusal:
-                unreadable.append((held.path, str(refusal)))
+            except ValueError:
+                unreadable.append(held.path)
         return RawDay(taken=taken, unreadable=unreadable, carried=len(folder.files[most:]))
 
-    def set_aside(self, path: Path, covers: str, why: str) -> None:
-        """Move one file the pass cannot read to the ledger's set-aside folder, and say why.
+    def set_aside(self, path: Path) -> None:
+        """Move one file the pass cannot read to the ledger's set-aside folder.
 
         The move is a write of its bytes at `ledger.set_aside_path` and a delete
         of its old path, which frees nothing, so the delete weighs 0 and
-        `bytes_freed` stays what the deletes free. `covers` is the period whose
-        packing set the file aside.
+        `bytes_freed` stays what the deletes free. Why it could not be read is
+        not kept: an error's text can carry a row of the file.
         """
         self.looked.add(path)
         self.write(ledger.set_aside_path(self.state_dir, self.ledger, path), path.read_bytes())
         self._drop(path, 0)
-        logger.warning(
-            "a file is moved aside unread ledger=%s period=%s path=%s/%s reason=%s",
-            self.ledger.value,
-            covers,
-            ledger.STATE_DIRNAME,
-            path.relative_to(self.state_dir).as_posix(),
-            why,
+        self.set_aside_paths.append(
+            f"{ledger.STATE_DIRNAME}/{path.relative_to(self.state_dir).as_posix()}"
         )
 
     def fit_to_budget(
@@ -409,9 +484,8 @@ class CompactTree:
             brought = self.listing.lacking(more.folders, beside=more.beside)
             needed = sum({**held, **brought}.values())
             if needed and needed > room:
-                return list(periods[:position]), self.stop_over_budget(
-                    covers, needed=sum(brought.values()), budget=budget
-                )
+                spent = OverBudgetError(needed=sum(brought.values()), room=room, budget=budget)
+                return list(periods[:position]), self.stop_spent(covers, spent)
             held.update(brought)
         return list(periods), None
 
@@ -427,13 +501,9 @@ class CompactTree:
             beside=[path for each in held for path in each.beside],
         )
 
-    def stop_over_budget(self, covers: str, *, needed: int, budget: int) -> Stop:
-        """Where a period of this ledger whose download does not fit stops its step."""
-        return stop_over_budget(self.ledger, covers, needed=needed, budget=budget)
-
     def stop_spent(self, covers: str, spent: OverBudgetError) -> Stop:
-        """Where a period stops when one of its own fetches found the budget spent."""
-        return self.stop_over_budget(covers, needed=spent.needed, budget=spent.budget)
+        """Where a period of this ledger stops its step when its download does not fit."""
+        return stop_over_budget(self.ledger, covers, spent)
 
     def write(self, path: Path, data: bytes) -> None:
         """Decide to write one file whole."""
@@ -458,10 +528,101 @@ class CompactTree:
         self.spares.append(path)
 
     def note_recovery(self, note: RecoveryNote, covers: str) -> None:
-        """Say once what the pass recovered instead of stopping, and the period it is about."""
-        logger.warning(
-            "a period was recovered ledger=%s period=%s note=%s", self.ledger.value, covers, note
+        """Record what the pass recovered instead of stopping, and the period it is about.
+
+        The note goes on the pass's record and its finished event, in the order
+        it was met.
+        """
+        self.recovered.append(Recovery(note=note, subject=covers))
+
+    def refuse(
+        self,
+        step: CompactionStep,
+        period: str,
+        *,
+        fault: GardenerFault = GardenerFault.RAISED,
+        ledger_fault: LedgerFault | None = None,
+        failure: BaseException | None = None,
+    ) -> Stop:
+        """A period `step` will not take, said once by name, and the stop it ends the step with.
+
+        `fault` is the record's word: `raised`, a defect, unless the caller names
+        a cause outside the code, which defers the pass instead. `ledger_fault`
+        is the ledger's own word when a file is missing, and `failure` the
+        exception that refused the period, named by its type and place only.
+        Its mark stays below the period either way.
+        """
+        error, where = event_log.cause_of(failure)
+        event_log.emit(
+            PeriodRefused(
+                ledger=self.ledger,
+                step=step,
+                period=period,
+                fault=fault,
+                ledger_fault=ledger_fault,
+                error=error,
+                where=where,
+            ),
+            level=logging.ERROR if fault is GardenerFault.RAISED else logging.WARNING,
         )
+        return Stop(stop_for(fault), period, fault)
+
+    def entries_now(self) -> Entries:
+        """Each index as the pass holds it at this moment, kept apart from what follows."""
+        return {
+            Period.DAILY: dict(self.daily),
+            Period.MONTHLY: dict(self.monthly),
+            Period.YEARLY: dict(self.yearly),
+        }
+
+    def periods_taken(self, before: Entries) -> PeriodsTaken:
+        """What the pass did since `before`, period by period, and where each mark ended.
+
+        An entry written since `before` is listed under its state, an adopted one
+        too; a packed day written again is a day taken again, whatever its state.
+        A day is lost when a written entry newly lists it. Drops and set-asides
+        are read off the lists the steps kept, because a year packed takes its
+        months out of the index too.
+        """
+        days = self._written(before, Period.DAILY)
+        months = self._written(before, Period.MONTHLY)
+        years = self._written(before, Period.YEARLY)
+        written = {Period.DAILY: days, Period.MONTHLY: months, Period.YEARLY: years}
+        new = [
+            entry
+            for period, entries in written.items()
+            for entry in entries
+            if entry.covers not in before[period]
+        ]
+        packed = {entry.covers for entry in new if entry.state is EntryState.PACKED}
+        lost = {entry.covers for entry in new if entry.state is EntryState.LOST}
+        for period, entries in ((Period.MONTHLY, months), (Period.YEARLY, years)):
+            for entry in entries:
+                held = before[period].get(entry.covers)
+                lost.update(set(entry.lost_days) - set(() if held is None else held.lost_days))
+        return PeriodsTaken(
+            days_packed=[entry.covers for entry in days if entry.covers in packed],
+            days_retaken=[entry.covers for entry in days if entry.covers in before[Period.DAILY]],
+            months_closed=[entry.covers for entry in months if entry.covers in packed],
+            years_packed=[entry.covers for entry in years if entry.covers in packed],
+            months_dropped=list(self.dropped_months),
+            raw_days_dropped=list(self.dropped_raw_days),
+            empty_periods=[entry.covers for entry in new if entry.state is EntryState.EMPTY],
+            lost_days=sorted(lost),
+            set_aside_paths=list(self.set_aside_paths),
+            daily_mark=self.daily_through,
+            monthly_mark=self.monthly_through,
+            yearly_mark=self.yearly_through,
+        )
+
+    def _written(self, before: Entries, period: Period) -> list[CompactEntry]:
+        """The entries of one index the pass wrote since `before`, oldest first."""
+        held = before[period]
+        return [
+            entry
+            for covers, entry in sorted(self.entries(period).items())
+            if held.get(covers) != entry
+        ]
 
     def entries(self, period: Period) -> dict[str, CompactEntry]:
         """One period's index as the pass holds it now, by what each entry covers."""
@@ -480,9 +641,9 @@ class CompactTree:
 
         Each other period's index is written with it when the ledger has none yet
         so a ledger never holds one index
-        without the others. A period with no index has no watermark either -
-        `read_marks` refuses that pair - so what the pass holds for it is nothing,
-        and the index says so.
+        without the others. An absent index was rebuilt from the files of its
+        periods before any step ran, so what the pass holds for it is what
+        that rebuild found, nothing when no file was there, and the index says so.
         """
         self.pending_indexes.add(period)
         self.pending_indexes.update(set(Period) - self.indexed)
@@ -495,44 +656,21 @@ class CompactTree:
             ledger=self.ledger,
             period=period,
             entries=[held[covers] for covers in sorted(held)],
+            expired_through=self.expired_through if period is Period.YEARLY else None,
         )
         path = ledger.compact_index_path(self.state_dir, self.ledger, period)
         self.write(path, index.to_json().encode("ascii"))
 
-    def write_watermark(
-        self, period: Period, *, through: str, advanced_at: str, run_id: str
-    ) -> None:
-        """Keep the final watermark for one write after indexes and source deletions."""
-        mark = Watermark(
-            version=Watermark.schema_version(),
-            ledger=self.ledger,
-            period=period,
-            through=through,
-            advanced_at=advanced_at,
-            run_id=run_id,
-        )
-        self.pending_watermarks[period] = mark
-
     def finish(self) -> None:
-        """Plan data, final indexes, source deletions, then final watermarks, once per pass."""
+        """Plan data, final indexes, then source deletions, once per pass."""
         writes = [change for change in self.changes if change.data is not None]
         deletes = [change for change in self.changes if change.data is None]
         indexes_start = len(self.changes)
         for period in (Period.YEARLY, Period.MONTHLY, Period.DAILY):
             if period in self.pending_indexes:
                 self.write_index(period)
-        watermarks_start = len(self.changes)
-        for period, mark in self.pending_watermarks.items():
-            path = ledger.watermark_path(self.state_dir, self.ledger, period)
-            self.write(path, mark.to_json().encode("ascii"))
-        self.changes = [
-            *writes,
-            *self.changes[indexes_start:watermarks_start],
-            *deletes,
-            *self.changes[watermarks_start:],
-        ]
+        self.changes = [*writes, *self.changes[indexes_start:], *deletes]
         self.pending_indexes.clear()
-        self.pending_watermarks.clear()
 
     def apply(self) -> None:
         """Carry out every change in the order it was decided. A dry run never calls this.

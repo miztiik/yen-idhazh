@@ -14,7 +14,7 @@ from conftest import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.deadline import (
     SECONDS_A_MINUTE,

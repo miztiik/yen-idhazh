@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import SEED_COMMIT
+from gardener.tasks._marks import marks_on_disk
+from gardener.tasks._task import first_ledger_year
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import schedule
 from utilities.ledger_migration import (
@@ -69,7 +71,12 @@ def _monthly_history(
     today: date,
     daily_through: str | None = None,
 ) -> None:
-    """Build real monthly door files and indexes for a bounded compaction fixture."""
+    """Build real monthly door files and indexes for a bounded compaction fixture.
+
+    The daily index names each day after the newest month, quiet, up to
+    `daily_through` or the newest day a pass on `today` takes, so the daily mark
+    worked out from the indexes stands there.
+    """
     scratch = state.parent / f"{which.value}-raw-source"
     entries: list[CompactEntry] = []
     identity = compaction_identity()
@@ -110,21 +117,22 @@ def _monthly_history(
         .to_json()
         .encode("ascii")
     )
-    latest_month = max(months)
-    monthly_mark = ledger.watermark_path(state, which, Period.MONTHLY)
-    monthly_mark.parent.mkdir(parents=True, exist_ok=True)
-    monthly_mark.write_bytes(
-        Watermark(
-            version=Watermark.schema_version(),
-            ledger=which,
-            period=Period.MONTHLY,
-            through=latest_month,
-            advanced_at="2027-03-20T00:41:00Z",
-            run_id=RUN,
-        )
-        .to_json()
-        .encode("ascii")
+    through = (
+        daily_through
+        or schedule.newest_eligible(
+            now=datetime.combine(today, time.min, tzinfo=UTC), after_days=1
+        ).isoformat()
     )
+    after = (date.fromisoformat(f"{max(months)}-01") + timedelta(days=31)).replace(day=1)
+    quiet = [
+        CompactEntry(
+            covers=(after + timedelta(days=offset)).isoformat(),
+            rows=0,
+            bytes=0,
+            state=EntryState.EMPTY,
+        )
+        for offset in range((date.fromisoformat(through) - after).days + 1)
+    ]
     daily_index = ledger.compact_index_path(state, which, Period.DAILY)
     daily_index.parent.mkdir(parents=True, exist_ok=True)
     daily_index.write_bytes(
@@ -132,27 +140,7 @@ def _monthly_history(
             version=CompactIndex.schema_version(),
             ledger=which,
             period=Period.DAILY,
-            entries=[],
-        )
-        .to_json()
-        .encode("ascii")
-    )
-    through = (
-        daily_through
-        or schedule.newest_eligible(
-            now=datetime.combine(today, time.min, tzinfo=UTC), after_days=1
-        ).isoformat()
-    )
-    daily_mark = ledger.watermark_path(state, which, Period.DAILY)
-    daily_mark.parent.mkdir(parents=True, exist_ok=True)
-    daily_mark.write_bytes(
-        Watermark(
-            version=Watermark.schema_version(),
-            ledger=which,
-            period=Period.DAILY,
-            through=through,
-            advanced_at="2027-03-20T00:41:00Z",
-            run_id=RUN,
+            entries=quiet,
         )
         .to_json()
         .encode("ascii")
@@ -262,7 +250,7 @@ def test_scoped_packing_keeps_an_unnamed_indexed_month(tmp_path: Path) -> None:
     assert len(ledger.load_days(state, EVALS, [OLD], model=EvalRow)) == 1
 
 
-def test_named_months_cannot_skip_the_daily_watermark_gap(tmp_path: Path) -> None:
+def test_named_months_cannot_skip_the_gap_after_the_daily_mark(tmp_path: Path) -> None:
     state = tmp_path / "state"
     old_day = "2026-08-15"
     _monthly_history(
@@ -354,7 +342,7 @@ def test_scoped_packing_cannot_skip_an_unabsorbed_month(tmp_path: Path) -> None:
         )
 
     assert daily.read_bytes() == before
-    assert Watermark.read(ledger.watermark_path(state, EVALS, Period.MONTHLY)).through == "2026-08"
+    assert marks_on_disk(state, EVALS)[Period.MONTHLY] == "2026-08"
     assert len(csv_files.left(state, [EVALS], months=["2026-10"])) == 1
 
 
@@ -375,17 +363,20 @@ def test_scoped_packing_cannot_skip_an_unabsorbed_year(tmp_path: Path) -> None:
     assert old_file is not None
     before = old_file.read_bytes()
     months = tuple(f"2026-{number:02d}" for number in range(1, 13))
-    policy = packing.declared([EVALS], config_beside(state))[EVALS]
+    config_dir = config_beside(state)
+    policy = packing.declared([EVALS], config_dir)[EVALS]
 
     with pytest.raises(refusals.NotProvenError, match="compaction refused"):
         packing.pack(
             state,
             EVALS,
             writer_identity(RUN, SEED_COMMIT),
+            repo_root=config_dir.parent,
             policy=policy,
             today=date(2028, 4, 4),
             months=months,
+            first_ledger_year=first_ledger_year(),
         )
 
     assert old_file.read_bytes() == before
-    assert not ledger.watermark_path(state, EVALS, Period.YEARLY).exists()
+    assert marks_on_disk(state, EVALS)[Period.YEARLY] is None

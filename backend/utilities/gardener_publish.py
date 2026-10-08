@@ -45,17 +45,27 @@ shard ran on - with `origin/main`, over every path the shard writes or deletes
 but its record. A path it lists is one main changed after the shard's commit, so
 the shard's version is stale. A re-run is the usual cause: it checks out its
 run's old commit and names its record afresh, so the record check cannot catch
-it. Nothing lands, not even the record; the shard warns and exits 0, and the
-next wake does the work again on the new main. Only trees are compared, so
-nothing is downloaded.
+it. Nothing lands, not even the record; the shard exits 0, and the next wake
+does the work again on the new main. Only trees are compared, so nothing is
+downloaded.
 
 **When every try failed, main's tip says why.** The tip is fetched once more. If
-it moved after the last try's base, other writers are landing: a warning, and
-exit 0. If it did not move, main refused the push: exit 3. A push's error text
+it moved after the last try's base, other writers are landing, and the shard
+exits 0. If it did not move, main refused the push: exit 3. A push's error text
 is never read, because git's words change with versions and languages.
 
 How the shard came to rest is one word of `idhazh.contracts.shard_landing`, and
-the line that says so names it.
+`publish` hands it back rather than saying it. **The shard says how it ended
+once, whatever ended it:** `run_and_land` logs one `shard-published` event - the
+landing word, or why the shard never came to rest, with its exit code and what
+that code means - and, when the run is a step on GitHub, adds the shard's
+summary to the job's page (`idhazh.gardener.run_summary`). An exception that
+escapes is said the same way, by its type and place, before it goes on, and the
+trace printed as the program ends names each chained exception's type and
+frames, never its text (`utilities.crash_trace`). On GitHub the event log also
+writes the warning a `stale` or `lost` shard shows on the run's page
+(`idhazh.gardener.workflow_commands`). Only `main` reads the environment:
+whether the run is a step on GitHub, and where its summary goes.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
@@ -71,21 +81,30 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import logging
 import os
 import random
 import subprocess
 import sys
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final
 
 from idhazh.config import GardenerSettings
+from idhazh.contracts.gardener_events import (
+    ShardPublished,
+    ShardStop,
+    TaskFinished,
+    TaskOutcome,
+)
+from idhazh.contracts.knobs.gardener import GardenerConfig
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import cli as gardener_cli
-from idhazh.gardener import github_collections, runner
+from idhazh.gardener import event_log, github_collections, run_summary, runner
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.file_listing import (
     FileListing,
@@ -100,6 +119,7 @@ from idhazh.gardener.outcome import (
     EXIT_OK,
     EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
+    MEANS,
     Outcome,
     Shard,
     worst,
@@ -115,6 +135,13 @@ COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 #: The branch every shard lands on, and the remote it is fetched from.
 REMOTE: Final = "origin"
 BRANCH: Final = "main"
+
+#: What GitHub's runner sets to `true` in every step it runs, so a run knows it
+#: is a step on GitHub and writes the workflow commands GitHub reads.
+GITHUB_ACTIONS_ENV: Final = "GITHUB_ACTIONS"
+
+#: The file GitHub's runner shows on the job's page as the step's summary.
+STEP_SUMMARY_ENV: Final = "GITHUB_STEP_SUMMARY"
 
 #: The longest one wait between two tries, in seconds.
 MAX_BACKOFF_SECONDS: Final = 8
@@ -223,7 +250,8 @@ class Checkout:
 
     def fetch(self) -> str:
         """Fetch `main` as it is now into `origin/main`, and hand back the commit it is at."""
-        self.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        # Keep existing ancestry for push hooks; shallow callers fetch only new commits.
+        self.git("fetch", "--quiet", REMOTE, BRANCH)
         return self.git("rev-parse", "--verify", f"{REMOTE}/{BRANCH}").strip()
 
     def changed_on_main(self, paths: Sequence[str]) -> list[str]:
@@ -440,21 +468,39 @@ def _what_staging_missed(shard: Shard, checkout: Checkout, index: Path) -> str |
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class PushOutcome:
+    """What one shard's push loop came to: its exit code, and how the commit came to rest.
+
+    `landing` is None when the loop refused the shard itself - a folder named as
+    a file, a record two runs claimed, or a staging check that failed - and then
+    it names no try. `stale_paths` are the paths main changed after the shard's
+    commit, sorted, and only a `stale` landing names them.
+    """
+
+    exit_code: int
+    landing: ShardLanding | None = None
+    push_try: int | None = None
+    stale_paths: tuple[str, ...] = ()
+
+
 def publish(
     shard: Shard,
     *,
     attempts: int,
     repo: Path,
     say: Callable[[str], None] = print,
-) -> int:
+) -> PushOutcome:
     """Land this shard on main, trying again on a newer tip, `attempts` times at most.
 
-    Every way it comes to rest is said with its word from `ShardLanding`.
+    It hands back how the commit came to rest, as its word from `ShardLanding`
+    and the try it came to rest on, and says only the refusals no landing word
+    names. The shard's `shard-published` event says the rest once.
     """
     refused = _refuse_a_directory(shard, repo)
     if refused is not None:
         say(f"shard {shard.index}: {refused}")
-        return EXIT_INTEGRITY
+        return PushOutcome(exit_code=EXIT_INTEGRITY)
     checkout = Checkout(repo)
     written, deleted = sorted(shard.written_paths), sorted(shard.deleted_paths)
     compared = sorted((shard.written_paths | shard.deleted_paths) - {shard.record_path})
@@ -464,48 +510,27 @@ def publish(
         landed = checkout.remote_blob(shard.record_path)
         if landed is not None:
             if landed == checkout.local_blob(shard.record_path):
-                say(f"shard {shard.index}: {ShardLanding.ALREADY_ON_MAIN}, try {attempt}")
-                return EXIT_OK
+                return PushOutcome(EXIT_OK, ShardLanding.ALREADY_ON_MAIN, attempt)
             say(
                 f"shard {shard.index}: {shard.record_path} is on {BRANCH} with other bytes, "
                 "so two runs claimed one record"
             )
-            return EXIT_INTEGRITY
+            return PushOutcome(exit_code=EXIT_INTEGRITY)
         stale = checkout.changed_on_main(compared)
         if stale:
-            more = f" and {len(stale) - 1} more" if len(stale) > 1 else ""
-            say(
-                f"::warning::shard {shard.index}: {ShardLanding.STALE} - {BRANCH} changed "
-                f"{stale[0]}{more} after the commit this shard ran on, so nothing landed. "
-                f"The next wake does the work again on the new {BRANCH}"
-            )
-            return EXIT_OK
+            return PushOutcome(EXIT_OK, ShardLanding.STALE, attempt, tuple(stale))
         index = checkout.stage(written, deleted)
         missed = _what_staging_missed(shard, checkout, index)
         if missed is not None:
             say(f"shard {shard.index}: {missed}")
-            return EXIT_INTEGRITY
+            return PushOutcome(exit_code=EXIT_INTEGRITY)
         if checkout.push(checkout.commit(index, shard.message)):
-            say(
-                f"shard {shard.index}: {ShardLanding.LANDED} on {BRANCH}, "
-                f"try {attempt} of {attempts}"
-            )
-            return EXIT_OK
-        say(f"shard {shard.index}: try {attempt} of {attempts}, the push failed")
+            return PushOutcome(EXIT_OK, ShardLanding.LANDED, attempt)
         if attempt < attempts:
             sleep_with_jitter(attempt)
     if checkout.fetch() != base:
-        say(
-            f"::warning::shard {shard.index}: {ShardLanding.LOST} - {BRANCH} moved after try "
-            f"{attempts} of {attempts}, so other writers are landing. Nothing landed; the "
-            "next wake does the work again"
-        )
-        return EXIT_OK
-    say(
-        f"shard {shard.index}: {ShardLanding.REFUSED} - {BRANCH} did not move after try "
-        f"{attempts} of {attempts}, so {BRANCH} refused the push. Nothing landed"
-    )
-    return EXIT_PUSH_REFUSED
+        return PushOutcome(EXIT_OK, ShardLanding.LOST, attempts)
+    return PushOutcome(EXIT_PUSH_REFUSED, ShardLanding.REFUSED, attempts)
 
 
 def read_the_listing(
@@ -600,6 +625,59 @@ def declared_folders(
     return owned, read
 
 
+#: Python's own exit status when an exception ends it: what a shard that crashed exits with.
+_CRASHED_EXIT: Final = EXIT_TASK_FAILED
+
+
+@dataclass(frozen=True, slots=True)
+class _ShardRun:
+    """Which shard of which run this is, and the knobs its last word names."""
+
+    names: tuple[str, ...]
+    shard: int
+    run_id: str
+    attempt: int
+    config: GardenerConfig
+
+    def published(
+        self,
+        exit_code: int,
+        *,
+        ran: Outcome | None = None,
+        pushed: PushOutcome | None = None,
+        stopped: ShardStop | None = None,
+        failure: BaseException | None = None,
+    ) -> ShardPublished:
+        """How the shard ended: its landing, or the word for why it never came to rest.
+
+        `ran` is what the runner came to, when it ran; `pushed` what the push
+        loop came to, when it ran; `failure` the exception a listing that failed
+        or a crash raised, named by its type and place and never its text.
+        """
+        finished = () if ran is None else ran.finished_tasks
+        error, where = event_log.cause_of(failure)
+        return ShardPublished(
+            shard=self.shard,
+            run_id=self.run_id,
+            attempt=self.attempt,
+            tasks=list(self.names),
+            failed_tasks=[each.task for each in finished if each.outcome is TaskOutcome.FAILED],
+            landing=None if pushed is None else pushed.landing,
+            stopped_because=stopped,
+            push_try=None if pushed is None else pushed.push_try,
+            push_tries=self.config.attempts,
+            record=None if ran is None or ran.landing is None else ran.landing.record_path,
+            stale_paths=[] if pushed is None else list(pushed.stale_paths),
+            downloaded_bytes=None if ran is None else ran.downloaded_bytes,
+            over_budget=ran is not None and ran.over_budget,
+            max_downloaded_mb=self.config.max_downloaded_mb,
+            exit_code=exit_code,
+            means=MEANS[exit_code],
+            error=error,
+            where=where,
+        )
+
+
 def run_and_land(
     names: Sequence[str],
     *,
@@ -613,23 +691,66 @@ def run_and_land(
     trees: TreeReader | None = None,
     clock: Callable[[], datetime] = runner.utc_now,
     say: Callable[[str], None] = print,
+    summary: Path | None = None,
 ) -> Outcome:
+    """Run the shard and land it, then say once how it ended, whatever ended it.
+
+    The shard's last word is one `shard-published` event, and `summary`, when
+    the run is a step on GitHub, is the file its job's summary page shows: the
+    shard's summary is added to it. An exception that escapes is said the same
+    way, by its type and place, and then goes on, so Python exits 1 with it.
+    """
+    run = _ShardRun(
+        names=tuple(names), shard=shard, run_id=run_id, attempt=attempt, config=settings.config
+    )
+    try:
+        ran, published = _run_and_land(
+            run,
+            settings=settings,
+            repo_root=repo_root,
+            period_range=period_range,
+            package=package,
+            trees=trees,
+            clock=clock,
+            say=say,
+        )
+    except Exception as crash:
+        crashed = run.published(_CRASHED_EXIT, stopped=ShardStop.CRASHED, failure=crash)
+        _said_how_it_ended(crashed, (), summary=summary, say=say)
+        raise
+    _said_how_it_ended(published, ran.finished_tasks, summary=summary, say=say)
+    return ran
+
+
+def _run_and_land(
+    run: _ShardRun,
+    *,
+    settings: GardenerSettings,
+    repo_root: Path,
+    period_range: tuple[str, str] | None,
+    package: ModuleType,
+    trees: TreeReader | None,
+    clock: Callable[[], datetime],
+    say: Callable[[str], None],
+) -> tuple[Outcome, ShardPublished]:
     """Read the commit's names, run the shard, and land what it hands back; the worst code wins.
 
     The listing covers only the named periods each task may read, and a period
     a step names as it runs. A listing that cannot be read runs no task and
-    lands nothing, and the shard exits 1, so the next wake tries again. A
-    deletion of a file the shard never listed from the commit lands nothing
-    either: a task decided it from something other than the commit.
+    lands nothing, and the shard exits 1, so the next wake tries again; its line
+    names the exception's type and place, never its text, which can quote a
+    value. A deletion of a file the shard never listed from the commit lands
+    nothing either: a task decided it from something other than the commit.
     """
+    names, shard = run.names, run.shard
     checkout = Checkout(repo_root)
     sha = checkout.head()
     if sha is None:
         say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
-        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+        return _refused(run, EXIT_INTEGRITY)
     if period_range is not None and len(names) != 1:
         say("a named period range runs one task, not a shard")
-        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+        return _refused(run, EXIT_INTEGRITY)
     started_at = clock()
     owned, read = declared_folders(names, settings)
     committed = checkout.committed_folders([*owned, *read])
@@ -658,17 +779,22 @@ def run_and_land(
             budget=settings.config.max_downloaded_mb * BYTES_PER_MB,
         )
     except (OSError, RuntimeError, ValueError) as refusal:
+        error, where = event_log.cause_of(refusal)
+        place = "" if where is None else f" at {where}"
         say(
             f"shard {shard}: the files under its folders could not be listed, so no task "
-            f"ran: {refusal}"
+            f"ran ({error}{place})"
         )
-        return Outcome(exit_code=EXIT_TASK_FAILED, record=None, landing=None)
+        unlisted = Outcome(exit_code=EXIT_TASK_FAILED, record=None, landing=None)
+        return unlisted, run.published(
+            EXIT_TASK_FAILED, stopped=ShardStop.LISTING_FAILED, failure=refusal
+        )
     ran = runner.run(
         names,
         settings=settings,
         repo_root=repo_root,
-        run_id=run_id,
-        attempt=attempt,
+        run_id=run.run_id,
+        attempt=run.attempt,
         shard=shard,
         git_sha=sha,
         committed_folders=committed,
@@ -681,16 +807,68 @@ def run_and_land(
         say=say,
     )
     if ran.landing is None:
-        return ran
-    unlisted = sorted(ran.landing.deleted_paths - listing.listed())
-    if unlisted:
+        return ran, run.published(ran.exit_code, ran=ran, stopped=ShardStop.CHECK_REFUSED)
+    unlisted_deletions = sorted(ran.landing.deleted_paths - listing.listed())
+    if unlisted_deletions:
         say(
-            f"shard {shard}: {unlisted[0]} was deleted, and the commit this shard read lists "
-            "no such file. Nothing lands"
+            f"shard {shard}: {unlisted_deletions[0]} was deleted, and the commit this shard "
+            "read lists no such file. Nothing lands"
         )
-        return dataclasses.replace(ran, exit_code=worst(ran.exit_code, EXIT_INTEGRITY))
+        code = worst(ran.exit_code, EXIT_INTEGRITY)
+        return dataclasses.replace(ran, exit_code=code), run.published(
+            code, ran=ran, stopped=ShardStop.CHECK_REFUSED
+        )
     pushed = publish(ran.landing, attempts=settings.config.attempts, repo=repo_root, say=say)
-    return dataclasses.replace(ran, exit_code=worst(ran.exit_code, pushed))
+    code = worst(ran.exit_code, pushed.exit_code)
+    stopped = None if pushed.landing is not None else ShardStop.CHECK_REFUSED
+    return dataclasses.replace(ran, exit_code=code), run.published(
+        code, ran=ran, pushed=pushed, stopped=stopped
+    )
+
+
+def _refused(run: _ShardRun, exit_code: int) -> tuple[Outcome, ShardPublished]:
+    """A shard a check refused before any task ran: no record, and nothing to land."""
+    nothing = Outcome(exit_code=exit_code, record=None, landing=None)
+    return nothing, run.published(exit_code, stopped=ShardStop.CHECK_REFUSED)
+
+
+def _level_of(published: ShardPublished) -> int:
+    """The level a shard's last word is logged at.
+
+    An error when it exits other than 0, a warning when nothing landed because
+    main moved on, and information otherwise.
+    """
+    if published.exit_code != EXIT_OK:
+        return logging.ERROR
+    if published.landing in (ShardLanding.STALE, ShardLanding.LOST):
+        return logging.WARNING
+    return logging.INFO
+
+
+def _said_how_it_ended(
+    published: ShardPublished,
+    finished: Sequence[TaskFinished],
+    *,
+    summary: Path | None,
+    say: Callable[[str], None],
+) -> None:
+    """Log the shard's last word, and add its summary to the job's page when there is one.
+
+    A page that will not take the summary costs the summary, never the shard's
+    exit code: the record has landed or not by then. The line that says so
+    names the error's type alone.
+    """
+    event_log.emit(published, level=_level_of(published))
+    if summary is None:
+        return
+    try:
+        with summary.open("a", encoding="utf-8", newline="\n") as page:
+            page.write(run_summary.markdown(published, finished))
+    except OSError as refusal:
+        say(
+            f"shard {published.shard}: its job summary could not be written "
+            f"({type(refusal).__name__})"
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -703,7 +881,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--from", dest="from_period")
     parser.add_argument("--to", dest="to_period")
     args = parser.parse_args(argv)
-    settings = gardener_cli.settings_or_none(args.config)
+    on_github = os.environ.get(GITHUB_ACTIONS_ENV) == "true"
+    summary = os.environ.get(STEP_SUMMARY_ENV)
+    settings = gardener_cli.settings_or_none(args.config, github=on_github)
     if settings is None:
         return EXIT_INTEGRITY
     names, shard = gardener_cli.chosen(settings, args, parser)
@@ -716,9 +896,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         attempt=args.attempt,
         shard=shard,
         period_range=selected_range,
+        summary=Path(summary) if summary else None,
     )
     return outcome.exit_code
 
 
 if __name__ == "__main__":
+    # A crash prints where it broke, never what it said. Nothing installs
+    # `utilities`, so it is imported from this checkout's `backend/` folder.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from utilities import crash_trace
+
+    crash_trace.install()
     sys.exit(main())

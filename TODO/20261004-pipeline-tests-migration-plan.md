@@ -1,8 +1,8 @@
 # Pipeline-test state nests under state/pipeline-tests, with a reusable migration tool
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-06
 **Level**: 5 for the approved root design; 2 for the first tooling phase.
-**Status**: Row 1 is done: the reusable migration tool is the package `backend/utilities/ledger_migration/`, run through `backend/utilities/migrate_to_parquet.py`. No committed data has moved. Rows 2 to 5 wait for the user's authorization.
+**Status**: Row 1 is done: the reusable migration tool is the package `backend/utilities/ledger_migration/`, run through `backend/utilities/migrate_to_parquet.py`. No committed data has moved. The user authorized rows 2 to 5 on 2026-10-06.
 
 ## 0. Operating contract
 
@@ -14,7 +14,7 @@ Table A - Scope and execution
 | A2 | Hard scope - in | Reusable preview, write, verify and retire operations; nested case roots; bounded readers; trial compaction; exact CSV conversion; producers, artifact validation, gardener consumers, fixtures and owning docs; deleting the four orphan trial span-rollup files (A4). |
 | A3 | Chosen strategy | Fowler: extend the existing migration tool and compaction engine. Keep case identity in separate roots, not in changed writer envelopes. |
 | A4 | Approved design | The user approved (2026-10-04) nested cases with both tiers and explicit trial compaction roots (C7, C8). The user ruled later the same day that span-rollup stays retired as #1189 retired it, with its producer, console reader, published folder, contract and registry entry: its eight orphan CSV files, left by runs that started before #1189 merged, are deleted unconverted (row 5 here and Plan 59), and no summary contract is restored. That ruling reverses the earlier approval to restore `SpanRollupRow`. Losing any other CSV cell is not approved (C11). |
-| A5 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP for rows 2 to 5 until the user authorizes them. |
+| A5 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. The user authorized rows 2 to 5 on 2026-10-06. |
 | A6 | First phase authorization | The user requested that the reusable tooling be built now. Its worker may change the migration utility, its focused helpers and tests, and its runbook. It must not move committed data. |
 | A7 | ESCALATE triggers | Pause only for: a persisted-contract change other than the approved C4, C7 and C8 shapes; a change to `WriterIdentity`, `unit_id` or a settlement key; enabling expiry or shortening any retention; a ledger a trial root can commit that no declaration covers; a writer or gardener run queued or running at data cutover; a source cell that cannot be preserved. |
 | A8 | Evidence | Plan 58 closed in pull request #1242. Its current implementation and [migration runbook](../docs/how-to/move-a-ledger-to-parquet.md), not the removed plan, are the reuse authority. |
@@ -37,7 +37,7 @@ Table C - Target and invariant declarations
 | Id | Subject | Contract |
 | --- | --- | --- |
 | C1 | State roots | Bench: `state/pipeline-tests`. Cases: `state/pipeline-tests/<case>`, with case names from `config/pipeline-tests.json`. Preserve disabled cases in the declared set. Never flatten case rows into the bench root. |
-| C2 | Ledger file grammar | Within each root, reuse the raw, compact, index and watermark builders declared in [persistence.md](../docs/architecture/contracts/persistence.md). No second path formula. |
+| C2 | Ledger file grammar | Within each root, reuse the raw, compact and index builders declared in [persistence.md](../docs/architecture/contracts/persistence.md). No second path formula. |
 | C3 | Trace logs | Preserve `traces/YYYY/MM/DD/<filename>.jsonl` within each case root. Trace logs have a different stored shape from ledger files; nesting must not rewrite their content. |
 | C4 | Case configuration | Keep `run.trial_state_dirname` as a slug. Add nullable `run.trial_case_dirname`, default `null`, and append it only beneath a supplied trial root. Refuse a case without a root and an id C5 reserves. `PipelineTestsConfig` in `backend/idhazh/contracts/pipeline_tests.py` already refuses duplicate case ids. |
 | C5 | Reserved case names | A case id may not be a name that `claimed_roots()` in `backend/idhazh/ledger/paths.py` returns: `raw`, `compact` and every registry family, which `LedgersConfig` holds equal to the first prefix segment of each ledger it lists, so `traces` and every CSV prefix are in it. A case root sits in the bench root beside those folders, and the bench writes only under them. `config.load` in `backend/idhazh/config.py` refuses a `run.trial_case_dirname` in that set, so an `idhazh` verb stops before `backend/idhazh/cli.py` moves `common.STATE_ROOT` and before any file is written. The refusal is not in `PipelineTestsConfig`, because a contract may not import the registry (CLAUDE.md section 4). |
@@ -48,7 +48,7 @@ Table C - Target and invariant declarations
 | C10 | Compaction mode | Packing may replace raw files only after compact readback proves complete row and identity parity. The reporting-only age window must not prevent packing or authorize expiry. Keep trace retention `dry_run: true`. |
 | C11 | Migration proof | Compare every source cell - every filled CSV cell, read through the ledger's declared old headings (`CsvLedger.old_headings` in `backend/utilities/ledger_migration/csv_layouts.py`) - after declared version normalization, each source key, row identities where already present, and retained non-source rows. An undeclared filled heading or a ragged row is refused, never dropped, and no ledger declares an old heading dropped (user ruling 2026-10-04). Source-derived expectations must not be built from potentially corrupted target rows. Verify indexes and period selection, not just raw file presence. No raw listing (`raw/<ledger>/index/<day>.json`) exists in `state/`, and no code reads one. |
 | C12 | Migration operations | Explicit named roots, ledgers and UTC months. Read-only preview; write without retiring source; read-only verify; retire only after fresh in-process verification of every named input. A command with no mode flag still runs the complete chain. No persisted migration journal or manifest. |
-| C13 | Artifact trust | Downloaded artifacts may supply validated raw files and traces, not compact results. A separate verifier checks committed trial state for named roots, ledgers and UTC months through row 1's stored-output check (`check_raw_day` and `check_compact_period` in `backend/idhazh/ledger/stored_output.py`), which checks raw and compact files, their envelopes and the compact indexes, and which row 2 extends to parse each period watermark. A root containing compact data is not accepted as a runner artifact merely because its path is valid. |
+| C13 | Artifact trust | Downloaded artifacts may supply validated raw files and traces, not compact results. A separate verifier checks committed trial state for named roots, ledgers and UTC months through row 1's stored-output check (`check_raw_day` and `check_compact_period` in `backend/idhazh/ledger/stored_output.py`), which checks raw and compact files, their envelopes and the compact indexes. A root containing compact data is not accepted as a runner artifact merely because its path is valid. |
 | C14 | Retry and rollback | Repeated writes settle to the same intended rows; minted filenames need not be byte-identical. Preserve old-layout readers through cutover. Revert data and writer changes in reverse order without disabling readers. No migration source is deleted before proof; the span-rollup orphans are deleted by ruling, not migrated (A4). |
 | C15 | Fixed inputs | Tools receive named roots and months; gardener passes receive named periods and configured roots; tests use fixtures or trees they generate. No normal reader or test enumerates committed history. |
 
@@ -59,9 +59,9 @@ Table D - PR phases
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Reusable migration operations ship | - | A | DONE #1265 | - | #1265 | phased-migration-tool |
-| D2 | 2 | Readers understand nested trial roots | 1 | B | PENDING | - | - | - |
-| D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | PENDING | - | - | - |
-| D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | PENDING | - | - | - |
+| D2 | 2 | Readers understand nested trial roots | 1 | B | DONE | pt-row-2 | - | Fowler |
+| D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | DONE #1405 | trial-root-compaction | #1405 | Fowler |
+| D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | OPEN | - | #1413 | Fowler |
 | D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | PENDING | - | - | - |
 
 ## 2. Row #1 - Reusable migration operations ship
@@ -152,8 +152,8 @@ Table F - Rejected alternatives
   - `backend/tests/gardener/tasks/test_trials_task.py`
   - `backend/tests/gardener/test_period_inputs.py`
   - `docs/concepts/growing-reads.md`
-- **Acceptance gates:** Local: `npm --prefix frontend run test:changed -- --list`, then the selected checks; ruff and mypy on the changed Python files; the tests above; `python backend/utilities/doc_load.py docs/concepts/growing-reads.md`. Fixtures: a generated C1 case root with door-written raw and compact files, a case slug holding date-like digits, and one corrupt envelope, index and watermark each. CI: the full backend suite.
-- **Oracle:** On a generated C1 case root holding door-written raw and compact files, the verifier accepts the tree and refuses each single corruption of an envelope, a compact index or a watermark. This cannot prove that a live workflow used the intended ref.
+- **Acceptance gates:** Local: `npm --prefix frontend run test:changed -- --list`, then the selected checks; ruff and mypy on the changed Python files; the tests above; `python backend/utilities/doc_load.py docs/concepts/growing-reads.md`. Fixtures: a generated C1 case root with door-written raw and compact files, a case slug holding date-like digits, and one corrupt envelope and one corrupt index. CI: the full backend suite.
+- **Oracle:** On a generated C1 case root holding door-written raw and compact files, the verifier accepts the tree and refuses each single corruption of an envelope or a compact index. This cannot prove that a live workflow used the intended ref.
 
 Table G - Decisions
 
@@ -225,7 +225,7 @@ Table I - Decisions
 | Id | Decision | Authority |
 | --- | --- | --- |
 | I1 | Root-scoped trial tasks use C7-C10; production publication policy continues to resolve its original declaration. | User-approved Fowler design. |
-| I2 | `period_inputs.paths_for_task` names a trial declaration's periods under each root in its `state_roots`. `_ledger_paths` there knows a raw folder only by the prefix `state/raw/` and builds compact, index and watermark paths under `repo_root / "state"`, so today a C1 root's raw days would go unlisted and its compact paths would name production's. Validate paired ownership; do not disable existing overlap safety to admit nested tasks. | Fowler. |
+| I2 | `period_inputs.paths_for_task` names a trial declaration's periods under each root in its `state_roots`. `_ledger_paths` there knows a raw folder only by the prefix `state/raw/` and builds compact and index paths under `repo_root / "state"`, so today a C1 root's raw days would go unlisted and its compact paths would name production's. Validate paired ownership; do not disable existing overlap safety to admit nested tasks. | Fowler. |
 | I3 | `backend/utilities/ledger_migration/packing.py` governs each named root and ledger by the one `CompactionPolicy` whose `ledger` is that ledger and whose `state_roots` holds the root's path relative to `config_dir.parent`; `planning.py` and `phases.py` carry that policy per root. It packs that root with `config_dir.parent` as the repository root and only that root's raw and compact pair as owned folders, never `state_dir.parent`. A root no declaration names for the ledger is filed raw, as today, under the ledger's production `compact-<ledger>`; with none, the ledger is refused at that root. The CSV-window reach check stays on production declarations; a trial declaration's reach is checked at configuration load (C9). `packs_here` keeps its one-root question, now answered from `state_roots`, so the command is not edited. No CSV in this plan needs it; it serves E4, a later ledger the tool moves into a trial root. | Fowler; tooling review. |
 | I4 | `config/gardener/trials.json` adds `state/pipeline-tests/<case>/traces` for every case `config/pipeline-tests.json` declares, before writers switch in row 4, and keeps the old sibling roots until row 5. Each trial declaration is listed in `task_names` of `config/idhazh_gardener.json`. | Fowler; reader before writer. |
 | I5 | A reader that asks which declaration governs a production ledger finds it by its name, `compact-<ledger>`, as `_governing` in `backend/idhazh/config.py` does. `door_refusals` in `backend/idhazh/telemetry/prune.py` keys every `CompactionPolicy` by its ledger, so `compact-trial-item-health`, read after `compact-item-health`, would decide whether `idhazh telemetry prune` may take production's item-health days. It reads `compact-<ledger>` instead, and so does `compaction_of` in `backend/tests/retention/test_prune_range.py`, which expects one declaration a ledger. | Fowler; C8. |
@@ -246,6 +246,7 @@ Table J - Rejected alternatives
   - `backend/idhazh/cli.py`
   - `backend/idhazh/config.py`
   - `backend/idhazh/stages/common.py`
+  - `backend/utilities/pipeline_test_case.py`
   - `backend/utilities/pipeline_test_case_config.py`
   - `backend/utilities/pipeline_test_ledgers.py`
   - `config/idhazh.json`

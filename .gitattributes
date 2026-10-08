@@ -32,11 +32,6 @@ config/*.json text eol=lf
 # writer, so there is nothing for a union to settle. `state/published/` and
 # `state/seen/` carried one until they moved there too.
 
-# One council shard's outcome. A row is one shard of one run and says nothing
-# about another shard or another run, so two writers appending are independent
-# and a repeat the union brings is dropped by `COUNCIL_SHARD_OUTCOME_KEY`.
-state/llm-council/shard-outcomes/**/*.csv text eol=lf merge=union
-
 # The three judge trees. A row is one measurement of one pair on one day, the
 # reader keys on the pair and takes the newest, so two runs that both judged
 # that day are not in disagreement and a repeat the union brings costs bytes
@@ -135,13 +130,12 @@ frontend/public/assist/index/*.bin binary
 *.wasm binary
 
 # The two roots the ledger door files under. Every data file there has one
-# writer and is written once, and every index and watermark is rewritten whole
-# by one writer, so a text merge of any of them could only splice two writers'
+# writer and is written once, and every index is rewritten whole by one
+# writer, so a text merge of any of them could only splice two writers'
 # bytes into a file neither wrote: `-merge` stops the push and asks.
 # Path-anchored, so a generic name elsewhere in the repository cannot match.
 # `*.parquet binary` is last so it wins over `tests/fixtures/** text` above - a
 # parquet fixture converted as text would be a file no reader can open.
 state/**/*.parquet                -merge
 state/compact/**/index/*.json      -merge
-state/compact/**/*/watermark.json  -merge
 *.parquet                         binary

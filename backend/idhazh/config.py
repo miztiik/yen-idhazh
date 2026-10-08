@@ -52,6 +52,7 @@ from idhazh.contracts.knobs.gardener import (
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgerEntry
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -143,6 +144,19 @@ def models_path(config_dir: Path, app: AppConfig) -> Path:
     return config_dir / app.models_file
 
 
+def refuse_a_trial_case_named_for_a_claimed_root(app: AppConfig) -> None:
+    """A case slug may not reuse a child of `state/` owned by a ledger."""
+    from idhazh.ledger.paths import claimed_roots
+
+    case_dirname = app.run.trial_case_dirname
+    if case_dirname is not None and case_dirname in claimed_roots():
+        raise ValueError(
+            "config/idhazh.json is refused: run.trial_case_dirname "
+            f"{case_dirname!r} is a child of state/ already owned by the ledger "
+            "door or a ledger family"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Every tunable the run will consult, already validated."""
@@ -160,6 +174,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
+    refuse_a_trial_case_named_for_a_claimed_root(app)
     read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
     try:
         models = ModelsConfig.from_json(read[app.models_file])
@@ -227,7 +242,7 @@ PUBLIC_COPY: Final = "public-copy"
 class _Series:
     """One series a task may keep, and the ledger under `state/` whose files it deletes."""
 
-    #: The published copy covers a tree outside `state/`, so it names none.
+    #: Only an input series sets a source-ledger floor. Outputs name none.
     ledger: LedgerName | None
 
 
@@ -239,7 +254,7 @@ _SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
             {
                 FULL_GRAIN: _Series(LedgerName.ITEM_HEALTH),
                 PUBLIC_COPY: _Series(None),
-                "aggregate": _Series(LedgerName.ITEM_HEALTH_SUMMARY),
+                "aggregate": _Series(None),
             }
         ),
     }
@@ -251,7 +266,9 @@ _SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType({"telemetry-aggrega
 
 #: Each ledger whose files a console read can still open. The declaration that
 #: governs it keeps every month file the widest read can select.
-_CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (LedgerName.FEED_HEALTH,)
+_CONSOLE_READ_LEDGERS: Final[tuple[LedgerName, ...]] = (
+    LedgerName.FEED_HEALTH,
+)
 
 #: Each task series whose files a console read can still open, held the same way.
 _CONSOLE_READ_SERIES: Final[tuple[tuple[str, str], ...]] = (
@@ -357,7 +374,7 @@ def refuse_what_the_declarations_break(
     _refuse_a_picture_window_the_archive_does_not_state(tasks, app)
     for name, policy in tasks.items():
         if isinstance(policy, CompactionPolicy):
-            _refuse_a_compaction_that_cuts_its_ledger(
+            _refuse_a_compaction_declaration(
                 name, policy, tasks, app=app, appearance=appearance
             )
         if isinstance(policy, CollectionTaskPolicy):
@@ -403,7 +420,6 @@ def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
                         "tasks may not own one folder or a folder inside the other's, "
                         "whatever their status, or both would delete in it"
                     )
-
 
 def _refuse_a_file_where_a_folder_belongs(tasks: Mapping[str, TaskPolicy], repo_root: Path) -> None:
     """A shard lists the files under each folder a task owns, so an owned file would list none."""
@@ -478,28 +494,55 @@ def _spelled(window: Window) -> str:
 
 
 def _reach(policy: CompactionPolicy) -> int | None:
-    """The fewest days a compaction's two periods reach back, or None when it keeps for ever.
+    """A conservative day-count reach, or None when the compaction retains all history.
 
     A month file lives `monthly_window` after its month is absorbed, and a month
     is absorbed `daily_keep_days` after it ends, so no pair of the two can leave a
-    day in no period. The months are counted at the fewest days they can hold.
+    day in no period. Enabled yearly expiry bounds it instead, using at least
+    28 days per calendar month; month-count readers compare months directly.
     """
     monthly = _days_kept(policy.monthly_window)
+    if policy.yearly_prune_enable and policy.yearly_keep_months is not None:
+        return policy.yearly_keep_months * 28
     return None if monthly is None else policy.daily_keep_days + monthly
 
 
 def compaction_reaches(policy: CompactionPolicy, needed: Window) -> bool:
     """Whether this compaction keeps every day `needed` asks for.
 
-    A `monthly_window` of forever reaches anything, and nothing shorter reaches a
-    floor of forever. Otherwise the pair's reach is set against the most days
+    Forever monthly retention reaches anything unless yearly expiry is enabled.
+    No finite expiry reaches a forever reader. Otherwise the reach is set against the most days
     `needed` can ask for, so the answer never depends on the day the build ran.
     """
+    if policy.yearly_prune_enable and isinstance(needed, MonthsWindow):
+        assert policy.yearly_keep_months is not None
+        return policy.yearly_keep_months >= needed.value
     reach = _reach(policy)
     if reach is None:
         return True
     wanted = _days_needed(needed)
     return wanted is not None and reach >= wanted
+
+
+def compaction_task(
+    ledger: LedgerName,
+    *,
+    trial: bool = False,
+    registry: Mapping[LedgerName, LedgerEntry] | None = None,
+) -> str:
+    """The name of the declaration that compacts a ledger, without its `.json`.
+
+    `compact-`, then the ledger's door folder with each `/` written `-`, so a
+    ledger filed inside its family's folder is named by the whole folder and
+    never by its last name alone. `trial` names the declaration that packs the
+    trial roots. `registry` is a fixture registry, or the committed one.
+    """
+    # Imported here rather than at the top: the ledger package reads this module
+    # while it loads, so importing it back at module scope would be a cycle.
+    from idhazh.ledger.paths import door_folders
+
+    folder = "-".join(door_folders(ledger, registry=registry))
+    return f"compact-trial-{folder}" if trial else f"compact-{folder}"
 
 
 def _governing(
@@ -516,7 +559,7 @@ def _governing(
     # while it loads, so importing it back at module scope would be a cycle.
     from idhazh.ledger.paths import STATE_DIRNAME, entry
 
-    name = f"compact-{'-'.join(entry(ledger).prefix)}"
+    name = compaction_task(ledger)
     compaction = tasks.get(name)
     if isinstance(compaction, CompactionPolicy) and compaction.ledger is ledger:
         return name, compaction
@@ -541,6 +584,11 @@ def _kept_by(policy: RetentionPolicy | CompactionPolicy) -> str:
     reach = _reach(policy)
     if reach is None:
         return "keeps every month file for ever"
+    if policy.yearly_prune_enable:
+        return (
+            f"reaches back at least {reach} days with yearly_keep_months "
+            f"{policy.yearly_keep_months}"
+        )
     return (
         f"reaches back {reach} days with daily_keep_days {policy.daily_keep_days} and "
         f"monthly_window {_spelled(policy.monthly_window)}"
@@ -780,13 +828,13 @@ def _refuse_a_published_reach_that_grows_or_falls_short(
     grow with the archive, unless the ledger packs each finished year into one
     file: its month files then last until their year is packed, and the yearly
     index grows by one entry a year. A ledger that packs years keeps every month
-    until its year is packed and every year for ever, so it reaches back past any
-    span the console offers, and it waits as long as its own declaration says. A
+    until its year is packed. Finite yearly expiry must cover the console's
+    widest span too. A
     ledger that deletes its month files reaches back at least the widest span the
     console offers.
     """
     ledger = policy.ledger.value
-    if policy.monthly_keep_days is not None:
+    if policy.monthly_keep_days is not None and reach is None:
         return
     if reach is None:
         raise ValueError(
@@ -821,20 +869,11 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     """
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
     ledger = policy.ledger
-    raw_roots = sorted(
-        folder.removeprefix("state/raw/")
-        for folder in policy.owns or ()
-        if folder.startswith("state/raw/")
-    )
-    expected = (
-        f"compact-{raw_roots[0].replace('/', '-')}"
-        if len(raw_roots) == 1
-        else f"compact-{ledger.value}"
-    )
+    expected = compaction_task(ledger)
     if name != expected:
         raise ValueError(
-            f"{where} compacts {ledger.value}, and a compaction is named for its folder: "
-            f"call it {expected}.json"
+            f"{where} compacts {ledger.value}, and a compaction is named for its ledger's "
+            f"folder: call it {expected}.json"
         )
     reach = _reach(policy)
     if ledger in app.ledger.published:
@@ -849,4 +888,69 @@ def _refuse_a_compaction_that_cuts_its_ledger(
         f"{where} {_kept_by(policy)}, and the {series} series of {_where(task)} keeps "
         f"{ledger.value} {_spelled(kept)}. The pair would delete a month before that series "
         "is done with it"
+    )
+
+
+def _refuse_a_compaction_declaration(
+    name: str,
+    policy: CompactionPolicy,
+    tasks: Mapping[str, TaskPolicy],
+    *,
+    app: AppConfig,
+    appearance: AppearanceConfig,
+) -> None:
+    """Keep production governance separate from explicit trial-root compactions."""
+    from idhazh import ledger
+
+    where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
+    production_name = compaction_task(policy.ledger)
+    trial_name = compaction_task(policy.ledger, trial=True)
+    trial = name == trial_name
+    if name not in (production_name, trial_name):
+        raise ValueError(
+            f"{where} compacts {policy.ledger.value}, and a compaction is named "
+            f"call it {production_name}.json for production or {trial_name}.json for trial roots"
+        )
+    if trial:
+        if not policy.state_roots or any(
+            root != "state/pipeline-tests"
+            and not (
+                len(PurePosixPath(root).parts) == 3
+                and PurePosixPath(root).parts[:2] == ("state", "pipeline-tests")
+            )
+            for root in policy.state_roots
+        ):
+            raise ValueError(
+                f"{where} state_roots must name only state/pipeline-tests or one "
+                "state/pipeline-tests/<case> root"
+            )
+    elif policy.state_roots != ["state"]:
+        raise ValueError(f"{where} is the production compaction and state_roots must be ['state']")
+
+    if trial:
+        prefix = ledger.door_folders(policy.ledger)
+        expected = {
+            PurePosixPath(root, tier, *prefix).as_posix()
+            for root in policy.state_roots
+            for tier in ("raw", "compact")
+        }
+        if set(policy.owns) != expected or len(policy.owns) != len(expected):
+            raise ValueError(
+                f"{where} owns {sorted(policy.owns)}, but its state_roots and "
+                f"{policy.ledger.value} require exactly {sorted(expected)}"
+            )
+        trials = tasks.get("trials")
+        if not isinstance(trials, RetentionPolicy):
+            raise ValueError(
+                f"{where} needs the retention window from config/gardener/trials.json"
+            )
+        if compaction_reaches(policy, trials.window):
+            return
+        raise ValueError(
+            f"{where} {_kept_by(policy)}, and config/gardener/trials.json keeps "
+            f"{_spelled(trials.window)}. The trial compaction must reach that window"
+        )
+
+    _refuse_a_compaction_that_cuts_its_ledger(
+        name, policy, tasks, app=app, appearance=appearance
     )

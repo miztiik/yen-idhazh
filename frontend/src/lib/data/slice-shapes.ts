@@ -17,7 +17,7 @@
 export type DateStamp = string;
 
 /** The ledgers the console may query. A closed set: a panel names a ledger, never a path. */
-export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'shard-outcomes', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener', 'run-plan'] as const;
+export const LEDGER_NAMES = ['seen', 'feed-health', 'item-health', 'host-fingerprint', 'summary-quality-evals', 'candidate-models', 'item-health-summary', 'published', 'feed-retirements', 'visual-prunes', 'counterfactual-scores', 'scored-pairs', 'fitted-thresholds', 'holdout-pairs', 'score-distribution', 'archive', 'metrics', 'merge-line-holdout-scores', 'traces', 'day-metrics', 'digest-fragments', 'gardener', 'run-plan', 'council-run-records'] as const;
 
 export type LedgerName = (typeof LEDGER_NAMES)[number];
 
@@ -74,7 +74,11 @@ export type LedgerFault = (typeof LEDGER_FAULTS)[number];
 export type SetAsideFiles = Readonly<Record<string, number>>;
 
 /** What the door hands a panel. `rows` is empty for every state but `ok`.
- *  `through` is the newest day `daily.json` names, or `null` before the first
+ *  `first` is the first day the answer covers: the span's own first day, or the
+ *  ledger's first day when the span starts before it. The days before a ledger
+ *  began are outside it, so the door cuts them and names the day it answered
+ *  from, rather than answering them as a fault. `through` is how far the ledger
+ *  is packed, the newest day any index names, or `null` before the first
  *  compaction, so a panel can say how far its data reaches. `lostDays` names
  *  the days in the span an index records lost - a daily entry `lost`, or a day
  *  in a month's or a year's `lost_days` - ascending: each has no record, so a panel
@@ -83,11 +87,10 @@ export type SetAsideFiles = Readonly<Record<string, number>>;
  *  panel can say its rows may be short. `fault` names the
  *  missing file behind a `missing` or an `unreachable`, and is `null` for an
  *  `unreachable` with another cause: an index this build will not act on, a file
- *  that did not arrive whole, an engine that could not answer, or a span that
- *  starts before the oldest day any index names. */
+ *  that did not arrive whole, or an engine that could not answer. */
 export type SliceResult =
-	| { state: 'ok'; rows: Row[]; through: DateStamp; lostDays: DateStamp[]; setAside: SetAsideFiles }
-	| { state: 'quiet'; rows: []; through: DateStamp | null; lostDays: DateStamp[]; setAside: SetAsideFiles }
+	| { state: 'ok'; rows: Row[]; first: DateStamp; through: DateStamp; lostDays: DateStamp[]; setAside: SetAsideFiles }
+	| { state: 'quiet'; rows: []; first: DateStamp; through: DateStamp | null; lostDays: DateStamp[]; setAside: SetAsideFiles }
 	| { state: 'missing'; rows: []; fault: Extract<LedgerFault, 'not-packed'> }
 	| { state: 'unreachable'; rows: []; at: DateStamp; fault: Exclude<LedgerFault, 'not-packed'> | null };
 
@@ -180,7 +183,7 @@ export type SpanCost = {
 	files: number;
 	bytes: number;
 	unpackedDays: readonly DateStamp[];
-	siteFrom: DateStamp | null;
+	cut: readonly CutDays[];
 	through: Readonly<Partial<Record<LedgerName, DateStamp>>>;
 };
 
@@ -208,9 +211,27 @@ export type AskRefusal =
  *  aside unread. An answer names only a ledger that is missing either. */
 export type SpanGap = { ledger: LedgerName; lostDays: readonly DateStamp[]; setAside: SetAsideFiles };
 
+/** Days of one selected ledger cut from the window: every day before `before`, the first day any
+ *  tier this page read names for it, where its answer starts. Nothing failed: the ledger began on
+ *  that day, or that day is the 1st of its first month, packed whole, or this page reads the site
+ *  alone and the site's copy starts there. A run-time answer, never persisted. */
+export type CutDays = { ledger: LedgerName; before: DateStamp };
+
+/** Days of one selected ledger that this answer could not read: every day before `before`, the
+ *  ledger's first day on this site, where its answer starts. Only the archive, the committed
+ *  repository, is read around this way: when it cannot be read for the days the site copy dropped,
+ *  whether its host did not answer, a file was not there, an index could not be read or a file
+ *  arrived at the wrong size, the ledger is read from the site's days alone. Such a ledger's start
+ *  is named here, never in `cut`. A run-time answer, never persisted. */
+export type UnansweredDays = { tier: 'archive'; ledger: LedgerName; before: DateStamp };
+
+/** `readFrom` is the first UTC day an answer with rows read: the window's first day, unless every
+ *  selected ledger's answer starts later, because its earlier days were cut or the repository could
+ *  not give them; then the earliest day one of them starts on. `cut` and `unanswered` name each such
+ *  ledger, in the order chosen. */
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; unpackedDays: readonly DateStamp[]; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
-	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; siteFrom: DateStamp | null; gaps: readonly SpanGap[] }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; unpackedDays: readonly DateStamp[]; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
+	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }
 	| { state: 'refused'; because: AskRefusal };

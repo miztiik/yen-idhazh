@@ -7,8 +7,9 @@ held to the same bytes for the same fixture config, and the payload is held to
 the model that declares it.
 
 The script is also run the way the plan job runs it - a fresh interpreter with
-no site packages, in a folder holding only `config/` and the script - so an
-import of anything outside the standard library fails here first.
+no site packages, in a folder holding only `config/`, the script and the module
+it prints a crash with - so an import of anything outside the standard library
+fails here first.
 """
 
 from __future__ import annotations
@@ -42,6 +43,32 @@ def a_fixture_config(root: Path, garden: str | None) -> Path:
     return config_dir
 
 
+def a_bare_script(root: Path) -> tuple[Path, Path]:
+    """A bare folder holding `config/` and the script beside what it imports to start.
+
+    The same layout the plan job's checkout holds: the script, the package
+    file and the crash trace, with nothing of ours installed.
+    """
+    bare = root / "bare"
+    config_dir = a_fixture_config(bare, "garden")
+    script = bare / "backend" / "utilities" / SCRIPT.name
+    script.parent.mkdir(parents=True)
+    for name in ("__init__.py", "crash_trace.py", SCRIPT.name):
+        shutil.copyfile(SCRIPT.parent / name, script.parent / name)
+    return bare, config_dir
+
+
+def run_bare_script(bare: Path, *flags: str) -> subprocess.CompletedProcess[str]:
+    script = bare / "backend" / "utilities" / SCRIPT.name
+    return subprocess.run(
+        [sys.executable, "-I", "-S", str(script), *flags],
+        cwd=bare,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 @pytest.mark.parametrize("garden", ["garden", "runner", None])
 def test_both_writers_emit_one_payload_and_it_validates(tmp_path: Path, garden: str | None) -> None:
     config_dir = a_fixture_config(tmp_path, garden)
@@ -56,22 +83,17 @@ def test_both_writers_emit_one_payload_and_it_validates(tmp_path: Path, garden: 
 
 
 def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None:
-    """A fresh interpreter, no site packages, a folder holding only `config/` and the script."""
-    bare = tmp_path / "bare"
-    config_dir = a_fixture_config(bare, "garden")
-    script = bare / "backend" / "utilities" / SCRIPT.name
-    script.parent.mkdir(parents=True)
-    shutil.copyfile(SCRIPT, script)
+    """A fresh interpreter, no site packages, and `config/` with the script and what it reaches.
+
+    Beside the script are the two files of its folder that the plan job's
+    checkout holds and the script imports as it starts: the package file and the
+    crash trace.
+    """
+    bare, config_dir = a_bare_script(tmp_path)
     expected = shards.payload(shards.plan(config.load_gardener(config_dir)))
 
     def ran(*flags: str) -> str:
-        done = subprocess.run(
-            [sys.executable, "-I", "-S", str(script), *flags],
-            cwd=bare,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        done = run_bare_script(bare, *flags)
         assert done.returncode == 0, done.stderr
         return done.stdout.strip()
 
@@ -80,6 +102,43 @@ def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None
     assert outputs["any_active_task"] == "true"
     assert outputs["shard_count"] == "5"
     assert json.loads(outputs["matrix"]) == json.loads(expected)["matrix"]
+
+
+@pytest.mark.parametrize(
+    ("failure", "sentence"),
+    [
+        ("slugs", "config/idhazh_gardener.json task_names must be a list of task slugs"),
+        ("duplicate", "config/idhazh_gardener.json task_names repeats a task"),
+        ("missing", "config/gardener/traces.json is missing"),
+    ],
+)
+def test_the_script_prints_its_refusal_and_exits_1(
+    tmp_path: Path, failure: str, sentence: str
+) -> None:
+    """Each config refusal ends the bare script on its own sentence, with the plan job's exit code.
+
+    The sentence quotes only this repository's own config, never fetched
+    text, and the run prints no `Traceback` line: a `SystemExit` never reaches
+    the crash printer, unlike the `ValueError` row #34 made it print as a bare
+    type and frame.
+    """
+    bare, config_dir = a_bare_script(tmp_path)
+    knobs_path = config_dir / "idhazh_gardener.json"
+    knobs = json.loads(knobs_path.read_text(encoding="utf-8"))
+    if failure == "slugs":
+        knobs["task_names"] = "traces"
+    elif failure == "duplicate":
+        knobs["task_names"].append(knobs["task_names"][0])
+    else:
+        (config_dir / "gardener" / "traces.json").unlink()
+    knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
+
+    done = run_bare_script(bare)
+
+    assert done.returncode == 1
+    assert done.stderr.strip() == sentence
+    assert "Traceback" not in done.stderr
+    assert done.stdout == ""
 
 
 def test_an_empty_garden_is_one_line_from_both_writers(tmp_path: Path) -> None:
@@ -113,7 +172,7 @@ def test_both_loaders_refuse_bad_named_lists(tmp_path: Path, failure: str) -> No
         knobs["task_names"].append(name)
         knobs_path.write_text(json.dumps(knobs), encoding="ascii", newline="\n")
         expected = "repeats a task"
-    with pytest.raises(ValueError, match=expected):
+    with pytest.raises(SystemExit, match=expected):
         gardener_shards.plan(config_dir)
     with pytest.raises(ValueError, match=expected):
         config.load_gardener(config_dir)

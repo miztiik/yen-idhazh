@@ -32,6 +32,7 @@
  */
 
 import type { LostDay } from '../console/recording';
+import { nameSpan } from '../console/span-words';
 import type { Row } from '../data/ledger';
 import { plural, shortDate } from '../format';
 import { dayTicks, type DayTick, type Frame } from './frame';
@@ -583,14 +584,9 @@ export function fleetDots(
 	};
 }
 
-/** Words for how much of a span is on the page: `these 30 days`, `this one day`. */
-export function spanWords(days: number): string {
-	return days === 1 ? 'this one day' : `these ${days} days`;
-}
-
 /** The sentence above the plot: the count, its days, and the kind given most. */
 export function fleetSentence(view: FleetView): string {
-	const ran = `${plural(view.placements, 'job', 'jobs')} ran in ${spanWords(view.windowDays)}`;
+	const ran = `${plural(view.placements, 'job', 'jobs')} ran in ${nameSpan(view.windowDays)}`;
 	const on =
 		view.days.length === view.windowDays ? '' : `, on ${plural(view.days.length, 'day', 'days')} of them`;
 	const counted = `${ran}${on}.`;
@@ -608,4 +604,17 @@ export function foldSentences(view: FleetView): string[] {
 				names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 			return `The ${row.label} row holds ${names.length} kinds: ${listed}.`;
 		});
+}
+
+/** How to drive the strip under the plot. A pick opens that day's jobs. */
+export const FLEET_HINT =
+	"Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest. Click or Enter lists that day's jobs.";
+
+/** What the strip says when it holds one column. There is no other day to step
+ * to, and a pick still opens the day's jobs. "This one day" names the window,
+ * so only the 1-day window says it; the words are Reader's. */
+export function fleetHintOne(windowDays: number): string {
+	return windowDays === 1
+		? `Click or Enter lists ${nameSpan(windowDays)}'s jobs.`
+		: "Click or Enter lists the day's jobs.";
 }

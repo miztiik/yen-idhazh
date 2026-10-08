@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -234,7 +234,8 @@ reads are here and not how many. These are `backend/`'s;
 | the gardener's `run-tasks` listing, `gardener_publish.read_the_listing` | the name and size of every file under the folders one shard's tasks own or read, from one `git ls-tree -r -l` over the commit, and for a file the clone never downloaded one GitHub trees API request per listed folder. No file content | a task deletes what its window no longer keeps, so it has to see every name it owns. What still grows is the number of names listed, one entry a file: measured 2026-09-30, the whole repository held 3,493 files and 980 of them under `state/`. What no longer grows with the tree is what the shard downloads: its checkout holds only code and config, and a task fetches only the day or month folders it reads. Every row carries that as `downloaded_bytes` beside the owned folders' weight as `cone_bytes`, and a shard over `max_downloaded_mb` - committed at 128, an estimate - exits 1 once its record has landed ([the reasoning](../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 | `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, and `grader_length_bias.py` joins every row. Each is an operator pass, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
-| `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/`, and any trial run's tree inside it | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
+| `pipeline_test_state_verifier.refusals` | the raw days, compact periods and indexes under the roots, ledgers and UTC months a caller names | it is a proof command for a migration or trial cutover. The caller names each root, each ledger and each month, so another committed trial root or another month on disk adds no read until the command names it. The command validates stored files through the door's raw and compact checkers rather than walking `state/` to discover cases |
+| `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/`, and any trial run's tree inside it | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. Packing reads only the named periods under roots selected by their production or trial compaction declarations. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on
@@ -401,9 +402,8 @@ the last day there was.
 | `payload.publishedDates` | the day directories the window reaches, newest first, then stops | `ARCHIVE_WINDOW_DAYS`, 90 |
 | `payload.latestDate` | the first entry of the above | the same 90, and it only needs the first |
 | `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
-| `payload.publishedItems` | one day payload a day in range | its caller's `windowDays` |
 | `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
-| `payload.telemetryRows` | the telemetry shards the span touches | its caller's `windowDays` |
+| `payload.telemetryRows` | the telemetry shards the window touches, and only the rows inside it | the window its caller hands over: the console's home page hands over its widest preset, which ends on the site's newest published day |
 
 ### A cover that is not a clock
 
@@ -411,11 +411,11 @@ the last day there was.
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `payload.readDayShards`, `payload.dayShardFiles` | the shards of the newest `days` recorded days of a CSV day tree | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
-| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore` | the ledger's compact indexes, then the newest `days` packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint or merge-line holdout score ledger, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the same 91, counted back from the newest packed day that holds a row: when the newest packed days hold none, the reader reads as many earlier days to make up for them. `-1` reads every packed day, and a caller that passes it says why beside the call. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
-| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same 91 |
+| `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint or merge-line holdout score ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
+| `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
-| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the day cover, for all three |
+| `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 

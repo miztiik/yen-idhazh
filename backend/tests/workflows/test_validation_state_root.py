@@ -6,11 +6,12 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 from idhazh.evals.golden import GoldenResult
 from idhazh.stages import common, decide
 from utilities import candidate_pointer
@@ -51,8 +52,7 @@ VALIDATION_PLAN_STEP = "Read the feeds"
 
 #: The two steps of the decide job, in the order they have to run: the gates
 #: file the verdict through the ledger door under the trial root, and the commit
-#: stages it. Nothing packs a trial root, so the verdict lands as the raw file the
-#: gates filed.
+#: stages it. Its separate compaction runs on a later gardener wake.
 VALIDATION_GATES_STEP = "Run the gates"
 
 VALIDATION_COMMIT_STEP = "Commit the candidate-models ledger"
@@ -211,10 +211,17 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
         if path.is_file() and path not in before
     )
     assert written, "the stage recorded no verdict at all, so this proves nothing"
-    trial_tree = f"state/{BENCH_TRIAL_STATE}/"
+    trial_tree = f"state/{TRIAL_STATE_PREFIX}/"
     assert [path for path in written if not path.startswith(trial_tree)] == [], (
         f"a stage on a trial config wrote outside {trial_tree}: {written}"
     )
+    test_cases = PipelineTestsConfig.from_json(
+        read_text(CONFIG_DIR / "pipeline-tests.json")
+    ).test_cases
+    case_roots = [f"{trial_tree}{test_case.id}/" for test_case in test_cases]
+    assert not [
+        path for path in written if any(path.startswith(case_root) for case_root in case_roots)
+    ], f"the decide stage wrote under a declared pipeline-test case root: {written}"
     assert not ledger.raw_root(production_root, LedgerName.CANDIDATE_MODELS).exists(), (
         "the production tree gained a candidate-models ledger"
     )

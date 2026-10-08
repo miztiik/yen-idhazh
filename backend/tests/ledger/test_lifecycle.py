@@ -25,7 +25,6 @@ from conftest import CONFIG_DIR, SEED_COMMIT, read_text
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
@@ -117,7 +116,7 @@ def _collect_metrics(state: Path) -> bool:
     metrics_sink.ship_judge_metrics(
         _first(ContentSimilarityJudgeMetrics),
         judge_id="content-similarity-judge",
-        shard=0,
+        name="0",
         out_dir=shipped,
     )
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
@@ -188,14 +187,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             lambda: ledger.append_fitted_thresholds(s, A_DAY, [_first(FittedSimilarityThreshold)]),
         ),
     ),
-    "append_council_shard_outcomes": (
-        LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_council_shard_outcomes(s, A_DAY, [_first(CouncilShardOutcome)]),
-        ),
-    ),
     "score_merge_line_holdout": (
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         1,
@@ -240,7 +231,9 @@ def test_every_checked_route_writes_nothing_into_a_paused_family_and_says_so_onc
 
     skipped = [record.getMessage() for record in caplog.records if SKIPPED in record.getMessage()]
     assert not wrote, f"{route} wrote into the paused family {family}"
-    assert skipped == [f"{SKIPPED} ledger={which.value} family={family} status=paused rows={rows}"]
+    assert skipped == [
+        f"{SKIPPED} ledger={which.value} family={family} status=paused rows={rows}"
+    ]
 
 
 def test_a_retired_family_is_skipped_exactly_like_a_paused_one(

@@ -20,7 +20,7 @@ on:
       shards:
         description: 'Total work-shard jobs'
         type: choice
-        default: '4'
+        default: '8'
         options:
           - '1'
           - '2'
@@ -41,7 +41,6 @@ on:
 permissions:
   contents: write
 
-# No concurrency group: a newer pending run can cancel an earlier dispatch.
 # Writer identities and commit retries handle overlapping runs.
 
 # Model settings and the runtime pin are read from config, not copied here.
@@ -561,6 +560,10 @@ jobs:
       - name: Measure the built site against the Pages cap
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
+
+      - name: Check published ledger columns
+        working-directory: frontend
+        run: python -m idhazh published-columns --site-tree build
 
       # Read rebuild-owned paths from their shared declaration.
       # Use a step output: a job-wide refresh value would affect unrelated commits.

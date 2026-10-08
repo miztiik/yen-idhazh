@@ -54,6 +54,9 @@
 	} from '$lib/console/waiting';
 	import Reserved from '$lib/components/Reserved.svelte';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
+	import { describeHeldPart } from '$lib/console/held-part-note';
+	import { describePromptCacheSubtitle } from '$lib/console/prompt-cache-subtitle';
+	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -66,22 +69,28 @@
 	import Chart from '$lib/charts/Chart.svelte';
 	import { pointerReadout, readoutMarks, readoutOf, type Readout } from '$lib/charts/readout';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
-	import { extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
+	import { extractionLabel, extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
 	import {
 		chartRule,
 		coverageText,
 		failureMix,
 		failureMixColumns,
+		horizonRate,
 		minutesText,
 		publishedSkyline,
 		publishingHorizon,
+		ruleTrendLabel,
 		siteCost,
+		siteCostLabel,
+		siteCostMeasure,
 		sizeGain,
+		skylineLabel,
 		timeSplitChart,
 		timeSplitColumns,
 		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
+	import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '$lib/console/daily-figures';
 	import type { StackShape } from '$lib/charts/stacked';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
@@ -102,19 +111,15 @@
 
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
-	/** Every day the pipeline published, newest last.
-	 *
-	 * The window anchors on this rather than on the telemetry, which no longer
-	 * crosses. It is the same set of days: `charts` holds one entry per published
-	 * day and already costs the page 2.5 KB, where the rows it would have been
-	 * taken from cost 3,334 KB (measured 2026-09-09, Intel Core i7-1265U).
-	 */
+	/** The day every window on this route ends on, the site's newest published
+	 * day. The server places it once, so the first viewport, every preset and
+	 * the reductions it took for each preset name the same days. */
 	// svelte-ignore state_referenced_locally
-	const publishedDates = data.charts.map((day) => day.date).sort();
+	const windowDay = data.windowDay;
 	/** The window the page opens on, computed once so the first viewport and the
 	 * first fetch agree on which months are wanted. */
 	// svelte-ignore state_referenced_locally
-	const opening = defaultWindow(publishedDates, data.today, data.console);
+	const opening = defaultWindow(windowDay, data.console);
 	/** The telemetry this session holds, as revision-owned month shards.
 	 *
 	 * **It starts empty and every row in it arrives by fetch.** The server used
@@ -264,7 +269,7 @@
 	 * quiet sentence, because widening is the only move an empty window offers. */
 	const widen = $derived(
 		wideningPreset(windowDays, presets, data.months, (days) =>
-			windowOfDays(publishedDates, data.today, days, data.console.today_anchor)
+			windowOfDays(windowDay, days, data.console.today_anchor)
 		)
 	);
 	/** What every waiting panel says. One sentence per state, written once, so
@@ -308,17 +313,18 @@
 
 	/** Set the span every windowed section reads.
 	 *
-	 * The window re-anchors on the newest day rather than keeping where a pan
-	 * left it, because "the last 30 days" is the question the preset asks.
+	 * The window goes back to ending on the newest published day rather than
+	 * keeping where a pan left it, because "the last 30 days" is the question the
+	 * preset asks.
 	 *
-	 * It anchors on the published days and not on the rows in hand. Anchoring on
+	 * It ends on the day the server placed and not on the rows in hand. Ending on
 	 * the rows would put the window wherever the fetch had got to, so the first
 	 * widen after opening the page would land on a different span from the same
 	 * widen a second later.
 	 */
 	function show(days: number, remember = true) {
 		windowDays = days;
-		viewport = windowOfDays(publishedDates, data.today, days, data.console.today_anchor);
+		viewport = windowOfDays(windowDay, days, data.console.today_anchor);
 		if (remember && typeof localStorage !== 'undefined') {
 			localStorage.setItem(WINDOW_KEY, String(days));
 		}
@@ -334,7 +340,7 @@
 	function monthsFor(days: number): number {
 		return monthsToLoad(
 			hold,
-			windowOfDays(publishedDates, data.today, days, data.console.today_anchor),
+			windowOfDays(windowDay, days, data.console.today_anchor),
 			data.months
 		).length;
 	}
@@ -353,6 +359,12 @@
 	const cost = $derived(
 		data.itemCostByWindow.find((entry) => entry.days === windowDays) ?? data.itemCostByWindow[0]
 	);
+	/** The note under the share, for the same window, or null where no item had
+	 * anything in memory. */
+	const heldPartNote = $derived(describeHeldPart(cost));
+	/** The panel's subtitle, for the same window. Printed only where the panel
+	 * itself renders, which is where `cost.counted` is above zero. */
+	const promptCacheSubtitle = $derived(describePromptCacheSubtitle(cost));
 
 	/** Whole seconds, and `<1` where a real measurement rounds away. The console
 	 * prints no decimal, and a `0` there would say the work was free. */
@@ -396,7 +408,7 @@
 	 * cards can never cover two different sets of days. It follows the preset
 	 * rather than a pan for the same reason the reduction does. */
 	const extractionSpan = $derived(
-		windowOfDays(publishedDates, data.today, windowDays, data.console.today_anchor)
+		windowOfDays(windowDay, windowDays, data.console.today_anchor)
 	);
 	/** Whether the extractor's yield is falling, which is the direction the
 	 * cards' own lines tell the operator to read and the cards cannot show. */
@@ -486,8 +498,8 @@
 	const windowedSize = $derived(sizeGain(data.manifests.filter((run) => inWindow(run.date))));
 	const sizeDelta = $derived(
 		windowedSize === null
-			? `No second measurement in these ${windowDays} days.`
-			: `${windowedSize >= 0 ? 'Up' : 'Down'} ${(Math.abs(windowedSize) / 1024 / 1024).toFixed(1)} MB over ${windowDays} days.`
+			? `No second measurement in ${nameSpan(windowDays)}.`
+			: `${windowedSize >= 0 ? 'Up' : 'Down'} ${(Math.abs(windowedSize) / 1024 / 1024).toFixed(1)} MB over ${countDays(windowDays)}.`
 	);
 	/** One bar a day, over the window the control set. Each card's own count is
 	 * the same window summed, so a reader can check the number against the
@@ -680,7 +692,7 @@
 	<!-- Beside the line above, and for the same reason: the article and score
 	     records are read when the site is built, and every panel built on one
 	     of them is empty, or stops early, for one reason the record owns. -->
-	<RecordNotes notes={data.recordNotes} />
+	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []} />
 
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
 	     another route that explains its own numbers. -->
@@ -714,9 +726,7 @@
 				viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
 				role="img"
 				tabindex="0"
-				aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} over the window, {grouped(
-					strip.busiest
-				)} on the busiest day"
+				aria-label={skylineLabel(noun, strip, windowDays)}
 				data-published-measure={measure}
 				data-published-days={strip.bars.length}
 				data-published-total={strip.total}
@@ -777,24 +787,32 @@
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
 	<!-- One line at a phone's width: the section's first chart sits right under
-	     it, and the keys are the ones every other strip on the console names. -->
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-glance-hint>
-		Point at a card's bars to read a day.
-	</p>
+	     it, and the keys are the ones every other strip on the console names. At
+	     one day each card's one bar is already read below it, so the line keeps
+	     its room blank and unread, as a strip's hint does. -->
+	{#if windowDays === 1}
+		<p class="invisible mt-1 text-[0.8125rem] text-text-tertiary" aria-hidden="true" data-glance-hint-held>
+			{'\u00a0'}
+		</p>
+	{:else}
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-glance-hint>
+			Point at a card's bars to read a day.
+		</p>
+	{/if}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<!-- Articles first. Visuals published is a fraction of it, and a fraction
 		     reads as one only when the denominator is beside it. -->
 		<KpiCard
 			label="Articles published"
 			value={grouped(articleSkyline.total)}
-			note="in these {windowDays} days"
+			note="in {nameSpan(windowDays)}"
 			tone="info"
 			trend={articleSkyline.empty ? null : articleBars}
 		/>
 		<KpiCard
 			label="Visuals published"
 			value={grouped(visualSkyline.total)}
-			note="in these {windowDays} days"
+			note="in {nameSpan(windowDays)}"
 			tone="info"
 			trend={visualSkyline.empty ? null : visualBars}
 		/>
@@ -822,17 +840,22 @@
 	>
 		<Panel
 			title="What one more article costs"
-			note="How long we can keep publishing. The 1 GB Pages cap is fixed, so what one more article costs is what sets the date we reach it. Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
+			note="How long we can keep publishing. The 1 GB Pages cap is fixed, so what one more article costs is what sets the date we reach it. {siteCostMeasure(windowDays)} {sizeDelta}"
 		>
 			{#if perArticle.empty}
 				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
-					No day in these {windowDays} days both published an article and recorded a size, so there is
-					no cost to divide.
+					{windowDays === 1
+						? `${openWithSpan(windowDays)} did not both publish an article and record a size, so there is no cost to divide.`
+						: `No day in ${nameSpan(windowDays)} both published an article and recorded a size, so there is no cost to divide.`}
 				</p>
 			{:else}
 				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-cost-summary>
-					{#if perArticle.spread === null}
-						One published day in these {windowDays} days, at {bytes(perArticle.median ?? 0)} an article.
+					{#if perArticle.spread === null && windowDays === 1}
+						<!-- "One published day in this one day" says one day twice. -->
+						{openWithSpan(windowDays)} published, at {bytes(perArticle.median ?? 0)} an article. One day
+						is not a spread, so no day is flagged.
+					{:else if perArticle.spread === null}
+						One published day in {nameSpan(windowDays)}, at {bytes(perArticle.median ?? 0)} an article.
 						One day is not a spread, so no day is flagged.
 					{:else}
 						Median {bytes(perArticle.median ?? 0)} an article, give or take {bytes(
@@ -851,8 +874,9 @@
 					<p class="mt-1 text-[0.8125rem] text-text-secondary" data-cost-horizon>
 						At {bytes(perArticle.median ?? 0)} an article, the 1 GB cap has room for about {roughly(
 							horizon.articles
-						)} more. At a median of {grouped(Math.round(horizon.articlesPerDay))} articles a published
-						day, that is about {horizon.years.toFixed(1)} years. The cap is measured on the built site,
+						)} more. At {horizonRate(horizon.articlesPerDay, windowDays)}, that is about {horizon.years.toFixed(
+							1
+						)} years. The cap is measured on the built site,
 						which is larger than the payload tree this rate came from, so that is the most room we have
 						and not the least.
 					</p>
@@ -862,11 +886,12 @@
 					option={perArticle.option}
 					width={data.console.chart_width}
 					height={220}
-					label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
+					label={siteCostLabel(windowDays)}
 					readout={costColumns}
 					readoutName="cost-per-article"
 					readoutMaxShare={data.chart.readout_max_share}
 					grid={COST_GRID}
+					{windowDays}
 					restingNote=", the newest published day"
 					hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
 				/>
@@ -1021,7 +1046,7 @@
 	<section
 		data-windowed="run-health"
 		data-window-days={windowDays}
-		aria-label="Run health, over {windowDays} days"
+		aria-label="Run health, over {countDays(windowDays)}"
 	>
 		<Panel verdict title="Run health">
 			<RunHealthPanel
@@ -1076,31 +1101,33 @@
 
 		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-item-cost-lead data-item-cost-rows={cost.rows}>
 			{#if cost.rows === 0}
-				No item is on the published record for these {cost.days} days, so there is nothing here to
+				No item is on the published record for {nameSpan(cost.days)}, so there is nothing here to
 				measure yet. It fills as runs publish.
 			{:else}
-				{grouped(cost.timed)} of the {grouped(cost.rows)} items in these {cost.days} days were
+				{grouped(cost.timed)} of the {grouped(cost.rows)} items in {nameSpan(cost.days)} were
 				timed by the model itself. The rest failed before it saw them, or were kept without ever
 				being sent to it.
 			{/if}
-			Panning does not move these days: they always end on the newest day the ledger holds.
+			{cost.days === 1
+				? `Panning does not move ${nameSpan(cost.days)}: it is always the newest published day.`
+				: 'Panning does not move these days: they always end on the newest published day.'}
 		</p>
 
 		{#if cost.reading === null && cost.writing === null}
 			{#if cost.rows > 0}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost="unmeasured">
-					Nothing recorded a model clock in these {cost.days} days. This fills as runs publish.
+					Nothing recorded a model clock in {nameSpan(cost.days)}. This fills as runs publish.
 				</p>
 			{/if}
 		{:else}
 			{#if cost.reading === null}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="empty">
-					Nothing timed the reading of a prompt in these {cost.days} days.
+					Nothing timed the reading of a prompt in {nameSpan(cost.days)}.
 				</p>
 			{:else if cost.reading.n < data.console.min_attempts_for_rate}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="thin">
 					{grouped(cost.reading.n)}
-					{cost.reading.n === 1 ? 'prompt was' : 'prompts were'} timed in these {cost.days} days. Too
+					{cost.reading.n === 1 ? 'prompt was' : 'prompts were'} timed in {nameSpan(cost.days)}. Too
 					few to give a middle or a slowest one in twenty - {data.console.min_attempts_for_rate}
 					needed. The fastest took {asSeconds(cost.reading.fastest)} and the slowest {asSeconds(
 						cost.reading.slowest
@@ -1129,19 +1156,19 @@
 						<span data-item-cost-reading="median">{asSeconds(cost.reading.median)}</span>, and one
 						in twenty took longer than
 						<span data-item-cost-reading="p95">{asSeconds(cost.reading.p95)}</span>. Over
-						{cost.timedDays} of these {cost.days} days.
+						{cost.timedDays} of {countDays(cost.days)}.
 					</p>
 				</Panel>
 			{/if}
 
 			{#if cost.writing === null}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-writing="empty">
-					Nothing timed the writing of a summary in these {cost.days} days.
+					Nothing timed the writing of a summary in {nameSpan(cost.days)}.
 				</p>
 			{:else if cost.writing.n < data.console.min_attempts_for_rate}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-writing="thin">
 					{grouped(cost.writing.n)}
-					{cost.writing.n === 1 ? 'summary was' : 'summaries were'} timed in these {cost.days} days.
+					{cost.writing.n === 1 ? 'summary was' : 'summaries were'} timed in {nameSpan(cost.days)}.
 					Too few to give a middle or a slowest one in twenty - {data.console.min_attempts_for_rate}
 					needed. The fastest took {asSeconds(cost.writing.fastest)} and the slowest {asSeconds(
 						cost.writing.slowest
@@ -1168,7 +1195,7 @@
 						<span data-item-cost-writing="median">{asSeconds(cost.writing.median)}</span>, and one
 						in twenty took longer than
 						<span data-item-cost-writing="p95">{asSeconds(cost.writing.p95)}</span>. Over
-						{cost.timedDays} of these {cost.days} days.
+						{cost.timedDays} of {countDays(cost.days)}.
 					</p>
 				</Panel>
 			{/if}
@@ -1204,13 +1231,13 @@
 
 			{#if cost.counted === 0}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-cache="unmeasured">
-					No item in these {cost.days} days recorded a token count, so nothing here can say what
+					No item in {nameSpan(cost.days)} recorded a token count, so nothing here can say what
 					the prompt cost or what was already in memory.
 				</p>
 			{:else}
 				<Panel
 					title="How much of each prompt was already in memory"
-					note="Prompt tokens the model had to read, against the ones it did not - the instructions in front of every article stay in memory between items."
+					note={promptCacheSubtitle}
 				>
 					<!-- Counts, not a track. The two-segment bar that used to sit here
 					     drew one flat share on no time axis, and the note below it told
@@ -1291,17 +1318,16 @@
 					</div>
 
 					<!-- The share is printed and never plotted as a trend, and this is why.
-					     The held part barely moves; the prompt does. A falling line here
-					     would read as the cache getting worse when it means the articles
-					     got longer, and that is the one wrong conclusion this panel could
-					     cause somebody to act on. -->
-					<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-item-cost-share-note>
-						The share follows the article, not the memory. The held part hardly changes - the
-						middle item kept {count(cost.reusedMedian)} tokens and the largest kept {count(
-							cost.reusedWidest
-						)} - so a longer article reads as a smaller share while exactly as much is held. Read
-						the token counts above, not the direction of the percentage.
-					</p>
+					     A longer article lowers the share while the part already in
+					     memory stays put, so a falling line would read as the cache
+					     getting worse when the articles merely got longer. The note
+					     checks that the part stayed put on its own two figures, for the
+					     window on screen, and says so where they show it changed a lot. -->
+					{#if heldPartNote !== null}
+						<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-item-cost-share-note>
+							{heldPartNote}
+						</p>
+					{/if}
 				</Panel>
 			{/if}
 		{/if}
@@ -1322,7 +1348,7 @@
 				Over {thresholds.ruleDays} days with the chart-only gate on, chart drawing is retired if the
 				median day spends more than {thresholds.minutesTarget} minutes per published visual, or
 				puts a visual on fewer than {thresholds.coveragePct}% of the items it published. Over
-				{windowDays} days.
+				{countDays(windowDays)}.
 			</p>
 			<div class="console-panel mt-3" data-charts="rule">
 				{#if rule.narrow}
@@ -1340,7 +1366,7 @@
 								label="Minutes per visual"
 								valueText={rule.minutes === null ? '-' : minutesText(rule.minutes)}
 								targetText="Retired above {thresholds.minutesTarget}, on the median day."
-								emptyNote="No minutes are on record for these {windowDays} days."
+								emptyNote="No minutes are on record for {nameSpan(windowDays)}."
 							/>
 							<Sparkline
 								marks={rule.minutesTrend}
@@ -1352,7 +1378,7 @@
 								}}
 								width={220}
 								height={30}
-								label="Minutes per visual, day by day, over {rule.minutesDays} measured days"
+								label={ruleTrendLabel('Minutes per visual', rule.minutesDays)}
 							/>
 							{@render ruleMove(rule.minutesTrend.movement, rule.minutesMarks.sense, 'minutes')}
 						</div>
@@ -1362,7 +1388,9 @@
 								label="Published articles with a visual"
 								valueText={rule.coverage === null ? '-' : coverageText(rule.coverage)}
 								targetText="Retired below {thresholds.coveragePct}%, on the median day."
-								emptyNote="No day in these {windowDays} days published anything to put a visual on."
+								emptyNote={windowDays === 1
+									? `${openWithSpan(windowDays)} did not publish anything to put a visual on.`
+									: `No day in ${nameSpan(windowDays)} published anything to put a visual on.`}
 							/>
 							<Sparkline
 								marks={rule.coverageTrend}
@@ -1374,7 +1402,10 @@
 								}}
 								width={220}
 								height={30}
-								label="Share of published articles carrying a visual, day by day, over {rule.coverageDays} measured days"
+								label={ruleTrendLabel(
+									'Share of published articles carrying a visual',
+									rule.coverageDays
+								)}
 							/>
 							{@render ruleMove(rule.coverageTrend.movement, rule.coverageMarks.sense, 'coverage')}
 						</div>
@@ -1401,7 +1432,7 @@
 						height={FLOW_HEIGHT}
 						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 						noReadout="a flow between stages, so there is no column two branches share, and every stage and every branch prints its count and share beside its node; agreed with Susan"
-						numbersNote={`Open "Show these figures day by day" below for each stage's count on every day.`}
+						numbersNote={dailyFiguresPointer(windowDays)}
 					/>
 				</div>
 				<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
@@ -1457,10 +1488,10 @@
 				data-daily-rows={chartsInWindow.length}
 			>
 				<summary class="console-summary" data-charts-toggle
-					>Show these figures day by day, over these {windowDays} days</summary
+					>{dailyFiguresSummary(windowDays)}</summary
 				>
 				<p class="mt-3 text-[0.8125rem] text-text-tertiary">
-					One row per day in the open window, newest first. Reached is every item the visual planner
+					{dailyFiguresRows(windowDays)} Reached is every item the visual planner
 					looked at, asked the model is the part it sent a request for, visuals drafted is what the
 					model returned, and visuals published is what survived the checks after it. A dash means no
 					minutes are on record, so there is no rate to divide. Zero reached means nothing committed
@@ -1512,7 +1543,7 @@
 	<div data-windowed="extraction" data-window-days={windowDays}>
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 			Every article is read for the quantities and dates it states, before the visual planner sees
-			it. This is what that reading found over {windowDays} days, so a fall in published charts can
+			it. This is what that reading found over {countDays(windowDays)}, so a fall in published charts can
 			name its own cause: if the planner stopped choosing charts this share climbs while the
 			chartable count holds, and if the extractor stopped finding numbers the chartable count falls
 			instead.
@@ -1528,9 +1559,15 @@
 				     An operator who finds a heading and nothing under it cannot tell a
 				     panel that measured nothing from one that is broken. -->
 				<p class="text-[0.9375rem] text-text-secondary" data-extraction="none">
-					No day in these {windowDays} days carries a record of what the extractor found. Every run
-					before 2026-09-08 measured none of this, so a window reaching only those days is silent
-					rather than empty. Widen the window, or wait for the next run.
+					{#if windowDays === 1}
+						{openWithSpan(windowDays)} does not carry a record of what the extractor found. Every run
+						before 2026-09-08 measured none of this, so a day before then is silent rather than empty.
+						Widen the window, or wait for the next run.
+					{:else}
+						No day in {nameSpan(windowDays)} carries a record of what the extractor found. Every run
+						before 2026-09-08 measured none of this, so a window reaching only those days is silent
+						rather than empty. Widen the window, or wait for the next run.
+					{/if}
 				</p>
 			{:else}
 				<p class="text-[0.9375rem] text-text" data-extraction-verdict>{extraction.verdict}</p>
@@ -1576,7 +1613,9 @@
 					<h3 class="text-[0.9375rem] font-semibold text-text">Whether the yield is falling</h3>
 					{#if yieldTrend.empty}
 						<p class="mt-2 text-[0.8125rem] text-text-secondary" data-extraction-trend="none">
-							No day in these {windowDays} days carries both counts, so there is no direction to draw.
+							{windowDays === 1
+								? `${openWithSpan(windowDays)} does not carry both counts, so nothing is drawn.`
+								: `No day in ${nameSpan(windowDays)} carries both counts, so there is no direction to draw.`}
 						</p>
 					{:else}
 						<p
@@ -1587,8 +1626,12 @@
 								? null
 								: yieldTrend.ratio.toFixed(1)}
 						>
-							{#if yieldTrend.single}
-								One measured day in these {windowDays} days. A single day has a level and no
+							{#if yieldTrend.single && windowDays === 1}
+								<!-- A second day never comes at one day, so nothing waits for one. -->
+								{openWithSpan(windowDays)} was measured. A single day has a level and no direction, so
+								only the point is drawn.
+							{:else if yieldTrend.single}
+								One measured day in {nameSpan(windowDays)}. A single day has a level and no
 								direction, so the point is drawn and the line waits for a second day.
 							{:else}
 								{yieldTrend.days.length} measured days. Both lines count articles, so they share one
@@ -1602,11 +1645,12 @@
 							option={yieldTrend.option}
 							width={data.console.chart_width}
 							height={220}
-							label="Articles the reading found enough figures of one kind in, against published articles carrying a chart, one point a day over {windowDays} days"
+							label={extractionLabel(windowDays)}
 							readout={yieldColumns}
 							readoutName="extraction-yield"
 							readoutMaxShare={data.chart.readout_max_share}
 							grid={YIELD_GRID}
+							{windowDays}
 							restingNote=", the newest measured day"
 							hint="Point at a day to read both counts. Left and Right step through them, Escape returns to the newest."
 						/>

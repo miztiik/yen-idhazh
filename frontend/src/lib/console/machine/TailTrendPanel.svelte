@@ -39,6 +39,7 @@
 		type SettingsMoved
 	} from '$lib/console/settings-moved';
 	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -46,6 +47,7 @@
 		start,
 		end,
 		modelChanges,
+		missingMarkers,
 		moved,
 		chart,
 		windowDays,
@@ -57,6 +59,9 @@
 		start: string;
 		end: string;
 		modelChanges: readonly string[];
+		/** The line for the days this span's markers could only come from the score
+		 * record, when that record did not read; null when no marker was lost. */
+		missingMarkers: string | null;
 		/** What the run record says moved, by date. A date in `modelChanges` with no
 		 * entry here moved something the record cannot name. */
 		moved: readonly SettingsMoved[];
@@ -149,11 +154,17 @@
 	/** One polyline a percentile, built once a span-and-width. Five were rebuilt
 	 * on every render before, once for each `{#each PERCENTILES}` pass. */
 	const tailLines = $derived(PERCENTILES.map((_, at) => tailLine(at)));
-	const tailSpan = $derived(
-		tailRuns.length === 0
-			? ''
-			: `${shortDate(tailRuns[0].date)} to ${shortDate(tailRuns[tailRuns.length - 1].date)}`
-	);
+	/** The runs' dates and the window's days, as the label names them. Where
+	 * every run is on one date, that date already says one day, so it stands
+	 * alone, never as a date to itself. */
+	const tailSpan = $derived.by(() => {
+		const first = tailRuns.at(0)?.date;
+		const last = tailRuns.at(-1)?.date;
+		if (first === undefined || last === undefined) return '';
+		return first === last
+			? shortDate(first)
+			: `${shortDate(first)} to ${shortDate(last)}, over ${countDays(days)}`;
+	});
 
 	/** How far the newest run's slow end sits from its own middle.
 	 *
@@ -187,11 +198,11 @@
 		heading="h3"
 		id="tail-trend"
 		title="Whether the slowest articles are getting slower"
-		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over the last {windowDays} days."
+		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over {nameSpan(windowDays)}."
 	>
 		{#if tailRuns.length === 0}
 			<p class="empty" data-machine-panel-empty="latency">
-				No run in these {days} days timed {floor} items, which is the floor
+				No run in {nameSpan(days)} timed {floor} items, which is the floor
 				below which a p99 is just the last item.
 			</p>
 			{#if tailUnread.length > 0}
@@ -207,7 +218,7 @@
 						viewBox={`0 0 ${tailW} ${tailH}`}
 						role="img"
 						tabindex="0"
-						aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}, over {days} days. All five plots share one scale."
+						aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}. All five plots share one scale."
 						data-latency-runs={tailRuns.length}
 						use:pointerReadout={{
 							marks: tailMarks,
@@ -347,13 +358,19 @@
 				/>
 			</div>
 
-			{#if tailRules.length === 0 && tailRuns.length > 1}
-				<p class="reads">
-					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
-				</p>
-			{:else if tailRules.length > 0}
+			<!-- The dashed-rule sentence, then what a score read that did not read cost
+			     the rules. While that line prints, the chart never says nothing changed:
+			     it cannot see the days the line names. -->
+			{#if tailRules.length > 0}
 				<p class="reads">
 					<span data-model-rule-note="machine-latency">{MODEL_RULE_NOTE}</span>
+				</p>
+			{/if}
+			{#if missingMarkers !== null}
+				<p class="reads" data-markers-missing="machine-latency">{missingMarkers}</p>
+			{:else if tailRules.length === 0 && tailRuns.length > 1}
+				<p class="reads">
+					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
 				</p>
 			{/if}
 
@@ -363,7 +380,7 @@
 
 			<p class="reads" data-latency-note>
 				{tailRuns.length}
-				{tailRuns.length === 1 ? 'run' : 'runs'} of these {days} days. The value is
+				{tailRuns.length === 1 ? 'run' : 'runs'} of {nameSpan(days)}. The value is
 				<code>summarize_ms</code>, the whole model call for one item, and a percentile is
 				interpolated linearly between the two nearest ranks - at about a hundred items the
 				nearest-rank rule and this one disagree by more than the difference between two runs, so

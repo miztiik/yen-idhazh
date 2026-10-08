@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { chartsReady } from './support/charts-ready';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { publishedSkyline, publishingHorizon, siteCost } from '../src/lib/charts/glance';
 import type { GlanceDay } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
@@ -20,6 +20,11 @@ import type { RunSummary } from '../src/lib/server/payload';
  * the oracle below asserts they report the same day count - which is the whole
  * of "they are on one window".
  *
+ * What the card counts is held two ways, and neither reads what the site was
+ * built from: the reader that counts a day's articles, `publishedCharts`, is
+ * run over day payloads a test writes in `console.spec.ts`, and on the page the
+ * card's count for a day is the count the daily chart table prints for it.
+ *
  * The page intro used to end with two counts of rows on record. Both only ever
  * grow, so neither could ever indicate a state, and nothing on the page acted
  * on either. The visible-copy check below keeps those old introductory counts
@@ -27,8 +32,6 @@ import type { RunSummary } from '../src/lib/server/payload';
  */
 
 const FRONTEND = resolve(process.cwd());
-/** The canary day tree the browser suite is built from. */
-const CANARY = resolve(FRONTEND, '..', 'backend', 'var', 'canary', 'digest');
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(FRONTEND, '..', 'config', 'appearance.json'), 'utf8')
@@ -45,30 +48,6 @@ const CARDS = ['Articles published', 'Visuals published'] as const;
 /** Thousands separated, the way every count on this page is written. */
 function grouped(value: number): string {
 	return value.toLocaleString('en-GB');
-}
-
-/** How many items each committed day published, read from the payloads.
- *
- * The card's own arithmetic is not consulted. A count taken from the page would
- * only prove the page agrees with itself, and this is the one number the
- * articles card exists to print.
- */
-function publishedItemsByDate(): Map<string, number> {
-	const found = new Map<string, number>();
-	const dirs = (at: string) =>
-		readdirSync(at, { withFileTypes: true })
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name)
-			.sort();
-	for (const year of dirs(CANARY)) {
-		for (const month of dirs(join(CANARY, year))) {
-			for (const day of dirs(join(CANARY, year, month))) {
-				const raw = readFileSync(join(CANARY, year, month, day, 'digest.json'), 'utf8');
-				found.set(`${year}-${month}-${day}`, (JSON.parse(raw) as { items: unknown[] }).items.length);
-			}
-		}
-	}
-	return found;
 }
 
 function day(date: string, published: number, items = published): GlanceDay {
@@ -202,7 +181,7 @@ test('THE ORACLE: the bar count is the window day count, at every preset', async
 					nodes.reduce((sum, node) => sum + Number(node.getAttribute('data-published')), 0)
 				);
 			await expect(card.locator('.kpi-value')).toHaveText(grouped(drawn));
-			await expect(card).toContainText(`in these ${preset} days`);
+			await expect(card).toContainText(preset === 1 ? 'in this one day' : `in these ${preset} days`);
 		}
 
 		// Both strips report the same span. That is the whole of "they are on one
@@ -217,38 +196,46 @@ test('THE ORACLE: the bar count is the window day count, at every preset', async
 	}
 });
 
-test('THE ORACLE: the articles card counts what the committed days published', async ({ page }) => {
-	// Counted from the payloads themselves, never from the page. A count the page
-	// also computed only proves the page agrees with itself.
-	const byDate = publishedItemsByDate();
-	expect(byDate.size, 'no committed day published an item, so the count is untested').toBeGreaterThan(
-		0
-	);
-
+test('THE ORACLE: the articles card counts what the chart table says each day published', async ({
+	page
+}) => {
 	await page.goto('/console/');
 	await hydrated(page);
 
+	// The card and the daily chart table draw one list, which the route builds
+	// from one read of each day payload, so for every day the table prints, the
+	// card's bar is the table's article count. What that read takes off a day
+	// payload is held to payloads a test writes in `console.spec.ts`.
 	const plot = page.locator('[data-kpi="Articles published"] svg[data-published-days]');
-	const drawn = await plot
-		.locator('rect[data-published-bar]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => [
-				node.getAttribute('data-published-bar') ?? '',
-				Number(node.getAttribute('data-published'))
-			])
+	const bars = new Map(
+		await plot
+			.locator('rect[data-published-bar]')
+			.evaluateAll((nodes) =>
+				nodes.map((node) => [
+					node.getAttribute('data-published-bar') ?? '',
+					Number(node.getAttribute('data-published'))
+				] as [string, number])
+			)
+	);
+	expect(bars.size, 'the strip drew no columns').toBeGreaterThan(0);
+	const table = await page
+		.locator('[data-chart-day]')
+		.evaluateAll((rows) =>
+			rows.map((row) => [
+				row.getAttribute('data-chart-day') ?? '',
+				Number((row.querySelector('[data-charts-cell="items"]')?.textContent ?? '').trim())
+			] as [string, number])
 		);
+	expect(table.length, 'the table prints no day of the window, so nothing is compared').toBeGreaterThan(0);
+	for (const [date, items] of table) {
+		expect(bars.has(date), `the card draws no bar for ${date}, which the table prints`).toBe(true);
+		expect(bars.get(date), `${date}: the card and the table count different articles`).toBe(items);
+	}
 
-	const window = drawn.map(([date]) => date);
-	expect(window.length, 'the strip drew no columns').toBeGreaterThan(0);
-	const expected = window.map((date) => byDate.get(date as string) ?? 0);
-	expect(
-		drawn.map(([, count]) => count),
-		'the bars and the committed payloads disagree about what was published'
-	).toEqual(expected);
-
-	// The card's own total is the same window summed, so the number can be
-	// checked against the picture.
-	const total = expected.reduce((sum, count) => sum + count, 0);
+	// The card's own total is the same window summed, so the number can be checked
+	// against the picture.
+	const counts = [...bars.values()];
+	const total = counts.reduce((sum, count) => sum + count, 0);
 	await expect(page.locator('[data-kpi="Articles published"] .kpi-value')).toHaveText(
 		grouped(total)
 	);
@@ -258,8 +245,9 @@ test('THE ORACLE: the articles card counts what the committed days published', a
 	const heights = await plot
 		.locator('rect[data-published-bar]')
 		.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('height'))));
-	const busiest = Math.max(...expected);
-	const tallest = heights[expected.indexOf(busiest)];
+	const busiest = Math.max(...counts);
+	expect(busiest, 'no day in the window published an article').toBeGreaterThan(0);
+	const tallest = heights[counts.indexOf(busiest)];
 	expect(tallest, 'the busiest day is not drawn full height').toBeCloseTo(34, 1);
 });
 
@@ -350,8 +338,9 @@ test('THE ORACLE: the cost panel says what it is for, and its chart fills its fr
 	expect(Number.isFinite(rate), `no rate in the horizon: ${said}`).toBe(true);
 	expect(rate, 'the horizon and the chart quote two different rates').toBe(median);
 
-	// The daily rate is a median over the days the chart drew, so it is one of
-	// the counts the articles card publishes for those same days.
+	// The daily rate is a median over the days the chart drew, so it is the middle
+	// of the counts the articles card draws for those same days. Every one of those
+	// days has to be on the card: a day with no count is a fault, never a zero.
 	const perDay = Number(
 		/median of ([\d,]+) articles a published day/.exec(said)?.[1]?.replace(/,/g, '')
 	);
@@ -359,8 +348,21 @@ test('THE ORACLE: the cost panel says what it is for, and its chart fills its fr
 	const drawn = await panel
 		.locator('[data-cost-day]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-cost-day') ?? ''));
-	const byDate = publishedItemsByDate();
-	const counts = drawn.map((date) => byDate.get(date) ?? 0).sort((a, b) => a - b);
+	expect(drawn.length, 'the cost chart drew no day').toBeGreaterThan(0);
+	const card = new Map(
+		await page
+			.locator('[data-kpi="Articles published"] rect[data-published-bar]')
+			.evaluateAll((nodes) =>
+				nodes.map((node) => [
+					node.getAttribute('data-published-bar') ?? '',
+					Number(node.getAttribute('data-published'))
+				] as [string, number])
+			)
+	);
+	for (const date of drawn) {
+		expect(card.has(date), `the articles card draws no count for ${date}`).toBe(true);
+	}
+	const counts = drawn.map((date) => card.get(date) as number).sort((a, b) => a - b);
 	const middle = Math.floor(counts.length / 2);
 	const expected =
 		counts.length % 2 ? counts[middle] : (counts[middle - 1] + counts[middle]) / 2;

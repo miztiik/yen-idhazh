@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.ledger import CsvContract, CsvRecord
 
 

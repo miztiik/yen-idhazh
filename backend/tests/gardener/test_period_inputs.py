@@ -54,31 +54,43 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
 
     A scheduled wake builds no window for a compaction, and a range a person
     names limits what the steps choose, not what the listing starts with. A
-    listing that lost a mark would hand the pass an index or watermark it reads
-    as absent.
+    ledger's marks are its three indexes; a listing that lost one would hand the
+    pass an index it reads as absent, and rebuilds.
     """
     today = date(2026, 9, 27)
     compactions = {
         name: policy
         for name, policy in config.load_gardener().tasks.items()
-        if isinstance(policy, CompactionPolicy)
+        if isinstance(policy, CompactionPolicy) and not name.startswith("compact-trial-")
     }
 
     assert compactions, "config/idhazh_gardener.json names no compaction"
     for name, policy in compactions.items():
-        compact = f"state/compact/{'/'.join(ledger.entry(policy.ledger).prefix)}"
+        compact = f"state/compact/{'/'.join(ledger.door_folders(policy.ledger))}"
         assert scheduled_range(name, policy, today) is None, name
         for period_range in (None, ("2026-08", "2026-08")):
             assert _named(
                 tmp_path, paths_for_task(tmp_path, name, policy, period_range, today=today)
             ) == [
-                f"{compact}/daily/watermark.json",
                 f"{compact}/index/daily.json",
                 f"{compact}/index/monthly.json",
                 f"{compact}/index/yearly.json",
-                f"{compact}/monthly/watermark.json",
-                f"{compact}/yearly/watermark.json",
             ], (name, period_range)
+
+
+def test_a_trial_compaction_lists_only_its_declared_root_indexes(tmp_path: Path) -> None:
+    policy = config.load_gardener().tasks["compact-trial-item-health"]
+    assert isinstance(policy, CompactionPolicy)
+
+    paths = paths_for_task(tmp_path, "compact-trial-item-health", policy, None, today=date(2026, 9, 27))
+
+    expected = {
+        tmp_path / root / "compact" / "item-health" / "index" / f"{period}.json"
+        for root in policy.state_roots
+        for period in ("daily", "monthly", "yearly")
+    }
+    assert set(paths) == expected
+    assert tmp_path / "state" / "compact" / "item-health" / "index" / "daily.json" not in paths
 
 
 def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_nothing_else(
@@ -100,14 +112,11 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
         "frontend/public/telemetry/2026/09/20.parquet",
         "state/compact/item-health/daily/2026/09/20.json",
         "state/compact/item-health/daily/2026/09/20.parquet",
-        "state/compact/item-health/daily/watermark.json",
         "state/compact/item-health/index/daily.json",
         "state/compact/item-health/index/monthly.json",
         "state/compact/item-health/index/yearly.json",
-        "state/compact/item-health/monthly/watermark.json",
         "state/compact/item-health/yearly/2026/2026.json",
         "state/compact/item-health/yearly/2026/2026.parquet",
-        "state/compact/item-health/yearly/watermark.json",
         "state/raw/item-health-summary/2026/09/20",
         "state/raw/item-health/2026/09/20",
     ]
@@ -137,3 +146,30 @@ def test_monthly_fold_also_lists_its_fixed_closed_day_window(tmp_path: Path) -> 
     assert root / "2026" / "08" in paths
     assert root / "2026" / "09" / "29" in paths
     assert root / "2026" / "09" / "21" not in paths
+
+
+def test_a_c1_case_traces_folder_lists_each_named_day_folder(tmp_path: Path) -> None:
+    """A nested traces root uses the generic dated tree branch, not the old trial prefix."""
+    policy = RetentionPolicy.model_validate(
+        {
+            "kind": "retention",
+            "lifecycle_status": "active",
+            "dry_run": True,
+            "max_deletes_per_run": None,
+            "owns": ["state/pipeline-tests/case-2026-09-20/traces"],
+            "window": {"unit": "days", "value": 90},
+        }
+    )
+
+    paths = paths_for_task(
+        tmp_path,
+        "trials",
+        policy,
+        ("2026-09-20", "2026-09-22"),
+        today=date(2026, 9, 27),
+    )
+
+    root = tmp_path / "state" / "pipeline-tests" / "case-2026-09-20" / "traces"
+    assert root / "2026" / "09" / "20" in paths
+    assert root / "2026" / "09" / "21" in paths
+    assert root / "2026" / "09" / "22" in paths

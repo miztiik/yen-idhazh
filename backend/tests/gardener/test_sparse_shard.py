@@ -26,7 +26,7 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
@@ -182,10 +182,9 @@ def test_a_listing_github_cannot_size_runs_no_task_and_exits_1(
     )
 
     assert (outcome.exit_code, outcome.record, outcome.landing) == (EXIT_TASK_FAILED, None, None)
-    assert any(
-        "could not be listed, so no task ran" in line and "did not report a size" in line
-        for line in said
-    ), said
+    (line,) = [line for line in said if "could not be listed, so no task ran" in line]
+    assert "(ValueError at idhazh.gardener.file_listing:" in line, line
+    assert "did not report a size" not in line, "the line printed the exception's text"
     assert on_origin(origin, AGED) == FILES[AGED]
 
 
@@ -289,19 +288,6 @@ def a_ledger_on_origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple
             .to_json()
             .encode("ascii")
         )
-    mark = ledger.watermark_path(state_dir, CLOSED, Period.DAILY)
-    mark.write_bytes(
-        Watermark(
-            version=Watermark.schema_version(),
-            ledger=CLOSED,
-            period=Period.DAILY,
-            through="2026-10-01",
-            advanced_at="2026-10-02T00:41:00Z",
-            run_id="2026-10-02-1",
-        )
-        .to_json()
-        .encode("ascii")
-    )
     git(seeder, "add", "--all")
     git(seeder, "commit", "--quiet", "-m", "a packed ledger")
     git(seeder, "push", "--quiet", "origin", "HEAD:refs/heads/main")

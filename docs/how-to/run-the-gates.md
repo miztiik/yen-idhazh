@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-07
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -162,7 +162,9 @@ so it retains the sufficiency checks without generating review pictures.
 For a design review, dispatch CI on the review branch with `panel_captures=true`.
 That run uploads the `panel-captures` artifact on a pass or a fail. Locally,
 prepare the canary build, then run
-`npx playwright test --project panels tests/panel-captures.spec.ts`.
+`npx playwright test --project=panels tests/panel-captures.spec.ts`. Keep the
+`=`: with a space, Playwright reads the spec's path as a second project name
+and runs nothing.
 Leave `SKIP_PANEL_CAPTURES` unset for that command. The
 pictures land in `frontend/test-results/panels/` as
 `<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
@@ -255,7 +257,7 @@ the copy afterwards:
 
 ```powershell
 $python = (Resolve-Path .\.venv\Scripts\python.exe).Path
-$copy = New-Item -ItemType Directory -Path (Join-Path $env:TEMP 'base-commit')
+$copy = New-Item -ItemType Directory -Path (Join-Path (Get-Item $env:TEMP).FullName 'base-commit')
 git archive --format=tar <base-commit> backend config tests pyproject.toml | tar -x -C $copy
 Copy-Item backend\tests\<folder>\test_<changed>.py (Join-Path $copy 'backend\tests\<folder>')
 Push-Location $copy; & $python -m pytest -n 0 backend/tests/<folder>/test_<changed>.py; Pop-Location
@@ -270,6 +272,10 @@ so the new test passes on "the base commit" while it ran the branch. Measured
 The tell is a `rootdir:` line in the output naming a folder outside the copy;
 the copy's own `-q` hides that line when its settings were read.
 
+**A copied test that reads a workflow file needs the base commit's `.github` in
+the copy too:** add it to the archive, or the test fails on a missing file, a
+failure the base commit did not cause (2026-10-07).
+
 **A canary build in the copy needs more of the tree.** Add `frontend` and the
 root `.gitignore` to the archive, run `git init` and commit the copy, and point
 `frontend\node_modules` at an installed one with a directory junction
@@ -279,11 +285,14 @@ fingerprints its inputs through git: with no `.gitignore` its own output counts
 as an input, and it ends with "Build inputs changed during compilation". Run
 `build_canary_day.py` from the copy's root with `PYTHONPATH` set to the copy's
 `backend`, and `build-canary.mjs` from its `frontend` with `IDHAZH_PYTHON` set
-to an installed interpreter, so the copy's code is what packs. Compare entries
-and names, not bytes, and leave out two clocks: the name of each raw file the
-canary writes after packing holds the time of its write, and each watermark's
-`advanced_at` the time of its pass, so both differ between any two builds of
-one commit.
+to an installed interpreter, so the copy's code is what packs. Name the copy by
+the long form of `TEMP`, as the block above does. Where `TEMP` is a short 8.3
+name, with a `~1` in it, the canary's telemetry step compares that spelling
+with the long one Python resolves for the repository root, and stops with
+`ValueError: ... is not in the subpath of ...` (2026-10-07, Windows, Python
+3.14.2). Compare entries and names, not bytes, and leave out the one clock: the
+name of each raw file the canary writes after packing holds the time of its
+write, so it differs between any two builds of one commit.
 
 ## Set up the backend environment
 
@@ -314,7 +323,7 @@ Two extras are declared. Install only what you need:
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML` | always - this is the gate set |
-| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
+| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it uses the current `tokenizers` range |
 
 `faithfulness` is the heavy one, and it is the only one a gate does not need. No
 test imports it. Spans need no extra at all: the sink writes a JSON line with the
@@ -513,6 +522,7 @@ npm run check
 npm run build
 npm run bundle-gate
 python -m idhazh site-weight --site-tree build
+python -m idhazh published-columns --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: it compiles
@@ -562,6 +572,15 @@ by that rate at `run.safety_ceiling_per_run` items a day and prints the answer i
 published days, to the alarm point and to the cap. **The size on the line above
 is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
+
+`published-columns` runs on the same built tree, immediately after `site-weight`.
+It reads only the parquet footers under the staged `state/` copy and checks that
+each published ledger file carries the columns its row contract declares. An
+older file that lacks a newer column is reported as history and still passes; a
+current-stamped file with different columns, a shared column with a different
+type, a newer file, or a published ledger without a door contract fails the
+build. A run that reads no parquet file for any published ledger with a door
+contract also fails, because the tree was probably not the built site.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it holds every route named in `config/idhazh.json` under the gzip guardrail
@@ -833,7 +852,7 @@ Run this from `frontend/` to print the number this checkout will use, which is
 the same derivation the config runs:
 
 ```powershell
-node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
+node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd()).digest().readUInt32BE(0)%10000)"
 ```
 
 Check these conditions before trusting browser evidence.
@@ -859,6 +878,32 @@ Check these conditions before trusting browser evidence.
  screenshot. If it does not match, use the native Playwright capture runner;
  do not label that image with the requested width. A hidden embedded page can
  also suspend animation-frame waits, so make it visible before relying on them.
+
+### A Data explorer test serves the data it checks
+
+A Data explorer browser test that runs a question serves the ledger it asks
+about. It builds that ledger with `frontend/tests/support/ledger-lifecycle.ts`,
+which writes the three indexes and real Parquet files through the query engine.
+It serves the ledger to the page with `serveBuilt` from
+`frontend/tests/support/explorer-answer.ts`, pins its own UTC day with
+`openExplorer(page, day)`, and writes out the rows, files and sentences it
+expects. Serving a built ledger also switches the page's writers' tier off,
+because a built ledger has no writer's files. The archive host stays blocked
+unless the test serves it a root it built, with `serveArchiveToPage`. No test
+works out its expected answer by running the query door again over the canary
+or the committed data (owner ruling, 2026-10-05). The canary keeps only the
+explorer checks that do not depend on what it holds: layout, notices and
+browser storage.
+
+**Find a test that depends on what the canary holds by moving the canary day.**
+Set `DATE` in `backend/utilities/build_canary_day.py` to a later day, run the
+specs with `npm run test:changed -- --spec <name>`, which builds the canary
+again from the edited file, then set `DATE` back. A test that turns red reads
+what the canary holds. The move is a measurement and is never committed.
+`test:changed` stops a browser run at its first failure, so to count every red
+test, run Playwright on the specs directly against that build. Setting `DATE`
+back needs no clean-up by hand: the canary day build deletes every folder it
+writes before it writes, so the next build holds nothing from the moved day.
 
 ## A chart has no plot until somebody scrolls to it
 

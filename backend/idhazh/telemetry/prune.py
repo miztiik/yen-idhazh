@@ -76,7 +76,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
-from idhazh import day_partition, ledger
+from idhazh import config, day_partition, ledger
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN, ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
@@ -123,18 +123,14 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: deleting a fitted row takes a day out of the guard's median and out of what
 #: step 4 compares against. Either can go on its own.
 #:
-#: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
-#: and the path land ahead of the step that appends to them (Guardrail #3), and a
-#: ledger an operator cannot name is a ledger a day cannot be taken out of. A range
-#: over a ledger with no file selects nothing and says so. The four
-#: `content-similarity-judge` ledgers are here for the same reason, and they are
-#: the judge's rather than the council's: what a reading is about decides where
+#: The three `content-similarity-judge` ledgers still on CSV are here before
+#: their first row for the same reason: a ledger an operator cannot name is a
+#: ledger a day cannot be taken out of. What a reading is about decides where
 #: it is filed, never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-    LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
@@ -173,12 +169,11 @@ def door_refusals(tasks: Mapping[str, TaskPolicy]) -> dict[str, str]:
     declares is refused too: nothing then says whether its days may go, and a
     delete is the one answer that cannot be taken back.
     """
-    declared = {
-        policy.ledger: policy for policy in tasks.values() if isinstance(policy, CompactionPolicy)
-    }
     refused: dict[str, str] = {}
     for word, name in DOOR_LEDGERS.items():
-        policy = declared.get(name)
+        policy = tasks.get(config.compaction_task(name))
+        if not isinstance(policy, CompactionPolicy) or policy.ledger is not name:
+            policy = None
         if policy is None:
             refused[word] = (
                 "no compaction under config/gardener/ declares it, so nothing says whether "

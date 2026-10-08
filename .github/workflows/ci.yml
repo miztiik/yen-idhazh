@@ -288,6 +288,10 @@ jobs:
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
+      - name: Check published ledger columns
+        working-directory: frontend
+        run: python -m idhazh published-columns --site-tree build
+
       # The oracle for the assist row: delete the whole model directory, build,
       # and the digest must be untouched. If it degrades at all, the feature is
       # on the critical path and the row has failed. Last in this job, because

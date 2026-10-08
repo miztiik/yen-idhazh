@@ -16,6 +16,7 @@
 	 */
 	import Panel from '$lib/components/Panel.svelte';
 	import { memoryHeldWithin, type MemoryHeldRecord } from '$lib/console/machine/memory-held';
+	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 
 	let {
 		record,
@@ -36,17 +37,22 @@
 	heading="h3"
 	id="memory-held"
 	title="What is holding the machine's memory"
-	note="The two parts of the bar add up to the machine and the two brackets under it do not, which is why they are drawn overlapping rather than side by side - one bar for the tightest moment of each day, over the last {days} days."
+	note="The two parts of the bar add up to the machine and the two brackets under it do not, which is why they are drawn overlapping rather than side by side - {days ===
+	1
+		? `one bar for the tightest moment of ${nameSpan(days)}`
+		: `one bar for the tightest moment of each day, over ${nameSpan(days)}`}."
 	wide
 >
 	{#if view.empty}
 		<p class="empty" data-machine-panel-empty="memory-held">
 			{#if record.firstDate === null}
 				No day this ledger holds recorded what the machine itself had, so there is nothing to
-				split up. Read over {record.daysRead} days.
+				split up. Read over {countDays(record.daysRead)}.
 			{:else}
-				No day in these {days} days recorded what the machine itself had. The reading begins on
-				{record.firstDate}.
+				{days === 1
+					? `${openWithSpan(days)} did not record what the machine itself had.`
+					: `No day in ${nameSpan(days)} recorded what the machine itself had.`}
+				The reading begins on {record.firstDate}.
 			{/if}
 		</p>
 	{:else}
@@ -169,7 +175,12 @@
 				the other {view.twoShape} draw one held part, because the run that wrote them recorded no
 				such reading.
 			{:else if view.fourShape > 0}
-				Every day here splits the held part into what each process holds on its own.
+				{days === 1
+					? `${openWithSpan(days)} splits the held part into what each process holds on its own.`
+					: 'Every day here splits the held part into what each process holds on its own.'}
+			{:else if days === 1}
+				{openWithSpan(days)} draws one held part rather than splitting it, because no run that wrote
+				the day recorded what each process holds on its own.
 			{:else}
 				Every day here draws one held part rather than splitting it, because no run that wrote
 				these days recorded what each process holds on its own.
@@ -183,9 +194,11 @@
 			and neither may be added to a part of the bar.
 		</p>
 
-		{#if record.firstDate !== null}
+		<!-- With one day of ledger there is no day before the reading began, and
+		     the bar already shows the reading, so the line says nothing then. -->
+		{#if record.firstDate !== null && record.daysRead > 1}
 			<p class="reads" data-memory-begins={record.firstDate}>
-				The machine's own reading begins on {record.firstDate}, over {record.daysRead} days of
+				The machine's own reading begins on {record.firstDate}, over {countDays(record.daysRead)} of
 				ledger; a day before it draws no bar rather than an empty one.
 			</p>
 		{/if}

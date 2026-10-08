@@ -9,15 +9,16 @@ from typing import cast
 
 import pytest
 from conftest import SEED_COMMIT
-from gardener.tasks._task import declared as task_declarations
+from gardener._historical_config import PRE_YEARLY_CONFIG
+from gardener.tasks._marks import marks_on_disk
 
-from idhazh import day_shards, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactIndex, EntryState, Watermark
+from idhazh.contracts.ledger_index import CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
@@ -49,13 +50,13 @@ class _Packed:
 
     Each daily entry: for a day with a file, the file's path, row count, source
     count, content digest and rows beside the identity their raw file gave them;
-    for a day with no file, its state. The daily watermark's day; and the raw
-    days still waiting. A file's envelope also names its writer and the instant
-    it was written, which two writers never share.
+    for a day with no file, its state. The daily mark the indexes give; and the
+    raw days still waiting. A file's envelope also names its writer and the
+    instant it was written, which two writers never share.
     """
 
     daily: dict[str, tuple[object, ...]]
-    through: str
+    through: str | None
     monthly: bool
     raw: list[str]
 
@@ -82,7 +83,7 @@ def _packed(state: Path, which: LedgerName) -> _Packed:
         )
     return _Packed(
         daily=daily,
-        through=Watermark.read(ledger.watermark_path(state, which, Period.DAILY)).through,
+        through=marks_on_disk(state, which)[Period.DAILY],
         monthly=ledger.compact_index_path(state, which, Period.MONTHLY).exists(),
         raw=ledger.raw_days(state, which),
     )
@@ -90,7 +91,8 @@ def _packed(state: Path, which: LedgerName) -> _Packed:
 
 def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
     """What the gardener hands this ledger's declared compaction over `root`, turned live."""
-    declared = task_declarations()[f"compact-{which.value}"]
+    settings = config.load_gardener(PRE_YEARLY_CONFIG)
+    declared = settings.tasks[f"compact-{which.value}"]
     assert isinstance(declared, CompactionPolicy)
     return TaskContext(
         state_dir=root / ledger.STATE_DIRNAME,
@@ -102,12 +104,13 @@ def _live(root: Path, which: LedgerName, today: date) -> TaskContext:
         job=ServerJob.RUN_TASKS,
         shard=0,
         git_sha=SEED_COMMIT,
-        owned_folders=tuple(declared.owns),
+        owned_folders=tuple(folder for folder in declared.owns if (root / folder).is_dir()),
         listing=FileListing.from_disk(
             root,
             declared.owns,
             paths=(root / folder for folder in declared.owns),
         ),
+        first_ledger_year=settings.config.first_ledger_year,
     )
 
 
@@ -118,8 +121,8 @@ def test_packing_leaves_what_a_live_compaction_leaves_over_the_same_raw_files(
 
     Both trees get the same raw files: one a CSV day, filed under the
     migration's own writer. The declared compaction turned live then leaves the
-    same daily entries, files, index and watermark, so a compaction turned on
-    after the move resumes from the right day. It takes two wakes where the
+    same daily entries, files and index, so a compaction turned on after the
+    move resumes from the right day. It takes two wakes where the
     migration takes one pass, because its declared budget is eight days a wake
     and the migration's is every day the rule admits: that changes when a day is
     packed, never what it holds. A first packing starts at the oldest raw day, so
@@ -162,7 +165,7 @@ def test_a_late_file_for_a_moved_day_is_folded_in_packed_again_and_proven(tmp_pa
 
     Its day was already moved and packed. The next run folds the file onto what
     the door holds, files the answer under the migration's own work unit, packs
-    the day again and proves it; the watermark stays where it was. A run with
+    the day again and proves it; the daily mark stays where it was. A run with
     nothing new in between moves nothing.
     """
     state = tmp_path / "state"
@@ -193,5 +196,5 @@ def test_a_late_file_for_a_moved_day_is_folded_in_packed_again_and_proven(tmp_pa
     index = CompactIndex.read(ledger.compact_index_path(state, ITEM, Period.DAILY))
     assert {entry.covers: entry.rows for entry in index.entries} == {OLD: 2}
     assert ledger.raw_days(state, ITEM) == [], "the day's new raw file was packed in"
-    assert Watermark.read(ledger.watermark_path(state, ITEM, Period.DAILY)).through == OLD
+    assert marks_on_disk(state, ITEM)[Period.DAILY] == OLD
     assert not csv_files.left(state, [ITEM], months=MONTHS)

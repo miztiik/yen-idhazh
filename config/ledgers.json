@@ -223,21 +223,6 @@
       ]
     },
     {
-      "name": "llm-council",
-      "lifecycle_status": "active",
-      "description": "How each unit of the nightly judging workflow ended, and what it cost.",
-      "onboarded": "2026-09-21",
-      "ledgers": [
-        {
-          "name": "shard-outcomes",
-          "grain": "day",
-          "prefix": ["llm-council", "shard-outcomes"],
-          "stem": null,
-          "suffix": ".csv"
-        }
-      ]
-    },
-    {
       "name": "traces",
       "lifecycle_status": "active",
       "description": "Raw step timings of recent runs, kept a short while so an operator can open one.",
@@ -307,6 +292,21 @@
           "name": "run-plan",
           "grain": "raw-and-compact",
           "prefix": ["run-plan"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "council-run-records",
+      "lifecycle_status": "active",
+      "description": "How each step of the nightly judging workflow ended, and what it cost.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "council-run-records",
+          "grain": "raw-and-compact",
+          "prefix": ["council-run-records"],
           "stem": null,
           "suffix": null
         }

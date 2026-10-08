@@ -66,9 +66,6 @@ INDEX_DIRNAME: Final = "index"
 #: The folder under a ledger's raw root that holds every file a compaction could not read.
 SET_ASIDE_DIRNAME: Final = "set-aside"
 
-#: What each compact period's resume mark is called, inside that period's folder.
-WATERMARK_FILENAME: Final = "watermark.json"
-
 #: The suffix of the small JSON files the gardener rewrites whole.
 _JSON_SUFFIX: Final = ".json"
 
@@ -143,7 +140,8 @@ def _no_registry_address(held: LedgerEntry) -> ValueError:
         f"{STATE_DIRNAME}/{RAW_DIRNAME}/ and {STATE_DIRNAME}/{COMPACT_DIRNAME}/, inside "
         "the registry prefix and named by their own grammar, so the registry holds no "
         "single address for it. "
-        "Ask raw_path, compact_path, compact_index_path or watermark_path"
+        "Ask raw_path, compact_path or compact_index_path, or raw_root or compact_root for a "
+        "folder a reader walks"
     )
 
 
@@ -247,10 +245,26 @@ def _resolved_root(absolute: Path) -> Path:
     return absolute.resolve()
 
 
-def _shown(state_dir: Path, built: Path) -> str:
-    """A path as it may leave the process: relative to the state root, POSIX (section 2)."""
+def _state_folder(root: Path) -> Path | None:
+    """The `state` folder that contains this root, or None for a synthetic test root."""
+    for candidate in (root, *root.parents):
+        if candidate.name == STATE_DIRNAME:
+            return candidate
+    return None
+
+
+def shown(state_dir: Path, built: Path) -> str:
+    """A path as it may leave the process: from its `state` folder, POSIX (section 2)."""
+    root = _resolved_root(state_dir.absolute())
+    target = built.resolve()
+    state_folder = _state_folder(root)
+    if state_folder is not None:
+        try:
+            return target.relative_to(state_folder.parent).as_posix()
+        except ValueError:
+            pass
     try:
-        below = os.path.relpath(built.resolve(), _resolved_root(state_dir.absolute()))
+        below = os.path.relpath(target, root)
     except ValueError:
         return built.name
     return PurePath(STATE_DIRNAME, below).as_posix()
@@ -270,7 +284,7 @@ def _under_the_two_roots(state_dir: Path, built: Path) -> Path:
         first = ()
     if not first or first[0] not in _THE_TWO_ROOTS:
         raise ValueError(
-            f"{_shown(state_dir, built)} is outside the two roots. Everything the ledger "
+            f"{shown(state_dir, built)} is outside the two roots. Everything the ledger "
             f"door writes sits under {STATE_DIRNAME}/{Tier.RAW.value}/ or "
             f"{STATE_DIRNAME}/{Tier.COMPACT.value}/, so a third root is refused rather "
             "than created"
@@ -341,6 +355,41 @@ def set_aside_path(
     return _under_the_two_roots(state_dir, built)
 
 
+def _compact_folder_path(
+    state_dir: Path, ledger: LedgerName, *, registry: DoorRegistry | None = None
+) -> Path:
+    """`compact/<folders>/` under the state root, unchecked: each builder checks its own result."""
+    return state_dir.joinpath(COMPACT_DIRNAME, *door_folders(ledger, registry=registry))
+
+
+def compact_folder(
+    state_dir: Path, ledger: LedgerName, *, registry: DoorRegistry | None = None
+) -> Path:
+    """The folder that holds everything one ledger packed: `compact/<folders>/`.
+
+    Its period folders and its index folder sit in it. `compact_root` and
+    `compact_index_path` are built from the same spelling, so where a ledger's
+    packed files sit is spelled once.
+    """
+    return _under_the_two_roots(
+        state_dir, _compact_folder_path(state_dir, ledger, registry=registry)
+    )
+
+
+def compact_root(
+    state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
+) -> Path:
+    """The folder that holds one ledger's files of one period: `compact/<folders>/<period>/`.
+
+    What a reader walks to find which days, months or years a ledger has files
+    for. `compact_path` is built from it, so the folder a reader walks and the
+    file a compaction writes in it cannot disagree about where the period sits.
+    """
+    return _under_the_two_roots(
+        state_dir, _compact_folder_path(state_dir, ledger, registry=registry) / period.value
+    )
+
+
 def compact_path(
     state_dir: Path,
     ledger: LedgerName,
@@ -356,9 +405,7 @@ def compact_path(
     or `compact/<ledger>/yearly/<YYYY>/<YYYY>`. A compact period has one writer, so its
     name is the period rather than a minted id, and a reader can compute the
     address. `covers` has to be the shape `period` covers, or this refuses rather
-    than file a month under a day. No file sits directly beside its period's
-    watermark, a year file included, because fetching a watermark into a checkout
-    that holds only names brings every file beside it.
+    than file a month under a day.
     """
     if not covers_fits(covers, tier=Tier.COMPACT, period=period):
         raise ValueError(
@@ -366,12 +413,8 @@ def compact_path(
             "a monthly file covers YYYY-MM and a yearly file covers YYYY"
         )
     *folders, leaf = covers.split("-")
-    built = state_dir.joinpath(
-        COMPACT_DIRNAME,
-        *door_folders(ledger, registry=registry),
-        period.value,
-        *(folders or [leaf]),
-        f"{leaf}.{fmt.value}",
+    built = compact_root(state_dir, ledger, period, registry=registry).joinpath(
+        *(folders or [leaf]), f"{leaf}.{fmt.value}"
     )
     return _under_the_two_roots(state_dir, built)
 
@@ -380,27 +423,7 @@ def compact_index_path(
     state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
 ) -> Path:
     """Where the listing of one compact period sits: `compact/<folders>/index/<period>.json`."""
-    built = state_dir.joinpath(
-        COMPACT_DIRNAME,
-        *door_folders(ledger, registry=registry),
-        INDEX_DIRNAME,
-        f"{period.value}{_JSON_SUFFIX}",
-    )
-    return _under_the_two_roots(state_dir, built)
-
-
-def watermark_path(
-    state_dir: Path, ledger: LedgerName, period: Period, *, registry: DoorRegistry | None = None
-) -> Path:
-    """Where one compact period's resume mark sits: `compact/<folders>/<period>/watermark.json`.
-
-    It records the newest period this roll-up has looked at, including one that
-    held nothing, which is the one fact no listing of the tree can recover.
-    """
-    built = state_dir.joinpath(
-        COMPACT_DIRNAME,
-        *door_folders(ledger, registry=registry),
-        period.value,
-        WATERMARK_FILENAME,
+    built = _compact_folder_path(state_dir, ledger, registry=registry).joinpath(
+        INDEX_DIRNAME, f"{period.value}{_JSON_SUFFIX}"
     )
     return _under_the_two_roots(state_dir, built)

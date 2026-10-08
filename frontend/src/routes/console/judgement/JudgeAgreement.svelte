@@ -28,13 +28,14 @@
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { dayMonth } from '$lib/format';
+	import { dayMonth, plural } from '$lib/format';
 	import {
 		agreementCorridor,
 		rateWithDenominator,
 		type AgreementLimits,
 		type JudgeDay
 	} from '$lib/console/merge-line';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -90,13 +91,60 @@
 		return `${Math.round(share * 100)}%`;
 	}
 
+	/** One day's two readings in words: what the strip prints at that day, and
+	 * the name its two dots carry, written together so the two never differ.
+	 *
+	 * A share needs `attemptsFloor` pairs behind it, the floor the sentence under
+	 * the strip keeps through `rateWithDenominator`, so the strip and the
+	 * sentence agree about when a share is a measurement. Under it the day prints
+	 * its counts and no share, which are the counts that sentence points at.
+	 * "Could not tell" is counted against the pairs whose two readings agreed,
+	 * the only pairs its share is taken over. The words are Reader's.
+	 */
+	function readingsOf(day: JudgeDay): { disagreed: string; unclear: string; name: string } {
+		const date = dayMonth(day.date);
+		const shares = {
+			disagreed: rateWithDenominator(
+				day.disagreementRate * day.pairsJudged,
+				day.pairsJudged,
+				attemptsFloor
+			),
+			unclear: rateWithDenominator(day.unclearRate * day.pairsJudged, day.pairsJudged, attemptsFloor)
+		};
+		if (shares.disagreed !== null && shares.unclear !== null) {
+			return {
+				disagreed: shares.disagreed,
+				unclear: shares.unclear,
+				name: `${date}: ${shares.disagreed} disagreed with the second reading, and ${percent(day.unclearRate)} could not tell.`
+			};
+		}
+		const disagreedCount = Math.round(day.disagreementRate * day.pairsJudged);
+		const agreedCount = day.pairsJudged - disagreedCount;
+		const disagreedWords = `${disagreedCount} of ${plural(day.pairsJudged, 'pair', 'pairs')}`;
+		if (agreedCount === 0) {
+			const notCounted = 'not counted, no pair agreed';
+			return {
+				disagreed: disagreedWords,
+				unclear: notCounted,
+				name: `${date}: ${disagreedWords} disagreed with the second reading. Could not tell: ${notCounted}.`
+			};
+		}
+		const unclearWords = `${Math.round(day.unclearRate * agreedCount)} of the ${agreedCount} that agreed`;
+		return {
+			disagreed: disagreedWords,
+			unclear: unclearWords,
+			name: `${date}: ${disagreedWords} disagreed with the second reading, and ${unclearWords} could not tell.`
+		};
+	}
+
 	const marks = $derived(
 		read.map((day, index) => ({
 			date: day.date,
 			x: px(columnsX[index]),
 			disagreeY: px(yAxis.scale(Math.min(day.disagreementRate, corridor[1]))),
 			unclearY: px(yAxis.scale(Math.min(day.unclearRate, corridor[1]))),
-			day
+			day,
+			said: readingsOf(day)
 		}))
 	);
 	const disagreePath = $derived(marks.map((mark) => `${mark.x},${mark.disagreeY}`).join(' '));
@@ -129,25 +177,19 @@
 					label: 'Disagreed with the second reading',
 					swatch: 'var(--chart-1)',
 					values: marks.map((mark) => mark.day.disagreementRate),
-					format: (rate: number, column: number) =>
-						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0} pairs`
+					format: (_: number, column: number) => marks[column].said.disagreed
 				},
 				{
 					label: 'Could not tell',
 					swatch: 'var(--chart-3)',
 					values: marks.map((mark) => mark.day.unclearRate),
-					format: (rate: number, column: number) =>
-						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0} pairs`
+					format: (_: number, column: number) => marks[column].said.unclear
 				}
 			],
 			notMeasured: 'No pair was read twice on this day',
 			resting: 'last'
 		})
 	);
-
-	function daySentence(day: (typeof marks)[number]['day']): string {
-		return `${dayMonth(day.date)}: ${percent(day.disagreementRate)} of ${day.pairsJudged} pairs disagreed with the second reading, and ${percent(day.unclearRate)} could not tell.`;
-	}
 	const count = $derived(readout.columns.length);
 </script>
 
@@ -174,7 +216,9 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label="How often the judge disagreed with its own second reading, a day"
+				aria-label={windowDays === 1
+					? `How often the judge disagreed with its own second reading, in ${nameSpan(windowDays)}`
+					: 'How often the judge disagreed with its own second reading, a day'}
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
@@ -246,7 +290,7 @@
 				{#each marks as mark (mark.date)}
 					<g
 						role="img"
-						aria-label={daySentence(mark.day)}
+						aria-label={mark.said.name}
 						data-agreement-day={mark.date}
 						data-agreement-judged={mark.day.pairsJudged}
 					>
@@ -280,23 +324,24 @@
 		<p class="agreement-note">
 			{#if read.length === 0}
 				<span data-agreement-state="none"
-					>No pair has been read twice yet, so there is nothing to compare.</span
+					>No pair was read twice in {nameSpan(windowDays)}, so there is nothing to compare.</span
 				>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
-					>{judged} pairs have been read twice. That is too few to report a share, so the
-					counts are below.</span
+					>{plural(judged, 'pair', 'pairs')}
+					{judged === 1 ? 'was' : 'were'} read twice in {nameSpan(windowDays)}. That is too few
+					to report a share, so the counts are above.</span
 				>
 			{:else if heldByJudge > 0}
 				<span data-agreement-state="past-mark"
-					>The two readings disagreed on {disagreeShare}, which is past the mark. No line
-					was fitted on {heldByJudge}
-					{heldByJudge === 1 ? 'day' : 'days'} because of it.</span
+					>The two readings disagreed on {disagreeShare} in {nameSpan(windowDays)}. No line was
+					fitted on {heldByJudge} of {countDays(windowDays)}, because a rate was past its mark on
+					{heldByJudge === 1 ? 'that day' : 'those days'}.</span
 				>
 			{:else}
 				<span data-agreement-state="inside"
-					>{disagreeShare} disagreed with their own second reading, and {unclearShare} could
-					not tell. Both rates are inside the marks.</span
+					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
+					{unclearShare} could not tell. Both rates are inside the marks.</span
 				>
 			{/if}
 		</p>

@@ -1,6 +1,6 @@
 """Does a row arriving twice change any answer a union-safe tree gives?
 
-`.gitattributes` gives five committed collections `merge=union`, so a merge that
+`.gitattributes` gives three committed collections `merge=union`, so a merge that
 finds the same row on both sides keeps both copies. That is safe only where the
 row is keyed and something settles the repeat: the same key twice is one record
 recorded twice, never two records.
@@ -22,7 +22,6 @@ from pathlib import Path
 import pytest
 
 from idhazh import ledger, path_classes
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 
@@ -37,12 +36,6 @@ AN_ADDRESS = "a" * 64
 #: so a tree added to that list without a row here fails rather than merges
 #: untested.
 _TREES = (
-    (
-        "state/llm-council/shard-outcomes",
-        CouncilShardOutcome,
-        ledger.COUNCIL_SHARD_OUTCOME_KEY,
-        {"date": A_DATE, "run_id": A_RUN, "judge_id": "judge-a", "shard": "0"},
-    ),
     (
         "state/content-similarity-judge/scored-pairs",
         StorySimilarityPair,
@@ -64,7 +57,7 @@ def _doubled(path: Path) -> None:
 
 
 def test_every_union_safe_tree_has_a_repeat_case_beside_it() -> None:
-    """A sixth tree joins the list and arrives with nothing proving it settles.
+    """A fourth tree joins the list and arrives with nothing proving it settles.
 
     `state/content-similarity-judge/metrics` is the one entry with no case
     below. It is named here so the gap is a known one rather than a silent one.
@@ -107,30 +100,3 @@ def test_a_row_arriving_twice_settles_back_to_one(
 
     assert dropped == 1, f"{tree}: the repeat was read as a second record"
     assert path.read_bytes() == once, f"{tree}: the settled file is not what one arrival wrote"
-
-
-def test_two_shards_of_one_run_are_two_records(tmp_path: Path) -> None:
-    """The other half, or the case above would pass on a function that kept one row.
-
-    Two council shards of one run are two units of work, and a settlement that
-    collapsed them would lose one shard's record for ever.
-    """
-    columns = CouncilShardOutcome.csv_columns()
-    path = tmp_path / "shard-outcomes.csv"
-    rows = [
-        {
-            name: {
-                "date": A_DATE,
-                "run_id": A_RUN,
-                "judge_id": "judge-a",
-                "shard": shard,
-            }.get(name, "")
-            for name in columns
-        }
-        for shard in ("0", "1")
-    ]
-    path.write_text(ledger.render_file(columns, rows), encoding="utf-8", newline="")
-    both = path.read_bytes()
-
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-    assert path.read_bytes() == both

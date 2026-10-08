@@ -13,6 +13,9 @@ from idhazh.contracts.item_health import RETIRED_CELLS
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, MonthsWindow, Window
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry
+from idhazh.contracts.merge_line_holdout_score import (
+    DROPPED_CELLS as DROPPED_HOLDOUT_SCORE_CELLS,
+)
 from utilities.ledger_migration.refusals import RefusedError
 
 
@@ -25,7 +28,11 @@ class CsvLedger(NamedTuple):
 
 
 def _tree(name: LedgerName, folder: str | None = None) -> LedgerEntry:
-    """A CSV day tree, one file a writer a day, under its own name unless it sat elsewhere."""
+    """A CSV day tree, one file a writer a day, under its own name unless it sat elsewhere.
+
+    `folder` is a path under `state/`, and may hold a family's folder before the
+    ledger's own, as `content-similarity-judge/merge-line-holdout-scores` does.
+    """
     return LedgerEntry(
         name=name, grain=Grain.DAY_TREE, prefix=tuple((folder or name.value).split("/"))
     )
@@ -40,14 +47,12 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
     {
         # The full-grain series of the telemetry-aggregate task deleted it.
         LedgerName.ITEM_HEALTH: CsvLedger(
-            _tree(LedgerName.ITEM_HEALTH),
-            MonthsWindow(unit="months", value=14),
+            _tree(LedgerName.ITEM_HEALTH), MonthsWindow(unit="months", value=14),
             RETIRED_CELLS,
         ),
         # Filed under `scores/`, its name before it was renamed. No eval row is deleted.
         LedgerName.SUMMARY_QUALITY_EVALS: CsvLedger(
-            _tree(LedgerName.SUMMARY_QUALITY_EVALS, "scores"),
-            ForeverWindow(unit="forever"),
+            _tree(LedgerName.SUMMARY_QUALITY_EVALS, "scores"), ForeverWindow(unit="forever"),
             RENAMED_CELLS,
         ),
         # The host-fingerprint retention task deleted it, until its compaction took over.
@@ -70,7 +75,7 @@ CSV_LEDGERS: Final[Mapping[LedgerName, CsvLedger]] = MappingProxyType(
                 "content-similarity-judge/merge-line-holdout-scores",
             ),
             ForeverWindow(unit="forever"),
-            MappingProxyType({"key_point_weight": None}),
+            MappingProxyType(dict.fromkeys(DROPPED_HOLDOUT_SCORE_CELLS)),
         ),
         LedgerName.SEEN: CsvLedger(_day_file(LedgerName.SEEN), DaysWindow(unit="days", value=90)),
         # Nothing deletes a published record: forgetting one republishes it.
@@ -88,7 +93,7 @@ def require_layout(which: LedgerName) -> LedgerEntry:
     if which not in CSV_LEDGERS:
         raise RefusedError(f"{which.value}: no supported CSV layout in CSV_LEDGERS")
     entry = CSV_LEDGERS[which].old_entry
-    if entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
+    if not entry.prefix or entry.grain not in (Grain.DAY_TREE, Grain.DAY_FILE):
         raise RefusedError(
             f"{which.value}: unsupported CSV layout {entry.grain.value} "
             f"under {'/'.join(entry.prefix)}"

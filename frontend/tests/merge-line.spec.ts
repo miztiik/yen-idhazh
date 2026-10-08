@@ -18,6 +18,8 @@ import {
 	clampNote,
 	corridorOf,
 	countedDays,
+	describeEarlierRow,
+	findNewestRow,
 	gateNeeds,
 	heldInWords,
 	heldNote,
@@ -227,19 +229,17 @@ test.describe('where the merge line sits', () => {
 	test('the clamp sentence counts the days a clamp fired and no others', () => {
 		// Two of the four: the daily step and the guard. The day that took its
 		// proposal whole and the day nothing was fitted are not clamps.
-		expect(clampNote(LINE, 30)).toBe('The clamp held the line back on 2 of the last 30 days.');
+		expect(clampNote(LINE, 30)).toBe('The clamp held the line back on 2 of 30 days.');
 	});
 
 	test('a window where the clamp never fired says so rather than printing a zero', () => {
-		expect(clampNote(LINE.slice(0, 1), 7)).toBe(
-			'The clamp has not held the line back on any of the last 7 days.'
-		);
+		expect(clampNote(LINE.slice(0, 1), 7)).toBe('The clamp has not held the line back in these 7 days.');
 	});
 
 	test('a held day is counted and a window with none says nothing at all', () => {
 		// Null rather than "0 days were held": a sentence a reader has to parse to
 		// learn that nothing happened is a sentence that should not be there.
-		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of these 30 days.');
+		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of 30 days.');
 		expect(heldNote(LINE.slice(0, 3), 30)).toBeNull();
 	});
 });
@@ -283,6 +283,47 @@ test.describe('the judge, and what the record still needs', () => {
 		for (const need of needs) {
 			expect(need.targetText, 'a bar was drawn with no words under its marker').not.toBe('');
 		}
+	});
+
+	test('the bars read the newest row on or before the last day, inside the window or before it', () => {
+		// The record changes only when a run writes a row, so a window with no row
+		// leaves it as its newest earlier row counted it, never at zero.
+		const rows = [
+			judgeDay('2030-06-12'),
+			judgeDay('2030-06-14', { negativesOnRecord: 120, daysOnRecord: 6, aboveLineOnRecord: 12 }),
+			judgeDay('2030-06-20')
+		];
+		const gates = { minimumNegatives: 200, minimumDays: 10, minimumAboveLine: 30 };
+
+		expect(findNewestRow(rows, '2030-06-15')?.date).toBe('2030-06-14');
+		expect(findNewestRow(rows, '2030-06-14')?.date).toBe('2030-06-14');
+		expect(findNewestRow([...rows].reverse(), '2030-06-15')?.date).toBe('2030-06-14');
+		expect(gateNeeds(findNewestRow(rows, '2030-06-15'), gates).map((need) => need.value)).toEqual([
+			120, 6, 12
+		]);
+		// No row by then is a record that never held one, which keeps its three zeros.
+		expect(findNewestRow(rows, '2030-06-11')).toBeNull();
+		expect(findNewestRow([], '2030-06-15')).toBeNull();
+	});
+
+	test('the note names the day the bars stand on, and says started again only where that row does', () => {
+		const zeros = { negativesOnRecord: 0, daysOnRecord: 0, aboveLineOnRecord: 0 };
+
+		expect(describeEarlierRow(judgeDay('2030-06-14'), 1)).toBe(
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+		);
+		expect(describeEarlierRow(judgeDay('2030-06-01'), 7)).toBe(
+			'The bars show what the record held on 1 Jun 2030, before these 7 days. No run has recorded anything since.'
+		);
+		expect(
+			describeEarlierRow(judgeDay('2030-06-14', { ...zeros, heldReason: 'inputs_changed' }), 1)
+		).toBe(
+			'The record was started again on 14 Jun 2030, before this one day. No run has recorded anything since.'
+		);
+		// Zeros alone do not prove the record was started again.
+		expect(describeEarlierRow(judgeDay('2030-06-14', zeros), 1)).toBe(
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+		);
 	});
 
 	test('a held day while the gates are unfilled is not a warning', () => {

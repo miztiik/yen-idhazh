@@ -114,6 +114,10 @@ jobs:
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
+      - name: Check published ledger columns
+        working-directory: frontend
+        run: python -m idhazh published-columns --site-tree build
+
       - name: Commit the repaired days
         if: inputs.commit
         env:

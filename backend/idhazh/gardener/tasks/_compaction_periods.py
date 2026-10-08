@@ -2,10 +2,13 @@
 
 Each step chooses from the ledger's own marks, the wake's UTC day and its
 declaration, never from folders a planner named for another step, so no step
-is offered a period from before its ledger began. The choice opens no file and
-lists nothing: the pass first names the months a first day run looks back over
-(`first_run_months`), then the choice is made once, before any step runs,
-logged, and handed to each step as its parameters (`PeriodsChosen`).
+is offered a period from before its ledger began. Each mark is worked out from
+the ledger's indexes (`ledger_marks.work_out_marks`), so a step has no mark only
+when no index names a period of its kind or a coarser one. The choice opens no
+file and lists nothing: the pass first names the months a first day run looks
+back over (`first_run_months`), then the choice is made once, before any step
+runs, logged, and handed to each step as its parameters (`PeriodsChosen`). A
+pass that takes nothing ends on the word the same choice gives (`idle_word`).
 
 **The drop step takes the oldest months past the keep line**, the oldest month
 the monthly window keeps. It starts at the oldest monthly entry, because the
@@ -16,20 +19,21 @@ counts entries rather than calendar months.
 
 **The year step takes the years after its mark**, and only where the
 declaration sets `monthly_keep_days`. It starts at the year after the yearly
-mark; with no mark, at the oldest year an index names - a yearly entry a pass
-cut before its mark left, or the year that holds the oldest monthly entry; with
-nothing indexed, nowhere. It takes consecutive years, each at least
+mark; with no mark, at the year that holds the oldest monthly entry; with no
+monthly entry either, nowhere. It takes consecutive years, each at least
 `monthly_keep_days` whole days past its end and each whose December the
 monthly mark is strictly past, so its next January is closed too, at most
 `max_periods_per_run` of them.
 
 **The month step takes the months after its mark.** It starts at the month
-after the monthly mark; with no mark, at the oldest month an index names; with
-nothing indexed, nowhere. It takes consecutive months, each at least
+after the monthly mark; with no mark, at the oldest month the daily index
+names; with nothing indexed, nowhere. It takes consecutive months, each at least
 `daily_keep_days` whole days past its end and each one whose last day the daily
 mark has reached, at most `max_periods_per_run` of them. A month in that span
 that a raw day still waits in is held when the step comes to it, once its raw
-folder is named; whether a day waits is a file, not a mark.
+folder is named; whether a day waits is a file, not a mark. The drop step
+taking months out of the index moves no mark, so the month step never starts
+at a month the drop step took.
 
 **The day step takes the days after its mark.** It starts at the day after the
 daily mark and takes days up to the earlier of the mark plus
@@ -37,8 +41,7 @@ daily mark and takes days up to the earlier of the mark plus
 `compact_after_days` whole days past its end. With no mark, a first run starts
 at the oldest raw day in the months it looks back over: the operator range's,
 or the month that holds the newest due day and the `lookback` months before it.
-A daily index with no mark beside it, which a pass cut before its mark landed
-leaves, starts it at its oldest day instead when that is older. While the
+While the
 monthly window's deletes are live a first run starts no earlier than the keep
 line, the oldest month the window keeps, and with no day to start at it takes
 nothing. The span is the most the step takes: the step also names the raw
@@ -55,6 +58,8 @@ stops at the first that does not (`CompactTree.fit_to_budget`).
 A range that ends before the step's first period leaves nothing to take. A
 range that starts after it, while that first period is ready, is refused at
 that period, so the person widens the range rather than finding it left open.
+The refusal defers the pass with the fault `range-starts-late`: a person's
+range, not a defect, so the job stays green.
 Whether that period is ready is read from the calendar and the marks alone, so
 the refusal reads nothing outside the range. The year step counts only the
 whole years a range holds, January to December, so it reads no month outside
@@ -73,11 +78,27 @@ from datetime import UTC, date, datetime, timedelta
 
 from idhazh import month_partition
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice
+from idhazh.contracts.gardener_events import PeriodsChosen, StartReason, StepChoice, TaskOutcome
 from idhazh.contracts.knobs.gardener import GITHUB_RERUN_DAYS, CompactionPolicy
 from idhazh.gardener import schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree
 from idhazh.gardener.tasks._monthly_period import days_of, first_kept_month, shift
+
+
+def idle_word(chosen: PeriodsChosen) -> TaskOutcome:
+    """The word a pass that found nothing to do ends on, read off what it chose.
+
+    A range a person named answers first: a first day run with a range looks
+    only inside it, so its `none` cannot tell an empty ledger from an empty
+    range, and `outside-range` is true of both. Otherwise a ledger whose every
+    step has nothing to start from is `empty`, and any other is `not-due`.
+    """
+    if chosen.operator_range is not None:
+        return TaskOutcome.OUTSIDE_RANGE
+    steps = (chosen.drops, chosen.years, chosen.months, chosen.days)
+    if all(step is None or step.start is StartReason.NONE for step in steps):
+        return TaskOutcome.EMPTY
+    return TaskOutcome.NOT_DUE
 
 
 def choose(
@@ -198,7 +219,7 @@ def _span(
             if ready is not None and start <= ready:
                 return StepChoice(
                     start=StartReason.OPERATOR_RANGE,
-                    stopped_because=StopReason.FAILED,
+                    stopped_because=StopReason.DEFERRED,
                     resume_from=start,
                 )
             return StepChoice(start=StartReason.OPERATOR_RANGE)
@@ -272,9 +293,8 @@ def _years(
         return None
     if tree.yearly_through is not None:
         start, why = _year_after(tree.yearly_through, 1), StartReason.MARK
-    elif tree.yearly or tree.monthly:
-        start = min([*tree.yearly, *(month[:4] for month in tree.monthly)])
-        why = StartReason.OLDEST_INDEXED
+    elif tree.monthly:
+        start, why = min(tree.monthly)[:4], StartReason.OLDEST_INDEXED
     else:
         return StepChoice(start=StartReason.NONE)
     newest = schedule.newest_eligible_year(now=now, after_days=policy.monthly_keep_days)
@@ -299,8 +319,6 @@ def _months(
     """The months the month step may close: from its mark, ready, in range, to the cap."""
     if tree.monthly_through is not None:
         start, why = shift(tree.monthly_through, 1), StartReason.MARK
-    elif tree.monthly:
-        start, why = min(tree.monthly), StartReason.OLDEST_INDEXED
     elif tree.daily:
         start, why = min(tree.daily)[:7], StartReason.OLDEST_INDEXED
     else:
@@ -323,19 +341,16 @@ def _days(
 ) -> StepChoice:
     """The new days the day step may pack: from its mark, or where a first run starts.
 
-    A first run starts at the oldest raw day in the months it looks back over,
-    or at the oldest day the daily index names when that is older: a pass cut
-    after its index landed and before its mark did leaves exactly that.
+    A first run starts at the oldest raw day in the months it looks back over.
     """
     if tree.daily_through is not None:
         start, why = _day_after(tree.daily_through, 1), StartReason.MARK
     else:
         looked = set(first_run_months(tree, policy, now=now, operator_range=operator_range))
-        found = sorted({*(day for day in tree.raw_days if day[:7] in looked), *tree.daily})
+        found = sorted(day for day in tree.raw_days if day[:7] in looked)
         if not found:
             return StepChoice(start=StartReason.NONE)
-        start = found[0]
-        why = StartReason.OLDEST_INDEXED if start in tree.daily else StartReason.OLDEST_RAW_DAY
+        start, why = found[0], StartReason.OLDEST_RAW_DAY
         if keep_line is not None and not policy.month_deletes_dry_run and start[:7] < keep_line:
             kept = [day for day in found if day[:7] >= keep_line]
             if not kept:
@@ -356,9 +371,8 @@ def _rerun_span(
 ) -> tuple[str, str] | None:
     """The packed days whose raw folders the day step names, because a re-run may write there.
 
-    GitHub lets a run be re-run for `GITHUB_RERUN_DAYS` days, and a re-run
-    writes into the day its run first wrote, so the span runs from that many
-    days before the wake's day to the daily mark.
+    Scheduled wakes look back `GITHUB_RERUN_DAYS` days. An explicit month
+    range also reaches older imports, up to the daily mark.
     """
     if tree.daily_through is None:
         return None
@@ -366,5 +380,5 @@ def _rerun_span(
     last = tree.daily_through
     if operator_range is not None:
         lowest, highest = month_partition.day_bounds(*operator_range)
-        first, last = max(first, lowest), min(last, highest)
+        first, last = lowest, min(last, highest)
     return (first, last) if first <= last else None

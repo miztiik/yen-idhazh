@@ -21,11 +21,12 @@
 import { base } from '$app/paths';
 import { fetchedBytes } from './fetched-bytes';
 import { readAsk, readAskCost, type ArchiveTier, type RawListedThrough } from './ask-reader';
+import { readColumns } from './ledger-columns';
 import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
 import { readSlice } from './slice-reader';
 import type { QueryEngine } from './slice-query';
-import type { AskOptions, AskResult, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
+import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
 export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SetAsideFiles, SliceOptions, SliceResult, SpanCost, SpanGap } from './slice-shapes';
@@ -81,16 +82,30 @@ export function ledgerReach(ledger: LedgerName): Promise<LedgerReach> {
 	return readReach(keeper(), ledger);
 }
 
-const rawListedThrough = (__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough;
+/** The newest raw day the site build listed for each ledger: this build's `__RAW_LISTED_THROUGH__`.
+ *  A page script that sets `__RAW_LISTED_THROUGH__` to an object with no keys reads no writer's
+ *  file, as the browser tests that serve a ledger they built do, because a built ledger has no
+ *  writer's files; nothing on the page can name a day the build did not list. */
+function rawListedThrough(): RawListedThrough {
+	const runtime = (globalThis as typeof globalThis & { __RAW_LISTED_THROUGH__?: unknown }).__RAW_LISTED_THROUGH__;
+	const switchedOff = runtime !== null && typeof runtime === 'object' && Object.keys(runtime).length === 0;
+	return switchedOff ? {} : ((__RAW_LISTED_THROUGH__ ?? {}) as RawListedThrough);
+}
 
 /** Run one read-only statement over chosen ledgers and days. */
 export function ask(options: AskOptions): Promise<AskResult> {
-	return readAsk(keeper(), archiveTier(), options, rawListedThrough);
+	return readAsk(keeper(), archiveTier(), options, rawListedThrough());
 }
 
 /** What a written question would fetch before it runs. */
 export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
-	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough);
+	return readAskCost(keeper(), archiveTier(), ledgers, from, to, rawListedThrough());
+}
+
+/** A chosen ledger's columns, from the files its empty view reads, whatever window is selected:
+ *  it takes no window and moves none. Files over `maxFetchBytes` are not fetched. */
+export function askColumns(ledger: LedgerName, maxFetchBytes: number): Promise<Column[]> {
+	return readColumns(keeper(), ledger, maxFetchBytes, rawListedThrough());
 }
 
 /** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */

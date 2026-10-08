@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
@@ -32,7 +33,6 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import (
@@ -115,9 +115,11 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 #: marks are hand-written and the day payloads are committed, so two attempts
 #: count the same cells and the first row wins.
 #:
-#: Spelled here as four strings and nothing else. The row contract joins the
-#: door table below because a door ledger needs its contract before it can file
-#: a parquet row.
+#: The shape these two cells name is `idhazh.contracts.merge_line_holdout_score`,
+#: and the door table below imports it only when its ledger is asked about: a
+#: council verb reaches this module for its own row types, and a judge contract
+#: imported here as the module loads would sit in the council's import closure
+#: (`backend/tests/council/test_council_runs_without_a_judge.py`).
 MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 
 
@@ -157,14 +159,16 @@ FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 
 
-#: What makes two council rows the same record. `judge_id` is in the key and a
-#: night running two tenants is why: one council run has one run id, so tenant
-#: A's unit 0 and tenant B's unit 0 on one judged date carry the same date, the
-#: same run and the same unit number. Without the slug the settlement would
-#: delete the second as a repeat, and the night would read as half of what it
-#: was. A repeat under all four cells is a second attempt at one unit, which did
-#: the same work under the same clock, so the first row wins.
-COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
+# What makes two rows of one council step the same record. A once-a-date step
+# has an empty part index; a repeated attempt at the same key is settled by the
+# door's writer identity, which keeps the highest attempt.
+COUNCIL_RUN_RECORD_KEY: Final = (
+    "date",
+    "run_id",
+    "judge_id",
+    "evaluation_step",
+    "work_part_index",
+)
 
 
 # One plan is the settled planning answer for one execution of one UTC day.
@@ -367,16 +371,48 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: _DoorShape(
-        MERGE_LINE_HOLDOUT_SCORE_KEY, MergeLineHoldoutScore
-    ),
     LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
+    LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
+        COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
+    ),
 }
+
+
+def _merge_line_holdout_score() -> type[Contract]:
+    """The holdout score's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
+
+    return MergeLineHoldoutScore
+
+
+#: The door ledgers a judge writes, each with its key and the function that
+#: imports the contract one of its rows is read by. The rest of the door table
+#: imports its contracts as this module loads. A judge's waits for the first
+#: question about its ledger, because the council imports this module for its
+#: own row types, and the owner ruled on 2026-09-21 that no further judge
+#: contract may join a council verb's imports: a judge deleted from the tree has
+#: to leave every council verb running.
+_JUDGE_DOOR_SHAPES: Final[
+    dict[LedgerName, tuple[tuple[str, ...], Callable[[], type[Contract]]]]
+] = {
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
+        MERGE_LINE_HOLDOUT_SCORE_KEY,
+        _merge_line_holdout_score,
+    ),
+}
+
+
+def door_table_ledgers() -> frozenset[LedgerName]:
+    """Every ledger the door table holds a key and a row contract for."""
+    return frozenset(_DOOR_SHAPES) | frozenset(_JUDGE_DOOR_SHAPES)
 
 
 def _door_shape(ledger: LedgerName) -> _DoorShape:
     """This ledger's row of the door table, or a refusal naming it."""
     held = _DOOR_SHAPES.get(ledger)
+    if held is None and ledger in _JUDGE_DOOR_SHAPES:
+        key, contract = _JUDGE_DOOR_SHAPES[ledger]
+        held = _DoorShape(key, contract())
     if held is None:
         raise ValueError(
             f"{ledger.value} has no key and no row contract in the door table in "

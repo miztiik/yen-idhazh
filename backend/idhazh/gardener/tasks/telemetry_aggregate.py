@@ -25,7 +25,7 @@ outright; while that series is `forever`, none is.
 A month already summarised is not folded again. The summary's raw folder need
 not be in the checkout yet: the first summary a pass writes is what creates it,
 so a due month never waits on it. A dry run folds every due month in memory and
-writes nothing, so the log says how many rows would become how many.
+writes nothing, so its finished event names each summary file it would write.
 """
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ KIND = TaskKind.RETENTION
 def run(context: TaskContext) -> Pass:
     """Summarise each due month, then take expired copies and summaries past their series."""
     import dataclasses
-    import logging
 
     from idhazh import config, day_partition, ledger, month_partition, retention
     from idhazh.config import FULL_GRAIN
@@ -184,13 +183,6 @@ def run(context: TaskContext) -> Pass:
     aged = [
         *(retention_files.Aged(path=copy, day=f"{copy.stem}-01") for copy in copies),
     ]
-    logging.getLogger(__name__).info(
-        "telemetry fold%s: %s due - %s summary rows, %s browser copies expired",
-        " (dry run)" if policy.dry_run else "",
-        ", ".join(due) or "no month",
-        sum(len(summary) for summary in summaries.values()),
-        len(copies),
-    )
     outcome = retention_files.take_files(
         context,
         aged,

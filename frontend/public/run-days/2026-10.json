@@ -93,14 +93,43 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 0,
+    "published_items": 323,
     "runs": [
       {"charts_drafted": 0,"decided": 0,"decision_ms": null,"failed": 80,"n": 1,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37392388734","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T00:08:57Z","status": "partial","succeeded": 0},
       {"charts_drafted": 0,"decided": 0,"decision_ms": null,"failed": 80,"n": 2,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37362367001","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:10:31Z","status": "partial","succeeded": 0},
-      {"charts_drafted": 0,"decided": 0,"decision_ms": null,"failed": 80,"n": 3,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37376291684","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:09:50Z","status": "partial","succeeded": 0}
+      {"charts_drafted": 0,"decided": 0,"decision_ms": null,"failed": 80,"n": 3,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37376291684","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:09:50Z","status": "partial","succeeded": 0},
+      {"charts_drafted": 0,"decided": 1,"decision_ms": 0,"failed": 0,"n": 4,"planned": 1,"prefiltered": 0,"run_id": "2026-10-06-37430344917","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:33:34Z","status": "partial","succeeded": 1},
+      {"charts_drafted": 0,"decided": 2,"decision_ms": 0,"failed": 0,"n": 5,"planned": 2,"prefiltered": 0,"run_id": "2026-10-06-37430995191","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T07:39:49Z","status": "partial","succeeded": 2},
+      {"charts_drafted": 11,"decided": 71,"decision_ms": 7,"failed": 9,"n": 6,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37440340354","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T09:04:16Z","status": "partial","succeeded": 71},
+      {"charts_drafted": 19,"decided": 70,"decision_ms": 6,"failed": 10,"n": 7,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37470278323","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T13:23:05Z","status": "partial","succeeded": 70},
+      {"charts_drafted": 20,"decided": 71,"decision_ms": 6,"failed": 9,"n": 8,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37498717802","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T16:49:50Z","status": "partial","succeeded": 71},
+      {"charts_drafted": 2,"decided": 9,"decision_ms": 0,"failed": 1,"n": 9,"planned": 10,"prefiltered": 0,"run_id": "2026-10-06-37530779260","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T21:01:28Z","status": "partial","succeeded": 9},
+      {"charts_drafted": 3,"decided": 10,"decision_ms": 2,"failed": 0,"n": 10,"planned": 10,"prefiltered": 0,"run_id": "2026-10-06-37537573804","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T21:59:21Z","status": "partial","succeeded": 10},
+      {"charts_drafted": 16,"decided": 69,"decision_ms": 6,"failed": 11,"n": 11,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37520131874","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T19:36:17Z","status": "partial","succeeded": 69},
+      {"charts_drafted": 12,"decided": 73,"decision_ms": 3,"failed": 7,"n": 12,"planned": 80,"prefiltered": 0,"run_id": "2026-10-06-37542151342","skipped": 0,"source_list_stale": false,"started_at": "2026-10-06T22:41:52Z","status": "partial","succeeded": 73}
     ],
-    "site_bytes": 38426801,
+    "site_bytes": 39093335,
     "site_files": 92,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-10-07",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 395,
+    "runs": [
+      {"charts_drafted": 13,"decided": 67,"decision_ms": 1,"failed": 13,"n": 1,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37595977217","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T08:46:39Z","status": "partial","succeeded": 67},
+      {"charts_drafted": 16,"decided": 64,"decision_ms": 4,"failed": 16,"n": 2,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37614017428","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T11:26:27Z","status": "partial","succeeded": 64},
+      {"charts_drafted": 18,"decided": 72,"decision_ms": 6,"failed": 8,"n": 3,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37628979481","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T13:30:43Z","status": "partial","succeeded": 72},
+      {"charts_drafted": 15,"decided": 71,"decision_ms": 6,"failed": 9,"n": 4,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37658986781","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T17:26:23Z","status": "partial","succeeded": 71},
+      {"charts_drafted": 18,"decided": 71,"decision_ms": 5,"failed": 9,"n": 5,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37678812271","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T20:01:26Z","status": "partial","succeeded": 71},
+      {"charts_drafted": 27,"decided": 71,"decision_ms": 3,"failed": 9,"n": 6,"planned": 80,"prefiltered": 0,"run_id": "2026-10-07-37686534953","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T21:03:13Z","status": "partial","succeeded": 71},
+      {"charts_drafted": 15,"decided": 65,"decision_ms": 6,"failed": 5,"n": 7,"planned": 70,"prefiltered": 0,"run_id": "2026-10-07-37700710989","skipped": 0,"source_list_stale": false,"started_at": "2026-10-07T23:11:01Z","status": "partial","succeeded": 65}
+    ],
+    "site_bytes": 39887071,
+    "site_files": 94,
     "version": "2026-09-09"
   }
 ]

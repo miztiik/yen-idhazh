@@ -20,10 +20,11 @@ import json
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, ledger
+from idhazh import config
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.registry import tenants
 from idhazh.council.session import shard_width
+from idhazh.ledger import staging
 
 #: How many jobs one repository may have running at once. GitHub's number, not
 #: ours: past it a job waits its turn, and lowering it would be a throttle
@@ -33,9 +34,7 @@ PLATFORM_JOB_CEILING: Final = 20
 #: The venue's own ledger, staged by the collecting job alongside whatever the
 #: tenants named. Built from the ledger's registry prefix rather than spelled, so
 #: a move of the tree moves this with it.
-COUNCIL_LEDGER: Final = "/".join(
-    (ledger.STATE_DIRNAME, *ledger.entry(LedgerName.LLM_COUNCIL_SHARD_OUTCOMES).prefix)
-)
+COUNCIL_LEDGER: Final = staging.staged_path(LedgerName.COUNCIL_RUN_RECORDS)
 
 
 def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]]:

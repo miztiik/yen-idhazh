@@ -182,7 +182,9 @@ class WriterIdentity(Model):
 
 
 #: A version 5 UUID in its canonical lower-case spelling: a row's `unit_id` cell.
-_UNIT_ID_PATTERN: Final = r"^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+_UNIT_ID_PATTERN: Final = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
 
 
 class RowIdentity(Model):

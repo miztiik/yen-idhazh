@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-07
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -22,7 +22,7 @@ Every path below is under `frontend/public/`. Every shape is a contract under `b
 | Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Item health | `ledger-rows.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Run manifests | `payload.ts` `loadManifests` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Published items | `payload.ts` `publishedItems` | `run-days/<YYYY-MM>.json` | `public-run-day` |
+| Published items | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
 | Machine counters | `machine-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `machine-shard-row` |
@@ -46,12 +46,13 @@ staged into `frontend/static/` and never reaches the build. A
 `page_weight.payload_ceilings_bytes` key naming it would therefore match nothing
 and fail the bundle gate.
 
-**Eleven datasets, eight schemas.** Three console reads answer off the run-day row
-and two off the telemetry shard. That is not a shortcut: `loadManifests`,
-`publishedItems` and `publishedCharts` share a key, a window and a producer, and
-two of them open a day payload of hundreds of kilobytes to take one integer out
-of it. `itemHealthRows` reads the census the telemetry shard already projects,
-so a second projection of it would be two schemas for one row.
+**Eleven datasets, eight schemas.** Three console datasets answer off the run-day
+row and two off the telemetry shard. That is not a shortcut: `loadManifests` and
+`publishedCharts` share a key, a window and a producer, and `publishedCharts`
+opens a day payload of hundreds of kilobytes to take two integers out of it -
+the articles the day published and the charts among them. `itemHealthRows`
+reads the census the telemetry shard already projects, so a second projection
+of it would be two schemas for one row.
 
 ### The run timeline is a second cut of the census, and that is the point
 
@@ -496,9 +497,11 @@ there would be a second rule for one question. `feedResults` still passes the
 feed rows through `settled` from `frontend/src/lib/feed-health.ts`, the same rule
 `discover.settled` runs, so on a packed day it keeps every row.
 
-**The panels stop at the newest packed day, never at today.** A day is packed
-once a whole day has passed since it ended, so the day a run is still
-publishing - the only day a repeated row ever reached a panel - is never read.
+**The rows stop at the newest packed day, though every window ends on the
+newest published day.** A day is packed once a whole day has passed since it
+ended, so the day a run is still publishing - the only day a repeated row ever
+reached a panel - is never read; it is the newest day of every window, and every
+panel built on a packed record draws it with nothing in it.
 Measured 2026-09-23 over the committed ledgers, before they moved: thirteen
 folded census days held 0 repeated keys between them and the unfolded day held
 240 repeats over 240 items, and the eval ledger's unfolded day held 441 rows over
@@ -508,11 +511,28 @@ more days before the newest published day (`recordNotes` in
 `frontend/src/lib/console/recording.ts`). A record that did not load because a
 packed file or a packed day is missing says which, because each has its own fix
 ([the four faults](how-the-query-door-answers-a-panel.md#when-a-file-is-missing)).
+A record whose packed rows stop before the open window says the day, month or
+year they are from, as its index names it, and that the page cannot tell a
+quiet stretch from a fault. It names the narrowest window the control offers
+that reaches back to them, and only when one does, because an instruction that
+does not work costs a click. A record whose route already prints its
+"Measurement is off" line gets no second explanation: that line is worded for
+the open window too, so it says the window holds nothing recorded and names the
+window that reaches back to the last recorded day, without naming a day the
+window does not show. A record packed as far as
+the day before the newest published day, which is normal running, gets the
+quietest line, last: that day is not shown yet, and that is normal. Each route
+writes its notes once for each window the control offers, and the page picks the
+open one.
 A record read whole can still be short, and says so in a plain line too: a day
 its packing recorded lost has no record, and a file it set aside unread holds
 rows no panel draws, so that line names the folder a person reads them in. A
 recording note never counts a lost day as a day before the recording started:
-the instrument ran that day, so the day dates its start.
+the instrument ran that day, so the day dates its start. It dates a start only
+where the route's read reaches back to the oldest named day of each record the
+instrument draws on, the read's `first` beside `lastRows`, and prints it only in
+a window that shows that day, so an instrument that ran before the read is never
+said to start in it, and no day before the read is opened to learn it.
 
 **Packing settles rows per day, not over the whole requested window.** This
 scope preserves historical rows; it does not define measurement identity.

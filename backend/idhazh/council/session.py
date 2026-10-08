@@ -25,14 +25,15 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, ledger
-from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import (
-    SELECTION_UNIT,
-    SETTLEMENT_UNIT,
-    CouncilShardOutcome,
+from idhazh import config, ledger, run_context
+from idhazh.contracts.base import DateStamp, RunId, ServerJob
+from idhazh.contracts.council_run_record import (
+    CouncilRunRecord,
+    EvaluationStep,
 )
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import metrics_sink
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import tenant, tenants
@@ -142,8 +143,9 @@ def prepare(council: CouncilConfig, *, date: DateStamp, run_id: RunId) -> tuple[
             unit="prepare",
             date=date,
             run_id=run_id,
-            shard=SELECTION_UNIT,
-            shards=shard_width(council, host),
+            evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
+            work_part_index=None,
+            work_part_count=shard_width(council, host),
             work=partial(host.prepare, date=date, run_id=run_id),
         )
         for host in _hosted(council, date)
@@ -151,7 +153,12 @@ def prepare(council: CouncilConfig, *, date: DateStamp, run_id: RunId) -> tuple[
 
 
 def settle(
-    council: CouncilConfig, *, date: DateStamp, run_id: RunId, state_dir: Path
+    council: CouncilConfig,
+    *,
+    date: DateStamp,
+    run_id: RunId,
+    state_dir: Path,
+    commit_sha: str,
 ) -> tuple[ShardResult, ...]:
     """Count, fit, or do nothing, once a date after every shard has reported.
 
@@ -168,14 +175,15 @@ def settle(
                 unit="settle",
                 date=date,
                 run_id=run_id,
-                shard=SETTLEMENT_UNIT,
-                shards=shard_width(council, host),
+                evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
+                work_part_index=None,
+                work_part_count=shard_width(council, host),
                 work=partial(host.settle, date=date, run_id=run_id),
             )
             for host in hosted
         )
     finally:
-        _collect(hosted, date=date, state_dir=state_dir)
+        _collect(hosted, date=date, run_id=run_id, state_dir=state_dir, commit_sha=commit_sha)
 
 
 def run_shard(
@@ -200,8 +208,9 @@ def run_shard(
         unit=f"shard {shard} of {shards}",
         date=date,
         run_id=run_id,
-        shard=shard,
-        shards=shards,
+        evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
+        work_part_index=shard,
+        work_part_count=shards,
         work=partial(
             run_shard_under_the_clock,
             host,
@@ -229,8 +238,9 @@ def _recorded(
     unit: str,
     date: DateStamp,
     run_id: RunId,
-    shard: int,
-    shards: int,
+    evaluation_step: EvaluationStep,
+    work_part_index: int | None,
+    work_part_count: int,
     work: Callable[[], ShardResult],
 ) -> ShardResult:
     """Run one unit of hosted work and file the council's own row on the way out.
@@ -257,8 +267,9 @@ def _recorded(
                 judge_id=judge_id,
                 date=date,
                 run_id=run_id,
-                shard=shard,
-                shards=shards,
+                evaluation_step=evaluation_step,
+                work_part_index=work_part_index,
+                work_part_count=work_part_count,
                 began=began,
                 seconds=time.monotonic() - started,
             )
@@ -273,8 +284,9 @@ def _file(
     judge_id: str,
     date: DateStamp,
     run_id: RunId,
-    shard: int,
-    shards: int,
+    evaluation_step: EvaluationStep,
+    work_part_index: int | None,
+    work_part_count: int,
     began: str,
     seconds: float,
 ) -> Path:
@@ -285,13 +297,14 @@ def _file(
     tenant handed back and read out of nothing else - a tenant with no model
     hands back nulls, and null is not zero.
     """
-    row = CouncilShardOutcome.model_validate(
+    row = CouncilRunRecord.model_validate(
         {
             "date": date,
             "run_id": run_id,
             "judge_id": judge_id,
-            "shard": shard,
-            "shards": shards,
+            "evaluation_step": evaluation_step,
+            "work_part_index": work_part_index,
+            "work_part_count": work_part_count,
             "outcome": result.outcome,
             "started_at": began,
             "seconds_spent": seconds,
@@ -302,12 +315,26 @@ def _file(
         }
     )
     return metrics_sink.ship_judge_metrics(
-        row, judge_id=judge_id, shard=shard, out_dir=outcomes_dir(date)
+        row,
+        judge_id=judge_id,
+        name=(
+            str(work_part_index)
+            if work_part_index is not None
+            else evaluation_step.value.replace("_", "-")
+        ),
+        out_dir=outcomes_dir(date),
     )
 
 
-def _collect(hosted: Sequence[Tenant], *, date: DateStamp, state_dir: Path) -> int:
-    """Append every row tonight's units filed into the council's own day file.
+def _collect(
+    hosted: Sequence[Tenant],
+    *,
+    date: DateStamp,
+    run_id: RunId,
+    state_dir: Path,
+    commit_sha: str,
+) -> int:
+    """File every row tonight's units wrote through the ledger door.
 
     What it reads is one directory a tenant, holding one file a unit, so it
     costs what the night fanned out to rather than what the archive has piled up
@@ -317,9 +344,23 @@ def _collect(hosted: Sequence[Tenant], *, date: DateStamp, state_dir: Path) -> i
         row
         for host in hosted
         for row in metrics_sink.shipped_rows(
-            outcomes_dir(date), judge_id=host.judge_id, contract=CouncilShardOutcome
+            outcomes_dir(date), judge_id=host.judge_id, contract=CouncilRunRecord
         )
     ]
-    landed = ledger.append_council_shard_outcomes(state_dir, date, recorded)
+    written = ledger.persist(
+        state_dir,
+        recorded,
+        ledger=LedgerName.COUNCIL_RUN_RECORDS,
+        covers=date,
+        identity=WriterIdentity(
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.SAVE_COUNCIL_RESULTS,
+            shard=0,
+            producer="council.session",
+            git_sha=commit_sha,
+        ),
+    )
+    landed = len(recorded) if written else 0
     _log.info("the council recorded %d units of its own work on %s", landed, date)
     return landed

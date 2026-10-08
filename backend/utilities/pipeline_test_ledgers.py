@@ -7,14 +7,12 @@ the trees onto and off those artifacts, and what reads them before anything is
 staged.
 
 **The check is the control, not the job split.** Every byte here is downstream of
-text this project did not write (Guardrail #11). Three shapes may be in the tree
-and nothing else: `<root>/<ledger>/<YYYY>/<MM>/<DD>/<name>.csv`, read row by row
-through the contract `ledger.segment_contract` names;
-`<root>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object a line; and
-`<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>`, one file the ledger door
-wrote, read row by row through the contract `ledger.door_contract` names. `<root>`
-has to be the trial root of a test case `config/pipeline-tests.json` declares, and
-`<ledger>` a day tree in the first shape and a ledger the door files in the third,
+text this project did not write (Guardrail #11). Two shapes may be in the tree
+and nothing else: `<root>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object
+a line, and `<root>/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.<format>`, one file
+the ledger door wrote, read row by row through the contract
+`ledger.door_contract` names. `<root>` has to be the trial root of a test case
+`config/pipeline-tests.json` declares, and `<ledger>` a ledger the door files,
 so every directory name comes from committed config rather than from the artifact.
 A raw file also has to sit under a real UTC day, at the one path `ledger.raw_path`
 builds from the file's own envelope, so its name is rebuilt rather than trusted.
@@ -41,11 +39,11 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from idhazh import day_partition, day_shards, ledger
+from idhazh import day_partition, ledger
 from idhazh.contracts.file_envelope import Format, Tier
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 from utilities.named_inputs import day_files
 
 #: How deep a writer's file sits below a trial root: the ledger, a year, a month,
@@ -56,41 +54,11 @@ TRACES = "traces"
 
 
 def _roots(config_root: Path) -> list[str]:
-    """Every declared test case's trial root, in the order config declares them."""
+    """Every declared test case's child slug, including disabled cases."""
     settings = PipelineTestsConfig.from_json(
         (config_root / "pipeline-tests.json").read_text(encoding="utf-8")
     )
-    return [test_case.trial_state_dirname for test_case in settings.test_cases]
-
-
-def _a_day_tree(name: str) -> LedgerName | None:
-    """The day tree this directory name is, or `None` for anything else.
-
-    `LedgerName` covers every ledger under `state/`, so reading a name back is no
-    no longer the same question as "does a writer file a segment here". A test
-    case run writes day trees, traces and the ledger door's raw files, so anything
-    else under a trial root is reported rather than read.
-    """
-    try:
-        which = LedgerName(name)
-    except ValueError:
-        return None
-    return which if which in DAY_TREES else None
-
-
-def _refuse_segment(path: Path, relative: str, which: LedgerName) -> list[str]:
-    """Every row of one day shard, read through the contract its ledger declares."""
-    parts = relative.split("/")
-    if len(parts) != DAY_SHARD_PARTS or path.suffix != ".csv":
-        return [f"{relative} is not <ledger>/<YYYY>/<MM>/<DD>/<name>.csv"]
-    model = ledger.segment_contract(which)
-    found: list[str] = []
-    for lineno, row in day_shards.rows_of(path):
-        try:
-            day_shards.parsed(path, lineno, row, model)
-        except (ValueError, TypeError) as refusal:
-            found.append(f"{relative} row {lineno} does not read back as {which.value}: {refusal}")
-    return found
+    return [test_case.id for test_case in settings.test_cases]
 
 
 def _refuse_raw_file(path: Path, relative: str, root: Path) -> list[str]:
@@ -197,11 +165,7 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
         elif parts[1] == ledger.paths.RAW_DIRNAME:
             found += _refuse_raw_file(path, "/".join(parts[1:]), tree / parts[0])
         else:
-            which = _a_day_tree(parts[1])
-            if which is None:
-                found.append(f"{relative} names {parts[1]}, which a test case run does not write")
-            else:
-                found += _refuse_segment(path, "/".join(parts[1:]), which)
+            found.append(f"{relative} names {parts[1]}, which a test case run does not write")
     return found
 
 
@@ -218,9 +182,8 @@ def gather(state: Path, tree: Path, *, roots: list[str], days: Sequence[str]) ->
     tree.mkdir(parents=True)
     arrived = []
     for name in roots:
-        root = state / name
-        bases = [ledger.tree_root(root, which) for which in DAY_TREES]
-        bases.append(root / TRACES)
+        root = state / TRIAL_STATE_PREFIX / name
+        bases = [root / TRACES]
         bases.extend(
             ledger.raw_root(root, which)
             for which in LedgerName
@@ -250,7 +213,7 @@ def place(tree: Path, state: Path, *, roots: list[str]) -> list[str]:
     """
     staged = []
     for name in roots:
-        destination = state / name
+        destination = state / TRIAL_STATE_PREFIX / name
         destination.mkdir(parents=True, exist_ok=True)
         source = tree / name
         if source.is_dir():

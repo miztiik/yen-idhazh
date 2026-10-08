@@ -125,11 +125,6 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-06",
-            change="`job` may name `operator`, for person-run door writes.",
-            why="The job vocabulary is shared by host rows and ledger writer identities.",
-        ),
-        ChangelogEntry(
             version="2026-09-20",
             change="`memcpy_probe_mib` is the derived buffer, not the configured one.",
             why="A constant could not clear a cache that varies fifteenfold across the fleet.",
@@ -146,8 +141,13 @@ class HostFingerprintRow(Contract):
         ),
         ChangelogEntry(
             version="2026-09-17",
-            change="Earlier changes are in this file's git history.",
-            why="The changelog keeps the four newest changes and one history pointer.",
+            change="Widened `job` to every workflow job that draws its own machine.",
+            why="A run whose slowest job is unmeasured is a run whose cost nobody can attribute.",
+        ),
+        ChangelogEntry(
+            version="2026-09-16",
+            change="Initial shape: the silicon a job drew, its instruction set and its bandwidth.",
+            why="Throughput moved 3.7x by machine and nothing recorded which machine.",
         ),
     )
 
@@ -160,7 +160,9 @@ class HostFingerprintRow(Contract):
             "runner writes one row, because a run is only as fast as its slowest job."
         ),
     )
-    shard: int = Field(ge=0, description="The shard within that job. A single-shard job writes 0.")
+    shard: int = Field(
+        ge=0, description="The shard within that job. A single-shard job writes 0."
+    )
 
     fingerprint: FingerprintId | None = Field(
         default=None,

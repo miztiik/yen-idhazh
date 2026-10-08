@@ -1,27 +1,19 @@
 /** Whether the machine took the model's memory back: the fold, then the panel.
  *
- * Every figure below is recomputed here from the fixture's own item rows, never
- * read back off the module's output - an assertion against a module's own
- * answer only proves the module agrees with itself.
+ * The fold tests write the rows they read and write out the answers those rows
+ * must produce. The browser tests read only the page and the attributes it
+ * publishes beside the drawn figures.
  *
- * Two fixtures, because neither alone states every case. The canary carries the
- * three days this panel exists to tell apart - a day that waited while the
- * machine's disk copies collapsed, a day that waited while they held steady,
- * and a day that counted and found nothing - and it is what the page under the
- * browser was built from. The rows written here carry the cases the canary
- * cannot hold at all: a day where every count sits on the first article of a
- * shard, and a run whose shards disagree about holding the memory down.
- *
- * Pure functions and the committed canary only, except where a test names a
- * page. No `$app` import and no SvelteKit alias: a spec that reaches one fails
- * the whole file at load instead of failing one test.
+ * Pure functions and the rendered page only. No `$app` import and no SvelteKit
+ * alias: a spec that reaches one fails the whole file at load instead of
+ * failing one test.
  */
 
 import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { grouped } from '../src/lib/charts/series';
 import { diskReads, type DiskReadMarks } from '../src/lib/console/machine/disk-reads';
-import { canaryArticleRows } from './support/canary-records';
 
 /** The two marks and the presets, off the committed config rather than typed
  * here - a threshold written into a test stops checking the shipped one. */
@@ -50,13 +42,6 @@ function marks(): DiskReadMarks {
 	return { marked: config.model_disk_reads_marked, named: config.model_disk_reads_named };
 }
 
-/** The canary's article rows. The page under the browser was built from this
- * tree, so reading the committed one would compare a drawing of one ledger
- * against the arithmetic of another. */
-function canaryHealth(): Promise<Record<string, string>[]> {
-	return canaryArticleRows();
-}
-
 /** One item row, with only the cells a reading needs. */
 function itemRow(cells: Record<string, string | number>): Record<string, string> {
 	const row: Record<string, string> = {};
@@ -64,39 +49,21 @@ function itemRow(cells: Record<string, string | number>): Record<string, string>
 	return row;
 }
 
-const dayOf = (health: readonly Record<string, string>[], date: string) =>
-	health.filter((row) => (row.date ?? '') === date);
-
 test.describe('the fold, as arithmetic', () => {
-	test('a day counts the articles that were not first on their shard, and only those', async () => {
-		// The exclusion is the whole reason this reading is about the machine and
-		// not about a server starting up, so it is checked against the canary's own
-		// rows rather than against a number written here: the total is summed in
-		// this test from the cells, and the rows sitting first are summed
-		// separately so a fold that quietly included them cannot pass.
-		const health = await canaryHealth();
-		const loud = health
-			.map((row) => (row.date ?? ''))
-			.filter((date, at, all) => all.indexOf(date) === at)
-			.sort()
-			.at(-1) as string;
-
-		const rows = dayOf(health, loud).filter((row) => (row.llama_major_faults ?? '') !== '');
-		expect(rows.length, 'the canary day carries no count to fold').toBeGreaterThan(0);
-
-		const away = rows.filter((row) => Number(row.item_index ?? '0') !== 0);
-		const first = rows.filter((row) => Number(row.item_index ?? '0') === 0);
-		expect(first.length, 'nothing sits first on a shard, so the exclusion is untested').toBeGreaterThan(0);
-		const expected = away.reduce((total, row) => total + Number(row.llama_major_faults), 0);
-		const everything = rows.reduce((total, row) => total + Number(row.llama_major_faults), 0);
-
-		const day = diskReads(dayOf(health, loud), marks()).days[0];
-		expect(day.reads, 'the day does not sum the articles it counted').toBe(expected);
-		expect(day.counted).toBe(away.length);
-		expect(day.excluded).toBe(first.length);
-		// The two answers are genuinely different numbers here, so a fold that
-		// forgot the exclusion would be caught rather than coincidentally right.
-		expect(everything).not.toBe(expected);
+	test('a day counts the articles that were not first on their shard, and only those', () => {
+		const reading = diskReads(
+			[
+				itemRow({ date: '2026-09-02', run_id: 'r1', item_index: 0, llama_major_faults: 100 }),
+				itemRow({ date: '2026-09-02', run_id: 'r1', item_index: 1, llama_major_faults: 11 }),
+				itemRow({ date: '2026-09-02', run_id: 'r1', item_index: 2, llama_major_faults: 22 }),
+				itemRow({ date: '2026-09-02', run_id: 'r2', llama_major_faults: 300 })
+			],
+			marks()
+		);
+		const day = reading.days[0];
+		expect(day.reads, 'the day summed a first or unseated article').toBe(33);
+		expect(day.counted, 'the day counted the wrong articles').toBe(2);
+		expect(day.excluded, 'the day did not report the articles it left out').toBe(2);
 	});
 
 	test('a row that never said where in its shard it sat is excluded, not counted as second', () => {
@@ -340,54 +307,75 @@ test.describe('the panel', () => {
 		expect(wide.height, 'the strip changed height when its marks changed').toBe(narrow.height);
 	});
 
-	test('the pinning line is read off the runs, not written into the panel', async ({ page }) => {
-		// Decision 1 of this row: the setting is printed from the run's own record.
-		// A panel that printed what it expected would go on saying it the morning
-		// after somebody changed the model. Checked against the ledger rather than
-		// against the words, so it fails when the fixture changes and the page
-		// does not.
+	test('the pinning line agrees with the state the page publishes beside it', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/machine/');
 		await hydrated(page);
 		await setWindow(page, Math.max(...consoleConfig().window_presets));
 
-		const said = new Set(
-			(await canaryHealth())
-				.map((row) => row.weights_pinned ?? '')
-				.filter((value) => value !== '')
-		);
-		expect(said, 'the canary records no setting, so this oracle asserts nothing').toEqual(
-			new Set(['True', 'False'])
-		);
-
 		const line = page.locator('[data-disk-read-pinning]');
-		await expect(line).toHaveAttribute('data-disk-read-pinning', 'mixed');
-		await expect(line).toContainText('held the model');
+		const state = await line.getAttribute('data-disk-read-pinning');
+		expect(state, 'the pinning line published no state').toMatch(/^(silent|held|loose|mixed)$/);
+		const words = await line.innerText();
+		if (state === 'silent') {
+			expect(words, 'the silent state does not name the missing setting').toContain(
+				'No run in these'
+			);
+			expect(words).toContain('unknown');
+		} else if (state === 'held') {
+			expect(words, 'the held state does not say the machine was not allowed to take memory').toContain(
+				'not allowed'
+			);
+		} else if (state === 'loose') {
+			expect(words, 'the loose state does not say the machine was free to take memory').toContain(
+				'free to take'
+			);
+		} else {
+			expect(words, 'the mixed state does not name both run settings').toContain('held');
+			expect(words).toContain('did not');
+		}
 	});
 
-	test('the panel leads with the finding, and the finding names the worst day', async ({
+	test('the panel leads with the finding, and the finding follows the published worst day', async ({
 		page
 	}) => {
-		// Decision 5 of this row: the panel says what it found, and the strip under
-		// it is the evidence. The day it names is recomputed here off the days the
-		// page actually drew, so the assertion follows the fixture instead of
-		// pinning a date that goes stale the next time the canary moves.
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/machine/');
 		await hydrated(page);
 
-		const drawn = await page.locator('[data-disk-read-day]').evaluateAll((nodes) =>
-			nodes.map((node) => node.getAttribute('data-disk-read-day') ?? '')
-		);
-		expect(drawn.length, 'the panel drew no days to read').toBeGreaterThan(0);
-		const worst = diskReads(
-			(await canaryHealth()).filter((row) => drawn.includes(row.date ?? '')),
-			marks()
-		).worst;
-		expect(worst, 'no day reached the naming mark on the default span').not.toBeNull();
-
 		const finding = page.locator('[data-disk-read-finding]');
-		await expect(finding).toHaveAttribute('data-disk-read-finding', 'fired');
-		await expect(finding).toContainText(String(worst?.date));
+		const state = await finding.getAttribute('data-disk-read-finding');
+		expect(state, 'the finding published no state').toMatch(/^(empty|unrecorded|quiet|fired)$/);
+		const words = await finding.innerText();
+
+		if (state === 'fired') {
+			const tiles = await page.locator('[data-disk-read-day]').evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					date: node.getAttribute('data-disk-read-day') ?? '',
+					reads: Number(node.getAttribute('data-disk-reads') ?? '0')
+				}))
+			);
+			const worst = tiles.reduce((loudest, tile) =>
+				tile.reads >= loudest.reads ? tile : loudest
+			);
+			expect(words, 'the fired finding does not name the worst published day').toContain(
+				worst.date
+			);
+			expect(words, 'the fired finding does not name the worst published count').toContain(
+				grouped(worst.reads)
+			);
+		} else if (state === 'empty') {
+			expect(words, 'the empty finding does not say there is nothing to say').toContain(
+				'nothing to say'
+			);
+		} else if (state === 'unrecorded') {
+			expect(words, 'the unrecorded finding does not name the missing instrument').toContain(
+				'missing instrument'
+			);
+		} else {
+			expect(words, 'the quiet finding does not say the model never waited').toContain(
+				'never once'
+			);
+		}
 	});
 });

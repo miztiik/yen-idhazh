@@ -5,9 +5,10 @@
 	 * Three target bars, one per gate, and a square a day underneath.
 	 *
 	 * **The bars are not deleted when the gates clear.** They become where
-	 * staleness fires. A record that empties - because a weight moved and the fit
-	 * archived it - drops all three bars back towards zero, and this is the one
-	 * picture that says so.
+	 * staleness fires. They are the record's newest row on or before the window's
+	 * last day, so a window with no row leaves them standing; only a record that
+	 * empties - because a weight moved and the fit archived it - or never held a
+	 * row draws them at zero.
 	 *
 	 * **A held day while the gates are unfilled is not a warning.** It is the
 	 * design working. The warning fill arrives on the day a hold stops being
@@ -21,7 +22,15 @@
 	import { shortDate } from '$lib/format';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { grouped } from '$lib/charts/series';
-	import { countedDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
+	import {
+		countedDays,
+		describeEarlierRow,
+		findNewestRow,
+		gateNeeds,
+		silentTail,
+		type JudgeDay
+	} from '$lib/console/merge-line';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -46,9 +55,12 @@
 	const spanned = $derived(
 		dates.filter((date) => date >= viewport.start && date <= viewport.end)
 	);
-	/** The record is cumulative, so the newest row is what it holds now. */
+	/** The record is cumulative, so its newest row on or before the window's last
+	 * day is what it holds then, whether or not the window holds a row. */
+	const standing = $derived(findNewestRow(days, viewport.end));
+	/** The newest row inside the window, which the note's state reads. */
 	const newest = $derived(drawn.length === 0 ? null : drawn[drawn.length - 1]);
-	const needs = $derived(gateNeeds(newest, gates));
+	const needs = $derived(gateNeeds(standing, gates));
 	const met = $derived(needs.every((need) => need.value >= need.target));
 	const squares = $derived(countedDays(spanned, drawn, met));
 	const silent = $derived(silentTail(squares));
@@ -99,7 +111,7 @@
 
 <Panel
 	title="What the record still needs"
-	note="Three counts have to be reached before the line may move at all. The squares are one a day: what the record did with that day."
+	note={`Three counts have to be reached before the line may move at all. ${windowDays === 1 ? `The square is what the record did with ${nameSpan(windowDays)}.` : 'The squares are one a day: what the record did with that day.'}`}
 >
 	<div
 		data-windowed="record-gates"
@@ -134,7 +146,9 @@
 				data-counted-squares={squares.length}
 				tabindex="0"
 				role="group"
-				aria-label="What the record did with each day. Left and Right read a day, Escape returns to the newest."
+				aria-label={windowDays === 1
+					? `What the record did with ${nameSpan(windowDays)}.`
+					: 'What the record did with each day. Left and Right read a day, Escape returns to the newest.'}
 				use:markReadout={{
 					count: squares.length,
 					walk: 'row',
@@ -167,32 +181,37 @@
 			{/if}
 		</div>
 
-		<p class="gates-note">
-			{#if newest === null}
+		<p class="gates-note" data-gates-note>
+			{#if newest === null && standing !== null}
+				<!-- The bars stand on a row before the window, so the note names its
+				     day: a reader has to know they are not this window's. -->
+				<span data-gates-state="earlier">{describeEarlierRow(standing, windowDays)}</span>
+			{:else if newest === null}
 				<span data-gates-state="empty"
-					>Nothing has been judged yet. The three bars are what the record needs before a
-					line may be fitted at all.</span
-				>
-			{:else if !met}
-				<span data-gates-state="filling"
-					>The record has {grouped(needs[0].value)} of the {grouped(needs[0].target)} readings
-					it needs, {needs[1].value} of {needs[1].target} days, and {grouped(needs[2].value)} of
-					{grouped(needs[2].target)} pairs above the line.</span
-				>
-			{:else if silent > 0}
-				<span data-gates-state="stale"
-					>Nothing has been counted for {silent}
-					{silent === 1 ? 'day' : 'days'}.</span
+					>Nothing was judged in {nameSpan(windowDays)}. The three bars are what the record needs
+					before a line may be fitted at all.</span
 				>
 			{:else}
-				<span data-gates-state="met"
-					>The record has what it needs. These three bars stay so a record that empties is
-					visible.</span
-				>
-			{/if}
-			{#if fitted > 0}
+				{#if !met}
+					<span data-gates-state="filling"
+						>The record has {grouped(needs[0].value)} of the {grouped(needs[0].target)} readings
+						it needs, {needs[1].value} of {needs[1].target} days, and {grouped(needs[2].value)} of
+						{grouped(needs[2].target)} pairs above the line.</span
+					>
+				{:else if silent > 0}
+					<span data-gates-state="stale">Nothing has been counted for {countDays(silent)}.</span>
+				{:else}
+					<span data-gates-state="met"
+						>The record has what it needs. These three bars stay so a record that empties is
+						visible.</span
+					>
+				{/if}
+				<!-- Printed in every state with a row, so the window's days are named
+				     whether or not a line was fitted on one of them. -->
 				<span data-counted-fitted={fitted}
-					>A line was fitted on {fitted} of these {windowDays} days.</span
+					>{fitted > 0
+						? `A line was fitted on ${fitted} of ${countDays(windowDays)}.`
+						: `No line was fitted in ${nameSpan(windowDays)}.`}</span
 				>
 			{/if}
 		</p>

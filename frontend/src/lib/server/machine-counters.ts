@@ -41,6 +41,7 @@
 
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../charts/machine';
+import { daysBetween, type TimeWindow } from '../charts/viewport';
 import { inferenceConfig, runConfig } from './config';
 import { machineRecord } from './host-fingerprint';
 import { itemHealthRows } from './ledger-rows';
@@ -280,6 +281,18 @@ export interface MachineRun {
 	 * is read against, so the two are the same shard's worst case. */
 	slowestModelLoadMs: Reading<number>;
 	clocks: ClockCheck;
+}
+
+/** Whether a run carries the model server's own counters.
+ *
+ * Only the machine record holds the two cells the server itself wrote: the
+ * prompt tokens it read and the seconds it spent reading them. So a run made of
+ * article rows alone carries none, and nor does a run whose machine record
+ * holds the probe and the clocks and neither cell. One cell from one shard is
+ * enough: a run with one written server figure is not a run with none.
+ */
+export function carriesServerCounters(run: MachineRun): boolean {
+	return run.promptTokens.from > 0 || run.readSeconds.from > 0;
 }
 
 /** A run whose rows cannot be made into one run, and what stopped it.
@@ -906,14 +919,14 @@ export function machineCounters(
 	return { runs, refused };
 }
 
-/** One row per job per run of the machine record, read from its packed files.
+/** One row per job per run of the machine record in `window`, read from its packed files.
  *
  * A job's two halves are one row once packed. Through `STATE_ROOT` like every
  * other ledger read, so a test can point the whole tree at a fixture and a
  * canary build cannot reach the real one.
  */
-export async function hostRows(days: number = LEDGER_WINDOW_DAYS): Promise<Record<string, string>[]> {
-	return (await machineRecord(days)).rows;
+export async function hostRows(window: TimeWindow): Promise<Record<string, string>[]> {
+	return (await machineRecord(window)).rows;
 }
 
 /** What each run's plan decided its shard count was, by run id.
@@ -954,11 +967,11 @@ export function machineLimits(): MachineLimits {
  * The one caller a route needs. Reading happens here and nowhere else, so
  * `machineCounters` stays drivable from a fixture.
  *
- * `days` covers all three reads - both packed ledgers and the manifests - so
+ * `window` covers all three reads - both packed ledgers and the manifests - so
  * they can never answer over different days.
  */
-export async function loadMachineCounters(days: number = LEDGER_WINDOW_DAYS): Promise<MachineCounters> {
-	const hosts = await hostRows(days);
-	const health = await itemHealthRows(days);
-	return machineCounters(hosts, health.rows, plannedShards(days), machineLimits());
+export async function loadMachineCounters(window: TimeWindow): Promise<MachineCounters> {
+	const hosts = await hostRows(window);
+	const health = await itemHealthRows(window);
+	return machineCounters(hosts, health.rows, plannedShards(daysBetween(window.start, window.end)), machineLimits());
 }

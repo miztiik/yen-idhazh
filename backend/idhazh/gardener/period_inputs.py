@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import calendar
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from idhazh import ledger, month_partition
 from idhazh.contracts.file_envelope import Format, Period
@@ -223,11 +223,17 @@ def _ledger_paths(
     *,
     monthly: bool,
 ) -> set[Path]:
-    """Named ledger periods plus compact indexes and watermarks."""
+    """Named ledger periods plus compact indexes."""
     paths: set[Path] = set()
-    state_dir = repo_root / ledger.STATE_DIRNAME
+    parts = PurePosixPath(folder).parts
+    tier_index = next(
+        (index for index, part in enumerate(parts) if part in {"raw", "compact"}), None
+    )
+    if tier_index is None:
+        raise ValueError(f"{folder} is not a raw or compact ledger folder")
+    state_dir = repo_root.joinpath(*parts[:tier_index])
     root = repo_root / folder
-    if folder.startswith("state/raw/"):
+    if parts[tier_index] == "raw":
         if monthly:
             for month in months:
                 paths.add(root / month[:4] / month[5:7])
@@ -268,7 +274,13 @@ def paths_for_task(
     """
     if isinstance(policy, CompactionPolicy):
         return tuple(
-            sorted(ledger_marks.name_marks(repo_root / ledger.STATE_DIRNAME, policy.ledger))
+            sorted(
+                path
+                for state_root in policy.state_roots
+                for path in ledger_marks.name_marks(
+                    repo_root.joinpath(*PurePosixPath(state_root).parts), policy.ledger
+                )
+            )
         )
     if period_range is None:
         return ()
@@ -294,9 +306,13 @@ def paths_for_task(
                     monthly=False,
                 )
             )
-        if folder.startswith("state/raw/") or folder.startswith("state/compact/"):
-            suffix = folder.removeprefix("state/raw/").removeprefix("state/compact/")
-            which = ledger.door_ledger_at(tuple(suffix.split("/")))
+        parts = PurePosixPath(folder).parts
+        tier_index = next(
+            (index for index, part in enumerate(parts) if part in {"raw", "compact"}), None
+        )
+        if tier_index is not None and parts[tier_index] in {"raw", "compact"}:
+            suffix = parts[tier_index + 1 :]
+            which = ledger.door_ledger_at(tuple(suffix))
             if which is None:
                 paths.update(_dated_paths(root, days, months, monthly=monthly))
             else:

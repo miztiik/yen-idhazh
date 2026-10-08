@@ -71,6 +71,7 @@ from idhazh.fingerprint import (
     runtime_build,
 )
 from idhazh.gardener import cli as gardener_cli
+from idhazh.ledger import published_columns
 from idhazh.publication_checks import PublicationCheckError
 from idhazh.publication_checks import runner as publication_runner
 from idhazh.stages import (
@@ -103,6 +104,11 @@ from idhazh.telemetry import (
 
 def _today() -> str:
     return assemble.utc_now()[:10]
+
+
+#: The commit a verb is handed when it is not told one: a workflow always names
+#: the real one, and a test or a local run takes this stand-in.
+_STAND_IN_COMMIT: Final = "0" * 40
 
 
 def _positive_int(text: str) -> int:
@@ -156,6 +162,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "derived-paths",
     "site-weight",
+    "published-columns",
     "check-publication",
     "score-merge-line-holdout",
     "council-prepare",
@@ -323,7 +330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
-    parser.add_argument("--commit", default="0" * 40)
+    parser.add_argument("--commit", default=_STAND_IN_COMMIT)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     parser.add_argument(
@@ -468,8 +475,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help=(
             "The built bundle `site-weight` measures - the directory the Pages deploy "
-            "uploads. Required, and deliberately without a default: a default is how "
-            "this came to measure the committed payloads instead of the site."
+            "uploads, and the tree `published-columns` checks. Required, and "
+            "deliberately without a default: a default is how this came to measure "
+            "the committed payloads instead of the site."
         ),
     )
     parser.add_argument(
@@ -575,6 +583,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             items_per_day=settings.app.run.safety_ceiling_per_run,
         )
 
+    if args.stage == "published-columns":
+        # Beside site-weight for the same reason: the answer is a fact about the
+        # built tree, not about the open web.
+        if args.site_tree is None:
+            parser.error("published-columns needs --site-tree: the built bundle to check")
+        return published_columns.check(args.site_tree, settings.app.ledger.published)
+
     if args.stage == "check-publication":
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
@@ -614,6 +629,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "the reading, and a digest run's id would claim a machine and a clock "
                 "that scored nothing"
             )
+        if args.commit == _STAND_IN_COMMIT:
+            parser.error(
+                "score-merge-line-holdout needs --commit: the file it writes names the "
+                "commit of the code that took the reading, and the stand-in of zeros "
+                "names none. Pass what git rev-parse HEAD prints"
+            )
         scored = score_merge_line_holdout.stage_score_merge_line_holdout(
             args.date or _today(),
             run_id=args.run_id,
@@ -645,6 +666,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
             state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
+            commit_sha=args.commit,
         )
         return 0
 

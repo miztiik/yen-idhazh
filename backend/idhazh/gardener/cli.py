@@ -25,7 +25,6 @@ variable (`idhazh.config`).
 from __future__ import annotations
 
 import argparse
-import logging
 import re
 import sys
 from collections.abc import Sequence
@@ -42,7 +41,7 @@ from idhazh.contracts.knobs.gardener import (
     MonthsWindow,
     RetentionPolicy,
 )
-from idhazh.gardener import listing, runner, shards
+from idhazh.gardener import event_log, listing, runner, shards
 from idhazh.gardener.outcome import EXIT_INTEGRITY
 
 #: The word that reaches this router. `idhazh/cli.py` holds it in one place -
@@ -75,18 +74,19 @@ def add_the_run(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
 
 
-def settings_or_none(config_dir: Path) -> GardenerSettings | None:
-    """The loaded declarations with logging set from them, or None once the refusal is printed."""
+def settings_or_none(config_dir: Path, *, github: bool = False) -> GardenerSettings | None:
+    """The loaded declarations with the event log installed at their level, or None once refused.
+
+    `github` says the caller runs as a step on GitHub, so the log also writes
+    the workflow commands GitHub reads (`event_log.GitHubLines`). Only the
+    landing utility knows that, and it says so.
+    """
     try:
         settings = config.load_gardener(config_dir)
     except ValueError as refusal:
         print(refusal, file=sys.stderr)
         return None
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    event_log.install(settings.app.logging.level.value, github=github)
     return settings
 
 

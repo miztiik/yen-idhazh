@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-07
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -27,6 +27,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
+| `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -40,6 +41,11 @@ the newest plan of the day can be the other run's. Without `--execution` a
 stage reads the newest plan of the day, which is right only where one process
 planned alone, as `idhazh run` does.
 
+The council save job files each judged date's run records through the ledger
+door. Each row names the step and part, while the envelope names the save job,
+attempt and council run. A retry therefore replaces the earlier attempt when
+the reader settles rows by `unit_id`.
+
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
 `state/raw/item-health/` is the fastest-growing ledger in the table above. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's days, read through `ledger.load_days` ([persistence.md](persistence.md#reading-a-whole-ledger)).
@@ -48,7 +54,7 @@ The console reads the feed record at build time from its packed files under `sta
 
 ## The gardener
 
-`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock, the instant the shard finished working, and `cone_bytes`, what the folders the shard owns weighed at the commit it checked out, beside `downloaded_bytes`, what the shard downloaded for its tasks to read - both empty on a row a hand run wrote, because a hand run weighs nothing. A row of `workflow-runs` or `workflow-artifacts` also carries `handled_through`, the newest UTC day its walk has handled every member through; every other task's row leaves it empty.
+`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock, the instant the shard finished working, and `cone_bytes`, what the folders the shard owns weighed at the commit it checked out, beside `downloaded_bytes`, what the shard downloaded for its tasks to read - both empty on a row a hand run wrote, because a hand run weighs nothing. A row of `workflow-runs` or `workflow-artifacts` also carries `handled_through`, the newest UTC day its walk has handled every member through; every other task's row leaves it empty. A row of a pass that stopped for a fault names it in `fault`, one closed word, and `recovered` lists every fault a pass recorded instead of stopping, one note a period or member; both are empty on a row written before 2026-10-07 ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-record)).
 
 Two tasks read it: `workflow-runs` and `workflow-artifacts` each read their own rows of the last `mark_lookback_days` UTC days, by named day, to find where their last walk stopped ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-collection-tasks)). It files at the `raw-and-compact` grain; what `prefix` means for that grain, and which builders refuse it, is [ledger-registry.md](ledger-registry.md#a-ledger-under-the-two-roots).
 

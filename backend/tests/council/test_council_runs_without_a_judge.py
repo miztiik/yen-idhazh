@@ -16,10 +16,9 @@ import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import config, ledger
-from idhazh.contracts.council_shard_outcome import (
-    SELECTION_UNIT,
-    SETTLEMENT_UNIT,
-    CouncilShardOutcome,
+from idhazh.contracts.council_run_record import (
+    CouncilRunRecord,
+    EvaluationStep,
     ShardOutcome,
 )
 from idhazh.contracts.knobs.council import CouncilConfig
@@ -36,6 +35,8 @@ A_VENUE: Final = "a_judgeless_venue"
 A_SLUG: Final = "a-judgeless-tenant"
 
 ANOTHER_SLUG: Final = "another-judgeless-tenant"
+
+A_SHA: Final = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
 
 #: The night the run check opens on, and the platform run id it is named after.
 #: Far enough after the committed `council.first_night` that the whole repair
@@ -73,9 +74,9 @@ JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.story_similarity_pair",
 )
 
-#: The judge contracts a council verb still reaches, and the routes they arrive
-#: on. Measured by a fresh walk when each door ledger's row contract joined the
-#: shared ledger table.
+#: The three judge contracts a council verb still reaches, and the routes they
+#: arrive on. Measured by a fresh walk on 2026-09-21, and the owner's ruling the
+#: same day is that these three may cross and nothing else may.
 #:
 #: **Why they are here rather than cut.** Both carriers are modules the two sides
 #: genuinely share. `idhazh.ledger` is the one registry of CSV rows and the
@@ -91,7 +92,6 @@ JUDGE_CONTRACT_MODULES: Final = (
 JUDGE_CONTRACTS_STILL_CROSSING: Final = frozenset(
     {
         "idhazh.contracts.fitted_similarity_threshold",
-        "idhazh.contracts.merge_line_holdout_score",
         "idhazh.contracts.story_similarity_distribution",
         "idhazh.contracts.story_similarity_pair",
     }
@@ -245,18 +245,11 @@ def _council(*slugs: str, repair_dates: int = 1) -> CouncilConfig:
     )
 
 
-def _the_nights_record(state_root: Path, date: str) -> list[CouncilShardOutcome]:
-    """The council's own day file, read back through the contract that wrote it."""
-    lines = (
-        ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date)
-        .read_text(encoding="utf-8")
-        .splitlines()
+def _the_nights_record(state_root: Path, date: str) -> list[CouncilRunRecord]:
+    """The council's current rows, read back through the ledger door."""
+    return ledger.load_days(
+        state_root, LedgerName.COUNCIL_RUN_RECORDS, [date], model=CouncilRunRecord
     )
-    columns = lines[0].split(",")
-    return [
-        CouncilShardOutcome.from_csv_row(dict(zip(columns, line.split(","), strict=True)))
-        for line in lines[1:]
-    ]
 
 
 def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
@@ -265,7 +258,7 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
     A venue that only works once somebody has moved in is not a venue. So with
     zero tenants: the name is minted, the guest list resolves, the plan names
     tonight, prepare and settle are no-ops that return cleanly, and the night
-    leaves no phantom day file behind. Six steps, none of them skipped.
+    leaves no phantom raw file behind. Six steps, none of them skipped.
     """
     council = _council()
     state_root = venue / "state"
@@ -274,14 +267,16 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
     hosted = registry.tenants(council.tenants)
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
     prepared = session.prepare(council, date=TONIGHT, run_id=run_id)
-    settled = session.settle(council, date=TONIGHT, run_id=run_id, state_dir=state_root)
+    settled = session.settle(
+        council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA
+    )
 
     assert run_id == f"{TONIGHT}-{A_PLATFORM_RUN}"
     assert hosted == ()
     assert planned == (TONIGHT,), "a night with nobody registered plans tonight and no more"
     assert prepared == ()
     assert settled == ()
-    assert not ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, TONIGHT).exists()
+    assert not ledger.raw_root(state_root, LedgerName.COUNCIL_RUN_RECORDS).exists()
 
 
 def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) -> None:
@@ -337,7 +332,9 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
             started=opened,
         )
         assert result.outcome is ShardOutcome.COMPLETED
-    session.settle(council, date=TONIGHT, run_id=run_id, state_dir=state_root)
+    session.settle(
+        council, date=TONIGHT, run_id=run_id, state_dir=state_root, commit_sha=A_SHA
+    )
 
     handed = written(A_VENUE, A_SLUG).TENANT.handed
     filed = _the_nights_record(state_root, TONIGHT)
@@ -345,9 +342,13 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     assert len(handed) == 2, "each shard is handed a deadline of its own"
     assert all(instant > opened for instant in handed), "the clock is the council's"
     assert {row.judge_id for row in filed} == {A_SLUG}
-    assert sorted(row.shard for row in filed) == [
-        SETTLEMENT_UNIT,
-        SELECTION_UNIT,
-        0,
-        1,
-    ], "two shards, plus the selection and the settlement"
+    assert sorted(
+        (row.evaluation_step, row.work_part_index) for row in filed
+    ) == sorted(
+        [
+            (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
+            (EvaluationStep.SELECT_JUDGE_WORK, None),
+            (EvaluationStep.EVALUATE_WORK_PART, 0),
+            (EvaluationStep.EVALUATE_WORK_PART, 1),
+        ]
+    ), "two parts, plus the selection and the settlement"

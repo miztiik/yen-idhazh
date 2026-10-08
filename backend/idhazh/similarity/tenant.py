@@ -18,7 +18,7 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
@@ -169,7 +169,7 @@ class ContentSimilarityJudge:
             deadline=deadline,
         )
         shipped = metrics_sink.ship_judge_metrics(
-            report.metrics, judge_id=JUDGE_ID, shard=shard, out_dir=_shipping_dir(date)
+            report.metrics, judge_id=JUDGE_ID, name=str(shard), out_dir=_shipping_dir(date)
         )
         LOG.info(
             "content-similarity-judge shipped its reading of shard=%s date=%s to %s",

@@ -70,14 +70,9 @@ class DayFolder(NamedTuple):
     unreadable: list[tuple[Path, str]]
 
 
-def _shown(state_dir: Path, path: Path) -> str:
-    """A path as it may leave the process: under `state/`, POSIX (CLAUDE.md section 2)."""
-    return f"{paths.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
-
-
 def _skip(state_dir: Path, path: Path, reason: object) -> None:
     """Say which file a read left out, and why, in the one line a person will look for."""
-    logger.warning("skipped a raw file path=%s reason=%s", _shown(state_dir, path), reason)
+    logger.warning("skipped a raw file path=%s reason=%s", paths.shown(state_dir, path), reason)
 
 
 def _day_folders(state_dir: Path, root: Path) -> list[tuple[str, Path]]:
@@ -210,7 +205,7 @@ def read_day_files(
     found = read_day_folder(state_dir, ledger, day, registry=registry)
     if found.unreadable:
         path, why = found.unreadable[0]
-        raise ValueError(f"{_shown(state_dir, path)} cannot be read: {why}")
+        raise ValueError(f"{paths.shown(state_dir, path)} cannot be read: {why}")
     return found.files
 
 

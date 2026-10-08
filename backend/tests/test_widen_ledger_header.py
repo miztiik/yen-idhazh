@@ -360,6 +360,6 @@ def test_every_store_in_the_vocabulary_resolves_except_the_named_ledgers(
             refused.add(name)
 
     assert refused == UNREGISTERED
-    assert len(widen_ledger_header.LEDGERS) - len(refused) == 3, (
-        "three of four have CSV headers; the other one is named in UNREGISTERED"
+    assert len(widen_ledger_header.LEDGERS) - len(refused) == 2, (
+        "two of three have CSV headers; the other one is named in UNREGISTERED"
     )

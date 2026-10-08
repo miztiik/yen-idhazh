@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -127,10 +127,10 @@ The shapes, and where each one lives once written:
 | `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/content-similarity-judge/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit reads one file of a size that never changes (Guardrail #12) |
 | `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one appended row of `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - what the merge line was, what the evidence proposed, and what the run applied |
 | `SimilarityHoldoutPair` | `similarity-holdout-pair` | one row of `state/content-similarity-judge/holdout-pairs.csv`, typed by a person - two addresses, two headlines, and whether they are one story |
-| `CouncilShardOutcome` | `council-shard-outcome` | one appended row of `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` - whether one unit of work finished, stopped on its deadline or had nothing to do, and what the work it hosted cost. It carries no name for the unit, so it reads the same whichever tenant ran |
+| `CouncilRunRecord` | `council-run-record` | one row of `state/raw/council-run-records/<YYYY>/<MM>/<DD>/`, later packed under `state/compact/council-run-records/` - which council step ran for one tenant, how it ended, how long it took, and what it cost. A missing part row against `work_part_count` shows a part that did not report |
 | `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one appended row of `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` - what one shard of that judge's night dealt, read, agreed and lost, plus its two rates and its clocks |
 | `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one row under `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/merge-line-holdout-scores/` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
-| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/raw/candidate-models/<YYYY>/<MM>/<DD>/`, in the raw file the gates file through the ledger door. Nothing packs a trial root |
+| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/raw/candidate-models/<YYYY>/<MM>/<DD>/`, in the raw file the gates file through the ledger door. A matching `compact-trial-candidate-models` declaration packs named trial roots without changing production retention |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |
@@ -432,8 +432,9 @@ stories, leads, run references and verticals on one line each. `RunManifest`
 keeps runs and model settings expanded, and puts configuration digests and
 vertical counts on one line each. The published day-metrics month encoder
 keeps days expanded, and puts sources, instruments and stage timings on one
-line each. The state day-metrics writer is unchanged. Existing helper callers
-keep their layout. All three producers preserve fields, values and stamps;
+line each. `DayMetrics` uses the same record selections for state day files,
+including each instrument's nested statistics. Other fields stay expanded.
+Existing helper callers keep their layout. These producers preserve fields, values and stamps;
 older layouts load normally and take the new layout when rewritten.
 
 The published run-days month encoder keeps days expanded and puts runs on one

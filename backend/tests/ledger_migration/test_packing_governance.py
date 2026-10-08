@@ -2,8 +2,8 @@
 
 A ledger the registry still files as CSV, one with no compaction, and one whose
 compaction keeps less than its CSV was kept are refused before a file is
-written; a root other than the state tree beside `config/` is filed raw and
-never packed.
+written; an undeclared non-production root is filed raw, while a declared trial
+root uses its own compaction policy.
 """
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ from typing import Any
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, SEED_COMMIT
+from gardener._garden import a_config
 
-from idhazh import ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledgers import Grain
@@ -36,6 +37,7 @@ from ._fixtures import (
     ON_CSV,
     RUN,
     TODAY,
+    compaction_identity,
     config_beside,
     entry_back_on_csv,
     feed_row,
@@ -60,7 +62,9 @@ def test_a_ledger_still_on_csv_is_refused(tmp_path: Path) -> None:
     one ledger the way it was filed before it moved, without its compaction.
     """
     state = tmp_path / "state"
-    write_csv(state, ON_CSV, OLD, writer_file_name(OLD, 1, ServerJob.PLAN), [feed_row(OLD).csv_row()])
+    write_csv(
+        state, ON_CSV, OLD, writer_file_name(OLD, 1, ServerJob.PLAN), [feed_row(OLD).csv_row()]
+    )
     write_csv(
         state,
         ITEM,
@@ -123,7 +127,9 @@ def test_a_door_ledger_whose_compaction_cannot_hold_its_csv_is_refused(
     would delete, at its first live pass, days its CSV still held.
     """
     state = tmp_path / "state"
-    write_csv(state, EVALS, NEW, writer_file_name(NEW, 1, ServerJob.WORK), [score_row(NEW, 1).csv_row()])
+    write_csv(
+        state, EVALS, NEW, writer_file_name(NEW, 1, ServerJob.WORK), [score_row(NEW, 1).csv_row()]
+    )
     config_dir = config_beside(state)
     declaration = config_dir / "gardener" / f"compact-{EVALS.value}.json"
     if change is None:
@@ -173,12 +179,11 @@ def test_the_migration_packs_live_and_only_reports_month_deletes_whatever_the_de
     assert (policy.dry_run, policy.month_deletes_dry_run) == (False, True)
 
 
-def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -> None:
-    """Only the state tree beside `config/` is packed; a trial run's tree inside it is filed raw.
+def test_a_trial_root_without_this_ledger_policy_is_filed_raw(tmp_path: Path) -> None:
+    """An unconfigured item-health trial root is filed raw.
 
-    Nothing reads a packed trial root, and the trials task empties it, so its
-    day files and indexes would be files nobody opens. Its days are still read
-    back cell for cell before its CSV goes.
+    Other trial compactions name the bench root, but none names this root for
+    item-health, so migration must not infer that a policy applies to it.
     """
     state = tmp_path / "state"
     trial = state / "pipeline-tests"
@@ -209,4 +214,93 @@ def test_a_root_beside_no_config_is_filed_raw_and_never_packed(tmp_path: Path) -
     assert read_back(trial, ITEM, OLD) == wanted[OLD]
     assert not csv_files.left(trial, [ITEM], months=MONTHS)
     assert packing.packs_here(REPO_ROOT / ledger.STATE_DIRNAME, CONFIG_DIR)
-    assert not packing.packs_here(REPO_ROOT / ledger.STATE_DIRNAME / "pipeline-tests", CONFIG_DIR)
+    assert packing.packs_here(REPO_ROOT / ledger.STATE_DIRNAME / "pipeline-tests", CONFIG_DIR)
+    assert not packing.packs_here(REPO_ROOT / ledger.STATE_DIRNAME / "pipeline-tests" / "case", CONFIG_DIR)
+
+
+def test_migration_packs_only_a_trial_root_named_by_its_policy(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    trial = state / "pipeline-tests" / "production-settings"
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
+    production = item_row(OLD, "production-row-01", machine=True)
+    production_raw = ledger.persist(
+        state, [production], ledger=ITEM, covers=OLD, identity=compaction_identity()
+    )[0]
+    production_bytes = production_raw.read_bytes()
+    trial_row = item_row(OLD, "trial-row-01", machine=True)
+    write_csv(
+        trial,
+        ITEM,
+        OLD,
+        writer_file_name(OLD, 1, ServerJob.WORK),
+        [trial_row.csv_row()],
+    )
+
+    ((_, moved),) = phases.migrate_roots(
+        MigrationInputs(
+            state_dirs=[trial],
+            which=[ITEM],
+            run_id=RUN,
+            git_sha=SEED_COMMIT,
+            today=TODAY,
+            config_dir=config_dir,
+            months=MONTHS,
+        )
+    )
+
+    daily = ledger.compact_file(trial, ITEM, Period.DAILY, OLD)
+    assert daily is not None and daily.is_file()
+    assert ledger.load_days(trial, ITEM, [OLD], model=type(trial_row)) == [trial_row]
+    assert (moved.packed, moved.filed) == ([OLD], 1)
+    assert production_raw.read_bytes() == production_bytes
+    assert not ledger.compact_index_path(state, ITEM, Period.DAILY).exists()
+
+
+def test_current_finite_retention_refuses_an_old_forever_csv_reader(tmp_path: Path) -> None:
+    """Owner-approved expiry does not silently authorize a lossless CSV migration."""
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
+    with pytest.raises(refusals.RefusedError, match="does not reach the window of forever"):
+        packing.declared([EVALS], config_dir)
+
+
+def test_current_migration_initializes_new_indexes_but_refuses_a_lost_one(
+    tmp_path: Path,
+) -> None:
+    """Only existing compact folders establish a tree under the finite expiry policy."""
+    state = tmp_path / "state"
+    write_csv(
+        state,
+        ITEM,
+        OLD,
+        writer_file_name(OLD, 1, ServerJob.WORK),
+        [item_row(OLD, "ai-01", machine=True).csv_row()],
+    )
+    config_dir = a_config(tmp_path, CONFIG_DIR / "gardener")
+    (config_dir / "ledgers.json").write_bytes((CONFIG_DIR / "ledgers.json").read_bytes())
+    inputs = MigrationInputs(
+        state_dirs=[state],
+        which=[ITEM],
+        run_id=RUN,
+        git_sha=SEED_COMMIT,
+        today=TODAY,
+        config_dir=config_dir,
+        months=MONTHS,
+    )
+    phases.migrate_roots(inputs)
+    index = ledger.compact_index_path(state, ITEM, Period.YEARLY)
+    assert index.is_file()
+    index.unlink()
+    policy = packing.declared([ITEM], config_dir)[ITEM]
+    with pytest.raises(refusals.NotProvenError, match=r"index/yearly\.json is missing"):
+        packing.pack(
+            state,
+            ITEM,
+            compaction_identity(),
+            repo_root=config_dir.parent,
+            policy=policy,
+            today=TODAY,
+            months=MONTHS,
+            first_ledger_year=config.load_gardener(config_dir).config.first_ledger_year,
+        )

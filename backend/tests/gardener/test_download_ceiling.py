@@ -28,6 +28,8 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.gardener_events import DownloadOverBudget
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import runner
@@ -38,6 +40,7 @@ from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 from idhazh.site_weight import BYTES_PER_MB
 from utilities import gardener_publish
 
+from ._events import the_event
 from ._garden import (
     GARDENER_FIXTURES,
     OriginBlobs,
@@ -356,15 +359,19 @@ def test_a_day_larger_than_the_whole_budget_is_refused_by_name_and_never_downloa
         outcome, row = packed_by_a_shard(tmp_path, origin, said)
 
     assert outcome.exit_code == EXIT_TASK_FAILED, said
-    assert (row.stopped_because, row.resume_from) == (StopReason.FAILED, "2026-09-20")
+    assert (row.stopped_because, row.resume_from, row.fault) == (
+        StopReason.FAILED,
+        "2026-09-20",
+        GardenerFault.RAISED,
+    )
     assert row.downloaded_bytes == 0
-    (refusal,) = [
-        record.getMessage()
-        for record in caplog.records
-        if "whole download budget" in record.getMessage()
-    ]
-    assert "period=2026-09-20 " in refusal
-    assert refusal.endswith(" max_downloaded_mb=1")
+    refusal = the_event(caplog.records, DownloadOverBudget)
+    assert (refusal.resume_from, refusal.stopped_because, refusal.max_downloaded_mb) == (
+        "2026-09-20",
+        StopReason.FAILED,
+        CEILING_MB,
+    )
+    assert refusal.needed_bytes > CEILING_MB * BYTES_PER_MB
     assert on_origin(origin, files["2026-09-20"]) is not None
 
 
@@ -429,5 +436,12 @@ def test_a_period_larger_than_the_whole_budget_is_refused_by_name(
             ["2026-09-20"], lambda day: PeriodFetch(folders=(tree.raw_day_folder(day),))
         )
 
-    assert (fits, over) == ([], Stop(StopReason.FAILED, "2026-09-20"))
-    assert "period=2026-09-20 bytes=1048577 max_downloaded_mb=1" in caplog.text
+    assert (fits, over) == ([], Stop(StopReason.FAILED, "2026-09-20", GardenerFault.RAISED))
+    assert the_event(caplog.records, DownloadOverBudget) == DownloadOverBudget(
+        ledger=PACKED,
+        resume_from="2026-09-20",
+        needed_bytes=BYTES_PER_MB + 1,
+        room_bytes=CEILING_MB * BYTES_PER_MB,
+        max_downloaded_mb=CEILING_MB,
+        stopped_because=StopReason.FAILED,
+    )

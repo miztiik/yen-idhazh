@@ -74,7 +74,9 @@ def test_the_negative_cells_cannot_outnumber_the_labelled_negatives(cell: str) -
     Driven once per cell, because a check that added only one of them would pass
     a test that moved only the other.
     """
-    payload: dict[str, Any] = a_scoring("a-line-scored-against-the-holdout").model_dump(mode="json")
+    payload: dict[str, Any] = a_scoring("a-line-scored-against-the-holdout").model_dump(
+        mode="json"
+    )
 
     assert (
         payload["merged_and_two_stories"] + payload["apart_and_two_stories"]
@@ -116,7 +118,8 @@ def test_the_row_carries_no_call_stamp_because_no_model_runs_in_it() -> None:
     columns = set(MergeLineHoldoutScore.csv_columns())
 
     assert not columns & set(JudgeConfigStamp.model_fields), (
-        "this row inherited a judge's call stamp, which asserts an instrument that never ran in it"
+        "this row inherited a judge's call stamp, which asserts an instrument that "
+        "never ran in it"
     )
     assert {"applied_line", "scorer_model", "cosine_weight"} <= columns, (
         "the row stopped saying what the line was made of, so two runs cannot be compared"
@@ -129,7 +132,9 @@ def test_the_labeller_is_recorded_rather_than_checked_against_a_roster() -> None
     One printable line, because a newline splits the row for any reader that
     takes a day file a line at a time.
     """
-    payload: dict[str, Any] = a_scoring("a-line-scored-against-the-holdout").model_dump(mode="json")
+    payload: dict[str, Any] = a_scoring("a-line-scored-against-the-holdout").model_dump(
+        mode="json"
+    )
 
     assert MergeLineHoldoutScore.model_validate(
         payload | {"labeller": "a-model-this-repository-does-not-ship"}
