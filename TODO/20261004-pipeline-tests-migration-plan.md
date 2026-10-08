@@ -63,9 +63,9 @@ Table D - PR phases
 | D3 | 3 | Trial roots compact under their own declarations | 1, 2 | C | DONE #1405 | trial-root-compaction | #1405 | Fowler |
 | D4 | 4 | Pipeline-test writers use separate nested cases | 3 | D | DONE #1413 | nested-pipeline-test-cases | #1413 | Fowler |
 | D5 | 5 | Committed trial files move to the nested roots, and the orphan span summaries are deleted | 4 | E | DONE | pt-row-5 | - | Fowler |
-| D6 | 6 | Path builders carry a swappable trial registry, with no production call site changed | 5 | F | DONE | pipeline-tests-tier-roots-fix | #1438 | Fowler |
-| D7 | 7 | Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root | 6 | G | IN PROGRESS | pipeline-tests-tier-roots-fix | - | Fowler |
-| D8 | 8 | Committed trial files move again, byte for byte, from root-first to tier-first | 7 | H | PENDING | pipeline-tests-tier-roots-fix | - | Fowler |
+| D6 | 6 | Path builders carry a swappable trial registry, with no production call site changed | 5 | F | DONE #1443 | pipeline-tests-tier-roots-fix-phase1 | #1443 | Fowler |
+| D7 | 7 | Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root | 6 | G | DONE #1438 | pipeline-tests-tier-roots-fix | #1438 | Fowler |
+| D8 | 8 | Committed trial files move again, byte for byte, from root-first to tier-first | 7 | H | IN PROGRESS | pipeline-tests-phase3-data-relocation | - | Fowler |
 
 ## 2. Row #1 - Reusable migration operations ship
 
@@ -372,7 +372,7 @@ Table O - Corrected design
 - **Files touched:** `backend/idhazh/ledger/paths.py`; `backend/idhazh/ledger/__init__.py`; `backend/tests/contracts/test_ledger_trial_overlay.py` (new).
 - **Acceptance gates:** `ruff check`, `mypy` on both source files; the new unit tests; the full `backend/tests/test_ledger.py`, `backend/tests/contracts/test_ledger_registry.py`, `backend/tests/contracts/test_ledger_door_fixture.py`, `backend/tests/ledger/test_ledger_files.py` and `backend/tests/test_ledger_families.py` suites green with no change to their assertions.
 - **Oracle:** Outside any `use_registry` block every builder answers exactly what it answered before this row; inside one, a door ledger's segments land ahead of its prefix and a tree ledger's land behind its own top-level folder; a nested block restores the enclosing override, not `None`, on exit, including on an exception.
-- **Status:** DONE, pull request #1438.
+- **Status:** DONE, pull request #1443.
 
 ### Row #7 - Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root
 
@@ -380,7 +380,7 @@ Table O - Corrected design
 - **Files touched:** `backend/idhazh/gardener/runner.py`; `backend/idhazh/config.py`; `backend/idhazh/contracts/knobs/gardener.py`; `backend/utilities/pipeline_test_ledgers.py`; `backend/utilities/pipeline_test_case.py`; `backend/idhazh/ledger/paths.py` (`_ACTIVE_OVERRIDE` hardened to a `contextvars.ContextVar`); `config/gardener/compact-trial-item-health.json`; `config/gardener/compact-trial-host-fingerprint.json`; `config/gardener/compact-trial-candidate-models.json`; `backend/tests/contracts/test_gardener_config.py`; `backend/tests/gardener/test_runner.py`; `backend/tests/workflows/test_a_trial_tree_may_hold_door_files.py`; `backend/tests/workflows/test_pipeline_tests_workflow.py`; `backend/tests/workflows/test_plan_handoff.py`; `.github/workflows/idhazh-pipeline-tests.yaml`; `.github/workflows/validate.yml`; `.github/workflows/measure.yml`; `docs/reference/repository-layout.md`; `docs/concepts/growing-reads.md`.
 - **Acceptance gates:** Local: `ruff check`, `mypy` on touched backend files; the updated and new tests above; `npm --prefix frontend run test:changed -- --list` (expected empty - no frontend file touched). CI: full merge-candidate checks.
 - **Oracle:** A trial compaction pass run against a fixture tree reads and writes at the tier-first address, not the old root-first one; `config.load` accepts the three corrected trial declarations and refuses one whose `owns` still names a root-first path; `trials.json`'s declaration and a trace file's address are both unchanged; no production `compact-<ledger>` declaration's behavior changes; concurrent case/shard writers each see only their own registry overlay, proven by a `ContextVar`-isolation regression test.
-- **Status:** IN PROGRESS.
+- **Status:** DONE, pull request #1438.
 
 ### Row #8 - Committed trial files move again, byte for byte, from root-first to tier-first
 
@@ -395,7 +395,7 @@ Table O - Corrected design
   - Not moved (O5): `state/pipeline-tests/no-visual-plan/traces/2026/09/29/2026-09-29-36540131911-1-work-00.jsonl`, `...-work-01.jsonl`, `state/pipeline-tests/production-settings/traces/2026/09/29/2026-09-29-36540131911-1-work-00.jsonl`, `...-work-01.jsonl`
 - **Acceptance gates:** Local, in order: (1) confirm no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml` or `measure.yml` is queued or running, or pause and name the run; (2) `git mv` each raw/compact file, comparing SHA-256 before and after; (3) a compaction/read smoke against the new addresses using the corrected builders; (4) the full test and doc gates. CI: full merge-candidate checks.
 - **Oracle:** Each moved file has the same SHA-256 at its tier-first path; no file is left at the row-5 root-first address; the four trace files are byte-identical and untouched at their row-5 address; a read through the corrected builders at the new address returns the same rows row 5's verifier accepted.
-- **Status:** PENDING, blocked on row 7 landing.
+- **Status:** IN PROGRESS, worktree `pipeline-tests-phase3-data-relocation`. The six files are `git mv`'d (SHA-256 and git blob SHA confirmed identical pre/post against `origin/main`); gate (1) cleared (all five named workflows confirmed not queued/running). Pushed for PR. Note: three stale `measure.yml` comments (still describing the old whole-state-root-swap model) could not be included in this branch - this worktree's token lacks the `workflow` OAuth scope needed to push workflow-file changes - and are deferred to a follow-up comment-only PR from a token with that scope.
 
 ## See also
 
