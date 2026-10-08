@@ -1383,6 +1383,118 @@ const STRIP_CASES: {
 		},
 		words:
 			'In this one day, 100% of 5 pairs disagreed with their own second reading. Could not tell: not counted, no pair agreed. The 100% that disagreed is past its mark.'
+	},
+	{
+		// The verdict follows the shares it judges, never why a day was held. The
+		// run checks first whether the record holds enough to fit on, so these
+		// days were held for that, with a share past its mark.
+		preset: 7,
+		state: 'no day was held for the judge, and the 20% that disagreed is past its mark',
+		days: [
+			judgeDay('2030-06-10', {
+				pairsJudged: 40,
+				pairsUsable: 32,
+				disagreementRate: 0.2,
+				unclearRate: 1 / 32,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 5,
+				pairsUsable: 4,
+				disagreementRate: 0.2,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 20% of 5 pairs',
+			'Could not tell 0 of the 4 that agreed'
+		],
+		dots: {
+			'2030-06-10':
+				'10 Jun: 20% of 40 pairs disagreed with the second reading, and 3% of the 32 that agreed could not tell.',
+			'2030-06-15':
+				'15 Jun: 20% of 5 pairs disagreed with the second reading, and 0 of the 4 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 20% of 45 pairs disagreed with their own second reading, and 3% of the 36 that agreed could not tell. The 20% that disagreed is past its mark.'
+	},
+	{
+		preset: 1,
+		state: 'its day was not held for the judge, and the 39% that could not tell is past its mark',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 40,
+				pairsUsable: 38,
+				disagreementRate: 0.05,
+				unclearRate: 15 / 38,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 5% of 40 pairs',
+			'Could not tell 39% of the 38 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 5% of 40 pairs disagreed with the second reading, and 39% of the 38 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 5% of 40 pairs disagreed with their own second reading, and 39% of the 38 that agreed could not tell. The 39% that could not tell is past its mark.'
+	},
+	{
+		preset: 7,
+		state: 'no day was held for the judge, and both rates are past their marks',
+		days: [
+			judgeDay('2030-06-11', {
+				pairsJudged: 30,
+				pairsUsable: 24,
+				disagreementRate: 0.2,
+				unclearRate: 8 / 24,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 20,
+				pairsUsable: 16,
+				disagreementRate: 0.2,
+				unclearRate: 0.5,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 20% of 20 pairs',
+			'Could not tell 50% of the 16 that agreed'
+		],
+		dots: {
+			'2030-06-11':
+				'11 Jun: 20% of 30 pairs disagreed with the second reading, and 33% of the 24 that agreed could not tell.',
+			'2030-06-15':
+				'15 Jun: 20% of 20 pairs disagreed with the second reading, and 50% of the 16 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 20% of 50 pairs disagreed with their own second reading, and 40% of the 40 that agreed could not tell. Both rates are past their marks.'
+	},
+	{
+		// A share that is not zero and rounds below one percent prints under one.
+		// A 0 would say no pair disagreed, and one did.
+		preset: 1,
+		state: '1 of its 300 pairs disagreed, a share that rounds below one percent',
+		days: [
+			judgeDay('2030-06-15', { pairsJudged: 300, pairsUsable: 299, disagreementRate: 1 / 300 })
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading <1% of 300 pairs',
+			'Could not tell 0% of the 299 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: <1% of 300 pairs disagreed with the second reading, and 0% of the 299 that agreed could not tell.'
+		},
+		words:
+			'In this one day, <1% of 300 pairs disagreed with their own second reading, and 0% of the 299 that agreed could not tell. Both rates are inside the marks.'
 	}
 ];
 
@@ -1661,6 +1773,33 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			} else {
 				expect(await said(page, '[data-agreement-floor-note]')).toBe(one.note);
 			}
+		});
+	}
+
+	for (const preset of [1, 7]) {
+		test(`THE ORACLE: judge-agreement's note and plot labels call each dashed line a mark, and keep "line" for the merge line, at the ${preset}-day window`, async ({
+			page
+		}) => {
+			const days = [
+				judgeDay(JUDGED_THROUGH, { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })
+			];
+			await page.setContent(
+				`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', preset, state: '', days, words: '' }))}</main>`
+			);
+
+			// One word for each thing: a dashed limit is a mark, and a line is the
+			// merge line and nothing else. The words are Reader's, the same at every window.
+			expect(
+				await said(page, '[data-console-panel="Whether the judge agrees with itself"] .panel-note')
+			).toBe(
+				'Every pair is read twice, with the two summaries swapped. A "disagreed" dot shows how often a pair\'s two readings disagreed. A "could not tell" dot shows how often the pairs whose two readings agreed could not tell. When a day\'s rate is past its own dashed mark, the run does not move the merge line that day.'
+			);
+			const labels = await page
+				.locator('[data-agreement-marker-label]')
+				.evaluateAll((nodes) =>
+					nodes.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
+				);
+			expect(labels).toEqual(['15% - the "disagreed" mark', '35% - the "could not tell" mark']);
 		});
 	}
 });
