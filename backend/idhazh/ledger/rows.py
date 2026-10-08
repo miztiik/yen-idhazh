@@ -41,14 +41,9 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import ledger_files, lifecycle, paths
-from idhazh.ledger.csv_file import (
-    _read_rows,
-    extend_ledger_file,
-)
-from idhazh.ledger.keys import STORY_SIMILARITY_THRESHOLD_KEY
+from idhazh.ledger import ledger_files
+from idhazh.ledger.csv_file import _read_rows
 from idhazh.ledger.persist import persist
-from idhazh.ledger.settle import drop_repeated_rows
 
 #: How far back a health read looks, in days the ledger holds. Not a policy - just
 #: enough history to reach into last month, so a quarantine decided on the first
@@ -258,39 +253,6 @@ def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilar
         [date],
         model=StorySimilarityPair,
     )
-
-
-def append_fitted_thresholds(
-    state_dir: Path, date: str, rows: Iterable[FittedSimilarityThreshold]
-) -> int:
-    """Append a run's fitted row into that day's own file.
-
-    Settled against `STORY_SIMILARITY_THRESHOLD_KEY` straight after the write.
-    The key is date and run, so a second RUN of one date keeps its own row - two
-    runs fitted two records and both are facts - and only a second attempt at
-    one execution is collapsed: both attempts fitted the same record, so the
-    first row wins and there is nothing to choose between them.
-
-    **The day file is created even when the fit was held**, and a held day writes
-    a row like any other: a line that moves itself has to leave a record on the
-    days it stayed put, or a reader cannot tell a held day from a day nothing
-    ran. The commit step names this directory, `git add` runs under
-    `set -euo pipefail`, and a path missing from the working tree aborts the
-    step and costs the ledgers staged beside it.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    recorded = list(rows)
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-    if not lifecycle.accepts_new_rows(which, len(recorded)):
-        return 0
-    file = paths.path(state_dir, which, date)
-    columns = FittedSimilarityThreshold.csv_columns()
-    if not file.exists():
-        file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(file, columns, recorded)
-    return landed - drop_repeated_rows(file, STORY_SIMILARITY_THRESHOLD_KEY)
 
 
 def load_fitted_thresholds(

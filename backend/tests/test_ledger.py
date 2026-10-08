@@ -901,7 +901,7 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     """A file already under the contract's header costs a re-file one line.
 
     Nothing this checkout writes can put a second header into a file: a day
-    tree's writer writes its file whole, and `extend_ledger_file` writes a header
+    tree's writer writes its file whole, and a CSV append writes a header
     only into a file that does not exist yet. So scanning every line of a file
     whose first line already matches asks a question whose answer cannot have
     moved since the file was written.

@@ -409,25 +409,12 @@ the last day there was.
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `payload.readDayShards`, `payload.dayShardFiles` | the day files of the newest `days` recorded days of a ledger that files one `<YYYY>/<MM>/<DD>.csv` a day, as the publication inventory names them | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts recorded days** - see below |
 | `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore`, `similarity-ledger.fittedLines` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint, merge-line holdout score or fitted merge line ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
-
-**A day is one file, and the cover counts recorded days.** The ledger this
-reader serves, the fitted merge line, files one `<YYYY>/<MM>/<DD>.csv` a day:
-grain `day` in `config/ledgers.json`, the registry
-`backend/idhazh/ledger/paths.py` builds its writer's path from. `dayShardFiles`
-keeps the newest `days` of the days the publication inventory names and opens
-one file a day, so `LEDGER_WINDOW_DAYS` bounds the read at 91 files whatever the
-ledger holds. From #1068 until 2026-10-08 the reader looked for a folder of files
-a day, which no writer filed, so the Judgement page read no row.
-`frontend/tests/similarity-ledgers.spec.ts` now holds the registry and the
-reader to the one layout. The merge line's holdout score left this reader when it
-moved onto the ledger door; it is read with the packed records above.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -456,11 +443,6 @@ matters, because the vector block is most of what a day payload weighs.
 once to find the newest year, which costs one directory entry a year for ever.
 `readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
 which shards are newest, which costs one entry a month for ever.
-`readDayShards` is the bigger one, and the fitted-line reader inherits it: the
-inventory names one entry a recorded day, and the reader reads every entry of
-its ledger to find the newest. It looks on disk only for the files inside its
-cover and opens no other, and deriving the newest day from today's date instead
-would answer nothing at all for a ledger whose last run was two months ago.
 
 ### Unbounded, and it says so
 

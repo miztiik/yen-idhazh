@@ -83,8 +83,6 @@ Each piece goes with its last user.
 | Piece | What it does | Its users now | It goes when |
 | --- | --- | --- | --- |
 | `day_shards.py` | read CSV day files and settle their rows | the migrator, the canary builder (`backend/utilities/build_canary_day.py`), the gardener's file walks (`gardener/named_trees.py`, `gardener/retention_files.py`) and `path_classes.py` | the migrator is gone |
-| `ledger.extend_ledger_file` in `ledger/csv_file.py` | append rows to one CSV day file | nothing since the fitted merge line moved | now |
-| `readDayShards` in `frontend/src/lib/server/payload.ts` | read CSV day files when the site builds | nothing since `similarity-ledger.ts` moved to the packed files | now |
 | `backend/utilities/ledger_migration/` | declare and read the old CSV layouts, then plan, write, prove and retire named months; `backend/utilities/migrate_to_parquet.py` is the command | the copy of the moved ledgers' committed CSV days, and the next ledger to move | no ledger a program writes is left on CSV ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `path_classes.UNION_SAFE` | name the trees whose CSV files two writers may append to, each with a `merge=union` line in `.gitattributes` | none: it is empty, because the fitted merge line's line was the last | the rest of the CSV code goes |
 | `_TARGET_LEDGERS` in `telemetry/prune.py`, and the prune verb's CSV branch with `day_partition.day_files` | name the CSV ledgers the prune verb reaches, and walk their day files | none: the list is empty, and only the branch's own tests drive it | the rest of the CSV code goes |
