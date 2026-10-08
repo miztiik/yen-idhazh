@@ -378,7 +378,7 @@ def _shown_files(state_root: Path, paths: list[Path]) -> str:
     return ",".join(ledger.paths.shown(state_root, path) for path in paths) or "nothing"
 
 
-def stage_fingerprint(
+def file_machine_row(
     *,
     date: str,
     run_id: str,
@@ -387,38 +387,18 @@ def stage_fingerprint(
     commit_sha: str,
     shard: int = 0,
     job: ServerJob = WORK_JOB,
-) -> HostFingerprintRow | None:
-    """Record what machine this job drew, before anything else competes for it.
+) -> tuple[HostFingerprintRow | None, list[Path]]:
+    """Record what machine this job drew, and say where the row landed.
 
-    Runs early on purpose. The bandwidth probe needs a gigabyte or two and an
-    idle machine, and a job that has already started its heaviest step has
-    neither - the model server in `work`, the embeddings and the site build in
-    `assemble`. A probe taken at the end of a job would measure that step rather
-    than the host. How much it needs depends on the cache the machine reports:
-    `probe_buffer_mib` sizes each of the two buffers against it.
-
-    The row goes to this job's own raw file through the ledger door. Ten jobs of
-    one run each draw a machine and each record it, and the door names each file
-    for its writer, so no two jobs share a path; the attempt is in the writer's
-    identity, so a re-run replaces its first try rather than colliding with it.
-
-    **The day and the run address are what this needs, and it asks for both.**
-    A machine reading is about a job rather than about the work that job did, so
-    a job that plans nothing can still take one. Reading a run plan to recover
-    two strings the caller already holds would make this probe refuse every
-    workflow that does not plan - the gardener's wakes and the council's nights
-    among them - for a payload it never opens.
-    **The bandwidth reading is taken only by the jobs config names.** It wants a
-    gigabyte and an idle machine, so a job that takes it anywhere but the bench
-    measures its own run rather than the host. A job outside the list is handed a
-    floor of zero, which is the caller saying do not probe, and the row carries
-    `memcpy_probe_mib` of zero beside an empty rate - the reading was not taken,
-    rather than a machine that could not copy.
+    `stage_fingerprint` is this for a caller that only wants the row. A caller
+    that has to name its own writes needs the paths as well: the gardener's shard
+    declares every file it wrote so its publisher can refuse one it did not, and
+    a row the shard filed but never named is a row that dies with the runner.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
         LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, run_id)
-        return None
+        return None, []
     reads_bandwidth = job in knobs.host_fingerprint_bandwidth_jobs
     row = read_row(
         date=date,
@@ -456,6 +436,55 @@ def stage_fingerprint(
         row.boot_seconds,
         row.mhz_at_probe,
         _shown_files(state_root, landed),
+    )
+    return row, landed
+
+
+def stage_fingerprint(
+    *,
+    date: str,
+    run_id: str,
+    settings: config.Settings,
+    state_root: Path,
+    commit_sha: str,
+    shard: int = 0,
+    job: ServerJob = WORK_JOB,
+) -> HostFingerprintRow | None:
+    """Record what machine this job drew, before anything else competes for it.
+
+    Runs early on purpose. The bandwidth probe needs a gigabyte or two and an
+    idle machine, and a job that has already started its heaviest step has
+    neither - the model server in `work`, the embeddings and the site build in
+    `assemble`. A probe taken at the end of a job would measure that step rather
+    than the host. How much it needs depends on the cache the machine reports:
+    `probe_buffer_mib` sizes each of the two buffers against it.
+
+    The row goes to this job's own raw file through the ledger door. Ten jobs of
+    one run each draw a machine and each record it, and the door names each file
+    for its writer, so no two jobs share a path; the attempt is in the writer's
+    identity, so a re-run replaces its first try rather than colliding with it.
+
+    **The day and the run address are what this needs, and it asks for both.**
+    A machine reading is about a job rather than about the work that job did, so
+    a job that plans nothing can still take one. Reading a run plan to recover
+    two strings the caller already holds would make this probe refuse every
+    workflow that does not plan - the gardener's wakes and the council's nights
+    among them - for a payload it never opens.
+    **The bandwidth reading is taken only by the jobs config names.** It wants a
+    gigabyte and an idle machine, so a job that takes it anywhere but the bench
+    measures its own run rather than the host. A job outside the list is handed a
+    floor of zero, which is the caller saying do not probe, and the row carries
+    `memcpy_probe_mib` of zero beside an empty rate - the reading was not taken,
+    rather than a machine that could not copy.
+    """
+    row, _ = file_machine_row(
+        date=date,
+        run_id=run_id,
+        settings=settings,
+        state_root=state_root,
+        commit_sha=commit_sha,
+        shard=shard,
+        job=job,
     )
     return row
 

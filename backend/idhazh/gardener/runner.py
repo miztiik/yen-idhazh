@@ -93,7 +93,7 @@ from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final
 
-from idhazh import ledger
+from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason, stop_for
@@ -117,6 +117,7 @@ from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.site_weight import BYTES_PER_MB
+from idhazh.telemetry import silicon
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -716,13 +717,24 @@ def run(
     if too_heavy is not None:
         say(too_heavy)
     recorded = record.relative_to(repo_root).as_posix()
+    machine = _machine_row(
+        settings,
+        state_dir=state_dir,
+        repo_root=repo_root,
+        run_id=run_id,
+        job=job,
+        shard=shard,
+        git_sha=git_sha,
+        today=today.isoformat(),
+        say=say,
+    )
     wrote = {path for each in ran for path in _landed(each)[0]}
     deleted = {path for each in ran for path in _landed(each)[1]}
     landing = Shard(
         index=shard,
         task_names=tuple(names),
         record_path=recorded,
-        written_paths=frozenset({recorded, *wrote}),
+        written_paths=frozenset({recorded, *machine, *wrote}),
         deleted_paths=frozenset(deleted),
         message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )
@@ -736,6 +748,51 @@ def run(
         downloaded_bytes=downloaded_bytes,
         over_budget=too_heavy is not None,
     )
+
+
+def _machine_row(
+    settings: GardenerSettings,
+    *,
+    state_dir: Path,
+    repo_root: Path,
+    run_id: str,
+    job: ServerJob,
+    shard: int,
+    git_sha: str,
+    today: str,
+    say: Callable[[str], None],
+) -> frozenset[str]:
+    """What machine this shard drew, filed as one of the shard's own writes.
+
+    Here rather than in a workflow step because the shard declares every file it
+    wrote and its publisher refuses one it did not: a step beside the shard would
+    write a row no shard named, and a row nobody names dies with the runner.
+
+    The wake is the measurement this ledger exists to explain. A gardener task
+    that takes twice as long this month is a question about the machine first,
+    and until now the gardener was one of the two workflows that could not say
+    which machine it drew.
+
+    It never fails the shard. A probe is an instrument, and an instrument that
+    takes a wake down has cost more than the reading was worth (CLAUDE.md
+    section 1a) - so a refusal is said and the shard carries on with the work it
+    came to do. The bandwidth reading is not taken here at all: the knob names
+    the bench, and a copy timed between two tasks would measure the wake.
+    """
+    try:
+        _, landed = silicon.file_machine_row(
+            date=today,
+            run_id=run_id,
+            settings=config.load(),
+            state_root=state_dir,
+            commit_sha=git_sha,
+            shard=shard,
+            job=job,
+        )
+    except OSError as refusal:
+        say(f"shard {shard}: the machine went unrecorded, and the wake carries on: {refusal}")
+        return frozenset()
+    return frozenset(path.relative_to(repo_root).as_posix() for path in landed)
 
 
 def tasks_of_shard(settings: GardenerSettings, index: int) -> tuple[str, ...]:
