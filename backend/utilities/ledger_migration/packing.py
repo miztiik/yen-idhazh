@@ -16,6 +16,7 @@ from idhazh.contracts.ledgers import Grain, LedgersConfig
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
+from idhazh.ledger import paths
 from utilities.ledger_migration.csv_cells import row_contract
 from utilities.ledger_migration.csv_layouts import CSV_LEDGERS
 from utilities.ledger_migration.packing_files import packing_paths
@@ -104,8 +105,16 @@ def policies_for_roots(
                 continue
             trial = tasks.get(config.compaction_task(name, trial=True))
             if isinstance(trial, CompactionPolicy) and root_name in trial.state_roots:
+                # The declaration's own `owns` names tier-first addresses under the
+                # shared production `state/`, for the registry-overlay root gardener
+                # compaction now packs trial files against (row 7). This caller packs
+                # a root migration passes in directly - `root_name` itself is the
+                # state_dir, with no overlay - so its folders are `<root_name>/raw/`
+                # and `<root_name>/compact/` nested under that root, not a filtered
+                # slice of the shared declaration's own paths.
                 root_owns = [
-                    folder for folder in trial.owns if folder.startswith(f"{root_name}/")
+                    "/".join((root_name, tier, *paths.door_folders(name)))
+                    for tier in (paths.RAW_DIRNAME, paths.COMPACT_DIRNAME)
                 ]
                 selected[state_dir][name] = CompactionPolicy.model_validate(
                     {

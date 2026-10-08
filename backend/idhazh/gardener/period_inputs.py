@@ -187,20 +187,19 @@ def paths_for_task(
     each of its steps names the periods it chooses as it runs.
     """
     if isinstance(policy, CompactionPolicy):
-        return tuple(
-            sorted(
-                path
-                for state_root in policy.state_roots
-                for path in ledger_marks.name_marks(
-                    repo_root.joinpath(*PurePosixPath(state_root).parts), policy.ledger
+        paths: set[Path] = set()
+        for state_root in policy.state_roots:
+            segments = PurePosixPath(state_root).relative_to("state").parts
+            with ledger.use_registry(ledger.overlay_registry(segments)):
+                paths.update(
+                    ledger_marks.name_marks(repo_root / ledger.STATE_DIRNAME, policy.ledger)
                 )
-            )
-        )
+        return tuple(sorted(paths))
     if period_range is None:
         return ()
     days, months = periods_in_range(period_range)
     monthly = month_partition.is_month_stem(period_range[0])
-    paths: set[Path] = set()
+    paths = set[Path]()
     for folder in (*policy.claims(), *policy.reads):
         root = repo_root / folder
         if (

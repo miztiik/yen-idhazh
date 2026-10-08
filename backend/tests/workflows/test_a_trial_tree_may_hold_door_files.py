@@ -155,11 +155,14 @@ def test_the_check_passes_the_raw_files_a_test_case_run_files(
     A check that knew only day trees and traces named every one of them a
     stray, so no dispatch could push its ledgers. The raw file is asserted to
     exist first, so a door that wrote nothing cannot pass this by leaving the
-    check nothing to read.
+    check nothing to read. Raw files are seeded tier-first, through the same
+    `ledger.paths.overlay_registry` a real test case run writes under.
     """
     tree, root, roots = _a_trial_tree(tmp_path)
-    assert file_rows(root), f"no {which.value} row was filed"
-    assert ledger.list_raw_files(root, which), f"the door wrote no raw {which.value} file"
+    case_id = root.name
+    with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, case_id))):
+        assert file_rows(tree), f"no {which.value} row was filed"
+        assert ledger.list_raw_files(tree, which), f"the door wrote no raw {which.value} file"
 
     gathered = tmp_path / "trial-ledgers"
     pipeline_test_ledgers.gather(tree, gathered, roots=sorted(roots), days=[DAY])
@@ -173,19 +176,18 @@ def test_equal_writer_identities_gather_check_and_place_under_separate_case_root
     roots = pipeline_test_ledgers._roots(CONFIG_DIR)[:2]
     assert len(roots) == 2
     state = tmp_path / ledger.STATE_DIRNAME
-    case_roots = [state / TRIAL_STATE_PREFIX / name for name in roots]
     expected_item_ids = ["ai-0000000001", "ai-0000000002"]
 
-    for number, (item_id, case_root) in enumerate(
-        zip(expected_item_ids, case_roots, strict=True), start=1
+    envelopes = []
+    for number, (item_id, name) in enumerate(
+        zip(expected_item_ids, roots, strict=True), start=1
     ):
         assert item_id == f"ai-{number:010d}"
-        seed_item_health(case_root, DAY, [_census_row(number)])
-
-    envelopes = [
-        ledger.read_envelope(ledger.list_raw_files(root, LedgerName.ITEM_HEALTH)[0].path)
-        for root in case_roots
-    ]
+        with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, name))):
+            seed_item_health(state, DAY, [_census_row(number)])
+            envelopes.append(
+                ledger.read_envelope(ledger.list_raw_files(state, LedgerName.ITEM_HEALTH)[0].path)
+            )
     identities = [
         (envelope.identity.run_id, envelope.identity.job, envelope.identity.shard)
         for envelope in envelopes
@@ -198,9 +200,17 @@ def test_equal_writer_identities_gather_check_and_place_under_separate_case_root
 
     staged = pipeline_test_ledgers.place(gathered, state, roots=roots)
 
-    assert staged == [root.as_posix() for root in case_roots]
-    for root, item_id in zip(case_roots, expected_item_ids, strict=True):
-        files = ledger.list_raw_files(root, LedgerName.ITEM_HEALTH)
+    assert staged == [
+        path.as_posix()
+        for name in roots
+        for path in (
+            state / TRIAL_STATE_PREFIX / name,
+            state / ledger.paths.RAW_DIRNAME / TRIAL_STATE_PREFIX / name,
+        )
+    ]
+    for name, item_id in zip(roots, expected_item_ids, strict=True):
+        with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, name))):
+            files = ledger.list_raw_files(state, LedgerName.ITEM_HEALTH)
         rows = ledger.load_stored([raw_file.path for raw_file in files], model=ItemHealthRow)
         assert [row.row.item_id for row in rows] == [item_id]
 

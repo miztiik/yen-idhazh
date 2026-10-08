@@ -15,8 +15,8 @@
   },
   "month_deletes_dry_run": true,
   "owns": [
-    "state/pipeline-tests/raw/host-fingerprint",
-    "state/pipeline-tests/compact/host-fingerprint"
+    "state/raw/pipeline-tests/host-fingerprint",
+    "state/compact/pipeline-tests/host-fingerprint"
   ],
   "prune_refusal": "Trial host-fingerprint data is not a production prune target.",
   "state_roots": [

@@ -913,12 +913,14 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
         tree, state, roots=[test_case.id for test_case in test_cases]
     )
 
-    assert len(staged) == len(test_cases)
+    assert len(staged) == 2 * len(test_cases), "a traces root and a raw root for every case"
     for test_case in test_cases:
         assert (state / TRIAL_STATE / test_case.id).is_dir()
-    assert ledger.raw_root(
-        state / TRIAL_STATE / test_cases[0].id, LedgerName.ITEM_HEALTH
-    ).is_dir()
+        assert (state / ledger.paths.RAW_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
+    with ledger.use_registry(
+        ledger.overlay_registry((TRIAL_STATE_PREFIX, test_cases[0].id))
+    ):
+        assert ledger.raw_root(state, LedgerName.ITEM_HEALTH).is_dir()
 
 
 def test_a_config_with_every_test_case_switched_off_is_refused() -> None:
@@ -1360,12 +1362,13 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     trial = next(
         test_case for test_case in one_shard.test_cases if test_case.id == _enabled_id()
     ).id
-    filed = ledger.load_days(
-        tmp_path / ledger.STATE_DIRNAME / TRIAL_STATE / trial,
-        LedgerName.RUN_PLAN,
-        ["2026-09-14"],
-        model=RunPlan,
-    )
+    with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, trial))):
+        filed = ledger.load_days(
+            tmp_path / ledger.STATE_DIRNAME,
+            LedgerName.RUN_PLAN,
+            ["2026-09-14"],
+            model=RunPlan,
+        )
     assert [plan.run_id for plan in filed] == [drawn.run_id], (
         "the drawn plan is filed where this test case's stages read a plan, before they start"
     )

@@ -103,7 +103,7 @@ permissions:
 concurrency:
   # One group per target, because the four targets are four jobs that share
   # nothing. Only `bench` commits: its `runtime` job pushes one host row as a
-  # raw file of its own under `state/pipeline-tests/raw/host-fingerprint/`,
+  # raw file of its own under `state/raw/pipeline-tests/host-fingerprint/`,
   # named for its writer, so two dispatches on one day never share a path and
   # neither can lose the other's row at the rebase.
   #
@@ -796,7 +796,7 @@ jobs:
       # artifact and the runner takes the rest with it; this commits one row -
       # the machine this dispatch drew - to `main`.
       #
-      # `state/pipeline-tests/raw/host-fingerprint` and nothing wider. The sweep's
+      # `state/raw/pipeline-tests/host-fingerprint` and nothing wider. The sweep's
       # own item-health, scores and traces land under the same trial root
       # because the whole state root moved, but nothing reads them back and
       # committing them would grow the repository for no reader (Guardrail #12).
@@ -824,8 +824,8 @@ jobs:
           NOTHING_STAGED_MESSAGE: "no machine recorded"
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: |
-          if [ -d state/pipeline-tests/raw/host-fingerprint ]; then
-            python backend/utilities/commit_and_push.py state/pipeline-tests/raw/host-fingerprint
+          if [ -d state/raw/pipeline-tests/host-fingerprint ]; then
+            python backend/utilities/commit_and_push.py state/raw/pipeline-tests/host-fingerprint
           else
             echo "$NOTHING_STAGED_MESSAGE"
           fi

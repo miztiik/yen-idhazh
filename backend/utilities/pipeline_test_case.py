@@ -108,21 +108,25 @@ def _file_the_plan(drawn: RunPlan, *, trial_case_dirname: str) -> None:
     """File the drawn plan into one test case's trial ledger, where its stages read it.
 
     Every case shares the trial root but reads its plan beside its own ledgers.
+    This runs in the same process as `run()`, never through `idhazh`'s own CLI
+    dispatch, so it enters the registry overlay itself rather than relying on
+    one a stage subprocess would already be inside.
     """
-    ledger.persist(
-        Path(ledger.STATE_DIRNAME) / TRIAL_STATE_PREFIX / trial_case_dirname,
-        [drawn],
-        ledger=LedgerName.RUN_PLAN,
-        covers=drawn.date,
-        identity=WriterIdentity(
-            run_id=drawn.run_id,
-            attempt=run_context.run_attempt(),
-            job=ServerJob.PLAN,
-            shard=0,
-            producer=PRODUCER,
-            git_sha=UNNAMED_COMMIT,
-        ),
-    )
+    with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, trial_case_dirname))):
+        ledger.persist(
+            Path(ledger.STATE_DIRNAME),
+            [drawn],
+            ledger=LedgerName.RUN_PLAN,
+            covers=drawn.date,
+            identity=WriterIdentity(
+                run_id=drawn.run_id,
+                attempt=run_context.run_attempt(),
+                job=ServerJob.PLAN,
+                shard=0,
+                producer=PRODUCER,
+                git_sha=UNNAMED_COMMIT,
+            ),
+        )
 
 
 def _refuse(message: str) -> int:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
@@ -65,13 +65,20 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
 
 
 def test_a_trial_compaction_lists_only_its_declared_root_indexes(tmp_path: Path) -> None:
+    """A trial root's name is spliced in ahead of its ledger's folder, tier first.
+
+    `state_roots` still reads `state/pipeline-tests(/<case>)`; the tier-first
+    address puts `compact` ahead of that trial name, not after it.
+    """
     policy = config.load_gardener().tasks["compact-trial-item-health"]
     assert isinstance(policy, CompactionPolicy)
 
     paths = paths_for_task(tmp_path, "compact-trial-item-health", policy, None, today=date(2026, 9, 27))
 
     expected = {
-        tmp_path / root / "compact" / "item-health" / "index" / f"{period}.json"
+        tmp_path.joinpath(
+            "state", "compact", *PurePosixPath(root).relative_to("state").parts, "item-health", "index", f"{period}.json"
+        )
         for root in policy.state_roots
         for period in ("daily", "monthly", "yearly")
     }

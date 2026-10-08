@@ -37,6 +37,7 @@ import os
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import cache
 from pathlib import Path, PurePath
 from typing import Final
@@ -103,16 +104,21 @@ _REGISTRY: Final[dict[LedgerName, LedgerEntry]] = {
 #: The registry every builder falls back to when a caller passes none, swapped
 #: for the run of a trial pass by `use_registry` and never by a builder itself.
 #: Production code never sets this: a call site that wants a trial address
-#: still passes no `registry` at all, because one process runs one trial root
-#: at a time and the active registry, not the call site, says which.
-_ACTIVE_OVERRIDE: DoorRegistry | None = None
+#: still passes no `registry` at all, because the active override, not the
+#: call site, says which. A `ContextVar` rather than a plain global: each
+#: thread gets its own value by default, and each asyncio task gets a copy
+#: taken at the point it was created, so a second trial root entered on
+#: another thread or task cannot see, or clobber, this one's override even
+#: though both run in the same process.
+_ACTIVE_OVERRIDE: ContextVar[DoorRegistry | None] = ContextVar("_ACTIVE_OVERRIDE", default=None)
 
 
 def _registry(registry: DoorRegistry | None) -> DoorRegistry:
     """The caller's fixture registry, the active override, or the committed one."""
     if registry is not None:
         return registry
-    return _REGISTRY if _ACTIVE_OVERRIDE is None else _ACTIVE_OVERRIDE
+    active = _ACTIVE_OVERRIDE.get()
+    return _REGISTRY if active is None else active
 
 
 @contextmanager
@@ -125,15 +131,15 @@ def use_registry(registry: DoorRegistry | None) -> Iterator[None]:
     site threading a `registry=` argument through stage code that never knew
     trials existed. Nested use is restored to the enclosing override rather
     than to `None`, so a block that opens inside another's `with` leaves it
-    exactly as it found it.
+    exactly as it found it. The restore uses the token `ContextVar.set`
+    returns rather than a saved value, so it undoes exactly this block's
+    change even if another thread or task set its own override in between.
     """
-    global _ACTIVE_OVERRIDE
-    previous = _ACTIVE_OVERRIDE
-    _ACTIVE_OVERRIDE = registry
+    token = _ACTIVE_OVERRIDE.set(registry)
     try:
         yield
     finally:
-        _ACTIVE_OVERRIDE = previous
+        _ACTIVE_OVERRIDE.reset(token)
 
 
 def overlay_registry(
@@ -144,20 +150,33 @@ def overlay_registry(
     Built for `use_registry`, so a trial run's producers and its compaction pass
     address the same files with no call site telling a ledger where a trial
     puts it. `segments` is what the trial root names beyond `state/` - one
-    bench segment, or a case segment after it - and every ledger takes it at
-    the same place its own grain already puts first: a door ledger
-    (`Grain.RAW_AND_COMPACT`) has no folder of its own under `state/` - its tier
-    comes from `raw_root`/`compact_folder`, not from its prefix - so `segments`
-    goes in front of its prefix, putting the tier first and the trial segments
-    right after it. Every other grain already owns a folder under `state/` at
-    `prefix[0]`, so that folder stays first and `segments` goes in right behind
-    it, which is why `state/traces/...` stays `state/traces/` before any trial
-    names anything.
+    bench segment, or a case segment after it.
+
+    A door ledger (`Grain.RAW_AND_COMPACT`) has no folder of its own under
+    `state/` - its tier comes from `raw_root`/`compact_folder`, not from its
+    prefix - so `segments` goes in front of its prefix, putting the tier first
+    and the trial segments right after it: `state/<raw|compact>/<segments>/<ledger>/...`.
+
+    `traces` takes the same front placement, even though its grain is `tree`
+    and it owns a folder at `prefix[0]` in production. Production's own
+    `traces` retention task (`config/gardener/traces.json`) walks all of
+    `state/traces` on a 7-day window; a trial's trace files are JSONL kept for
+    the trial's own, longer window
+    (`config/gardener/trials.json`), and nesting them at
+    `state/traces/<segments>` would put both tasks' claims one inside the
+    other - the refusal `config._refuse_overlapping_claims` exists to catch.
+    So a trial's traces go at `state/<segments>/traces`, beside its other
+    ledgers rather than inside production's claim, which is also where they
+    already sat before this registry existed and so costs no data move.
+
+    Every remaining grain already owns a folder under `state/` at `prefix[0]`
+    with nothing else claiming inside it for a different window, so that
+    folder stays first and `segments` goes in right behind it.
     """
     base = _registry(registry)
     overlaid: dict[LedgerName, LedgerEntry] = {}
     for name, held in base.items():
-        if held.grain is Grain.RAW_AND_COMPACT:
+        if held.grain is Grain.RAW_AND_COMPACT or name is LedgerName.TRACES:
             new_prefix = (*segments, *held.prefix)
         else:
             new_prefix = (held.prefix[0], *segments, *held.prefix[1:])

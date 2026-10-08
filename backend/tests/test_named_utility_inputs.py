@@ -174,16 +174,25 @@ def test_prompt_loop_ignores_unnamed_articles(tmp_path: Path, article_ok: Articl
 def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:
     state = tmp_path / "state"
     root = "fixture"
+    # `gather` reads raw ledger files tier-first, from `state/raw/pipeline-tests/<root>/<ledger>/`
+    # (`ledger.overlay_registry`), and traces from their exempt, un-tiered home at
+    # `state/pipeline-tests/<root>/traces/` (module docstring). Written-to and
+    # artifact-shaped paths differ for the raw case, so both sides are tracked.
+    written = (
+        f"raw/{TRIAL_STATE_PREFIX}/{root}/feed-health/2026/09/01/a.parquet",
+        f"{TRIAL_STATE_PREFIX}/{root}/traces/2026/09/01/a.jsonl",
+        f"raw/{TRIAL_STATE_PREFIX}/{root}/published/2026/09/01/a.parquet",
+    )
     wanted = (
         f"{root}/raw/feed-health/2026/09/01/a.parquet",
         f"{root}/traces/2026/09/01/a.jsonl",
         f"{root}/raw/published/2026/09/01/a.parquet",
     )
-    for name in wanted:
-        path = state / TRIAL_STATE_PREFIX / name
+    for name in written:
+        path = state / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("one day", encoding="ascii")
-    other = state / TRIAL_STATE_PREFIX / root / "raw/feed-health/2026/09/02/a.parquet"
+    other = state / "raw" / TRIAL_STATE_PREFIX / root / "feed-health/2026/09/02/a.parquet"
     other.parent.mkdir(parents=True)
     other.write_bytes(b"\xff")
     tree = tmp_path / "artifact"

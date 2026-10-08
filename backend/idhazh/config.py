@@ -931,7 +931,7 @@ def _refuse_a_compaction_declaration(
     if trial:
         prefix = ledger.door_folders(policy.ledger)
         expected = {
-            PurePosixPath(root, tier, *prefix).as_posix()
+            PurePosixPath("state", tier, *PurePosixPath(root).parts[1:], *prefix).as_posix()
             for root in policy.state_roots
             for tier in ("raw", "compact")
         }

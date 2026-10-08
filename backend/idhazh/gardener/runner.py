@@ -296,7 +296,15 @@ def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran
 
 
 def _run_compaction_roots(held: registry.TaskModule, context: TaskContext) -> Pass:
-    """Run one pass per declared root, stopping when the first root needs another wake."""
+    """Run one pass per declared root, stopping when the first root needs another wake.
+
+    A trial root is a segment path spliced after the tier, not a directory the
+    pass enters: `state_dir` stays `state/` for every root, and what changes
+    per root is which registry `path`/`raw_root`/`tree_root` fall back to
+    (`ledger.use_registry`, `ledger.overlay_registry`) - so a trial's files sit
+    at `state/raw/<segments>/<ledger>`, beside every other ledger's
+    `state/raw/<ledger>`, rather than under a root of their own.
+    """
     from idhazh.contracts.gardener_events import PeriodsTaken
 
     policy = context.policy
@@ -304,19 +312,23 @@ def _run_compaction_roots(held: registry.TaskModule, context: TaskContext) -> Pa
         raise ValueError("a compaction root pass needs a compaction declaration")
     outcomes: list[Pass] = []
     for state_root in policy.state_roots:
-        root = context.repo_root.joinpath(*PurePosixPath(state_root).parts)
+        segments = PurePosixPath(state_root).relative_to("state").parts
         owns = tuple(
-            folder for folder in policy.owns if folder.startswith(f"{state_root}/")
+            folder
+            for folder in policy.owns
+            if (parts := PurePosixPath(folder).parts)[:1] == ("state",)
+            and parts[1:2] in (("raw",), ("compact",))
+            and parts[2 : 2 + len(segments)] == segments
         )
         if not owns:
             raise ValueError(f"{state_root} has no owned folders for {policy.ledger.value}")
         root_context = replace(
             context,
-            state_dir=root,
             owned_folders=tuple(folder for folder in context.owned_folders if folder in owns),
             listing=context.listing.within(owns),
         )
-        outcome = held.run(root_context)
+        with ledger.use_registry(ledger.overlay_registry(segments)):
+            outcome = held.run(root_context)
         outcomes.append(outcome)
         if outcome.more_to_do:
             break
