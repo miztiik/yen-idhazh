@@ -50,6 +50,13 @@
       "prefix": "",
       "parameters_millions": 109,
       "why": "The same size as gte-base from a different group. One pair at one size is what separates a training difference from a size difference."
+    },
+    {
+      "slug": "gte-modernbert",
+      "model_id": "Alibaba-NLP/gte-modernbert-base",
+      "prefix": "",
+      "parameters_millions": 149,
+      "why": "The same training again, on a newer foundation than the rest of the list. Sits within forty million parameters of gte-base, so the pair reads as a change of foundation rather than a change of size. It is the one row that asks whether anything has moved since the models here were built."
     }
   ],
   "set_aside": [

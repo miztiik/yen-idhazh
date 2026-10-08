@@ -150,7 +150,11 @@ jobs:
         run: |
           set -euo pipefail
           pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
-          pip install --quiet sentence-transformers scikit-learn numpy pydantic
+          # Newest first. A recent foundation needs a recent library, and a
+          # model that still will not load is recorded as unavailable with the
+          # reason rather than taking the shard down.
+          pip install --quiet --upgrade \
+            'transformers>=4.48' sentence-transformers scikit-learn numpy pydantic
 
       - name: Score it
         env:
