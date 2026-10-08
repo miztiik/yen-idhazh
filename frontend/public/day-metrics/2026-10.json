@@ -1090,5 +1090,97 @@
     },
     "version": "2026-09-29",
     "visuals_rendered": 0
+  },
+  {
+    "addresses_considered": 8744,
+    "bands": {
+      "high": 6,
+      "low": 0,
+      "medium": 2
+    },
+    "date": "2026-10-08",
+    "determinism_violations": 0,
+    "extraction": {
+      "chartable": 7,
+      "chartable_charted": 0,
+      "chartable_published": 5,
+      "elements_found": 470,
+      "items": 10,
+      "narrative": 1,
+      "span_integrity_pass": 10,
+      "unclassified": 2
+    },
+    "extraction_suspect": 0,
+    "instruments": [
+      {"column": "coherence","stat": {"count": 8,"maximum": 0.47803807216182187,"minimum": 0.22572211544450937,"p25": 0.23885004144590785,"p50": 0.29065410857368545,"p75": 0.33828330462499495,"total": 2.3771006633111047}},
+      {"column": "compression","stat": {"count": 8,"maximum": 0.4787234042553192,"minimum": 0.10652173913043478,"p25": 0.11839323467230443,"p50": 0.15904139433551198,"p75": 0.2012987012987013,"total": 1.5236433187642024}},
+      {"column": "evidential_density","stat": {"count": 8,"maximum": 0.00468384074941452,"minimum": 0.0,"p25": 0.0,"p50": 0.0,"p75": 0.0021141649048625794,"total": 0.006798005654277099}},
+      {"column": "extractiveness","stat": {"count": 8,"maximum": 0.41509433962264153,"minimum": 0.025,"p25": 0.17391304347826086,"p50": 0.2033898305084746,"p75": 0.25,"total": 1.655492451704615}},
+      {"column": "hhem","stat": {"count": 8,"maximum": 0.9713648557662964,"minimum": 0.9056893587112427,"p25": 0.9442523121833801,"p50": 0.9523581862449646,"p75": 0.9681176543235779,"total": 7.5567779541015625}},
+      {"column": "hhem_delta","stat": {"count": 8,"maximum": 0.0,"minimum": 0.0,"p25": 0.0,"p50": 0.0,"p75": 0.0,"total": 0.0}},
+      {"column": "hhem_full","stat": {"count": 8,"maximum": 0.9713648557662964,"minimum": 0.9056893587112427,"p25": 0.9442523121833801,"p50": 0.9523581862449646,"p75": 0.9681176543235779,"total": 7.5567779541015625}},
+      {"column": "score_ms","stat": {"count": 8,"maximum": 1376.0,"minimum": 286.0,"p25": 534.0,"p50": 1014.0,"p75": 1374.0,"total": 6935.0}},
+      {"column": "self_repetition","stat": {"count": 8,"maximum": 0.0,"minimum": 0.0,"p25": 0.0,"p50": 0.0,"p75": 0.0,"total": 0.0}},
+      {"column": "semantic_coverage","stat": {"count": 8,"maximum": 0.65,"minimum": 0.3,"p25": 0.4,"p50": 0.55,"p75": 0.6,"total": 3.85}},
+      {"column": "source_words","stat": {"count": 8,"maximum": 713.0,"minimum": 92.0,"p25": 307.0,"p50": 458.0,"p75": 470.0,"total": 3225.0}},
+      {"column": "source_words_before_cap","stat": {"count": 8,"maximum": 713.0,"minimum": 92.0,"p25": 307.0,"p50": 458.0,"p75": 470.0,"total": 3225.0}},
+      {"column": "speculative_density","stat": {"count": 8,"maximum": 0.02074688796680498,"minimum": 0.0,"p25": 0.0,"p50": 0.002173913043478261,"p75": 0.004357298474945534,"total": 0.03173418476479861}},
+      {"column": "summary_words","stat": {"count": 8,"maximum": 83.0,"minimum": 45.0,"p25": 56.0,"p50": 62.0,"p75": 73.0,"total": 490.0}},
+      {"column": "verbatim_run","stat": {"count": 8,"maximum": 0.39285714285714285,"minimum": 0.060240963855421686,"p25": 0.12244897959183673,"p50": 0.14516129032258066,"p75": 0.2222222222222222,"total": 1.335993202731404}}
+    ],
+    "items_failed": 2,
+    "items_planned": 10,
+    "items_published": 8,
+    "items_truncated": 0,
+    "label_similarity": {
+      "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
+      "nearest": {
+        "count": 8,
+        "maximum": 0.45476355518706923,
+        "minimum": 0.0965717664576981,
+        "p25": 0.15441044594720757,
+        "p50": 0.23024263589018096,
+        "p75": 0.3880700386694458,
+        "total": 1.8707327789515067
+      },
+      "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
+    },
+    "model_id": "qwen3-5-9b-q4-k-m",
+    "reasons": {
+      "faithfulness": 0,
+      "hedge_dropped": 2,
+      "lead_missing": 0,
+      "not_scored": 0,
+      "unattributed": 0,
+      "unsupported_number": 0
+    },
+    "revision": 1,
+    "runs": 1,
+    "sources": [
+      {"doubted": 0,"published": 1,"source_id": "abc-au-world","truncated": 0},
+      {"doubted": 0,"published": 1,"source_id": "bleepingcomputer","truncated": 0},
+      {"doubted": 0,"published": 1,"source_id": "cgtn-business","truncated": 0},
+      {"doubted": 0,"published": 1,"source_id": "free-press-journal","truncated": 0},
+      {"doubted": 1,"published": 2,"source_id": "straitstimes-business","truncated": 0},
+      {"doubted": 1,"published": 1,"source_id": "the-federal","truncated": 0},
+      {"doubted": 0,"published": 1,"source_id": "the-hindu-national","truncated": 0}
+    ],
+    "sources_present": 7,
+    "stage_timing": [
+      {"max_ms": 3377,"p50_ms": 816,"p90_ms": 1730,"stage": "fetch","sum_ms": 11312,"timed": 10},
+      {"max_ms": 164,"p50_ms": 56,"p90_ms": 96,"stage": "extract","sum_ms": 657,"timed": 10},
+      {"max_ms": 1326151,"p50_ms": 614742,"p90_ms": 1326120,"stage": "summarize","sum_ms": 7175184,"timed": 10}
+    ],
+    "summaries_scored": 8,
+    "throughput": {
+      "cached_tokens": 33467,
+      "decode_ms": 2017922,
+      "input_tokens": 59804,
+      "items": 8,
+      "output_tokens": 9732,
+      "prefill_ms": 2504521
+    },
+    "version": "2026-09-29",
+    "visuals_rendered": 0
   }
 ]
