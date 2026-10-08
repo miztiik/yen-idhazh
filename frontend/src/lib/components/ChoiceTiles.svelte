@@ -124,7 +124,7 @@
 
 	.choice-word {
 		display: grid;
-		place-items: center;
+		place-items: center start;
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		font-variant-numeric: tabular-nums;
@@ -132,6 +132,9 @@
 		white-space: nowrap;
 	}
 
+	/* The hidden weight-600 copy sizes the cell, and the shown word starts where that copy starts,
+	   so a word that changes weight never moves its start: centred, it moved by half the
+	   difference, which a wide system face makes a shift the browser reports. */
 	.choice-word::before,
 	.choice-word > span {
 		grid-area: 1 / 1;

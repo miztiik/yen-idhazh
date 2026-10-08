@@ -746,9 +746,11 @@ async function settle(page: Page) {
 	await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 50)))));
 }
 
-type ChartReading = { boxes: Record<string, Box>; pills: (Box | null)[]; scrollY: number; shift: number; sources: ShiftSource[] };
+type ChartReading = { boxes: Record<string, Box>; starts: Record<string, { x: number; y: number }>; pills: (Box | null)[]; scrollY: number; shift: number; sources: ShiftSource[] };
 
-/** Every box on the Chart tab that a choice must not move, and the pill each slot holds. */
+/** Every box on the Chart tab that a choice must not move, where each tile's word starts, and the
+ *  pill each slot holds. A word's start is read on its own, because a browser reports a moved
+ *  start of under 3 px as no shift at all, so a narrow face hides what a wider one shows. */
 async function chartReading(page: Page): Promise<ChartReading> {
 	return page.evaluate(() => {
 		const read = (node: Element) => {
@@ -763,11 +765,17 @@ async function chartReading(page: Page): Promise<ChartReading> {
 		}
 		document.querySelectorAll('[role="tab"]').forEach((tab) => (boxes[`tab ${tab.textContent?.trim()}`] = read(tab)));
 		document.querySelectorAll('[data-shape-choice]').forEach((tile) => (boxes[`tile ${tile.getAttribute('data-shape-choice')}`] = read(tile)));
+		const starts: Record<string, { x: number; y: number }> = {};
+		document.querySelectorAll('[data-shape-choice] .choice-shown').forEach((word) => {
+			const { x, y } = word.getBoundingClientRect();
+			starts[`word ${word.closest('[data-shape-choice]')?.getAttribute('data-shape-choice')}`] = { x, y };
+		});
 		const slots = [...document.querySelectorAll('[data-role-slot]')];
 		slots.forEach((slot) => (boxes[`slot ${slot.getAttribute('data-role-slot')}`] = read(slot)));
 		const held = window as typeof window & { __explorerShift?: number; __explorerSources?: ShiftSource[] };
 		return {
 			boxes,
+			starts,
 			pills: slots.map((slot) => {
 				const pill = slot.querySelector('summary');
 				return pill === null ? null : read(pill);
@@ -779,14 +787,18 @@ async function chartReading(page: Page): Promise<ChartReading> {
 	});
 }
 
-/** Nothing outside the drawing moved: no layout shift, no scroll, every box where it was, and
- *  each pill exactly filling its slot. */
+/** Nothing outside the drawing moved: no layout shift, no scroll, every box where it was, every
+ *  tile's word starting where it started, and each pill exactly filling its slot. */
 function expectChartStill(before: ChartReading, after: ChartReading, label: string) {
 	expect(after.shift, `${label}: layout shift sources ${JSON.stringify(after.sources, null, 2)}`).toBe(0);
 	expect(after.scrollY, `${label}: the page scrolled`).toBe(before.scrollY);
 	expect(Object.keys(after.boxes).sort(), `${label}: the parts on the tab`).toEqual(Object.keys(before.boxes).sort());
 	for (const [name, box] of Object.entries(before.boxes)) {
 		for (const side of ['x', 'y', 'width', 'height'] as const) expect(after.boxes[name][side], `${label}: ${name} ${side}`).toBeCloseTo(box[side], 0);
+	}
+	expect(Object.keys(after.starts).sort(), `${label}: the tiles' words`).toEqual(Object.keys(before.starts).sort());
+	for (const [name, start] of Object.entries(before.starts)) {
+		for (const side of ['x', 'y'] as const) expect(after.starts[name][side], `${label}: ${name} starts at another ${side}`).toBeCloseTo(start[side], 0);
 	}
 	after.pills.forEach((pill, index) => {
 		if (pill === null) return;
