@@ -92,6 +92,10 @@
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
 	const statusText = $derived(statusLine());
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
+	// Whether a question may run now. The Run button and Ctrl+Enter both read this one answer, so
+	// no way in starts a run before the page has read its ledgers, during another run, or with no
+	// ledger or no statement.
+	const canRun = $derived(!initializing && !running && selected.length > 0 && sql.trim() !== '');
 	const answerLink = $derived(result !== null && !running && answerOffscreen ? '#data-explorer-rows' : '');
 	const shapeBounds = $derived({
 		chartMinRows: config.chart_min_rows,
@@ -460,17 +464,19 @@
 	}
 
 	async function run() {
-		if (selected.length === 0) return;
+		if (!canRun) return;
 		running = true;
+		// What this run asks, read once as it starts: the question, the ledgers and the span may change
+		// while the answer is on its way, and the answer, the link and History all belong to what was asked.
+		const asked = { statement: sql, ledgers: [...selected], days: windowDays, span: span() };
 		await replaceAddress();
-		const nextSpan = span();
 		lastRead = null;
 		const started = performance.now();
 		try {
-			const answer = await ask({ ledgers: selected, from: nextSpan.from, to: nextSpan.to, sql, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
+			const answer = await ask({ ledgers: asked.ledgers, from: asked.span.from, to: asked.span.to, sql: asked.statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes });
 			lastMs = Math.round(performance.now() - started);
 			// The window goes with its answer, so the lines under the answer change only on a run.
-			runSpan = nextSpan;
+			runSpan = asked.span;
 			result = answer;
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
 				lastMs = answer.read.ms;
@@ -479,11 +485,11 @@
 			const rows = answer.state === 'ok' ? answer.rows.length : 0;
 			const nextRun: RecentRun = {
 				id: new Date(Date.now()).toISOString(),
-				statement: sql,
-				ledgers: selected,
-				days: windowDays,
-				from: fromDay,
-				end: toDay,
+				statement: asked.statement,
+				ledgers: asked.ledgers,
+				days: asked.days,
+				from: asked.span.from,
+				end: asked.span.to,
 				rows,
 				ms: lastMs ?? Math.round(performance.now() - started),
 				askedAt: new Date(Date.now()).toISOString()
@@ -595,7 +601,7 @@
 								{#if linkNotices.includes(LINK_TOO_LONG_NOTICE)}<button type="button" class="copy-question" onclick={copyQuestion}><Icon id="copy" /> Copy question</button>{/if}
 							{/if}
 							<!-- Last, so nothing that changes to its left moves it. -->
-							<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={initializing || running || selected.length === 0 || sql.trim() === ''} aria-busy={running} onclick={() => { if (!initializing && !running && selected.length > 0 && sql.trim() !== '') void run(); }}>
+							<button type="button" class="run-button" aria-label={running ? 'Running' : 'Run'} aria-keyshortcuts="Control+Enter Meta+Enter" disabled={initializing} aria-disabled={!canRun} aria-busy={running} onclick={() => void run()}>
 								<Icon id="query-run" />
 								<span class="run-words"><span class:hidden-word={running}>Run</span><span class:hidden-word={!running}>Running</span></span>
 								<span class="run-shortcut">Ctrl+Enter</span>
