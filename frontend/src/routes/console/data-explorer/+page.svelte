@@ -202,6 +202,9 @@
 		activeResultTab = tab;
 	}
 	function resultTabKey(event: KeyboardEvent) {
+		// Only a tab's own arrows move between the tabs: the open tab's controls stand in the same
+		// strip, and the chart tiles take Left and Right to choose a chart.
+		if ((event.target as HTMLElement | null)?.getAttribute('role') !== 'tab') return;
 		if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
 			event.preventDefault();
 			activeResultTab = activeResultTab === 'table' ? 'chart' : 'table';
@@ -679,6 +682,7 @@
 			lostDays={drawnAnswer?.gaps.flatMap((gap) => gap.lostDays) ?? []}
 			bounds={shapeBounds}
 			floorHeight={data.console.chart_height}
+			slotsPerLine={roleSlots}
 			capped={drawnAnswer?.capped ?? false}
 			maxRows={config.max_rows}
 			onRoles={chooseRole}
@@ -1021,8 +1025,10 @@
 		color: var(--color-text);
 	}
 
+	/* The open tab's controls take all the room after the tabs, so their box is the same whichever
+	   tab is open and only what stands in it changes. */
 	.result-actions {
-		margin-inline-start: auto;
+		flex: 1 1 auto;
 		display: flex;
 		flex-wrap: nowrap;
 		align-self: center;
@@ -1167,7 +1173,6 @@
 		.result-actions {
 			grid-row: 2;
 			grid-column: 1 / -1;
-			margin-inline-start: 0;
 		}
 		/* Two lines that hold whatever face the system draws: the two short controls,
 		   Questions and History, share the first, and the long how-to link has the

@@ -35,6 +35,7 @@
 		lostDays,
 		bounds,
 		floorHeight,
+		slotsPerLine = MOST_ROLES,
 		capped = false,
 		maxRows,
 		onRoles,
@@ -47,6 +48,8 @@
 		bounds: ExplorerShapeBounds;
 		/** The fewest pixels a plot is drawn tall, `console.chart_height`. */
 		floorHeight: number;
+		/** The role row's slots on one line at this width, the band's `explorer_role_slots_per_line`. */
+		slotsPerLine?: number;
 		capped?: boolean;
 		maxRows: number;
 		onRoles: (type: ExplorerChartType, role: RoleId, values: string[]) => void;
@@ -127,7 +130,7 @@
 	<div class="role-row" data-chart-roles>
 		{#each slots as index (index)}
 			{@const state = chart.roles[index]}
-			<div class="role-slot" data-role-slot={index}>
+			<div class="role-slot" data-role-slot={index} style={`--slots-to-end:${slotsPerLine - (index % slotsPerLine)}`}>
 				{#if state !== undefined && chart.type !== null}
 					{@const type = chart.type}
 					{#key `${type}:${state.role.id}`}
@@ -202,17 +205,21 @@
 	/* One slot for each role of the chart with the most roles, a fixed number to a line by band,
 	   so the row is the same height whichever chart is chosen. */
 	.role-row {
+		--role-gap: var(--space-3);
 		box-sizing: border-box;
 		display: grid;
 		grid-template-columns: repeat(var(--role-slots), minmax(0, 1fr));
 		grid-auto-rows: var(--workbench-control);
-		column-gap: var(--space-3);
+		column-gap: var(--role-gap);
 		row-gap: var(--space-1);
 		block-size: calc(var(--role-lines) * var(--workbench-control) + (var(--role-lines) - 1) * var(--space-1) + 2 * var(--space-1));
 		padding: var(--space-1) var(--space-3);
 	}
 
+	/* The room from a slot's start to its line's end, in the units of the slot's own width, so a
+	   pill's list knows its widest box before it is first laid out. */
 	.role-slot {
+		--pill-list-room: calc(var(--slots-to-end) * (100% + var(--role-gap)) - var(--role-gap));
 		min-inline-size: 0;
 	}
 

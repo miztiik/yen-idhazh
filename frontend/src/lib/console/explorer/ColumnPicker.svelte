@@ -40,6 +40,8 @@
 	let filterField = $state<HTMLInputElement | null>(null);
 	let typed = $state('');
 	let current = $state<string | null>(null);
+	/** Which way the open list hangs from its pill. */
+	let opens = $state<'down' | 'up'>('down');
 	/** The pointer that opened the list: a touch puts focus on the checked line, so a phone's
 	 *  keyboard rises only when the reader taps the filter. */
 	let opener = 'mouse';
@@ -64,24 +66,29 @@
 		return name.split(/(?<=_)/);
 	}
 
-	/** Hang the list under its pill, at least as wide as the pill's slot and at most as wide as the
-	 *  role row's content box, moved back inside that box where it would pass its end, and no
-	 *  taller than the room down to the window's bottom edge. */
+	/** Hang the list where it has room, inside the window less `--space-3`: under its pill, or over
+	 *  it when the room under the pill is shorter than the list and the room over it is larger. Its
+	 *  width needs no measuring: the style sheet hangs it from its pill, at least as wide as the
+	 *  pill's slot and at most the room from there to the role row's end. The pill calls this as it
+	 *  is pressed, before the list has a box, so the list is laid out where it belongs the first
+	 *  time and opening it moves nothing. */
 	function place() {
 		if (details === null || list === null) return;
 		const pill = details.querySelector('summary')?.getBoundingClientRect();
-		const row = details.closest<HTMLElement>('[data-chart-roles]');
-		if (pill === undefined || row === null) return;
-		const box = row.getBoundingClientRect();
-		const style = getComputedStyle(row);
-		const start = box.left + parseFloat(style.paddingLeft);
-		const end = box.right - parseFloat(style.paddingRight);
-		list.style.minInlineSize = `${pill.width}px`;
-		list.style.maxInlineSize = `${end - start}px`;
-		list.style.insetInlineStart = '0px';
-		list.style.maxBlockSize = `calc(${document.documentElement.clientHeight - pill.bottom}px - var(--space-1) - var(--space-3))`;
-		const width = list.getBoundingClientRect().width;
-		list.style.insetInlineStart = `${Math.max(start, Math.min(pill.left, end - width)) - pill.left}px`;
+		if (pill === undefined) return;
+		const below = document.documentElement.clientHeight - pill.bottom;
+		const above = pill.top;
+		// The filter and each line are at least a pill tall, and so is the foot of a full list.
+		const rows = options.length + (full ? 2 : 1);
+		const up = below < rows * pill.height && above > below;
+		const room = `calc(${up ? above : below}px - var(--space-1) - var(--space-3))`;
+		// Written to the element at once as well, so the layout that follows already has it.
+		opens = up ? 'up' : 'down';
+		details.dataset.opens = opens;
+		list.style.maxBlockSize = room;
+		// Over its pill the list keeps the height it opened at, so the filter stays where the reader
+		// types while the lines under it narrow.
+		list.style.blockSize = up ? `min(${rows} * var(--workbench-control) + 2 * var(--space-1) + 2 * var(--pill-list-edge), ${room})` : '';
 	}
 
 	async function opened() {
@@ -100,11 +107,18 @@
 	}
 
 	function pillKey(event: KeyboardEvent) {
+		const opening = !empty && details !== null && !details.open && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown');
+		if (opening) place();
 		if (event.key === 'Enter' || event.key === ' ') opener = 'keyboard';
 		if (event.key !== 'ArrowDown' || empty || details === null || details.open) return;
 		event.preventDefault();
 		opener = 'keyboard';
 		details.open = true;
+	}
+
+	function pillDown(event: PointerEvent) {
+		opener = event.pointerType;
+		if (!empty && details !== null && !details.open) place();
 	}
 
 	function move(from: HTMLInputElement | null, step: number) {
@@ -160,9 +174,8 @@
 		if (!role.several && !byKey) void closeAfterPick(details);
 	}
 
-	/** Place the list in the task that opens it, before the page paints, so its first frame is its
-	 *  only one. `toggle` arrives a task later, after a paint that would show the list at its own
-	 *  width and then widen it under the reader's eye. */
+	/** Place the list again in the task that opens it, before the page paints, for an open the pill's
+	 *  own press did not place, such as a screen reader's click, and again when the window resizes. */
 	$effect(() => {
 		if (details === null) return;
 		const again = () => {
@@ -178,8 +191,8 @@
 	});
 </script>
 
-<details class="column-picker" class:empty data-role={role.id} bind:this={details} use:closesWhenLeft ontoggle={opened}>
-	<summary aria-label={label} aria-disabled={empty ? 'true' : undefined} onpointerdown={(event) => (opener = event.pointerType)} onclick={press} onkeydown={pillKey}>
+<details class="column-picker" class:empty data-role={role.id} data-opens={opens} bind:this={details} use:closesWhenLeft ontoggle={opened}>
+	<summary aria-label={label} aria-disabled={empty ? 'true' : undefined} onpointerdown={pillDown} onclick={press} onkeydown={pillKey}>
 		<span class="pill-role">{role.word}</span>
 		<span class="pill-face"><span class="pill-name" data-pill-name>{face.name}</span>{#if face.more}<span class="pill-more">{face.more}</span>{/if}</span>
 		{#if !empty}<span class="pill-mark"><Icon id="choice-list" /></span>{/if}
@@ -298,21 +311,38 @@
 		display: none;
 	}
 
+	/* Hung from its pill: at least the slot's width and at most the room to the role row's end
+	   (`--pill-list-room`, from the slot), so its width is known before its first layout. The
+	   gutter is held whether or not the list scrolls, so a scroll bar never narrows its lines, and a
+	   line scrolled into view, or given focus, stops below the filter rather than under it. */
 	.column-picker[open] .pill-list {
+		--pill-list-edge: 1px;
 		position: absolute;
 		z-index: 10;
 		inset-block-start: calc(100% + var(--space-1));
+		inset-inline-start: 0;
 		display: block;
+		box-sizing: border-box;
 		inline-size: max-content;
+		min-inline-size: 100%;
+		max-inline-size: var(--pill-list-room, 100%);
 		overflow-y: auto;
 		overscroll-behavior: contain;
+		scroll-padding-block-start: var(--workbench-control);
+		scrollbar-gutter: stable;
 		scrollbar-width: thin;
 		scrollbar-color: var(--color-rule-strong) transparent;
 		padding: var(--space-1);
-		border: 1px solid var(--color-rule);
+		border: var(--pill-list-edge) solid var(--color-rule);
 		border-radius: var(--radius-md);
 		background: var(--color-surface-raised);
 		box-shadow: var(--shadow-md);
+	}
+
+	/* Over the pill, where the room under it is too short for the list. */
+	.column-picker[open][data-opens='up'] .pill-list {
+		inset-block-start: auto;
+		inset-block-end: calc(100% + var(--space-1));
 	}
 
 	/* The filter stays at the list's head while its lines scroll under it. */

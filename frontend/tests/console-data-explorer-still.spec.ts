@@ -827,7 +827,11 @@ for (const view of VIEWS) {
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		const sizes = await tokens(page);
-		const strip = async () => box(page, '.result-tabs');
+		// In the page's own coordinates, because the test scrolls the answer into view between readings.
+		const strip = async () => page.locator('.result-tabs').evaluate((node) => {
+			const rect = node.getBoundingClientRect();
+			return { x: rect.x + window.scrollX, y: rect.y + window.scrollY, width: rect.width, height: rect.height };
+		});
 		// I2: the strip is the same box with either tab open, two lines below 640 px and one above.
 		const tableStrip = await strip();
 		const lines = view.width < 640 ? 2 : 1;
@@ -896,11 +900,14 @@ for (const view of VIEWS) {
 		await expect(pill(page, 'across').locator('[data-pill-list]')).toBeHidden();
 		await expect(pill(page, 'across').locator('summary')).toBeFocused();
 		await expect(pill(page, 'across').locator('[data-pill-name]')).toHaveText('other');
-		// I2: the copy buttons stand on the strip only while Table is open, and the tiles only while Chart is.
+		// I2, after an answer as before one: the strip's box is the same with either tab open, the copy
+		// buttons stand on it only while Table is open, and the tiles only while Chart is.
+		const answeredStrip = await strip();
+		expect(answeredStrip.height, 'the strip is not its lines tall').toBeCloseTo(tableStrip.height, 0);
 		await page.getByRole('tab', { name: 'Table' }).click();
 		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(0);
 		await expect(page.locator('.result-tabs').getByRole('button', { name: /^Copy as/ })).toHaveCount(2);
-		closeBox(tableStrip, await strip());
+		closeBox(answeredStrip, await strip());
 	});
 
 	test(`I3, I4 and T9: a change of chart or of column moves nothing outside the drawing, at ${view.width}px`, async ({ page, context }) => {
@@ -984,7 +991,8 @@ for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] a
 		await serveToPage(context, root, 'feed-health');
 		const switchesStill = async (one: Page, state: string) => {
 			await one.getByRole('tab', { name: 'Table' }).click();
-			await one.evaluate(() => window.scrollTo(0, 0));
+			// The tabs are pressed where a person sees them, so the press itself scrolls nothing.
+			await one.getByRole('tab', { name: 'Chart' }).scrollIntoViewIfNeeded();
 			await startShiftObserver(one);
 			const before = await snapshot(one);
 			await one.getByRole('tab', { name: 'Chart' }).click();
@@ -1142,6 +1150,37 @@ test('I8: the filter keeps the names that hold the typed text anywhere, in their
 	await expect(values.locator('.pill-note')).toHaveText('No column here has "no-such-name" in its name.');
 });
 
+test('I7 and I13: a pill near the window\'s foot opens its list over itself, inside the window, with every line reachable, and moves nothing', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await page.setViewportSize({ width: 390, height: 844 });
+	await openExplorer(page, PINNED);
+	await openChart(page);
+	await page.locator('[data-shape-choice="dateSeries"]').click();
+	const lines = pill(page, 'lines');
+	// Scroll the page until the pill stands just above the window's foot, as a reader may leave it.
+	const before = (await lines.locator('summary').boundingBox())!;
+	await page.evaluate((by) => window.scrollBy({ top: by, behavior: 'instant' }), before.y + before.height - (844 - 8));
+	const near = (await lines.locator('summary').boundingBox())!;
+	expect(844 - (near.y + near.height), 'the pill is not near the window\'s foot, so this proves nothing').toBeLessThan(near.height);
+	await settle(page);
+	await startShiftObserver(page);
+	const still = await chartReading(page);
+	await lines.locator('summary').click();
+	const list = lines.locator('[data-pill-list]');
+	await expect(list).toBeVisible();
+	await settle(page);
+	expectChartStill(still, await chartReading(page), 'Lines list opened near the foot');
+	const at = (await list.boundingBox())!;
+	expect(at.y + at.height, 'the list does not hang over its pill').toBeLessThanOrEqual(near.y + 0.5);
+	expect(at.y).toBeGreaterThanOrEqual(-0.5);
+	expect(await list.evaluate((node) => node.scrollHeight <= node.clientHeight), 'the list has room for every line').toBe(true);
+	const tiny = lines.locator('[data-column="tiny"] input');
+	await tiny.click();
+	await expect(tiny).toBeChecked();
+	await page.keyboard.press('Escape');
+	await expect(list).toBeHidden();
+});
+
 /** 128 columns as `SELECT * FROM "item-health"` returns them: 88 numbers that share a few starts,
  *  five of them about decoding, among 40 text columns. */
 function wideAnswer(): { sql: string; numbers: string[] } {
@@ -1295,8 +1334,10 @@ test('I14: the column picker borrows the page\'s floating list and type label, a
 	const picker = readFileSync(path.join(folder, 'ColumnPicker.svelte'), 'utf8');
 	expect(picker).toMatch(/from '\$lib\/console\/explorer\/floating-list'/);
 	expect(picker).toMatch(/import ColumnType from '\$lib\/console\/explorer\/ColumnType\.svelte'/);
+	// A file closes a list itself when it sets a list's `open` to false or reads the Escape key. A
+	// press listener alone closes nothing: the ledger list's stops following the chosen ledger.
 	const handlers = readdirSync(folder)
 		.filter((name) => name !== 'floating-list.ts')
-		.filter((name) => /addEventListener\('(pointerdown|focusin)'|'Escape'/.test(readFileSync(path.join(folder, name), 'utf8')));
+		.filter((name) => /open\s*=\s*false|removeAttribute\(\s*['"]open['"]|['"]Escape['"]/i.test(readFileSync(path.join(folder, name), 'utf8')));
 	expect(handlers).toEqual([]);
 });
