@@ -163,8 +163,9 @@ class ServerJob(StrEnum):
     # verdict. It stands no server up and records no machine, so it names a
     # writer of the candidate-models ledger and of nothing else here.
     DECIDE = "decide"
-    # The jobs that maintain rows rather than record them: a one-off migration,
-    # and the gardener's sharded task job and its history rewrite.
+    # The jobs that maintain rows rather than record them: an operator's range
+    # prune, which files a door day again without the days it takes, and the
+    # gardener's sharded task job and its history rewrite.
     MIGRATE = "migrate"
     RUN_TASKS = "run-tasks"
     HISTORY = "history"
@@ -710,7 +711,7 @@ def renamed_keys[V](data: V, renames: Mapping[str, str]) -> V:
 
     The read-side migration `CLAUDE.md` section 11 owes when a field changes
     name in a shape whose older payloads are never rewritten - a sealed per-item
-    payload, or a committed CSV whose heading still spells the old name. The old
+    payload, or a committed ledger file whose column still spells the old name. The old
     key is moved to the new one only when the new one is absent, so a payload
     that already carries the new name keeps its own value, and an old key beside
     it is dropped rather than left for `extra="forbid"` to refuse.

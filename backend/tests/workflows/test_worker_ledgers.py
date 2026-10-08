@@ -10,7 +10,7 @@ import pytest
 from conftest import REPO_ROOT, writer_identity
 from retention._trees import health_row
 
-from idhazh import ledger, path_classes, telemetry
+from idhazh import ledger, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
@@ -368,28 +368,19 @@ def test_the_eval_rows_travel_with_the_shard_that_filed_them() -> None:
         assert (REPO_ROOT / carrier).is_dir(), f"{carrier} must be in a fresh checkout"
 
 
-def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_union() -> None:
+def test_a_file_one_writer_owns_takes_no_merge_driver() -> None:
     """Asked of git rather than of a pattern matcher written here.
 
     `.gitattributes` is the file that decides, so the question goes to the tool
     that reads it. A second implementation of its globbing could agree with this
     test and disagree with the merge.
 
-    Two classes and two answers. A file named for one run, attempt, job and
-    shard has exactly one writer, so there is nothing for a driver to settle and
-    git answers `unspecified` - its ordinary text merge, which stops the push if
-    two sides ever did change one of them. A collection two jobs append
-    independent rows to takes `merge=union`, and `idhazh.path_classes.UNION_SAFE` is
-    this repository's own list of those. The list is read here rather than
-    copied, so a collection that joins it without a line in `.gitattributes`
-    fails in the same commit.
-
-    Every tree under `state/` carried a union driver until 2026-09-19, which is
-    what let a second attempt at one job stack a row the first attempt had
-    already pushed. `state/feed-health` was the tree that showed why the
-    written-once name replaced it: two plan jobs of one night can hold different
-    verdicts on one feed, and a union there kept both and made the
-    disagreement quiet.
+    A file named for one run, attempt, job and shard has exactly one writer, so
+    there is nothing for a driver to settle and git answers `unspecified` - its
+    ordinary text merge, which stops the push if two sides ever did change one
+    of them. Every tree under `state/` carried a union driver until 2026-09-19,
+    which is what let a second attempt at one job stack a row the first attempt
+    had already pushed.
 
     No path has to exist. `check-attr` matches a name against the rules and
     never opens a file, and a committed date literal in a test is a date that
@@ -400,23 +391,16 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
             run_id=f"{SUBSTITUTED_DATE}-1", attempt=1, job=ServerJob.WORK, shard=1
         )
     ]
-    shared = [
-        entry if entry.endswith(".csv") else f"{entry}/2026/01/01/a.csv"
-        for entry in path_classes.UNION_SAFE
-    ]
 
     answered = subprocess.run(
-        ["git", "check-attr", "merge", "--", *one_writer, *shared],
+        ["git", "check-attr", "merge", "--", *one_writer],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
     ).stdout.splitlines()
 
-    assert answered == [
-        *(f"{path}: merge: unspecified" for path in one_writer),
-        *(f"{path}: merge: union" for path in shared),
-    ]
+    assert answered == [f"{path}: merge: unspecified" for path in one_writer]
 
 
 @requires_bash

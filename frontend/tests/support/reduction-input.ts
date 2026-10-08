@@ -128,7 +128,7 @@ export function healthRows(sizes: Sizes): Record<string, string>[] {
 	return rows;
 }
 
-/** One row per scored summary, the shape `state/scores/<YYYY>/<MM>/<DD>.csv` holds. */
+/** One row per scored summary, the shape a `summary-quality-evals` row holds. */
 export function scoreRows(sizes: Sizes): Record<string, string>[] {
 	const next = sequence(43);
 	const rows: Record<string, string>[] = [];

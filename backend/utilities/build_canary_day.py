@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
 import hashlib
 import json
 import math
@@ -38,7 +39,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, ledger
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -68,7 +69,6 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.knobs.models import ModelRef
@@ -127,9 +127,10 @@ PRODUCER: Final = "utilities.build_canary_day"
 
 type FixtureRow = ItemHealthRow | HostFingerprintRow
 
-#: The two ledgers `build-canary.mjs` writes rows for, and what settles a day of
-#: each. That script writes them as CSV, one file a run, under its own folder
-#: beside the state tree, and `--file-fixture-rows` files them through the door.
+#: The two ledgers `build-canary.mjs` writes rows for, and the key each fixture
+#: record is written under once. That script writes them as CSV, one file a run,
+#: under its own folder beside the state tree, and `--file-fixture-rows` files
+#: them through the door.
 FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, ...]]]] = {
     LedgerName.ITEM_HEALTH: (ItemHealthRow, ledger.ITEM_HEALTH_KEY),
     LedgerName.HOST_FINGERPRINT: (HostFingerprintRow, ledger.HOST_FINGERPRINT_KEY),
@@ -1576,25 +1577,21 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
     """File the rows `build-canary.mjs` wrote as CSV through the door, then delete the CSV.
 
     That script writes one file a run under `<staged>/<ledger>/<YYYY>/<MM>/<DD>/`.
-    Each day is settled the way a CSV day was read and filed as one raw file a
-    run, under the run's own id, so a run the fixture names is a writer the
-    door names too.
+    Those files are scratch the two build steps hand each other, never committed
+    and never read by a later run, so each row is read with its contract's own
+    `from_csv_row` and filed as one raw file a run, under the run's own id: a
+    run the fixture names is a writer the door names too.
     """
     filed: dict[LedgerName, int] = {}
     for which, (model, key) in FIXTURE_ROW_LEDGERS.items():
         root = staged / which.value
         if not root.is_dir():
             continue
-        days = sorted(
-            day
-            for dates in day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW).values()
-            for day in dates
-        )
         count = 0
-        for day in days:
+        for day, files in _staged_days(root).items():
             by_run: dict[str, list[FixtureRow]] = {}
-            for cells in day_shards.settled_day(root, day, key, model):
-                by_run.setdefault(cells["run_id"], []).append(model.from_csv_row(cells))
+            for row in _staged_rows(files, model, key):
+                by_run.setdefault(row.run_id, []).append(row)
             for run_id, rows in by_run.items():
                 ledger.persist(
                     state, rows, ledger=which, covers=day, identity=_fixture_writer(run_id)
@@ -1603,6 +1600,61 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
         shutil.rmtree(root)
         filed[which] = count
     return filed
+
+
+def _staged_days(root: Path) -> dict[str, list[Path]]:
+    """Each day a staged ledger folder holds, and its files, oldest day first.
+
+    `root` is a folder `build-canary.mjs` made a moment ago, so walking it costs
+    what the fixture wrote and never what the repository holds (Guardrail #12).
+    A file anywhere but `<YYYY>/<MM>/<DD>/<name>.csv` is refused by name, so a
+    row the script put somewhere else is never deleted unfiled.
+    """
+    days: dict[str, list[Path]] = {}
+    for path in sorted(found for found in root.rglob("*") if found.is_file()):
+        parts = path.relative_to(root).parts
+        day = "-".join(parts[:3])
+        if len(parts) != 4 or path.suffix != ".csv" or not _names_a_day(day):
+            raise ValueError(
+                f"{root.name}/{path.relative_to(root).as_posix()} is not a "
+                "<YYYY>/<MM>/<DD>/<run>.csv file, which is the only shape build-canary.mjs writes"
+            )
+        days.setdefault(day, []).append(path)
+    return days
+
+
+def _names_a_day(day: str) -> bool:
+    """Whether `YYYY-MM-DD` is a real UTC day spelled the one way an ISO day is spelled."""
+    try:
+        return calendar_date.fromisoformat(day).isoformat() == day
+    except ValueError:
+        return False
+
+
+def _staged_rows(
+    files: Sequence[Path], model: type[FixtureRow], key: tuple[str, ...]
+) -> list[FixtureRow]:
+    """Every row of one staged day, read through its contract, each key once.
+
+    A key filed twice is refused rather than settled here: the door settles two
+    rows of one key by its own rule when a reader asks, and a fixture that meant
+    one record should not depend on which rule picks it.
+    """
+    rows: list[FixtureRow] = []
+    held: set[tuple[str, ...]] = set()
+    for path in files:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for cells in csv.DictReader(handle):
+                row = model.from_csv_row(cells)
+                record = tuple(str(getattr(row, name)) for name in key)
+                if record in held:
+                    raise ValueError(
+                        f"{path.name} files {dict(zip(key, record, strict=True))} a second "
+                        "time on its day. Each fixture record is one row"
+                    )
+                held.add(record)
+                rows.append(row)
+    return rows
 
 
 def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:

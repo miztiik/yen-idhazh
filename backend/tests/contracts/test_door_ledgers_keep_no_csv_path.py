@@ -1,15 +1,15 @@
-"""Does every ledger on the door keep no CSV path, and can every door row be filed?
+"""Does every ledger on the door have its compaction and its folders, and can every door row be filed?
 
-A ledger moves to the door when its entry in `config/ledgers.json` switches to
-`raw-and-compact`, and that switch is the only one: every rule here reads it.
-Each test holds one place a CSV ledger is written down - the union merge driver,
-the prune verb's CSV targets, a compaction, a folder a declaration owns - to the
-moved ledgers. Every test reads
-the committed registry and the committed declarations under `config/gardener/`,
-never a fixture garden, which holds declarations the committed config does not.
+A ledger is on the door when its entry in `config/ledgers.json` is
+`raw-and-compact`, and that one switch is what every rule here reads. No ledger
+keeps a CSV path any more, so what is left to hold each one to is the rest of
+what a ledger on the door owes: a compaction, folders a declaration may own,
+and a door row the door can file. Every test reads the committed registry and
+the committed declarations under `config/gardener/`, never a fixture garden,
+which holds declarations the committed config does not.
 
-The door table gets a ledger's row before the ledger moves, so it is held here
-too: a key or a field the door cannot file fails here rather than at the
+The door table holds each door ledger's key and row contract, so it is held
+here too: a key or a field the door cannot file fails here rather than at the
 ledger's first write.
 """
 
@@ -20,14 +20,13 @@ from typing import Final
 
 import pytest
 
-from idhazh import config, ledger, path_classes
+from idhazh import config, ledger
 from idhazh.contracts import file_envelope
 from idhazh.contracts.file_envelope import Tier
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.ledger import arrow_schema, keys
-from idhazh.telemetry import prune
 
 pytestmark = pytest.mark.contract
 
@@ -73,22 +72,8 @@ def _under_state(*segments: str) -> str:
     return "/".join((ledger.STATE_DIRNAME, *segments))
 
 
-def test_a_door_ledger_takes_no_union_driver() -> None:
-    """Every file under the two roots has one writer, so a union has nothing to settle."""
-    folders = {_under_state(*ledger.entry(member).prefix) for member in _door_ledgers()}
-
-    assert sorted(folders & set(path_classes.UNION_SAFE)) == []
-
-
-def test_a_door_ledger_is_not_a_csv_prune_target() -> None:
-    """The prune verb's CSV targets delete CSV files, and a moved ledger has none."""
-    door = _door_ledgers()
-
-    assert sorted(member.value for member in door & set(prune._TARGET_LEDGERS)) == []
-
-
 def test_a_compaction_and_a_door_ledger_come_together() -> None:
-    """Every door ledger has its compaction, and nothing compacts a ledger on CSV.
+    """Every door ledger has its compaction, and nothing compacts a ledger outside the door.
 
     The loader refuses a compaction not named for its folder, so a compaction that
     loads is the file `config/gardener/compact-<folder>.json`.
@@ -101,14 +86,14 @@ def test_a_compaction_and_a_door_ledger_come_together() -> None:
         "a door ledger has no compaction, so nothing bounds its files under the two roots"
     )
     assert sorted(member.value for member in compacted - door) == [], (
-        "a compaction names a ledger the registry still files as CSV"
+        "a compaction names a ledger the registry does not file through the door"
     )
 
 
 def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
     """A declaration owning a folder no ledger is filed in deletes where nothing writes.
 
-    A ledger still on CSV sits at `state/<prefix>`; a door ledger at
+    A ledger outside the door sits at `state/<prefix>`; a door ledger at
     `state/raw/<prefix>` and `state/compact/<prefix>`, and never at its old folder.
     """
     door = _door_ledgers()
