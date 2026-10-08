@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-10-08
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -9,7 +9,7 @@ What a reader actually gets: the published surface, the item, and the rule that 
 Two pages, both static files with nothing computed at read time:
 
 - **The digest** - the day's items. This is what the project is for.
-- **The eval dashboard** - the committed ledger, rendered. It reads the CSV and never recomputes a score ([evaluation.md](evaluation.md)).
+- **The eval dashboard** - the committed ledger, rendered. It reads the ledger's packed files and never recomputes a score ([evaluation.md](evaluation.md)).
 
 The digest is a **rendering, never a source of truth.** The truth is the per-item payloads and the ledger; the page is one view over them and can be regenerated at any time. This is why an item carries its own identity as a field and the digest does not.
 
