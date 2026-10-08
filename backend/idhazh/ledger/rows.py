@@ -46,10 +46,7 @@ from idhazh.ledger.csv_file import (
     _read_rows,
     extend_ledger_file,
 )
-from idhazh.ledger.keys import (
-    STORY_SIMILARITY_PAIR_KEY,
-    STORY_SIMILARITY_THRESHOLD_KEY,
-)
+from idhazh.ledger.keys import STORY_SIMILARITY_THRESHOLD_KEY
 from idhazh.ledger.persist import persist
 from idhazh.ledger.settle import drop_repeated_rows
 
@@ -241,39 +238,6 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     )
 
 
-def append_story_similarity_pairs(
-    state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
-) -> int:
-    """Append a day's judged pairs into that day's own file.
-
-    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write. The
-    key carries `run_id`, so a second
-    RUN of one date keeps its own rows and only a second attempt at one
-    execution is collapsed - both attempts judged the same pair under the same
-    prompt against the same day, so the first row wins and there is nothing to
-    choose between them. Which of two runs the record counts is decided over the
-    whole day when the day is folded, never line by line here.
-
-    **The day file is created even when the day judged nothing.** The commit step
-    names this directory,
-    `git add` runs under `set -euo pipefail`, and a path missing from the working
-    tree aborts the step and costs the ledgers staged beside it.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    recorded = list(rows)
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
-    if not lifecycle.accepts_new_rows(which, len(recorded)):
-        return 0
-    file = paths.path(state_dir, which, date)
-    columns = StorySimilarityPair.csv_columns()
-    if not file.exists():
-        file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(file, columns, recorded)
-    return landed - drop_repeated_rows(file, STORY_SIMILARITY_PAIR_KEY)
-
-
 def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
     """One named day's judged pairs, read through the ledger door, and never a second day.
 
@@ -301,17 +265,18 @@ def append_fitted_thresholds(
 ) -> int:
     """Append a run's fitted row into that day's own file.
 
-    Settled against `STORY_SIMILARITY_THRESHOLD_KEY` straight after the write,
-    the way `append_story_similarity_pairs` is. The key is date and run, so a
-    second RUN of one date keeps its own row - two runs fitted two records and
-    both are facts - and only a second attempt at one execution is collapsed.
+    Settled against `STORY_SIMILARITY_THRESHOLD_KEY` straight after the write.
+    The key is date and run, so a second RUN of one date keeps its own row - two
+    runs fitted two records and both are facts - and only a second attempt at
+    one execution is collapsed: both attempts fitted the same record, so the
+    first row wins and there is nothing to choose between them.
 
     **The day file is created even when the fit was held**, and a held day writes
     a row like any other: a line that moves itself has to leave a record on the
     days it stayed put, or a reader cannot tell a held day from a day nothing
-    ran. The empty-file half is the same reason `append_story_similarity_pairs`
-    gives - the commit step names this directory and a missing path aborts it
-    under `set -euo pipefail`.
+    ran. The commit step names this directory, `git add` runs under
+    `set -euo pipefail`, and a path missing from the working tree aborts the
+    step and costs the ledgers staged beside it.
 
     Returns how many rows the file gained, so a caller can log the count.
     """

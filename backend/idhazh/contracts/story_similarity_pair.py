@@ -51,15 +51,17 @@ from idhazh.contracts.base import (
 #: `key_point_weight` went with the key points themselves: the term shipped at a
 #: weight of 0.0, so it never moved a score, and the cosine is now the whole one.
 #:
-#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
-#: heading that is neither a current column nor one the reader carries, so a
-#: column deleted above without an entry here leaves every committed day file
-#: unappendable and unrepairable at once.
+#: **This is a contract, not a courtesy.** The migrator refuses a filled cell
+#: under a heading that is neither a current column nor one its `old_headings`
+#: names, and its entry for this ledger is built from this set, so a column
+#: deleted above without an entry here leaves every committed day file that
+#: still carries it unmovable.
 #:
-#: **Both sides of the row read this one set.** A committed day file reaches it
-#: through `ledger.STORY_SIMILARITY_PAIR_CARRIED`; a JSON payload reaches it
-#: through the before-validator on the row. A removal declared once is therefore
-#: honoured wherever the row is read.
+#: **Both sides of the row read this one set.** A committed CSV day an earlier
+#: run wrote reaches it through the migrator's `old_headings`, which maps each of
+#: these headings to nothing; a JSON payload reaches it through the
+#: before-validator on the row. A removal declared once is therefore honoured
+#: wherever the row is read.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset(
     {"decode_digest", "key_point", "key_point_weight"}
 )

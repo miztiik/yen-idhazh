@@ -36,9 +36,6 @@ from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import (
-    DROPPED_CELLS as DROPPED_PAIR_CELLS,
-)
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -284,15 +281,8 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
 
 
 #: The headings a day file an earlier run wrote still carries that the current
-#: judged-pair row no longer names. A dropped heading has no replacement - the
-#: file still re-files, and the cell goes, which is the point of dropping it. One
-#: column has left this row and none has moved, so there is no retired half:
-#: `from_csv_row` reads a day file by the names the contract holds now and the
-#: dropped heading simply goes.
-STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
-
-
-#: The same again, for the fitted line's day files.
+#: fitted-line row no longer names. A dropped heading has no replacement - the
+#: file still re-files, and the cell goes, which is the point of dropping it.
 FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
 
 
