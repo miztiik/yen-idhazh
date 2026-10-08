@@ -39,7 +39,7 @@ Run the migrator from the checked-out code commit. Name the roots and UTC months
 The migrator must import this checkout's code; set the import path to this worktree's backend as described in [Git fixtures and child producers](../reference/agent-notes.md#git-fixtures-and-child-producers).
 
 ```text
-python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests-no-visual-plan --state-dir state/pipeline-tests-production-settings --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
+python backend/utilities/migrate_to_parquet.py --state-dir state --state-dir state/pipeline-tests --state-dir state/pipeline-tests/production-settings --state-dir state/pipeline-tests/no-visual-plan --month <YYYY-MM> --run-id <UTC-DATE>-1 --git-sha <FULL-CODE-COMMIT-SHA> --ledger <LEDGER-NAME>
 ```
 
 To move the same inputs in separate phases, add exactly one of `--plan`,

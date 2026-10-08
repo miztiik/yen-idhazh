@@ -127,12 +127,6 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
         if folder.split("/")[0] == ledger.STATE_DIRNAME
         and folder not in built
         and folder not in declared_trial_folders
-        and (name, folder)
-        not in {
-            ("trials", "state/pipeline-tests-production-settings"),
-            ("trials", "state/pipeline-tests-no-visual-plan"),
-            ("trials", "state/pipeline-tests-parallel-summarization"),
-        }
         and not (
             name == "trials"
             and folder.startswith("state/pipeline-tests/")

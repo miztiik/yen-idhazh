@@ -36,7 +36,9 @@
     "fleet_min_rows": 160,
     "fleet_top_kinds": 4,
     "judged_panel_ids": [
-      "platform-mix"
+      "platform-mix",
+      "data-explorer-rows",
+      "data-explorer-shape"
     ],
     "machine_colour_floor_share": 0.4,
     "machine_colour_stops": 5,
@@ -140,7 +142,7 @@
     "explorer_cell_max_ch": 40,
     "explorer_counter_from_share": 0.9,
     "explorer_readout_lines": [
-      7,
+      4,
       3,
       4,
       3
@@ -204,7 +206,7 @@
     "explorer_reach_days": 365,
     "explorer_row_page": 50,
     "explorer_strip_shown": [
-      3,
+      0,
       6
     ],
     "explorer_chart_min_rows": 3,

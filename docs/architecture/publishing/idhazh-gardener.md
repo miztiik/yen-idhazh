@@ -445,17 +445,26 @@ worked or failed: the event says it once.
 
 **A crash prints where it broke, never what it said.** When an exception ends
 a program the gardener's workflow runs - the plan, a shard, the due check or the
-squash - the trace in the job's log names the exception and each exception
-chained to it by its type, and each frame by its module and line, such as
-`idhazh.config:310`, in Python's own layout. It never prints a message, an
-argument or a local, because a message can quote what GitHub's API or a file
-returned (Guardrail #11). `__main__` in a frame is the program the step ran. The
-exit code is still Python's own, 1, and the squash prints the same trace when a
-run cannot be recorded, then exits 2. Each program installs the printer,
-`backend/utilities/crash_trace.py`, before it calls its `main`, so an exception
-raised while a program imports its own modules still prints Python's own trace;
-nothing those imports run reads fetched text. A refusal a program ends on with
-a sentence of its own, as the due check does, keeps its words.
+squash - or a command a person runs on gardener code - `idhazh gardener
+list-tasks`, `plan-shards` or `run-task`, `idhazh telemetry prune`, or the
+ledger migrator, `backend/utilities/migrate_to_parquet.py` - the trace names the
+exception and each exception chained to it by its type, and each frame by its
+module and line, such as `idhazh.config:310`, in Python's own layout. It never
+prints a message, an argument or a local, because a message can quote a ledger
+row or what GitHub's API or a file returned (Guardrail #11). `__main__` in a
+frame is the program the step ran, or the command's own entry. The exit code is
+still Python's own, 1, and the squash prints the same trace when a run cannot be
+recorded, then exits 2. The printer is `backend/idhazh/crash_trace.py`. The four
+programs and the migrator install it before they call their `main`, `idhazh
+gardener` installs it as its `main` starts, and `idhazh telemetry` only for
+`prune`: its other four subcommands, like every other `idhazh` verb, still print
+Python's own trace. An exception raised while a program or command imports its
+own modules, before it installs the printer, prints Python's own trace too;
+nothing those imports run reads fetched text, and the only file other than code
+the commands' imports read is `config/ledgers.json`. A refusal a program or
+command ends on with a sentence of its own keeps its words: the due check's, the
+config refusal `idhazh gardener` prints, and the refusals `idhazh telemetry
+prune` and the migrator print.
 
 **What stays printed text.** A check that refuses the shard, before its tasks
 run or after, a download over the budget, which names the three heaviest
@@ -984,18 +993,28 @@ summary and a picture would break the repository's ASCII rule (Susan,
 for a person exits 0 behind a green tick (Reader, 2026-10-07).
 
 **2026-10-07: a crash keeps its stack and drops its text.** An exception that
-gets past every task's own handling is a fault in the runner or a program, and
-the frames are what a person needs to find it, so the trace stays in the job's
-log. Its messages go, because one can quote what GitHub's API or a file
-returned. A frame is `module:line`, the form an event's `where` takes, and no
+gets past every task's own handling is a fault in the runner, a program or a
+command, and the frames are what a person needs to find it, so the trace stays.
+Its messages go, because one can quote a ledger row or what GitHub's API or a
+file returned. A frame is `module:line`, the form an event's `where` takes, and no
 function name is added: a module and a line at the commit the job checked out
 point to exactly one line. The printer reads each name only when it is a plain
 string, because a printer that raised would make Python print its own trace,
-text included. It sits beside the programs in `backend/utilities/` and is the
-standard library alone, because the plan job checks out only `config` and that
-folder and installs nothing. Each program imports it inside its `__main__`
-block, so the three programs held to standard-library imports at the top of the
-file stay that way (Fowler, 2026-10-07, on the owner's ruling of the same day).
+text included. It sits in the package, as `backend/idhazh/crash_trace.py`,
+because the `idhazh` commands that run gardener code install it too, and the
+package imports nothing from `backend/utilities/`. It and the package's
+`__init__.py` are the standard library alone, because the planner imports them
+with nothing installed, which is why the plan job checks out `backend/idhazh`
+beside `config` and `backend/utilities`. A module directly in `backend/` was
+rejected: the package would import a file its wheel does not hold, and the plan
+job would get that file only through git's rule that a sparse checkout also
+writes the files directly inside each listed folder's parent folders. Each
+program imports the printer inside its `__main__` block, so the three programs
+held to standard-library imports at the top of the file stay that way. Each
+command installs it in its own `main`, so the console script and
+`python -m idhazh` print a crash the same way, and `idhazh telemetry` installs
+it for `prune` alone, the one of its five subcommands that runs gardener code
+(Fowler, 2026-10-07 and 2026-10-08, on the owner's ruling of 2026-10-07).
 
 ## See also
 

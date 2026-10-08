@@ -1,21 +1,28 @@
-"""Does every program the gardener's workflow runs print a crash as where it broke, never what it said?
+"""Does every gardener program and operator command print a crash as where it broke, never what it said?
 
-Each case runs one program the way its job does, in a fresh interpreter, through
-a driver. The driver raises an exception carrying planted text and, while it
-handles that one, runs the program as `__main__` on an input the program's own
-code cannot read: a config folder with no gardener config in it, or a corpus
-stamp that is a folder. The path carries the planted text, so the exception that
-ends the program quotes it, and so does the exception chained to it. Python's
-own trace prints both messages (Guardrail #11). Nothing is replaced: the program
-raises on real input, and Python chains the two.
+Each case runs one program the way its job does, or one command the way a
+person types it, in a fresh interpreter, through a driver. The driver raises an
+exception carrying planted text and, while it handles that one, runs the
+program as `__main__` on an input the program's own code cannot read: a config
+folder with no config in it, a corpus stamp that is a folder, or a state tree
+whose door holds a file where a day's folder goes. The path carries the planted
+text, so the exception that ends the program quotes it, and so does the
+exception chained to it. Python's own trace prints both messages (Guardrail
+#11). Nothing is replaced: the program raises on real input, and Python chains
+the two.
 
 The plan job and the due check install nothing, so their cases run with
 `-I -S`: no site packages, and no folder on the path but the one the program
 puts there itself.
 
-The last test holds the four to every command in the workflow that starts
-Python, so a fifth program cannot land without a case here. What the trace
-holds for any chain is `test_crash_trace.py`.
+No workflow runs the three operator commands. The two `idhazh` commands run
+through the package's `__main__.py`, which calls the `main` the console script
+calls, and `run-task` stands for the gardener's three subcommands, which share
+one `main`. The ledger migrator runs as a person runs it.
+
+The last test holds the four workflow programs to every command in the workflow
+that starts Python, so a fifth program cannot land without a case here. What
+the trace holds for any chain is `test_crash_trace.py`.
 """
 
 from __future__ import annotations
@@ -31,7 +38,11 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import REPO_ROOT, SEED_COMMIT
+from ledger_migration._fixtures import ITEM, OLD, item_row, write_csv, writer_file_name
+
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 
 from ._harness import (
     GARDENER_PLAN_MODULE,
@@ -47,12 +58,19 @@ pytestmark = pytest.mark.workflow
 
 WORKFLOW: Final = "idhazh-gardener.yml"
 
+#: The package's own entry: the console script `idhazh` and `python -m idhazh`
+#: both call the `main` this runs.
+IDHAZH_ENTRY: Final = REPO_ROOT / "backend" / "idhazh" / "__main__.py"
+
+#: The ledger migrator, which a person runs to move a CSV tree onto the door.
+MIGRATOR: Final = REPO_ROOT / "backend" / "utilities" / "migrate_to_parquet.py"
+
 #: What a fetched page might say, planted in the driver's exception; and the part
 #: of it that the program's input path carries too, which no line may hold.
 FETCHED: Final = "Breaking: click https://example.invalid/now"
 PLANTED: Final = "example.invalid"
 
-#: A run and a day the programs accept, so each gets as far as its config.
+#: A run and a day the programs accept, so each gets as far as its input.
 RUN_ID: Final = "2026-10-07-1"
 TODAY: Final = "2026-10-07"
 
@@ -90,13 +108,20 @@ STARTS_PYTHON: Final = frozenset({"python", "python3", "idhazh"})
 
 
 class Crash(NamedTuple):
-    """One program, whether its job installs nothing first, and the input that ends it."""
+    """One program or command, whether its job installs nothing first, and the input that ends it."""
 
     program: Path
     installs_nothing: bool
     #: Builds the input under a test's folder, and returns the program's
     #: arguments and the type of the exception that ends it.
     inputs: Callable[[Path], tuple[list[str], str]]
+    #: The words of an `idhazh` command line before its arguments; none for a program.
+    verb: tuple[str, ...] = ()
+
+    @property
+    def command(self) -> str:
+        """The case's name: the `idhazh` command line, hyphenated, or the program's file name."""
+        return "-".join(("idhazh", *self.verb)) if self.verb else self.program.name
 
 
 def no_gardener_config(root: Path) -> str:
@@ -154,12 +179,71 @@ def what_reading_refuses(folder: Path) -> str:
     raise AssertionError(f"{folder} reads as a file, so it cannot end the program")
 
 
+def a_gardener_task_crashes(root: Path) -> tuple[list[str], str]:
+    """`run-task` in the test's own folder, so nothing it runs can reach this checkout."""
+    arguments = ["compact-gardener", "--run-id", RUN_ID, "--attempt", "1"]
+    return [
+        *arguments,
+        "--git-sha",
+        SEED_COMMIT,
+        "--repo-root",
+        str(root),
+        "--config",
+        no_gardener_config(root),
+    ], "FileNotFoundError"
+
+
+def a_prune_crashes(root: Path) -> tuple[list[str], str]:
+    """A dry run over one day, of a state tree in the test's own folder."""
+    arguments = ["--target", "feed-health", "--since", TODAY, "--until", TODAY]
+    return [
+        *arguments,
+        "--state-root",
+        str(root / "state"),
+        "--config",
+        no_gardener_config(root),
+    ], "FileNotFoundError"
+
+
+def a_migration_crashes(root: Path) -> tuple[list[str], str]:
+    """A CSV day filed into a door that holds a file where the day's folder goes.
+
+    The migrator turns a fault in what it reads into a refusal it prints on
+    purpose, which keeps its words. A fault in what it writes is not caught: the
+    write cannot make the day's folder, and the exception names that path. The
+    text is planted in a folder above the state tree, because the migrator
+    prints a root outside the checkout by its last folder name, on purpose.
+    """
+    state = root / PLANTED / "state"
+    row = item_row(OLD, "ai-01", machine=True)
+    write_csv(state, ITEM, OLD, writer_file_name(OLD, 1, ServerJob.WORK), [row.csv_row()])
+    day = ledger.raw_root(state, ITEM).joinpath(*OLD.split("-"))
+    day.parent.mkdir(parents=True)
+    day.write_text("a file where the day's folder goes", encoding="ascii")
+    arguments = ["--state-dir", str(state), "--month", OLD[:7], "--ledger", ITEM.value]
+    return [
+        *arguments,
+        "--run-id",
+        RUN_ID,
+        "--git-sha",
+        SEED_COMMIT,
+        "--write",
+    ], "FileExistsError"
+
+
 #: The four programs the workflow runs, each with the input that ends it.
 CRASHES: Final = (
     Crash(GARDENER_PLAN_MODULE, True, the_planner_crashes),
     Crash(GARDENER_SHARD_MODULE, False, a_shard_crashes),
     Crash(SQUASH_DUE_MODULE, True, the_due_check_crashes),
     Crash(PRUNE_PUSH_MODULE, False, the_squash_crashes),
+)
+
+#: The three commands a person runs on gardener code, which no workflow runs.
+OPERATOR_CRASHES: Final = (
+    Crash(IDHAZH_ENTRY, False, a_gardener_task_crashes, ("gardener", "run-task")),
+    Crash(IDHAZH_ENTRY, False, a_prune_crashes, ("telemetry", "prune")),
+    Crash(MIGRATOR, False, a_migration_crashes),
 )
 
 
@@ -184,7 +268,7 @@ def programs_started(script: str) -> set[str]:
     }
 
 
-@pytest.mark.parametrize("crash", CRASHES, ids=lambda crash: crash.program.name)
+@pytest.mark.parametrize("crash", [*CRASHES, *OPERATOR_CRASHES], ids=lambda crash: crash.command)
 def test_a_crash_prints_each_exceptions_type_and_frames_and_never_its_text(
     tmp_path: Path, crash: Crash
 ) -> None:
@@ -199,7 +283,7 @@ def test_a_crash_prints_each_exceptions_type_and_frames_and_never_its_text(
         env["PYTHONPATH"] = str(REPO_ROOT / "backend")
 
     done = subprocess.run(
-        [sys.executable, *flags, "-c", DRIVER, str(crash.program), *arguments],
+        [sys.executable, *flags, "-c", DRIVER, str(crash.program), *crash.verb, *arguments],
         cwd=tmp_path,
         env=env,
         capture_output=True,

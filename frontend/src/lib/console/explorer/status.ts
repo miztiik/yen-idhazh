@@ -1,6 +1,6 @@
 import { megabytes } from '$lib/assist/session';
 import type { FetchCost } from '$lib/data/ledger';
-import { shortDate } from '$lib/format';
+import { plural as countNoun, shortDate } from '$lib/format';
 
 export type ExplorerStatusState =
 	| 'idle'
@@ -32,7 +32,7 @@ export type ExplorerStatusInput = {
 };
 
 export function plural(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? '' : 's'}`;
+	return countNoun(count, noun, `${noun}s`);
 }
 
 export function size(bytes: number): string {
@@ -58,9 +58,9 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'running-query':
 			return 'Running the question.';
 		case 'answered':
-			return `Answered in ${elapsed(input.ms)}. Fetched ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}; ${input.read?.alreadyHeld ?? 0} more were already in this page.`;
+			return (input.read?.files ?? 0) === 0 ? `Answered in ${elapsed(input.ms)}.` : `Answered in ${elapsed(input.ms)}. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
 		case 'quiet':
-			return `Ran in ${elapsed(input.ms)} and matched no rows. Fetched ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
+			return (input.read?.files ?? 0) === 0 ? `Ran in ${elapsed(input.ms)} and matched no rows.` : `Ran in ${elapsed(input.ms)} and matched no rows. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
@@ -76,8 +76,4 @@ export function statusSentence(input: ExplorerStatusInput): string {
 			return `${prefix}${engine}${empty}`;
 		}
 	}
-}
-
-export function statusWithHeld(sentence: string, heldBytes: number): string {
-	return `${sentence} This page holds ${size(heldBytes)} of fetched files; a reload empties it.`;
 }

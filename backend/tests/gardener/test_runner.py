@@ -500,7 +500,10 @@ def test_a_named_trial_root_selects_its_period_and_ignores_unconfigured_children
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Only a configured trial root and a named date are in the pass's listing."""
-    stray = "state/pipeline-tests-production-settings/seen/2026/06/25/2026-06-25.txt"
+    stray = (
+        "state/pipeline-tests/production-settings/traces/"
+        "2026/06/25/2026-06-25.txt"
+    )
     checkout, settings = a_garden_with_the_complement(
         tmp_path, monkeypatch, {**RUNNER_FILES, stray: "aged\n"}
     )
@@ -574,9 +577,9 @@ def test_trials_owns_only_its_configured_roots(tmp_path: Path) -> None:
 
     owns = settings.tasks["trials"].owns
     assert set(owns) == {
-        "state/pipeline-tests-production-settings",
-        "state/pipeline-tests-no-visual-plan",
-        "state/pipeline-tests-parallel-summarization",
+        "state/pipeline-tests/production-settings/traces",
+        "state/pipeline-tests/no-visual-plan/traces",
+        "state/pipeline-tests/parallel-summarization/traces",
     }
     sweeps = runner.owner_of("trials", settings.tasks)
     assert all(sweeps(folder) and sweeps(f"{folder}/x.csv") for folder in owns)
