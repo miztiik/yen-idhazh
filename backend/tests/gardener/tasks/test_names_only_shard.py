@@ -67,7 +67,7 @@ _OWN_TO_THE_RUN: Final = {"downloaded_bytes", "duration_ms"}
 
 
 def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
-    """The named committed declarations with their deletions and fold turned on.
+    """The named committed declarations with their deletions turned on.
 
     `changed` replaces fields of one declaration, by its name.
     """
@@ -79,8 +79,6 @@ def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
         source = config_dir / "gardener" / f"{name}.json"
         declared = json.loads(source.read_text(encoding="utf-8"))
         declared["dry_run"] = False
-        if isinstance(declared.get("fold"), dict):
-            declared["fold"]["dry_run"] = False
         declared |= changed.get(source.stem.replace("-", "_"), {})
         (config_dir / "gardener" / source.name).write_text(json.dumps(declared), encoding="utf-8")
     return config.load_gardener(config_dir)

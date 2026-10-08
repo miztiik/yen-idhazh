@@ -227,9 +227,22 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   printed nothing for over 100 s from a clean tree, and once printed its
   address just after the limit; the same build served on the next try. The
   tell is an empty `git status --porcelain` since the build. Do not rebuild;
-  run the same command again when the load drops:
+  when the load drops, run the same command again, adding `--fresh` to a
+  `test:changed` run (next note):
   ```powershell
   (Get-CimInstance Win32_Processor).LoadPercentage
+  ```
+- **Running the same `test:changed` command again after that timeout reads as a second failure; it is the first one, handed back.**
+  The launcher, `frontend/scripts/run-checks.ts`, files each finished run
+  under a hash of what it checked - the tree, the tool versions and the
+  selected checks - and an unchanged command returns that run's exit code, a
+  failure included, until `--fresh` is added. Plan 62's row L36 met it on
+  2026-10-08: after its browser step timed out on a box at 100 percent CPU,
+  the same command printed `Reusing completed run ...: exit 1` and ran no
+  test. The tell is that line at once, with no test output after it. When the
+  load drops, add `--fresh`:
+  ```powershell
+  npm --prefix frontend run test:changed -- <the same arguments> --fresh
   ```
 - **A console spec's check on the base commit reads as needing a canary build in the copy; its server-rendered cases need none.**
   `frontend/playwright.config.ts` starts `frontend/scripts/verified-preview.ts`,

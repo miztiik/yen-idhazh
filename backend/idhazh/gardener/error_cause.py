@@ -4,9 +4,9 @@ not delete, an API that is down, a download budget spent, or a code defect?
 One pure function answers it, `classify`, and every place a gardener pass
 catches an error asks it: the walk that deletes a collection's members
 (`one_at_a_time.take`), the GitHub driver's deletes (`github_collections`), the
-runner, for an error that escapes a task, the closed-day fold, the ledger
-prune, and the compaction's download budget. So a code defect is `raised`
-whichever wrapper caught it, and no wrapper relabels one.
+runner, for an error that escapes a task, the ledger prune, and the
+compaction's download budget. So a code defect is `raised` whichever wrapper
+caught it, and no wrapper relabels one.
 
 **`HTTPError` is tested first**, because it is a kind of `URLError`, which is a
 kind of `OSError`. Tested in another order, a refusal GitHub gave would read as

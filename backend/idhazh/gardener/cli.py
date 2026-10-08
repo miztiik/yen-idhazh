@@ -151,13 +151,7 @@ def period_range(
     if args.name is None:
         parser.error("--from and --to are available only with one named task")
     policy = settings.tasks[args.name]
-    if isinstance(policy, CompactionPolicy) or isinstance(
-        policy.window, MonthsWindow
-    ) or (
-        isinstance(policy, RetentionPolicy)
-        and policy.fold is not None
-        and policy.fold.settles_months
-    ):
+    if isinstance(policy, CompactionPolicy) or isinstance(policy.window, MonthsWindow):
         if not month_partition.is_month_stem(start) or not month_partition.is_month_stem(end):
             parser.error("--from and --to must be real YYYY-MM months for this task")
         if start > end:

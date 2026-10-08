@@ -586,7 +586,7 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # Keyed by a label rather than by a job, because a label names one commit step
 # wherever it lives: `bench` is a job of another workflow. Until 2026-09-28 the
 # assemble job committed twice - the day, then the closed-day fold - and the
-# fold is the gardener's now.
+# fold moved to the gardener, which no longer runs it.
 COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
 
 COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/commit_and_push.py")
