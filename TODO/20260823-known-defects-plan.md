@@ -148,7 +148,7 @@ a summary.
 
 **Doing nothing costs a red browser job each time it comes back, and a
 re-run.** How often that is, nobody knows: it has been seen once. The run's
-trace is kept in its `playwright-traces` artifact until 2026-10-15.
+trace is in its `playwright-traces` artifact, which expires on 2026-10-15.
 
 **The next move is a worker's: make the failure come back where it can be
 watched.** Run this one test in the `reader` project a few hundred times with
