@@ -8,7 +8,7 @@ This procedure is project-specific because it names this repository's ledger con
 
 ## Complete the code change
 
-Read the ledger's contract, its registry entry, its CSV writer and readers, and its compaction declaration. The ledger's registry entry must use `raw-and-compact`. Its `compact-<ledger>` declaration must exist and retain at least the old CSV retention window. The migrator refuses a missing door entry, a missing compaction, or a compaction that could discard data the CSV window kept.
+Read the ledger's contract, its registry entry, its CSV writer and readers, and its compaction declaration. The ledger's registry entry must use `raw-and-compact`. Its `compact-<ledger>` declaration must exist and retain at least the old CSV retention window. The migrator refuses a missing door entry, a missing compaction, or a compaction that could discard data the CSV window kept. A person may decide that the door keeps a ledger for less time than its CSV did. That decision goes in the ledger's `CsvLedger` entry as `shorter_by`, which names who decided and when; it is the only way past that last refusal.
 
 A move is complete only when every applicable part below holds.
 
