@@ -13,15 +13,18 @@ verdict reaching a publish decision.
 
 The row is persisted twice on the way through: the draw the council leaves under
 `backend/var/council/<date>/selection/<judge>/` holds the day's pairs before a
-judging unit reads them, and
-`state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` holds what came back.
+judging unit reads them, and the ledger door files what came back under
+`state/raw/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>/`, which the
+gardener packs under `state/compact/content-similarity-judge/scored-pairs/`.
 One shape for both, because the second file is the first one with the judge's
 columns filled in.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -36,6 +39,7 @@ from idhazh.contracts.base import (
     UrlKey,
     canonical_json,
     derive_text_digest,
+    renamed_keys,
     without_retired_keys,
 )
 
@@ -47,18 +51,31 @@ from idhazh.contracts.base import (
 #: `key_point_weight` went with the key points themselves: the term shipped at a
 #: weight of 0.0, so it never moved a score, and the cosine is now the whole one.
 #:
-#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
-#: heading that is neither a current column nor one the reader carries, so a
-#: column deleted above without an entry here leaves every committed day file
-#: unappendable and unrepairable at once.
+#: **This is a contract, not a courtesy.** The migrator refuses a filled cell
+#: under a heading that is neither a current column nor one its `old_headings`
+#: names, and its entry for this ledger is built from this set, so a column
+#: deleted above without an entry here leaves every committed day file that
+#: still carries it unmovable.
 #:
-#: **Both sides of the row read this one set.** A committed day file reaches it
-#: through `ledger.STORY_SIMILARITY_PAIR_CARRIED`; a JSON payload reaches it
-#: through the before-validator on the row. A removal declared once is therefore
-#: honoured wherever the row is read.
+#: **Both sides of the row read this one set.** A committed CSV day an earlier
+#: run wrote reaches it through the migrator's `old_headings`, which maps each of
+#: these headings to nothing; a JSON payload reaches it through the
+#: before-validator on the row. A removal declared once is therefore honoured
+#: wherever the row is read.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset(
     {"decode_digest", "key_point", "key_point_weight"}
 )
+
+#: Headings an earlier row spelled under another name, mapped to the field that
+#: holds the value now. `shard` became `work_part_index` when the ledger moved
+#: onto the ledger door: the door writes its own `shard` cell on every row it
+#: files, naming the job that filed it, and a row field of that name would take
+#: that cell's place.
+#:
+#: Both sides of the row read this one map, as they read `DROPPED_CELLS`: a CSV
+#: row an earlier run wrote through `from_csv_row`, and a JSON payload through
+#: the before-validator.
+RENAMED_CELLS: Final[Mapping[str, str]] = MappingProxyType({"shard": "work_part_index"})
 
 #: How far a recomputed composite may sit from the one on the row before the row
 #: is refused. The score is a product of two floats, so the rule and the row can
@@ -154,6 +171,11 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-08",
+            change="shard is renamed work_part_index. An old shard heading is read under it.",
+            why="The ledger door writes its own shard cell on every row it files.",
+        ),
+        ChangelogEntry(
             version="2026-09-24",
             change="key_point and key_point_weight go. Both headings are carried and dropped.",
             why="The term shipped at a weight of zero and never moved a score.",
@@ -170,11 +192,6 @@ class StorySimilarityPair(Contract):
         ),
         ChangelogEntry(
             version="2026-09-21T12:00",
-            change="first_token_margin is a renormalised per-verdict gap over a 25-wide window.",
-            why="A raw top-two gap over three tokens subtracted one verdict from itself.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
@@ -187,11 +204,12 @@ class StorySimilarityPair(Contract):
             "and both rows stay: each read its own day."
         )
     )
-    shard: int = Field(
+    work_part_index: int = Field(
         ge=0,
         description=(
-            "Which judging shard owns this row. index mod shards, never a contiguous "
-            "block, so a truncated draw still spreads evenly across them."
+            "Which part of the judging split owns this row: its index in the draw mod "
+            "the part count, never a contiguous block, so a truncated draw still spreads "
+            "evenly across the parts."
         ),
     )
     pair_key: Sha256 = Field(
@@ -382,7 +400,7 @@ class StorySimilarityPair(Contract):
     @model_validator(mode="before")
     @classmethod
     def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
-        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+        """The read-side migration `CLAUDE.md` section 11 owes a removed or renamed column.
 
         A judging shard seals a draw before it reads it and the archive keeps a
         payload for as long as anybody wants to look at it, so a key this row
@@ -390,9 +408,10 @@ class StorySimilarityPair(Contract):
         exactly what its author meant to write.
 
         The keys come from `DROPPED_CELLS` rather than from a list of their own,
-        so the CSV side and the JSON side cannot name different sets.
+        so the CSV side and the JSON side cannot name different sets. A key this
+        row renamed is read under its new name, from `RENAMED_CELLS`.
         """
-        return without_retired_keys(data, *DROPPED_CELLS)
+        return renamed_keys(without_retired_keys(data, *DROPPED_CELLS), RENAMED_CELLS)
 
     @model_validator(mode="after")
     def _the_pair_is_ordered_and_named_by_its_own_contents(self) -> Self:
@@ -484,6 +503,7 @@ class StorySimilarityPair(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
+        row = renamed_keys(row, RENAMED_CELLS)
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
         for name, field in cls.model_fields.items():
             if payload[name] == "" and field.default is None:

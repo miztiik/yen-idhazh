@@ -1,20 +1,29 @@
-"""Does finite yearly retention delete only due indexed years and preserve restart progress?"""
+"""Does finite yearly retention delete only due indexed years, keep restart progress, and say so?"""
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
+from conftest import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Format, Period
-from idhazh.contracts.gardener_events import CompactionStep, ExpiredYearsChosen, PeriodRefused
+from idhazh.contracts.gardener_events import (
+    CompactionStep,
+    ExpiredYearsChosen,
+    PeriodRefused,
+    ShardPublished,
+    TaskFinished,
+    TaskOutcome,
+)
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.knobs.gardener import (
     CompactionPolicy,
@@ -23,13 +32,16 @@ from idhazh.contracts.knobs.gardener import (
     MonthsWindow,
 )
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
-from idhazh.gardener import event_log
+from idhazh.contracts.shard_landing import ShardLanding
+from idhazh.gardener import event_log, run_summary, runner
 from idhazh.gardener.one_at_a_time import Pass
+from idhazh.gardener.outcome import MEANS, Outcome
 from idhazh.gardener.tasks import compaction
 from idhazh.gardener.tasks._yearly_expiry import expires_at
 from idhazh.telemetry.door_prune import take_days
 
 from .._events import events, the_event
+from .._garden import a_config
 from ._marks import marks_on_disk
 from ._task import context_for
 from .test_compaction_years import (
@@ -43,6 +55,12 @@ from .test_compaction_years import (
 )
 
 pytestmark = pytest.mark.contract
+
+#: The run a pass through the runner names, on the first UTC day a year expires.
+RUN_ID: Final = "2030-01-01-18012345678"
+
+#: The first wake at which a year expires: 2026, kept 36 calendar months after its UTC end.
+EXPIRY_WAKE: Final = datetime(2030, 1, 1, 0, 40, tzinfo=UTC)
 
 
 def indexed_years(root: Path, years: tuple[str, ...]) -> dict[str, Path]:
@@ -97,6 +115,95 @@ def said_as_text(records: Iterable[logging.LogRecord]) -> list[str]:
     ]
 
 
+def empty(covers: str) -> CompactEntry:
+    """The entry of a period a pass looked at and found no row in, so it has no file."""
+    return CompactEntry(covers=covers, rows=0, bytes=0, state=EntryState.EMPTY)
+
+
+def caught_up(root: Path) -> Path:
+    """2026 packed and indexed, and every later period looked at by the 2030-01-01 UTC wake.
+
+    2027 and 2028 are packed years, the months of 2029 to October are closed,
+    and the days from 2029-11-01 to 2029-12-30 are packed, each an `empty`
+    entry. So the expiry is the only step with a period to take: 2029-12-30 is
+    the newest day one whole day past its end, 2029-10 the newest month 45 days
+    past its end, and 2029 is not yet 93 days past its own. Hands back 2026's file.
+    """
+    year_file = indexed_years(root, ("2026",))["2026"]
+    index_entries(
+        root,
+        Period.YEARLY,
+        [
+            CompactEntry(covers="2026", rows=1, bytes=year_file.stat().st_size),
+            empty("2027"),
+            empty("2028"),
+        ],
+    )
+    index_entries(root, Period.MONTHLY, [empty(f"2029-{month:02d}") for month in range(1, 11)])
+    first = date(2029, 11, 1)
+    index_entries(
+        root,
+        Period.DAILY,
+        [empty((first + timedelta(days=offset)).isoformat()) for offset in range(60)],
+    )
+    return year_file
+
+
+def run_by_the_runner(root: Path, *, dry_run: bool) -> Outcome:
+    """The compaction as the runner runs it at a wake on 2030-01-01 UTC, which logs its events.
+
+    The declaration is the committed one with every knob the caught-up tree
+    depends on named, so a deployment choice cannot move what a test expects.
+    """
+    declared = root / "declared" / f"{TASK}.json"
+    declared.parent.mkdir(parents=True)
+    committed = json.loads(read_text(CONFIG_DIR / "gardener" / f"{TASK}.json"))
+    knobs = {
+        "dry_run": dry_run,
+        "compact_after_days": 1,
+        "daily_keep_days": 45,
+        "monthly_keep_days": 93,
+        "monthly_window": {"unit": "forever"},
+        "yearly_keep_months": 36,
+        "yearly_prune_enable": True,
+    }
+    declared.write_text(json.dumps(committed | knobs), encoding="ascii")
+    return runner.run(
+        (TASK,),
+        settings=config.load_gardener(a_config(root, declared)),
+        repo_root=root,
+        run_id=RUN_ID,
+        attempt=1,
+        shard=0,
+        git_sha="a" * 40,
+        committed_folders=None,
+        cone_bytes=None,
+        listing=None,
+        clock=lambda: EXPIRY_WAKE,
+    )
+
+
+def summary_of(root: Path, outcome: Outcome, finished: TaskFinished) -> str:
+    """The job summary of a shard that ran this one task and landed on its first try."""
+    assert outcome.record is not None
+    published = ShardPublished(
+        shard=0,
+        run_id=RUN_ID,
+        attempt=1,
+        tasks=[finished.task],
+        failed_tasks=[],
+        landing=ShardLanding.LANDED,
+        push_try=1,
+        push_tries=6,
+        record=outcome.record.relative_to(root).as_posix(),
+        downloaded_bytes=outcome.downloaded_bytes,
+        max_downloaded_mb=128,
+        exit_code=outcome.exit_code,
+        means=MEANS[outcome.exit_code],
+    )
+    return run_summary.markdown(published, [finished])
+
+
 def test_exact_calendar_expiry_uses_year_end_and_utc() -> None:
     due = expires_at("2026", 36)
     assert due == datetime(2030, 1, 1, tzinfo=UTC)
@@ -117,6 +224,74 @@ def test_the_years_a_pass_takes_are_one_event_and_never_text(
     assert said_as_text(caplog.records) == []
     chosen = the_event(caplog.records, ExpiredYearsChosen)
     assert (chosen.ledger, chosen.years) == (VISUALS, ["2026"])
+
+
+@pytest.mark.parametrize(
+    ("dry_run", "word", "row"),
+    [
+        pytest.param(
+            False,
+            TaskOutcome.DONE,
+            "| `compact-visual-prunes` | done | deleted 1 expired year |",
+            id="live",
+        ),
+        pytest.param(
+            True,
+            TaskOutcome.DRY_RUN,
+            "| `compact-visual-prunes` | dry-run | would delete 1 expired year |",
+            id="dry-run",
+        ),
+    ],
+)
+def test_a_pass_whose_only_work_is_an_expired_year_says_so_on_its_event_and_its_summary(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    dry_run: bool,
+    word: TaskOutcome,
+    row: str,
+) -> None:
+    """THE ORACLE: the year a pass took is on its `task-finished` event, and its row says so.
+
+    A live pass deletes 2026, and its row says it did; a dry run deletes nothing,
+    lists the same year, and its row says only that it would. Neither row says
+    "nothing", which is what each said while the event listed no expired year.
+    """
+    year_file = caught_up(tmp_path)
+
+    with caplog.at_level(logging.INFO):
+        outcome = run_by_the_runner(tmp_path, dry_run=dry_run)
+
+    finished = the_event(caplog.records, TaskFinished)
+    assert (finished.task, finished.outcome, finished.dry_run) == (
+        "compact-visual-prunes",
+        word,
+        dry_run,
+    )
+    assert finished.periods is not None
+    rows = [
+        line
+        for line in summary_of(tmp_path, outcome, finished).splitlines()
+        if line.startswith("| `compact-visual-prunes` |")
+    ]
+    assert (finished.periods.model_dump(mode="json"), rows) == (
+        {
+            "days_packed": [],
+            "days_retaken": [],
+            "months_closed": [],
+            "years_packed": [],
+            "years_expired": ["2026"],
+            "months_dropped": [],
+            "raw_days_dropped": [],
+            "empty_periods": [],
+            "lost_days": [],
+            "set_aside_paths": [],
+            "daily_mark": "2029-12-30",
+            "monthly_mark": "2029-10",
+            "yearly_mark": "2028",
+        },
+        [row],
+    )
+    assert year_file.exists() is dry_run, "a live pass deletes the year, and a dry run keeps it"
 
 
 @pytest.mark.parametrize(

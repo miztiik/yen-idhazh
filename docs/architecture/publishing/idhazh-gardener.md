@@ -510,8 +510,9 @@ ran and nothing else, so it cannot say what the log does not. Top to bottom:
   task did not fit its work to the budget;
 - one row a task, in the order the tasks ran: how it ended, with `failed` in
   bold and the fault that stopped it, and what it did, naming what it took -
-  files, runs or artifacts, days, months and years - and the exception's type
-  and place that stopped it;
+  files, runs or artifacts, or a compaction's expired years and the days,
+  months and years it packed - and the exception's type and place that stopped
+  it;
 - what each word in the table means and what happens next, once a word: the
   event's own `next`, keyed by the fault when a fault stopped the task;
 - what the tasks handled without stopping: one line for each task and note,
@@ -519,7 +520,11 @@ ran and nothing else, so it cannot say what the log does not. Top to bottom:
 
 A compaction's old months and raw days are said as found past the keep line,
 because its record lists them whether its monthly window deleted them or only
-reported them. A summary holds closed words, counts, periods, member ids, paths
+reported them. Its expired years are said as deleted, first in its row, such as
+"deleted 1 expired year", or "would delete 1 expired year" on a dry run: the
+yearly expiry has no switch that only reports, and no later wake can undo it
+([ledger-compaction.md](ledger-compaction.md#yearly-expiry)).
+A summary holds closed words, counts, periods, member ids, paths
 the gardener named, an exception's type and place, and fixed sentences, never
 an exception's text or a row's value, and every sentence is escaped for
 Markdown. A page that will not take the summary costs the summary and never the
@@ -1015,6 +1020,17 @@ command installs it in its own `main`, so the console script and
 `python -m idhazh` print a crash the same way, and `idhazh telemetry` installs
 it for `prune` alone, the one of its five subcommands that runs gardener code
 (Fowler, 2026-10-07 and 2026-10-08, on the owner's ruling of 2026-10-07).
+
+**2026-10-08: an expired year is said as deleted, first in its task's row.**
+The summary counts only what a compaction's finished event lists, and the event
+listed no expired year, so a pass whose only work was to delete one said
+"nothing". The event now lists them in `years_expired`, from the expiry's own
+list, because a year that leaves the index leaves no entry to compare. "Expired
+1 year" was rejected: it reads as "a year went by" and hides the delete. The row
+says "deleted", as it does wherever something is gone for good, and "expired"
+says why; an empty year counts too, because the noun is the year, not its file.
+The part comes first because no later wake can undo it, and on a dry run
+"would" then sits beside "delete" (Reader, 2026-10-08).
 
 ## See also
 

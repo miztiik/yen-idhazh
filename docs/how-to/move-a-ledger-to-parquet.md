@@ -8,7 +8,7 @@ This procedure is project-specific because it names this repository's ledger con
 
 ## Complete the code change
 
-Read the ledger's contract, its registry entry, its CSV writer and readers, and its compaction declaration. The ledger's registry entry must use `raw-and-compact`. Its `compact-<folder>` declaration must exist and retain at least the old CSV retention window, where `<folder>` is the ledger's door folder with `/` written `-`. The migrator refuses a missing door entry, a missing compaction, or a compaction that could discard data the CSV window kept.
+Read the ledger's contract, its registry entry, its CSV writer and readers, and its compaction declaration. The ledger's registry entry must use `raw-and-compact`. Its `compact-<folder>` declaration must exist and retain at least the old CSV retention window, where `<folder>` is the ledger's door folder with `/` written `-`. The migrator refuses a missing door entry, a missing compaction, or a compaction that could discard data the CSV window kept. A person may decide that the door keeps a ledger for less time than its CSV did. That decision goes in the ledger's `CsvLedger` entry as `shorter_by`, which names who decided and when; it is the only way past that last refusal.
 
 A move is complete only when every applicable part below holds.
 
@@ -82,16 +82,17 @@ named CSV tree cannot be read. Invalid arguments and combined modes exit two
 before any phase runs.
 Every mode refuses a named root that is not an existing directory, with exit one.
 
-Only the nine layouts in `CSV_LEDGERS` are supported: `item-health`,
+Only the eleven layouts in `CSV_LEDGERS` are supported: `item-health`,
 `summary-quality-evals` (old CSV folder `scores`), `host-fingerprint`,
-`counterfactual-scores`, `candidate-models`, `feed-health`,
-`content-similarity-judge/merge-line-holdout-scores`, `seen` and `published`.
+`counterfactual-scores`, `candidate-models`, `feed-health`, `seen`,
+`published`, and three of the similarity judge's ledgers, each one shared file
+a day inside its family's folder:
+`content-similarity-judge/merge-line-holdout-scores`,
+`content-similarity-judge/scored-pairs` and `content-similarity-judge/metrics`.
 This tool does not migrate `council-run-records`, `span-rollup` or an
 undeclared CSV layout. Moving another shape requires its own contract and
 reader design first. The reader supports a declared day tree or shared day file
-under a multi-folder prefix, such as
-`content-similarity-judge/merge-line-holdout-scores`. It does not infer an
-undeclared layout such as `content-similarity-judge/scored-pairs`.
+under a multi-folder prefix. It does not infer an undeclared layout.
 `item-health-summary` moved without a migrator entry because no committed file
 existed.
 
@@ -99,7 +100,9 @@ Both CSV layouts refuse a filled cell under an unknown heading, a value with
 no heading, and conflicting filled values under an old heading and its current
 column. Empty cells under unknown headings are allowed. A dropped heading
 requires an explicit `old_headings` entry mapped to `None`, added by a person
-in a reviewed commit. There are no such declarations for `runner_name`,
+in a reviewed commit. The scored-pairs entry has three: `decode_digest`,
+`key_point` and `key_point_weight`, the headings its contract stopped naming.
+There are no such declarations for `runner_name`,
 `cgroup_peak_bytes`, `max_output_tokens`, `coverage` or `new_fact_rate`.
 Their filled CSV cells are refused, even if the contract's legacy reader
 would otherwise ignore them.

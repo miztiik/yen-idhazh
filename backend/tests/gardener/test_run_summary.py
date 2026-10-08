@@ -102,6 +102,7 @@ def periods(**listed: list[str]) -> PeriodsTaken:
         "days_retaken": [],
         "months_closed": [],
         "years_packed": [],
+        "years_expired": [],
         "months_dropped": [],
         "raw_days_dropped": [],
         "empty_periods": [],
@@ -433,6 +434,24 @@ def test_downloads_are_read_against_the_budget_and_said_over_it_as_a_defect() ->
             ),
             "would pack 1 day, close 1 month",
             id="a-dry-compaction",
+        ),
+        pytest.param(
+            a_task(
+                "compact-published",
+                TaskOutcome.DONE,
+                periods=periods(years_expired=["2026", "2027"], days_packed=["2030-12-30"]),
+            ),
+            "deleted 2 expired years, packed 1 day",
+            id="a-compaction-says-first-the-years-it-deleted-as-expired",
+        ),
+        pytest.param(
+            a_task(
+                "compact-published",
+                TaskOutcome.DRY_RUN,
+                periods=periods(years_expired=["2026"], days_packed=["2030-12-30"]),
+            ),
+            "would delete 1 expired year, pack 1 day",
+            id="a-dry-compaction-says-only-that-it-would-delete-an-expired-year",
         ),
         pytest.param(
             a_task(
