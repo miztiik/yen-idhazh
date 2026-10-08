@@ -49,12 +49,21 @@ def test_a_bench_level_door_ledger_takes_one_segment() -> None:
         assert raw_root(STATE, LedgerName.HOST_FINGERPRINT) == STATE / "raw" / "pipeline-tests" / "host-fingerprint"
 
 
-def test_a_tree_ledgers_segments_land_after_its_own_top_level_folder() -> None:
-    """`traces` already owns `state/traces/`: the segments nest inside it, not before it."""
+def test_traces_segments_land_before_its_own_prefix_not_nested_inside_it() -> None:
+    """`traces` takes the door placement: production's `state/traces` retention
+
+    (`config/gardener/traces.json`, a 7-day window) walks all of `state/traces`.
+    Nesting a trial's traces at `state/traces/<segments>` would put that task's
+    claim and the trial's own longer-lived trace retention
+    (`config/gardener/trials.json`) one inside the other, which
+    `config._refuse_overlapping_claims` exists to catch. So a trial's traces
+    sit beside its other ledgers at `state/<segments>/traces`, exactly where
+    they already lived before this overlay existed.
+    """
     with use_registry(overlay_registry(("pipeline-tests", "no-visual-plan"))):
-        assert tree_root(STATE, LedgerName.TRACES) == STATE / "traces" / "pipeline-tests" / "no-visual-plan"
-        assert relpath(LedgerName.TRACES, "2026-10-08") == "state/traces/pipeline-tests/no-visual-plan/2026/10/08"
-        assert tree_relpath(LedgerName.TRACES) == "state/traces/pipeline-tests/no-visual-plan"
+        assert tree_root(STATE, LedgerName.TRACES) == STATE / "pipeline-tests" / "no-visual-plan" / "traces"
+        assert relpath(LedgerName.TRACES, "2026-10-08") == "state/pipeline-tests/no-visual-plan/traces/2026/10/08"
+        assert tree_relpath(LedgerName.TRACES) == "state/pipeline-tests/no-visual-plan/traces"
 
 
 def test_the_overlay_leaves_every_other_field_of_the_entry_alone() -> None:
@@ -105,3 +114,39 @@ def test_a_compact_index_path_takes_the_trial_segments_too() -> None:
     with use_registry(overlay_registry(("pipeline-tests",))):
         path = compact_index_path(STATE, LedgerName.HOST_FINGERPRINT, Period.DAILY)
     assert path == STATE / "compact" / "pipeline-tests" / "host-fingerprint" / "index" / "daily.json"
+
+
+def test_two_threads_each_holding_their_own_trial_overlay_cannot_see_the_other() -> None:
+    """The active override is a `ContextVar`, not a plain global.
+
+    Nothing in this codebase runs two trial roots on two threads of the same
+    process today - every pipeline-test case is its own CI matrix job, and the
+    gardener compacts one root at a time (`gardener.runner._run_compaction_roots`).
+    This test holds that apart anyway: if a future caller ever does share a
+    process across trial roots, one thread's override must never leak into, or
+    get clobbered by, another's.
+    """
+    import threading
+
+    case_a = overlay_registry(("pipeline-tests", "case-a"))
+    case_b = overlay_registry(("pipeline-tests", "case-b"))
+    seen: dict[str, Path] = {}
+    ready = threading.Barrier(2)
+
+    def hold(label: str, registry: object) -> None:
+        with use_registry(registry):  # type: ignore[arg-type]
+            ready.wait()  # both threads are inside their own override before either reads
+            seen[label] = raw_root(STATE, LedgerName.ITEM_HEALTH)
+
+    threads = [
+        threading.Thread(target=hold, args=("a", case_a)),
+        threading.Thread(target=hold, args=("b", case_b)),
+    ]
+    for one in threads:
+        one.start()
+    for one in threads:
+        one.join()
+
+    assert seen["a"] == STATE / "raw" / "pipeline-tests" / "case-a" / "item-health"
+    assert seen["b"] == STATE / "raw" / "pipeline-tests" / "case-b" / "item-health"
+    assert raw_root(STATE, LedgerName.ITEM_HEALTH) == STATE / "raw" / "item-health"

@@ -404,8 +404,12 @@ class CompactionPolicy(_Declared):
     state_roots: list[RelPath] = Field(
         default_factory=lambda: ["state"],
         description=(
-            "The repository-relative state roots this declaration compacts, in pass order. "
-            "Each root owns this ledger's raw and compact folders only."
+            "The trial roots this declaration compacts, in pass order, or ['state'] for "
+            "production. A trial root beyond 'state' is not a folder the pass enters: its "
+            "segments are spliced between the tier and this ledger's own folder "
+            "(state/<raw|compact>/<state_root's segments>/<ledger>), so this ledger's "
+            "trial files sit beside every other ledger's at the same tier rather than "
+            "under a root of their own."
         ),
     )
     lookback: int | None = Field(
