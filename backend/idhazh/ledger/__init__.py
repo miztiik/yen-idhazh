@@ -82,6 +82,7 @@ from idhazh.ledger.paths import (
     door_folders,
     door_ledger_at,
     entry,
+    overlay_registry,
     path,
     raw_path,
     raw_root,
@@ -90,6 +91,7 @@ from idhazh.ledger.paths import (
     set_aside_path,
     tree_relpath,
     tree_root,
+    use_registry,
 )
 from idhazh.ledger.persist import (
     FileFooter,
@@ -153,6 +155,7 @@ __all__ = [  # noqa: RUF022
     "door_folders",
     "door_ledger_at",
     "entry",
+    "overlay_registry",
     "path",
     "paths",
     "raw_path",
@@ -162,6 +165,7 @@ __all__ = [  # noqa: RUF022
     "set_aside_path",
     "tree_relpath",
     "tree_root",
+    "use_registry",
     # persist.py: the one door a contract payload takes to disk, and back.
     "FileFooter",
     "PeriodFile",
