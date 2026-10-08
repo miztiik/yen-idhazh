@@ -460,10 +460,9 @@ once to find the newest year, which costs one directory entry a year for ever.
 which shards are newest, which costs one entry a month for ever.
 `readDayShards` is the bigger one, and both judge readers inherit it: the
 inventory names one entry a recorded day, and the reader reads every entry of
-its ledger and checks each named file exists before it keeps the newest. It
-opens no file outside its cover, and deriving the newest day from today's date
-instead would answer nothing at all for a ledger whose last run was two months
-ago.
+its ledger to find the newest. It looks on disk only for the files inside its
+cover and opens no other, and deriving the newest day from today's date instead
+would answer nothing at all for a ledger whose last run was two months ago.
 
 ### Unbounded, and it says so
 

@@ -511,8 +511,9 @@ export interface DayShard {
  *
  * A day-grain ledger files one `<YYYY>/<MM>/<DD>.csv` a day: grain `day` in
  * `config/ledgers.json`, the path `backend/idhazh/ledger/paths.py` builds for its
- * writer. A name in any other layout is skipped. The cover counts recorded days,
- * and a missing named file fails the build. */
+ * writer. A name in any other layout is skipped. The cover counts recorded days.
+ * Only a file inside the cover is looked for on disk, so a day the cover leaves
+ * out costs nothing, and a missing one inside it fails the build. */
 export function dayShardFiles(
 	dir: string,
 	days: number = LEDGER_WINDOW_DAYS,
@@ -527,15 +528,19 @@ export function dayShardFiles(
 		const name = /^(\d{4})\/(\d{2})\/(\d{2})\.csv$/.exec(file.slice(prefix.length));
 		if (!name) continue;
 		const date = `${name[1]}-${name[2]}-${name[3]}`;
-		const path = join(stateRoot, ...file.split('/'));
-		if (!existsSync(path)) throw new Error(`Publication inventory names missing ledger file ${file}.`);
 		const shards = grouped.get(date) ?? [];
-		shards.push({ date, path });
+		shards.push({ date, path: join(stateRoot, ...file.split('/')) });
 		grouped.set(date, shards);
 	}
 	const recorded = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, files]) => files);
-	const kept = unbounded(days) ? recorded : recorded.slice(Math.max(0, recorded.length - days));
-	return kept.flat();
+	const kept = (unbounded(days) ? recorded : recorded.slice(Math.max(0, recorded.length - days))).flat();
+	for (const shard of kept) {
+		if (!existsSync(shard.path)) {
+			const file = relative(stateRoot, shard.path).replaceAll('\\', '/');
+			throw new Error(`Publication inventory names missing ledger file ${file}.`);
+		}
+	}
+	return kept;
 }
 
 /** The counts a run settled about one day.

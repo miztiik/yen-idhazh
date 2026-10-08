@@ -175,6 +175,21 @@ test('a day the inventory names inside the cover and the disk lacks stops the re
 	});
 });
 
+test('THE ORACLE: a holdout day outside the cover is not read, so the disk may lack it', () => {
+	withRoot((root) => {
+		const named = writeScoreDays(root);
+		rmSync(join(root, ...named[0].split('/')));
+		writeInventory(root, named);
+
+		expect(mergeLineHoldoutScore(1, root)).toEqual(SCORE_21_SEP);
+		// A cover that reaches 20 Sep stops on the same missing file, so the read
+		// above answered because it never reached that day.
+		expect(() => mergeLineHoldoutScore(2, root)).toThrow(
+			'Publication inventory names missing ledger file content-similarity-judge/merge-line-holdout-scores/2026/09/20.csv.'
+		);
+	});
+});
+
 test('the registry files both judge ledgers one YYYY/MM/DD.csv a day, in the folders the readers open', () => {
 	const registry = JSON.parse(
 		readFileSync(join(import.meta.dirname, '..', '..', 'config', 'ledgers.json'), 'utf8')
