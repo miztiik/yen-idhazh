@@ -10,6 +10,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 import pytest
+from conftest import CONFIG_DIR
 from gardener._historical_config import PRE_YEARLY_CONFIG
 
 from idhazh import config, ledger
@@ -19,6 +20,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.contracts.seen import PublishedRow
 from utilities.ledger_migration import (
+    csv_files,
     csv_layouts,
     refusals,
 )
@@ -88,15 +90,24 @@ def test_the_eval_ledgers_csv_tree_is_read_where_its_old_name_filed_it(tmp_path:
     assert not (state / "scores").exists()
 
 
-def test_a_nested_similarity_judge_csv_tree_keeps_its_old_root(tmp_path: Path) -> None:
-    """The migrator can name a day tree under a family folder."""
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
-    state = tmp_path / "state"
+def test_the_holdout_score_is_read_where_the_recorded_registry_filed_it(tmp_path: Path) -> None:
+    """One shared day file inside the judge's folder, so a check finds the file a person committed.
 
-    assert csv_layouts.csv_root(state, which) == (
-        state / "content-similarity-judge" / "merge-line-holdout-scores"
+    Declared as a day tree instead, the reader would refuse that file as a day
+    folder it cannot read, and no copy or check of the ledger could run.
+    """
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    recorded = ledger.registry_entries(
+        LedgersConfig.from_json((PRE_YEARLY_CONFIG / "ledgers.json").read_text(encoding="utf-8"))
     )
+    state = tmp_path / "state"
+    committed = state / "content-similarity-judge" / "merge-line-holdout-scores" / "2026" / "09" / "21.csv"
+    committed.parent.mkdir(parents=True)
+    committed.write_text("date,run_id\n2026-09-21,2026-09-21-1\n", encoding="utf-8", newline="")
+
+    assert csv_layouts.CSV_LEDGERS[which].old_entry == recorded[which]
     assert csv_layouts.CSV_LEDGERS[which].old_headings == {"key_point_weight": None}
+    assert csv_files.left(state, [which], months=["2026-09"]) == [committed]
 
 
 def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
@@ -105,12 +116,24 @@ def test_every_unmoved_table_entry_is_the_registry_entry() -> None:
     Read off the committed `config/ledgers.json`: a change that files a ledger's
     CSV somewhere else, and leaves its table entry behind, fails here.
     """
-    door = set(csv_layouts.door_ledgers())
+    door = set(csv_layouts.door_ledgers(CONFIG_DIR))
     unmoved = [name for name in csv_layouts.CSV_LEDGERS if name not in door]
 
     assert {name: csv_layouts.CSV_LEDGERS[name].old_entry for name in unmoved} == {
         name: ledger.entry(name) for name in unmoved
     }
+
+
+def test_the_ledgers_a_run_takes_by_default_are_the_ones_its_own_config_moved() -> None:
+    """A run held against the recorded config takes what that config had moved, and no more.
+
+    The holdout score moved after the config was recorded, so the committed
+    registry files it through the door and the recorded one still files it as CSV.
+    """
+    holdout = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+
+    assert holdout in csv_layouts.door_ledgers(CONFIG_DIR)
+    assert holdout not in csv_layouts.door_ledgers(PRE_YEARLY_CONFIG)
 
 
 def test_every_moved_ledger_kept_its_old_window_before_yearly_expiry() -> None:
@@ -125,9 +148,7 @@ def test_every_moved_ledger_kept_its_old_window_before_yearly_expiry() -> None:
         LedgersConfig.from_json((PRE_YEARLY_CONFIG / "ledgers.json").read_text(encoding="utf-8"))
     )
     tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
-    moved = [
-        name for name in csv_layouts.door_ledgers() if recorded[name].grain is Grain.RAW_AND_COMPACT
-    ]
+    moved = csv_layouts.door_ledgers(PRE_YEARLY_CONFIG)
     short: list[str] = []
     for name in moved:
         policy = tasks[config.compaction_task(name, registry=recorded)]
