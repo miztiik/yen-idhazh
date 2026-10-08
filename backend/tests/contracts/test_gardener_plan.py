@@ -7,9 +7,9 @@ held to the same bytes for the same fixture config, and the payload is held to
 the model that declares it.
 
 The script is also run the way the plan job runs it - a fresh interpreter with
-no site packages, in a folder holding only `config/`, the script and the module
-it prints a crash with - so an import of anything outside the standard library
-fails here first.
+no site packages, in a folder holding only `config/`, the script and the two
+package files it imports to print a crash - so an import of anything outside
+the standard library fails here first.
 """
 
 from __future__ import annotations
@@ -33,6 +33,8 @@ from utilities import gardener_shards
 pytestmark = pytest.mark.contract
 
 SCRIPT = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
+#: The package whose `__init__.py` and crash printer the script imports as it starts.
+PACKAGE = REPO_ROOT / "backend" / "idhazh"
 EMPTY = '{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shards":[]}'
 
 
@@ -44,17 +46,20 @@ def a_fixture_config(root: Path, garden: str | None) -> Path:
 
 
 def a_bare_script(root: Path) -> tuple[Path, Path]:
-    """A bare folder holding `config/` and the script beside what it imports to start.
+    """A bare folder holding `config/`, the script and what it imports to start.
 
-    The same layout the plan job's checkout holds: the script, the package
-    file and the crash trace, with nothing of ours installed.
+    The same layout the plan job's checkout holds: the script, and the package's
+    `__init__.py` and crash printer, with nothing of ours installed.
     """
     bare = root / "bare"
     config_dir = a_fixture_config(bare, "garden")
     script = bare / "backend" / "utilities" / SCRIPT.name
+    printer = bare / "backend" / PACKAGE.name
     script.parent.mkdir(parents=True)
-    for name in ("__init__.py", "crash_trace.py", SCRIPT.name):
-        shutil.copyfile(SCRIPT.parent / name, script.parent / name)
+    printer.mkdir()
+    shutil.copyfile(SCRIPT, script)
+    for name in ("__init__.py", "crash_trace.py"):
+        shutil.copyfile(PACKAGE / name, printer / name)
     return bare, config_dir
 
 
@@ -85,9 +90,9 @@ def test_both_writers_emit_one_payload_and_it_validates(tmp_path: Path, garden: 
 def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None:
     """A fresh interpreter, no site packages, and `config/` with the script and what it reaches.
 
-    Beside the script are the two files of its folder that the plan job's
-    checkout holds and the script imports as it starts: the package file and the
-    crash trace.
+    Beside the script are the two package files the plan job's checkout holds
+    and the script imports as it starts: the package's `__init__.py` and the
+    crash printer.
     """
     bare, config_dir = a_bare_script(tmp_path)
     expected = shards.payload(shards.plan(config.load_gardener(config_dir)))
