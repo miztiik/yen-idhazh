@@ -62,6 +62,7 @@ import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import { latestDate, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { listManifestDays, pipelineChanges } from '$lib/server/model-work';
 import { describeServerCounters } from '$lib/server/server-counter-notes';
+import { listRunDays } from '$lib/server/run-days';
 import { windowDay } from '$lib/server/window-day';
 import { settingsMoved } from '$lib/console/settings-moved';
 import {
@@ -275,15 +276,15 @@ export async function load() {
 	};
 	const ramp = machineRamp(placements, colour);
 
-	const dates = [
-		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
-	].filter((date) => date !== '');
 	// What each instrument answered for over the whole read, so a recording note
 	// can tell where an instrument began from the days before a span as well as
 	// those inside it. The server's counters, the machine record and the item
 	// ledger each answer for different days of one run.
 	const machineDays = [...new Set(fingerprints.map((row) => row.date))].sort();
 	const healthDays = [...new Set(health.map((row) => row.date ?? ''))].filter((date) => date !== '').sort();
+	// Every day with a run, from either record: each note below that counts or
+	// names such days reads this one list.
+	const dates = listRunDays(counters, healthDays);
 
 	// The two shares a stolen-processor tile is drawn against, out of
 	// `console.*` rather than typed into the module (Guardrail #6). Both are
