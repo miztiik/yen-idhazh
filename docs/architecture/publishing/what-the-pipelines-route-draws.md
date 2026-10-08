@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -164,9 +164,23 @@ days, and drives the one picked day from both figures.
 
 ## What is failing, by stage
 
-- **One column a day, with the volume in the column.** A window holding one day
-  is one column and still says how much work there was; only a window holding
-  nothing at all draws no chart.
+Two charts answer it. `What is failing, by stage` draws the failures alone,
+stacked by the stage each item stopped at. `Failure rate against volume`,
+further down, draws the same failures inside each day's whole volume, with each
+stage's rate as a line. Both read one series over the same days.
+
+- **The failure mix is one column a day of the window, pan included.** A window
+  of one day is one column. A day nothing was planned on draws no column, and
+  its strip says `No item was planned on this day`; a day that ran and failed
+  nothing is a real zero. A window with no failure draws no chart: one sentence
+  in the chart's room says that nothing was planned, or that nothing failed out
+  of how many items planned, because none of 4 and none of 4,000 are different
+  news. Until the page has read the window, the panel holds its waiting box
+  instead: before a script runs, a sentence about the window's days would be
+  about rows nobody has read.
+- **The volume chart is one column a day, with the volume in the column.** A
+  window holding one day is one column and still says how much work there was;
+  only a window holding nothing at all draws no chart.
 - **One chart, not three panels with sparklines.** Three panels leave the split,
   and the split is the defect rather than the content. A single headline failure
   rate is the other end of the same mistake: it hides which stage failed, and
@@ -182,6 +196,22 @@ days, and drives the one picked day from both figures.
 - **No `run.success_floor_pct` reference line.** That floor is a published rate
   over attempted items and a stage panel is a different denominator. A wrong
   reference line is worse than none.
+
+## Where an item's time went
+
+One column a day of the window, pan included: the mean item's whole clock, split
+by the steps that claimed it, with the time no named step claimed on top. A day
+that timed no item from start to finish keeps its column, empty, and neither end
+is trimmed off, because a window that shrank to the timed days would draw a span
+the control never named. Its strip says `No item was timed from start to finish
+on this day` - such a day can still have timed every item's fetch, which
+`Time per item, by stage` draws. A window with no such item draws no chart, and
+its one sentence names the cause, because an operator checks a different thing
+for each: `No item was planned in these 7 days, so there is no time to split.`
+or `No item was timed from start to finish in these 7 days, so there is no time
+to split.` Until the page has read the window it holds its waiting box, as the
+failure mix does. The unclaimed time can fall below zero when two clocks
+disagree, and a band below zero on every day drawn is still drawn.
 
 ## Time per item, by stage
 

@@ -74,7 +74,10 @@
 		chartRule,
 		coverageText,
 		failureMix,
+		failureMixAbsent,
 		failureMixColumns,
+		failureMixLabel,
+		failureTotals,
 		horizonRate,
 		minutesText,
 		publishedSkyline,
@@ -85,11 +88,15 @@
 		siteCostMeasure,
 		sizeGain,
 		skylineLabel,
+		timeSplitAbsent,
 		timeSplitChart,
 		timeSplitColumns,
+		timeSplitLabel,
 		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
+	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
+	import { emptyState } from '$lib/charts/d3/empty';
 	import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '$lib/console/daily-figures';
 	import type { StackShape } from '$lib/charts/stacked';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
@@ -575,43 +582,26 @@
 		return (Math.round(value / scale) * scale).toLocaleString('en-GB');
 	}
 
-	/** The window the rows in hand cover. Derived from the rows themselves rather
-	 * than passed in, so the mix chart and the strip under it can never be drawn
-	 * over two different spans. */
-	function failureSeriesFor(rows: TelemetryRow[]) {
-		const dates = datesIn(rows);
-		if (dates.length === 0) return [];
-		return failureSeries(rows, { start: dates[0], end: dates[dates.length - 1] });
-	}
-
-	/** The stage failure series the mix chart and its strip both read. One array,
-	 * so the band a reader hovers and the number the strip prints are the same
-	 * measurement rather than two that happen to agree today.
+	/** The stage failure series the mix chart and its strip both read, over the
+	 * window the control set, pan included. One array, so the band a reader
+	 * hovers and the number the strip prints are the same measurement rather
+	 * than two that happen to agree today. It is the series `Failure rate
+	 * against volume` draws further down, over the same days, so the two panels
+	 * cannot count one window's failures two ways.
 	 *
-	 * It reads the hold, so it is empty until the first month shard lands and
-	 * fills as each one does. The panel says which of those two it is in.
+	 * It has a column for every day of the window whether or not anything ran,
+	 * so what the panel draws is decided from `mixTotals`, never from its length.
 	 */
-	const mixSeries = $derived(failureSeriesFor(rows));
-	/** Where the time went, over the same span the mix chart reads and for the
-	 * same reason: derived from the rows in hand, so the two panels can never be
-	 * drawn over different days.
-	 *
-	 * Trimmed at both ENDS to the days that timed an item, and never in the
-	 * middle. A run before the item clock was published carries no
-	 * `item_total_ms` at all, so leading and trailing columns of eight zeroes
-	 * would say the item took no time rather than that nothing timed it. A gap
-	 * inside the span is kept: closing it up would slide every later day one
-	 * column left and draw the hole as if it were the next day along.
-	 */
-	const timeDays = $derived.by(() => {
-		const dates = datesIn(rows);
-		if (dates.length === 0) return [];
-		const days = timeSplit(rows, { start: dates[0], end: dates[dates.length - 1] });
-		const first = days.findIndex((day) => day.items > 0);
-		if (first === -1) return [];
-		const last = days.findLastIndex((day) => day.items > 0);
-		return days.slice(first, last + 1);
-	});
+	const mixSeries = $derived(failureSeries(rows, viewport));
+	const mixTotals = $derived(failureTotals(mixSeries));
+	/** Where the time went, over the same window as the mix chart, and exactly
+	 * its days. A day that timed no item keeps its column, empty, rather than
+	 * being trimmed off either end: a window that shrank to the days that timed
+	 * something would draw a span the control never named. */
+	const timeDays = $derived(timeSplit(rows, viewport));
+	/** Whether any day of the window timed an item, which is what the panel
+	 * draws a chart for. */
+	const timed = $derived(timeDays.some((day) => day.items > 0));
 	/** The server drew stacked, like the mix chart. Picking `Lines` redraws the
 	 * identical values. */
 	let timeShape = $state<StackShape>('bars');
@@ -922,102 +912,141 @@
 	     prints every stage at the hovered day, so a sentence restating the
 	     encoding said what the shape already says - and said it wrongly the
 	     moment the switch below drew lines. It survives verbatim in the chart's
-	     accessible description, so nobody loses it. -->
-	<Panel title="What is failing, by stage">
-		<!-- The box is the same height whether it is waiting, empty, gapped or
-		     full, so this panel and everything under it stay where they were
-		     drawn. Four different nothings, and the panel says which one it is:
-		     before this row a broken fetch and a clean window drew the same
-		     unmarked gap. -->
-		<Reserved
-			panelState={mixSeries.length === 0 ? telemetryState : 'ready'}
-			height={data.console.chart_height}
-			width={data.console.chart_width}
-			name="failure-mix"
-			label="Failures per day by stage"
-		>
-			{#if mixSeries.length === 0}
-				<!-- The window was read and it holds no failure. That is an answer, and
-				     it is a better one than the general "nothing was recorded" line
-				     above the panels, because it names what was looked for. -->
-				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-mix-empty="none">
-					No failure is on record in the months this session has read.
-				</p>
-			{:else}
-				<Chart
-					svg=""
-					option={failureMix(mixSeries, mixShape).option}
-					width={760}
-					height={220}
-					label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike. Drawn as lines instead, each stage is its own count a day and the total is not shown."
-					readout={failureMixColumns(mixSeries)}
-					readoutName="failure-mix"
-					readoutMaxShare={data.chart.readout_max_share}
-					restingNote=", the newest day"
-					hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
-					fetched
-				/>
-				<!-- Stacked answers what the mix is and how big the day got; lines answer
-				     what one stage did on its own, which a stack hides when one band
-				     halves while its neighbour doubles. Same array either way. -->
-				<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
-			{/if}
-		</Reserved>
-	</Panel>
+	     accessible description, so nobody loses it.
+
+	     It draws the window's days, pan included, the same series over the same
+	     days as `Failure rate against volume` below it. Its span is in its own
+	     label, as `Run health` carries its own: the control above names the
+	     window once for the page, and the date row and the strip name the days. -->
+	<section
+		data-windowed="failure-mix"
+		data-window-days={windowDays}
+		aria-label="What is failing, by stage, over {countDays(windowDays)}"
+	>
+		<Panel title="What is failing, by stage">
+			<!-- The box is the same height whether it is waiting, empty, gapped or
+			     full, so this panel and everything under it stay where they were
+			     drawn. Four different nothings, and the panel says which one it is:
+			     before this row a broken fetch and a clean window drew the same
+			     unmarked gap. It also stands until the page has read its window,
+			     because before a script runs the window's own sentence would say
+			     nothing was planned on days whose rows were never read. -->
+			<Reserved
+				panelState={!ready ? 'loading' : mixTotals.failures > 0 ? 'ready' : telemetryState}
+				height={data.console.chart_height}
+				width={data.console.chart_width}
+				name="failure-mix"
+				label="Failures by stage"
+			>
+				{#if mixTotals.failures === 0}
+					<!-- The window was read and holds no failure. Nothing was planned, or
+					     nothing failed out of so many, and the sentence says which: that
+					     names what was looked for, which the general line above the panels
+					     cannot. It stands in the chart's own room, so the panel is one
+					     height whichever nothing it holds. -->
+					<div data-mix-empty={mixTotals.planned === 0 ? 'none' : 'clean'}>
+						<EmptyState
+							drawing={emptyState('quiet', failureMixAbsent(windowDays, mixTotals.planned))}
+							height={data.console.chart_height}
+							width={data.console.chart_width}
+							name="failure-mix"
+							label="Failures by stage"
+						/>
+					</div>
+				{:else}
+					<Chart
+						svg=""
+						option={failureMix(mixSeries, mixShape).option}
+						width={760}
+						height={220}
+						label={failureMixLabel(windowDays)}
+						readout={failureMixColumns(mixSeries)}
+						readoutName="failure-mix"
+						readoutMaxShare={data.chart.readout_max_share}
+						restingNote=", the newest day"
+						hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
+						{windowDays}
+						fetched
+					/>
+					<!-- Stacked answers what the mix is and how big the day got; lines answer
+					     what one stage did on its own, which a stack hides when one band
+					     halves while its neighbour doubles. Same array either way. -->
+					<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
+				{/if}
+			</Reserved>
+		</Panel>
+	</section>
 	{/snippet}
 
 	{#snippet itemTimeSplitPanel()}
 	<!-- The note is not a restatement of the encoding - the strip under the chart
 	     already prints every band at the hovered day. It is there for the one
 	     thing the shape cannot say: that the top band is time no step claimed,
-	     and that it is the band to look at first. -->
-	<Panel
-		title="Where an item's time went"
-		note="One column is one day and its height is the mean item's whole clock, split by what claimed it. The top band is time no named step claimed, so a step nobody thought to time shows up there rather than nowhere."
+	     and that it is the band to look at first.
+
+	     It draws the window's days, pan included, as the mix chart above does,
+	     and names its span in its own label for the same reason. -->
+	<section
+		data-windowed="time-split"
+		data-window-days={windowDays}
+		aria-label="Where an item's time went, over {countDays(windowDays)}"
 	>
-		<!-- Same reserved box as the mix chart above, so this panel and everything
-		     under it stay where they were drawn whether the months are still
-		     arriving, absent, refused, or read and holding nothing. -->
-		<Reserved
-			panelState={timeDays.length === 0 ? telemetryState : 'ready'}
-			height={data.console.chart_height}
-			width={data.console.chart_width}
-			name="time-split"
-			label="Mean milliseconds an item spent in each step, per day"
+		<Panel
+			title="Where an item's time went"
+			note="One column is one day and its height is the mean item's whole clock, split by what claimed it. The top band is time no named step claimed, so a step nobody thought to time shows up there rather than nowhere."
 		>
-			{#if timeDays.length === 0}
-				<!-- The months were read and no row carries an item clock. That is a
-				     different answer from "no month arrived", and it is the one an
-				     operator needs: the instrument has not reached this data yet. -->
-				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-time-split-empty="none">
-					No item in the months this session has read carries an end-to-end clock, so
-					there is no time to split.
-				</p>
-			{:else}
-				<Chart
-					svg=""
-					option={timeSplitChart(timeDays, timeShape).option}
-					width={760}
-					height={220}
-					label="Mean milliseconds an item spent in each step, per day. One column is one day and its height is the mean item's whole clock. The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed. Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown."
-					readout={timeSplitColumns(timeDays)}
-					readoutName="time-split"
-					readoutMaxShare={data.chart.readout_max_share}
-					restingNote=", the newest day"
-					hint="Point at a day to read every step at once. Left and Right step through the days, Escape returns to the newest."
-					fetched
-				/>
-				<!-- Stacked answers what the split is and whether the item got slower;
-				     lines answer what one step did on its own, which a stack hides when
-				     one band halves while its neighbour doubles. Same array either way. -->
-				<ShapeSwitch
-					bind:shape={timeShape}
-					name="time-split"
-					label="How to draw the item time split"
-				/>
-			{/if}
-		</Reserved>
-	</Panel>
+			<!-- Same reserved box as the mix chart above, so this panel and everything
+			     under it stay where they were drawn whether the months are still
+			     arriving, absent, refused, or read and holding nothing - and it
+			     stands until the page has read its window, for the same reason. -->
+			<Reserved
+				panelState={!ready ? 'loading' : timed ? 'ready' : telemetryState}
+				height={data.console.chart_height}
+				width={data.console.chart_width}
+				name="time-split"
+				label="Mean milliseconds an item spent in each step"
+			>
+				{#if !timed}
+					<!-- No item in the window was timed from start to finish. Either nothing
+					     was planned, or the instrument has not reached these items, and an
+					     operator checks a different thing for each, so the sentence says
+					     which. -->
+					<div data-time-split-empty={rowsInView.length === 0 ? 'none' : 'untimed'}>
+						<EmptyState
+							drawing={emptyState('quiet', timeSplitAbsent(windowDays, rowsInView.length))}
+							height={data.console.chart_height}
+							width={data.console.chart_width}
+							name="time-split"
+							label="Mean milliseconds an item spent in each step"
+						/>
+					</div>
+				{:else}
+					<Chart
+						svg=""
+						option={timeSplitChart(timeDays, timeShape).option}
+						width={760}
+						height={220}
+						label={timeSplitLabel(windowDays)}
+						readout={timeSplitColumns(timeDays)}
+						readoutName="time-split"
+						readoutMaxShare={data.chart.readout_max_share}
+						restingNote=", the newest day"
+						hint="Point at a day to read every step at once. Left and Right step through the days, Escape returns to the newest."
+						{windowDays}
+						fetched
+					/>
+					<!-- Stacked answers what the split is and whether the item got slower;
+					     lines answer what one step did on its own, which a stack hides when
+					     one band halves while its neighbour doubles. Same array either way. -->
+					<ShapeSwitch
+						bind:shape={timeShape}
+						name="time-split"
+						label="How to draw the item time split"
+					/>
+				{/if}
+			</Reserved>
+		</Panel>
+	</section>
 	{/snippet}
 
 	{#snippet runTimelinePanel()}
