@@ -104,7 +104,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L47 | Hardware's started line counts a day whose only run is machine records alone | L36 | O | PENDING | - | - | - |
 | L48 | The Data explorer's line under an answer ends on the last day it read | L12, L46, plan 55's row "The reader chooses the chart and the columns it draws" (holds `frontend/src/routes/console/data-explorer/+page.svelte` as well as `frontend/tests/console-data-explorer.spec.ts`) | R | PENDING | - | - | - |
 | L49 | Every console route asks search engines not to list it | L38, plan 55's row "The reader chooses the chart and the columns it draws", L42 | S | PENDING | - | - | - |
-| L50 | Two console tests prove what they claim | - | T | PENDING | - | - | - |
+| L50 | Two console tests prove what they claim | - | T | DONE | cautious-bassoon | - | Plan 62 row l50 |
 | L51 | Judgement's agreement panel words follow the rates they judge | L39, L40 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | U | PENDING | - | - | - |
 
 ## 2. Shared declarations
@@ -2124,12 +2124,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Level 1: two test assertions, each read in one file, each fixed by comparing against a value the test can observe or by adding one wait | Plan owner, 2026-10-08 |
+| 2 | The forced full page load and the held-back band file are shown in the row's report and are not kept as standing cases. The first would check only the browser's rule that a new document takes a new time origin, which no edit to the console can break. The second would add a slow-network case to the strip's checks, which this row does not ask for | This row's worker, on the plan owner's dispatch note, 2026-10-08 (found during execution) |
+| 3 | The strip read waits with `expect(...).toBeAttached()`, not `locator.waitFor()`. A strip that never draws then fails inside the suite's 15-second expect timeout, with a message that names the route. `waitFor` has no limit of its own in this suite, so it would hold the test to its 180-second limit | This row's worker, 2026-10-08 (found during execution) |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | As today | The "no reload" check cannot fail, so a regression that reloads the page on a tab click ships unnoticed; the strip read can flake on a busy machine and hide a real drawing fault behind a re-run | Nothing to build, and two checks that do not catch what they claim to | Row L43's report, findings 2 and 3 |
+| 2 | Keep the forced full page load and the held-back band file as standing cases | Decision 2 | Two more cases in every console run, one of them a load of the Hardware route | Found during execution |
 
 ### Row #L51 - Judgement's agreement panel words follow the rates they judge
 
