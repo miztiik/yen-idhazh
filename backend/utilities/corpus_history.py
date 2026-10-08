@@ -62,7 +62,7 @@ cadence.
 It sits here and not in `backend/idhazh/` because it runs git, and nothing in
 the package may start a process (`backend/tests/test_canaries.py`). Its module
 scope is the standard library alone: `idhazh` is imported by the one function
-that reads the declaration and binds the task, and `utilities.crash_trace` where
+that reads the declaration and binds the task, and `idhazh.crash_trace` where
 a crash is printed, so a run that cannot be recorded names the exception's type
 and frames and never its text.
 
@@ -397,7 +397,7 @@ def squash_history(
             print(f"nothing was pushed: {refusal}", file=sys.stderr)
             return EXIT_CANNOT_REWRITE
         except Exception as failure:
-            from utilities import crash_trace
+            from idhazh import crash_trace
 
             crash_trace.print_trace(failure)
             print("nothing was pushed: the run could not be recorded", file=sys.stderr)
@@ -552,10 +552,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    # A crash prints where it broke, never what it said. Nothing installs
-    # `utilities`, so it is imported from this checkout's `backend/` folder.
+    # A crash prints where it broke, never what it said. The printer is imported
+    # from this checkout's `backend/`, as the plan job's programs import it.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from utilities import crash_trace
+    from idhazh import crash_trace
 
     crash_trace.install()
     raise SystemExit(main())

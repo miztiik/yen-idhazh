@@ -32,7 +32,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, month_partition
+from idhazh import config, crash_trace, month_partition
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
 from idhazh.contracts.knobs.gardener import (
@@ -172,6 +172,8 @@ def period_range(
 
 
 def main(argv: Sequence[str] | None) -> int:
+    # A crash prints where it broke: a message can quote a ledger row or GitHub's answer.
+    crash_trace.install()
     parser = _parser()
     args = parser.parse_args(argv)
     settings = settings_or_none(args.config)

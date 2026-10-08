@@ -1,6 +1,6 @@
 """Does a crash's trace name every exception of its chain by type and frames, and quote none?
 
-`backend/utilities/crash_trace.py` is what each program the gardener's workflow
+`backend/idhazh/crash_trace.py` is what each program the gardener's workflow
 runs prints when an exception ends it. Each case here raises a real exception in
 code this file holds and reads what `print_trace` writes to stderr. Every
 exception carries planted text, the way a message can quote a fetched page, so a
@@ -16,7 +16,7 @@ from typing import Final
 
 import pytest
 
-from utilities import crash_trace
+from idhazh import crash_trace
 
 pytestmark = pytest.mark.workflow
 
