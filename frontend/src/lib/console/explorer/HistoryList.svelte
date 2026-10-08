@@ -41,19 +41,18 @@
 
 <style>
 	/* No position of its own: the list hangs from the end of the group the page sets
-	   History in, so it opens inside the window whichever end of the line History is at. */
-	.history-list {
-		border: 1px solid var(--color-rule);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-		padding-inline: var(--space-3);
-	}
-
+	   History in, so it opens inside the window whichever end of the line History is at.
+	   The edge is the summary's own, as a chip's is: an edge around the whole details
+	   made History taller than the controls beside it by the edge's width. */
 	summary {
 		min-block-size: 2.75rem;
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		padding-inline: var(--space-3);
 		cursor: pointer;
 		font-weight: 600;
 	}

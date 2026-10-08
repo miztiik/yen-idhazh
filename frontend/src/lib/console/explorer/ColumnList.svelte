@@ -8,7 +8,7 @@
 </script>
 
 <div class="column-list" data-explorer-columns>
-	<h3>{label}</h3>
+	<h3><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg> {label}</h3>
 	{#if columns.length === 0}
 		<p>No columns are known yet.</p>
 	{:else}
@@ -30,10 +30,10 @@
 
 <style>
 	.column-list { block-size: 100%; min-block-size: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); overflow: hidden; }
-	h3 { margin: 0; font-size: var(--text-sm); }
+	h3 { margin: 0; display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; letter-spacing: var(--tracking-label); text-transform: uppercase; }
 	p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
 	/* Positioned, so the hidden screen-reader spans in its rows scroll with the list instead of escaping it and stretching the page. */
-	.column-box { position: relative; block-size: 100%; min-block-size: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; }
+	.column-box { position: relative; block-size: 100%; min-block-size: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--color-rule-strong) transparent; font-size: var(--text-xs); line-height: var(--leading-xs); }
 	h4 { position: sticky; inset-block-start: 0; z-index: 1; margin: 0; background: var(--color-surface); font-family: var(--font-data); font-size: inherit; font-weight: 600; }
 	ul { list-style: none; margin: 0; padding: 0; }
 	li { min-block-size: var(--workbench-row); display: flex; flex-wrap: wrap; align-items: first baseline; column-gap: var(--space-2); padding-inline: var(--space-3); }

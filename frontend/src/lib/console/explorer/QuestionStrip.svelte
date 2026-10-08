@@ -96,7 +96,7 @@
 	{/each}
 	{#if folded.length > 0}
 		<details bind:this={fold} use:closesWhenLeft>
-			<summary>{folded.length} more</summary>
+			<summary>{phone ? `Questions (${folded.length})` : `${folded.length} more`}</summary>
 			<div class="folded">
 				{#each folded as chip, index (`folded:${chip.kind}:${chip.id}`)}
 					{#if chip.kind === 'saved'}
@@ -127,12 +127,12 @@
 </div>
 
 <style>
-	.question-strip { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block: var(--space-3); overflow-x: clip; }
-	.run-label { color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-	.example, summary, .ruler-chip { min-block-size: 2.75rem; border: 1px solid var(--color-rule); border-radius: var(--radius-full); background: var(--tint-neutral); color: var(--color-text); padding: var(--space-1) var(--space-3); font-size: var(--text-sm); display: inline-flex; align-items: center; }
+	.question-strip { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block: var(--space-3); overflow: visible; }
+	.run-label { color: var(--color-text-tertiary); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: var(--tracking-label); }
+	.example, summary, .ruler-chip { min-block-size: var(--workbench-control); border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--tint-neutral); color: var(--color-text); padding: var(--space-1) var(--space-3); font-size: var(--text-sm); display: inline-flex; align-items: center; white-space: normal; overflow-wrap: anywhere; }
 	.saved-chip, .ruler-saved { display: inline-flex; align-items: center; }
 	.saved-chip .example, .ruler-saved .ruler-chip { border-start-end-radius: 0; border-end-end-radius: 0; }
-	.forget, .ruler-forget { min-block-size: 2.75rem; border: 1px solid var(--color-rule); border-inline-start: 0; border-radius: 0 var(--radius-full) var(--radius-full) 0; background: var(--color-surface); color: var(--color-text-secondary); padding-inline: var(--space-2); }
+	.forget, .ruler-forget { min-block-size: var(--workbench-control); border: 1px solid var(--color-rule); border-inline-start: 0; border-radius: 0 var(--radius-md) var(--radius-md) 0; background: var(--color-surface); color: var(--color-text-secondary); padding-inline: var(--space-2); }
 	.ruler-forget { display: inline-flex; align-items: center; }
 	.example:focus-visible, summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	/* Hung from the strip rather than from its summary, so the list opens inside the strip's width. */
@@ -149,10 +149,21 @@
 	@media (max-width: 639px) {
 		.example,
 		summary {
-			min-inline-size: 0;
-			inline-size: 100%;
+			box-sizing: border-box;
+			block-size: var(--workbench-control);
+			min-inline-size: max-content;
+			inline-size: auto;
 			max-inline-size: 100%;
-			overflow: hidden;
+			overflow: visible;
 		}
+		details { inline-size: max-content; max-inline-size: 100%; }
+		.folded {
+			inset-inline-start: 0;
+			inset-inline-end: auto;
+			inline-size: max-content;
+			min-inline-size: min(16rem, calc(100vw - 2 * var(--gutter)));
+			max-inline-size: calc(100vw - 2 * var(--gutter));
+		}
+		.folded .example { inline-size: 100%; justify-content: start; }
 	}
 </style>

@@ -1,13 +1,18 @@
 <script lang="ts">
+	// DuckDB `duckdb_keywords()` reserved and type_function words, plus BY from the shipped examples.
+	const DUCKDB_KEYWORDS = new Set([
+		'ALL','ALTER','AND','ANY','AS','ASC','BY','CASE','CAST','CHECK','COLUMN','CREATE','CROSS','DEFAULT','DELETE','DESC','DESCRIBE','DISTINCT','DROP','ELSE','END','EXCEPT','EXISTS','EXPLAIN','FALSE','FILTER','FROM','FULL','GROUP','HAVING','IN','INNER','INSERT','INTERSECT','INTO','IS','JOIN','LEFT','LIKE','LIMIT','NOT','NULL','ON','OR','ORDER','OUTER','RIGHT','SELECT','SUMMARIZE','TABLE','THEN','TRUE','UNION','UPDATE','USING','VALUES','WHEN','WHERE','WITH',
+		'BIGINT','BLOB','BOOLEAN','DATE','DECIMAL','DOUBLE','FLOAT','HUGEINT','INTEGER','INTERVAL','SMALLINT','TIME','TIMESTAMP','TINYINT','UBIGINT','UINTEGER','USMALLINT','UTINYINT','VARCHAR'
+	]);
 	let { value, maxChars, lines, onInput, onRun }: { value: string; maxChars: number; lines: number; onInput: (value: string) => void; onRun?: () => void } = $props();
 	const rows = $derived((value || ' ').split('\n'));
 	function highlighted(line: string): { text: string; kind: string }[] {
-		return line.split(/(\bSELECT\b|\bFROM\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bBY\b|\bWITH\b|\bDESCRIBE\b|\bSUMMARIZE\b|\bEXPLAIN\b|'[^']*'|\b\d+(?:\.\d+)?\b|--.*$)/gi).filter(Boolean).map((text) => {
+		return line.split(/(--.*$|'[^']*'|\b[A-Za-z_][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b)/g).filter(Boolean).map((text) => {
 			const upper = text.toUpperCase();
 			if (/^--/.test(text)) return { text, kind: 'comment' };
 			if (/^'/.test(text)) return { text, kind: 'string' };
 			if (/^\d/.test(text)) return { text, kind: 'number' };
-			if (['SELECT','FROM','WHERE','GROUP','ORDER','BY','WITH','DESCRIBE','SUMMARIZE','EXPLAIN'].includes(upper)) return { text, kind: 'keyword' };
+			if (DUCKDB_KEYWORDS.has(upper)) return { text, kind: 'keyword' };
 			return { text, kind: 'text' };
 		});
 	}

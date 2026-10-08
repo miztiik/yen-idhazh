@@ -596,7 +596,7 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_readout_lines: tuple[int, int, int, int] = Field(
-        default=(7, 3, 4, 3),
+        default=(4, 3, 4, 3),
         description=(
             "Lines reserved by the Data explorer status bar, for the four frame "
             "breakpoint bands from narrowest to widest."
@@ -619,7 +619,7 @@ class ConsoleConfig(Model):
         ),
     )
     explorer_strip_shown: tuple[int, int] = Field(
-        default=(3, 6),
+        default=(0, 6),
         description="Example chips shown before the rest fold at phone and wider widths.",
     )
     explorer_cell_max_ch: int = Field(
@@ -885,10 +885,10 @@ class ConsoleConfig(Model):
         if any(lines < 1 for lines in self.explorer_editor_lines_shown):
             raise ValueError("console.explorer_editor_lines_shown must hold two positive values")
         if (
-            self.explorer_strip_shown[0] < 1
+            self.explorer_strip_shown[0] < 0
             or self.explorer_strip_shown[0] > self.explorer_strip_shown[1]
         ):
-            raise ValueError("console.explorer_strip_shown must be ascending and positive")
+            raise ValueError("console.explorer_strip_shown must be ascending and non-negative")
         return self
 
     @model_validator(mode="after")

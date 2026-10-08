@@ -92,7 +92,7 @@ The console knobs are:
 - `console.feed_rows`
 - `console.completeness_grace_days`
 - `console.explorer_chrome`
-- `console.explorer_readout_lines`
+- `console.explorer_readout_lines`: status-bar line reservations for the Data explorer, narrow to wide. Default `[4, 3, 4, 3]`.
 - `console.explorer_notice_ms`
 - `console.explorer_row_page`
 - `console.explorer_max_rows`

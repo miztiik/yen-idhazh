@@ -22,8 +22,10 @@ Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributor
 
 Only the icons in use, as unmodified source SVG, under `svg/`. Data explorer added `query-run` from Lucide `play`, `list-refresh` from `refresh-cw`, `sort-ascending` from `arrow-up`, `sort-descending` from `arrow-down`, `copy` from `copy`, `saved` from `bookmark`, `forget` from `x`, `history` from `history`, `share-link` from `link`, `shape-series` from `chart-line`, `shape-ranked` from `chart-bar`, `shape-distribution` from `chart-column`, `shape-scatter` from `chart-scatter` and `docs` from `book-open`. The upstream
 package is NOT a dependency: it was installed once to extract these files and
-removed. Measured 2026-10-04: 21 files, 11,406 B, against the 40 KB budget in
-the rows that added them.
+removed. Data explorer density added `ledgers` from Lucide `database`,
+`query-editor` from `square-terminal` and `column-list` from `columns-3`.
+Measured 2026-10-05: 34 files, 4,226 B of marks, against the 40 KB budget in the rows
+that added them.
 
 Each file keeps Lucide's own geometry, its 24-unit box and its `currentColor`
 stroke. The filename is a semantic id this project chose - `topic-ai`, not

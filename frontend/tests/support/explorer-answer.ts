@@ -20,7 +20,8 @@ export async function openExplorer(page: Page, day: DateStamp, options: { addres
 	await page.clock.setFixedTime(`${day}T12:00:00Z`);
 	await page.goto(`/console/data-explorer/${options.address ?? ''}`, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-console-panel-id="data-explorer-ask"]')).toBeVisible();
-	await expect(page.locator('[data-ledger-name]').first()).toBeVisible();
+	await expect(page.locator('[data-workbench-region="ledgers"]')).toBeVisible();
+	await expect.poll(() => page.locator('[data-ledger-name]').count()).toBeGreaterThan(0);
 	if (options.ready ?? true) await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 }
 
@@ -48,15 +49,23 @@ export async function expectAnswer(page: Page, state: AnswerState) {
 	await expect(shown, `the answer is not ${state}`).toHaveCount(1);
 }
 
-export async function chooseExplorerQuestion(page: Page, ledgers: readonly LedgerName[], sql: string) {
+export async function chooseExplorerQuestion(page: Page, ledgers: readonly LedgerName[], sql: string, waitForColumns = true) {
+	const ensureLedgersOpen = async () => {
+		const firstLedger = page.locator('[data-ledger-name]').first();
+		if (await firstLedger.count() > 0 && !(await firstLedger.isVisible())) {
+			await page.locator('[data-workbench-region="ledgers"] summary').click();
+		}
+	};
+	await ensureLedgersOpen();
 	while (await page.locator('[data-ledger-name] input:checked').count() > 0) {
 		await page.locator('[data-ledger-name] input:checked').first().click();
 	}
+	await ensureLedgersOpen();
 	for (const ledger of ledgers) {
 		await page.locator(`[data-ledger-name="${ledger}"] input`).check();
 	}
 	await page.locator('#explorer-sql').fill(sql);
-	if (ledgers.length > 0) {
+	if (ledgers.length > 0 && waitForColumns) {
 		await expect(page.locator('[data-explorer-columns]')).toContainText(`${ledgers[ledgers.length - 1]}.`, { timeout: 60_000 });
 	}
 	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });

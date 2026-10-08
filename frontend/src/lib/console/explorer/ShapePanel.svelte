@@ -1,5 +1,6 @@
 <script lang="ts">
 	/** Draws a Data explorer answer with the chart type its columns can honestly support. */
+	import { onMount } from 'svelte';
 	import type { Column, DateStamp, Row } from '$lib/data/ledger';
 	import { tooFewSentence } from '$lib/console/waiting';
 	import { frame } from '$lib/charts/frame';
@@ -17,34 +18,18 @@
 	import { printCell } from './answer';
 
 	let { columns, rows, lostDays, bounds, height, selectedType = null }: { columns: readonly Column[]; rows: readonly Row[]; lostDays: readonly DateStamp[]; bounds: ExplorerShapeBounds; height: number; selectedType?: ExplorerChartType | null } = $props();
+	let drawing = $state<HTMLDivElement | null>(null);
+	let chartWidth = $state(760);
 
 	const shapes = $derived(chooseExplorerShapes(columns, rows, bounds));
 	const choices = $derived(shapes.filter((shape) => shape.kind === 'chart'));
 	const active = $derived(choices.find((shape) => shape.type === selectedType) ?? shapes[0]);
-	const note = $derived(noteFor(active));
+	const footnote = $derived(footnoteFor(active));
 	const chartTokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 
 	function text(row: Row, column: string): string {
 		const spec = columns.find((one) => one.name === column) ?? { name: column, type: 'VARCHAR' };
 		return printCell(spec, row[column]).text;
-	}
-
-	function noteFor(next: ExplorerShape): string {
-		if (next.kind === 'none') return next.reason;
-		if (next.type === 'dateSeries') {
-			const why = `Drawn over time because the answer has a date column.`;
-			return next.rowsWithNoDay === 0 ? why : `${why} ${rowsWithNoDaySentence(next.rowsWithNoDay, next.dateColumn)}`;
-		}
-		if (next.type === 'rankedList') return `Drawn ranked because the answer has one text column and one number column.`;
-		if (next.type === 'pairedScatter') return `Drawn paired because the answer has two number columns.`;
-		return `Drawn as a spread because the answer has one number column.`;
-	}
-
-	/** The rows a date chart does not draw because their day is NULL, which the table prints as `null`. */
-	function rowsWithNoDaySentence(count: number, dateColumn: string): string {
-		return count === 1
-			? `1 row holds null in the column "${dateColumn}", so the chart does not draw it. It is in the table.`
-			: `${count} rows hold null in the column "${dateColumn}", so the chart does not draw them. They are in the table.`;
 	}
 
 	function lede(next: ExplorerShape): string {
@@ -96,10 +81,31 @@
 		if (values.length === 0) return null;
 		return { subject: next.valueColumn, facts: [{ label: 'middle', value: String(values[Math.floor(values.length / 2)]) }] };
 	}
+
+	/** The rows a date chart does not draw because their day is NULL, which the table prints as `null`. */
+	function rowsWithNoDaySentence(count: number, dateColumn: string): string {
+		return count === 1
+			? `1 row holds null in the column "${dateColumn}", so the chart does not draw it. It is in the table.`
+			: `${count} rows hold null in the column "${dateColumn}", so the chart does not draw them. They are in the table.`;
+	}
+
+	function footnoteFor(next: ExplorerShape): string {
+		return next.kind !== 'none' && next.type === 'dateSeries' && next.rowsWithNoDay > 0 ? rowsWithNoDaySentence(next.rowsWithNoDay, next.dateColumn) : '';
+	}
+
+	onMount(() => {
+		if (drawing === null) return;
+		const sync = () => {
+			if (drawing !== null) chartWidth = Math.max(1, Math.floor(drawing.getBoundingClientRect().width));
+		};
+		const observer = new ResizeObserver(sync);
+		observer.observe(drawing);
+		sync();
+		return () => observer.disconnect();
+	});
 </script>
 
 <div class="shape-panel" style={`--shape-height:${height}px`}>
-	<p class="shape-note">{note}</p>
 	{#if active.kind === 'none'}
 		<div class="shape-none" data-shape-none>{active.reason}</div>
 	{:else if tooFew(active)}
@@ -107,14 +113,15 @@
 	{:else}
 		<p class="shape-lede" data-lede>{lede(active)}</p>
 		{@const readout = readoutFor(active)}
+		<div class="shape-drawing" bind:this={drawing}>
 		{#if active.type === 'dateSeries'}
-			{@const box = frame(760, height)}
+			{@const box = frame(chartWidth, height)}
 			{@const seriesColumns = active.seriesColumns}
 			{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
 			{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: chartTokens[index] ?? '--chart-1', points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: box, density: 6, valueTicks: 4, padding: 0.25 })}
 			{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(--chart-${index + 1})`, values: days.map(({ row }) => (row === null ? null : numericValue(row, column))), format: (n) => text({ [column]: n }, column) })), notMeasured: 'No number for this day', resting: 'last' })}
 			<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
-				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={760} {height} readout={dateReadout} />
+				<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={chartWidth} {height} readout={dateReadout} />
 			</div>
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'rankedList'}
@@ -123,16 +130,18 @@
 			{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else if active.type === 'pairedScatter'}
-			{@const box = frame(760, height)}
+			{@const box = frame(chartWidth, height)}
 			{@const points = rows.flatMap((row, index) => numericValue(row, active.xColumn) === null || numericValue(row, active.yColumn) === null ? [] : [{ label: active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn), x: numericValue(row, active.xColumn) as number, y: numericValue(row, active.yColumn) as number }])}
-			<PairedScatter geometry={pairedScatter(points, { frame: box, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={760} {height} />
+			<PairedScatter geometry={pairedScatter(points, { frame: box, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={chartWidth} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{:else}
-			{@const box = frame(760, height)}
+			{@const box = frame(chartWidth, height)}
 			{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
-			<Distribution geometry={distribution(values, { frame: box, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={760} {height} />
+			<Distribution geometry={distribution(values, { frame: box, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} {height} />
 			<p data-comparison={active.comparison}>{active.comparison}.</p>
 		{/if}
+		</div>
+		{#if footnote}<p class="shape-foot" data-shape-foot>{footnote}</p>{/if}
 	{/if}
 </div>
 
@@ -140,9 +149,14 @@
 	.shape-panel {
 		display: grid;
 		gap: var(--space-3);
+		min-inline-size: 0;
 	}
 
-	.shape-note,
+	.shape-drawing {
+		min-inline-size: 0;
+		overflow: auto;
+	}
+
 	.shape-panel p {
 		margin: 0;
 		color: var(--color-text-secondary);
@@ -152,6 +166,11 @@
 		color: var(--color-text);
 		font-size: var(--text-xl);
 		font-weight: 700;
+	}
+
+	.shape-foot {
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 	}
 
 	.shape-none,
