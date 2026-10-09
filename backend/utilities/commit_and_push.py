@@ -577,7 +577,7 @@ def main(argv: Sequence[str]) -> int:
     confirmed: frozenset[str] = frozenset()
     receipt_path = os.environ.get("PUBLICATION_RECEIPT")
     if receipt_path:
-        from utilities.publication_inputs import confirmed_paths
+        from utilities.publication_inputs import confirmed_paths, validate_git_blobs
 
         changed: set[str] = set()
         for command in (
@@ -673,6 +673,12 @@ def main(argv: Sequence[str]) -> int:
         _warn("could not stage what this job produced")
         _report_rebased(rebased)
         return 1
+    if receipt_path:
+        try:
+            validate_git_blobs(Path(receipt_path), revision="")
+        except (OSError, ValueError) as error:
+            _warn(f"publication refused: {error}")
+            return 2
     if _git("diff", "--cached", "--quiet").returncode == 0:
         _say(nothing_staged_message)
         _report_rebased(rebased)
@@ -721,6 +727,7 @@ def main(argv: Sequence[str]) -> int:
                 return 2
             try:
                 confirmed_paths(declarations, receipt_path=Path(receipt_path), changed=delta)
+                validate_git_blobs(Path(receipt_path), revision="HEAD")
             except (OSError, ValueError) as error:
                 _warn(f"publication refused: {error}")
                 _report_rebased(rebased)

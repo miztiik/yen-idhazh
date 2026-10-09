@@ -257,6 +257,27 @@ def test_two_settles_share_one_named_receipt_without_duplicate_paths(
     assert on_origin(origin, PAPER) == "2\n"
 
 
+def test_git_line_ending_conversion_cannot_publish_unconfirmed_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    origin, checkout = garden(tmp_path, monkeypatch)
+    write(checkout / ".gitattributes", "state/paper/*.json text eol=lf\n")
+    git(checkout, "add", "--", ".gitattributes")
+    git(checkout, "commit", "--quiet", "-m", "declare text normalization")
+    git(checkout, "push", "--quiet")
+    before = git(checkout, "rev-parse", "HEAD")
+    with recording(checkout):
+        atomic_write.write_atomic(checkout / PAPER, '{"count":1}\r\n')
+
+    result = collected(checkout, tmp_path)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Git blob differs" in result.stderr
+    assert git(checkout, "rev-parse", "HEAD") == before
+    assert git(origin, "rev-parse", "main") == before
+    assert on_origin(origin, PAPER) is None
+
+
 def test_a_conflicted_uuid_raw_file_keeps_exactly_this_attempts_confirmed_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

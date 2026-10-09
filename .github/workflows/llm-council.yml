@@ -345,6 +345,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Stamp the collecting job clock
+        run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -382,7 +385,7 @@ jobs:
           set -euo pipefail
           failed=0
           while read -r judged; do
-            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" || failed=1
+            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" --job-started-at "$JOB_STARTED_AT" || failed=1
           done < <(echo "$COUNCIL_DATES" | jq -r 'unique[]')
           exit "$failed"
 

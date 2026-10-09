@@ -181,8 +181,9 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
+@pytest.mark.parametrize("land", [False, True], ids=["local", "pushed"])
 def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, land: bool
 ) -> None:
     """A wake that cannot say which machine it drew cannot explain its own cost.
 
@@ -198,8 +199,9 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     every other cell is still taken.
     """
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
 
-    outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False)
+    outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=land)
 
     assert outcome.exit_code == EXIT_OK
     assert outcome.landing is not None
@@ -216,17 +218,37 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     assert machine.fingerprint is not None, "the machine went unnamed"
     assert machine.memcpy_probe_mib == 0, "the wake timed a copy the knob did not ask for"
     assert machine.memcpy_gib_s is None, "an untaken reading is absent, never a rate"
+    assert machine.job_seconds == 0, "the fixture's clock never advanced"
 
     named = {
         path
         for path in outcome.landing.written_paths
         if LedgerName.HOST_FINGERPRINT.value in path
     }
-    assert len(named) == 1, (
+    assert len(named) == 2, (
         f"the shard filed a machine row and did not name it among its writes: "
         f"{sorted(outcome.landing.written_paths)}"
     )
-    assert (checkout / next(iter(named))).is_file(), "the named path is not the row it wrote"
+    assert all((checkout / path).is_file() for path in named)
+    if land:
+        assert all(on_origin(origin, path) is not None for path in named)
+    files = ledger.list_raw_files(
+        checkout / ledger.STATE_DIRNAME, LedgerName.HOST_FINGERPRINT, days={WAKE.date().isoformat()}
+    )
+    assert {held.envelope.identity.attempt for held in files} == {1}
+
+
+def test_a_shard_uses_its_loaded_fingerprint_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    settings.app.observability.host_fingerprint = False
+
+    outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False)
+
+    assert outcome.exit_code == EXIT_OK
+    assert outcome.landing is not None
+    assert not any("host-fingerprint" in path for path in outcome.landing.written_paths)
 
 
 def test_a_shard_whose_own_family_is_paused_fails_loudly_and_records_nothing(

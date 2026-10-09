@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -44,3 +45,22 @@ def confirmed_paths(
         if hashlib.sha256(held.read_bytes()).hexdigest() != expected_digest:
             raise ValueError(f"{path} changed after its publication write was recorded")
     return tuple(sorted(changed))
+
+
+def validate_git_blobs(receipt_path: Path, *, revision: str) -> None:
+    """Check the bytes Git will publish, not just the working files.
+
+    An empty revision selects the index. HEAD selects the committed tree,
+    including a tree changed by replay after a rejected push.
+    """
+    receipt = PublicationReceipt.from_json(receipt_path.read_text(encoding="utf-8"))
+    for path, expected_digest in receipt.writes.items():
+        blob = subprocess.run(
+            ["git", "cat-file", "blob", f"{revision}:{path}"],
+            capture_output=True,
+            check=False,
+        )
+        if blob.returncode != 0:
+            raise ValueError(f"{path} has no confirmed Git blob in {revision or 'the index'}")
+        if hashlib.sha256(blob.stdout).hexdigest() != expected_digest:
+            raise ValueError(f"{path} Git blob differs from its confirmed publication bytes")

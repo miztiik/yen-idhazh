@@ -361,11 +361,13 @@ def read_row(
     )
 
 
-def _writer(run_id: str, *, commit_sha: str, job: ServerJob, shard: int) -> WriterIdentity:
+def _writer(
+    run_id: str, *, commit_sha: str, job: ServerJob, shard: int, attempt: int | None = None
+) -> WriterIdentity:
     """This job's writer identity, the same for its probe and its clock."""
     return WriterIdentity(
         run_id=run_id,
-        attempt=run_context.run_attempt(),
+        attempt=run_context.run_attempt() if attempt is None else attempt,
         job=job,
         shard=shard,
         producer=PRODUCER,
@@ -382,11 +384,12 @@ def file_machine_row(
     *,
     date: str,
     run_id: str,
-    settings: config.Settings,
+    settings: config.Settings | config.GardenerSettings,
     state_root: Path,
     commit_sha: str,
     shard: int = 0,
     job: ServerJob = WORK_JOB,
+    attempt: int | None = None,
 ) -> tuple[HostFingerprintRow | None, list[Path]]:
     """Record what machine this job drew, and say where the row landed.
 
@@ -413,7 +416,7 @@ def file_machine_row(
         [row],
         ledger=LedgerName.HOST_FINGERPRINT,
         covers=date,
-        identity=_writer(run_id, commit_sha=commit_sha, job=job, shard=shard),
+        identity=_writer(run_id, commit_sha=commit_sha, job=job, shard=shard, attempt=attempt),
     )
     LOG.info(
         "fingerprint job=%s shard=%s run=%s id=%s cpu=%s family=%s model=%s stepping=%s "
@@ -538,11 +541,11 @@ def _with_clock(probe: HostFingerprintRow, clock: HostFingerprintRow) -> HostFin
     return HostFingerprintRow.model_validate(cells)
 
 
-def stage_job_clock(
+def file_job_clock(
     *,
     date: str,
     run_id: str,
-    settings: config.Settings,
+    settings: config.Settings | config.GardenerSettings,
     state_root: Path,
     commit_sha: str,
     shard: int = 0,
@@ -550,7 +553,9 @@ def stage_job_clock(
     job_started_at: int | None = None,
     server_log_path: Path | None = None,
     metrics_path: Path | None = None,
-) -> HostFingerprintRow | None:
+    attempt: int | None = None,
+    finished_at: str | None = None,
+) -> tuple[HostFingerprintRow | None, list[Path]]:
     """What the job cost, recorded onto the host row the probe opened.
 
     The other end of `stage_fingerprint`. Four cells of that row are only knowable
@@ -578,8 +583,8 @@ def stage_job_clock(
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
         LOG.info("job clock off job=%s shard=%s run=%s", job, shard, run_id)
-        return None
-    scraped_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        return None, []
+    scraped_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     prompt_tokens, prompt_seconds = server_prompt_totals(_text_if_readable(metrics_path))
     row = HostFingerprintRow(
         version=HostFingerprintRow.schema_version(),
@@ -592,7 +597,7 @@ def stage_job_clock(
         server_prompt_tokens=prompt_tokens,
         server_prompt_seconds=prompt_seconds,
     )
-    identity = _writer(run_id, commit_sha=commit_sha, job=job, shard=shard)
+    identity = _writer(run_id, commit_sha=commit_sha, job=job, shard=shard, attempt=attempt)
     probe = _own_probe(state_root, date, identity)
     whole = _with_clock(probe, row) if probe is not None else row
     landed = ledger.persist(
@@ -614,6 +619,35 @@ def stage_job_clock(
         row.server_prompt_seconds,
         "found" if probe is not None else "absent",
         _shown_files(state_root, landed),
+    )
+    return whole, landed
+
+
+def stage_job_clock(
+    *,
+    date: str,
+    run_id: str,
+    settings: config.Settings,
+    state_root: Path,
+    commit_sha: str,
+    shard: int = 0,
+    job: ServerJob = WORK_JOB,
+    job_started_at: int | None = None,
+    server_log_path: Path | None = None,
+    metrics_path: Path | None = None,
+) -> HostFingerprintRow | None:
+    """Close the machine row when the caller does not need its written paths."""
+    whole, _ = file_job_clock(
+        date=date,
+        run_id=run_id,
+        settings=settings,
+        state_root=state_root,
+        commit_sha=commit_sha,
+        shard=shard,
+        job=job,
+        job_started_at=job_started_at,
+        server_log_path=server_log_path,
+        metrics_path=metrics_path,
     )
     return whole
 

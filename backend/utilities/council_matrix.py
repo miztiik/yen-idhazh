@@ -21,21 +21,13 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.registry import tenants
 from idhazh.council.session import publication_paths, shard_width
-from idhazh.ledger import staging
 
 #: How many jobs one repository may have running at once. GitHub's number, not
 #: ours: past it a job waits its turn, and lowering it would be a throttle
 #: nobody asked for (CLAUDE.md Guardrail #2).
 PLATFORM_JOB_CEILING: Final = 20
-
-#: The venue's own ledger, staged by the collecting job alongside whatever the
-#: tenants named. Built from the ledger's registry prefix rather than spelled, so
-#: a move of the tree moves this with it.
-COUNCIL_LEDGER: Final = staging.staged_path(LedgerName.COUNCIL_RUN_RECORDS)
-
 
 def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]]:
     """Every unit of work the night fans out to, tenant by tenant, date by date.
@@ -61,9 +53,10 @@ def committed_paths(config_dir: Path) -> tuple[str, ...]:
     Asked of the tenants rather than spelled in the workflow. A second tenant's
     output was never going to be committed by a list of one tenant's four paths.
 
-    The venue's own ledger leads, because the venue records every unit it ran
-    whatever the tenant inside it wrote. A night with no tenant writes nothing at
-    all and names nothing, which is what keeps the commit step skipped.
+    The venue's own ledgers lead, because the venue records every unit it ran and
+    the machine it ran them on whatever the tenant inside it wrote. A night with
+    no tenant writes nothing at all and names nothing, which is what keeps the
+    commit step skipped.
     """
     return publication_paths(config.load(config_dir).app.council)
 

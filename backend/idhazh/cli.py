@@ -46,6 +46,7 @@ import logging
 import sys
 import time
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -62,6 +63,7 @@ from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.council import run_identity as council_identity
 from idhazh.council import session as council_session
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
@@ -100,6 +102,7 @@ from idhazh.telemetry import (
     cli as telemetry_cli,
 )
 from idhazh.telemetry import (
+    job_machine,
     silicon,
 )
 
@@ -718,19 +721,35 @@ def _dispatch(
         # `state/`, so it is the one that is handed the root.
         from idhazh.council import publication
 
-        run_id = _council_run(parser, args.stage, args.run_id)
+        night = _council_run(parser, args.stage, args.run_id)
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        identity = council_session._identify_writer(run_id=run_id, commit_sha=args.commit)
+        identity = council_session._identify_writer(run_id=night, commit_sha=args.commit)
+        machine = (
+            job_machine.record(
+                date=council_identity.opened_on(night),
+                run_id=night,
+                settings=settings,
+                state_root=state_dir,
+                commit_sha=args.commit,
+                job=ServerJob.SAVE_COUNCIL_RESULTS,
+                started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
+                if args.job_started_at
+                else None,
+            )
+            if settings.app.council.tenants
+            else contextlib.nullcontext()
+        )
+        # The receipt must cover the probe and the closing clock as well as tenant writes.
         with publication.record(
             state_dir=state_dir,
             identity=identity,
             prefixes=council_session.publication_paths(settings.app.council),
             destination=publication.receipt_path(identity),
-        ):
+        ), machine:
             council_session.settle(
                 settings.app.council,
                 date=args.date or _today(),
-                run_id=run_id,
+                run_id=night,
                 state_dir=state_dir,
                 commit_sha=args.commit,
             )

@@ -20,10 +20,12 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import registry, session
+from idhazh.council import publication, registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
 from ._config import copy_config
@@ -178,6 +180,39 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     empty = _config_registering(tmp_path)
 
     assert cli.main([verb, "--date", A_DATE, "--run-id", A_RUN, "--config", str(empty)]) == 0
+    from idhazh.stages import common
+
+    assert not ledger.list_raw_files(common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, days={A_RUN[:10]})
+
+
+def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue: Path) -> None:
+    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
+    config_root = _config_registering(venue, A_SLUG)
+    state = venue / "state"
+    address = [
+        "--config", str(config_root), "--run-id", A_RUN,
+        "--state-root", str(state), "--commit", A_SHA,
+    ]
+
+    for judged in (A_DATE, "2026-09-19"):
+        assert cli.main(["council-settle", "--date", judged, *address]) == 0
+
+    rows = ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [A_RUN[:10]], model=HostFingerprintRow
+    )
+    assert len(rows) == 1
+    (row,) = rows
+    assert row.job is ServerJob.SAVE_COUNCIL_RESULTS
+    assert row.run_id == A_RUN
+    assert row.fingerprint is not None
+    assert row.job_seconds is not None
+    assert row.memcpy_probe_mib == 0 and row.memcpy_gib_s is None
+    identity = session._identify_writer(run_id=A_RUN, commit_sha=A_SHA)
+    receipt = PublicationReceipt.from_json(read_text(publication.receipt_path(identity)))
+    files = ledger.list_raw_files(state, LedgerName.HOST_FINGERPRINT, days={A_RUN[:10]})
+    expected = {f"state/{held.path.relative_to(state).as_posix()}" for held in files}
+    assert len(expected) == 4, "two dates each file a probe and a closing clock"
+    assert expected <= set(receipt.writes), "both halves must be confirmed for publication"
 
 
 @pytest.mark.parametrize("verb", [*COUNCIL_VERBS, "council-shard"])
@@ -530,7 +565,11 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
         (session.COUNCIL_ROOT / A_RUN / "publication-1.json").read_text(encoding="utf-8")
     )
     assert receipt.identity == envelope.identity
-    assert set(receipt.writes) == {first[0].path.relative_to(state_root.parent).as_posix()}
+    first_machine = ledger.read_day_files(state_root, LedgerName.HOST_FINGERPRINT, A_RUN[:10])
+    assert len(first_machine) == 2
+    assert set(receipt.writes) == {
+        raw.path.relative_to(state_root.parent).as_posix() for raw in [*first, *first_machine]
+    }
     assert {
         (row.evaluation_step, row.work_part_index)
         for row in ledger.load_days(
@@ -552,7 +591,15 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
         (session.COUNCIL_ROOT / A_RUN / "publication-2.json").read_text(encoding="utf-8")
     )
     assert receipt.identity == second.envelope.identity
-    assert set(receipt.writes) == {second.path.relative_to(state_root.parent).as_posix()}
+    second_machine = [
+        raw
+        for raw in ledger.read_day_files(state_root, LedgerName.HOST_FINGERPRINT, A_RUN[:10])
+        if raw.envelope.identity.attempt == 2
+    ]
+    assert len(second_machine) == 2
+    assert set(receipt.writes) == {
+        raw.path.relative_to(state_root.parent).as_posix() for raw in [second, *second_machine]
+    }
     stored = [
         ledger.load_stored([raw.path], model=CouncilRunRecord)
         for raw in retried
