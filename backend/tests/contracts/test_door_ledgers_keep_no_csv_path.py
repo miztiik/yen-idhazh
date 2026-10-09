@@ -27,6 +27,7 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.ledger import arrow_schema, keys
+from idhazh.ledger.paths import TRIAL_TRACES_DIRNAME
 
 pytestmark = pytest.mark.contract
 
@@ -119,8 +120,7 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
         and folder not in declared_trial_folders
         and not (
             name == "trials"
-            and folder.startswith("state/pipeline-tests/")
-            and folder.endswith("/traces")
+            and folder.startswith(f"state/{TRIAL_TRACES_DIRNAME}/")
         )
     )
 
