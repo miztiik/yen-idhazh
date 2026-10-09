@@ -1,0 +1,28 @@
+{
+  "completed_at": "2026-10-09T22:54:27Z",
+  "date": "2026-10-09",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "business-economy-dc4zz5n23cch7cca": "8/gAAwYBAAQMBQkJ+woA+gD8Av/2//4DDv3//gj+AQoD+/YB+/4C/QUB9/3/+AT+BQEF/fsF/QD8AQUBAgAJ+wwDBAz+/wcH/gHyCgMIAfb3/f8CAAEAAgABCgkF9/z79fv7AAUS8wL89wH4AQH8BQb29gT5/wX2+wn5BgsBAAADAAcICgIC/Pr/9wMM7gH3//8K/ggDBP8G9/4B/gX+B/f6+//8AAX9CQD6/vj3/AoLBwEDBPb7AAD2BQYIAu7/8wX1/v8AAQQIAf779QICCP4CC/8P/P8DAAUG9gcHCAABBff6BPcAC/4KBQMCAwADAP8I+fn1BQkHBwYC+P/79+8KAvP6/AgE/wEFCfn9AP7/9gUBAwQIBvoL/QESB/v4/wD9CQTyDPv+9gEGAvwDAgIBAALwCAsFBwD39wsSDwD29f0CBfQE/gMCBv37/fr++wT8+wEDCAP+/Pf5BAD++wED9fn/CAMG/fn7BPn+8QH+8AUA/QgE+vQE/fz8+v8H"
+    }
+  },
+  "failed_item_ids": [],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["tata"],"events": [],"introduced_by_run": 1,"item_id": "business-economy-dc4zz5n23cch7cca","lenses": [],"on_front_page": false,"published_at": "2026-10-09T11:21:25Z","rank_score": 1.487105,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "business-today-in","source_kind": "reporting","source_name": "Business Today","source_url": "https://businesstoday.in/markets/stocks/story/vedanta-tcs-shares-to-turn-ex-dividend-ola-rights-issue-2-stock-splits-next-week-560691-2026-10-09","summary": "Several companies, including Vedanta Ltd and Tata Consultancy Services Ltd, are set to undergo corporate actions next week. Vedanta declared an interim dividend of Rs 5 per share, while TCS fixed October 14 as the record date for its second interim dividend. Ola Electric Mobility Ltd is proposing a rights issue at Rs 27 apiece, alongside stock splits and a bonus issue.","time_source": "feed","title": "Vedanta and TCS shares turn ex-dividend next week with other corporate actions","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "business-economy","visual": null,"watchlist_hit": true}
+  ],
+  "items_planned": 1,
+  "run_id": "2026-10-09-38000761331",
+  "version": "2026-09-22",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6693,"eligible_feeds": 51,"feed_floor": 35,"id": "ai","planned": 0,"too_old": 6667},
+    {"below_feed_floor": false,"considered": 564,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 518},
+    {"below_feed_floor": false,"considered": 636,"eligible_feeds": 24,"feed_floor": 21,"id": "business-economy","planned": 1,"too_old": 486},
+    {"below_feed_floor": false,"considered": 678,"eligible_feeds": 30,"feed_floor": 21,"id": "world","planned": 0,"too_old": 416},
+    {"below_feed_floor": false,"considered": 1242,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 0,"too_old": 522},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": true,"considered": 0,"eligible_feeds": 0,"feed_floor": 21,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}
