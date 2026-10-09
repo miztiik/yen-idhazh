@@ -17,6 +17,7 @@ import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { agreementCorridor } from '../src/lib/console/merge-line';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8'));
@@ -36,14 +37,19 @@ async function open(page: Page, width = 1440): Promise<void> {
 }
 
 test.describe('whether the judge agrees with itself', () => {
-	test('the agreement axis is the two knobs and never the data', async ({ page }) => {
+	test('the agreement axis holds both marks, niced to a whole step', async ({ page }) => {
 		await open(page);
 
-		// Zero to the looser of the two limits. Not 0 to 1 - neither rate can reach
-		// 1 without the run holding first, so half the plot would be a region the
-		// data cannot enter.
+		// Niced outward from the two marks rather than stopped at the looser one,
+		// so a share past it has room to draw past it too - proved on days the
+		// test builds in `merge-line.spec.ts`. The canary has judged nothing, so
+		// no share widens the axis further here.
+		const [low, high] = agreementCorridor({
+			disagreementMax: TUNING.disagreement_max,
+			unclearMax: TUNING.unclear_max
+		});
 		expect(await page.locator(AGREEMENT).getAttribute('data-agreement-domain')).toBe(
-			`0,${Math.max(TUNING.disagreement_max, TUNING.unclear_max)}`
+			`${low},${high}`
 		);
 	});
 
@@ -235,5 +241,5 @@ test('the resting heading separates the date from the note', async ({ page }) =>
 	expect(
 		(await day.innerText()).trim(),
 		'the resting heading runs the date into the note'
-	).toMatch(/, the newest day$/);
+	).toMatch(/, the newest day with numbers$/);
 });
