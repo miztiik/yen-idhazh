@@ -39,6 +39,19 @@ its choice is open. Changing one does not change the other.
 
 ## How the comparison runs
 
+A selected run passes `selected_encoders` as comma-separated config slugs and
+sets `reuse_pairs` to true. It reads the committed `pairs.json` without rebuilding
+it. Only the selected encoders run; the collector retains the other saved rows.
+Thus a new candidate does not spend runner time re-encoding the controls.
+
+The October 2026 candidates are text-only `google/embeddinggemma-2` with the
+sentence-similarity instruction, and the official merged text-matching weights
+for Jina v5 nano. Both inputs to a pair have the same role. Revisions, constructor
+options, prompts and the input hash are saved with each new reading. The runtime
+package versions are uploaded with the shard log. Vectors are retained for 90
+days, not three. The Jina weights are CC-BY-NC-4.0; this comparison is not approval
+for commercial deployment.
+
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TD
@@ -131,6 +144,26 @@ either. Plan 63 row R14 builds the set a person validates, and that one can
 settle each pair where a word-overlap rule cannot.
 
 ## Who wrote the labels
+
+The original comparison buckets below remain title-derived. The separate
+`judgments/pairs.json` contains the recovered 935-pair reading sheet, and
+`judgments/verdicts.jsonl` contains append-only decisions. These are model-written
+labels, not human ground truth. No original author model was recorded for the
+first 54 recovered verdicts; their notes are preserved without inventing that
+provenance. New decisions name their model, confidence and reason. A person's
+review has a separate `human_verdict` field.
+
+Each judgment carries hashes of both the sheet and the article content. A
+changed sheet cannot silently reuse an old answer. Corrections append a new
+history row; they do not overwrite the prior decision. Every finished batch is
+committed as a delta. Conversation memory is not the label store.
+
+The next comparison uses saved vectors for the same judged pairs, with a
+separate threshold for each encoder. Exclude `cannot_tell` from binary metrics.
+Keep repeated or reversed pairs and pairs sharing articles on the same side of
+any calibration/holdout split. The existing vector frame covers 817 of the 935
+sheet rows; the other 118 need additional embeddings and must remain explicitly
+unscored, not silently dropped from a claim about the whole sheet.
 
 **Nobody. There are none.** This set has no human judgement in it at all, and
 that changes what every number on it means.

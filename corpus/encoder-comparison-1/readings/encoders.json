@@ -4,6 +4,7 @@
   {
    "version": "2026-10-08",
    "slug": "gte-small",
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
    "model_id": "thenlper/gte-small",
    "parameters_millions": 33,
    "prefix": "",
@@ -40,6 +41,7 @@
   {
    "version": "2026-10-08",
    "slug": "gte-base",
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
    "model_id": "thenlper/gte-base",
    "parameters_millions": 109,
    "prefix": "",
@@ -76,6 +78,7 @@
   {
    "version": "2026-10-08",
    "slug": "minilm-l6",
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
    "model_id": "sentence-transformers/all-MiniLM-L6-v2",
    "parameters_millions": 22,
    "prefix": "",
@@ -112,6 +115,7 @@
   {
    "version": "2026-10-08",
    "slug": "gte-modernbert",
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
    "model_id": "Alibaba-NLP/gte-modernbert-base",
    "parameters_millions": 149,
    "prefix": "",
@@ -148,6 +152,7 @@
   {
    "version": "2026-10-08",
    "slug": "bge-base",
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
    "model_id": "BAAI/bge-base-en-v1.5",
    "parameters_millions": 109,
    "prefix": "",

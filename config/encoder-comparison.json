@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-08",
+  "version": "2026-10-09",
   "corpus": {
     "published_articles": 15115,
     "articles_a_batch": 1000,
@@ -57,6 +57,35 @@
       "prefix": "",
       "parameters_millions": 149,
       "why": "The same training again, on a newer foundation than the rest of the list. Sits within forty million parameters of gte-base, so the pair reads as a change of foundation rather than a change of size. It is the one row that asks whether anything has moved since the models here were built."
+    },
+    {
+      "slug": "embeddinggemma-two",
+      "model_id": "google/embeddinggemma-2",
+      "prefix": "task: sentence similarity | query: ",
+      "parameters_millions": 270,
+      "model_options": {
+        "revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+        "config_kwargs": {
+          "vision_config": null,
+          "audio_config": null
+        },
+        "model_kwargs": {"dtype": "float32"}
+      },
+      "encode_options": {"prompt": ""},
+      "why": "The selected October 2026 encoder, loaded text-only. Both summaries use the sentence-similarity instruction. Apache-2.0; this run measures quality and CPU cost, not a production adoption."
+    },
+    {
+      "slug": "jina-v5-nano",
+      "model_id": "jinaai/jina-embeddings-v5-text-nano-text-matching",
+      "prefix": "Document: ",
+      "parameters_millions": 212,
+      "model_options": {
+        "revision": "a75863a1a1ada69eda80f20ae26b5f40b4a823bc",
+        "trust_remote_code": true,
+        "model_kwargs": {"dtype": "float32"}
+      },
+      "encode_options": {"prompt": ""},
+      "why": "The selected February 2026 nano encoder with its official text-matching adapter already merged. Both summaries use Document: once. The merged weights contain about 212M parameters; the multi-adapter model advertises 239M. CC-BY-NC-4.0: evaluation only, not commercial adoption."
     }
   ],
   "set_aside": [
