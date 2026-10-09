@@ -1,69 +1,180 @@
 /** How does a test build the real Judgement route on its own recorded data?
  *
- * Named route entries and their literal module imports form the private source
- * tree. No committed directory is walked. The production configuration builds
- * that tree, with private cache and output, before preview serves the browser.
+ * A fixed named inventory forms the private source tree. A new module must be
+ * named here before compilation can use it. No import discovery or directory
+ * walk expands the inputs. Cache, output and preview remain private.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import {
-	appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync,
-	readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
+	appendFileSync, copyFileSync, mkdirSync, mkdtempSync,
+	realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compile } from 'svelte/compiler';
-import ts from 'typescript';
 import { publishedSite } from './published-site';
 import { buildLedger } from './ledger-lifecycle';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ENTRIES = [
-	'src/app.html', 'src/app.d.ts',
-	'src/routes/+layout.ts', 'src/routes/+layout.svelte', 'src/routes/+error.svelte',
-	'src/routes/console/+layout.ts', 'src/routes/console/+layout.svelte',
+const INPUTS = [
+	'asset-base.js',
+	'scripts/published-ledgers.mjs',
+	'scripts/query-engine-assets.ts',
+	'scripts/raw-listed-through.mjs',
+	'src/app.d.ts',
+	'src/app.html',
+	'src/lib/assist/day.ts',
+	'src/lib/assist/encoder.ts',
+	'src/lib/assist/loader.ts',
+	'src/lib/assist/month.ts',
+	'src/lib/assist/search.ts',
+	'src/lib/assist/session.ts',
+	'src/lib/assist/weights.ts',
+	'src/lib/bands.ts',
+	'src/lib/charts/d3/DateSeries.svelte',
+	'src/lib/charts/d3/Distribution.svelte',
+	'src/lib/charts/d3/EmptyState.svelte',
+	'src/lib/charts/d3/PairedScatter.svelte',
+	'src/lib/charts/d3/axis.ts',
+	'src/lib/charts/d3/dateSeries.ts',
+	'src/lib/charts/d3/distribution.ts',
+	'src/lib/charts/d3/empty.ts',
+	'src/lib/charts/d3/pairedScatter.ts',
+	'src/lib/charts/d3/scale.ts',
+	'src/lib/charts/frame.ts',
+	'src/lib/charts/glance.ts',
+	'src/lib/charts/indexed-runs.ts',
+	'src/lib/charts/rank.ts',
+	'src/lib/charts/readout.ts',
+	'src/lib/charts/series.ts',
+	'src/lib/charts/skeleton.ts',
+	'src/lib/charts/sparkline.ts',
+	'src/lib/charts/stacked.ts',
+	'src/lib/charts/targetbar.ts',
+	'src/lib/charts/theme.ts',
+	'src/lib/charts/viewport.ts',
+	'src/lib/components/ChartReadout.svelte',
+	'src/lib/components/ChoiceTiles.svelte',
+	'src/lib/components/ConsoleBand.svelte',
+	'src/lib/components/ConsoleNav.svelte',
+	'src/lib/components/NotHere.svelte',
+	'src/lib/components/Notice.svelte',
+	'src/lib/components/Panel.svelte',
+	'src/lib/components/RankedList.svelte',
+	'src/lib/components/Reserved.svelte',
+	'src/lib/components/SiteFooter.svelte',
+	'src/lib/components/SiteHeader.svelte',
+	'src/lib/components/TargetBar.svelte',
+	'src/lib/components/ThemeToggle.svelte',
+	'src/lib/components/WindowControl.svelte',
+	'src/lib/components/WindowControlSource.svelte',
+	'src/lib/components/WindowStatus.svelte',
+	'src/lib/console/applied-line.ts',
+	'src/lib/console/band.ts',
+	'src/lib/console/chrome.ts',
+	'src/lib/console/completeness.ts',
+	'src/lib/console/eval-instruments.ts',
+	'src/lib/console/explorer/AnswerTable.svelte',
+	'src/lib/console/explorer/ColumnList.svelte',
+	'src/lib/console/explorer/ColumnPicker.svelte',
+	'src/lib/console/explorer/ColumnType.svelte',
+	'src/lib/console/explorer/CopyAnswer.svelte',
+	'src/lib/console/explorer/HistoryList.svelte',
+	'src/lib/console/explorer/LedgerList.svelte',
+	'src/lib/console/explorer/QueryEditor.svelte',
+	'src/lib/console/explorer/QuestionStrip.svelte',
+	'src/lib/console/explorer/RunStatus.svelte',
+	'src/lib/console/explorer/ShapePanel.svelte',
+	'src/lib/console/explorer/address.ts',
+	'src/lib/console/explorer/answer.ts',
+	'src/lib/console/explorer/chart-roles.ts',
+	'src/lib/console/explorer/column-groups.ts',
+	'src/lib/console/explorer/days-read.ts',
+	'src/lib/console/explorer/floating-list.ts',
+	'src/lib/console/explorer/gaps.ts',
+	'src/lib/console/explorer/keep.ts',
+	'src/lib/console/explorer/preset-span.ts',
+	'src/lib/console/explorer/registry.ts',
+	'src/lib/console/explorer/role-row.ts',
+	'src/lib/console/explorer/shape.ts',
+	'src/lib/console/explorer/status.ts',
+	'src/lib/console/explorer/strip-fit.ts',
+	'src/lib/console/explorer/type-colour.ts',
+	'src/lib/console/explorer/type-family.ts',
+	'src/lib/console/explorer/utc-instant.ts',
+	'src/lib/console/holdout.ts',
+	'src/lib/console/merge-line.ts',
+	'src/lib/console/recording.ts',
+	'src/lib/console/span-words.ts',
+	'src/lib/console/strip.ts',
+	'src/lib/console/verdict-split.ts',
+	'src/lib/console/waiting.ts',
+	'src/lib/console/window-slot.ts',
+	'src/lib/data/ask-reader.ts',
+	'src/lib/data/compact-index.ts',
+	'src/lib/data/engine.ts',
+	'src/lib/data/fetched-bytes.ts',
+	'src/lib/data/ledger-columns.ts',
+	'src/lib/data/ledger-reach.ts',
+	'src/lib/data/ledger.ts',
+	'src/lib/data/page-keeper.ts',
+	'src/lib/data/raw-day-index.ts',
+	'src/lib/data/site-window.ts',
+	'src/lib/data/slice-query.ts',
+	'src/lib/data/slice-reader.ts',
+	'src/lib/data/slice-shapes.ts',
+	'src/lib/data/slice.ts',
+	'src/lib/data/statement.ts',
+	'src/lib/day-shape.ts',
+	'src/lib/feed-health.ts',
+	'src/lib/format.ts',
+	'src/lib/icons/Icon.svelte',
+	'src/lib/icons/generated.ts',
+	'src/lib/offline.generated.ts',
+	'src/lib/offline.ts',
+	'src/lib/payload/desks.ts',
+	'src/lib/payload/drawing.ts',
+	'src/lib/payload/project.ts',
+	'src/lib/payload/types.ts',
+	'src/lib/server/config.ts',
+	'src/lib/server/ledger-disk.ts',
+	'src/lib/server/ledger-rows.ts',
+	'src/lib/server/payload.ts',
+	'src/lib/server/publication.ts',
+	'src/lib/server/recorded-line.ts',
+	'src/lib/server/similarity-holdout.ts',
+	'src/lib/server/similarity-ledger.ts',
+	'src/lib/server/window-day.ts',
+	'src/lib/theme.ts',
+	'src/routes/+error.svelte',
+	'src/routes/+layout.svelte',
+	'src/routes/+layout.ts',
+	'src/routes/console/+layout.svelte',
+	'src/routes/console/+layout.ts',
+	'src/routes/console/data-explorer/+page.svelte',
+	'src/routes/console/data-explorer/+page.ts',
 	'src/routes/console/judgement/+page.server.ts',
 	'src/routes/console/judgement/+page.svelte',
-	'src/routes/console/data-explorer/+page.ts',
-	'src/routes/console/data-explorer/+page.svelte',
-	'src/styles/app.css', 'src/styles/tokens.css', 'src/styles/frame.generated.css',
-	'vite.config.ts', 'svelte.config.js', 'asset-base.js',
-	'scripts/query-engine-assets.ts', 'scripts/raw-listed-through.mjs',
-	'scripts/published-ledgers.mjs'
+	'src/routes/console/judgement/HoldoutMargin.svelte',
+	'src/routes/console/judgement/JudgeAgreement.svelte',
+	'src/routes/console/judgement/MergeLinePlot.svelte',
+	'src/routes/console/judgement/MergedStoriesPanel.svelte',
+	'src/routes/console/judgement/RecordGates.svelte',
+	'src/routes/console/judgement/VerdictSplit.svelte',
+	'src/styles/app.css',
+	'src/styles/frame.generated.css',
+	'src/styles/tokens.css',
+	'svelte.config.js',
+	'vite.config.ts'
 ] as const;
 
-function stageModules(frontend: string): string[] {
-	const staged = new Set<string>();
-	function stage(name: string): void {
-		name = name.split(sep).join('/');
-		if (staged.has(name)) return;
+function stageModules(frontend: string): void {
+	for (const name of INPUTS) {
 		const source = join(FRONTEND, name);
-		const text = readFileSync(source, 'utf8');
 		const target = join(frontend, name);
 		mkdirSync(dirname(target), { recursive: true });
 		copyFileSync(source, target);
-		staged.add(name);
-		if (!/\.(svelte|ts|js|mjs)$/.test(name)) return;
-		const code = name.endsWith('.svelte')
-			? compile(text, { filename: source, generate: 'server' }).js.code
-			: text;
-		for (const imported of ts.preProcessFile(code, true, true).importedFiles) {
-			const specifier = imported.fileName;
-			if (specifier.endsWith('/$types') || specifier === './$types') continue;
-			const base = specifier.startsWith('$lib/')
-				? join(FRONTEND, 'src', 'lib', specifier.slice(5))
-				: specifier.startsWith('.') ? resolve(dirname(source), specifier) : null;
-			if (base === null) continue;
-			const file = [base, ...['.ts', '.js', '.svelte', '.json', '.mjs', '.css'].map((extension) => base + extension),
-				join(base, 'index.ts')].find((candidate) => existsSync(candidate) && /\.[^\\/.]+$/.test(candidate));
-			if (file === undefined) throw new Error(`The Judgement fixture cannot resolve ${specifier} from ${name}`);
-			const next = relative(FRONTEND, file);
-			if (next.startsWith('..')) throw new Error(`The Judgement fixture import leaves frontend: ${name} -> ${specifier}`);
-			stage(next);
-		}
 	}
-	for (const entry of ENTRIES) stage(entry);
-	return [...staged].sort();
 }
 
 export async function judgementRoute(report: string): Promise<{
@@ -116,7 +227,8 @@ export async function judgementRoute(report: string): Promise<{
 			});
 		}
 		const frontend = join(root, 'frontend');
-		const inputs = stageModules(frontend);
+		stageModules(frontend);
+		const inputs = [...INPUTS];
 		copyFileSync(join(FRONTEND, 'package.json'), join(frontend, 'package.json'));
 		copyFileSync(join(FRONTEND, 'tsconfig.json'), join(frontend, 'tsconfig.json'));
 		mkdirSync(join(frontend, 'static'), { recursive: true });
