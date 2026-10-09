@@ -141,7 +141,14 @@
 						swatch: one.swatch,
 						reserve: widest(one.values, readout.notMeasured, counted)
 					}))
-				: [{ label: readout.notMeasured, value: '', swatch: null, reserve: 0 }];
+				: [
+						{
+							label: readout.notMeasuredAt[column] ?? readout.notMeasured,
+							value: '',
+							swatch: null,
+							reserve: 0
+						}
+					];
 			const events = readout.events[column] ?? [];
 			// A column nothing measured already says so in one sentence, so it does
 			// not say "nothing" a second time in the events' own words. An event

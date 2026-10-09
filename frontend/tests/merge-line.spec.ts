@@ -261,13 +261,28 @@ test.describe('the judge, and what the record still needs', () => {
 		};
 	}
 
-	test('the agreement axis is zero to the looser of the two limits', () => {
-		// Not 0 to 1: neither rate can reach 1 without the run holding first, so
-		// half the plot would be a region the data cannot enter. Not fitted to the
-		// data either - a healthy two percent drawn full height says the judge is
-		// in trouble when it is not.
-		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.35]);
+	test('the agreement axis holds both marks, niced outward to a whole step', () => {
+		// Niced rather than exact, like every other console axis: 0.35 itself is
+		// not a round step at four ticks, so the looser mark ends up with 24px of
+		// headroom above it on a 190px plot instead of sitting on the plot's edge.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.4]);
 		expect(agreementCorridor({ disagreementMax: 0.4, unclearMax: 0.35 })).toEqual([0, 0.4]);
+	});
+
+	test('a share past both marks widens the axis rather than drawing pinned to one', () => {
+		// A share past its own mark is the one reading this panel exists to show,
+		// so the axis grows to hold it instead of clipping it onto the mark's own
+		// line (Jony, 2026-10-09, row L55).
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.4])).toEqual([
+			0, 0.4
+		]);
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.97])).toEqual([
+			0, 1
+		]);
+		// A share under both marks never narrows the axis below them.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.02])).toEqual([
+			0, 0.4
+		]);
 	});
 
 	test('a record with nothing in it still draws three bars at zero', () => {

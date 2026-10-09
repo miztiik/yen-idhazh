@@ -13,6 +13,7 @@
  * the arithmetic is checked without a day off the archive (Guardrail #12).
  */
 
+import { linearAxis } from '../charts/frame';
 import { grouped } from '../charts/series';
 import { dayMonth, shortDate } from '../format';
 import { countDays, nameSpan } from './span-words';
@@ -263,16 +264,23 @@ export interface GateNeed {
 	targetText: string;
 }
 
-/** The agreement axis: zero to the looser of the two limits, never the data.
+/** The agreement axis: zero to the looser of the two limits, widened to clear
+ * any share the chart draws, and niced to a whole tick step.
  *
- * Both rates are bounded by the two knobs that hold the run, and the looser of
- * the two carries both series and both markers. Not 0 to 1: neither rate can
- * reach 1 without the run holding first, so half the plot would be a region the
- * data cannot enter. Not fitted to the data either - a rate of 0.02 drawn full
- * height says the judge is in trouble when it is not.
+ * Both rates are bounded below by the two knobs that hold the run, so a
+ * healthy two percent still draws against them rather than filling the panel
+ * and reading as trouble. But a share past its own mark is the one reading
+ * this panel exists to show, and a top fixed at the looser mark would clip
+ * that share onto the mark's own line and hide how far past it the day went
+ * (Jony, 2026-10-09). So the top is niced from both marks and every drawn
+ * share, through the one rule every console axis nices by
+ * (`linearAxis` in `../charts/frame`), never from the marks alone.
  */
-export function agreementCorridor(limits: AgreementLimits): [number, number] {
-	return [0, Math.max(limits.disagreementMax, limits.unclearMax)];
+export function agreementCorridor(
+	limits: AgreementLimits,
+	shares: readonly number[] = []
+): [number, number] {
+	return linearAxis([limits.disagreementMax, limits.unclearMax, ...shares], [0, 1]).domain;
 }
 
 /** The three bars, in the order the record fills them.

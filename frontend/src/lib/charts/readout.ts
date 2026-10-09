@@ -67,6 +67,11 @@ export interface ReadoutInput {
 	events?: { lines: readonly (readonly ReadoutLine[])[]; none?: string };
 	/** From the same vocabulary as the panel's empty state. */
 	notMeasured: string;
+	/** One column's own reason it holds no reading, where that differs from
+	 * `notMeasured` - a chart whose empty columns are not all empty for the
+	 * same cause. Null at a column falls back to `notMeasured`; omit the whole
+	 * array where every column shares one reason. */
+	notMeasuredAt?: readonly (string | null)[];
 	resting: ReadoutResting;
 }
 
@@ -90,6 +95,9 @@ export interface Readout {
 	/** Printed once, in place of the series, on a column nothing measured - and
 	 * in place of a single missing reading on a column that measured the rest. */
 	notMeasured: string;
+	/** Each column's own reason, where it differs from `notMeasured`; null
+	 * wherever a chart does not distinguish its empty columns. */
+	notMeasuredAt: (string | null)[];
 	/** The column shown while nobody has picked one. */
 	resting: number;
 	/** The sentence for a chart with no column at all, or null. */
@@ -188,6 +196,9 @@ export function readoutOf(input: ReadoutInput): Readout {
 	if (input.events !== undefined && lines.length !== count) {
 		throw new Error(`readout events have ${lines.length} columns for ${count}`);
 	}
+	if (input.notMeasuredAt !== undefined && input.notMeasuredAt.length !== count) {
+		throw new Error(`readout notMeasuredAt has ${input.notMeasuredAt.length} reasons for ${count} columns`);
+	}
 	return {
 		columns: [...input.columns],
 		series: input.series
@@ -203,6 +214,7 @@ export function readoutOf(input: ReadoutInput): Readout {
 		events: input.columns.map((_, column) => [...(lines[column] ?? [])]),
 		eventsNone: input.events?.none ?? '',
 		notMeasured: input.notMeasured,
+		notMeasuredAt: input.columns.map((_, column) => input.notMeasuredAt?.[column] ?? null),
 		resting: restingColumn(input),
 		empty: count === 0 ? input.notMeasured : null
 	};
