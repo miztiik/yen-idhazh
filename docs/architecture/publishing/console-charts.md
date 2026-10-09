@@ -93,6 +93,43 @@ if fewer than 5 pairs were read twice, and no "could not tell" dot if fewer than
 5 pairs agreed.`, with the floor read from config, and on a chart of two or more
 columns a second sentence that says the counts are in the strip above.
 
+## A share above the axis top is not clipped to a mark
+
+A fixed axis over a limit joins the values the limit is measured against, so a
+share past it still draws past it. Jony ruled that the judge's agreement chart
+nices its axis from both dashed marks and from every share it draws a dot for,
+so a share above a mark widens the axis rather than drawing pinned to the
+mark's own line. Pinning a reading to a mark would show a value the chart does
+not hold, and the whole point of the mark is to say whether a reading is past
+it. A share under the floor still draws nothing: this rule only ever widens
+the axis, never narrows it below the two marks.
+
+## Every day of the window is a column, read or not
+
+Jony ruled that a day the window spans but no run judged keeps its place as an
+empty column: it draws no dot, carries no accessible name of its own, and
+breaks each rate's line the same way a day under the floor does. Spacing
+columns by the days that happen to hold a reading would join two read days
+with a straight line across a day nobody measured, which draws a value there.
+The column still answers a pointer, a tap or an arrow key, and the readout
+strip says why it holds no reading instead of a measurement.
+
+## A day whose own tick is thinned out still gets its date, beside an unread neighbour
+
+The shared day-tick calculation already thins labels to fit a wide window,
+keeping a bare tick mark for a column whose label it drops. On the judge's
+agreement chart, a day can keep a real dot while losing its own tick this way,
+and where it sits beside a day with no reading at all, a reader who is only
+looking - not stepping through with a keyboard, not holding a pointer still -
+has no date near that dot. Jony ruled that such a day prints its own date
+beside its topmost dot, `aria-hidden` since the day's accessible name already
+carries it, where the thinning dropped its tick and an immediate neighbour
+read nothing. Keep this label clear of a mark's own label: read each dashed
+mark's label as the small box it occupies and raise the date label above any
+box it would otherwise sit on. A mark close enough to the plot's own top can
+still collide with that date label's own clamp; this is left open until a
+real window reaches it.
+
 ## Every chart with a shared column carries a pointer readout
 
 A readout is a visible strip beside the plot, not a tooltip under the pointer.
@@ -214,6 +251,8 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - Shared coordinates and readouts make charts comparable without relearning each panel.
 - Counts and coverage distinguish sparse measurements from reliable rates. A missing sample is never evidence of zero work.
 - A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
+- A fixed axis that stops at a mark hides exactly the reading a mark exists to show: how far past it a day went. Niceing the axis from the data as well as the marks keeps every share visible without ever pinning one to a line it does not sit on.
+- A thinned-out tick label is a deliberate trade against a wide window; it is not supposed to take a day's only date with it when that day also lost its neighbour's reading. A floating label kept clear of a mark's own label answers both without widening the shared thinning itself.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
 - Failure rate remains unboxed in the item-telemetry viewport. A fixed box would add a slot to a group whose panels flow to their own empty states. The page names a missing or failed month once; the chart uses short state sentences and keeps its quiet-window sentence for a successful empty read.
