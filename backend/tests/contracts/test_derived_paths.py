@@ -42,7 +42,7 @@ def test_the_rendered_line_is_every_derived_path_in_one_order_with_single_spaces
     rendered = path_classes.refresh_paths(day_dir=A_DAY_DIR)
 
     assert rendered.split(" ") == [
-        entry.format(day_dir=A_DAY_DIR) for entry in path_classes.DERIVED if "/" in entry
+        entry.format(day_dir=A_DAY_DIR) for entry in path_classes.DERIVED
     ]
     assert "  " not in rendered, "two spaces is an empty path the script would try to stage"
     assert f"{A_DAY_DIR}/digest.json" in rendered.split()
@@ -50,26 +50,6 @@ def test_the_rendered_line_is_every_derived_path_in_one_order_with_single_spaces
     # Never the day's directory itself. It also holds the day's charts, and a
     # raced chart is dropped before the rebase rather than handed back.
     assert A_DAY_DIR not in rendered.split()
-
-
-def test_a_derived_filename_is_never_handed_back_because_no_step_can_rebuild_it() -> None:
-    """A bare name in the list is derived, and it is the one kind left out.
-
-    `settled.csv` is the fold of a closed day. It is derived - two runs that
-    fold one day compute the same bytes - but it names a file in many
-    directories rather than one path, and `idhazh assemble` re-emits no fold. A
-    job that handed one back would delete it instead of rebuilding it.
-
-    A conflicted fold refuses the push rather than merging, which is the
-    mechanism working: the name carries no writer identity, so the resolver
-    answers "not mine" and stops.
-    """
-    names = [entry for entry in path_classes.DERIVED if "/" not in entry]
-
-    assert names, "the class holds a name, and dropping the last one would pass this by accident"
-    handed_back = path_classes.refresh_paths(day_dir=A_DAY_DIR).split(" ")
-    for name in names:
-        assert name not in handed_back
 
 
 def test_a_path_that_carries_a_space_is_refused_where_it_is_written() -> None:

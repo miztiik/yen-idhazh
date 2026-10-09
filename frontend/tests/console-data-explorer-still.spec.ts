@@ -418,7 +418,9 @@ test('Susan 2026-10-07: checked choice tiles keep their bold-word width in every
 
 test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
-	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, days: 90, firstRun: true })).toBe('Run reads 123 files, 64.0 MB from 4 ledgers over 90 UTC days. It also starts the query engine.');
+	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, readFrom: '2030-03-18', readTo: PINNED, firstRun: true })).toBe('Run will read 123 files, 64.0 MB from 4 ledgers over 90 UTC days, from 18 Mar 2030 through 15 Jun 2030. It also starts the query engine.');
+	expect(statusSentence({ state: 'idle', files: 1, bytes: 491, ledgers: 1, readFrom: PINNED, readTo: PINNED })).toBe('Run will read 1 file, 1 KB from 1 ledger over 1 UTC day: 15 Jun 2030.');
+	expect(statusSentence({ state: 'idle', ledgers: 1, readFrom: null, readTo: null })).toBe('Run will read 0 files, 0.0 MB from 1 ledger over 0 UTC days.');
 	expect(statusSentence({ state: 'costing' })).toBe('Choosing a ledger fetches one day of it to list its columns.');
 	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'running-query' })).toBe('Running the question.');
@@ -435,7 +437,7 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		const status = page.locator('[data-workbench-region="status"]');
-		await expect(status).toContainText('Run reads');
+		await expect(status).toContainText('Run will read');
 		await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(page);
 		await expectAnswer(page, 'quiet');
@@ -812,12 +814,48 @@ async function tokens(page: Page) {
 	return page.evaluate(() => {
 		const css = getComputedStyle(document.documentElement);
 		const rem = parseFloat(css.fontSize);
-		const px = (name: string) => {
-			const value = css.getPropertyValue(name).trim();
+		const px = (name: string, from: CSSStyleDeclaration = css) => {
+			const value = from.getPropertyValue(name).trim();
 			return value.endsWith('rem') ? parseFloat(value) * rem : parseFloat(value);
 		};
-		return { control: px('--workbench-control'), space1: px('--space-1') };
+		const workbench = getComputedStyle(document.querySelector('.workbench')!);
+		return {
+			control: px('--workbench-control'),
+			space1: px('--space-1'),
+			space2: px('--space-2'),
+			space3: px('--space-3'),
+			textXs: px('--text-xs'),
+			leadingSm: px('--leading-sm'),
+			leadingBase: px('--leading-base'),
+			leadingXl: px('--leading-xl'),
+			// The line a chart's readout takes, which sets no line height of its own: the page's.
+			lineShare: css.lineHeight.endsWith('px') ? parseFloat(css.lineHeight) / parseFloat(css.fontSize) : parseFloat(css.lineHeight),
+			// `console.chart_height`, as the page hands it to the chart.
+			chartHeight: px('--idle-height', workbench)
+		};
 	});
+}
+
+/** The band each of the four widths in `VIEWS` falls in, cut at `frame.breakpoints_px`. */
+const BAND: Record<number, number> = { 390: 0, 768: 1, 1024: 2, 1440: 3 };
+
+type Sizes = Awaited<ReturnType<typeof tokens>>;
+
+/** The result region's floor at `width`, from the page's tokens (row 26 rule 5): the strip, the role
+ *  row, and the drawing's floor - the main figure's line, the plot, the date chart's readout, the
+ *  comparison's line and the space between them. */
+function resultFloor(sizes: Sizes, width: number): number {
+	const stripLines = width < 640 ? 2 : 1;
+	const strip = stripLines * sizes.control + (stripLines + 1) * sizes.space1;
+	const roleLines = ROLE_LINES[width];
+	const roles = roleLines * sizes.control + (roleLines - 1) * sizes.space1 + 2 * sizes.space1;
+	const readout = sizes.space3 + sizes.space1 + sizes.space2 + 3 * sizes.lineShare * sizes.textXs;
+	return strip + roles + sizes.leadingXl + sizes.space3 + sizes.chartHeight + readout + sizes.leadingBase + sizes.space3;
+}
+
+/** How tall the foot is for an answer that can give `notes` notes, at `width` (row 26 rule 2). */
+function footRoom(sizes: Sizes, notes: number, width: number): number {
+	return notes === 0 ? 0 : notes * explorerConfig().chart_note_lines[BAND[width]] * sizes.leadingSm + 2 * sizes.space1;
 }
 
 async function openChart(page: Page, sql = CHART_SQL) {
@@ -928,6 +966,11 @@ for (const view of VIEWS) {
 		await openExplorer(page, PINNED);
 		await openChart(page);
 		for (const tile of await page.locator('[data-shape-choice] input').all()) await expect(tile, 'two date columns picked a chart').not.toBeChecked();
+		// The answer gives a note: the page's own lines leave `tiny` out as flat. So the foot that
+		// must hold still is a real box, one note's room under every chart (row 26's I3).
+		const sizes = await tokens(page);
+		const foot = page.locator('[data-chart-foot]');
+		expect(Math.abs((await foot.evaluate((node) => node.getBoundingClientRect().height)) - footRoom(sizes, 1, view.width)), 'the foot is not one note\'s room').toBeLessThanOrEqual(0.5);
 		// I3 by a press, from every tile to every other.
 		for (const from of CHART_TYPES) {
 			for (const to of CHART_TYPES) {
@@ -942,6 +985,13 @@ for (const view of VIEWS) {
 				await expect(page.locator(`[data-shape-choice="${to}"] input`)).toBeFocused();
 			}
 		}
+		// Over time names the flat line in the foot; Ranked, where that note and the one for rows with
+		// no day do not show, keeps their room empty.
+		await page.locator('[data-shape-choice="dateSeries"]').click();
+		await expect(foot.locator('[data-shape-foot]')).toHaveText(['"tiny" is left out: it is under 5% of "other", so it would draw flat.']);
+		await page.locator('[data-shape-choice="rankedList"]').click();
+		await expect(foot.locator('[data-shape-foot]')).toHaveCount(0);
+		expect(Math.abs((await foot.evaluate((node) => node.getBoundingClientRect().height)) - footRoom(sizes, 1, view.width)), 'Ranked gave the foot\'s room away').toBeLessThanOrEqual(0.5);
 		// I3 by an arrow key, along the tiles and back.
 		await page.locator('[data-shape-choice="dateSeries"]').click();
 		for (const [key, to] of [['ArrowRight', 'rankedList'], ['ArrowRight', 'pairedScatter'], ['ArrowRight', 'distribution'], ['ArrowLeft', 'pairedScatter'], ['ArrowLeft', 'rankedList'], ['ArrowLeft', 'dateSeries']] as const) {
@@ -992,8 +1042,148 @@ for (const view of VIEWS) {
 		await settle(page);
 		expectChartStill(before, await chartReading(page), 'Lines checked and unchecked');
 		await expect(pill(page, 'lines').locator('summary')).toBeFocused();
+		// I4 for the foot (row 26): an answer that can give two notes, a flat line and a row with no
+		// day in `gappy`. Picking `gappy`, then `day`, then unchecking a line while the flat line is
+		// named changes the foot's text and never its box. A fresh page, so no earlier pick holds.
+		await openExplorer(page, PINNED);
+		await openChart(page, GAPPY_SQL);
+		await page.locator('[data-shape-choice="dateSeries"]').click();
+		await settle(page);
+		await expect(foot.locator('[data-shape-foot]')).toHaveText([FLAT_TINY]);
+		expect(Math.abs((await foot.evaluate((node) => node.getBoundingClientRect().height)) - footRoom(sizes, 2, view.width)), 'the foot is not two notes\' room').toBeLessThanOrEqual(0.5);
+		await startShiftObserver(page);
+		const held = await chartReading(page);
+		await pill(page, 'date').locator('summary').click();
+		await pill(page, 'date').locator('[data-column="gappy"] input').click();
+		await settle(page);
+		await expect(foot.locator('[data-shape-foot]')).toHaveText([FLAT_TINY, '1 row holds null in the column "gappy", so the chart does not draw it. It is in the table.']);
+		expectChartStill(held, await chartReading(page), 'Date to a column with a null day');
+		await pill(page, 'date').locator('summary').click();
+		await pill(page, 'date').locator('[data-column="day"] input').click();
+		await settle(page);
+		await expect(foot.locator('[data-shape-foot]')).toHaveText([FLAT_TINY]);
+		expectChartStill(held, await chartReading(page), 'Date back to a column with every day');
+		await pill(page, 'lines').locator('summary').click();
+		await pill(page, 'lines').locator('[data-column="up"] input').click();
+		await page.keyboard.press('Escape');
+		await settle(page);
+		await expect(foot.locator('[data-shape-foot]')).toHaveCount(0);
+		expectChartStill(held, await chartReading(page), 'a line unchecked while the flat line was named');
 	});
 }
+
+/** Two date columns, `gappy` with no day on one row, and a column too flat to draw beside two that
+ *  are not: an answer that can give two notes under Over time, whichever of them shows. */
+const GAPPY_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, CASE WHEN i = 3 THEN NULL ELSE DATE '2026-01-01' + i::INTEGER END AS gappy, 100 + i AS across, 200 - i AS up, 0 AS tiny FROM range(0, 30) AS t(i)";
+const FLAT_TINY = '"tiny" is left out: it is under 5% of "up", so it would draw flat.';
+
+/** Three answers and the notes each can give: an Over time chart whose page lines leave `tiny` out
+ *  as flat, the same chart with nothing to leave out, and a paired chart, whose readout is shorter. */
+const FLOOR_ANSWERS = [
+	{ sql: "SELECT DATE '2026-01-01' + i::INTEGER AS day, 100 + i AS a, 0 AS tiny FROM range(0, 30) AS t(i)", notes: 1, said: ['"tiny" is left out: it is under 5% of "a", so it would draw flat.'] },
+	{ sql: "SELECT DATE '2026-01-01' + i::INTEGER AS day, 100 + i AS a FROM range(0, 30) AS t(i)", notes: 0, said: [] },
+	{ sql: 'SELECT i AS a, 200 - i AS b FROM range(0, 170) AS t(i)', notes: 0, said: [] }
+] as const;
+
+for (const view of VIEWS) {
+	test(`I1: the result region keeps its floor, the foot holds only the notes the answer can give, and no plot scrolls inside the drawing, at ${view.width}px`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		const sizes = await tokens(page);
+		const floor = resultFloor(sizes, view.width);
+		for (const { sql, notes, said } of FLOOR_ANSWERS) {
+			await openChart(page, sql);
+			await page.locator('[data-chart-drawing] svg[data-chart-type]').waitFor({ state: 'visible', timeout: 60_000 });
+			await settle(page);
+			await expect(page.locator('[data-chart-foot] [data-shape-foot]')).toHaveText([...said]);
+			const at = await page.evaluate(() => {
+				const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+				const drawing = document.querySelector('[data-chart-drawing]') as HTMLElement;
+				const root = document.documentElement;
+				return {
+					region: box('[data-workbench-region="answer"]').height,
+					foot: box('[data-chart-foot]').height,
+					drawingBottom: box('[data-chart-drawing]').bottom,
+					panelBottom: box('#data-explorer-shape').bottom,
+					drawingScrolls: drawing.scrollHeight > drawing.clientHeight,
+					plot: box('[data-chart-drawing] svg[data-chart-type]').height,
+					pageScrolls: root.scrollHeight > root.clientHeight
+				};
+			});
+			const label = `${view.width}px, ${notes} note(s)`;
+			expect(at.region, `${label}: the region is under its floor`).toBeGreaterThanOrEqual(floor - 0.5);
+			expect(Math.abs(at.foot - footRoom(sizes, notes, view.width)), `${label}: the foot is ${at.foot} px tall`).toBeLessThanOrEqual(0.5);
+			if (notes === 0) expect(Math.abs(at.drawingBottom - at.panelBottom), `${label}: the drawing does not reach the panel's foot`).toBeLessThanOrEqual(0.5);
+			expect(at.drawingScrolls, `${label}: the drawing scrolls a plot`).toBe(false);
+			expect(at.plot + at.foot, `${label}: the plot and the foot share less than the chart's height`).toBeGreaterThanOrEqual(sizes.chartHeight - 0.5);
+			if (view.width === 1440) expect(at.pageScrolls, `${label}: the page scrolls`).toBe(false);
+			if (view.width === 1024) {
+				expect(Math.abs(at.region - floor), `${label}: the region is ${at.region} px, not its floor, ${floor} px`).toBeLessThanOrEqual(0.5);
+				// The page's last scroll position shows the whole drawing, down to its comparison.
+				await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+				const comparison = await page.locator('[data-chart-drawing] [data-comparison]').evaluate((node) => {
+					const rect = node.getBoundingClientRect();
+					return { top: rect.top, bottom: rect.bottom, window: document.documentElement.clientHeight };
+				});
+				expect(comparison.top, `${label}: the comparison is above the window`).toBeGreaterThanOrEqual(-0.5);
+				expect(comparison.bottom, `${label}: the comparison is below the window`).toBeLessThanOrEqual(comparison.window + 0.5);
+			}
+		}
+	});
+}
+
+test('I6: across runs of one answer, and through a busy and a failed run, the drawing and the foot hold their boxes', async ({ page, context }) => {
+	const root = test.info().outputPath('state');
+	// item-health is fetched by no run until the busy one, so that run can be held on its fetch.
+	await serveBuilt(context, root, { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) }, { ledger: 'item-health', pinned: PINNED, days: everyDay(1, 0) });
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, PINNED);
+	const sizes = await tokens(page);
+	const boxes = () => page.evaluate(() => Object.fromEntries(['[data-chart-drawing]', '[data-chart-foot]'].map((selector) => {
+		const rect = document.querySelector(selector)!.getBoundingClientRect();
+		return [selector, { x: rect.x, y: rect.y, width: rect.width, height: rect.height }];
+	})) as Record<string, Box>);
+	const same = (first: Record<string, Box>, now: Record<string, Box>, label: string) => {
+		for (const [name, box] of Object.entries(first)) {
+			for (const side of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(now[name][side] - box[side]), `${label}: ${name} ${side}`).toBeLessThanOrEqual(0.5);
+		}
+	};
+	// Before the first answer the foot has no room.
+	await page.getByRole('tab', { name: 'Chart' }).click();
+	expect((await boxes())['[data-chart-foot]'].height, 'the foot has room before any answer').toBeLessThanOrEqual(0.5);
+	await openChart(page);
+	const first = await boxes();
+	expect(Math.abs(first['[data-chart-foot]'].height - footRoom(sizes, 1, 1440)), 'the foot is not one note\'s room').toBeLessThanOrEqual(0.5);
+	for (const run of [1, 2]) {
+		await runExplorer(page);
+		await expectAnswer(page, 'table');
+		await settle(page);
+		same(first, await boxes(), `run ${run} of the same answer`);
+	}
+	await chooseExplorerQuestion(page, ['published'], 'SELECT 1; SELECT 2');
+	await runExplorer(page);
+	await expectAnswer(page, 'refused');
+	await settle(page);
+	same(first, await boxes(), 'a refused run');
+	await expect(page.locator('[data-chart-foot] [data-shape-foot]')).toHaveCount(0);
+	// A run held on its fetch is busy until the test lets it fail, so the page answers unreachable.
+	await chooseExplorerQuestion(page, ['item-health'], 'SELECT count(*) AS rows FROM "item-health"', false);
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => { release = resolve; });
+	await page.route('**/state/**/*.parquet*', async (route) => {
+		await held;
+		await route.abort();
+	});
+	await page.getByRole('button', { name: /^Run$/ }).click();
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-state="loading"]')).toHaveCount(1);
+	await settle(page);
+	same(first, await boxes(), 'a busy run');
+	release();
+	await expectAnswer(page, 'unreachable');
+	await settle(page);
+	same(first, await boxes(), 'a failed run');
+});
 
 for (const view of [{ width: 1440, height: 900 }, { width: 390, height: 844 }] as const) {
 	test(`I5: switching between Table and Chart moves nothing in every state, with the role row in place, at ${view.width}px`, async ({ page, context }) => {

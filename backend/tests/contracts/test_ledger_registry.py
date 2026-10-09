@@ -34,7 +34,6 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 REGISTRY: Final = REPO_ROOT / "config" / paths.REGISTRY_FILENAME
 
 A_DAY: Final = "2026-09-18"
-A_MONTH: Final = "2026-09"
 A_STAMP: Final = "20260918T120000Z"
 STATE: Final = Path("state")
 
@@ -178,7 +177,6 @@ COVERS: Final[dict[Grain, str | None]] = {
     Grain.FLAT: None,
     Grain.DAY_FILE: A_DAY,
     Grain.DAY_TREE: A_DAY,
-    Grain.MONTH_FILE: A_MONTH,
     Grain.STAMPED: A_STAMP,
 }
 
@@ -190,8 +188,9 @@ COVERS: Final[dict[Grain, str | None]] = {
 THROUGH_THE_DOOR: Final = frozenset(
     member for member in LedgerName if paths.entry(member).grain is Grain.RAW_AND_COMPACT
 )
-#: Every ledger the registry still builds a CSV address for.
-CSV_LEDGERS: Final = [member for member in LedgerName if member not in THROUGH_THE_DOOR]
+#: Every ledger the registry still builds an address for: one flat file, a day
+#: file, a day folder or a stamped file, none of them CSV.
+REGISTRY_ADDRESSED: Final = [member for member in LedgerName if member not in THROUGH_THE_DOOR]
 
 
 def a_registry(families: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -342,7 +341,7 @@ def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
 
     `day-metrics` moves under the judge's folder, so every other rule still holds
     and `LedgerName.DAY_METRICS` becomes the one name that no longer says where
-    it sits. It is a ledger the registry still builds a CSV address for: a ledger
+    it sits. It is a ledger the registry still builds an address for: a ledger
     filed under the two roots is refused first for a prefix that is not its name.
     """
     judge = a_family("content-similarity-judge")
@@ -362,7 +361,7 @@ def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
     )
 
 
-@pytest.mark.parametrize("member", CSV_LEDGERS, ids=lambda m: m.value)
+@pytest.mark.parametrize("member", REGISTRY_ADDRESSED, ids=lambda m: m.value)
 def test_a_ledger_sits_where_it_sat_before_the_registry(member: LedgerName) -> None:
     """Path parity, extension included, against the module git holds at the base."""
     old_relpath, old_path, _ = AT_THE_BASE[member.name]
@@ -374,7 +373,7 @@ def test_a_ledger_sits_where_it_sat_before_the_registry(member: LedgerName) -> N
         assert paths.relpath(member, covers) == old_relpath
 
 
-@pytest.mark.parametrize("member", CSV_LEDGERS, ids=lambda m: m.value)
+@pytest.mark.parametrize("member", REGISTRY_ADDRESSED, ids=lambda m: m.value)
 def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
     """Tree-root parity, the nested trees included."""
     _, _, old_root = AT_THE_BASE[member.name]
@@ -388,24 +387,23 @@ def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
 
 def test_the_two_forms_of_one_folder_agree() -> None:
     """`tree_relpath` is `tree_root` in POSIX form, the way `relpath` is `path`'s."""
-    for member in CSV_LEDGERS:
+    for member in REGISTRY_ADDRESSED:
         if paths.entry(member).grain is Grain.FLAT:
             continue
         assert paths.tree_relpath(member) == paths.tree_root(STATE, member).as_posix()
 
 
-def test_every_month_ledger_and_every_stamped_ledger_has_a_folder() -> None:
-    """A ledger filed by month or by stamp names each file after its period, in one folder.
+def test_every_stamped_ledger_has_a_folder() -> None:
+    """A ledger filed by stamp names each file after its stamp, in one folder.
 
-    That folder is what a caller walks to find every month or every stamp, so it
-    has to be the directory each of the ledger's files sits in.
+    That folder is what a caller walks to find every stamp, so it has to be the
+    directory each of the ledger's files sits in.
     """
-    periods = {Grain.MONTH_FILE, Grain.STAMPED}
-    members = [member for member in LedgerName if paths.entry(member).grain in periods]
+    members = [member for member in LedgerName if paths.entry(member).grain is Grain.STAMPED]
 
-    assert {paths.entry(member).grain for member in members} <= periods
+    assert members
     for member in members:
-        filed = paths.path(STATE, member, COVERS[paths.entry(member).grain])
+        filed = paths.path(STATE, member, COVERS[Grain.STAMPED])
         assert filed.parent == paths.tree_root(STATE, member)
 
 
@@ -424,7 +422,7 @@ def test_a_flat_ledger_has_no_folder_to_walk_and_the_refusal_names_it() -> None:
 def test_the_two_forms_of_one_address_agree() -> None:
     """`path` and `relpath` are the same answer, so neither can drift alone."""
     root = Path("anywhere")
-    for member in CSV_LEDGERS:
+    for member in REGISTRY_ADDRESSED:
         covers = COVERS[paths.entry(member).grain]
         under = paths.path(root, member, covers).relative_to(root).as_posix()
         assert paths.relpath(member, covers) == f"{paths.STATE_DIRNAME}/{under}"
@@ -434,7 +432,7 @@ def test_the_two_forms_of_one_address_agree() -> None:
     "member",
     [
         member
-        for member in CSV_LEDGERS
+        for member in REGISTRY_ADDRESSED
         if paths.entry(member).grain in {Grain.DAY_FILE, Grain.DAY_TREE}
     ],
     ids=lambda m: m.value,
@@ -473,6 +471,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "item-health-summary",
         "summary-quality-evals",
         "traces",
+        "trial-traces",
         "day-metrics",
         "digest-fragments",
         "gardener",

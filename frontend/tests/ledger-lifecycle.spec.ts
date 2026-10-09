@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
 import { recordNotes } from '../src/lib/console/recording';
 import { describeCutDays, describeDaysRead } from '../src/lib/console/explorer/days-read';
-import { readAsk } from '../src/lib/data/ask-reader';
+import { readAsk, readAskCost } from '../src/lib/data/ask-reader';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readColumns } from '../src/lib/data/ledger-columns';
@@ -86,6 +86,39 @@ const INDEXES = ['daily', 'monthly', 'yearly'].map((period) => `compact/${LEDGER
 /** A panel's slice of the built ledger: the day each row was filed under, and its number in that day. */
 const slicing = (from: string, to: string): SliceOptions => ({ columns: ['date', 'n'], from, to });
 const dayFile = (day: string): string => `compact/${LEDGER}/daily/${day.replaceAll('-', '/')}.parquet`;
+
+test('the cost estimate names the same read bounds for late starts, early ends and ledgers with no day in the window', async () => {
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger: LEDGER, pinned: PINNED, days: everyDay(4, 0) });
+	await buildLedger(root, { ledger: 'seen', pinned: PINNED, days: [{ ago: 1461, state: 'empty' }, ...everyDay(13, 0)] });
+	await buildLedger(root, { ledger: 'item-health', pinned: PINNED, days: everyDay(4, 3) });
+	const site = aPage(servedFrom(root, SITE).fetcher);
+	try {
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: '2030-06-11', readTo: '2030-06-15'
+		});
+		expect(await readAskCost(site, null, [LEDGER, 'seen'], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: '2030-06-02', readTo: '2030-06-15'
+		});
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', '2030-06-12', {})).toMatchObject({
+			readFrom: '2030-06-11', readTo: '2030-06-12'
+		});
+		expect(await readAskCost(site, null, [LEDGER], PINNED, PINNED, {})).toMatchObject({
+			readFrom: '2030-06-15', readTo: '2030-06-15'
+		});
+		expect(await readAskCost(site, null, ['item-health'], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: '2030-06-11', readTo: '2030-06-12'
+		});
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', '2030-06-10', {})).toMatchObject({
+			readFrom: null, readTo: null
+		});
+		expect(await readAskCost(site, null, [], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: null, readTo: null
+		});
+	} finally {
+		await site.release();
+	}
+});
 
 test.describe('a ledger the test builds', () => {
 	test('answers the rows it was built with, reads its empty day as quiet, and names its lost day', async () => {

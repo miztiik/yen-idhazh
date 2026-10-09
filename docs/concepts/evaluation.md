@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -78,7 +78,7 @@ calculation.
 extracted body before `extract.truncation_cap_tokens` cut it. `source_words` is
 `Article.word_count`, the same counter applied to what survived. The difference
 between them is the cut, and nothing else. They are the names item-health gives
-the same two facts; a committed CSV heading from before the rename,
+the same two facts; a row written before the rename, under
 `source_word_count` or `source_seen_word_count`, still reads under the new name.
 
 **A row stamped before `2026-08-27T20:00` measured something else.** Both cells

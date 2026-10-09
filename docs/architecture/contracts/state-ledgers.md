@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -66,7 +66,7 @@ Its read carries `collect.published_window_days`, and the committed config sets 
 
 Size it from the ceiling. A run plans at most `run.safety_ceiling_per_run` items, which the committed config sets to 80, and the schedule fires five times a day - so a day writes at most 400 rows and a year at most about 146,000.
 
-The whole read holds one month's rows and the answer at a time, whatever the history holds. `backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` doubles the months held and checks that the peak stays flat. The read times measured on 2026-09-08 were of the CSV day files this ledger no longer keeps, so they are not repeated here; git history holds them. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
+The whole read holds one month's rows and the answer at a time, whatever the history holds. `backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` doubles the months held and checks that the peak stays flat. The read times measured on 2026-09-08 were of a file layout this ledger no longer keeps, so they are not repeated here; git history holds them. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
 ## The item-health summary keeps a month but files through the door
 

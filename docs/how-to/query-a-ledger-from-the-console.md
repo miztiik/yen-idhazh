@@ -1,6 +1,6 @@
 # Query a ledger from the Data explorer console
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 Use the Data explorer page when the console has the data you need but no purpose-built panel answers your question.
 
@@ -28,13 +28,18 @@ The line under the answer says which UTC days it read, for example `Read from 11
 
 Under the line that says which days were read, the answer names what each selected ledger is missing in those days. A day whose record was lost has no rows in the answer; it was not a quiet day. The date chart breaks its line at such a day rather than joining the days either side. A file the packing set aside unread may hold rows the answer lacks; the line says how many files and which folder holds them, `state/raw/<ledger>/set-aside/`, for a person to read.
 
-The action line prices the next run before it fetches data. A wide span can be refused before any file is fetched when it would pass `console.explorer_max_fetch_bytes`.
+The action line prices the next run before it fetches data. Its UTC day count and dates estimate the same span the line under the answer reports: from the earliest day a selected ledger will read to the latest day one will read. It does not add each ledger's days together. For a 14-day window ending on 15 Jun 2030, a ledger that starts on 11 Jun reads 5 UTC days; beside a ledger that covers the whole window, the count is 14 UTC days. A ledger that stops before the window ends cannot add days after it stops. The line says `Run will read {files}, {size} from {ledgers} over 5 UTC days, from 11 Jun 2030 through 15 Jun 2030.`, or `over 1 UTC day: 15 Jun 2030.` for one day, and `over 0 UTC days.` when no selected ledger reads a day. A wide span can be refused before any file is fetched when it would pass `console.explorer_max_fetch_bytes`.
 
 ## Share or keep a question
 
 Copy link stores the chosen ledgers, the custom dates and the compressed question when the link fits `console.explorer_link_max_bytes`, the measured request-target limit. A longer link carries the ledgers and the days only, and `Copy question` appears beside Copy link. A preset span that ends today keeps `days`; a custom span uses `from` and `end`.
 
 Save keeps the question in this browser. A question saved before custom dates existed opens ending on the reader's UTC day.
+
+Saved questions and History keep exact dates only for a custom span. A preset
+span reopens ending on the current UTC day. A custom span marks no day tile;
+press any tile to replace its dates with that span ending today. Older entries
+that already carry dates keep them, even when their length matches a preset.
 
 ## See also
 

@@ -49,7 +49,12 @@ The denominator is the number that reached that stage, not the whole day.
 Print counts and denominators beside rates. Below `console.min_attempts_for_rate`,
 show counts only and break the rate line, as
 [a share under the floor](#a-share-under-the-floor-gets-no-mark) requires.
-An empty window is not a day of zeroes.
+An empty window is not a day of zeroes. In the Pipelines viewport, this panel
+keeps its own place rather than taking a reserved box: while the monthly files
+are being read it says `Reading the monthly files. This chart is not ready yet.`;
+if a required file does not arrive it says `This chart is unavailable.` The
+shared line above the panels names a missing or failed month. Only a successful
+read with no planned items gets the quiet-window sentence.
 
 **Summary length against the length asked for:** show daily counts inside, below
 and above the configured target band. Print the `summarize.bands` bounds and name
@@ -250,6 +255,7 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - A thinned-out tick label is a deliberate trade against a wide window; it is not supposed to take a day's only date with it when that day also lost its neighbour's reading. A floating label kept clear of a mark's own label answers both without widening the shared thinning itself.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
+- Failure rate remains unboxed in the item-telemetry viewport. A fixed box would add a slot to a group whose panels flow to their own empty states. The page names a missing or failed month once; the chart uses short state sentences and keeps its quiet-window sentence for a successful empty read.
 
 ## See also
 

@@ -17,9 +17,10 @@
 	import CopyAnswer from '$lib/console/explorer/CopyAnswer.svelte';
 	import HistoryList from '$lib/console/explorer/HistoryList.svelte';
 	import ShapePanel from '$lib/console/explorer/ShapePanel.svelte';
-	import { chooseChart, type ChosenRoles, type ExplorerChartType } from '$lib/console/explorer/shape';
+	import { chooseChart, countChartNotes, type ChosenRoles, type ExplorerChartType } from '$lib/console/explorer/shape';
 	import { CHART_KINDS, MOST_ROLES, type RoleId } from '$lib/console/explorer/chart-roles';
 	import { roleRowLines, roleSlotsPerLine } from '$lib/console/explorer/role-row';
+	import { matchPresetSpan } from '$lib/console/explorer/preset-span';
 	import { describeCutDays, describeDaysRead } from '$lib/console/explorer/days-read';
 	import { gapLines } from '$lib/console/explorer/gaps';
 	import { size, statusSentence } from '$lib/console/explorer/status';
@@ -49,10 +50,14 @@
 	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} });
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
+	// The notes the last answer can give, which the chart's foot keeps room for while a run is busy
+	// and after one that brought no answer, so a Run moves the drawing's bottom edge only when an
+	// answer that can give another number of notes arrives. Before the first answer there are none.
+	let chartNoteCount = $state(0);
 	let orderedRows = $state<Row[]>([]);
 	let ledgerColumns = $state<Column[]>([]);
 	let runSpan = $state<{ from: DateStamp; to: DateStamp } | null>(null);
@@ -87,8 +92,10 @@
 	const noticeText = $derived([keepNotice, copyNotice, !storageWorks && !storageNoticeDismissed ? 'This browser keeps nothing.' : ''].filter(Boolean).join(' '));
 	const persistentNotice = $derived(!storageWorks && !storageNoticeDismissed);
 	const readoutLines = $derived(config.readout_lines[readoutBand] ?? config.readout_lines[0]);
+	const chartNoteLines = $derived(config.chart_note_lines[readoutBand] ?? config.chart_note_lines[0]);
 	const roleSlots = $derived(roleSlotsPerLine(MOST_ROLES, config.role_slots_per_line)[readoutBand] ?? MOST_ROLES);
 	const roleLines = $derived(roleRowLines(MOST_ROLES, config.role_slots_per_line)[readoutBand] ?? 1);
+	const presetSpan = $derived(matchPresetSpan(fromDay, toDay, todayUtc(), presets));
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
 	const statusText = $derived(statusLine());
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
@@ -195,7 +202,7 @@
 		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
 		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
 		const empty = emptyLedgerLines();
-		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
+		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
 	function siteFromText(): string {
 		const span = runSpan;
@@ -369,8 +376,7 @@
 			days: windowDays,
 			statement: sql,
 			maxBytes: config.link_max_bytes,
-			from: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : fromDay,
-			end: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : toDay
+			...(presetSpan === null ? { from: fromDay, end: toDay } : {})
 		});
 		history.replaceState(history.state, '', `${address.href}${location.hash}`);
 		linkNotices = [...address.notices];
@@ -403,8 +409,7 @@
 			statement: sql,
 			ledgers: selected,
 			days: windowDays,
-			from: fromDay,
-			end: toDay,
+			...(presetSpan === null ? { from: fromDay, end: toDay } : {}),
 			updatedAt: new Date(Date.now()).toISOString()
 		};
 		const kept = keepSavedQuestion(savedQuestions, next, config.saved_max);
@@ -445,7 +450,7 @@
 		if (!ready) return;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} };
+			cost = { files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} };
 			ledgerColumns = [];
 			return;
 		}
@@ -468,7 +473,7 @@
 		running = true;
 		// What this run asks, read once as it starts: the question, the ledgers and the span may change
 		// while the answer is on its way, and the answer, the link and History all belong to what was asked.
-		const asked = { statement: sql, ledgers: [...selected], days: windowDays, span: span() };
+		const asked = { statement: sql, ledgers: [...selected], days: windowDays, span: span(), custom: presetSpan === null };
 		await replaceAddress();
 		lastRead = null;
 		const started = performance.now();
@@ -478,6 +483,8 @@
 			// The window goes with its answer, so the lines under the answer change only on a run.
 			runSpan = asked.span;
 			result = answer;
+			if (answer.state === 'ok') chartNoteCount = countChartNotes(answer.columns, answer.rows as Row[], shapeBounds, answer.capped);
+			else if (answer.state === 'quiet') chartNoteCount = 0;
 			if ((answer.state === 'ok' || answer.state === 'quiet') && 'read' in answer) {
 				lastMs = answer.read.ms;
 				lastRead = answer.read;
@@ -488,8 +495,7 @@
 				statement: asked.statement,
 				ledgers: asked.ledgers,
 				days: asked.days,
-				from: asked.span.from,
-				end: asked.span.to,
+				...(asked.custom ? { from: asked.span.from, end: asked.span.to } : {}),
 				rows,
 				ms: lastMs ?? Math.round(performance.now() - started),
 				askedAt: new Date(Date.now()).toISOString()
@@ -559,7 +565,7 @@
 
 <Notice text={noticeText} durationMs={config.notice_ms} persistent={persistentNotice} onClose={() => { copyNotice = ''; keepNotice = null; if (!storageWorks) storageNoticeDismissed = true; }} />
 
-<div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--readout-lines:${readoutLines};--role-slots:${roleSlots};--role-lines:${roleLines}`}>
+<div class="workbench" style={`--idle-height:${data.console.chart_height}px;--editor-lines:${editorLines};--role-slots:${roleSlots};--role-lines:${roleLines};--note-lines:${chartNoteLines}`}>
 <Panel id="data-explorer-ask" title="Your question">
 	<div class="question-panel">
 		<div data-workbench-region="questions">
@@ -580,7 +586,7 @@
 					<div class="editor-head">
 						<label for="explorer-sql"><Icon id="query-editor" /> DuckDB SQL</label>
 						<WindowControl
-							days={windowDays}
+							days={presetSpan}
 							presets={presets}
 							busy={costing || running}
 							ready={ready}
@@ -688,6 +694,7 @@
 			lostDays={drawnAnswer?.gaps.flatMap((gap) => gap.lostDays) ?? []}
 			bounds={shapeBounds}
 			floorHeight={data.console.chart_height}
+			noteCount={chartNoteCount}
 			slotsPerLine={roleSlots}
 			capped={drawnAnswer?.capped ?? false}
 			maxRows={config.max_rows}
@@ -719,10 +726,27 @@
 <style>
 	/* The workbench is a tool, so it has the whole window and no card edge: the
 	   strip's rule above it is its top edge, and a border at the window's edge
-	   would frame nothing. */
+	   would frame nothing.
+
+	   The result region's floor is the least room its parts need, each height
+	   written once here and read by the Chart tab too: the strip, the role row,
+	   and the drawing's floor - the main figure's line, the plot at
+	   `console.chart_height`, the room its readout takes, and the comparison's
+	   line. A window too short for it scrolls the page, never the plot. */
 	.workbench {
 		overflow-x: clip;
 		background: var(--color-bg);
+		--strip-height: calc(var(--workbench-control) + 2 * var(--space-1));
+		--role-row-height: calc(var(--role-lines) * var(--workbench-control) + (var(--role-lines) - 1) * var(--space-1) + 2 * var(--space-1));
+		--lede-line: var(--leading-xl);
+		--comparison-line: var(--leading-base);
+		/* A chart's readout sets no line height of its own, so its 0.75rem lines
+		   take the page's 1.5. The room is the tallest readout, the date chart's:
+		   its day, its entries and its key hint, and the space above each. */
+		--readout-line: calc(1.5 * var(--text-xs));
+		--readout-room: calc(var(--space-3) + var(--space-1) + var(--space-2) + 3 * var(--readout-line));
+		--drawing-floor: calc(var(--lede-line) + var(--space-3) + var(--idle-height) + var(--readout-room) + var(--comparison-line) + var(--space-3));
+		--result-floor: calc(var(--strip-height) + var(--role-row-height) + var(--drawing-floor));
 	}
 
 	.workbench > :global([data-console-panel-id]) {
@@ -994,13 +1018,14 @@
 	}
 
 	/* The strip is one line from 640 px and two below it, in both tabs: the tabs, then the open
-	   tab's own controls. Its rule is drawn inside its box, so the box is the lines alone. */
+	   tab's own controls. Its rule is drawn inside its box, so the box is the lines alone, and so
+	   is the region's own rule above it, so the region's box is exactly its rows. */
 	.result-region {
 		contain: size;
 		display: grid;
-		grid-template-rows: calc(var(--workbench-control) + 2 * var(--space-1)) minmax(0, 1fr);
+		grid-template-rows: var(--strip-height) minmax(0, 1fr);
 		min-block-size: 0;
-		border-block-start: 1px solid var(--color-rule);
+		box-shadow: inset 0 1px 0 var(--color-rule);
 		background: var(--color-bg);
 	}
 
@@ -1075,16 +1100,16 @@
 	   a media query cannot read. */
 	@media (min-width: 1024px) {
 		/* `min-block-size: 0` hands the split to the two `1fr` rows: each half
-		   keeps its own smallest size, and only a window shorter than both
-		   together makes the page scroll. Left to its content, the box would ask
-		   for twice the larger half, because two equal rows size to their larger
-		   minimum. */
+		   keeps its own smallest size - the question its content, the answer
+		   `--result-floor` - and only a window shorter than both together makes
+		   the page scroll. Left to its content, the box would ask for twice the
+		   larger half, because two equal rows size to their larger minimum. */
 		.workbench {
 			flex: 1 1 0;
 			min-block-size: 0;
 			display: grid;
 			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: minmax(max-content, 1fr) minmax(0, 1fr);
+			grid-template-rows: minmax(max-content, 1fr) minmax(var(--result-floor), 1fr);
 		}
 
 		.workbench > :global([data-console-panel-id='data-explorer-ask']) {
@@ -1161,15 +1186,15 @@
 		.rail-region:not([open]) > :global(.column-list) {
 			display: none;
 		}
-		.result-region { min-block-size: 100svh; }
+		.result-region { min-block-size: max(100svh, var(--result-floor)); }
 	}
 
 	@media (max-width: 639px) {
+		.workbench {
+			--strip-height: calc(2 * var(--workbench-control) + 3 * var(--space-1));
+		}
 		/* The strip takes two lines in both tabs: the tabs, then the open tab's own controls, which
 		   need the phone's whole width. Its box is the same whichever tab is open. */
-		.result-region {
-			grid-template-rows: calc(2 * var(--workbench-control) + 3 * var(--space-1)) minmax(0, 1fr);
-		}
 		.result-tabs {
 			display: grid;
 			grid-template-columns: auto auto minmax(0, 1fr);

@@ -598,7 +598,7 @@ def main(argv: Sequence[str]) -> int:
     # The identity this job's own files carry. `ledger.segment_name` names a
     # writer's file `<run_id>-<attempt>-<job>-<shard>`, and this project's run id
     # is itself `<date>-<execution>` - so a committed name reads
-    # `2026-09-22-35743751882-1-work-03.csv`. That leading date is why the match
+    # `2026-09-22-35743751882-1-work-03.jsonl`. That leading date is why the match
     # is not anchored to the first character: the runner hands this program the
     # execution number, and the date is the plan job's to choose. The execution
     # number is allocated by GitHub and is eleven digits, so finding it with the
