@@ -5,12 +5,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-from utilities.compare_summary_encoders import read_config, select_encoders, stage_collect
+from utilities.compare_summary_encoders import (
+    read_config,
+    select_encoders,
+    stage_collect,
+    stage_render,
+)
+from utilities.encoder_reading_table import render_readings
 
 CONFIG = Path(__file__).resolve().parents[2] / "config" / "encoder-comparison.json"
 WORKFLOW = CONFIG.parent.parent / ".github" / "workflows" / "encoder-comparison.yml"
@@ -98,3 +105,44 @@ def test_collect_rejects_a_saved_row_for_another_pair_set(tmp_path: Path) -> Non
             readings_from=tmp_path / "incoming", out=output,
             commit="", run_url="", selected="embeddinggemma-two", preserve_existing=True,
         ))
+
+
+def test_reading_table_uses_standard_terms_without_changing_saved_numbers() -> None:
+    readings = [{
+        "slug": "recorded-encoder", "state": "measured", "numbers_an_article": 384,
+        "parameters_millions": 33, "separation": 0.91, "spread": 0.7,
+        "same_mean": 0.9, "different_mean": 0.2, "ambiguous_mean": 0.5,
+        "ambiguous_lean": 0.4, "related_mean": 0.8, "related_lean": 0.9,
+        "articles_a_second": 12.0, "minutes_for_whole_archive": 2.0,
+        "minutes_for_one_day": 0.1, "peak_memory_gb": 0.75,
+    }]
+    original = deepcopy(readings)
+    table = render_readings(readings, archive_articles=1440, batch_articles=72)
+    assert readings == original
+    assert "Proxy ROC AUC" in table and "Mean cosine difference" in table
+    assert "1440" not in table and "1,440 archive articles" in table
+    assert "72 articles per batch" in table
+    assert "Fraction above midpoint" in table and "not a standard selection metric" in table
+    assert "not standard deviation, Cohen's d" in table
+    assert "| `recorded-encoder` | 0.900 | 0.200 | 0.700 | 0.500 | 0.400 | 0.800 | 0.900 |" in table
+    assert "**Spread**" not in table and "**Middle lean**" not in table
+    assert "will join too much" not in table and "cannot tell an update" not in table
+
+
+def test_render_saved_readings_leaves_the_measurement_and_manifest_unchanged(
+    tmp_path: Path,
+) -> None:
+    readings = tmp_path / "encoders.json"
+    readings.write_text(json.dumps({"encoders": [{
+        "slug": "unavailable-encoder", "state": "unavailable",
+        "articles_done": 0, "articles_to_encode": 10,
+    }]}), encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('{"run": "recorded"}', encoding="utf-8")
+    original_readings, original_manifest = readings.read_bytes(), manifest.read_bytes()
+    output = tmp_path / "encoders.md"
+    stage_render(argparse.Namespace(config=CONFIG, readings=readings, out=output))
+    assert readings.read_bytes() == original_readings
+    assert manifest.read_bytes() == original_manifest
+    assert "| `unavailable-encoder` | | | unavailable 0/10 | | | | |" in output.read_text()
+    assert "\r\n" not in output.read_bytes().decode("utf-8")

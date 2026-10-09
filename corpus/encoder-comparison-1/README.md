@@ -125,9 +125,9 @@ flowchart TD
   SCORE --> TABLE[("Readings<br/>One row an encoder")]
 
   subgraph OBSERVED["Metrics"]
-    SEPARATION["separation<br/>Chance a same-event pair<br/>outscores a different one (0 to 1)"]
-    LEAN["ambiguous_lean<br/>Share of uncertain pairs<br/>scored above halfway (0 to 1)"]
-    SECOND["related_lean<br/>Share of second pieces<br/>scored above halfway (0 to 1)"]
+    SEPARATION["Proxy ROC AUC<br/>Positive pair ranks above<br/>negative pair (0 to 1)"]
+    LEAN["Middle-overlap exceedance fraction<br/>Unlabeled scores above the<br/>class-mean midpoint (0 to 1)"]
+    SECOND["Same-outlet exceedance fraction<br/>Unlabeled scores above the<br/>class-mean midpoint (0 to 1)"]
     RATE["articles_a_second<br/>Encoding rate on the runner (count/s)"]
   end
 
@@ -154,7 +154,7 @@ flowchart TD
 bucket a pair goes in and is then set aside. Letting an encoder see the same
 signal that built the answer key would flatter every one of them equally.
 
-**Only the first two buckets make a separation score.** The other two are
+**Only the first two buckets make a proxy ROC AUC.** The other two are
 scored on the same vectors and reported on their own, because neither has an
 answer anybody knows. Folding them in would leave one number answering three
 questions and none of them clearly.
@@ -174,22 +174,15 @@ rule cannot give it: the two titles share their subject words either way.
 Counted over the 44 named UTC days: **488 high-overlap pairs come from one
 outlet, against 5,517 from two.**
 
-They were dropped at first and are now their own bucket, scored on the same
-vectors and reported beside the rest. They are never folded into separation,
-because separation answers *"can you tell one event from another"* and this
-asks *"can you tell an update from a new story"*. One number answering both
-would answer neither clearly.
+They are their own unlabeled group, scored on the same vectors and reported
+beside the rest. They are not folded into proxy ROC AUC because their event
+identity has not been judged in this proxy.
 
-What the reading means:
-
-- **Near 1.0** - the encoder scores a follow-up as high as a genuine match. In
-  production it will fold every update into the story it follows.
-- **Lower** - it keeps some signal, and a grouping rule has something to work
-  with.
-
-Nobody has said which of those 488 are one event, so this is not an accuracy
-either. Plan 63 row R14 builds the set a person validates, and that one can
-settle each pair where a word-overlap rule cannot.
+The mean cosine and fraction above the class-mean midpoint describe this
+group's scores. A fraction near one does not prove an error: some of these
+pairs may really report one event. No precision, recall or over-merging claim
+can be made without labels. The separate model-judged set answers event
+identity for its selected pairs; it does not label all 488 proxy candidates.
 
 ## Who wrote the labels
 
@@ -246,6 +239,18 @@ vector-dependent quota was empty, leaving **850 unique pairs**. The sampler
 shuffled within each group with seed `20261008`, added 85 blind repeat copies
 and shuffled the sheet again: **935 rows**. The missing quota was not filled
 with easier pairs.
+
+The corpus did **not** form only 935 pairs. The sampler considered **9,101,758
+same-day or next-day candidate pairs** before choosing 850 identities. The
+1,000 target was a bounded judgment budget, not a count of all events or a
+statistical power calculation. Reusing articles and inserting blind copies
+means 935 rows touch 1,386 articles, not 1,870. The current uncertainty ranges
+describe this enriched sample; they do not establish archive-wide accuracy.
+
+Expanding the sample should add the missing low-word-overlap same-event cases,
+hard different-event neighbors, and representative randomly selected candidate
+pairs, rather than merely more easy mismatches. More article-independent,
+reviewed examples would improve coverage and the label evidence.
 
 The original export and these arguments reproduced every row and selection
 field of the committed sheet exactly:
@@ -424,7 +429,7 @@ evidence and was not used to pick a split or threshold.
 Table E. Saved encoding costs for 1,000 articles on separate GitHub
 4-vCPU, 16-GB, no-GPU runs, with whole-process peak memory.
 
-| ID | Encoder | Minutes / 1,000 | Peak GB | Vector run |
+| ID | Encoder | Minutes / 1,000 | Peak GiB | Vector run |
 | --- | --- | ---: | ---: | --- |
 | E1 | MiniLM-L6 | 0.58 | 0.87 | `37850950040` |
 | E2 | GTE-small | 0.18 | 1.14 | `37850950040` |
@@ -453,6 +458,98 @@ coverage of missing inputs, or a statistically demonstrated GTE/Gemma winner.
 GTE-small and MiniLM remain the owner's candidates. No production configuration
 changes. A representative sample and human review of label disagreements would
 test the remaining deployment assumptions; neither is claimed here.
+
+### Settings and fine-tuning worth investigating
+
+The official [EmbeddingGemma-2 model card](https://huggingface.co/google/embeddinggemma-2)
+documents symmetric task prefixes, mean pooling, 768-dimensional output and
+float32 or bfloat16 inference. The measured run already used mean pooling,
+full 768 dimensions, float32 and
+`task: sentence similarity | query: ` on both inputs. There was no missing
+similarity instruction to repair. Vision and audio were disabled for memory
+and CPU cost; enabling them does not enrich text-only inputs.
+
+**A lower cosine cutoff increases recall but can lower precision.** On the
+178 calibration pairs only, Gemma's 95% precision constraint selected a
+0.971336 cutoff, finding five of 64 same-event pairs (7.81% recall, 100%
+observed precision). Relaxing the constraint to 90% selected 0.951614 and found
+18 of 64 (28.13% recall, 18 correct / 20 predicted matches). This is
+calibration-only exploration, not a new held-out result or a proposed
+production setting. Changing the cutoff does not improve AP, which measures
+the whole ranking.
+
+The comparison caps every input at **256 tokens**; Gemma supports 8,192.
+A tokenizer-only audit at the recorded model revision, including the same
+prefix and special tokens, found 25 of 10,675 encoded inputs above the cap
+(maximum 332 tokens). Four of 1,163 distinct eligible articles exceed it,
+affecting four of the 545 held-out pairs: `p0132`, `p0317`, `p0577`, `p0592`.
+The tokenizer JSON hash is
+`4d777ef5bdc1aa36227abdfb77c3e49e7b9c892d16e1b6bda41c393504828be4`.
+Testing 512 tokens would cover all recorded inputs for this tokenizer. The
+audit does not establish that missing text changed those four labels or scores,
+or that a larger context would solve the recall problem.
+
+A `Clustering` prefix is another documented Gemma task setting to test on
+development data, not a demonstrated improvement. Broad topical clustering
+may be less suitable than similarity for distinguishing separate events about
+the same company. Matryoshka truncation to 512 or 256 dimensions can be
+evaluated from saved full vectors after re-normalization: it saves vector
+storage and scoring cost, not the main encoder forward pass, and is not a
+promised recall boost. Batch size, thread count and supported numerical
+precision primarily affect runtime and memory.
+
+GTE-small's [official card](https://huggingface.co/thenlper/gte-small) identifies
+**Alibaba DAMO Academy** as its training group. Its uploader name is not its
+research pedigree. Google's resources, a model's age and published general
+benchmarks do not establish superiority on this particular event-identity
+task. GTE-small remains the provisional quality/cost choice, with MiniLM as
+the retained control, not a deployment decision.
+
+**GTE-small can be fine-tuned** with Sentence Transformers. Binary
+same/different pairs fit a supervised contrastive objective; difficult
+different-event examples teach the model not to join separate occurrences.
+The [training guide](https://sbert.net/docs/sentence_transformer/training_overview.html)
+and [loss guide](https://sbert.net/docs/sentence_transformer/loss_overview.html)
+describe domain adaptation and matching a loss to label format. Same-event
+positive pairs can also support ranking losses, but indiscriminate in-batch
+negatives may incorrectly separate different articles about one real event.
+
+Fine-tuning is a hypothesis, not a free upgrade. There are only 723 unique
+covered binary pairs, and the existing non-held-out partition has just 178
+pairs (64 same, 114 different). Review inconsistent or ambiguous labels and
+collect additional train/development data. Keep connected articles together,
+keep the 545 held-out pairs out of training and hyperparameter selection, and
+reserve a fresh confirmation set after repeated model comparisons. Training
+on all 935 and measuring on those same pairs would be memorization, not
+evidence of improvement. No fine-tuning or additional encoding has run here.
+
+### Faster evaluation of additional encoders
+
+A new encoder need not encode the archive. The **entire fixed judging sheet**
+needs at most **1,386 unique summaries encoded once**, not 935 times two and
+not 15,000 articles. That is about one eighth of the earlier 10,675-summary
+encoding work, assuming similar lengths and batch efficiency; actual wall
+time still needs measurement.
+
+All four current encoders already cover 1,269 of those articles; 117 distinct
+article inputs are absent from their caches. The earlier 118 missing rows and
+102 excluded identities count pair appearances and pair identities, not
+articles. Filling those missing inputs would require additional encoding and
+versioned provenance for every baseline included in a larger comparison.
+
+For an exact like-for-like comparison on the **existing 723-pair evaluation**,
+a new encoder needs only its **1,163 distinct eligible summaries**. It can
+reuse the fixed pair IDs, article partitions and model judgments; encode
+those texts once, then calculate cosine scores. Saved models require no
+encoding to test other cutoffs or compute additional metrics.
+
+The current `encoder-comparison.yml` still reads the 10,675-summary proxy input,
+and the evaluator refuses vectors in a different article order. A compact
+judged-input runner and matching order/hash are the next wiring change; neither
+has been silently substituted for the completed run. A prompt/context or
+weight change needs new vectors for that changed variant, but only for its
+selected inputs. A learned cutoff or representation must be chosen without
+tuning on the final held-out sample.
 
 ### Reproduce without encoding
 
@@ -520,7 +617,7 @@ middle band is kept.
 | Different events | Two outlets, titles share **less than 0.10** | A mismatch the encoder should score low |
 
 Every pair is published the same day or a day apart. Only the first and last
-bucket make a separation score; the middle two are scored on the same vectors
+bucket make a proxy ROC AUC; the middle two are scored on the same vectors
 and reported on their own.
 
 ### Where the thresholds came from
@@ -536,21 +633,17 @@ The 0.10 line is where a shared word stops meaning anything: below it, two
 titles usually share only a country or a company name that half the corpus
 mentions.
 
-### What the middle band reports
+### What the unlabeled score distributions report
 
-Nobody knows whether an uncertain pair matches, so it is never counted right or
-wrong. What it reports is a **lean**: the share of those pairs an encoder scores
-above the halfway mark between its matching and mismatching averages.
+The middle-overlap and same-outlet groups have no event labels in this proxy.
+Each group has a mean cosine and a descriptive exceedance fraction: the share
+of scores strictly above `(positive mean + negative mean) / 2`. The midpoint is
+encoder-specific and is not a calibrated or production threshold.
 
-- A **high** lean means the encoder pulls doubtful pairs towards "same". In
-  production it will join stories that should stay apart.
-- A **low** lean means it pushes them towards "different". In production it will
-  leave one story in several pieces, which is the failure the current 1.4
-  percent already shows.
-
-Two encoders can separate the easy cases equally well and lean very differently.
-That difference is invisible to a two-bucket test and it is the one that decides
-what the reader sees.
+Higher or lower fractions describe scores, not correct or incorrect decisions.
+Neither an over-merging rate nor recall can be inferred from them. The generated
+[`readings/encoders.md`](readings/encoders.md) spells out the formulas and maps
+the historical JSON names to these descriptions.
 
 ### What the title-derived proxy cannot tell you
 
@@ -558,12 +651,10 @@ Both outer buckets contain mistakes. Two outlets can write near-identical titles
 about genuinely different events, and one event can draw two titles with no
 words in common. **So no number here is an accuracy.**
 
-What the stand-in can do is rank. Every encoder scores the identical pairs, so
-an encoder that handles the hard cases better scores higher, even though none of
-them can be scored absolutely. That is the whole claim.
-
-Plan 63 row R14 builds the set that does carry human judgement. When it lands,
-this comparison is worth re-running against it.
+Every encoder scores identical proxy pairs, but scores near one on easy,
+title-derived cases cannot establish a ranking on actual event identity. The
+completed model-judged evaluation is the harder selector. It is explicitly
+model-written, not the future human-reviewed evidence this project still lacks.
 
 ## If a shard runs out of time
 
@@ -588,9 +679,10 @@ leaving the row blank.
 
 ## What the numbers mean
 
-**Separation** is the one to read. Pick one likely-same pair and one
-likely-different pair at random: how often does this encoder score the
-same-event one higher? 1.0 is perfect, 0.5 is a coin toss.
+**ROC AUC** is the standard name of the statistic historically stored as
+`separation`. On the proxy, it compares likely-positive with likely-negative
+pairs, not verified event labels. One is perfect ordering, 0.5 is chance-level,
+and ties receive half credit.
 
 It is used instead of the gap between two averages, because encoders put their
 scores on different scales. An earlier attempt at this comparison, run on a
@@ -599,16 +691,16 @@ laptop, reported `all-MiniLM-L6-v2` ahead of `bge-base-en-v1.5` on a gap of
 places them at 0.105, so the gap was measuring the scale and not the skill. A
 rank cannot be fooled that way.
 
-**Spread** is kept beside it because it decides something separate. Two encoders
-can separate equally well while one leaves far more room between the two groups
-for a decision to sit in. A compressed scale makes any fixed cut-off harder to
-place and more fragile when the corpus shifts.
+**Mean cosine difference** is the standard descriptive quantity stored as
+`spread`: positive mean minus negative mean. It is not variance, standard
+deviation, Cohen's d or a scale-free quality measure. A larger gap does not
+establish easier calibration or more stable production behavior; separate
+encoders have different similarity distributions.
 
-**Articles a second** was taken on the runner. **It is not a selection
-criterion.** A batch is about a thousand articles and gets three hours, so the
-slowest encoder measured here finishes in a ninth of its session and the
-fastest in a hundredth. Nothing in that range changes whether a batch
-completes.
+**Throughput** is encoded summaries divided by encoding seconds, on the
+recorded host. It informs runtime cost, not embedding quality or the chance
+of meeting every future job deadline. The time projections assume that rate
+continues for the configured number of articles.
 
 The figure is kept for two narrower purposes: deciding how long a comparison
 like this one takes to run, and pricing the one-time cost of re-encoding the
@@ -623,9 +715,23 @@ cache size and memory bandwidth differ between them. Each shard now records the
 processor it ran on, so a figure can be read against its machine instead of
 being read as the model's.
 
-**Peak memory** is the whole process against the runner's 16 GB. This one does
+**Peak resident memory** is the whole process, reported in GiB, against the
+runner's advertised 16 GB. This one does
 bite: the batch also runs the summariser, and a large encoder plus a loaded
 language model is where the limit is reached.
+
+The [generated metric glossary](readings/encoders.md#metric-glossary) defines
+cosine, ROC AUC, AP, precision, recall, confusion counts, diagnostic midpoint
+fractions, throughput, memory and confidence intervals. The historical JSON
+keys are retained so the original numeric measurements and report provenance
+remain intact. Refresh the readable table without encoding or changing a
+manifest:
+
+```powershell
+python backend\utilities\compare_summary_encoders.py render `
+  --readings corpus\encoder-comparison-1\readings\encoders.json `
+  --out corpus\encoder-comparison-1\readings\encoders.md
+```
 
 ## What was removed
 
