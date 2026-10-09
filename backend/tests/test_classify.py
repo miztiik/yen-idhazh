@@ -11,7 +11,6 @@ import dataclasses
 import json
 import re
 from math import ceil
-from os.path import commonprefix
 from string import Template
 from typing import Any
 
@@ -1987,12 +1986,17 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
     suppressed = build_summarize_and_plan_request(
         first, reply, markers=committed_markers(), plan=False
     )
+    asked_prompt = str(asked["prompt"])
+    suppressed_prompt = str(suppressed["prompt"])
     opening = str(first["prompt"])
 
-    assert str(asked["prompt"]).startswith(opening)
-    assert str(suppressed["prompt"]).startswith(opening)
-    shared = commonprefix([str(asked["prompt"]), str(suppressed["prompt"])])
-    assert len(shared) >= len(opening) + len(reply), (
+    assert asked_prompt.startswith(opening)
+    assert suppressed_prompt.startswith(opening)
+    shared_prefix_length = len(opening) + len(reply)
+    assert (
+        len(asked_prompt) >= shared_prefix_length
+        and suppressed_prompt.startswith(asked_prompt[:shared_prefix_length])
+    ), (
         "suppressing the plan moved something in front of the label call's reply, so a gated "
         "item cannot reuse the prefix an ungated one left"
     )
