@@ -7,6 +7,7 @@
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import { countDays } from '$lib/console/span-words';
+	import type { PanelState } from '$lib/console/waiting';
 	import BandDistance from './BandDistance.svelte';
 	import FailureList from './FailureList.svelte';
 	import FailurePanels from './FailurePanels.svelte';
@@ -20,6 +21,7 @@
 	let {
 		rows,
 		window: viewport,
+		panelState,
 		config,
 		bands,
 		tickDensity,
@@ -30,6 +32,7 @@
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
+		panelState: PanelState;
 		config: {
 			pan_days: number;
 			chart_height: number;
@@ -145,6 +148,7 @@
 			<FailurePanels
 				{rows}
 				window={viewport}
+				{panelState}
 				minAttempts={config.min_attempts_for_rate}
 				height={config.chart_height}
 				width={config.chart_width}

@@ -48,11 +48,13 @@
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import { countDays, nameSpan } from '$lib/console/span-words';
+	import type { PanelState } from '$lib/console/waiting';
 	import { shortDate } from '$lib/format';
 
 	let {
 		rows,
 		window,
+		panelState,
 		minAttempts,
 		height,
 		width,
@@ -63,6 +65,7 @@
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
+		panelState: PanelState;
 		minAttempts: number;
 		/** The whole SVG, margins included. */
 		height: number;
@@ -362,7 +365,15 @@
 		{/if}
 	</div>
 
-	{#if load.empty}
+	{#if load.empty && panelState === 'loading'}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-loading>
+			Reading the monthly files. This chart is not ready yet.
+		</p>
+	{:else if load.empty && panelState !== 'quiet' && panelState !== 'ready'}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-unavailable>
+			This chart is unavailable.
+		</p>
+	{:else if load.empty}
 		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-empty>
 			No item was planned in {nameSpan(windowDays)}, so there is no rate to give and no volume to
 			give it against.
