@@ -1,6 +1,53 @@
 {
- "version": "2026-10-08",
+ "version": "2026-10-09",
  "encoders": [
+  {
+   "version": "2026-10-09",
+   "slug": "jina-v5-nano",
+   "model_id": "jinaai/jina-embeddings-v5-text-nano-text-matching",
+   "parameters_millions": 212,
+   "prefix": "Document: ",
+   "model_options": {
+    "revision": "a75863a1a1ada69eda80f20ae26b5f40b4a823bc",
+    "trust_remote_code": true,
+    "model_kwargs": {
+     "dtype": "float32"
+    }
+   },
+   "encode_options": {
+    "prompt": ""
+   },
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
+   "why": "The selected February 2026 nano encoder with its official text-matching adapter already merged. Both summaries use Document: once. The merged weights contain about 212M parameters; the multi-adapter model advertises 239M. CC-BY-NC-4.0: evaluation only, not commercial adoption.",
+   "state": "measured",
+   "reason": null,
+   "written_at": "2026-10-09T07:40:32Z",
+   "articles_to_encode": 10675,
+   "articles_done": 10675,
+   "load_seconds": 6.5,
+   "encode_seconds": 3074.7,
+   "numbers_an_article": 768,
+   "pairs": {
+    "same": 5517,
+    "different": 5517,
+    "ambiguous": 4000,
+    "related": 488
+   },
+   "separation": 0.9961,
+   "same_mean": 0.886,
+   "different_mean": 0.537,
+   "ambiguous_mean": 0.74,
+   "ambiguous_lean": 0.593,
+   "related_mean": 0.881,
+   "related_lean": 0.982,
+   "spread": 0.349,
+   "articles_a_second": 3.5,
+   "threads_used": 4,
+   "processors_available": 4,
+   "minutes_for_whole_archive": 72.6,
+   "minutes_for_one_day": 4.8,
+   "peak_memory_gb": 1.91
+  },
   {
    "version": "2026-10-08",
    "slug": "gte-small",
@@ -185,6 +232,56 @@
    "minutes_for_whole_archive": 49.6,
    "minutes_for_one_day": 3.28,
    "peak_memory_gb": 1.48
+  },
+  {
+   "version": "2026-10-09",
+   "slug": "embeddinggemma-two",
+   "model_id": "google/embeddinggemma-2",
+   "parameters_millions": 270,
+   "prefix": "task: sentence similarity | query: ",
+   "model_options": {
+    "revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+    "config_kwargs": {
+     "vision_config": null,
+     "audio_config": null
+    },
+    "model_kwargs": {
+     "dtype": "float32"
+    }
+   },
+   "encode_options": {
+    "prompt": ""
+   },
+   "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
+   "why": "The selected October 2026 encoder, loaded text-only. Both summaries use the sentence-similarity instruction. Apache-2.0; this run measures quality and CPU cost, not a production adoption.",
+   "state": "unavailable",
+   "reason": "ImportError: EmbeddingGemma2Processor requires the PIL library but it was not found in your environment. You can install it with pip:\n`pip install pillow`. Please note that you may need to restart your runtime after installation.\n\nTo install the required dependencies, run:\npip install -U \"sentence-t",
+   "written_at": "2026-10-09T06:49:16Z",
+   "articles_to_encode": 10675,
+   "articles_done": 0,
+   "load_seconds": null,
+   "encode_seconds": null,
+   "numbers_an_article": null,
+   "pairs": {
+    "same": 5517,
+    "different": 5517,
+    "ambiguous": 4000,
+    "related": 488
+   },
+   "separation": null,
+   "same_mean": null,
+   "different_mean": null,
+   "ambiguous_mean": null,
+   "ambiguous_lean": null,
+   "related_mean": null,
+   "related_lean": null,
+   "spread": null,
+   "articles_a_second": null,
+   "threads_used": 4,
+   "processors_available": 4,
+   "minutes_for_whole_archive": null,
+   "minutes_for_one_day": null,
+   "peak_memory_gb": 2.1
   }
  ]
 }
