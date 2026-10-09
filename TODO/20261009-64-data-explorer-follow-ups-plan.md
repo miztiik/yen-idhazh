@@ -13,7 +13,7 @@
 | Hard scope - out | See the table below. |
 | ESCALATE triggers | 1. Changing the trust boundary, contamination meaning, a persisted contract or the model requires owner approval before implementation.<br>2. A measurement cannot settle its question: report what is missing and the smallest measurement that would settle it; do not treat an unmeasured path as passing.<br>3. A proposed archive change needs another host, content-policy origin or publication mechanism: ask the owner.<br>4. A row overlaps an active row's named files: hold that row or agree a release point before editing. |
 | Chosen strategy | Keep verified defects separate from measurements. Retain current production behavior until a measurement supports a change. This closure carries findings, not approval to weaken their controls. |
-| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. AUTHOR-AND-STOP until the owner authorizes this plan; measuring rows run alone. |
+| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Only row 2 is authorized by the owner on 2026-10-09. Rows 1, 3 and 4 remain AUTHOR-AND-STOP; measuring rows run alone. |
 
 ### Hard scope - out
 
@@ -28,7 +28,7 @@
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Extraction is remeasured before its trafilatura ceiling changes | - | A | PENDING | - | - | - |
-| 2 | Corpus-history tests name their bare repository explicitly | - | B | PENDING | - | - | - |
+| 2 | Corpus-history tests name their bare repository explicitly | - | B | DONE | upgraded-lamp | - | owner |
 | 3 | Archive range reads are measured before whole-file reads change | - | C | PENDING | - | - | - |
 | 4 | Choosing an example is one undoable edit | - | B | PENDING | - | - | - |
 
