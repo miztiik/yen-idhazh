@@ -19,8 +19,8 @@ Saved rows are not re-encoded. Each row's date, model options and task settings 
 | `gte-base` | 768 | 109M | **0.9943** | 0.205 | 0.929 | 0.724 | 0.834 | 0.535 | 0.925 | 0.961 | 1.2 | 202.9 min | 13.43 min | 0.97 GB |
 | `minilm-l6` | 384 | 22M | **0.9925** | 0.658 | 0.760 | 0.102 | 0.462 | 0.540 | 0.746 | 0.971 | 28.6 | 8.8 min | 0.58 min | 0.87 GB |
 | `gte-modernbert` | 768 | 149M | **0.9915** | 0.384 | 0.859 | 0.475 | 0.687 | 0.557 | 0.852 | 0.963 | 0.6 | 400.1 min | 26.47 min | 1.08 GB |
+| `embeddinggemma-two` | 768 | 270M | **0.9905** | 0.154 | 0.917 | 0.763 | 0.848 | 0.546 | 0.919 | 0.986 | 3.0 | 85.3 min | 5.64 min | 3.3 GB |
 | `bge-base` | 768 | 109M | **0.9905** | 0.384 | 0.841 | 0.457 | 0.666 | 0.537 | 0.838 | 0.973 | 5.1 | 49.6 min | 3.28 min | 1.48 GB |
-| `embeddinggemma-two` | | | unavailable 0/10675 | | | | | | | | | | | |
 
 Why each encoder is in the list:
 
@@ -29,5 +29,5 @@ Why each encoder is in the list:
 - **`gte-base`** - Best separation of the six measured, at 0.96 GB. The leader to beat, and the other half of the size-against-training question.
 - **`minilm-l6`** - What the search surface runs today. Every other row is read as a gain or a loss against it.
 - **`gte-modernbert`** - The same training again, on a newer foundation than the rest of the list. Sits within forty million parameters of gte-base, so the pair reads as a change of foundation rather than a change of size. It is the one row that asks whether anything has moved since the models here were built.
-- **`bge-base`** - The same size as gte-base from a different group. One pair at one size is what separates a training difference from a size difference.
 - **`embeddinggemma-two`** - The selected October 2026 encoder, loaded text-only. Both summaries use the sentence-similarity instruction. Apache-2.0; this run measures quality and CPU cost, not a production adoption.
+- **`bge-base`** - The same size as gte-base from a different group. One pair at one size is what separates a training difference from a size difference.
