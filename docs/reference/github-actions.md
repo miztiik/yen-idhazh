@@ -83,7 +83,7 @@ or comparative speed across different runner machines.
 Give each case its own trial root named `<case>` to prevent filename
 collisions - ledgers land tier-first at `state/raw/pipeline-tests/<case>/` and
 `state/compact/pipeline-tests/<case>/`, traces at
-`state/trial-traces/pipeline-tests/<case>/`. The case slug is separate from the shared
+`state/raw/traces/pipeline-tests/<case>/`. The case slug is separate from the shared
 `run.trial_state_dirname` root. Only the commit job has write permission; validate
 downloaded rows and config-derived paths before staging them. Gather only the plan's
 named UTC day from each declared ledger, not a trial root's accumulated history.
