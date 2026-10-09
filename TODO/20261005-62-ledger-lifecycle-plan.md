@@ -112,10 +112,11 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | PENDING | - | - | - |
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
-| L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | - | 79f93e3d-1fc7-419a-a79e-94163d651183 |
+| L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
+| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -2550,3 +2551,33 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the component tests as the only check | They do not prove that one rendered page binds all three panels to the recorded line | Nothing to build, and the full-page binding remains unchecked | Row L52's Follow-up 3; plan owner, 2026-10-09 |
+
+### Row #L62 - The agreement chart's date and mark labels stay clear near the plot top
+
+- **Scope:** Keep a measured day's local date label and a dashed mark's label readable and separate when both reach the plot's upper-right corner, using the smallest placement Jony rules for this chart. Level 1; no persisted shape changes.
+- **The fault** (L55's discovered defect, explicitly left open in #1483's Follow-ups and decision 8; read at branch head `edbaeea98aa28df3012178968fe73dc7ad60780f`, not claimed finished): `strandedLabels` prints a measured day's date when the axis dropped its tick and an immediately adjacent day has no reading. Near the plot's right edge, the date can reach a dashed mark's label. L55 raises the date clear of that label's box, then clamps its position to `box.top + 2`. Where the mark itself is near the plot top, the clamp can pull the date back into the box it just cleared. A quiet window whose rounded axis ends only slightly above the higher mark can reach this case. Advisor willingness to leave it open is not evidence that the labels are separate.
+- **Files touched** (named files read on the L55 branch; verify symbols and file lists again after its exact merge):
+  - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (`strandedLabels`, `markLabelBoxes` and the rendered local date and dashed-mark labels; held by L55, L57 and L56 while each runs)
+  - `frontend/tests/console-window.spec.ts` (the generated-day regression beside L55's date-label clearance cases; held by L55, L57, L34 and L45 while each runs)
+  - `docs/architecture/publishing/console-charts.md` (the agreement chart's date-label placement rule, updated with Jony's settled choice; also held by L55 and L56 while each runs)
+  - Read only: `frontend/src/lib/charts/frame.ts` (`labelWidth`, `AXIS_LABEL_PX` and the shared plot frame). Do not change shared geometry in this row or copy its machinery into the chart.
+- **Acceptance gates:** local: inspect `npm --prefix frontend run test:changed -- --list`, run `npm --prefix frontend run test:changed -- --spec console-window.spec.ts` for the regression and existing chart cases, and run `npm --prefix frontend run check`; run `doc_load.py` before and after changing the owning page. Complete integrated browser smoke on Judgement and one other console route; inspect the rendered labels at 390px and 1280px viewport widths in both themes, including empty and all-unread windows. Jony chooses placement; Susan reviews ship sufficiency, including the generated worst case. CI: follow the exact PR head's selected console checks; every group runs on the merge push. Record inputs, commands, results and counts outside the repository; do not repeat unchanged worker checks.
+- **Oracle:** In the existing window spec, generate bounded days that put a measured day with a dropped axis tick beside an unread day near the right edge, and put the higher dashed mark near `box.top` so L55's top clamp is triggered after its clearance step. Assert that the actual rendered date-label and mark-label bounding boxes do not intersect, and that the date stays readable inside the plot, at 390px and 1280px in both themes. Keep the existing non-top clearance case and all-unread behavior unchanged. Before dispatch, verify that this new check fails on a separate copy of the exact landed L55 commit for the label overlap, with that copy's code and test settings; absence of `strandedLabels` before L55 is not defect evidence. If the landed code no longer reproduces the overlap, report the result and correct the row before dispatch rather than inventing a failure. Bounding boxes prove separation and containment, not whether the placement preserves the date's association with its day or the mark's meaning; Jony and Susan settle those.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | This is the unfinished near-top collision L55 discovered, not a new claim that L55's ordinary mark-label clearance failed or that its advisor resolved the corner. L55's existing row and section stay unchanged in this upkeep change | User-directed assignment, 2026-10-09; L55's Follow-ups and decision 8 |
+| 2 | L62 waits for L55's landed implementation and L57's edits to the same chart and window spec, and for L34 and L45's edits to the shared window spec. At dispatch compare every named Files touched list against all active rows, including L56's chart and owning-page edits; hold and record any further file dependency before starting | User-directed assignment, 2026-10-09 |
+| 3 | Jony selects the smallest local placement that retains the date's link to its day and the dashed mark's meaning. No position, axis change or hidden label is prescribed here. Susan reviews whether the result is sufficient to ship in both themes and widths | To be ruled at execution (Jony and Susan) |
+| 4 | Reuse the shared geometry and the chart's existing label-box calculations. If consultation finds that a new surface or shared contract scope is necessary, stop for human scope approval; do not duplicate machinery or take an owner waiver | User-directed assignment, 2026-10-09; section 0 and CLAUDE.md section 6 |
+| 5 | Level 1: one chart's local label placement changes; a wrong version is visible and local. No persisted shape moves. The executing change records any durable placement rule in the owning page, and no production code cites this plan | User-directed assignment, 2026-10-09 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Treat L55's ordinary clearance case or its advisor's deferral as closure | Neither proves separation after the near-top clamp; the discovered defect would have no executable work | Nothing to build, and overlapping dates and mark labels remain possible | User-directed assignment, 2026-10-09 |
+| 2 | Hide the date or choose a sideways move before Jony's consultation | A hidden date loses the fact the label restores; a floating date can lose its link to the dot it names | Less placement work, but reduced reading clarity that has not been approved | L55's Jony ruling; user-directed assignment, 2026-10-09 |
+| 3 | Add a second geometry helper or change the shared frame to avoid choosing local placement | Shared machinery already supplies label sizes and the plot frame; no evidence yet calls for a wider change | More code to keep in step, or a shared-scope change requiring human approval | User-directed assignment, 2026-10-09 |
