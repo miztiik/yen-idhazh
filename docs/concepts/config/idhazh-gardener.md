@@ -331,11 +331,7 @@ ledger's months.** For `item-health` that is the `full-grain` series of
 Five cases: a bounded floor against a bounded pair compares; a bounded floor
 against a pair kept forever passes; a floor kept forever against a bounded pair is
 refused, because a person chose never to delete that ledger; forever against
-forever passes; and a ledger no task ever limited has no floor. How long a moved
-ledger's CSV was kept is not a declaration: `CSV_LEDGERS` in
-`backend/utilities/ledger_migration/csv_layouts.py` records it, and its test holds every
-moved ledger's committed compaction to it, so no retired retention task stays
-behind owning a folder nothing writes.
+forever passes; and a ledger no task ever limited has no floor.
 
 **A cleanup age lives in the declaration of the task that deletes by
 it.** Eleven keys left `config/idhazh.json` - the ledger ages, the trial window,
