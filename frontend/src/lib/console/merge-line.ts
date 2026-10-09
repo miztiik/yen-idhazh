@@ -221,7 +221,7 @@ export function clampNote(days: readonly LineDay[], windowDays: number): string 
 	return `The clamp held the line back on ${held} of ${countDays(windowDays)}.`;
 }
 
-/** How many days in the window fitted nothing, in one sentence, or null.
+/** How many recorded days in the window fitted nothing, in one sentence, or null.
  *
  * A held day breaks the proposed series rather than joining across it: a line
  * drawn through a day nothing was fitted on claims a measurement nobody took.
@@ -230,7 +230,7 @@ export function clampNote(days: readonly LineDay[], windowDays: number): string 
 export function heldNote(days: readonly LineDay[], windowDays: number): string | null {
 	const held = days.filter((day) => day.heldReason !== 'none').length;
 	if (held === 0) return null;
-	return `Nothing was fitted on ${held} of ${countDays(windowDays)}.`;
+	return `Nothing was fitted on ${held} recorded ${held === 1 ? 'day' : 'days'} in this ${windowDays}-day window.`;
 }
 
 // --- Whether the judge agrees with itself, and what the record still needs ------

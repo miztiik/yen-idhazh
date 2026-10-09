@@ -413,7 +413,7 @@
 			at={selected}
 			name="merge-line"
 			maxShare={readoutMaxShare}
-			restingNote=", the newest day"
+			restingNote=", the newest recorded day shown"
 		/>
 
 		<p class="line-note">
