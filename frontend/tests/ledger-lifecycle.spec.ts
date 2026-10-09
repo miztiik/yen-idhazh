@@ -120,6 +120,33 @@ test('the cost estimate names the same read bounds for late starts, early ends a
 	}
 });
 
+test('a ledger that stopped before the window cannot supply the first day read beside a later-starting ledger', async () => {
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger: LEDGER, pinned: PINNED, days: everyDay(20, 14) });
+	await buildLedger(root, { ledger: 'seen', pinned: PINNED, days: everyDay(4, 0) });
+	const site = aPage(servedFrom(root, SITE).fetcher);
+	const ledgers = [LEDGER, 'seen'] as const;
+	const sql = `SELECT (SELECT count(*) FROM "${LEDGER}") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows`;
+	try {
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: null, readTo: null
+		});
+		const cost = await readAskCost(site, null, ledgers, '2030-06-02', PINNED, {});
+		const answer = await readAsk(site, null, { ...question('2030-06-02', PINNED, sql), ledgers }, {});
+		expect.soft(cost).toMatchObject({ readFrom: '2030-06-11', readTo: PINNED });
+		expect.soft(answer).toMatchObject({
+			state: 'ok', readFrom: '2030-06-11', readTo: PINNED,
+			rows: [{ fingerprint_rows: '0', seen_rows: '5' }]
+		});
+		expect(daysReadLines(answer, PINNED)).toEqual([
+			'Read from 5 UTC days, 11 Jun 2030 to 15 Jun 2030.',
+			'Days of the seen record before 11 Jun 2030 are not on this site.'
+		]);
+	} finally {
+		await site.release();
+	}
+});
+
 test.describe('a ledger the test builds', () => {
 	test('answers the rows it was built with, reads its empty day as quiet, and names its lost day', async () => {
 		const root = test.info().outputPath('state');

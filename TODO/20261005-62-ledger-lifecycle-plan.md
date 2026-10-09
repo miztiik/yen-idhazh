@@ -112,7 +112,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | PENDING | - | - | - |
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
-| L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | PENDING | - | - | - |
+| L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | - | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
@@ -2456,7 +2456,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (searched on current `origin/main` for `firstDayRead`, `endDay`, `readFrom` and the generated-ledger cases):
   - `frontend/src/lib/data/ask-reader.ts` (`firstDayRead`, which must exclude plans that read no day)
   - `frontend/tests/ledger-lifecycle.spec.ts` (the existing integration cases build ledgers and drive the real `readAsk` path; add the generated-ledger Oracle there)
-  - Read, no change unless the answer note needs its own page assertion: `frontend/tests/console-data-explorer.spec.ts` (the browser route and answer-note checks)
+  - `frontend/tests/console-data-explorer.spec.ts` (found during execution: the generated-ledger page case checks the action line and rendered answer note for a selected ledger that stopped before the window)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md` (found during execution: the shared reader's span rule excludes a ledger that read no day from both bounds)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the selected ledger-lifecycle spec; `npm --prefix frontend run check`. Coordinate with plan 55's owner before changing anything under `frontend/src/lib/data/`. CI: the pull request runs the selected frontend specs; every group runs on the merge push.
 - **Oracle:** Build one selected ledger whose `through` is before the window and a second whose first actual read is later than the window start but whose range overlaps the window. The answer's `readFrom` and the Data explorer's line name the second ledger's first read day, not the day supplied by the ledger that read nothing. Keep the existing cases where ledgers overlap and where one answer ends early; do not add disjoint-range counting.
 

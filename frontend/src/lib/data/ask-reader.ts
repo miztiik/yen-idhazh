@@ -393,8 +393,8 @@ function startDay(one: LedgerPlan, from: DateStamp): DateStamp {
 }
 
 /** The first day any selected ledger's answer reads. */
-function firstDayRead(plans: readonly LedgerPlan[], from: DateStamp): DateStamp {
-	return plans.map((one) => startDay(one, from)).sort()[0] ?? from;
+function firstDayRead(plans: readonly LedgerPlan[], from: DateStamp, to: DateStamp): DateStamp {
+	return plans.filter((one) => endDay(one, from, to) !== null).map((one) => startDay(one, from)).sort()[0] ?? from;
 }
 
 /** The last day one ledger's answer reads: the earlier of `to`, the window's last day, and
@@ -446,7 +446,7 @@ function planOf(ledgersPlanned: LedgerPlan[], from: DateStamp, to: DateStamp): P
 		cost: {
 			files: files.length,
 			bytes: files.reduce((sum, plannedFile) => sum + plannedFile.file.bytes, 0),
-			readFrom: readsDays ? firstDayRead(ledgersPlanned, from) : null,
+			readFrom: readsDays ? firstDayRead(ledgersPlanned, from, to) : null,
 			readTo: readsDays ? lastDayRead(ledgersPlanned, from, to) : null,
 			unpackedDays: [...new Set(ledgersPlanned.flatMap((one) => one.unpackedDays))],
 			cut: cutOf(ledgersPlanned),
@@ -670,7 +670,7 @@ async function answerHeld(
 		const named = { cut: planned.cost.cut, unanswered: planned.unanswered, gaps: gapsOf(planned.ledgers) };
 		return answer.rows.length === 0
 			? { state: 'quiet', columns, read, ...named }
-			: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, readFrom: firstDayRead(planned.ledgers, opts.from), readTo: lastDayRead(planned.ledgers, opts.from, opts.to), unpackedDays: planned.cost.unpackedDays, ...named };
+			: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, readFrom: firstDayRead(planned.ledgers, opts.from, opts.to), readTo: lastDayRead(planned.ledgers, opts.from, opts.to), unpackedDays: planned.cost.unpackedDays, ...named };
 	} catch (error) {
 		return { state: 'refused', because: { kind: 'engine-error', message: error instanceof Error ? error.message : String(error) } };
 	}
