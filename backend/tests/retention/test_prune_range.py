@@ -8,17 +8,15 @@ has removed only the days it had already reached.
 
 That second property changed on 2026-09-17. Until then the prune moved a whole
 range into a scratch directory and rolled every move back if one failed, so a
-failed pass removed nothing at all. It deletes one day file at a time now
-through `idhazh.gardener.one_at_a_time`, so a failed pass keeps what it had
-deleted and the record says where the next pass resumes.
+failed pass removed nothing at all. Now a failed pass keeps what it had already
+changed, and the same command finishes it.
 
 Every tree here is BUILT (CLAUDE.md section 13). The committed archive grows, so
 a test that read it would cost more every month for the same answer
 (Guardrail #12) - and a built tree carries the cases the archive has never
-produced: a day either side of a boundary, a ledger whose month directory is
-emptied exactly, and a delete that fails on the third file of four.
+produced: a day either side of a boundary, and a write that fails part way.
 
-A ledger on the ledger door is a target too, of its own kind. Its days sit in
+Every target is a ledger on the ledger door. Its days sit in
 raw files and in daily, monthly and yearly files that hold other days as well,
 so its property is about rows rather than files: no row of a day the range
 names is left, every other day reads back the same rows, and every index still
@@ -36,7 +34,6 @@ from collections.abc import Callable, Iterable, Mapping
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from types import MappingProxyType
 from typing import Final
 
 import pytest
@@ -53,7 +50,6 @@ from idhazh import atomic_write, config, day_partition, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
@@ -99,24 +95,9 @@ def prune_range(
     )
 
 
-#: The CSV ledger every range test below prunes: one `<DD>.csv` a day, two folders
-#: deep as a family files one, and the word an operator types for it. No ledger
-#: files CSV days now - the judge's fitted line, the last on the verb's CSV word
-#: list, moved to the ledger door - so the CSV branch is driven through a word
-#: list this file hands it, a real mapping in place of the committed empty one.
-CSV_FOLDER: Final = "a-family/a-day-tree"
-TARGET: Final = CSV_FOLDER.replace("/", "-")
-
-
-@pytest.fixture(autouse=True)
-def a_csv_word_list(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The verb's CSV word list, naming the one CSV ledger this file builds."""
-    monkeypatch.setattr(prune, "TARGETS", MappingProxyType({TARGET: CSV_FOLDER}))
-
-
-#: The seven days every range test is drawn on. Wide enough that a boundary off
+#: The seven days the range tests are drawn on. Wide enough that a boundary off
 #: by one has a day on the wrong side rather than an empty result, and it spans a
-#: month end so a directory that empties has a parent that does not.
+#: month end so a folder that empties has a parent that does not.
 FIRST_DAY: Final = "2026-07-29"
 DAYS: Final = tuple(
     (date_type.fromisoformat(FIRST_DAY) + timedelta(days=offset)).isoformat()
@@ -124,43 +105,8 @@ DAYS: Final = tuple(
 )
 
 
-def a_threshold_record(state_root: Path, days: Iterable[str] = DAYS) -> Path:
-    """One CSV day file per day, each holding a fitted line the way its CSV writer filed one.
-
-    Real rows rather than invented text: the contract's own fixture, rendered
-    through the one CSV renderer, so the tree is a shape the fitted line's CSV
-    writer produced before it moved to the door.
-    """
-    fixture = CONTRACT_FIXTURES_DIR / "fitted-similarity-threshold"
-    base = FittedSimilarityThreshold.from_json(
-        read_text(fixture / "the-record-is-too-small-to-fit-on.json")
-    )
-    for day in days:
-        row = FittedSimilarityThreshold.model_validate(
-            {**base.model_dump(), "date": day, "run_id": f"{day}-1"}
-        )
-        path = state_root.joinpath(*CSV_FOLDER.split("/"), day[:4], day[5:7], f"{day[8:10]}.csv")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            ledger.render_file(FittedSimilarityThreshold.csv_columns(), [row.csv_row()]),
-            encoding="utf-8",
-            newline="",
-        )
-    return state_root
-
-
-def the_day_file(day: str) -> str:
-    """The one file `a_threshold_record` leaves for a day, POSIX and relative."""
-    return f"{ledger.STATE_DIRNAME}/{CSV_FOLDER}/{day[:4]}/{day[5:7]}/{day[8:10]}.csv"
-
-
 def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
-    """One item-health day per day, filed through the ledger door.
-
-    A ledger beside the one a test prunes: its days are raw files under
-    `state/raw/`, which no CSV target walks, so a prune of another ledger that
-    reached them would be deleting rows nobody named.
-    """
+    """One item-health day per day, filed through the ledger door."""
     for number, day in enumerate(days):
         seed_item_health(
             state_root,
@@ -184,108 +130,18 @@ def fingerprints(root: Path) -> dict[str, str]:
     }
 
 
-def dates_on_disk(state_root: Path) -> list[str]:
-    """Which days the pruned ledger still holds, through the prune's own walk."""
-    return [
-        day_partition.date_of(path)
-        for path in day_partition.day_files(state_root.joinpath(*CSV_FOLDER.split("/")))
-    ]
-
-
 # --- The range -----------------------------------------------------------------
-
-
-def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
-    """`--since` and `--until` are inclusive, and the days either side stay.
-
-    Asserted as a bijection rather than as a count: every day inside the range
-    went, and every day outside it is still there. A count would pass a prune
-    that removed the right NUMBER of the wrong files.
-    """
-    state = a_threshold_record(tmp_path / "state")
-    since, until = DAYS[2], DAYS[4]
-
-    outcome = prune_range(
-        state,
-        target=TARGET,
-        since=since,
-        until=until,
-        dry_run=False,
-    )
-
-    assert [
-        the_day_file(day) for day in (DAYS[2], DAYS[3], DAYS[4])
-    ] == sorted(outcome.removed), (
-        "the removed list is not exactly the three days the range names: "
-        f"{outcome.removed}"
-    )
-    assert dates_on_disk(state) == [
-        DAYS[0],
-        DAYS[1],
-        DAYS[5],
-        DAYS[6],
-    ], "a day outside the range went, or a day inside it stayed"
-    assert outcome.kept == 4
-
-
-def test_one_day_is_a_range_of_itself(tmp_path: Path) -> None:
-    """`--since X --until X` removes exactly X, which is what inclusive means."""
-    state = a_threshold_record(tmp_path / "state")
-
-    outcome = prune_range(
-        state,
-        target=TARGET,
-        since=DAYS[3],
-        until=DAYS[3],
-        dry_run=False,
-    )
-
-    assert outcome.removed == (the_day_file(DAYS[3]),)
-    assert DAYS[3] not in dates_on_disk(state)
-    assert len(dates_on_disk(state)) == len(DAYS) - 1
-
-
-def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> None:
-    """The files a prune did not name are the files it did not touch.
-
-    Two ledgers, so the check also covers the one the prune was never pointed at:
-    a walk that reached the wrong directory would move a file nobody named. The
-    census beside it holds the same days, so a walk keyed on the day alone would
-    reach it too.
-    """
-    state = a_threshold_record(tmp_path / "state")
-    a_census(state)
-
-    before = fingerprints(state)
-    outcome = prune_range(
-        state,
-        target=TARGET,
-        since=DAYS[1],
-        until=DAYS[2],
-        dry_run=False,
-    )
-
-    after = fingerprints(state)
-    gone = {relpath.removeprefix(f"{ledger.STATE_DIRNAME}/") for relpath in outcome.removed}
-    assert set(before) - set(after) == gone, "the files that left are not the files it named"
-    for relpath, digest in after.items():
-        assert before[relpath] == digest, f"{relpath} survived the prune with different bytes"
 
 
 def test_a_backwards_range_names_no_day(tmp_path: Path) -> None:
     """An operator who swapped the two ends is told, rather than deleting nothing."""
-    state = a_threshold_record(tmp_path / "state")
+    state = a_census(tmp_path / "state")
+    before = fingerprints(state)
 
     with pytest.raises(ValueError, match="is after --until"):
-        prune_range(
-            state,
-            target=TARGET,
-            since=DAYS[4],
-            until=DAYS[1],
-            dry_run=False,
-        )
+        prune_range(state, target=CENSUS, since=DAYS[4], until=DAYS[1], dry_run=False)
 
-    assert dates_on_disk(state) == list(DAYS)
+    assert fingerprints(state) == before
 
 
 @pytest.mark.parametrize("value", ["2026-8-4", "20260804", "yesterday", "2026-13-01"])
@@ -296,55 +152,32 @@ def test_a_day_that_is_not_a_day_is_refused(tmp_path: Path, value: str) -> None:
     is how every date comparison in this tree works - would then put that day
     outside every range it belongs in.
     """
-    state = a_threshold_record(tmp_path / "state")
+    state = a_census(tmp_path / "state")
+    before = fingerprints(state)
 
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
-        prune_range(state, target=TARGET, since=value, until=DAYS[4], dry_run=False)
+        prune_range(state, target=CENSUS, since=value, until=DAYS[4], dry_run=False)
 
-    assert dates_on_disk(state) == list(DAYS)
+    assert fingerprints(state) == before
 
 
-def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
-    """A ledger that keeps its emptied directories makes its own walk cost more.
+def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> None:
+    """A fresh clone has no history, which is not a fault."""
+    outcome = prune_range(tmp_path / "state", target=CENSUS, since=DAYS[0], until=DAYS[6])
 
-    `DAYS` crosses a month end, so a range that takes July whole leaves August
-    standing - which is what says the drop is scoped to what emptied.
-    """
-    state = a_threshold_record(tmp_path / "state")
-
-    prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[2], dry_run=False)
-
-    ledger_root = state.joinpath(*CSV_FOLDER.split("/"))
-    assert not (ledger_root / "2026" / "07").exists(), "an emptied month directory was left behind"
-    assert (ledger_root / "2026" / "08").is_dir(), "the month that still holds days was removed"
+    assert (outcome.removed, outcome.rewritten, outcome.kept) == ((), (), 0)
 
 
 # --- The vocabulary ------------------------------------------------------------
 
 
-def test_no_csv_ledger_is_left_and_the_fitted_line_is_a_target_on_the_door() -> None:
-    """The committed CSV word list is empty, and the fitted line's word names its door ledger.
-
-    A word that stayed on the CSV list after its ledger moved would walk a folder
-    nothing writes, and select nothing for every range an operator names - a
-    command that reports success and removes nothing.
-    """
+def test_the_fitted_line_is_a_target_on_the_door() -> None:
+    """The fitted line's word names its door ledger, read off the registry."""
     fitted = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
     word = "-".join(ledger.entry(fitted).prefix)
 
-    assert prune._TARGET_LEDGERS == ()
     assert prune.DOOR_LEDGERS[word] is fitted
     assert prune.resolve(word, committed_tasks()) == word
-
-
-def test_the_built_word_selects_the_day_file_its_folder_holds(tmp_path: Path) -> None:
-    """The CSV branch reads a word's folder off the word list and nothing else."""
-    state = a_threshold_record(tmp_path / "state", days=[DAYS[3]])
-
-    outcome = prune_range(state, target=TARGET, since=DAYS[3], until=DAYS[3], dry_run=False)
-
-    assert outcome.removed == (the_day_file(DAYS[3]),)
-    assert dates_on_disk(state) == [], f"{TARGET} reported a removal that did not happen"
 
 
 #: The ledgers whose rows must never be forgotten, so a range of them is refused
@@ -361,11 +194,11 @@ def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: st
 
     Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
-    question whose answer is why the answer is no. Both are on the ledger door,
-    so each one's compaction declaration gives its reason in `prune_refusal`.
+    question whose answer is why the answer is no. Each one's compaction
+    declaration gives its reason in `prune_refusal`.
     """
     reasons = prune.door_refusals(committed_tasks())
-    state = a_threshold_record(tmp_path / "state")
+    state = a_census(tmp_path / "state")
     before = fingerprints(state)
 
     with pytest.raises(ValueError) as refusal:
@@ -380,9 +213,9 @@ def test_the_ledgers_that_must_not_forget_are_refused(tmp_path: Path, target: st
 @pytest.mark.parametrize(
     "target",
     [
-        "state/content-similarity-judge/fitted-thresholds",
-        "../content-similarity-judge-fitted-thresholds",
-        "content-similarity-judge-fitted-thresholds/2026/07/29",
+        "state/raw/item-health",
+        "../item-health",
+        "item-health/2026/07/29",
         "/etc/passwd",
         "traces",
         "day-metrics",
@@ -399,7 +232,7 @@ def test_a_target_outside_the_vocabulary_is_refused(tmp_path: Path, target: str)
     Each names a ledger the vocabulary does take, so a refusal here is a refusal
     of the path and never of the ledger.
     """
-    state = a_threshold_record(tmp_path / "state")
+    state = a_census(tmp_path / "state")
     before = fingerprints(state)
 
     with pytest.raises(ValueError) as refusal:
@@ -407,170 +240,6 @@ def test_a_target_outside_the_vocabulary_is_refused(tmp_path: Path, target: str)
 
     assert "the name of a ledger" in str(refusal.value)
     assert fingerprints(state) == before
-
-
-# --- Dry run, and the failure part way -----------------------------------------
-
-
-def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
-    """The default, and the list a person reads before passing `--no-dry-run`.
-
-    The same list on both sides: what a dry run prints has to be what a live run
-    removes, file for file, or reading it settles nothing.
-    """
-    state = a_threshold_record(tmp_path / "state")
-    before = fingerprints(state)
-
-    reported = prune_range(state, target=TARGET, since=DAYS[1], until=DAYS[3])
-
-    assert reported.dry_run is True
-    assert fingerprints(state) == before, "a dry run moved a file"
-
-    removed = prune_range(state, target=TARGET, since=DAYS[1], until=DAYS[3], dry_run=False)
-    assert removed.removed == reported.removed
-    assert removed.bytes_freed == reported.bytes_freed
-
-    lines = prune.report(reported)
-    assert all(any(relpath in line for line in lines) for relpath in reported.removed)
-    assert "--no-dry-run" in lines[-1]
-
-
-def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Four files are selected and the third delete raises: two are gone, two remain.
-
-    This is what atomic means here, and it is not what this test asserted before
-    2026-09-17. Until then the prune moved a whole range into a scratch
-    directory and put every file back if one move failed, so the property was
-    "the tree is exactly as you found it". The owner replaced that shape with
-    short atomic deletes, so the property moved with it: one `unlink` is the
-    unit, it either happened or it did not, and an interruption after the second
-    file leaves two files gone and no rollback to get wrong.
-
-    The record is what makes the difference workable. An operator whose pass
-    stopped reads which files went and which one to retry, where a rollback only
-    ever told them to start again.
-    """
-    state = a_threshold_record(tmp_path / "state")
-    deletes = 0
-    real_delete = prune._delete
-
-    def fail_on_the_third(day: Path) -> None:
-        nonlocal deletes
-        deletes += 1
-        if deletes == 3:
-            raise OSError("the file system said no")
-        real_delete(day)
-
-    monkeypatch.setattr(prune, "_delete", fail_on_the_third)
-
-    with pytest.raises(prune.PruneInterruptedError) as stop:
-        prune_range(
-            state,
-            target=TARGET,
-            since=DAYS[1],
-            until=DAYS[4],
-            dry_run=False,
-        )
-
-    assert deletes == 3, "the prune kept deleting after a failure"
-    assert stop.value.so_far.taken == (
-        the_day_file(DAYS[1]),
-        the_day_file(DAYS[2]),
-    )
-    assert (stop.value.so_far.stopped_because, stop.value.so_far.fault) == (
-        StopReason.FAILED,
-        GardenerFault.RAISED,
-    ), "a file the system refused is a defect, never an outage"
-    assert stop.value.so_far.resume_from == the_day_file(DAYS[3]), (
-        "the next pass has to retry the day that failed"
-    )
-    assert dates_on_disk(state) == [
-        DAYS[0],
-        DAYS[3],
-        DAYS[4],
-        DAYS[5],
-        DAYS[6],
-    ], "a day after the failure went, or a day before it came back"
-
-
-def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -> None:
-    """A range wider than the bite an operator wants is taken in bites.
-
-    The point of the ceiling on a ledger's day files is the same as on a
-    collection of 612 artifacts: one command, a bounded cost, and a record that
-    says whether there is more.
-    """
-    state = a_threshold_record(tmp_path / "state")
-
-    outcome = prune_range(
-        state,
-        target=TARGET,
-        since=DAYS[0],
-        until=DAYS[4],
-        dry_run=False,
-        max_deletes=2,
-    )
-
-    assert outcome.removed == (
-        the_day_file(DAYS[0]),
-        the_day_file(DAYS[1]),
-    )
-    assert outcome.more_to_do
-    assert outcome.resume_from == the_day_file(DAYS[2])
-    assert dates_on_disk(state) == list(DAYS[2:])
-    assert any("run it again" in line for line in prune.report(outcome))
-
-
-def test_the_range_an_operator_typed_is_its_own_ceiling(tmp_path: Path) -> None:
-    """With no `--max-deletes`, a range of n days deletes at most n files.
-
-    A real bound rather than a number somebody picked: the arithmetic is the
-    operator's own, so the default cannot silently take less than was asked for.
-    """
-    state = a_threshold_record(tmp_path / "state")
-
-    outcome = prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[6], dry_run=False)
-
-    assert len(outcome.removed) == len(DAYS)
-    assert outcome.resume_from is None, "the range was taken whole, so nothing is left"
-    assert dates_on_disk(state) == []
-
-
-def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> None:
-    """No scratch directory, because there is no longer a phase that needs one."""
-    state = a_threshold_record(tmp_path / "state")
-
-    prune_range(state, target=TARGET, since=DAYS[0], until=DAYS[1], dry_run=False)
-
-    assert [entry.name for entry in state.iterdir()] == [CSV_FOLDER.split("/")[0]]
-    assert not list(state.glob(".prune-*")), "a scratch directory appeared from somewhere"
-
-
-def test_a_range_with_no_day_in_it_says_so(tmp_path: Path) -> None:
-    """A range that names nothing is not a failure, and the report says which."""
-    state = a_threshold_record(tmp_path / "state")
-
-    outcome = prune_range(state, target=TARGET, since="2025-01-01", until="2025-01-31")
-
-    assert outcome.removed == ()
-    assert outcome.kept == len(DAYS)
-    assert "no day file in that range" in prune.report(outcome)[0]
-
-
-def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> None:
-    """A fresh clone has no history, which is not a fault."""
-    outcome = prune_range(
-        tmp_path / "state",
-        target=TARGET,
-        since=DAYS[0],
-        until=DAYS[6],
-        dry_run=False,
-    )
-
-    assert outcome.removed == ()
-    assert outcome.kept == 0
 
 
 # --- A ledger on the ledger door ---------------------------------------------------
@@ -1115,8 +784,8 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
 ) -> None:
     """The third change raises: the two before it happened, the record names them, a re-run finishes.
 
-    The failure is injected the way the CSV test above injects it: the real
-    change runs for every file but the third, so the tree is the one a file
+    The failure is injected by wrapping the one function that makes a change: the
+    real change runs for every file but the third, so the tree is the one a file
     system that refused one change leaves. The record names the first two
     paths of the dry run's list, and the first day of the range as the place
     the next pass starts, because no day was finished.

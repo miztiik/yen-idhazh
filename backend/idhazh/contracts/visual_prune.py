@@ -6,8 +6,9 @@ not. Read whole - "is the backlog shrinking" has no time bound - so the
 day layout buys the read nothing, and it is there for what it buys a writer
 instead: every writer holds a file of its own, so two runs never write one
 path. `idhazh.ledger` owns that trade and states it
-(`docs/architecture/contracts/schemas.md`). The CSV methods below read the day
-files this ledger was committed as before it moved there.
+(`docs/architecture/contracts/schemas.md`). `csv_row` below spells a row as
+text cells, which is how the door's settlement names a cell a dropped row held,
+and `from_csv_row` reads those cells back.
 
 **`skipped_by_fuse` is the field this row exists for.** `deleted` is capped by
 the visual-prune declaration's `max_deletes_per_run`, so it reads the same on a

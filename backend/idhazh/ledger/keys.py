@@ -1,16 +1,14 @@
 """What makes two rows of one ledger the same record, and which contract reads one.
 
 A key is a fact about a ledger, so it is written once and read by every pass that
-settles one: the append that runs from the commit step, the fold a reader takes
-over a day directory, and the compaction. A second copy of a key is how two
-readers start disagreeing about what one file holds.
+settles one: the compaction, and the reader that settles a ledger's rows when a
+caller asks for them. A second copy of a key is how two readers start
+disagreeing about what one file holds.
 
 One table pairs a key with the contract that reads a row: the ledgers the door
-in `ledger/persist.py` files under `state/raw/` and `state/compact/`. It also
-holds each ledger still on CSV that is ready to move, so moving one is a switch
-of its registry grain. A judge's ledgers sit in a second part of the table,
-whose contracts are imported on first use, for the reason beside
-`_JUDGE_DOOR_SHAPES`.
+in `ledger/persist.py` files under `state/raw/` and `state/compact/`. A judge's
+ledgers sit in a second part of the table, whose contracts are imported on
+first use, for the reason beside `_JUDGE_DOOR_SHAPES`.
 
 Where a ledger's file lives is a different question with its own home, which is
 why `paths` imports nothing from here and this module imports nothing from it.
@@ -244,7 +242,7 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     in the contract that owns what a feed result means. A row that no longer
     parses keeps whatever is already on record - the same choice `load_health`
     makes, and for the same reason: this ledger is diagnostic, and refusing
-    would cost a run the whole commit step this pass was called from.
+    would cost a run the whole read or compaction this pass was called from.
     """
     try:
         return supersedes(FeedHealthRow.from_csv_row(later), FeedHealthRow.from_csv_row(kept))
@@ -307,9 +305,9 @@ _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
 def preference_for(key: tuple[str, ...]) -> Preference | None:
     """How two rows holding one key settle, where the key declares it.
 
-    One vocabulary for the question, not two: the post-merge settlement reads
-    this table and so does the compaction, so a key whose repeats can disagree
-    gives the same answer whichever pass reaches it first.
+    One vocabulary for the question, not two: the compaction reads this table and
+    so does the reader that settles a ledger's rows, so a key whose repeats can
+    disagree gives the same answer whichever pass reaches it first.
     """
     return _PREFERENCES.get(key)
 
@@ -324,12 +322,8 @@ class _DoorShape(NamedTuple):
 #: What settles two rows of each ledger the door files under the two roots, and
 #: the contract that reads one. The compaction settles a period by it and the
 #: reader in `ledger/ledger_files.py` settles a whole ledger by it, so the two
-#: cannot disagree about which row of a key survives.
-#:
-#: A ledger still on CSV has its row here before it moves. Nothing asks the door
-#: about a ledger before the registry files it under the two roots, so a row here
-#: changes nothing until then, and the change that moves the ledger switches its
-#: registry grain rather than writing its key a second time.
+#: cannot disagree about which row of a key survives. A new door ledger gets its
+#: row here in the change that registers it.
 _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),

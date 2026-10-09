@@ -1,7 +1,8 @@
 """Where each ledger's file lives under `state/`, and never guessed.
 
-Two kinds of address, and ten builders in all. A ledger that files the way the
-CSV trees do is read from `config/ledgers.json`, which is loaded and validated
+Two kinds of address, and ten builders in all. A ledger that files outside the
+two roots - one flat file, a day file, a day folder or a stamped file - is read
+from `config/ledgers.json`, which is loaded and validated
 once, when this module loads, so a config that does not describe every ledger
 stops the build rather than a run four hundred seconds in. A ledger that goes
 through the door in `ledger/persist.py` files under `state/raw/` or
@@ -76,7 +77,6 @@ _JSON_SUFFIX: Final = ".json"
 _PERIOD: Final[dict[Grain, str]] = {
     Grain.DAY_FILE: "the YYYY-MM-DD day its rows describe",
     Grain.DAY_TREE: "the YYYY-MM-DD day its rows describe",
-    Grain.MONTH_FILE: "the YYYY-MM month its rows describe",
     Grain.STAMPED: "the stamp its rows were taken under",
 }
 
@@ -261,7 +261,7 @@ def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
         return (*held.prefix, covers[:4], covers[5:7], covers[8:10])
     if held.grain is Grain.DAY_FILE:
         return (*held.prefix, covers[:4], covers[5:7], f"{covers[8:10]}{held.suffix}")
-    # A month file and a stamped file both name themselves after the whole period.
+    # A stamped file names itself after the whole stamp.
     return (*held.prefix, f"{covers}{held.suffix}")
 
 
@@ -313,10 +313,10 @@ def tree_root(
 ) -> Path:
     """The folder that holds every file of this ledger and nothing else, under this state root.
 
-    What the `day_shards`, `day_partition` and `month_partition` readers are
-    handed: a walk that starts here meets every day, month or stamp the ledger
-    has filed. It is a builder of its own rather than `path` with no period, so
-    `path` keeps refusing a missing one.
+    What a reader of a day file, a day folder or a stamped file is handed: a walk
+    that starts here meets every day or stamp the ledger has filed. It is a
+    builder of its own rather than `path` with no period, so `path` keeps
+    refusing a missing one.
     """
     return state_dir.joinpath(*_folder(entry(ledger, registry=registry)))
 

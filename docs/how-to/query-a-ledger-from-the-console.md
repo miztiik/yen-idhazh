@@ -36,6 +36,11 @@ Copy link stores the chosen ledgers, the custom dates and the compressed questio
 
 Save keeps the question in this browser. A question saved before custom dates existed opens ending on the reader's UTC day.
 
+Saved questions and History keep exact dates only for a custom span. A preset
+span reopens ending on the current UTC day. A custom span marks no day tile;
+press any tile to replace its dates with that span ending today. Older entries
+that already carry dates keep them, even when their length matches a preset.
+
 ## See also
 
 - [How the query door answers a written question](../architecture/publishing/how-the-query-door-answers-a-written-question.md)
