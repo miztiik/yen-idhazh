@@ -103,7 +103,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L46 | The site build bakes the raw days the data explorer may read | - | Q | DONE | automatic-garbanzo | #1427 | Plan 62 row l46 |
 | L47 | Hardware's started line counts a day whose only run is machine records alone | L36 | O | DONE | super-couscous | #1441 | Plan 62 row l47 |
 | L48 | The Data explorer's line under an answer ends on the last day it read | L12, L46, plan 55's row "The reader chooses the chart and the columns it draws" (holds `frontend/src/routes/console/data-explorer/+page.svelte` as well as `frontend/tests/console-data-explorer.spec.ts`) | R | DONE | glowing-doodle | #1468 | Plan 62 row l48 |
-| L49 | Every console route asks search engines not to list it | L38, plan 55's row "The reader chooses the chart and the columns it draws", L42 | S | PENDING | - | - | - |
+| L49 | Every console route asks search engines not to list it | L38, plan 55's row "The reader chooses the chart and the columns it draws", L42 | S | COLLAPSED - owner removed the requirement, 2026-10-09; #1474 closed unmerged | special-adventure | #1474 (closed unmerged) | Record removed search obligation |
 | L50 | Two console tests prove what they claim | - | T | DONE | cautious-bassoon | #1445 | Plan 62 row l50 |
 | L51 | Judgement's agreement panel words follow the rates they judge | L39, L40 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | U | DONE | scaling-meme | #1463 | Plan 62 row l51 |
 | L52 | Judgement names the line each build recorded | L38, L35 (holds `frontend/tests/console-window.spec.ts`), L40 (holds `frontend/tests/console-window.spec.ts`) | V | DONE | verbose-couscous | #1469 | Plan 62 row l52 |
@@ -2178,31 +2178,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #L49 - Every console route asks search engines not to list it
 
-- **Scope:** Every console route carries `<meta name="robots" content="noindex" />` in its head, so a search engine that crawls it does not list it. Level to be set from the search below.
-- **The gap** (row L43's report, finding 1, 2026-10-08): a search of `frontend/src/routes/console/` for `noindex` finds it on three routes, Pipelines, Hardware and Summaries, and finds it on none of Judgement, Voices and Data explorer; the site ships no `frontend/static/robots.txt`. A search engine that crawls the console may list those three routes.
-- **Why CI did not catch it:** `.github/workflows/ci.yml`'s `robots` job runs `pytest backend/tests/test_extract.py`, which checks the article extractor's own RFC 9309 `robots.txt` parsing for sources this project crawls. It reads nothing under `frontend/src/routes/console/` and asserts no console-route meta tag, so a console route with no `noindex` tag passes that job every time.
-- **Files touched** (found by a search on `origin/main` at 3ba1b39b8 for `noindex` under `frontend/src/routes/console/`, for `robots` under `.github/workflows/` and `backend/tests/`, and for `robots.txt` under `frontend/static/`; search again at dispatch):
-  - `frontend/src/routes/console/judgement/+page.svelte` (sets no `noindex`; held by L38)
-  - `frontend/src/routes/console/voices/+page.svelte` (sets no `noindex`)
-  - `frontend/src/routes/console/data-explorer/+page.svelte` (sets no `noindex`; held by plan 55's row "The reader chooses the chart and the columns it draws")
-  - `frontend/src/routes/console/+layout.svelte` (a candidate home for one shared tag, if Fowler rules for it; L42 changes this file for the days control, so coordinate before dispatch)
-  - `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/routes/console/model/+page.svelte` (already set `noindex`; read, to confirm the pattern a shared or per-page fix follows)
-  - `.github/workflows/ci.yml` (the `robots` job; read, to say why it did not catch this)
-- **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list` for the affected specs; `npm --prefix frontend run check`; the browser smoke of each console route, reading its rendered head. CI: the pull request runs the console specs; every group runs on the merge push.
-- **Oracle:** on a page the test builds, or on the canary page: every console route's rendered head carries `<meta name="robots" content="noindex" />`. On `origin/main` Judgement, Voices and Data explorer carry no such tag, which is what lets this check fail.
-
-**Decisions**
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | Fowler rules the shape: one tag in a shared place such as `console/+layout.svelte`, or one tag on each page | To be ruled at dispatch (Fowler) |
-| 2 | Level set from the search: a missing tag on three pages, fixed by one line each or by one shared line, following a pattern three other pages already set; a wrong version is obvious and local | Plan owner, 2026-10-08 |
-
-**Rejected alternatives**
-
-| # | Option | Why rejected | What it would cost to take | Authority |
-| --- | --- | --- | --- | --- |
-| 1 | As today | A search engine that crawls the console may list Judgement, Voices or Data explorer, pages built for no reader who does not already use this console | Nothing to build, and three routes a search engine may index | Row L43's report, finding 1 |
+- **Disposition:** COLLAPSED. The owner removed this requirement on 2026-10-09: "fulfilling searchengines is not our responsibility." The scope-in list's L49 entry names the original request, not current work.
+- **Current contract:** The Data explorer remains browser-only and keeps the common fallback. There is no crawler-specific document or raw-response requirement. The [Data explorer design rationale](../docs/architecture/publishing/data-explorer-state.md#design-rationale) owns this rule; plan 55's owner updates that page separately.
+- **Historical finding:** L43's report noted that some console routes lacked `noindex`. That finding is not an unmet requirement after the owner's removal. It does not require a new console shell or a source-code change.
+- **Delivery evidence:** [#1474](https://github.com/miztiik/yen-idhazh/pull/1474) closed without merging at head `eb0bb50efb9d27c817c561f17c42f0765eddfee4`. This disposition does not claim that its rendered-head capability was delivered.
+- **Files changed:** This row and its Status Reckoner line only. Source code, tests, configuration, other rows and the plan's date stay unchanged. The plan owner handles the remaining audit, distillation and deletion.
+- **Acceptance:** Check the live closed, unmerged PR; run the documentation load report before and after the edit; inspect the shared test selector and run its documentation whitespace check. Application tests and browser smoke do not apply to this documentation-only disposition.
 
 ### Row #L50 - Two console tests prove what they claim
 
