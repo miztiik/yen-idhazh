@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -906,6 +906,10 @@ works out its expected answer by running the query door again over the canary
 or the committed data (owner ruling, 2026-10-05). The canary keeps only the
 explorer checks that do not depend on what it holds: layout, notices and
 browser storage.
+
+`runExplorer` watches the Run button before clicking it, then waits for that
+run to finish. A fast refusal can finish before the click returns. Watching
+after the click can miss it; checking only the answer can accept an older run.
 
 **Find a test that depends on what the canary holds by moving the canary day.**
 Set `DATE` in `backend/utilities/build_canary_day.py` to a later day, run the

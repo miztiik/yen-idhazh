@@ -6,6 +6,7 @@ import { render } from 'svelte/server';
 
 import { frame, noModelRuleNote } from '../src/lib/charts/frame';
 import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { flow } from '../src/lib/charts/d3/flow';
 import {
 	emptyState,
 	missingSentence,
@@ -34,6 +35,8 @@ import {
 	type Verdict
 } from './support/panel-gates';
 import { serverCompiler } from './support/server-render';
+import { explorerConfig } from '../src/lib/server/config';
+import { showPanel } from './support/panel-tab';
 
 const PINNED = '2026-08-20';
 
@@ -298,7 +301,7 @@ async function settledExplorer(page: Page, id: string, width: number, theme: The
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 	await runExplorer(page);
-	if (id === 'data-explorer-shape') await page.getByRole('tab', { name: 'Chart' }).click();
+	if (id === 'data-explorer-shape') await showPanel(page, id);
 	return readPanel(await settled(page, id));
 }
 
@@ -316,7 +319,7 @@ async function explorerNothing(page: Page, id: string, state: Nothing, theme: Th
 			await held;
 			await route.continue();
 		}, { times: 1 });
-		if (id === 'data-explorer-shape') await page.getByRole('tab', { name: 'Chart' }).click();
+		if (id === 'data-explorer-shape') await showPanel(page, id);
 		await page.getByRole('button', { name: /^Run$/ }).click();
 		const panel = page.locator(`[data-console-panel-id="${id}"]`);
 		await expect(panel.locator('.shimmer, [data-state="loading"]')).toHaveCount(1);
@@ -332,7 +335,7 @@ async function explorerNothing(page: Page, id: string, state: Nothing, theme: Th
 	const ledgers = state === 'missing' ? (['feed-health'] as const) : (['published'] as const);
 	await chooseExplorerQuestion(page, ledgers, sql, false);
 	await runExplorer(page);
-	if (id === 'data-explorer-shape') await page.getByRole('tab', { name: 'Chart' }).click();
+	if (id === 'data-explorer-shape') await showPanel(page, id);
 	const panel = page.locator(`[data-console-panel-id="${id}"]`);
 	await expect(panel.locator(state === 'refused' ? '[data-state="refused"]' : `[data-state="${state}"]`)).toHaveCount(1);
 	return readPanel(panel);
@@ -418,7 +421,7 @@ test('T10: after a choice the page would not make, each of the four charts passe
 		await openExplorer(page, PINNED);
 		await chooseExplorerQuestion(page, ['published'], EVERY_CHART_SQL);
 		await runExplorer(page);
-		await page.getByRole('tab', { name: 'Chart' }).click();
+		await showPanel(page, 'data-explorer-shape');
 		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
 		for (const { type, role, column, said } of CHOICES) {
 			const label = `${width} ${theme} ${type}`;
@@ -441,3 +444,107 @@ test('T10: after a choice the page would not make, each of the four charts passe
 		}
 	}
 });
+
+const ADDED_CHARTS = [
+	{ type: 'partsOfOne', sql: "SELECT * FROM (VALUES ('first', 10, 8, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)" },
+	{ type: 'tileStrip', sql: "SELECT * FROM (VALUES (DATE '2026-08-17', true), (DATE '2026-08-18', false), (DATE '2026-08-19', NULL::BOOLEAN), (DATE '2026-08-20', true)) AS t(day, ok)" },
+	{ type: 'flow', sql: "SELECT * FROM (VALUES ('first', 10, 8, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)" }
+] as const;
+
+for (const width of [390, 768, 1024, 1440]) for (const theme of THEMES) {
+	test(`row20: three real reused charts pass sufficiency and keyboard readouts at ${width}px in ${theme}`, async ({ page }, info) => {
+		await page.setViewportSize({ width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 });
+		await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
+		await openExplorer(page, PINNED);
+		const failures: string[] = [];
+		page.on('pageerror', (error) => failures.push(error.message));
+		page.on('console', (message) => { if (message.type() === 'error') failures.push(message.text()); });
+		page.on('response', (response) => { if (response.status() === 404) failures.push(`404 ${new URL(response.url()).pathname}`); });
+		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
+		await chooseExplorerQuestion(page, ['published'], ADDED_CHARTS[0].sql);
+		for (const [index, { type, sql }] of ADDED_CHARTS.entries()) {
+			if (index > 0) {
+				await page.locator('#explorer-sql').fill(sql);
+				await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
+			}
+			await runExplorer(page);
+			await showPanel(page, 'data-explorer-shape');
+			await page.locator(`[data-shape-choice="${type}"]`).click();
+			const plot = panel.locator(`[data-chart-type="${type}"]`);
+			await expect(plot).toBeVisible();
+			for (const verdict of [judgeFill(await readPanel(panel), consolePanels().fillFloor), judgeLede(await readPanel(panel)), judgeComparison(await readPanel(panel))]) {
+				expect(verdict.pass, verdict.says).toBe(true);
+			}
+			await expect(panel.locator('[title], title')).toHaveCount(0);
+			await expect(panel.locator('[data-readout]')).toBeVisible();
+			if (type === 'tileStrip') {
+				await expect(panel.locator('[data-model-rule="no"]')).toHaveAttribute('data-model-rule-none', 'this page does not know which settings changed inside your span');
+				await expect(plot.locator('[data-tile-state]')).toHaveCount(4);
+				await expect(plot.locator('[data-tile-state="absent"]')).toHaveCount(1);
+				await plot.focus();
+				await page.keyboard.press('Home');
+				await expect(panel.locator('[data-readout]')).toContainText('true');
+				await page.keyboard.press('ArrowRight');
+				await expect(panel.locator('[data-readout]')).toContainText('false');
+				await page.keyboard.press('ArrowRight');
+				await expect(panel.locator('[data-readout]')).toContainText('null');
+			} else if (type === 'partsOfOne') {
+				await expect(plot).toHaveAttribute('data-parts-overlapping', 'yes');
+				await expect(plot.locator('.parts-total')).toHaveCount(0);
+				await plot.locator('ol').focus();
+				await page.keyboard.press('End');
+				await expect(panel.locator('[data-readout-subject]')).toContainText('last');
+			} else {
+				const expected = await plot.evaluate((node) => node.getBoundingClientRect().width < 640 ? 'stepped' : 'diagram');
+				await expect(plot).toHaveAttribute('data-flow-shape', expected);
+				if (expected === 'diagram') {
+					const dimensions = { width: Number(await plot.getAttribute('width')), height: Number(await plot.getAttribute('height')) };
+					const shared = flow([{ label: 'first', arrived: 10, left: 8, drops: [{ label: 'lost', count: 2 }] }, { label: 'last', arrived: 8, left: 6, drops: [{ label: 'lost', count: 2 }] }], { frame: frame(dimensions.width, dimensions.height), narrow: false, nodeWidth: 12, nodeGap: 8 });
+					expect(shared?.kind).toBe('diagram');
+					if (shared?.kind === 'diagram') {
+						const drawn = await plot.locator('rect').evaluateAll((nodes) => nodes.map((node) => ['x', 'y', 'width', 'height'].map((name) => Number(node.getAttribute(name)))));
+						expect(drawn).toEqual(shared.nodes.map((node) => [node.x, node.y, node.width, node.height]));
+					}
+					expect(await plot.locator('rect').first().getAttribute('width')).toBe('12');
+					if (width === 1440) {
+						await panel.evaluate((node) => { (node as HTMLElement).style.setProperty('--space-3', '1rem'); (node as HTMLElement).style.setProperty('--space-2', '0.75rem'); });
+						await expect(plot.locator('rect').first()).toHaveAttribute('width', '16');
+						await panel.evaluate((node) => { (node as HTMLElement).style.removeProperty('--space-3'); (node as HTMLElement).style.removeProperty('--space-2'); });
+						await expect(plot.locator('rect').first()).toHaveAttribute('width', '12');
+					}
+					await plot.focus();
+				} else await plot.locator('ol').focus();
+				await page.keyboard.press('End');
+				await expect(panel.locator('[data-readout-subject]')).toContainText('last');
+			}
+			await panel.screenshot({ path: info.outputPath(`row20-${type}-${width}-${theme}.png`) });
+		}
+		// The module's own counts-not-one-flow fallback, even on a wide window.
+		await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES ('first', 10, 9, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)");
+		await runExplorer(page);
+		await expect(panel.locator('[data-flow-shape="stepped"]')).toBeVisible();
+		await expect(panel).toContainText('first counts 10 arriving and 11 leaving, so the counts are not one flow and the stages are listed rather than drawn.');
+		await expect(panel.locator('[data-lede]')).toHaveText('last: 6 went');
+		await panel.screenshot({ path: info.outputPath(`row20-flow-list-${width}-${theme}.png`) });
+		if (width === 1440) {
+			await chooseExplorerQuestion(page, ['published'], "SELECT 'Only stage' AS stage, 10 AS arrived, 10 AS went, 0 AS lost");
+			await runExplorer(page);
+			const single = panel.locator('[data-flow-shape="diagram"]');
+			await expect(single).toBeVisible();
+			const label = single.locator('text');
+			await expect(label).toHaveText('Only stage 10');
+			const plotBox = (await single.boundingBox())!;
+			const labelBox = (await label.boundingBox())!;
+			expect(labelBox.x).toBeGreaterThanOrEqual(plotBox.x);
+			expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(plotBox.x + plotBox.width);
+		}
+		const cap = explorerConfig().rank_max;
+		await chooseExplorerQuestion(page, ['published'], `SELECT i::VARCHAR AS stage, CASE WHEN i < ${cap} THEN 0 ELSE 10 END AS arrived, 0 AS went FROM range(0, ${cap + 1}) AS t(i)`);
+		await runExplorer(page);
+		await page.locator('[data-shape-choice="partsOfOne"]').click();
+		await expect(panel.locator('[data-shape-none]')).toHaveText(`Nothing here to draw: every bar you checked is 0 or null in the first ${cap} rows. The remaining rows are in the table.`);
+		await page.goto('/console/');
+		await expect(page.locator('main')).toBeVisible();
+		expect(failures).toEqual([]);
+	});
+}
