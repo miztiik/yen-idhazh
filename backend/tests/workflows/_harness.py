@@ -28,7 +28,8 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
-from utilities.commit_and_push import PUSH_ATTEMPT_LABEL
+
+PUSH_ATTEMPT_LABEL = "push-attempt "
 
 #: Everything the platform runs. A rule about what a runner may execute is
 #: stated over this rather than over the two directories below, so a file
@@ -587,9 +588,9 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # wherever it lives: `bench` is a job of another workflow. Until 2026-09-28 the
 # assemble job committed twice - the day, then the closed-day fold - and the
 # fold moved to the gardener, which no longer runs it.
-COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
+COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "digest_publish.py"
 
-COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/commit_and_push.py")
+COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/digest_publish.py")
 
 # Which workflow each label's step lives in. `bench` is dispatched by hand, many
 # times a day, and since 2026-09-17 it pushes the machine it drew.
@@ -1040,7 +1041,9 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     roots = (ledger.STATE_DIRNAME, f"{ledger.STATE_DIRNAME}/")
     for body in _run_bodies(workflow):
         for line in body.replace("\\\n", " ").splitlines():
-            if "commit_and_push.py" not in line and "git add" not in line:
+            if not any(name in line for name in (
+                "digest_publish.py", "record_publish.py", "council_publish.py", "git add",
+            )):
                 continue
             if any(word == roots[0] or word.startswith(roots[1]) for word in line.split()):
                 return True
@@ -1383,6 +1386,16 @@ def _stage_invocations(
             if not isinstance(script, str):
                 continue
             blanked = re.sub(r"\$\{\{.*?\}\}", "expression", script, flags=re.DOTALL)
+            blanked = blanked.replace(
+                "python backend/utilities/digest_publish.py run ", "python -m idhazh "
+            )
+            blanked = re.sub(
+                r"python backend/utilities/record_publish.py run \w+ ",
+                "python -m idhazh ", blanked,
+            )
+            blanked = blanked.replace(
+                "python backend/utilities/council_publish.py", "python -m idhazh council-settle"
+            )
             for line in blanked.replace("\\\n", " ").splitlines():
                 if not re.search(r"\bpython3?\s+-m\s+idhazh(?=\s)", line):
                     continue
