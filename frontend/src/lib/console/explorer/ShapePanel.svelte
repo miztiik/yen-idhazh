@@ -87,6 +87,11 @@
 	const notes = $derived(placeholder === null ? chartNotes(active, bounds, capped, maxRows) : []);
 	// The drawing and the foot are drawn again, never moved, when the chart or a column changes.
 	const drawingKey = $derived(JSON.stringify([placeholder === null, chart.type, chart.roles.map((state) => state.chosen)]));
+	const flowDrawing = $derived.by(() => {
+		if (active.kind !== 'chart' || active.type !== 'flow') return null;
+		const stages = rows.map((row) => ({ label: text(row, active.stageColumn), arrived: numericValue(row, active.arrivedColumn) as number, left: numericValue(row, active.wentOnColumn) as number, drops: active.droppedColumns.map((column) => ({ label: column, count: numericValue(row, column) as number })) }));
+		return flow(stages, { frame: frame(chartWidth, chartHeight), narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap, includeCountsStatus: true });
+	});
 
 	function text(row: Row, column: string): string {
 		const spec = columns.find((one) => one.name === column) ?? { name: column, type: 'VARCHAR' };
@@ -104,6 +109,10 @@
 		if (next.type === 'tileStrip') {
 			const days = chooseDateSeriesDays(next.dateColumn, rows, lostDays);
 			return `"${next.markColumn}" was true on ${days.filter(({ row }) => row !== null && readTruthValue(row, next.markColumn) === true).length} of ${days.length} UTC ${days.length === 1 ? 'day' : 'days'}`;
+		}
+		if (next.type === 'flow' && flowDrawing?.kind === 'stepped' && flowDrawing.countsConsistent === false) {
+			const last = rows[rows.length - 1];
+			return `${text(last, next.stageColumn)}: ${text(last, next.wentOnColumn)} ${next.wentOnColumn}`;
 		}
 		return next.mainFigure ?? `${rows.length} rows`;
 	}
@@ -206,11 +215,8 @@
 							</div>
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'flow'}
-							{@const plotFrame = frame(chartWidth, chartHeight)}
-							{@const stages = rows.map((row) => ({ label: text(row, active.stageColumn), arrived: numericValue(row, active.arrivedColumn) as number, left: numericValue(row, active.wentOnColumn) as number, drops: active.droppedColumns.map((column) => ({ label: column, count: numericValue(row, column) as number })) }))}
-							{@const flowGeometry = flow(stages, { frame: plotFrame, narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap })}
 							{@const records = rows.map((row) => factsOf(text(row, active.stageColumn), [active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].map((column) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column) })), 'null'))}
-							<Flow geometry={flowGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} tooltips={false} />
+							<Flow geometry={flowDrawing} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} tooltips={false} />
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'dateSeries'}
 							{@const plotFrame = frame(chartWidth, chartHeight)}

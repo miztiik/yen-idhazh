@@ -515,6 +515,8 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		expect(listed).toContain('6 of 10 went through every stage');
 		const unbalanced = draw(columns, [{ ...rows[0], went: '9' }, rows[1]], 'flow');
 		expect(unbalanced).toContain('first counts 10 arriving and 11 leaving, so the counts are not one flow and the stages are listed rather than drawn.');
+		expect(unbalanced).toContain('last: 6 went');
+		expect(unbalanced).not.toContain('went through every stage');
 		const dates: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'ok', type: 'BOOLEAN' }];
 		const days: Row[] = [{ day: '2026-10-01', ok: 'true' }, { day: '2026-10-02', ok: 'false' }, { day: '2026-10-03', ok: null }];
 		const tiles = draw(dates, days, 'tileStrip');
@@ -894,4 +896,13 @@ test('the three new role defaults and refusals match Tables F, G and M', () => {
 		['tileStrip', 'Nothing here to draw: Which days needs a date or timestamp column for Date, and a true/false column to mark the days. The ledgers keep their dates as text: CAST(date AS DATE) in the question makes a date column.']
 	] as const) expect(chooseChart(incomplete, [{ name: 'first', a: '1' }], bounds, type).shape).toMatchObject({ reason });
 	expect(() => tileStrip([{ date: '2026-10-01', state: 'fired', reading: 1 }])).toThrow('A tile with a reading needs fill and naming thresholds.');
+});
+
+test('the shared Flow count verdict is opt-in and separates a valid narrow list from a non-flow', () => {
+	const stages = [{ label: 'first', arrived: 10, left: 8, drops: [{ label: 'lost', count: 2 }] }, { label: 'last', arrived: 8, left: 6, drops: [{ label: 'lost', count: 2 }] }];
+	const options = { frame: frame(760, 220), narrow: true, nodeWidth: 12, nodeGap: 8 };
+	const original = flow(stages, options);
+	expect(original).not.toHaveProperty('countsConsistent');
+	expect(flow(stages, { ...options, includeCountsStatus: true })).toMatchObject({ kind: 'stepped', note: null, countsConsistent: true });
+	expect(flow([{ ...stages[0], left: 9 }, stages[1]], { ...options, includeCountsStatus: true })).toMatchObject({ kind: 'stepped', countsConsistent: false });
 });

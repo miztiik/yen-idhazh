@@ -669,6 +669,13 @@ row has a positive bar, the box names the prefix and directs the reader to the
 remaining table rows. Saying there are no rows would hide real records. This
 does not change the cap, answer order or whole-answer zero/null refusal.
 
+Susan, 2026-10-09: a diagnosed non-flow cannot claim that a count went through
+every stage. Its lede is the last stage's literal Went on reading, such as
+`last: 6 went`. Valid flows, including valid narrow lists, keep the completion
+lede. The shared module exposes its existing count verdict only when the caller
+requests it. One cached geometry supplies both headline and drawing; the module's
+note, comparison and list remain unchanged.
+
 Jony, 2026-10-09: Flow's stage width comes from `--space-3`; its branch gap
 comes from `--space-2`. The existing measure pass resolves inherited tokens to
 CSS pixels, including rem conversion. Theme/config substitution therefore

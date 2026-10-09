@@ -520,6 +520,7 @@ for (const width of [390, 768, 1024, 1440]) for (const theme of THEMES) {
 		await runExplorer(page);
 		await expect(panel.locator('[data-flow-shape="stepped"]')).toBeVisible();
 		await expect(panel).toContainText('first counts 10 arriving and 11 leaving, so the counts are not one flow and the stages are listed rather than drawn.');
+		await expect(panel.locator('[data-lede]')).toHaveText('last: 6 went');
 		await panel.screenshot({ path: info.outputPath(`row20-flow-list-${width}-${theme}.png`) });
 		if (width === 1440) {
 			await chooseExplorerQuestion(page, ['published'], "SELECT 'Only stage' AS stage, 10 AS arrived, 10 AS went, 0 AS lost");
