@@ -7,9 +7,11 @@ import {
 	similarityConfig
 } from '$lib/server/config';
 import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
+import { findBuiltLine } from '$lib/console/applied-line';
 import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/console/merge-line';
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
+import { readRecordedLine } from '$lib/server/recorded-line';
 import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
 import { holdoutReading, markReach, mergeLineHoldoutScore } from '$lib/server/similarity-holdout';
 import { windowDay } from '$lib/server/window-day';
@@ -23,7 +25,8 @@ export type { JudgeDay, LineDay, MergeDay };
  * One day file a published day inside the widest span the window control
  * offers, and nothing else. The route fetches nothing at read time: every span
  * the control can draw is already in the document, so changing the window costs
- * no request.
+ * no request. The newest published day's run record is one more file, read for
+ * the line that day was built with.
  *
  * **The cover is worked out before the first file is opened** (Guardrail #12).
  * `widestDays` is the largest preset, so a day older than the widest span is
@@ -53,11 +56,12 @@ export async function load() {
 	// One read, three panels. The fitted row carries the line, both judge rates
 	// and all three gate counts, so asking the ledger twice would be two reads
 	// that could disagree about which run of a date they took. It also holds the
-	// days the merge line's rule looks back over while `applied_lookback_days` is
-	// under the widest preset, because no row is dated after the newest published
-	// day. The rows come from the packed record, read inside the widest span, so a
-	// fitted day reaches the page once the gardener has packed it.
+	// days the rule a build follows looks back over while `applied_lookback_days`
+	// is under the widest preset, because no row is dated after the newest
+	// published day. The rows come from the packed record, read inside the widest
+	// span, so a fitted day reaches the page once the gardener has packed it.
 	const rows = await fittedLines(readSpan);
+	const similarity = similarityConfig();
 	// The record is cumulative and the counts are per day, so the newest row is
 	// what both the split and the figures strip are about.
 	const newest = rows.length === 0 ? null : rows[rows.length - 1];
@@ -121,9 +125,7 @@ export async function load() {
 		span: daysInWindow(readSpan),
 		// The band and the daily step the chart draws against, read off config so
 		// the axis is the range a line MAY take rather than the range it has taken.
-		// The switch and the lookback come with them, so a window with no fitted
-		// day draws its rule at the line a build used.
-		similarity: similarityConfig(),
+		similarity,
 		// 120 slots, a fixed size whatever the archive grows to, so this read costs
 		// the same on the thousandth day as on the third. The page draws no 120-slot
 		// chart, so only the four counts, the two ranges and the 24 rebinned rows
@@ -136,9 +138,12 @@ export async function load() {
 			judged: newest?.pairsJudged ?? null,
 			usable: newest?.pairsUsable ?? null
 		},
-		// The committed floor: what a build groups at while the switch is off, or
-		// when no fit applied a line in its lookback.
-		configuredLine: committedFloor(),
+		// The line the newest published day was built with, which the merge line's
+		// rule, the verdict split and the holdout margin all draw. The day's last
+		// build wrote it into the run record; where the record holds none, the rule
+		// a build follows works it out from the fitted rows, the switch, the
+		// lookback and the committed floor.
+		builtWith: findBuiltLine(day, readRecordedLine(day), rows, similarity, committedFloor()),
 		// Only the pairs marked as two different stories reach the document whole.
 		// They are the load-bearing ones - the line has to stay above every one of
 		// them - and inlining the rest would put two addresses and two headlines a
