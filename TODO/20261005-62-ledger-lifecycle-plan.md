@@ -88,7 +88,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | DONE | probable-journey | #1414 | Plan 62 row l31 |
 | L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | DONE | cuddly-sniffle | #1409 | Plan 62 row l32 |
 | L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | DONE | ubiquitous-system | #1482 | Plan 62 row l33 |
-| L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `frontend/tests/console-window.spec.ts`), L52 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | DONE | ideal-bassoon | - | Make one-day console wording accurate |
+| L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `frontend/tests/console-window.spec.ts`), L52 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | DONE | ideal-bassoon | #1488 | Make one-day console wording accurate |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | DONE | urban-winner | #1447 | Plan 62 row l35 |
 | L36 | Hardware's one-sided line leaves out a day whose only run was refused | L28, L29 | M | DONE | psychic-goggles | #1421 | Plan 62 row l36 |
 | L37 | Article cost names a refused shard's processor time or leaves it out | L29 | N | DONE | jubilant-doodle | #1431 | Plan 62 row l37 |
@@ -99,7 +99,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L42 | The days control shows the window the panels draw after moving between console routes | L31 (holds `frontend/tests/console-window.spec.ts` as well as `which-console-surfaces-follow-the-window-and-which-say-why-not.md`) | O | DONE | animated-pancake | #1464 | Plan 62 row l42 |
 | L43 | Every console route sets its own page title | - | N | DONE | upgraded-telegram | #1429 | Plan 62 row l43 |
 | L44 | The publication inventory names every fitted-line and holdout day the council commits | L41, plan 59's row "The fitted merge line is saved through the door" (it closes this row) | O | COLLAPSED #1454 | - | - | - |
-| L45 | Judgement's sentences agree with the days and counts it draws | L41 | P | PENDING | - | - | - |
+| L45 | Judgement's sentences agree with the days and counts it draws | L41, L57 (holds `frontend/src/lib/console/merge-line.ts`, `frontend/tests/merge-line.spec.ts` and `frontend/tests/console-window.spec.ts`) | P | PENDING | - | - | - |
 | L46 | The site build bakes the raw days the data explorer may read | - | Q | DONE | automatic-garbanzo | #1427 | Plan 62 row l46 |
 | L47 | Hardware's started line counts a day whose only run is machine records alone | L36 | O | DONE | super-couscous | #1441 | Plan 62 row l47 |
 | L48 | The Data explorer's line under an answer ends on the last day it read | L12, L46, plan 55's row "The reader chooses the chart and the columns it draws" (holds `frontend/src/routes/console/data-explorer/+page.svelte` as well as `frontend/tests/console-data-explorer.spec.ts`) | R | DONE | glowing-doodle | #1468 | Plan 62 row l48 |
@@ -2054,6 +2054,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 3 | The first two faults do not depend on the inventory, so they wait for nothing. For the third, plan 59's owner confirmed all 19 fitted-line days were packed in successful wake 37862656235 and the old CSVs were removed in #1471 (7e5bfd9df). A Playwright read of the published page then confirmed the fault at 14 and 30 days: the merge-line heading says "7 Oct, the newest day" while the latest published day is 8 Oct. The fault survives #1454, #1462 and #1471, so L45 must still fix it. L60 waits for L45 because they share `MergeLinePlot.svelte` and `console-window.spec.ts` | Plan owner, 2026-10-09 |
 | 4 | The third fault is this row's, not row L34's (rejected alternative 2); row L41's Follow-up had left that choice to Reader | Plan owner, 2026-10-08 |
 | 5 | Level 1: three sentences on one route; a wrong version is obvious and local | Plan owner, 2026-10-08 |
+| 6 | L45 waits for L57, whose writing and checks are active and whose Files touched list shares `frontend/src/lib/console/merge-line.ts`, `frontend/tests/merge-line.spec.ts` and `frontend/tests/console-window.spec.ts` with L45. L45 has not started. This is file-safety ordering under `docs/how-to/execute-a-plan.md`, not a personal user ruling | Plan coordinator, 2026-10-09 |
 
 **Rejected alternatives**
 
