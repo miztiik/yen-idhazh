@@ -1,26 +1,26 @@
 {
   "compaction_lag_days": 0,
   "covers_through": "2026-10-09",
-  "generated_at": "2026-10-09T21:23:57Z",
+  "generated_at": "2026-10-09T21:41:49Z",
   "months": [
     "2026-08",
     "2026-09",
     "2026-10"
   ],
   "routes": [
-    {"carries": "The model spent 58 h 56 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "27 feeds resting"},
+    {"carries": "The model spent 60 h 32 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "27 feeds resting"},
     {"carries": "This day ran in 6 runs, 1.31x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "40 items failed"},
-    {"carries": "366 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 2989.1 MB"},
+    {"carries": "380 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 2989.1 MB"},
     {"carries": "23 summaries were marked \"not sure\" on this day.","description": "What the model made of each article, and where we disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "27 feeds rested over these 235 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "12 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 0,
   "size": {
-    "articles_to_cap": 382332,
-    "bytes": 41437549,
-    "cap_fraction": 0.03859172482043505,
-    "left_mb": 984.4820737838745,
+    "articles_to_cap": 382320,
+    "bytes": 41468395,
+    "cap_fraction": 0.038620452396571636,
+    "left_mb": 984.4526567459106,
     "measured_days": 48,
     "sentence": "39.5 MB of the 1 GB limit - room for about 382,000 more articles."
   },
@@ -33,9 +33,10 @@
       {"health": "amber","label": "Run 2 is worth a look"},
       {"health": "amber","label": "Run 3 is worth a look"},
       {"health": "amber","label": "Run 4 is worth a look"},
-      {"health": "amber","label": "Run 5 is worth a look"}
+      {"health": "amber","label": "Run 5 is worth a look"},
+      {"health": "amber","label": "Run 6 is worth a look"}
     ],
-    "sentence": "2026-10-09 ran 5 runs and published 366 of 400 planned items. 34 items failed."
+    "sentence": "2026-10-09 ran 6 runs and published 440 of 480 planned items. 40 items failed."
   },
   "version": "2026-10-02",
   "worst": {
