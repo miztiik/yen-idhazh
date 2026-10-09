@@ -117,7 +117,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
 | L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
-| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | - | Rest voices on newest source day |
+| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | #1497 | Rest voices on newest source day |
 
 ## 2. Shared declarations
 
