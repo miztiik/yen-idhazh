@@ -16,7 +16,7 @@ import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
 import { flow } from '../src/lib/charts/d3/flow';
 import { frame } from '../src/lib/charts/frame';
-import { truthValue } from '../src/lib/console/explorer/shape';
+import { readTruthValue } from '../src/lib/console/explorer/shape';
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -518,7 +518,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		const dates: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'ok', type: 'BOOLEAN' }];
 		const days: Row[] = [{ day: '2026-10-01', ok: 'true' }, { day: '2026-10-02', ok: 'false' }, { day: '2026-10-03', ok: null }];
 		const tiles = draw(dates, days, 'tileStrip');
-		const strip = tileStrip(days.map((row) => ({ date: String(row.day), state: truthValue(row, 'ok') === null ? 'absent' : truthValue(row, 'ok') ? 'fired' : 'quiet' })));
+		const strip = tileStrip(days.map((row) => ({ date: String(row.day), state: readTruthValue(row, 'ok') === null ? 'absent' : readTruthValue(row, 'ok') ? 'fired' : 'quiet' })));
 		for (const tile of strip!.tiles) expect(tiles).toContain(`data-tile-state="${tile.state}"`);
 		expect(tiles).toContain('"ok" was true on 1 of 3 UTC days');
 		for (const body of [bars, listed, tiles]) {
@@ -533,6 +533,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		expect(tiles.match(/data-tile-state="absent"/g)).toHaveLength(2);
 		expect(tiles.match(/data-tile-state="quiet"/g)).toHaveLength(1);
 		expect(tiles).toContain('"ok" was true on 1 of 4 UTC days');
+		expect(draw(columns, [{ day: '2026-10-01', ok: 'true' }], 'tileStrip')).toContain('"ok" was true on 1 of 1 UTC day');
 		const bars = draw([{ name: 'name', type: 'VARCHAR' }, { name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }], [{ name: 'first', a: '8', b: null }, { name: 'last', a: '4', b: '2' }], 'partsOfOne');
 		expect(bars.match(/class="parts-segment /g)).toHaveLength(3);
 		expect(bars.match(/class="parts-row /g)).toHaveLength(2);

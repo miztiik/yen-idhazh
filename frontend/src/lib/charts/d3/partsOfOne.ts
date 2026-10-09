@@ -69,7 +69,7 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 		throw new RangeError(`A row splits into at most ${hues} parts, one hue each; the order names ${opts.order.length}.`);
 	}
 	const place = new Map(opts.order.map((label, index) => [label, index]));
-	const tokenOf = (index: number): ChartToken => opts.tokens?.[index] ?? hueOf(index);
+	const chooseToken = (index: number): ChartToken => opts.tokens?.[index] ?? hueOf(index);
 	if (place.size !== opts.order.length) throw new Error('The order names one part twice.');
 
 	const measured = rows.map((row) => {
@@ -104,7 +104,7 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 					return {
 						label: part.label,
 						value: part.value,
-						token: tokenOf(part.index),
+						token: chooseToken(part.index),
 						start: percentOf(at / max),
 						size: percentOf(part.value / max)
 					};
@@ -113,6 +113,6 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 		}),
 		max,
 		overlapping,
-		key: opts.order.map((label, index) => ({ label, token: tokenOf(index) }))
+		key: opts.order.map((label, index) => ({ label, token: chooseToken(index) }))
 	};
 }

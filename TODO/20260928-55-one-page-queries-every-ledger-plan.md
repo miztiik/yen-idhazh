@@ -72,7 +72,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 17 | The date chart leaves out a row whose day is NULL and says how many it left out | 16 | O | DONE | musical-umbrella | #1341 | Explorer chart skips a null day |
 | 18 | The Data explorer's panel pictures pass again at every width and theme | 12 | P | DONE | urban-goggles | - | Explorer captures fit again |
 | 19 | The reader chooses the chart and the columns it draws | 10 | Q | DONE | p55r19 | #1449 | p55-row19-worker |
-| 20 | The explorer draws Side by side, Which days and Flow | 19, 26; plan 52 row 2 | R | BLOCKED | - | - | - |
+| 20 | The explorer draws Side by side, Which days and Flow | 19, 26; plan 52 row 2 | R | DONE | p55r20 | p55-row20-worker | - |
 | 21 | The site build checks that each published file carries its contract's columns | - | Q | DONE | p55r21 | #1390 | p55-row21-worker |
 | 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | DESCOPED | - | - | - |
 | 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | DESCOPED | - | - | - |

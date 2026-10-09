@@ -335,7 +335,7 @@ function unfilled(type: ExplorerChartType, roles: readonly RoleState[]): NoShape
 }
 
 /** Why a chosen date column cannot place one mark per UTC day. */
-function dayRefusal(dateColumn: string, rows: readonly Row[], purpose: string): NoShape | null {
+function findDayRefusal(dateColumn: string, rows: readonly Row[], purpose: string): NoShape | null {
 	const unplaceable = firstUnplaceableDay(rows, dateColumn);
 	if (unplaceable !== null) {
 		return {
@@ -367,7 +367,7 @@ function dateSeriesShape(roles: readonly RoleState[], rows: readonly Row[], boun
 	const dateColumn = chosenOf(roles, 'date')[0];
 	const lines = roles.find((state) => state.role.id === 'lines');
 	if (dateColumn === undefined || lines === undefined || lines.options.length === 0) return unfilled('dateSeries', roles);
-	const refusal = dayRefusal(dateColumn, rows, 'to draw it over time');
+	const refusal = findDayRefusal(dateColumn, rows, 'to draw it over time');
 	if (refusal !== null) return refusal;
 	const datedRows = datedRowsOf(rows, dateColumn);
 	const rowsWithNoDay = rowsWithNoDayIn(rows, dateColumn);
@@ -486,7 +486,7 @@ function distributionShape(roles: readonly RoleState[], rows: readonly Row[], bo
 }
 
 /** The naming and magnitude checks shared by charts that measure from zero. */
-function magnitudeRefusal(columns: readonly Column[], rows: readonly Row[], nameColumn: string, numbers: readonly string[]): NoShape | null {
+function findMagnitudeRefusal(columns: readonly Column[], rows: readonly Row[], nameColumn: string, numbers: readonly string[]): NoShape | null {
 	const names = new Set<string>();
 	for (const row of rows) {
 		const name = printed(columns, row, nameColumn);
@@ -501,13 +501,13 @@ function magnitudeRefusal(columns: readonly Column[], rows: readonly Row[], name
 	return null;
 }
 
-function partsShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+function derivePartsShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
 	const labelColumn = chosenOf(roles, 'name')[0];
 	const bars = roles.find((state) => state.role.id === 'bars');
 	const barColumns = bars?.chosen ?? [];
 	if (labelColumn === undefined || (bars?.options.filter((one) => one.value !== labelColumn).length ?? 0) < 2) return unfilled('partsOfOne', roles);
 	if (barColumns.length < 2) return { kind: 'none', code: 'too-few-bars', reason: 'Nothing here to draw: Side by side needs two columns checked under Bars.' };
-	const refusal = magnitudeRefusal(columns, rows, labelColumn, barColumns);
+	const refusal = findMagnitudeRefusal(columns, rows, labelColumn, barColumns);
 	if (refusal !== null) return refusal;
 	if (rows.every((row) => barColumns.every((column) => (numericValue(row, column) ?? 0) === 0))) return { kind: 'none', code: 'all-zero', reason: 'Nothing here to draw: every bar you checked is 0 or null on every row.' };
 	const drawn = rows.slice(0, bounds.rankMax);
@@ -524,31 +524,31 @@ function partsShape(roles: readonly RoleState[], columns: readonly Column[], row
 }
 
 /** A true/false cell from the engine, which returns cells as text. NULL never becomes false. */
-export function truthValue(row: Row, column: string): boolean | null {
+export function readTruthValue(row: Row, column: string): boolean | null {
 	const value = row[column];
 	if (value === true || value === 'true') return true;
 	if (value === false || value === 'false') return false;
 	return null;
 }
 
-function tilesShape(roles: readonly RoleState[], rows: readonly Row[]): ExplorerShape {
+function deriveTilesShape(roles: readonly RoleState[], rows: readonly Row[]): ExplorerShape {
 	const dateColumn = chosenOf(roles, 'date')[0];
 	const markColumn = chosenOf(roles, 'markIf')[0];
 	if (dateColumn === undefined || markColumn === undefined) return unfilled('tileStrip', roles);
-	const refusal = dayRefusal(dateColumn, rows, 'to mark it day by day');
+	const refusal = findDayRefusal(dateColumn, rows, 'to mark it day by day');
 	if (refusal !== null) return refusal;
-	if (datedRowsOf(rows, dateColumn).every((row) => truthValue(row, markColumn) === null)) return { kind: 'none', code: 'marks-all-null', reason: `Nothing here to draw: "${markColumn}" is null on every day.` };
+	if (datedRowsOf(rows, dateColumn).every((row) => readTruthValue(row, markColumn) === null)) return { kind: 'none', code: 'marks-all-null', reason: `Nothing here to draw: "${markColumn}" is null on every day.` };
 	return { kind: 'chart', type: 'tileStrip', option: 'Which days', icon: 'shape-days', dateColumn, markColumn, rowsWithNoDay: rowsWithNoDayIn(rows, dateColumn), comparison: 'each UTC day against the other days in the span' };
 }
 
-function flowShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[]): ExplorerShape {
+function deriveFlowShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[]): ExplorerShape {
 	const stageColumn = chosenOf(roles, 'stage')[0];
 	const arrivedColumn = chosenOf(roles, 'arrived')[0];
 	const wentOnColumn = chosenOf(roles, 'wentOn')[0];
 	const droppedColumns = chosenOf(roles, 'dropped');
 	if (stageColumn === undefined || arrivedColumn === undefined || wentOnColumn === undefined) return unfilled('flow', roles);
 	const numbers = [arrivedColumn, wentOnColumn, ...droppedColumns];
-	const refusal = magnitudeRefusal(columns, rows, stageColumn, numbers);
+	const refusal = findMagnitudeRefusal(columns, rows, stageColumn, numbers);
 	if (refusal !== null) return refusal;
 	for (const row of rows) for (const column of numbers) {
 		if (numericValue(row, column) === null) return { kind: 'none', code: 'null-count', reason: `Nothing here to draw: "${column}" is null at the stage "${printed(columns, row, stageColumn)}", and a flow needs every count.` };
@@ -562,9 +562,9 @@ export function chartShape(type: ExplorerChartType, roles: readonly RoleState[],
 	if (type === 'dateSeries') return dateSeriesShape(roles, rows, bounds);
 	if (type === 'rankedList') return rankedListShape(roles, columns, rows, bounds);
 	if (type === 'pairedScatter') return pairedScatterShape(roles, rows, bounds);
-	if (type === 'partsOfOne') return partsShape(roles, columns, rows, bounds);
-	if (type === 'tileStrip') return tilesShape(roles, rows);
-	if (type === 'flow') return flowShape(roles, columns, rows);
+	if (type === 'partsOfOne') return derivePartsShape(roles, columns, rows, bounds);
+	if (type === 'tileStrip') return deriveTilesShape(roles, rows);
+	if (type === 'flow') return deriveFlowShape(roles, columns, rows);
 	return distributionShape(roles, rows, bounds);
 }
 

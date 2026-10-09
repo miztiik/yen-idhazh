@@ -34,7 +34,7 @@
 	import RankedList from '$lib/components/RankedList.svelte';
 	import ColumnPicker from '$lib/console/explorer/ColumnPicker.svelte';
 	import { MOST_ROLES, SERIES_TOKENS, type ExplorerChartType, type RoleId } from '$lib/console/explorer/chart-roles';
-	import { IN_THE_ANSWER, chartNotes, chooseDateSeriesDays, numericValue, truthValue, type ExplorerChart, type ExplorerShape, type ExplorerShapeBounds } from './shape';
+	import { IN_THE_ANSWER, chartNotes, chooseDateSeriesDays, numericValue, readTruthValue, type ExplorerChart, type ExplorerShape, type ExplorerShapeBounds } from './shape';
 	import { printCell } from './answer';
 
 	let {
@@ -103,7 +103,7 @@
 		if (next.type === 'pairedScatter') return next.mainFigure;
 		if (next.type === 'tileStrip') {
 			const days = chooseDateSeriesDays(next.dateColumn, rows, lostDays);
-			return `"${next.markColumn}" was true on ${days.filter(({ row }) => row !== null && truthValue(row, next.markColumn) === true).length} of ${days.length} UTC days`;
+			return `"${next.markColumn}" was true on ${days.filter(({ row }) => row !== null && readTruthValue(row, next.markColumn) === true).length} of ${days.length} UTC ${days.length === 1 ? 'day' : 'days'}`;
 		}
 		return next.mainFigure ?? `${rows.length} rows`;
 	}
@@ -137,12 +137,12 @@
 		if (box === null || stack === null) return;
 		const style = getComputedStyle(box);
 		const rootPixels = parseFloat(getComputedStyle(document.documentElement).fontSize);
-		const spacingPixels = (token: string) => {
+		const readSpacingPixels = (token: string) => {
 			const value = style.getPropertyValue(token).trim();
 			return parseFloat(value) * (value.endsWith('rem') ? rootPixels : value.endsWith('em') ? parseFloat(style.fontSize) : 1);
 		};
-		nodeWidth = spacingPixels('--space-3');
-		nodeGap = spacingPixels('--space-2');
+		nodeWidth = readSpacingPixels('--space-3');
+		nodeGap = readSpacingPixels('--space-2');
 		const room = box.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
 		const rest = stack.getBoundingClientRect().height - chartHeight;
 		// What the plot's box holds beside the height it was drawn at: its edge.
@@ -199,8 +199,8 @@
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'tileStrip'}
 							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
-							{@const tiles = tileStrip(days.map(({ day, row }) => { const value = row === null ? null : truthValue(row, active.markColumn); return { date: day, state: value === null ? 'absent' : value ? 'fired' : 'quiet' }; }))}
-							{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-1)', values: days.map(({ row }) => { const value = row === null ? null : truthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
+							{@const tiles = tileStrip(days.map(({ day, row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return { date: day, state: value === null ? 'absent' : value ? 'fired' : 'quiet' }; }))}
+							{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-1)', values: days.map(({ row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
 							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 								<TileStrip geometry={tiles} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Which days: ${active.dateColumn}, ${active.markColumn}`} width={chartWidth} height={chartHeight} readout={tileReadout} stateWords={{ fired: 'true', quiet: 'false', absent: 'null' }} />
 							</div>
