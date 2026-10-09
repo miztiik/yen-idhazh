@@ -114,9 +114,9 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | DONE | bookish-telegram | #1491 | Make agreement numbers match verdicts |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
-| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | - | Align merge chart meaning |
+| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
-| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | - | Clear near-top agreement labels |
+| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
 | L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | - | Rest voices on newest source day |
 
 ## 2. Shared declarations
