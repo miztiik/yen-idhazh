@@ -78,7 +78,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | DESCOPED | - | - | - |
 | 24 | The page reads each index once before a run, and the ledger list raises no accessibility warning | 10 | Q | DONE | p55fix1 | #1435 | executing owner |
 | 25 | The panel pictures open the tab that holds each Data explorer panel | 10 | Q | DONE | p55fix2 | #1453 | executing owner |
-| 26 | The chart keeps its room: the foot reserves only the notes an answer can give, and a short window scrolls the page | 19 | Q | DONE | p55r26 | - | p55-row26-worker |
+| 26 | The chart keeps its room: the foot reserves only the notes an answer can give, and a short window scrolls the page | 19 | Q | DONE | upgraded-lamp | #1475 | executing owner |
 | 27 | Ctrl+Enter runs a question only when Run could, and History keeps the question each run asked | 4 | Q | DONE | p55fix3 | #1461 | executing owner |
 | 28 | A day tile marks only its preset ending today, and saved questions and runs keep dates only for custom spans | 6 | Q | DONE | upgraded-lamp | #1472 | executing owner |
 
