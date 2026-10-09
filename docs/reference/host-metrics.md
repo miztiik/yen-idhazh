@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -27,7 +27,7 @@ set is still operator-only: the console reads it at build time under
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
-| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/pipeline-tests/compact/host-fingerprint/` by `compact-trial-host-fingerprint` |
+| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
 | Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job files its own row through `ledger.persist`, and nothing else writes the ledger |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
@@ -76,8 +76,9 @@ fails `backend/tests/workflows/test_worker_ledgers.py` instead of filing half a
 row for three weeks.
 
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
-whole state root with `run.trial_state_dirname`, so its rows land under
-`state/pipeline-tests/`. The trial compaction declaration packs that root
+whole state root with `run.trial_state_dirname`, so its rows land tier-first
+under `state/raw/pipeline-tests/` and `state/compact/pipeline-tests/`. The trial
+compaction declaration packs that root
 without changing the production ledger's retention policy. The reason is in
 the design rationale below.
 
@@ -472,15 +473,16 @@ machine, so it runs before the job's heaviest step - ahead of the model server i
 `work`, ahead of the embeddings and the site build in `assemble` - and after the
 plan file exists in every job, because the row is filed under the run's own id.
 
-**A bench dispatch writes under `state/pipeline-tests/`, not beside the
+**A bench dispatch writes tier-first under `state/raw/pipeline-tests/` and
+`state/compact/pipeline-tests/`, not beside the
 production rows.** A bench is dispatched ad hoc, many times a day, against
 branches nobody merged. Mixing those rows into the ledger the console reads would
 mean every panel filtering by job for ever - a cost paid on every read, by every
 reader, to keep a few dispatches apart. The split pays it once instead. What it
 costs is a join whenever somebody asks what machines GitHub has given us across
 both, and that is a question asked rarely and by an operator. The mechanism is
-the one that already existed: `run.trial_state_dirname` moves the whole state
-root for a run, so one input on the candidate-config action puts every ledger
+the one that already existed: `run.trial_state_dirname` names the trial root a
+run's ledgers splice in ahead of each tier, so one input on the candidate-config action puts every ledger
 that run writes under the trial tree, and no second way of doing the same thing
 was minted. Owner decision, 2026-09-16.
 
@@ -546,8 +548,8 @@ got before. Authority: Fowler, 2026-09-17.
 
 **A bench dispatch writes the same way.** `measure.yml` has no `assemble` job,
 and it needs none: its probe writes its own file under the day and the commit
-stages `state/pipeline-tests/raw/host-fingerprint`; the gardener packs that
-root under `state/pipeline-tests/compact/host-fingerprint` through
+stages `state/raw/pipeline-tests/host-fingerprint`; the gardener packs that
+root under `state/compact/pipeline-tests/host-fingerprint` through
 `compact-trial-host-fingerprint`. When this was decided it was
 the one state writer with
 no concurrency group

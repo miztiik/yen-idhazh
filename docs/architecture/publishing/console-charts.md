@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 **Known noncompliance:** Existing prerendered charts do not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -49,7 +49,12 @@ The denominator is the number that reached that stage, not the whole day.
 Print counts and denominators beside rates. Below `console.min_attempts_for_rate`,
 show counts only and break the rate line, as
 [a share under the floor](#a-share-under-the-floor-gets-no-mark) requires.
-An empty window is not a day of zeroes.
+An empty window is not a day of zeroes. In the Pipelines viewport, this panel
+keeps its own place rather than taking a reserved box: while the monthly files
+are being read it says `Reading the monthly files. This chart is not ready yet.`;
+if a required file does not arrive it says `This chart is unavailable.` The
+shared line above the panels names a missing or failed month. Only a successful
+read with no planned items gets the quiet-window sentence.
 
 **Summary length against the length asked for:** show daily counts inside, below
 and above the configured target band. Print the `summarize.bands` bounds and name
@@ -211,6 +216,7 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
+- Failure rate remains unboxed in the item-telemetry viewport. A fixed box would add a slot to a group whose panels flow to their own empty states. The page names a missing or failed month once; the chart uses short state sentences and keeps its quiet-window sentence for a successful empty read.
 
 ## See also
 

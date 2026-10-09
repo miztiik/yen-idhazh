@@ -75,7 +75,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | #1396 | Plan 62 row l18 |
 | L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | #1391 | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
-| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
+| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | DONE | laughing-spoon | #1477 | Plan 62 row l21 |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | #1385 | Plan 62 row l22 |
 | L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | DONE | fuzzy-winner | #1381 | Plan 62 row l23 |
 | L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | #1376 | Plan 62 row l24 |
@@ -108,12 +108,12 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L51 | Judgement's agreement panel words follow the rates they judge | L39, L40 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | U | DONE | scaling-meme | #1463 | Plan 62 row l51 |
 | L52 | Judgement names the line each build recorded | L38, L35 (holds `frontend/tests/console-window.spec.ts`), L40 (holds `frontend/tests/console-window.spec.ts`) | V | DONE | verbose-couscous | #1469 | Plan 62 row l52 |
 | L53 | Hardware reads a machine record with no job the same way everywhere | - | W | DONE | fuzzy-doodle | #1459 | Plan 62 row l53 |
-| L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | PENDING | - | - | - |
+| L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | - | Plan 62 row l54 |
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | PENDING | - | - | - |
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | PENDING | - | - | - |
-| L59 | VerdictSplit says which day's line its judged pairs use | - | AC | PENDING | - | - | - |
+| L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
 
@@ -1075,10 +1075,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (found by a search on `main` at 3f6440edb for "Run reads", `statusSentence` and `spanDays`; search again at dispatch, after #1357 merges):
   - `frontend/src/lib/console/explorer/status.ts` (`statusSentence`, state `idle`: "Run reads {files}, {size} from {ledgers} over {days} UTC days.")
   - `frontend/src/routes/console/data-explorer/+page.svelte` (`statusLine()` hands that sentence `days: spanDays()`, the window's days)
-  - `frontend/src/lib/data/slice-shapes.ts` and `frontend/src/lib/data/ask-reader.ts` (only if `SpanCost.cut` must carry more than each cut ledger and the day its answer starts; decision 3)
+  - `frontend/src/lib/data/slice-shapes.ts` and `frontend/src/lib/data/ask-reader.ts` (found during execution: `SpanCost` carries nullable `readFrom` and `readTo`, computed by the same `firstDayRead` and `lastDayRead` functions as the answer; decision 3)
+  - `frontend/tests/ledger-lifecycle.spec.ts` (found during execution: the estimate's bounds for a late start, mixed starts, an early end, one day, no day and no chosen ledger)
   - `frontend/tests/console-data-explorer-still.spec.ts` (pins the words of the `idle` sentence, and reads "Run reads" on the page)
   - `frontend/tests/console-data-explorer.spec.ts` (the Oracle, on roots built with `frontend/tests/support/ledger-lifecycle.ts`)
   - `docs/how-to/query-a-ledger-from-the-console.md` (says what the action line prices)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md` (found during execution: the runtime estimate's bounds and why its day count is shared with the answer)
   - Left as they are: `frontend/scripts/published-ledgers.mjs`, whose `spanDays` is the site copy's own parameter; `TODO/20260928-55-one-page-queries-every-ledger-plan.md`, which declares the action line's words (decision 4)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-data-explorer.spec.ts --spec console-data-explorer-still.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the data explorer. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-data-explorer.spec.ts`, on ledgers the test builds (Table D, D3): one ledger built to begin 5 days before the end of a 14-day window. Before the run, the action line counts the 5 days the run will read; on `main` it counts the window's 14, which is what lets this check fail. A second case adds a ledger built to begin 4 years before, and the line says what Reader rules for two ledgers that read different days. It cannot settle the words, which Reader chooses (decision 1); the test pins the words Reader chooses.
@@ -1087,9 +1089,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the words, and how the line counts when the selected ledgers read different days (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Reader chooses the words, and how the line counts when the selected ledgers read different days (CLAUDE.md section 14) | Reader, 2026-10-09: count the inclusive UTC dates from the earliest reading start to the latest reading end, never a sum of each ledger's days. Before Run: "Run will read {files}, {size} from {ledgers} over {n} UTC days, from {first} through {last}."; one day: "over 1 UTC day: {day}."; no day: "over 0 UTC days.". Each date carries its year. The after-Run sentence keeps its existing words; this row changes only the action line |
 | 2 | The fault: the line before a run, "Run reads ... over {n} UTC days.", counts the window's days, not the days each ledger will read. So for one question it can count days that the line under the answer, which counts the days read since L12, does not | Row L12's report; the owner, 2026-10-07 |
-| 3 | The count comes from `SpanCost`, which the page asks for before every run. Its `cut` names each selected ledger cut from the window and the day that ledger's answer starts, and it can carry the days each ledger will read (row L12's report). That is a field of a run-time answer, not a persisted shape, so Table C, C1 does not fire | Row L12's report; plan author, 2026-10-07 |
+| 3 | The count comes from `SpanCost`, which the page asks for before every run. It carries nullable `readFrom` and `readTo`, from the same day functions as the answer, and both are null when no ledger reads a day. These fields are never persisted, so Table C, C1 does not fire. An archive file that fails during the run can still change the actual answer's bounds | Row L12's report; plan author, 2026-10-07; implementation follows Fowler's day rule of 2026-10-08 in row L48, decision 5. Plan 55's owner was told before changing the data files, and confirmed those files were free, 2026-10-09 |
 | 4 | L21 waits for plan 55's row "The Data explorer reaches the reference's density" (#1357), which reshapes the data explorer page and edits `status.ts`, `+page.svelte` and both explorer specs this row edits. The Depends-on cell names that row by number so that the plan reader holds L21; check its title again at dispatch. Plan 55 declares the action line's words too, so coordinate with plan 55's owner session before dispatch | The owner, 2026-10-07 |
 | 5 | Level 2: the line before every explorer run changes, and every run is priced through `SpanCost` | The owner, 2026-10-07 |
 
@@ -2318,24 +2320,25 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **The fault** (row L35's Follow-up, Susan's, 2026-10-08; read again on `origin/main` at d8961d8b2, after #1447): the panel, `frontend/src/lib/components/FailurePanels.svelte`, prints "No item was planned in {span}, so there is no rate to give and no volume to give it against." whenever the window holds no row (`load.empty`). The page holds no telemetry row until a month file lands, so the panel prints it before a script has read the window, and again when the month file did not arrive: a page still loading, or missing its data, states a fact about the pipeline. `docs/architecture/publishing/console-charts.md`, in "An empty chart box says which nothing it holds", asks a chart whose data is pending to say it is loading, and one whose data did not load to explain the failure. `frontend/src/lib/components/Viewport.svelte` draws this panel and the two below it with no reserved box, on purpose: its comment says each says what is empty about it, and that a month that did not arrive is said once, above the panels. The two panels above it, "What is failing, by stage" and "Where an item's time went", stand in a reserved box (`Reserved`) that says when a month did not come back, and since row L35 (#1447) it waits until the page has read the window.
 - **Files touched** (found by a search on `origin/main` at 62da7be9a, and again at d8961d8b2 after #1447, for "No item was planned", `load.empty`, `data-failure-empty`, `FailurePanels`, `Reserved` and `telemetryState` under `frontend/` and `docs/`; search again at dispatch):
   - `frontend/src/lib/components/FailurePanels.svelte` (the sentence, printed whenever `load.empty`, whatever the fetch did)
-  - `frontend/src/lib/components/Viewport.svelte` (draws the panel with no reserved box, and hands it the rows and no fetch state; its comment says why)
-  - `frontend/src/routes/console/+page.svelte` (holds `ready` and the fetch's state, `telemetryState`, which the two panels above it hand their `Reserved` boxes, and hands `Viewport` the rows; held by L42 while it runs)
-  - `frontend/tests/console-failure.spec.ts` (the Oracle, beside "a window holding nothing renders, and says so rather than drawing zero", which serves rows the test builds through `openServed`)
+  - `frontend/src/lib/components/Viewport.svelte` (draws the panel with no reserved box and hands it the rows; found during execution: passes the page's fetch state to the failure panel without changing the other panels)
+  - `frontend/src/routes/console/+page.svelte` (holds `ready` and the fetch's state, `telemetryState`, which the two panels above it hand their `Reserved` boxes, and hands `Viewport` the rows; found during execution: passes its fetch state to the failure panel)
+  - `frontend/tests/console-failure.spec.ts` (the Oracle, beside "a window holding nothing renders, and says so rather than drawing zero", which serves rows the test builds through `openServed`; found during execution: adds held-file and 404 cases)
   - `frontend/tests/support/served-telemetry.ts` (`openServed` answers every month file the page asks for once the test has built its rows; changed only if the Oracle needs a month it holds back or refuses)
   - `docs/architecture/publishing/console-charts.md` (its "Failure rate against volume" paragraph, and "An empty chart box says which nothing it holds")
   - Read, no change unless the ruling reaches them: `frontend/src/lib/components/Reserved.svelte`, the box the two panels above it use; `frontend/src/lib/console/waiting.ts`, which writes the sentence for each state of the fetch; `frontend/src/lib/components/BandDistance.svelte` and `frontend/src/lib/components/FailureList.svelte`, which `Viewport.svelte` leaves outside a box for the same reason; `frontend/tests/console.spec.ts`, whose "panning to a month with no rows leaves a visible gap" pins the sentence for a window that was read and holds no row; `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md`, whose section "A console panel reserves its room, and names which nothing it is holding" says a reserved box and its failure state are one decision
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-failure.spec.ts`, then the specs it selects for the changed files; `npm --prefix frontend run check`; `doc_load.py` on each changed page; the browser smoke of Pipelines at the 1- and 14-day presets, with its month files held back, answered 404 and answered with rows. CI: the pull request runs the console specs; every group runs on the merge push.
-- **Oracle:** in `console-failure.spec.ts`, on rows the test builds (Table D, D3): while the month file is held back, the panel does not say that no item was planned; with the month file answered 404, it says that the data did not come; with the window read and holding no row, it still prints "No item was planned in these {N} days, ...". On `origin/main` the first two print the third's sentence, which is what lets this check fail. It cannot settle whether the panel takes a box, or the words of either state, which Jony, Susan and Reader rule (decisions 1 and 2).
+- **Oracle:** in `console-failure.spec.ts`, with the monthly request held and with it answered 404, the panel prints Reader's exact sentences, "Reading the monthly files. This chart is not ready yet." and "This chart is unavailable.", and prints neither a quiet sentence nor a chart. For a window the test reads successfully and builds with no rows, it prints the whole sentence, "No item was planned in these 7 days, so there is no rate to give and no volume to give it against." (Table D, D3). On `origin/main` the held and 404 cases print the quiet-window sentence, which is what lets these checks fail.
 
 **Decisions**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Jony and Susan rule whether the panel takes the reserved box that row L35 gave the two panels above it, or says the same in its own place. `Viewport.svelte`'s reason for no box is a cost to price in that ruling, not a rule to obey (CLAUDE.md sections 0d and 14) | To be ruled at dispatch (Jony and Susan) |
-| 2 | Reader chooses the words (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | The failure-rate panel stays in the item-telemetry viewport without a reserved box. Its short waiting and unavailable messages fit in its own place, while a box would add a fixed slot to a group whose panels flow to their own empty states | Jony and Susan, 2026-10-09 |
+| 2 | While the files are being read, the panel says "Reading the monthly files. This chart is not ready yet." When a required file does not arrive, it says "This chart is unavailable." The shared line above the panels names the failed month. A successfully read empty window keeps its existing quiet sentence | Reader, 2026-10-09 |
 | 3 | The fault is row L35's Follow-up, which Susan found | Row L35's report; plan owner, 2026-10-08 |
 | 4 | L54 waits for L35 (#1447), whose reserved box is the precedent and which changed `frontend/src/routes/console/+page.svelte` | Plan owner, 2026-10-08 |
 | 5 | Level 1: what one panel says while its data is loading or did not arrive; a wrong version is obvious and local | Plan owner, 2026-10-08 |
+| 6 | The route passes its telemetry state through the viewport. The failure panel shows a state sentence only when it has no rows, so available rows remain visible while other files are being read | Found during execution |
 
 **Rejected alternatives**
 
@@ -2472,6 +2475,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #L59 - VerdictSplit says which day's line its judged pairs use
 
+- **Status:** DONE. The note names the newest day in Reader's settled sentence, and the rendered-page test asserts the whole sentence. No data, configuration or line calculation changed.
 - **Scope:** Replace the note's "the line the day was built with" with Reader's settled words: "Every judged pair, split by whether its score cleared the line the newest day was built with and by what the judge said about it." Level 1.
 - **The fault** (row L52's Reader Follow-up 1, 2026-10-08): the judged pairs can come from several days, but the note's "the day" can read as each pair's own day. The panel compares every pair with the newest published day's recorded line.
 - **Files touched** (searched on current `origin/main` for the note and its rendered-page tests):

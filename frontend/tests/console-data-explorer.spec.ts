@@ -17,6 +17,62 @@ const PINNED = '2030-06-15';
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
 const JOIN_SQL = 'SELECT \'published x item-health\' AS pair, CAST(count(*) AS VARCHAR) AS rows FROM "published" p, "item-health" h';
 
+test('THE ORACLE: the action line counts five days for a ledger that begins inside a fourteen-day window', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 5 files, 2 KB from 1 ledger over 5 UTC days, from 11 Jun 2030 through 15 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await expect(page.locator('.answer-note')).toHaveText('Read from 5 UTC days, 11 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
+});
+
+test('THE ORACLE: beside a ledger that began four years ago the action line counts the fourteen dates once', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 0) },
+		{ ledger: 'seen', pinned: PINNED, days: [{ ago: 1461, state: 'empty' }, ...everyDay(13, 0)] });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint', 'seen'], 'SELECT (SELECT count(*) FROM "host-fingerprint") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 19 files, 9 KB from 2 ledgers over 14 UTC days, from 2 Jun 2030 through 15 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['5', '14']]);
+	await expect(page.locator('.answer-note')).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
+});
+
+test('the action line stops on the ledger\'s last listed day, not the window\'s last day', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 3) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 2 files, 1 KB from 1 ledger over 2 UTC days, from 11 Jun 2030 through 12 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await expect(page.locator('.answer-note')).toHaveText('Read from 2 UTC days, 11 Jun 2030 to 12 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
+});
+
+test('the action line names one UTC day', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="1"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 1 file, 1 KB from 1 ledger over 1 UTC day: 15 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await expect(page.locator('.answer-note')).toHaveText('Read from 1 UTC day, 15 Jun 2030. 1 row shown.');
+});
+
+test('the action line counts no day before a ledger starts', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2030-06-02');
+	await page.getByRole('textbox', { name: 'To (UTC)' }).fill('2030-06-14');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 0 files, 0.0 MB from 1 ledger over 0 UTC days. It also starts the query engine.', { timeout: 60_000 });
+});
+
 function addDays(day: string, delta: number): string {
 	const date = new Date(`${day}T00:00:00Z`);
 	date.setUTCDate(date.getUTCDate() + delta);
@@ -296,7 +352,7 @@ test('opened from a link, the page reads each index and listing once before a ru
 	});
 	// The link names no question, so the editor stays empty and Run stays off: wait for the cost line instead.
 	await openExplorer(page, PINNED, { address: '?ledgers=host-fingerprint&days=14', ready: false });
-	await expect(page.locator('[data-explorer-action-line]')).toContainText('Run reads', { timeout: 60_000 });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('Run will read', { timeout: 60_000 });
 	expect(read.length, 'the page read no index, so this test proves nothing').toBeGreaterThan(0);
 	expect(read.filter((file, at) => read.indexOf(file) !== at), 'a file was read twice before Run').toEqual([]);
 });
