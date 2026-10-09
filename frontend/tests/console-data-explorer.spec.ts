@@ -148,7 +148,7 @@ test('THE ORACLE: Data explorer opens as the sixth tab and renders its two panel
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toHaveText('Run a question, and its answer can be drawn here.');
 	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('This page holds');
 });
 
@@ -682,7 +682,7 @@ test('THE ORACLE: a shared address fills the editor and does not run itself', as
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
 	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('Answered in');
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toHaveText('Run a question, and its answer can be drawn here.');
 	await expect(page.locator('[data-explorer-columns]')).toContainText('published.');
 	expect(fetched, 'a shared link fetched more than the newest day before Run').toEqual(['compact/published/daily/2030/06/15.parquet']);
 	const beforeType = page.url();
@@ -860,7 +860,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 
 /** One answer every chart can draw: a row a UTC day, a name a row, and three number columns. */
 const EVERY_CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other FROM range(0, 170) AS t(i)";
-const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution'] as const;
+const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution', 'partsOfOne', 'tileStrip', 'flow'] as const;
 
 /** Open a role's pill on the Chart tab and pick the line for `column` in its list. */
 async function pickColumn(page: Page, role: string, column: string) {
@@ -875,7 +875,7 @@ test('T6: Draw it as is radio tiles for every chart on every answer, none disabl
 	const group = page.getByRole('group', { name: 'Draw it as' });
 	const tiles = group.locator('input[type="radio"]');
 	const expectEveryTile = async (label: string) => {
-		await expect(tiles, label).toHaveCount(4);
+		await expect(tiles, label).toHaveCount(7);
 		expect(await tiles.evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)), label).toEqual([...CHART_TYPES]);
 		for (const tile of await tiles.all()) await expect(tile, label).toBeEnabled();
 	};
