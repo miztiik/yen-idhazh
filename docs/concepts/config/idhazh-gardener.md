@@ -145,7 +145,7 @@ declarations: no finite expiry and pruning disabled.
 | # | Key | What it sets |
 | --- | --- | --- |
 | 1 | `dry_run` | Whether a pass changes any file. `true` reports every path a live pass would write and delete, and changes nothing |
-| 2 | `month_deletes_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it, and packs those days and months like the rest; the pass's record counts the files a live pass would drop at that wake in `selected` and not in `deleted`. `false` lets the window delete them |
+| 2 | `month_deletes_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it. A raw day in a closed month past the keep line stays where it is; the other packing steps still run. The pass's record counts the files a live pass would drop at that wake in `selected` and not in `deleted`. `false` lets the window delete them |
 | 3 | `daily_keep_days` | How many days after a UTC month ends it is absorbed into its month file. At least 31 |
 | 4 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
 | 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
