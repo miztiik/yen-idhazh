@@ -258,6 +258,22 @@ def test_a_row_from_before_the_fault_word_reads_as_one_that_named_none() -> None
     assert (failed.stopped_because, failed.fault) == (StopReason.FAILED, None)
 
 
+def test_manual_action_is_an_additive_contract_change() -> None:
+    changelog = CollectionPruneRow.json_schema()["changelog"]
+
+    assert CollectionPruneRow.schema_version() == "2026-10-09"
+    assert changelog[0]["change"] == (
+        "manual-action added as a failed fault; older rows read unchanged."
+    )
+    assert [entry["version"] for entry in changelog] == [
+        "2026-10-09",
+        "2026-10-07",
+        "2026-10-04",
+        "2026-10-03T18:00",
+        "2026-09-17",
+    ]
+
+
 @pytest.mark.parametrize(
     ("changes", "refusal"),
     [
@@ -275,6 +291,11 @@ def test_a_row_from_before_the_fault_word_reads_as_one_that_named_none() -> None
             {"stopped_because": "deferred", "fault": "raised"},
             "fault raised ends a pass failed, not deferred",
             id="a-defect-that-left-the-job-green",
+        ),
+        pytest.param(
+            {"stopped_because": "deferred", "fault": "manual-action"},
+            "fault manual-action ends a pass failed, not deferred",
+            id="a-manual-refusal-that-left-the-job-green",
         ),
         pytest.param(
             {"stopped_because": "failed", "fault": "api-unavailable"},
@@ -307,9 +328,13 @@ def test_a_cause_or_a_note_no_pass_could_have_written_is_refused(
 
 
 @pytest.mark.parametrize("fault", list(GardenerFault), ids=lambda fault: fault.value)
-def test_a_code_defect_fails_a_pass_and_every_other_cause_defers_it(fault: GardenerFault) -> None:
-    """Only `failed` turns the job red, so only a defect may end a pass there."""
-    expected = StopReason.FAILED if fault is GardenerFault.RAISED else StopReason.DEFERRED
+def test_each_fault_exhaustively_maps_to_its_stop(fault: GardenerFault) -> None:
+    """Defects and manual action fail; every retryable fault defers."""
+    expected = (
+        StopReason.FAILED
+        if fault in (GardenerFault.RAISED, GardenerFault.MANUAL_ACTION)
+        else StopReason.DEFERRED
+    )
 
     assert stop_for(fault) is expected
     assert a_row(stopped_because=expected.value, fault=fault.value).fault is fault

@@ -15,15 +15,17 @@ reached one.
 
 **`fault` says why a pass stopped, and `recovered` what it met and did not stop
 for.** A pass that stopped names the cause in one closed word. `raised` is a
-code defect and ends the pass `failed`, the one stop that turns the job red.
-Every other word - GitHub's API not answering, a range that starts after a ready
-period, a period that waits for a person - ends it `deferred`, and the next wake
-or a person settles it. A fault the pass could record it records instead, one
-note a period or member - a day packed again from its raw files, a file moved
-aside, a member GitHub will not delete - and goes on, so a recovered pass still
-ends exhausted or at its ceiling. Neither holds text the pass read: a word, a
-period and a member id are all either carries (Guardrail #11). The sentence a
-person reads is rendered from them when the row is read, and is never stored.
+code defect and `manual-action` is a recognized refusal only a person can
+settle; both end the pass `failed` and turn the job red. Every other word -
+GitHub's API not answering, a range that starts after a ready period, or a
+named period repair - ends it `deferred`; a later wake retries it, and a person
+repairs it when its own word says so. A fault the pass could record it records
+instead, one note a period or member - a day packed again from its raw files, a
+file moved aside, a member GitHub will not delete - and goes on, so a recovered
+pass still ends exhausted or at its ceiling. Neither holds text the pass read:
+a word, a period and a member id are all either carries (Guardrail #11). The
+sentence a person reads is rendered from them when the row is read, and is never
+stored.
 
 It is `VisualPruneRow.skipped_by_fuse` arrived at from the other side, and the
 difference is the whole reason this shape is not that one. That field counts a
@@ -67,7 +69,7 @@ which carries them still reads.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, ClassVar, Final, Self
+from typing import Annotated, ClassVar, Final, Self, assert_never
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -104,23 +106,33 @@ class StopReason(StrEnum):
     EXHAUSTED = "exhausted"
     #: The ceiling was reached. There is more, and `resume_from` names it.
     CEILING = "ceiling"
-    #: A code defect stopped the pass - in a delete, the listing, or the task
-    #: itself - and `fault` is `raised`: the one stop that turns the job red. On
-    #: a row written before `fault` existed, any stop for an error. `resume_from`
-    #: names the member it failed at when it had reached one, so the next pass
-    #: retries it rather than stepping over it, and is empty when it failed
-    #: before it could name any.
+    #: A code defect or a named refusal only a person can settle stopped the
+    #: pass, and `fault` says which. This is the stop that turns the job red. On
+    #: a row written before `fault` existed, any stop for an error.
+    #: `resume_from` names the member it failed at when it had reached one, so
+    #: the next pass retries it rather than stepping over it, and is empty when
+    #: it failed before it could name any.
     FAILED = "failed"
-    #: A cause outside the code stopped the pass, and `fault` names it: GitHub's
-    #: API did not answer, or a period waits for a range that starts earlier or
-    #: for a person. `resume_from` names where it stopped when it had reached a
+    #: A cause outside the code stopped the pass, and `fault` names it:
+    #: GitHub's API did not answer, or a period waits for an earlier range or a
+    #: named repair. `resume_from` names where it stopped when it had reached a
     #: member or period. The job stays green, and the next wake starts there.
     DEFERRED = "deferred"
 
 
 def stop_for(fault: GardenerFault) -> StopReason:
-    """The stop a fault ends a pass with: a code defect fails it, every other cause defers it."""
-    return StopReason.FAILED if fault is GardenerFault.RAISED else StopReason.DEFERRED
+    """The stop each persisted fault ends a pass with, exhaustively."""
+    match fault:
+        case GardenerFault.RAISED | GardenerFault.MANUAL_ACTION:
+            return StopReason.FAILED
+        case (
+            GardenerFault.API_UNAVAILABLE
+            | GardenerFault.RANGE_STARTS_LATE
+            | GardenerFault.NO_MONTH_TO_REOPEN
+            | GardenerFault.PACKED_FILE_UNREADABLE
+        ):
+            return StopReason.DEFERRED
+    assert_never(fault)
 
 
 class Recovery(Model):
@@ -141,6 +153,11 @@ class CollectionPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-09",
+            change="manual-action added as a failed fault; older rows read unchanged.",
+            why="A recognized refusal is red without being mislabeled as a code defect.",
+        ),
+        ChangelogEntry(
             version="2026-10-07",
             change="fault, recovered and the deferred stop added; older rows read with none.",
             why="A row says why a pass stopped and what it recovered instead of stopping.",
@@ -154,11 +171,6 @@ class CollectionPruneRow(Contract):
             version="2026-10-03T18:00",
             change="candidates_seen describes the fixed named period window.",
             why="Scheduled cleanup reads a window; older backlog uses an explicit range.",
-        ),
-        ChangelogEntry(
-            version="2026-10-01",
-            change="folded_months, additive: closed months a fold settled into one file each.",
-            why="A task may settle a closed month into one file, and says how many it settled.",
         ),
         ChangelogEntry(
             version="2026-09-17",
@@ -250,11 +262,12 @@ class CollectionPruneRow(Contract):
     fault: GardenerFault | None = Field(
         default=None,
         description=(
-            "Why the pass stopped, in one closed word: `raised` beside `failed`, a code defect "
-            "and the one stop that turns the job red; every other word beside `deferred`, a "
-            "cause outside the code that a later wake or a person settles. Empty on a pass "
-            "that did not stop, and on a row written before the word existed. Never the text "
-            "of an error, which can carry what the pass read."
+            "Why the pass stopped, in one closed word: `raised` for a code defect or "
+            "`manual-action` for a recognized refusal beside `failed`; every other word "
+            "beside `deferred`, for a cause outside the code that a later wake retries or "
+            "a person repairs. Empty on a pass that did not stop, and on a row written "
+            "before the word existed. Never the text of an error, which can carry what "
+            "the pass read."
         ),
     )
     recovered: list[Recovery] = Field(
@@ -378,8 +391,8 @@ class CollectionPruneRow(Contract):
         if self.fault is not None and self.stopped_because is not stop_for(self.fault):
             raise ValueError(
                 f"fault {self.fault.value} ends a pass {stop_for(self.fault).value}, not "
-                f"{self.stopped_because.value}: raised fails a pass, every other word defers "
-                "it, and a pass that did not stop has no fault"
+                f"{self.stopped_because.value}: raised and manual-action fail a pass, the "
+                "retryable words defer it, and a pass that did not stop has no fault"
             )
         if self.stopped_because is StopReason.DEFERRED and self.fault is None:
             raise ValueError("a deferred pass names what deferred it in fault")

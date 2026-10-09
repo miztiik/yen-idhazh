@@ -66,9 +66,11 @@ deleted at its old path and written at its new one, so it is in both lists and
 frees nothing. `seen` counts every raw day folder listed and every file read or
 weighed, so the listing's growth while a compaction stays dry shows in each
 record. A day, month or year refused ends the pass at that period while every
-other step it took still lands: `failed`, fault `raised`, for a defect, and the
-task exits 1; `deferred` for a period that waits for a range that starts
-earlier or for a person, with a word that says which, and the job stays green.
+other step it took still lands: `failed`, fault `raised`, for a defect, or
+`failed`, fault `manual-action`, for a named refusal only a person can settle;
+the task exits 1 either way. A cause outside the code that waits for another
+wake or a named repair ends `deferred` with a word that names it, and the job
+stays green.
 A budget running out ends it at `ceiling` - the cap, a day's most raw files, or
 what is left of the shard's download budget. A pass whose marks, or the files
 an absent index is rebuilt from, do not fit that budget takes nothing and ends

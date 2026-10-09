@@ -1,12 +1,12 @@
 """What does an error a gardener pass meets mean: a member already gone, one GitHub will
-not delete, an API that is down, a download budget spent, or a code defect?
+not delete, an API that is down, a download budget spent, manual action, or a code defect?
 
 One pure function answers it, `classify`, and every place a gardener pass
 catches an error asks it: the walk that deletes a collection's members
 (`one_at_a_time.take`), the GitHub driver's deletes (`github_collections`), the
 runner, for an error that escapes a task, the ledger prune, and the
 compaction's download budget. So a code defect is `raised` whichever wrapper
-caught it, and no wrapper relabels one.
+caught it, and only an explicit `ManualActionError` is `manual-action`.
 
 **`HTTPError` is tested first**, because it is a kind of `URLError`, which is a
 kind of `OSError`. Tested in another order, a refusal GitHub gave would read as
@@ -23,15 +23,18 @@ a connection that failed.
   again.
 - **`OverBudgetError` no larger than the whole budget, `BUDGET_SPENT`.** A
   compaction step stops at `ceiling` for a wake with room.
-- **`OverBudgetError` larger than the whole budget, `RAISED`.** No wake could
-  take it, and only a person can raise the budget, so the step ends `failed`.
-  A shard whose downloads passed the budget is a defect by the same rule.
+- **`ManualActionError`, `MANUAL_ACTION`.** A named refusal only a person can
+  settle. The pass ends `failed` with the fault `manual-action`.
+- **`OverBudgetError` larger than the whole budget, `RAISED`.** This raw error
+  means an unclassified or aggregate budget failure and remains a code defect.
+  A period that explicitly knows it is larger than the whole budget constructs
+  `ManualActionError` at that refusal site.
 - **Any other 4xx, and any other error, `RAISED`.** The pass ends `failed` with
   the fault `raised`, and the job turns red.
 
 **`GONE` and `NOT_DELETABLE` mean something only on a delete.** A 404 on a read
 says the request was wrong, not that a member went, so a stop for any cause but
-`API_UNAVAILABLE` records the fault `raised` (`fault_of`).
+`API_UNAVAILABLE` or `MANUAL_ACTION` records the fault `raised` (`fault_of`).
 
 **The answer is read from the error's type, status code and the response header
 interface, never from its text.** Header names are case-insensitive, and only
@@ -46,7 +49,7 @@ from __future__ import annotations
 import urllib.error
 from enum import StrEnum
 from http import HTTPStatus
-from typing import Final
+from typing import Final, assert_never
 
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.gardener.file_listing import OverBudgetError
@@ -95,8 +98,14 @@ class ErrorCause(StrEnum):
     #: A fetch would pass what is left of the shard's download budget, and a
     #: later wake, with its whole budget, has room for it.
     BUDGET_SPENT = "budget-spent"
-    #: A code defect, or a refusal only a person can resolve.
+    #: A named refusal only a person can settle.
+    MANUAL_ACTION = "manual-action"
+    #: A code defect or an error no named cause classifies.
     RAISED = "raised"
+
+
+class ManualActionError(ValueError):
+    """A named refusal whose data or policy needs a person's decision."""
 
 
 def _forbidden_is_api_unavailable(error: urllib.error.HTTPError) -> bool:
@@ -109,6 +118,8 @@ def _forbidden_is_api_unavailable(error: urllib.error.HTTPError) -> bool:
 
 def classify(error: Exception) -> ErrorCause:
     """What this error means, from its type, status and closed response-header signals."""
+    if isinstance(error, ManualActionError):
+        return ErrorCause.MANUAL_ACTION
     if isinstance(error, urllib.error.HTTPError):
         if error.code in GONE_STATUSES:
             return ErrorCause.GONE
@@ -127,11 +138,22 @@ def classify(error: Exception) -> ErrorCause:
 
 
 def fault_of(cause: ErrorCause) -> GardenerFault:
-    """The fault a pass stopped by this cause records: `api-unavailable`, or else `raised`.
+    """The fault a pass stopped by this cause records.
 
-    Every other cause either never stops a pass where it means what it says -
-    a member gone, or not deletable, on a delete - or stops it for a defect.
+    A member gone or not deletable means what it says only on a delete, and a
+    spent partial budget ends at the ceiling, so a stop for any of those is a
+    defect.
     """
-    if cause is ErrorCause.API_UNAVAILABLE:
-        return GardenerFault.API_UNAVAILABLE
-    return GardenerFault.RAISED
+    match cause:
+        case ErrorCause.API_UNAVAILABLE:
+            return GardenerFault.API_UNAVAILABLE
+        case ErrorCause.MANUAL_ACTION:
+            return GardenerFault.MANUAL_ACTION
+        case (
+            ErrorCause.GONE
+            | ErrorCause.NOT_DELETABLE
+            | ErrorCause.BUDGET_SPENT
+            | ErrorCause.RAISED
+        ):
+            return GardenerFault.RAISED
+    assert_never(cause)

@@ -663,15 +663,15 @@ def test_a_year_missing_a_month_whose_raw_day_is_still_there_is_refused_and_noth
     assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
         StopReason.FAILED,
         "2026",
-        GardenerFault.RAISED,
+        GardenerFault.MANUAL_ACTION,
     )
     refused = the_event(caplog.records, PeriodRefused)
     assert (refused.step, refused.period, refused.ledger_fault, refused.error) == (
         CompactionStep.PACK_YEARS,
         "2026",
         ledger.LedgerFault.DAY_MISSING,
-        None,
-    ), "the gardener's own check refused it, so no exception is named"
+        "ManualActionError",
+    )
     assert files_under(root) == before
 
 
@@ -804,12 +804,12 @@ def test_a_year_file_over_github_s_large_file_line_is_refused_and_its_months_kep
     assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
         StopReason.FAILED,
         "2026",
-        GardenerFault.RAISED,
+        GardenerFault.MANUAL_ACTION,
     )
     refused = the_event(caplog.records, PeriodRefused)
     assert (refused.step, refused.error, refused.ledger_fault) == (
         CompactionStep.PACK_YEARS,
-        "ValueError",
+        "ManualActionError",
         None,
     )
     assert refused.where is not None
