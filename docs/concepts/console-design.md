@@ -55,11 +55,10 @@ Five rules hold for every number the console prints:
  articles is not a measurement, and a column that hides its denominator
  invites a trend that is not there. Under `console.min_attempts_for_rate` a
  figure prints its counts and no share, in a strip and in a mark's name as in
- a sentence (Reader, 2026-10-07, plan 62's row L32, #1409). The count is the
+ a sentence. The count is the
  one the share is taken over, and the floor counts it: Judgement's "could not
  tell" is a share of the pairs whose two readings agreed, so it prints `2% of
- the 41 that agreed`, and `1 of the 3 that agreed` under the floor (Reader,
- 2026-10-08, plan 62's row L39).
+ the 41 that agreed`, and `1 of the 3 that agreed` under the floor.
 
 **A verdict word is set by the share it judges, never by why a day was held.**
 `inside` and `past` compare a share the page prints with its own mark, the
@@ -72,7 +71,7 @@ Judgement's agreement panel, the window sentence that prints both shares ends
 Otherwise it names the share that is past,
 `The 20% that disagreed is past its mark.` or
 `The 39% that could not tell is past its mark.`, or it ends
-`Both rates are past their marks.` (Reader, 2026-10-08, plan 62's row L39.)
+`Both rates are past their marks.`
 When rounding would hide the side of the mark, the verdict instead says
 `The share that disagreed is just above its 15% mark.` or
 `The share that could not tell is just above its 35% mark.`, with `just below`
