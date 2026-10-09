@@ -341,16 +341,17 @@ Each row also carries `cone_bytes`, what the shard's owned folders weighed, and
 `downloaded_bytes`, what its tasks downloaded ([above](#what-a-shard-downloads)).
 
 **A row says why its pass stopped, and what it recovered instead of stopping.**
-Every error a task meets is read once for what it means, from its type and its
-status code and never its text (`backend/idhazh/gardener/error_cause.py`). A
-pass that stopped names the cause in `fault`, one closed word declared in
+Every error a task meets is read once for what it means, from its type, status
+code and the closed temporary-refusal header signals on a 403, and never from
+its text (`backend/idhazh/gardener/error_cause.py`). A pass that stopped names
+the cause in `fault`, one closed word declared in
 `backend/idhazh/contracts/gardener_fault.py`, beside `stopped_because` and
 `resume_from`:
 
 | # | `fault` | `stopped_because` | What stopped the pass | What happens next |
 | --- | --- | --- | --- | --- |
 | 1 | `raised` | `failed` | A code defect: any error no other word names, including an answer from GitHub that refuses the request itself, and a period larger than the shard's whole download budget | The shard exits 1, and a person reads the log |
-| 2 | `api-unavailable` | `deferred` | GitHub's API answered 429 or 5xx, or a connection failed or timed out | The next wake asks again; nothing inside a wake does |
+| 2 | `api-unavailable` | `deferred` | GitHub's API answered 429, 5xx, or a 403 with `x-ratelimit-remaining: 0` or any `retry-after` header; or a connection failed or timed out | The next wake asks again; nothing inside a wake does |
 | 3 | `range-starts-late` | `deferred` | A range a person named starts after a period that is ready before it | The person widens the range |
 | 4 | `no-month-to-reopen` | `deferred` | A raw day sits in a month the monthly mark is past that no monthly entry names | Its files wait for a person ([ledger-compaction.md](ledger-compaction.md#a-late-file)) |
 | 5 | `packed-file-unreadable` | `deferred` | A packed day or month file a re-run or a late file would be settled into cannot be read, or is not there | A person restores the file from git history |
@@ -662,7 +663,8 @@ goes on, says so in one `member-out-of-order` event, and its mark stays where
 it started.
 
 **GitHub's answer to a delete is read for what it means, and one refused member
-stops nothing.** `error_cause.py` reads the status code alone. A 404 or 410 says
+stops nothing.** `error_cause.py` reads the status code and, for a 403, the
+response headers through their case-insensitive interface. A 404 or 410 says
 the member is already gone, and it counts as deleted. A 409 or 422 says GitHub
 will not delete it: the row records its id as a `not-deletable` note, it counts
 against `max_deletes_per_run` as a delete would, and the pass goes on, so its
@@ -670,11 +672,12 @@ day is handled and the mark may pass it. Stopping there instead would stop
 every later pass at the same member, and nothing behind it would ever be
 deleted. That 409 and 422 mean
 this is a reading of GitHub's documentation, not a measurement: the first time
-a pass meets one, its answer is recorded as a test fixture. A 429, a 5xx, or a
+a pass meets one, its answer is recorded as a test fixture. A 403 with
+`x-ratelimit-remaining: 0` or any `retry-after` header, a 429, a 5xx, or a
 connection that fails or times out ends the pass `deferred` with the fault
 `api-unavailable`: the mark never passes the member it stopped at, the job stays
-green, and the next wake asks again. Any other answer, a 403 included, is a
-defect and ends the pass `failed`.
+green, and the next wake asks again. Any other answer, including an ordinary
+403, is a defect and ends the pass `failed`.
 
 **The runs: one search a UTC day, from 00:00:00Z to 23:59:59Z, oldest day
 first.** Both ends carry `Z`, so GitHub never chooses which day is meant. One
