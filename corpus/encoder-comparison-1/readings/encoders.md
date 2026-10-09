@@ -1,6 +1,6 @@
 # Encoder readings
 
-Taken 2026-10-08 on a GitHub `ubuntu-latest` runner: 4 processor threads, 16 GB, no graphics card.
+Taken 2026-10-09 on a GitHub `ubuntu-latest` runner: 4 processor threads, 16 GB, no graphics card.
 
 **Separation** is the chance this encoder scores a likely-same pair above a likely-different one. 1.0 is perfect, 0.5 is a coin toss. No difference in similarity scale can distort it.
 
@@ -8,24 +8,20 @@ Taken 2026-10-08 on a GitHub `ubuntu-latest` runner: 4 processor threads, 16 GB,
 
 **Middle lean** is the share of uncertain pairs - the ones whose titles share something but not much - that this encoder scores above the halfway mark between matching and mismatching. Nobody knows whether those pairs match, so this is never right or wrong. High means the encoder will join too much; low means it will leave one story in pieces.
 
-| Encoder | Numbers | Size | Separation | Spread | Same | Different | Middle | Middle lean | Articles a second | 15,122 take | A day takes | Peak memory |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `gte-base` | 768 | 109M | **0.9942** | 0.205 | 0.929 | 0.724 | 0.834 | 0.535 | 8.4 | 29.9 min | 0.67 min | 1.56 GB |
-| `minilm-l6` | 384 | 22M | **0.9925** | 0.658 | 0.760 | 0.102 | 0.462 | 0.540 | 28.0 | 9.0 min | 0.20 min | 0.88 GB |
-| `e5-base` | 768 | 109M | **0.9910** | 0.167 | 0.903 | 0.736 | 0.826 | 0.515 | 4.5 | 55.7 min | 1.24 min | 1.44 GB |
-| `bge-base` | 768 | 109M | **0.9905** | 0.384 | 0.841 | 0.457 | 0.666 | 0.537 | 4.6 | 55.2 min | 1.23 min | 1.54 GB |
-| `bge-large` | | | encoding 6144/10553 | | | | | | | | | |
-| `mxbai-large` | | | encoding 1024/10553 | | | | | | | | | |
-| `bge-m3` | | | encoding 5120/10553 | | | | | | | | | |
-| `qwen3-embedding-0.6b` | | | did not report  | | | | | | | | | |
+**Second-piece lean** is the same reading for one outlet's second article on one subject in one day - a correction or a follow-up. Near one means this encoder cannot tell an update from a new story.
+
+| Encoder | Numbers | Size | Separation | Spread | Same | Different | Middle | Middle lean | Second piece | Second-piece lean | Articles a second | 15,122 take | A day takes | Peak memory |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gte-small` | 384 | 33M | **0.9944** | 0.196 | 0.934 | 0.738 | 0.844 | 0.539 | 0.931 | 0.971 | 90.3 | 2.8 min | 0.18 min | 1.14 GB |
+| `gte-base` | 768 | 109M | **0.9943** | 0.205 | 0.929 | 0.724 | 0.834 | 0.535 | 0.925 | 0.961 | 1.2 | 202.9 min | 13.43 min | 0.97 GB |
+| `minilm-l6` | 384 | 22M | **0.9925** | 0.658 | 0.760 | 0.102 | 0.462 | 0.540 | 0.746 | 0.971 | 28.6 | 8.8 min | 0.58 min | 0.87 GB |
+| `gte-modernbert` | 768 | 149M | **0.9915** | 0.384 | 0.859 | 0.475 | 0.687 | 0.557 | 0.852 | 0.963 | 0.6 | 400.1 min | 26.47 min | 1.08 GB |
+| `bge-base` | 768 | 109M | **0.9905** | 0.384 | 0.841 | 0.457 | 0.666 | 0.537 | 0.838 | 0.973 | 5.1 | 49.6 min | 3.28 min | 1.48 GB |
 
 Why each encoder is in the list:
 
-- **`gte-base`** - Same size as bge-base, trained differently. The pair proves whether size or training is doing the work.
+- **`gte-small`** - The same training as gte-base at the same 384 numbers an article the current encoder uses. It asks whether gte-base's lead is its training or its size, and whether the smallest useful vector can carry it.
+- **`gte-base`** - Best separation of the six measured, at 0.96 GB. The leader to beat, and the other half of the size-against-training question.
 - **`minilm-l6`** - What the search surface runs today. Every other row is read as a gain or a loss against it.
-- **`e5-base`** - Third model at the same size. It needs a prefix on its input, and leaving it off costs quality silently, so the run proves the prefix as well as the model.
-- **`bge-base`** - A widely used mid-sized English model. Packs unrelated pairs close together, which costs a fixed cut-off and not a rank score.
-- **`bge-large`** - Three times bge-base. The question is whether the extra time fits the job.
-- **`mxbai-large`** - Same size as bge-large, trained differently. It repeats the size-against-training control at the large end, where one pair alone would leave it untested.
-- **`bge-m3`** - The one with a different shape: a meaning vector and a weight for every word from one pass, which is two channels from one model. Carries languages this corpus never uses.
-- **`qwen3-embedding-0.6b`** - The most recent design in the list. Its vector can be cut short without encoding again, so a smaller form costs nothing extra to measure.
+- **`gte-modernbert`** - The same training again, on a newer foundation than the rest of the list. Sits within forty million parameters of gte-base, so the pair reads as a change of foundation rather than a change of size. It is the one row that asks whether anything has moved since the models here were built.
+- **`bge-base`** - The same size as gte-base from a different group. One pair at one size is what separates a training difference from a size difference.
