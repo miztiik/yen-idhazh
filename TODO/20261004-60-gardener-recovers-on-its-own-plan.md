@@ -80,7 +80,7 @@ Table A - what is out
 | 38 | An expired year reaches the job summary | 35 | H | DONE | silver-train | #1434 | Plan 60 row 38 |
 | 39 | The job summary says plainly when nothing is left and what a dry run holds back | 38 | I | DONE | fuzzy-barnacle | #1440 | Plan 60 row 39 |
 | 40 | The monthly-window words match the live retention policy | 24 | J | DONE | plan-60-row-24-month-close | #1516 | - |
-| 41 | An exhausted 403 is API unavailable | 20 | K | DONE | fluffy-tribble | - | Plan 60 row 41 exhausted 403 |
+| 41 | An exhausted 403 is API unavailable | 20 | K | DONE | fluffy-tribble | #1519 | Plan 60 row 41 exhausted 403 |
 | 42 | A refusal only a person can settle says manual action | 41 | L | PENDING | - | - | - |
 | 43 | Every idhazh crash prints where it broke, never the error's text | 42 | M | PENDING | - | - | - |
 | 44 | The ledger test ignores arbitrary same-millisecond file order | 43 | N | PENDING | - | - | - |
