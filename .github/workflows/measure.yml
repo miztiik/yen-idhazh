@@ -508,9 +508,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 330
     # The one job in this workflow that pushes, and it pushes exactly one thing:
-    # the machine it drew, under `state/pipeline-tests/`. Every other job here
-    # reads the repository and writes nothing back, which is why the permission
-    # is raised on this job rather than at workflow level.
+    # the machine it drew, under `state/raw/pipeline-tests/host-fingerprint/`.
+    # Every other job here reads the repository and writes nothing back, which
+    # is why the permission is raised on this job rather than at workflow level.
     permissions:
       contents: write
     env:
@@ -644,7 +644,9 @@ jobs:
       # in the action. The second input is the exception and it is not a control
       # on the measurement: a bench is a run that exercises production's code
       # path and must not be readable as a production day, so `cli` moves this
-      # run's whole state root onto `state/pipeline-tests/`.
+      # run's whole state root onto the `pipeline-tests` trial prefix, which
+      # lands ledgers tier-first under `state/raw/pipeline-tests/` and
+      # `state/compact/pipeline-tests/`.
       - name: Build the candidate config
         uses: ./.github/actions/candidate-config
         with:
@@ -704,10 +706,10 @@ jobs:
       # way, and it is the only row this workflow commits.
       #
       # It goes through the candidate config, which is what puts the row under
-      # `state/pipeline-tests/` rather than beside the production rows. A bench
-      # is dispatched many times a day against unmerged branches; mixing those
-      # rows into the ledger the console reads would mean every panel filtering
-      # by job for ever.
+      # `state/raw/pipeline-tests/host-fingerprint/` rather than beside the
+      # production rows. A bench is dispatched many times a day against
+      # unmerged branches; mixing those rows into the ledger the console reads
+      # would mean every panel filtering by job for ever.
       #
       # After the corpus step because the probe reads the plan that step wrote,
       # and before the sweep because the bandwidth reading wants a gigabyte and
