@@ -75,7 +75,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | #1396 | Plan 62 row l18 |
 | L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | #1391 | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
-| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | PENDING | - | - | - |
+| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | DONE | laughing-spoon | - | Plan 62 row l21 |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | #1385 | Plan 62 row l22 |
 | L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | DONE | fuzzy-winner | #1381 | Plan 62 row l23 |
 | L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | #1376 | Plan 62 row l24 |
@@ -1071,10 +1071,12 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (found by a search on `main` at 3f6440edb for "Run reads", `statusSentence` and `spanDays`; search again at dispatch, after #1357 merges):
   - `frontend/src/lib/console/explorer/status.ts` (`statusSentence`, state `idle`: "Run reads {files}, {size} from {ledgers} over {days} UTC days.")
   - `frontend/src/routes/console/data-explorer/+page.svelte` (`statusLine()` hands that sentence `days: spanDays()`, the window's days)
-  - `frontend/src/lib/data/slice-shapes.ts` and `frontend/src/lib/data/ask-reader.ts` (only if `SpanCost.cut` must carry more than each cut ledger and the day its answer starts; decision 3)
+  - `frontend/src/lib/data/slice-shapes.ts` and `frontend/src/lib/data/ask-reader.ts` (found during execution: `SpanCost` carries nullable `readFrom` and `readTo`, computed by the same `firstDayRead` and `lastDayRead` functions as the answer; decision 3)
+  - `frontend/tests/ledger-lifecycle.spec.ts` (found during execution: the estimate's bounds for a late start, mixed starts, an early end, one day, no day and no chosen ledger)
   - `frontend/tests/console-data-explorer-still.spec.ts` (pins the words of the `idle` sentence, and reads "Run reads" on the page)
   - `frontend/tests/console-data-explorer.spec.ts` (the Oracle, on roots built with `frontend/tests/support/ledger-lifecycle.ts`)
   - `docs/how-to/query-a-ledger-from-the-console.md` (says what the action line prices)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md` (found during execution: the runtime estimate's bounds and why its day count is shared with the answer)
   - Left as they are: `frontend/scripts/published-ledgers.mjs`, whose `spanDays` is the site copy's own parameter; `TODO/20260928-55-one-page-queries-every-ledger-plan.md`, which declares the action line's words (decision 4)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-data-explorer.spec.ts --spec console-data-explorer-still.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the data explorer. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-data-explorer.spec.ts`, on ledgers the test builds (Table D, D3): one ledger built to begin 5 days before the end of a 14-day window. Before the run, the action line counts the 5 days the run will read; on `main` it counts the window's 14, which is what lets this check fail. A second case adds a ledger built to begin 4 years before, and the line says what Reader rules for two ledgers that read different days. It cannot settle the words, which Reader chooses (decision 1); the test pins the words Reader chooses.
@@ -1083,9 +1085,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the words, and how the line counts when the selected ledgers read different days (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Reader chooses the words, and how the line counts when the selected ledgers read different days (CLAUDE.md section 14) | Reader, 2026-10-09: count the inclusive UTC dates from the earliest reading start to the latest reading end, never a sum of each ledger's days. Before Run: "Run will read {files}, {size} from {ledgers} over {n} UTC days, from {first} through {last}."; one day: "over 1 UTC day: {day}."; no day: "over 0 UTC days.". Each date carries its year. The after-Run sentence keeps its existing words; this row changes only the action line |
 | 2 | The fault: the line before a run, "Run reads ... over {n} UTC days.", counts the window's days, not the days each ledger will read. So for one question it can count days that the line under the answer, which counts the days read since L12, does not | Row L12's report; the owner, 2026-10-07 |
-| 3 | The count comes from `SpanCost`, which the page asks for before every run. Its `cut` names each selected ledger cut from the window and the day that ledger's answer starts, and it can carry the days each ledger will read (row L12's report). That is a field of a run-time answer, not a persisted shape, so Table C, C1 does not fire | Row L12's report; plan author, 2026-10-07 |
+| 3 | The count comes from `SpanCost`, which the page asks for before every run. It carries nullable `readFrom` and `readTo`, from the same day functions as the answer, and both are null when no ledger reads a day. These fields are never persisted, so Table C, C1 does not fire. An archive file that fails during the run can still change the actual answer's bounds | Row L12's report; plan author, 2026-10-07; implementation follows Fowler's day rule of 2026-10-08 in row L48, decision 5. Plan 55's owner was told before changing the data files, and confirmed those files were free, 2026-10-09 |
 | 4 | L21 waits for plan 55's row "The Data explorer reaches the reference's density" (#1357), which reshapes the data explorer page and edits `status.ts`, `+page.svelte` and both explorer specs this row edits. The Depends-on cell names that row by number so that the plan reader holds L21; check its title again at dispatch. Plan 55 declares the action line's words too, so coordinate with plan 55's owner session before dispatch | The owner, 2026-10-07 |
 | 5 | Level 2: the line before every explorer run changes, and every run is priced through `SpanCost` | The owner, 2026-10-07 |
 

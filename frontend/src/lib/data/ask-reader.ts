@@ -428,16 +428,17 @@ async function plan(
 	for (const ledger of chosen) {
 		if (!(LEDGER_NAMES as readonly string[]).includes(ledger)) return { state: 'missing', ledger };
 	}
-	return planOf(await Promise.all(chosen.map((ledger) => planLedger(keeper, archive, ledger, from, to, rawListed))));
+	return planOf(await Promise.all(chosen.map((ledger) => planLedger(keeper, archive, ledger, from, to, rawListed))), from, to);
 }
 
 /** A question's plan from its ledgers' plans, in the order chosen, or the answer one of them gives first. */
-function planOf(ledgersPlanned: LedgerPlan[]): Plan | AskResult {
+function planOf(ledgersPlanned: LedgerPlan[], from: DateStamp, to: DateStamp): Plan | AskResult {
 	const failed = ledgersPlanned.find((one) => one.unreachable !== null);
 	if (failed?.unreachable) return failed.unreachable;
 	const noDays = ledgersPlanned.find((one) => one.through === null);
 	if (noDays) return { state: 'missing', ledger: noDays.ledger };
 	const files = ledgersPlanned.flatMap((one) => one.files);
+	const readsDays = ledgersPlanned.some((one) => endDay(one, from, to) !== null);
 	return {
 		ledgers: ledgersPlanned,
 		files,
@@ -445,6 +446,8 @@ function planOf(ledgersPlanned: LedgerPlan[]): Plan | AskResult {
 		cost: {
 			files: files.length,
 			bytes: files.reduce((sum, plannedFile) => sum + plannedFile.file.bytes, 0),
+			readFrom: readsDays ? firstDayRead(ledgersPlanned, from) : null,
+			readTo: readsDays ? lastDayRead(ledgersPlanned, from, to) : null,
 			unpackedDays: [...new Set(ledgersPlanned.flatMap((one) => one.unpackedDays))],
 			cut: cutOf(ledgersPlanned),
 			through: Object.fromEntries(ledgersPlanned.flatMap((one) => (one.through === null ? [] : [[one.ledger, one.through]])))
@@ -568,7 +571,7 @@ export async function readAskCost(
 	rawListed: RawListedThrough
 ): Promise<SpanCost> {
 	const planned = await plan(keeper, archive, ledgers, from, to, rawListed);
-	return 'state' in planned ? { files: 0, bytes: 0, unpackedDays: [], cut: 'cut' in planned ? planned.cut : [], through: {} } : planned.cost;
+	return 'state' in planned ? { files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: 'cut' in planned ? planned.cut : [], through: {} } : planned.cost;
 }
 
 /** What a plan answers before any file is held: `quiet` when no selected ledger holds a file in the
@@ -617,7 +620,7 @@ async function holdArchive(
 		if (failed !== undefined) archive.keeper.warn(archiveFileLine(failed, holding.shortfall, opts.from, opts.to));
 		ledgers.push(await planLedger(keeper, archive, one.ledger, opts.from, opts.to, rawListed, false));
 	}
-	return ledgers.every((one, at) => one === asked.ledgers[at]) ? asked : planOf(ledgers);
+	return ledgers.every((one, at) => one === asked.ledgers[at]) ? asked : planOf(ledgers, opts.from, opts.to);
 }
 
 /** The answer to a planned question: each ledger's archive files held first, then the site's,
