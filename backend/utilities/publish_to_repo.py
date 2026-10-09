@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import random
+import subprocess
 import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from utilities.publication_git import Repository
+from utilities.publication_git import INVOCATION_DEADLINE, Repository
 from utilities.publication_request import Entry, IntegrityError, PublicationRequest, contains
 from utilities.push_retry import PushRetry
+
+_VERIFICATION_SECONDS = 30
 
 
 class Status(StrEnum):
@@ -54,6 +57,8 @@ class PublicationResult:
 def _matches(
     git: Repository, tip: str, request: PublicationRequest, entries: dict[str, Entry]
 ) -> bool:
+    for path in set(entries) | set(request.deletions):
+        git.parents_safe(tip, path)
     return all(git.entry(tip, path) == entry for path, entry in entries.items()) and all(
         git.entry(tip, path) is None for path in request.deletions
     )
@@ -116,10 +121,12 @@ def _verify_preparation(
                 != (after.sha256, after.mode, after.immutable)
             ):
                 raise IntegrityError("preparation changed completed artifact", (path,))
+            if not before.immutable and before.baseline != after.baseline:
+                raise IntegrityError("preparation rebased an undeclared mutable target", (path,))
     for path in set(original.deletions) | set(prepared.deletions):
         if not any(contains(scope, path) for scope in scopes):
             old_delete, new_delete = original.deletions.get(path), prepared.deletions.get(path)
-            if old_delete is None or new_delete is None or not new_delete.completed:
+            if old_delete is None or new_delete != old_delete:
                 raise IntegrityError("preparation changed completed deletion", (path,))
 
 
@@ -139,6 +146,8 @@ def publish(
     prepared = False
     active = request
     deadline = time.monotonic() + retry.deadline_for(request.identity.job)
+    git.deadline = deadline
+    deadline_token = INVOCATION_DEADLINE.set(deadline)
 
     def result(status: Status, paths: tuple[str, ...] = (), detail: str = "") -> PublicationResult:
         return PublicationResult(status, candidate, base, observed, pushes, paths, prepared, detail)
@@ -153,10 +162,13 @@ def publish(
             return result(Status.NO_CHANGES)
         entries = git.objects(request)
         while time.monotonic() < deadline and (max_pushes is None or pushes < max_pushes):
+            git.deadline = deadline
             observed = git.fetch()
             git.prime(observed, set(active.writes) | set(active.deletions))
             if _matches(git, observed, active, entries):
+                base = base or observed
                 return result(Status.LANDED if candidate else Status.ALREADY_ON_MAIN)
+            base = observed
             stale = _stale(git, observed, active, entries)
             if active.prepare is not None and (observed != active.source_tip or stale):
                 try:
@@ -168,7 +180,7 @@ def publish(
                     entries = git.objects(fresh)
                     active = fresh
                     prepared = True
-                except (ValueError, OSError, RuntimeError) as error:
+                except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
                     if isinstance(error, IntegrityError):
                         return result(Status.INTEGRITY_REFUSED, error.paths, str(error))
                     return result(Status.PREPARATION_FAILURE, detail=str(error))
@@ -183,6 +195,7 @@ def publish(
                 break
             pushes += 1
             accepted = git.push(candidate)
+            git.deadline = time.monotonic() + _VERIFICATION_SECONDS
             observed = git.fetch()
             git.prime(observed, set(active.writes) | set(active.deletions))
             if _matches(git, observed, active, entries):
@@ -200,13 +213,22 @@ def publish(
         return result(Status.LOST if base is not None and observed != base else Status.REFUSED)
     except IntegrityError as error:
         return result(Status.INTEGRITY_REFUSED, error.paths, str(error))
-    except (OSError, RuntimeError) as error:
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         # A transport error is not proof that a push failed.
         if candidate is not None:
             try:
+                git.deadline = time.monotonic() + _VERIFICATION_SECONDS
                 observed = git.fetch()
-                if _matches(git, observed, active, git.objects(active)):
+                git.prime(observed, set(active.writes) | set(active.deletions))
+                if _matches(git, observed, active, entries):
                     return result(Status.LANDED)
-            except (OSError, RuntimeError, ValueError):
-                pass
+            except (
+                OSError,
+                RuntimeError,
+                ValueError,
+                subprocess.TimeoutExpired,
+            ) as verification_error:
+                return result(Status.REFUSED, detail=f"{error}; verification: {verification_error}")
         return result(Status.REFUSED, detail=str(error))
+    finally:
+        INVOCATION_DEADLINE.reset(deadline_token)

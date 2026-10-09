@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
-import csv
 import hashlib
-import io
 import json
 import os
 import re
@@ -20,16 +18,12 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text, seed_publication_inventory
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
-from idhazh.telemetry.publish import series
-
-PUSH_ATTEMPT_LABEL = "push-attempt "
 
 #: Everything the platform runs. A rule about what a runner may execute is
 #: stated over this rather than over the two directories below, so a file
@@ -681,88 +675,11 @@ PUBLISH_DECISION_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "publish_
 #: reads has spent them for nothing.
 PLAN_STEP: Final = "Plan the day"
 
-COMMIT_BASE_ENV: Final = frozenset(
-    {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
-)
-
-# Two labels rebuild what they commit, and each one says which file it may
-# rebuild. Only assemble commits rendered assets, so only assemble drops a raced
-# one. Every other job takes the base three and nothing else: no path under
-# `state/` has two writers now, so those commit steps settle nothing after their
-# rebase.
-COMMIT_SCRIPT_ENV: Final = {
-    "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV | {"SHARD"},
-    "assemble": COMMIT_BASE_ENV
-    | {
-        "REFRESH_PATHS",
-        "REGENERATE_COMMAND",
-        "DROP_RACED_ASSETS_COMMAND",
-    },
-    "bench": COMMIT_BASE_ENV,
-}
-
-#: The bench's machine row folder, tier-first: `state/raw/pipeline-tests/host-fingerprint`.
-#: The CLI reaches this same path by overlaying the registry from
-#: `settings.app.run.trial_state_dirname` (`cli.main`) rather than by passing a
-#: nested `state_dir` - so this harness overlays the same registry instead of
-#: joining `BENCH_LEDGER_ROOT` onto `raw/`, which would compute the folder the
-#: ledger door no longer writes to.
-with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
-    _BENCH_HOST_FINGERPRINT_RAW_ROOT: Final = ledger.raw_root(
-        Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT
-    )
-
-COMMIT_STAGED_PATHS: Final = {
-    # `state` whole since 2026-09-17, where this was five paths named one at a
-    # time. The catch-up compaction runs in this job and folds a segment into
-    # whichever head that segment's own rows name, so what the job writes is not
-    # knowable when the list is written - and a hand-listed set would commit the
-    # segment deletions while leaving the heads behind.
-    "plan": [
-        "state",
-        "frontend/public/publication.json",
-    ],
-    # `state` whole since 2026-09-22, where this was `state/traces` and
-    # `state/segments` named one at a time. Every tree a shard writes now names
-    # its file for the one writer that wrote it, so the shard commits into the
-    # day directory of whichever tree its own rows belong to - and that set is
-    # not knowable when a list is written. Naming the directory also answers the
-    # fresh-checkout rule: `state` is in every checkout and a tree inside it need
-    # not be.
-    "work": [
-        "state",
-    ],
-    "assemble": [
-        "frontend/public/digest",
-        "frontend/public/publication.json",
-        "frontend/public/telemetry",
-        "frontend/public/assist/index",
-        "frontend/public/source-health.json",
-        "frontend/public/console",
-        "frontend/public/run-days",
-        "frontend/public/day-metrics",
-        "frontend/public/machine",
-        "frontend/public/run-timeline",
-        "state",
-        "corpus",
-    ],
-    # Under the trial root and nowhere near the production ledger. A bench runs
-    # many times a day against unmerged branches, so one of its rows beside the
-    # rows the console reads would mean every panel filtering by job for ever.
-    #
-    # The machine ledger's raw folder alone, not `state/pipeline-tests` whole:
-    # the sweep's item-health, scores and traces land under the same trial root
-    # because the whole state root moved, and nothing reads them back. The
-    # folder is asked of the ledger door, which files the probe's row there.
-    "bench": [_BENCH_HOST_FINGERPRINT_RAW_ROOT.as_posix()],
-}
-
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
 
-RECORD_COMMAND: Final = "python -m idhazh record"
+RECORD_COMMAND: Final = "python backend/utilities/digest_publish.py run record"
 
 # The step that adds this run's accepted pairs to the training window. It runs
 # in assemble because that is where the article text still exists: `items/` is
@@ -770,7 +687,7 @@ RECORD_COMMAND: Final = "python -m idhazh record"
 # check out a fresh tree and harvest nothing. It may not fail the publish.
 HARVEST_STEP: Final = "Harvest the training corpus"
 
-HARVEST_COMMAND: Final = "python -m idhazh harvest"
+HARVEST_COMMAND: Final = "python backend/utilities/digest_publish.py run harvest"
 
 # The step that lays out this run's visual decisions for a person to look at. It
 # runs in assemble because that is the only job holding every population at
@@ -799,7 +716,7 @@ SCRAPE_STEP: Final = "What the server counted"
 # One step name across all three, because it answers one question in each.
 FINGERPRINT_STEP: Final = "What machine this job drew"
 
-FINGERPRINT_COMMAND: Final = "python -m idhazh fingerprint"
+FINGERPRINT_COMMAND: Final = "python backend/utilities/digest_publish.py run fingerprint"
 
 FINGERPRINT_JOB_FLAG: Final = "--job"
 
@@ -834,7 +751,7 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT",)
 # whole row replaces the probe's half-row when the ledger is read.
 JOB_CLOCK_STEP: Final = "What this job cost"
 
-JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
+JOB_CLOCK_COMMAND: Final = "python backend/utilities/digest_publish.py run job-clock"
 
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
@@ -923,14 +840,6 @@ EXPRESSION_VALUES: Final = {
     "matrix.date": SUBSTITUTED_DATE,
     "inputs.runtime_candidate": SUBSTITUTED_CANDIDATE,
 }
-
-# The producer the harness drives through the loop. See its own docstring for
-# why the pipeline's `assemble` cannot be the one under a temporary clone.
-REBUILD_STAND_IN: Final = Path(__file__).with_name("rebuild_day.py")
-
-# The drop, by contrast, IS the shipped one: it anchors on the working
-# directory, so it runs inside a temporary clone unchanged.
-DROP_ENTRY_POINT: Final = REPO_ROOT / "backend" / "utilities" / "drop_raced_assets.py"
 
 RUN_ARTIFACTS: Final = "backend/var/run"
 
@@ -1040,10 +949,23 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     """
     roots = (ledger.STATE_DIRNAME, f"{ledger.STATE_DIRNAME}/")
     for body in _run_bodies(workflow):
+        if re.search(
+            r"(?:digest_publish\.py (?:plan|work|assemble)|"
+            r"record_publish\.py land (?:measure|validate)|"
+            r"council_publish\.py|gardener_publish\.py|pipeline_test_publish\.py)",
+            body,
+        ):
+            return True
         for line in body.replace("\\\n", " ").splitlines():
-            if not any(name in line for name in (
-                "digest_publish.py", "record_publish.py", "council_publish.py", "git add",
-            )):
+            if not any(
+                name in line
+                for name in (
+                    "digest_publish.py",
+                    "record_publish.py",
+                    "council_publish.py",
+                    "git add",
+                )
+            ):
                 continue
             if any(word == roots[0] or word.startswith(roots[1]) for word in line.split()):
                 return True
@@ -1391,7 +1313,8 @@ def _stage_invocations(
             )
             blanked = re.sub(
                 r"python backend/utilities/record_publish.py run \w+ ",
-                "python -m idhazh ", blanked,
+                "python -m idhazh ",
+                blanked,
             )
             blanked = blanked.replace(
                 "python backend/utilities/council_publish.py", "python -m idhazh council-settle"
@@ -1859,15 +1782,30 @@ def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
     job_name = COMMIT_JOBS[label]
     step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
     script = _script(step, f"job {job_name} commit step {label}")
+    program = (
+        ("python", "backend/utilities/record_publish.py")
+        if label == "bench"
+        else COMMIT_PROGRAM_CALL
+    )
     calls = [
-        words
-        for line in script.splitlines()
-        if tuple((words := shlex.split(line))[:2]) == COMMIT_PROGRAM_CALL
+        words for line in script.splitlines() if tuple((words := shlex.split(line))[:2]) == program
     ]
     assert len(calls) == 1, f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}, once"
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
     settings = {name: _substitute(str(value)) for name, value in declared.items()}
     return calls[0][2:], settings
+
+
+def _publication_scopes(label: str) -> list[str]:
+    from utilities.digest_publish import permissions
+    from utilities.record_publish import POLICIES
+
+    argv, _ = _commit_call(label)
+    if label == "bench":
+        assert argv == ["land", "measure"]
+        return list(POLICIES["measure"][1])
+    assert argv[0] == label
+    return list(permissions(label, date=SUBSTITUTED_DATE))
 
 
 def _git_calls(source: str) -> list[str]:
@@ -1922,14 +1860,6 @@ def _bash() -> str | None:
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
     reason="no bash on this host to execute the shell a workflow inlines",
-)
-
-# The loop word-splits `REGENERATE_COMMAND` on spaces, exactly as the workflow's
-# own value expects, so a harness that has to name an interpreter needs a path
-# without one.
-requires_space_free_paths: Final = pytest.mark.skipif(
-    " " in sys.executable or " " in str(REBUILD_STAND_IN) or " " in str(DROP_ENTRY_POINT),
-    reason="REGENERATE_COMMAND is word-split on spaces",
 )
 
 
@@ -2044,8 +1974,14 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
     # off at production speed.
     _write(seed / "config/push-retry.json", json.dumps(_fast_push_retry()) + "\n")
     _git(
-        seed, env, "add", ".gitattributes", ".gitignore", "config/push-retry.json",
-        "docs", "runner-noise.txt",
+        seed,
+        env,
+        "add",
+        ".gitattributes",
+        ".gitignore",
+        "config/push-retry.json",
+        "docs",
+        "runner-noise.txt",
         *staged_paths,
     )
     _git(seed, env, "commit", "-m", "seed")
@@ -2072,162 +2008,6 @@ def _scripted_origin(
     return origin, runner
 
 
-#: The suffix a scripted writer's file carries. `rebuild_day.py` writes and reads
-#: each one as CSV, its own scratch format: the race under test is about who
-#: wrote a name, never about what format a ledger files.
-WRITER_SUFFIX: Final = ".csv"
-
-
-def _a_writer(execution: str) -> str:
-    """The filename one assemble job owns inside a day directory.
-
-    Built through `ledger.segment_name` rather than spelled here, so a race
-    between two of these is a race between two names a run can produce. The
-    execution number is what tells the three writers of a scripted race apart:
-    the seed, the run that beat this one to origin, and this one.
-    """
-    return ledger.segment_name(
-        run_id=f"{SUBSTITUTED_DATE}-{execution}",
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-        suffix=WRITER_SUFFIX,
-    )
-
-
-#: The three writers a scripted digest race models. GitHub allocates an
-#: execution number of eleven digits, so these are eleven digits.
-SEED_WRITER: Final = _a_writer("40000000001")
-RACING_WRITER: Final = _a_writer("40000000002")
-THIS_WRITER: Final = _a_writer("40000000003")
-
-
-def _rebuild_command(date: str, writer: str = THIS_WRITER) -> str:
-    """The producer the harness puts through the loop, as the loop word-splits it."""
-    return (
-        f"{Path(sys.executable).as_posix()} {REBUILD_STAND_IN.as_posix()} "
-        f"--date {date} --writer {writer}"
-    )
-
-
-def _drop_command(date: str) -> str:
-    """The shipped raced-asset drop, as the loop word-splits it."""
-    return f"{Path(sys.executable).as_posix()} {DROP_ENTRY_POINT.as_posix()} --date {date}"
-
-
-def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
-    """One published visual, exactly as the work job's artifact leaves it.
-
-    A marks file under the day's directory and a real `VisualDecision` beside the
-    run's items saying where it landed. `body` is what makes two compiles of one
-    item differ, which is the only case that can now put two adds on one path -
-    identical bytes are the case git resolves on its own.
-    """
-    _write(repo / "frontend" / "public" / relpath, f'{{"item_id": "{body or item_id}"}}\n')
-    decision = VisualDecision(
-        version=VisualDecision.schema_version(),
-        item_id=item_id,
-        url_key=hashlib.sha256(item_id.encode("ascii")).hexdigest(),
-        kind=VisualKind.CHART,
-        spec='{"marks": []}',
-        data_path=relpath,
-        visual_state=VisualState.RENDERED,
-        model_id="qwen3-4b",
-        decided_at=f"{date}T00:00:00Z",
-    )
-    _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}{PAYLOAD_SUFFIX}", decision.to_json())
-
-
-def _rebuild(
-    repo: Path, env: dict[str, str], date: str, items: Sequence[str], writer: str = THIS_WRITER
-) -> None:
-    """One assemble run: write this run's artifacts, then publish them."""
-    _write(
-        repo / RUN_ARTIFACTS / date / "items.json",
-        json.dumps({"items": list(items)}) + "\n",
-    )
-    subprocess.run(
-        [sys.executable, str(REBUILD_STAND_IN), "--date", date, "--writer", writer],
-        cwd=repo,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-
-def _seed_digest_origin(root: Path, date: str) -> None:
-    """Build the origin carrying one published day, in one template directory."""
-    env = _isolated_env(root)
-    origin = root / "origin.git"
-    _git(root, env, "init", "--bare", "-b", "main", str(origin))
-    seed = root / "seed"
-    _git(root, env, "clone", str(origin), str(seed))
-    _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    _write(seed / ".gitignore", read_text(REPO_ROOT / ".gitignore"))
-    _write(seed / "docs" / "unrelated.md", "seed\n")
-    # Empty files suffice: the commit loop does not interpret corpus contents.
-    for relative in CORPUS_SEED:
-        _write(seed / relative, "")
-    for dirname in series.PUBLISHED_ROOTS:
-        _write(seed / "frontend" / "public" / dirname / "fixture.json", "{}\n")
-    seed_publication_inventory(seed / "frontend" / "public")
-    _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
-    _git(
-        seed, env, "add", ".gitattributes", ".gitignore", "docs",
-        *COMMIT_STAGED_PATHS["assemble"],
-    )
-    _git(seed, env, "commit", "-m", f"digest: {date}")
-    _git(seed, env, "push", "-u", "origin", "main")
-
-
-def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path, Path]:
-    """An origin carrying a published day, plus the clone the assemble job runs in.
-
-    The day is written by the same producer the loop reruns, so nothing here is
-    a hand-made fixture of what that producer emits. It is written once for the
-    session and copied here, for the reason `_scripted_origin` gives.
-    """
-    root, unbuilt = template(("digest", date))
-    if unbuilt:
-        _seed_digest_origin(root, date)
-    origin = tmp_path / "origin.git"
-    copy_origin(root, origin)
-    runner = tmp_path / "runner"
-    _git(tmp_path, env, "clone", str(origin), str(runner))
-    return origin, runner
-
-
-def _race_the_day(
-    tmp_path: Path,
-    env: dict[str, str],
-    date: str,
-    items: Sequence[str],
-    pull_request: str,
-    charts: Mapping[str, str] | None = None,
-) -> None:
-    """Origin gains another run of the same day AND an unrelated merge, in that order."""
-    other = tmp_path / "other"
-    _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
-    for item_id, relpath in (charts or {}).items():
-        _chart(other, date, item_id, relpath)
-    _rebuild(other, env, date, items, RACING_WRITER)
-    _git(other, env, "add", *COMMIT_STAGED_PATHS["assemble"])
-    _git(other, env, "commit", "-m", f"digest: {date}")
-    _write(other / "docs" / "unrelated.md", "merged by a pull request\n")
-    _git(other, env, "add", "docs")
-    _git(other, env, "commit", "-m", pull_request)
-    _git(other, env, "push", "origin", "main")
-
-
-def _rows(text: str) -> list[dict[str, str]]:
-    return list(csv.DictReader(io.StringIO(text)))
-
-
-def _tracked(repo: Path, env: dict[str, str], relative: str) -> bool:
-    return relative in _git(repo, env, "ls-tree", "-r", "--name-only", "main").splitlines()
-
-
 def _mid_rebase(runner: Path) -> bool:
     return (runner / ".git" / "rebase-merge").is_dir() or (
         runner / ".git" / "rebase-apply"
@@ -2250,22 +2030,53 @@ def _run_commit_script(
     env: dict[str, str],
     staged_paths: Sequence[str],
     settings: dict[str, str],
+    *,
+    authority: Sequence[str] = ("frontend/public",),
 ) -> subprocess.CompletedProcess[str]:
-    """Run the retry loop over a real repository, as a workflow step would.
+    """Drive the shared publisher with explicit fixture evidence, never directory staging."""
+    import dataclasses
 
-    `sys.executable` rather than `python`, because the suite's own interpreter is
-    the one with a path a test can name. A runner has `python` on PATH, and the
-    program imports nothing from `idhazh`, so either
-    one runs the same bytes.
-    """
-    retry_file = runner.parent / "push-retry.json"
-    _write(retry_file, json.dumps(_fast_push_retry()) + "\n")
-    return subprocess.run(
-        [sys.executable, COMMIT_PROGRAM.as_posix(), *staged_paths],
-        cwd=runner,
-        env={**env, "PUSH_RETRY_CONFIG": str(retry_file), **settings},
-        capture_output=True,
-        text=True,
+    from idhazh.contracts.file_envelope import WriterIdentity
+    from utilities.digest_publish import INVENTORY, inventory_preparation
+    from utilities.publication_evidence import confirmed
+    from utilities.publication_git import Repository
+    from utilities.publication_request import PublicationRequest
+    from utilities.publish_to_repo import publish
+    from utilities.push_retry import PushRetry
+
+    git = Repository(runner)
+    source = _git(runner, env, "rev-parse", "HEAD").strip()
+    hashes = {
+        path: hashlib.sha256((runner / path).read_bytes()).hexdigest() for path in staged_paths
+    }
+    request = PublicationRequest(
+        WriterIdentity(
+            run_id=f"{SUBSTITUTED_DATE}-{SUBSTITUTED_EXECUTION}",
+            attempt=1,
+            job=ServerJob(settings.get("GITHUB_JOB", "work")),
+            shard=0,
+            producer="tests.completed-publication",
+            git_sha=source,
+        ),
+        settings["COMMIT_MESSAGE"],
+        source,
+        tuple(authority),
+        (),
+        confirmed(git, hashes, source=source, permissions=tuple(authority), mutable=(INVENTORY,)),
+        preparation_scopes=(INVENTORY,) if INVENTORY in hashes else (),
+    )
+    if INVENTORY in hashes:
+        request = dataclasses.replace(request, prepare=inventory_preparation(runner, request))
+    result = publish(
+        request,
+        repo=runner,
+        retry=PushRetry({"default": 120}, 0.001, 0.001, 1),
+    )
+    return subprocess.CompletedProcess(
+        ["shared-publisher"],
+        result.exit_code,
+        json.dumps(dataclasses.asdict(result), default=str),
+        result.detail,
     )
 
 
@@ -2298,22 +2109,6 @@ def _reject_the_first_pushes(origin: Path, count: int) -> None:
         newline="\n",
     )
     hook.chmod(0o755)
-
-
-def _push_attempts(stdout: str) -> list[dict[str, Any]]:
-    """Every attempt record the loop published, decoded.
-
-    The program publishes the fields; this reads them. It used to compose a
-    sentence with the fields spelled into it and this function split the
-    sentence back apart, which was two spellings of one record - either could
-    drift while the other stayed green. The label is imported rather than
-    spelled, so there is one place that decides where a record starts.
-    """
-    return [
-        json.loads(line[len(PUSH_ATTEMPT_LABEL) :])
-        for line in stdout.splitlines()
-        if line.startswith(PUSH_ATTEMPT_LABEL)
-    ]
 
 
 #: Every job that builds the site and then commits what it built, named with the

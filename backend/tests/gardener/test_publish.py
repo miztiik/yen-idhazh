@@ -24,9 +24,9 @@ import pyarrow.parquet as parquet
 import pytest
 from pydantic import ValidationError
 
-from idhazh.contracts.shard_landing import ShardLanding
-from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
@@ -35,7 +35,7 @@ from idhazh.gardener.outcome import (
     Shard,
     worst,
 )
-from utilities import commit_and_push, gardener_publish
+from utilities import gardener_publish, publication_git
 from utilities.gardener_publish import PushOutcome
 
 from ._garden import (
@@ -92,13 +92,25 @@ def landed(shard: Shard, checkout: Path, *, attempts: int = 6) -> tuple[PushOutc
     """What the push loop came to, and every line it printed."""
     said: list[str] = []
     pushed = gardener_publish.publish(
-        shard, attempts=attempts, repo=checkout, say=said.append,
+        shard,
+        attempts=attempts,
+        repo=checkout,
+        say=said.append,
         identity=WriterIdentity(
-            run_id="2026-09-27-123", attempt=1, job=ServerJob.RUN_TASKS, shard=0,
-            producer="tests.gardener", git_sha=git(checkout, "rev-parse", "HEAD").strip(),
+            run_id="2026-09-27-123",
+            attempt=1,
+            job=ServerJob.RUN_TASKS,
+            shard=0,
+            producer="tests.gardener",
+            git_sha=git(checkout, "rev-parse", "HEAD").strip(),
         ),
-        write_permissions=("state/old", "state/dir", "state/raw/gardener",
-                           "state/compact/council-run-records", "state/new"),
+        write_permissions=(
+            "state/old",
+            "state/dir",
+            "state/raw/gardener",
+            "state/compact/council-run-records",
+            "state/new",
+        ),
         delete_permissions=("state/old", "state/dir"),
     )
     return pushed, said
@@ -117,11 +129,11 @@ def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
     assert on_origin(origin, RECORD) == '{"task": "old"}\n'
     assert on_origin(origin, AGED) is None
     assert on_origin(origin, KEPT) == "kept\n", "a file the shard did not delete went"
-    identity = f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>"
+    identity = f"{publication_git.COMMITTER_NAME} <{publication_git.COMMITTER_EMAIL}>"
     assert commits_on(origin)[0] == f"{identity}: {MESSAGE}"
     assert (gardener_publish.COMMITTER_NAME, gardener_publish.COMMITTER_EMAIL) == (
-        commit_and_push.COMMITTER_NAME,
-        commit_and_push.COMMITTER_EMAIL,
+        publication_git.COMMITTER_NAME,
+        publication_git.COMMITTER_EMAIL,
     )
 
 

@@ -20,23 +20,44 @@ def ledger_window(which: LedgerName, *, through: str, days: int) -> tuple[str, .
     asked: set[str] = {
         paths.compact_index_path(state, which, period).as_posix() for period in Period
     }
+    coverage: dict[Period, set[str]] = {period: set() for period in Period}
+    end = date.fromisoformat(through)
     for offset in range(days):
-        stamp = (date.fromisoformat(through) - timedelta(days=offset)).isoformat()
+        stamp = (end - timedelta(days=offset)).isoformat()
         asked.add((raw / stamp.replace("-", "/")).as_posix())
         for period, covers in (
             (Period.DAILY, stamp),
             (Period.MONTHLY, stamp[:7]),
             (Period.YEARLY, stamp[:4]),
         ):
-            for suffix in (".parquet", ".json"):
-                asked.add(
-                    paths.compact_path(state, which, period, covers).with_suffix(suffix).as_posix()
-                )
+            coverage[period].add(covers)
+    for period, periods in coverage.items():
+        if not periods:
+            continue
+        sample_date = min(periods)
+        sample = paths.compact_path(state, which, period, sample_date)
+        sample_parts = (
+            sample_date.split("-")
+            if period is not Period.YEARLY
+            else [
+                sample_date,
+                sample_date,
+            ]
+        )
+        if sample.with_suffix("").parts[-len(sample_parts) :] != tuple(sample_parts):
+            raise IntegrityError("compact period layout changed; update the bounded input policy")
+        root = sample.parents[len(sample_parts) - 1]
+        for covers in periods:
+            parts = covers.split("-") if period is not Period.YEARLY else [covers, covers]
+            held = root.joinpath(*parts)
+            asked.update(held.with_suffix(suffix).as_posix() for suffix in (".parquet", ".json"))
     return tuple(sorted(asked))
 
 
 def named_entries(
-    git: Repository, tree: str, inputs: Sequence[str],
+    git: Repository,
+    tree: str,
+    inputs: Sequence[str],
 ) -> dict[str, tuple[str, str, str]]:
     """Tree entries under concrete bounded inputs, batched below argv limits."""
     inputs = tuple(dict.fromkeys(inputs))
@@ -61,12 +82,18 @@ def named_entries(
             metadata, path = line.split("\t", 1)
             mode, kind, oid = metadata.split()
             entries[path] = mode, kind, oid
-    git.prime(tree, set(entries))
+    git.prime(tree, set(inputs) | set(entries))
+    for asked in inputs:
+        git.parents_safe(tree, asked)
     return entries
 
 
 def materialize(
-    git: Repository, tree: str, inputs: Sequence[str], destination: Path, *,
+    git: Repository,
+    tree: str,
+    inputs: Sequence[str],
+    destination: Path,
+    *,
     preserve_existing: bool = False,
 ) -> tuple[str, ...]:
     """Fetch only blobs named by bounded inputs; missing materialization is an error."""

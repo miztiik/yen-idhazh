@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
+import time
+from contextvars import ContextVar
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
@@ -13,6 +15,7 @@ from utilities.publication_request import PLAIN_MODE, Entry, IntegrityError, Pub
 COMMITTER_NAME = "miztiik"
 COMMITTER_EMAIL = "miztiik@users.noreply.github.com"
 TRAILER = "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+INVOCATION_DEADLINE: ContextVar[float | None] = ContextVar("publication-deadline", default=None)
 
 
 class Repository:
@@ -21,6 +24,7 @@ class Repository:
     def __init__(self, repo: Path) -> None:
         self.repo = repo
         self._entries: dict[tuple[str, str], Entry | None] = {}
+        self.deadline: float | None = None
 
     def prime(self, tree: str, paths: set[str]) -> None:
         """Read only named entries and their parents, in bounded argv batches."""
@@ -69,6 +73,10 @@ class Repository:
         if index is not None:
             env["GIT_INDEX_FILE"] = str(index)
             args = ("-c", "core.sparseCheckout=false", "-c", "index.sparse=false", *args)
+        deadline = self.deadline if self.deadline is not None else INVOCATION_DEADLINE.get()
+        remaining = deadline - time.monotonic() if deadline is not None else None
+        if remaining is not None and remaining <= 0:
+            raise RuntimeError("publication deadline expired before Git operation")
         return subprocess.run(
             ["git", *(("--literal-pathspecs",) if "check-ignore" not in args else ()), *args],
             input=data,
@@ -76,6 +84,7 @@ class Repository:
             capture_output=True,
             env=env,
             check=False,
+            timeout=remaining,
         )
 
     def git(
@@ -91,7 +100,19 @@ class Repository:
         return done.stdout.decode("utf-8")
 
     def fetch(self) -> str:
-        self.git("fetch", "--quiet", "origin", "main")
+        depth = (
+            ("--depth=1",)
+            if self.git("rev-parse", "--is-shallow-repository").strip() == "true"
+            else ()
+        )
+        self.git(
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            *depth,
+            "origin",
+            "+refs/heads/main:refs/remotes/origin/main",
+        )
         return self.git("rev-parse", "--verify", "origin/main").strip()
 
     def entry(self, tree: str, path: str) -> Entry | None:
@@ -116,6 +137,19 @@ class Repository:
             entry = self.entry(tree, parent.as_posix())
             if entry is not None and entry.mode != "040000":
                 raise IntegrityError("source parent is not a directory", (path,))
+
+    def index_entry(self, path: str) -> Entry | None:
+        listed = self.git("ls-files", "--stage", "-z", "--", path)
+        for line in listed.split("\0"):
+            if not line:
+                continue
+            metadata, name = line.split("\t", 1)
+            if name == path:
+                mode, oid, stage = metadata.split()
+                if stage != "0":
+                    raise IntegrityError("named output has an unresolved index entry", (path,))
+                return Entry(mode, oid)
+        return None
 
     def blob(self, oid: str, *, fetches: bool = False) -> bytes:
         done = self.run("cat-file", "blob", oid, fetches=fetches)
