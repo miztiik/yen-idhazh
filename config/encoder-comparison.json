@@ -22,6 +22,43 @@
     "threads": 0,
     "checkpoint_every_articles": 512
   },
+  "judgment_evaluation": {
+    "expected_judgments": 935,
+    "calibration_fraction": 0.3,
+    "split_seed": 20261009,
+    "precision_target": 0.95,
+    "bootstrap_rounds": 1000,
+    "bootstrap_seed": 20261010,
+    "interval_level": 0.95,
+    "minimum_valid_draws": 100,
+    "reference": "gte-small"
+  },
+  "judgment_vectors": [
+    {
+      "slug": "minilm-l6",
+      "file": "baseline-vectors/vectors-minilm-l6/minilm-l6.npy",
+      "run_id": "37850950040",
+      "artifact": "vectors-minilm-l6"
+    },
+    {
+      "slug": "gte-small",
+      "file": "baseline-vectors/vectors-gte-small/gte-small.npy",
+      "run_id": "37850950040",
+      "artifact": "vectors-gte-small"
+    },
+    {
+      "slug": "jina-v5-nano",
+      "file": "new-vectors-37895396586/jina-v5-nano.npy",
+      "run_id": "37895396586",
+      "artifact": "vectors-jina-v5-nano"
+    },
+    {
+      "slug": "embeddinggemma-two",
+      "file": "new-vectors-37909985697/embeddinggemma-two.npy",
+      "run_id": "37909985697",
+      "artifact": "vectors-embeddinggemma-two"
+    }
+  ],
   "encoders": [
     {
       "slug": "minilm-l6",
