@@ -75,7 +75,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L18 | The console home reads each day payload once | L13 | F | DONE | fluffy-carnival | #1396 | Plan 62 row l18 |
 | L19 | console-mark-parity's skipped test checks data it builds | L13 | F | DONE | super-spork | #1391 | Plan 62 row l19 |
 | L20 | The dwell rule is placed right when a day that decided nothing sits inside the run | L14 | F | DONE | reimagined-doodle | #1371 | Plan 62 row l20 |
-| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | DONE | laughing-spoon | - | Plan 62 row l21 |
+| L21 | The data explorer's action line counts the days a run will read | plan 55 row #10 | F | DONE | laughing-spoon | #1477 | Plan 62 row l21 |
 | L22 | Summaries' one-sided lines say what is true | L16 | F | DONE | fuzzy-meme | #1385 | Plan 62 row l22 |
 | L23 | The pipelines route's page and the prompt-cache subtitle say what is drawn | L15 | F | DONE | fuzzy-winner | #1381 | Plan 62 row l23 |
 | L24 | The bundle gate does not fail a published ledger that is not packed yet | L7 | G | DONE | supreme-eureka | #1376 | Plan 62 row l24 |
@@ -113,7 +113,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | PENDING | - | - | - |
-| L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | - | Plan 62 row l59 |
+| L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
 
