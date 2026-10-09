@@ -274,5 +274,5 @@ test('the resting heading separates the date from the note', async ({ page }) =>
 	expect(
 		(await day.innerText()).trim(),
 		'the resting heading runs the date into the note'
-	).toMatch(/, the newest day$/);
+	).toMatch(/, the newest recorded day shown$/);
 });

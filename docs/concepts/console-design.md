@@ -80,6 +80,15 @@ for the corresponding inside share. The dashed mark labels keep their
 existing figures. Extra decimal places cannot settle this: a smaller
 difference would still round away.
 
+**Recorded days are not every day in the window.** Judgement's merge-line
+note names how many recorded days fitted nothing, without implying a fit on
+days with no row. Its resting heading says `the newest recorded day shown`,
+not the window's newest day; a strip with one column keeps the date alone.
+While the record fills, its sentence states the actual counts, then the
+minimum counts needed. A count that has passed its minimum is not a share:
+`49 pairs above the line; it needs at least ... 30 pairs above the line`,
+never `49 of 30 pairs`.
+
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, a run whose rows cannot be made into one run is left out of the
 first line's run count - for example, a run where one shard filed two machine

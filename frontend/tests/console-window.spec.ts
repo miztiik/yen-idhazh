@@ -959,7 +959,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record is still filling and no line was fitted',
 		days: [judgeDay('2030-06-12', { ...FILLING, negativesOnRecord: 100 }), judgeDay('2030-06-15', FILLING)],
 		words:
-			'The record has 120 of the 200 readings it needs, 6 of 10 days, and 12 of 30 pairs above the line. No line was fitted in these 7 days.'
+			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in these 7 days.'
 	},
 	{
 		surface: 'record-gates',
@@ -967,7 +967,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record is still filling and no line was fitted',
 		days: [judgeDay('2030-06-15', FILLING)],
 		words:
-			'The record has 120 of the 200 readings it needs, 6 of 10 days, and 12 of 30 pairs above the line. No line was fitted in this one day.'
+			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in this one day.'
 	},
 	{
 		surface: 'record-gates',
@@ -2712,10 +2712,61 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			`${LINE_NOTE} The shaded band at each day is as far as the line was allowed to fall in one day.`
 		);
 		expect(await stripOf(page, 'merge-line')).toEqual({
-			heading: '15 Jun, the newest day',
+			heading: '15 Jun, the newest recorded day shown',
 			hint: DEFAULT_KEYS
 		});
 	});
+
+	test('THE ORACLE L45: a held row and six unrecorded days imply no fit', async ({ page }) => {
+		await draw(page, 'MergeLinePlot', {
+			...lineProps(7, []),
+			days: [{ ...lineDay('2030-06-14'), proposed: null, heldReason: 'sheet_too_small' }]
+		});
+		expect(await said(page, '[data-line-held-note]')).toBe(
+			'Nothing was fitted on 1 recorded day in this 7-day window.'
+		);
+		await draw(page, 'RecordGates', propsOf({
+			surface: 'record-gates', preset: 7, state: 'one held row and six silent days',
+			days: [judgeDay('2030-06-14', FILLING)], words: ''
+		}));
+		expect(await said(page, '[data-counted-fitted]')).toBe('No line was fitted in these 7 days.');
+		await expect(page.locator('[data-counted-state="silent"]')).toHaveCount(6);
+	});
+
+	test('THE ORACLE L45: filling counts may exceed their requirements without becoming shares', async ({ page }) => {
+		for (const [counts, words] of [
+			[{ ...FILLING, aboveLineOnRecord: 49 },
+				'The record has 120 readings, 6 days, and 49 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line.'],
+			[{ ...FILLING, negativesOnRecord: 1234, daysOnRecord: 14 },
+				'The record has 1,234 readings, 14 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line.'],
+			[{ ...FILLING, daysOnRecord: 1 },
+				'The record has 120 readings, 1 day, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line.']
+		] as const) {
+			await draw(page, 'RecordGates', propsOf({
+				surface: 'record-gates', preset: 7, state: 'counts fill independently',
+				days: [judgeDay(JUDGED_THROUGH, counts)], words: ''
+			}));
+			expect(await said(page, '[data-gates-state="filling"]')).toBe(words);
+		}
+	});
+
+	for (const preset of [14, 30]) {
+		test(`THE ORACLE L45: the ${preset}-day strip names its newest recorded day, not the window end`, async ({ page }) => {
+			for (const heldReason of ['none', 'sheet_too_small']) {
+				await draw(page, 'MergeLinePlot', {
+					...lineProps(preset, []),
+					days: [
+						lineDay('2030-06-12'),
+						{ ...lineDay('2030-06-14'), heldReason, proposed: heldReason === 'none' ? 0.95 : null }
+					]
+				});
+				expect(await said(page, '[data-readout="merge-line"] [data-readout-day]')).toBe(
+					'14 Jun, the newest recorded day shown'
+				);
+				await expect(page.locator('[data-windowed="merge-line"]')).toHaveAttribute('data-window-days', String(preset));
+			}
+		});
+	}
 
 		/** Mount the real record surfaces on generated inputs, with their real keyboard actions. */
 		test.describe('remaining one-day words and keys on generated records', () => {
@@ -3000,7 +3051,7 @@ const BARS_CASES: BarsCase[] = [
 		days: [judgeDay('2030-06-14', FILLING), judgeDay(JUDGED_THROUGH, { heldReason: 'inputs_changed' })],
 		bars: ['0', '0', '0'],
 		words:
-			'The record has 0 of the 200 readings it needs, 0 of 10 days, and 0 of 30 pairs above the line. No line was fitted in this one day.'
+			'The record has 0 readings, 0 days, and 0 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in this one day.'
 	}
 ];
 

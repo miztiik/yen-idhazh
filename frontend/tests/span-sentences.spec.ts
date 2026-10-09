@@ -314,6 +314,6 @@ test('the clamp and fitting sentences count over the days on screen', () => {
 	);
 
 	const unfitted = [lineDay('2026-10-06', { heldReason: 'sheet_too_small', proposed: null })];
-	expect(heldNote(unfitted, 1)).toBe('Nothing was fitted on 1 of 1 day.');
-	expect(heldNote(unfitted, 7)).toBe('Nothing was fitted on 1 of 7 days.');
+	expect(heldNote(unfitted, 1)).toBe('Nothing was fitted on 1 recorded day in this 1-day window.');
+	expect(heldNote(unfitted, 7)).toBe('Nothing was fitted on 1 recorded day in this 7-day window.');
 });
