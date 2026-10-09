@@ -186,6 +186,9 @@ export type FetchCost = { files: number; bytes: number; alreadyHeld: number; ms:
 export type SpanCost = {
 	files: number;
 	bytes: number;
+	/** Inclusive UTC bounds estimated for the answer, or null when no ledger reads a day. */
+	readFrom: DateStamp | null;
+	readTo: DateStamp | null;
 	unpackedDays: readonly DateStamp[];
 	cut: readonly CutDays[];
 	through: Readonly<Partial<Record<LedgerName, DateStamp>>>;

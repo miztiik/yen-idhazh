@@ -1,5 +1,6 @@
 import { megabytes } from '$lib/assist/session';
 import type { FetchCost } from '$lib/data/ledger';
+import { daysBetween } from '$lib/data/slice';
 import { plural as countNoun, shortDate } from '$lib/format';
 
 export type ExplorerStatusState =
@@ -21,7 +22,8 @@ export type ExplorerStatusInput = {
 	files?: number;
 	bytes?: number;
 	ledgers?: number;
-	days?: number;
+	readFrom?: string | null;
+	readTo?: string | null;
 	firstRun?: boolean;
 	ms?: number | null;
 	read?: FetchCost | null;
@@ -70,7 +72,11 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'unreachable-files':
 			return 'Did not run. The ledger files could not be fetched.';
 		case 'idle': {
-			const prefix = `Run reads ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(input.days ?? 0, 'UTC day')}.`;
+			const from = input.readFrom;
+			const to = input.readTo;
+			const days = from && to ? daysBetween(from, to).length : 0;
+			const dates = days === 1 && to ? `: ${shortDate(to)}` : days > 1 && from && to ? `, from ${shortDate(from)} through ${shortDate(to)}` : '';
+			const prefix = `Run will read ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(days, 'UTC day')}${dates}.`;
 			const engine = input.firstRun ? ' It also starts the query engine.' : '';
 			const empty = input.ledger !== undefined && input.through !== undefined ? ` Nothing in ${input.ledger} after ${shortDate(input.through)}.` : '';
 			return `${prefix}${engine}${empty}`;

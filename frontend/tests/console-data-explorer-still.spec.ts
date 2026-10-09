@@ -418,7 +418,9 @@ test('Susan 2026-10-07: checked choice tiles keep their bold-word width in every
 
 test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
-	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, days: 90, firstRun: true })).toBe('Run reads 123 files, 64.0 MB from 4 ledgers over 90 UTC days. It also starts the query engine.');
+	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, readFrom: '2030-03-18', readTo: PINNED, firstRun: true })).toBe('Run will read 123 files, 64.0 MB from 4 ledgers over 90 UTC days, from 18 Mar 2030 through 15 Jun 2030. It also starts the query engine.');
+	expect(statusSentence({ state: 'idle', files: 1, bytes: 491, ledgers: 1, readFrom: PINNED, readTo: PINNED })).toBe('Run will read 1 file, 1 KB from 1 ledger over 1 UTC day: 15 Jun 2030.');
+	expect(statusSentence({ state: 'idle', ledgers: 1, readFrom: null, readTo: null })).toBe('Run will read 0 files, 0.0 MB from 1 ledger over 0 UTC days.');
 	expect(statusSentence({ state: 'costing' })).toBe('Choosing a ledger fetches one day of it to list its columns.');
 	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'running-query' })).toBe('Running the question.');
@@ -435,7 +437,7 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		const status = page.locator('[data-workbench-region="status"]');
-		await expect(status).toContainText('Run reads');
+		await expect(status).toContainText('Run will read');
 		await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(page);
 		await expectAnswer(page, 'quiet');
