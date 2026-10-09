@@ -131,7 +131,7 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The floor on the diagram is a number the run chooses, since 2026-09-18.** With the flag off - which is how it ships - it is `assemble.same_story.floor_min` and the diagram reads exactly as it always has. With it on, `similarity.applied.effective_same_story` replaces that one field with the newest line a fit applied inside `applied_lookback_days`, and the rest of the block is untouched: same weights, same figure veto, same all-pairs rule. Four things each mean the committed floor rather than a fitted one, and each is an ordinary day: the flag is off, the tree is absent, every row inside the lookback was held, or the newest row carries no line.
 
-**The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date.
+**The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date. The console's Judgement page reads it: its merge line, verdict split and holdout margin name the line the newest published day's last build wrote down, and work the line out from the fitted rows only where that record holds none. Worked out alone, the line could be one no build used, because the nightly fit below files its row after most of that day's builds ran.
 
 ## The line fits itself, once a night
 
@@ -301,7 +301,7 @@ console is where the loop is watched once it starts
 | --- | --- |
 | `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? |
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
-| `state/content-similarity-judge/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
+| `content-similarity-judge/fitted-thresholds`, under `state/raw/` and `state/compact/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
 | `content-similarity-judge/holdout-pairs`, under `state/raw/` and `state/compact/` | Which pairs did a person mark, and which way? |
 | `content-similarity-judge/metrics`, under `state/raw/` and `state/compact/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 

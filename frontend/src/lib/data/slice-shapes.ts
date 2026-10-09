@@ -26,7 +26,8 @@ export const LEDGER_FOLDERS = {
 	'holdout-pairs': 'content-similarity-judge/holdout-pairs',
 	'merge-line-holdout-scores': 'content-similarity-judge/merge-line-holdout-scores',
 	'scored-pairs': 'content-similarity-judge/scored-pairs',
-	'metrics': 'content-similarity-judge/metrics'
+	'metrics': 'content-similarity-judge/metrics',
+	'fitted-thresholds': 'content-similarity-judge/fitted-thresholds'
 } as const satisfies Partial<Record<LedgerName, string>>;
 
 /** A structured filter, never raw SQL. The door binds `value` as a query parameter,
@@ -231,9 +232,11 @@ export type UnansweredDays = { tier: 'archive'; ledger: LedgerName; before: Date
 /** `readFrom` is the first UTC day an answer with rows read: the window's first day, unless every
  *  selected ledger's answer starts later, because its earlier days were cut or the repository could
  *  not give them; then the earliest day one of them starts on. `cut` and `unanswered` name each such
- *  ledger, in the order chosen. */
+ *  ledger, in the order chosen. `readTo` is the last UTC day it read: each ledger's answer ends on
+ *  the earlier of the window's last day and the newest day that ledger lists, and `readTo` is the
+ *  latest such end of a ledger that read a day of the window. */
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; unpackedDays: readonly DateStamp[]; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; readTo: DateStamp; unpackedDays: readonly DateStamp[]; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
 	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }

@@ -34,8 +34,10 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.gardener import event_log, report, runner
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
+from idhazh.ledger import paths
 from utilities import gardener_publish
 
 from ._events import events, the_event
@@ -178,6 +180,40 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
+def test_a_shard_whose_own_family_is_paused_fails_loudly_and_records_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gardener's record is a new row, so a paused family refuses it like any other.
+
+    Until 2026-10-08 the ledger door exempted every write carrying a maintenance
+    job - `migrate`, `run-tasks`, `history` - from the lifecycle check, on the
+    reading that such a job only files rows that were already recorded. This
+    write is the one the exemption actually reached, and it is a new row: the
+    shard's own record of a wake, which nothing recorded before it.
+
+    With the exemption gone a paused `gardener` family takes no record, and the
+    shard says so by its exit code rather than by carrying on with a record it
+    never wrote. That loud failure is the point - pausing the family a wake
+    writes into is a configuration nobody can act on if the wake reports success.
+    """
+    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    before = commits_on(origin)
+    raw = json.loads(read_text(CONFIG_DIR / paths.REGISTRY_FILENAME))
+    for family in raw["families"]:
+        if any(held["name"] == LedgerName.GARDENER.value for held in family["ledgers"]):
+            family["lifecycle_status"] = LedgerLifecycleStatus.PAUSED.value
+    monkeypatch.setattr(paths, "_CONFIG", LedgersConfig.model_validate(raw))
+
+    outcome, said = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch)
+
+    assert outcome.exit_code != EXIT_OK, "a wake that recorded nothing reported success"
+    assert outcome.record is None
+    assert commits_on(origin) == before, "a record nothing wrote reached main"
+    assert any("paused or retired" in line for line in said), (
+        f"the shard never said why it refused: {said}"
+    )
+
+
 def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
     tmp_path: Path,
 ) -> None:
@@ -218,20 +254,21 @@ def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
             }
         )
         expected[case] = row
-        ledger.persist(
-            repo_root / "state" / "pipeline-tests" / case,
-            [row],
-            ledger=LedgerName.ITEM_HEALTH,
-            covers=day,
-            identity=WriterIdentity(
-                run_id=f"{day}-{number}",
-                attempt=1,
-                job=ServerJob.WORK,
-                shard=0,
-                producer="work",
-                git_sha="a" * 40,
-            ),
-        )
+        with ledger.use_registry(ledger.overlay_registry(("pipeline-tests", case))):
+            ledger.persist(
+                repo_root / "state",
+                [row],
+                ledger=LedgerName.ITEM_HEALTH,
+                covers=day,
+                identity=WriterIdentity(
+                    run_id=f"{day}-{number}",
+                    attempt=1,
+                    job=ServerJob.WORK,
+                    shard=0,
+                    producer="work",
+                    git_sha="a" * 40,
+                ),
+            )
 
     outcome = runner.run(
         ["compact-trial-item-health"],
@@ -251,21 +288,24 @@ def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
     task_row = rows_of(outcome.record)["compact-trial-item-health"]
     assert task_row.selected > 0, task_row.model_dump_json()
     for case, row in expected.items():
-        root = repo_root / "state" / "pipeline-tests" / case
-        daily_index = ledger.compact_index_path(
-            root, LedgerName.ITEM_HEALTH, Period.DAILY
-        )
-        assert daily_index.is_file()
-        assert day in {
-            entry.covers for entry in CompactIndex.read(daily_index).entries
-        }
-        assert ledger.load_days(root, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow) == [row]
-        compact = ledger.compact_file(root, LedgerName.ITEM_HEALTH, Period.DAILY, day)
-        assert compact is not None and compact.is_file()
-        envelope = ledger.read_envelope(compact)
-        assert envelope.identity.run_id == "2026-10-04-9001"
-        assert envelope.identity.job is ServerJob.RUN_TASKS
-        assert envelope.identity.git_sha == "b" * 40
+        root = repo_root / "state"
+        with ledger.use_registry(ledger.overlay_registry(("pipeline-tests", case))):
+            daily_index = ledger.compact_index_path(
+                root, LedgerName.ITEM_HEALTH, Period.DAILY
+            )
+            assert daily_index.is_file()
+            assert day in {
+                entry.covers for entry in CompactIndex.read(daily_index).entries
+            }
+            assert ledger.load_days(
+                root, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow
+            ) == [row]
+            compact = ledger.compact_file(root, LedgerName.ITEM_HEALTH, Period.DAILY, day)
+            assert compact is not None and compact.is_file()
+            envelope = ledger.read_envelope(compact)
+            assert envelope.identity.run_id == "2026-10-04-9001"
+            assert envelope.identity.job is ServerJob.RUN_TASKS
+            assert envelope.identity.git_sha == "b" * 40
 
     assert production_raw.read_bytes() == production_bytes
     assert not ledger.compact_index_path(

@@ -53,11 +53,11 @@ Table C - when to stop and ask
 | 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
 | 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | DONE | p59-row-3 | - | Fowler |
 | 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | DONE | p59-row-4 | - | Fowler |
-| 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
+| 5 | The fitted merge line is saved through the door | 4 | C | DONE | p59-row-5 | - | Fowler |
 | 6 | The merge line's holdout score is saved through the door | 2, 11 | B | DONE | p59-row-6 | - | Fowler |
 | 7 | The holdout marks are saved through the door | 6 | C | DONE | p59-row-7 | - | Fowler |
 | 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
-| 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | PENDING | - | - | - |
+| 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | DONE | p59-row-9 | - | Fowler |
 | 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
 | 11 | The door files a ledger under a folder of any depth | - | A | DONE | p59-row-11 | - | Fowler |
 
@@ -265,6 +265,10 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | The frontend reads packed days only (`sliceFromDisk`), as every door ledger does, so a line is shown from the gardener's next pack, at most one day after it is written | Fowler, 2026-10-05: one read path for every ledger; the line moves once a night |
 | 2 | Merges right after a `digest.yml` run ends, and the plan's owner lands this ledger's copy before the next digest or council run (row 9, decision 2) | Fowler, 2026-10-08 |
+| 3 | `set_merge_line` no longer registers its file in `frontend/public/publication.json`. The council never commits that file, which is the fault L44 names, and the Judgement page now reads the compact index instead. The canary inventory stops naming fitted files for the same reason | Fowler, 2026-10-08 |
+| 4 | The CSV code this row leaves with no ledger stays for row 10, with its lists emptied: `ledger.keyed_paths` and `backend/utilities/widen_ledger_header.py`, `UNION_SAFE`, and the prune verb's CSV branch with `_TARGET_LEDGERS` and `day_partition.day_files`. Each still has callers or tests, and row 10 deletes them with the rest. The tests that built a fitted CSV path go or are rebuilt: `retention/test_union_safe_repeats.py` and the widener's re-file tests are deleted, because standing in for `keyed_paths` would be a mock, and the prune verb's CSV tests now run over a word list they build. Row 10's search adds `keyed_paths` and `widen_ledger_header` | Fowler, 2026-10-08 |
+| 5 | The dead-code commit deletes what nothing calls once the fitted line moves: `append_fitted_thresholds` and `FITTED_SIMILARITY_THRESHOLD_CARRIED`; `drop_repeated_rows` and `extend_ledger_file`, whose last caller was that append; and `readDayShards`, `dayShardFiles` and `DayShard`, whose last caller was `fittedLines`. `stateFiles` in `publication.ts` stays: the inventory's state entries are still written, and its own tests are now its only reader | Fowler, 2026-10-08 |
+| 6 | The frontend oracle runs the backend from a `logic` spec: it files the night before through the door, runs the stage and its re-run, packs both days with the shipped compaction under the test's own folder, and compares `fittedLines` with what the backend reads back. CI's site job installs the backend before `test:logic`, and the launcher names the Python. Which Python runs is now one helper, `frontend/tests/support/backend-python.ts`, shared with `malformed-day.spec.ts` | Fowler, 2026-10-08 |
 
 ### Row #6 - The merge line's holdout score is saved through the door
 

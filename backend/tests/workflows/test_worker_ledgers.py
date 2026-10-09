@@ -268,9 +268,42 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("plan", COMMIT_STEPS["plan"]),
         ("assemble", FINGERPRINT_STEP),
+        ("assemble", JOB_CLOCK_STEP),
         ("assemble", HARVEST_STEP),
         ("assemble", REVIEW_STEP),
     }
+
+
+def test_every_job_that_records_a_machine_also_closes_its_row() -> None:
+    """A probe with no clock is a half-row for ever, and nothing said so.
+
+    The probe opens the row at job start and the clock fills the four cells only
+    the end of a job can know. A job that runs one and not the other leaves a row
+    that reads as a job which cost nothing to run - and `assemble` did exactly
+    that from 2026-09-17, because it took the probe and nobody noticed the other
+    half was missing.
+
+    Asked of every probing job rather than of a list written again here, so a new
+    job that takes the probe owes the clock without an edit to this test.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    for job_name in sorted(FINGERPRINT_JOBS):
+        names = [step.get("name") for step in _steps(workflow, job_name)]
+        assert JOB_CLOCK_STEP in names, (
+            f"the {job_name} job records a machine and never closes the row: it has "
+            f"{FINGERPRINT_STEP!r} and no {JOB_CLOCK_STEP!r}, so job_seconds stays empty"
+        )
+        assert names.index(FINGERPRINT_STEP) < names.index(JOB_CLOCK_STEP), (
+            f"the {job_name} job clocks itself before it has measured the machine"
+        )
+        script = _substitute(
+            _script(_step(workflow, job_name, "name", JOB_CLOCK_STEP), f"job {job_name} clock")
+        )
+        assert JOB_CLOCK_COMMAND in script, f"{job_name} must run {JOB_CLOCK_COMMAND}"
+        assert f"{FINGERPRINT_JOB_FLAG} {FINGERPRINT_JOBS[job_name]}" in script, (
+            f"the {job_name} job does not clock itself as {FINGERPRINT_JOBS[job_name]}, so the "
+            "clock's half would land on another job's row"
+        )
 
 
 def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:

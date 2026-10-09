@@ -43,7 +43,6 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import { dayMonth } from '$lib/format';
-	import { findAppliedLine } from '$lib/console/applied-line';
 	import { clampEnvelope, clampNote, corridorOf, heldNote, type LineDay } from '$lib/console/merge-line';
 	import { nameSpan } from '$lib/console/span-words';
 
@@ -55,28 +54,22 @@
 		width,
 		tickDensity,
 		readoutMaxShare,
-		configuredLine,
+		builtWith,
 		markedApart
 	}: {
 		/** Every day the record fitted a row for, oldest first. */
 		days: LineDay[];
-		/** The band, and the switch and lookback a build reads a fitted line with,
-		 * off `config/idhazh.json`. */
-		knobs: {
-			band_low: number;
-			band_high: number;
-			enabled: boolean;
-			applied_lookback_days: number;
-		};
+		/** The band a fitted line may take, off `config/idhazh.json`. */
+		knobs: { band_low: number; band_high: number };
 		viewport: TimeWindow;
 		height: number;
 		width: number;
 		tickDensity: number;
 		readoutMaxShare: number;
-		/** The committed floor. What a build groups at while the switch is off, or
-		 * when no fit applied a line in its lookback, so state K1 draws a rule
-		 * rather than an empty box. */
-		configuredLine: number;
+		/** The line the newest day was built with. The dashed rule is drawn at it
+		 * when no fitted day is in the window, so state K1 draws a rule rather
+		 * than an empty box. */
+		builtWith: number;
 		/** The lowest and highest score among the pairs a person marked as two
 		 * different stories, and how many there are. Null where nobody has marked
 		 * one, which draws no strip rather than a zero-height one. */
@@ -113,9 +106,6 @@
 	/** Which day the dashed rule is the line of, in words. At one day that day is
 	 * the whole window, so it is named as the window, not as the newest of several. */
 	const ruleDay = $derived(windowDays === 1 ? nameSpan(windowDays) : 'the newest day');
-	/** The line the window's last day was built with: where the dashed rule goes
-	 * when no fitted day is in the window. */
-	const ruleLine = $derived(findAppliedLine(viewport.end, days, knobs, configuredLine));
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	/** `zero: false` and `nice: false`, and both are load-bearing. Anchoring at
@@ -319,15 +309,15 @@
 					<line
 						x1={box.left}
 						x2={box.right}
-						y1={yAxis.scale(ruleLine)}
-						y2={yAxis.scale(ruleLine)}
+						y1={yAxis.scale(builtWith)}
+						y2={yAxis.scale(builtWith)}
 						stroke="var(--color-text-tertiary)"
 						stroke-dasharray="4 4"
-						data-line-rule={reads(ruleLine)}
+						data-line-rule={reads(builtWith)}
 					/>
 					<text
 						x={box.left + 8}
-						y={yAxis.scale(ruleLine) - 8}
+						y={yAxis.scale(builtWith) - 8}
 						fill="var(--color-text-tertiary)"
 						font-size="12"
 						data-line-rule-label

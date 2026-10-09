@@ -749,8 +749,8 @@ function lineDay(date: string): LineDay {
 	};
 }
 
-/** The band, the switch and the lookback the route hands the merge line. The
- * switch is off unless a case turns it on. */
+/** The knobs the route hands the merge line, which draws its axis over the band.
+ * The switch is off unless a case turns it on. */
 const LINE_KNOBS = { band_low: 0.88, band_high: 1, enabled: false, applied_lookback_days: 7 };
 
 /** One panel in one state at one window, and every word it owes about its days. */
@@ -1043,7 +1043,7 @@ function propsOf(one: SpanCase): Record<string, unknown> {
 			return {
 				days: one.days,
 				knobs: LINE_KNOBS,
-				configuredLine: 0.94,
+				builtWith: 0.94,
 				markedApart: null,
 				viewport,
 				...DRAWN_AT
@@ -1058,40 +1058,10 @@ async function said(page: Page, selector: string): Promise<string> {
 	return ((await node.textContent()) ?? '').replace(/\s+/g, ' ').trim();
 }
 
-/** A day a fit applied `line` on, or a held day that kept `line`. */
-function appliedOn(date: string, line: number, heldReason = 'none'): LineDay {
-	return { ...lineDay(date), proposed: heldReason === 'none' ? line : null, applied: line, heldReason };
+/** A day a fit applied `line` on. */
+function appliedOn(date: string, line: number): LineDay {
+	return { ...lineDay(date), proposed: line, applied: line };
 }
-
-/** With no fitted day in its window, where the merge line draws its rule. Each
- * case is the 1-day window on 15 Jun 2030 with a lookback of 7 days, so that
- * day's build read the lines of 8 to 15 Jun. The committed floor is 0.94. */
-const RULE_CASES: { state: string; enabled: boolean; days: LineDay[]; rule: string }[] = [
-	{
-		state: 'the switch is on and a line was fitted 3 days before',
-		enabled: true,
-		days: [appliedOn('2030-06-12', 0.937)],
-		rule: '0.937'
-	},
-	{
-		state: 'the switch is on and a line was fitted 7 days before, the first day the build read',
-		enabled: true,
-		days: [appliedOn('2030-06-08', 0.937)],
-		rule: '0.937'
-	},
-	{
-		state: 'the switch is on, the one fitted line is 8 days before, and the day inside the lookback was held',
-		enabled: true,
-		days: [appliedOn('2030-06-07', 0.937), appliedOn('2030-06-13', 0.951, 'judge_unstable')],
-		rule: '0.940'
-	},
-	{
-		state: 'the switch is off, though a line was fitted 3 days before',
-		enabled: false,
-		days: [appliedOn('2030-06-12', 0.937)],
-		rule: '0.940'
-	}
-];
 
 /** The agreement strip resting on its newest day at one window: its heading, its
  * two entries as a reader is given them, the name each drawn day's dots carry,
@@ -1383,6 +1353,118 @@ const STRIP_CASES: {
 		},
 		words:
 			'In this one day, 100% of 5 pairs disagreed with their own second reading. Could not tell: not counted, no pair agreed. The 100% that disagreed is past its mark.'
+	},
+	{
+		// The verdict follows the shares it judges, never why a day was held. The
+		// run checks first whether the record holds enough to fit on, so these
+		// days were held for that, with a share past its mark.
+		preset: 7,
+		state: 'no day was held for the judge, and the 20% that disagreed is past its mark',
+		days: [
+			judgeDay('2030-06-10', {
+				pairsJudged: 40,
+				pairsUsable: 32,
+				disagreementRate: 0.2,
+				unclearRate: 1 / 32,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 5,
+				pairsUsable: 4,
+				disagreementRate: 0.2,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 20% of 5 pairs',
+			'Could not tell 0 of the 4 that agreed'
+		],
+		dots: {
+			'2030-06-10':
+				'10 Jun: 20% of 40 pairs disagreed with the second reading, and 3% of the 32 that agreed could not tell.',
+			'2030-06-15':
+				'15 Jun: 20% of 5 pairs disagreed with the second reading, and 0 of the 4 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 20% of 45 pairs disagreed with their own second reading, and 3% of the 36 that agreed could not tell. The 20% that disagreed is past its mark.'
+	},
+	{
+		preset: 1,
+		state: 'its day was not held for the judge, and the 39% that could not tell is past its mark',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 40,
+				pairsUsable: 38,
+				disagreementRate: 0.05,
+				unclearRate: 15 / 38,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 5% of 40 pairs',
+			'Could not tell 39% of the 38 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 5% of 40 pairs disagreed with the second reading, and 39% of the 38 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 5% of 40 pairs disagreed with their own second reading, and 39% of the 38 that agreed could not tell. The 39% that could not tell is past its mark.'
+	},
+	{
+		preset: 7,
+		state: 'no day was held for the judge, and both rates are past their marks',
+		days: [
+			judgeDay('2030-06-11', {
+				pairsJudged: 30,
+				pairsUsable: 24,
+				disagreementRate: 0.2,
+				unclearRate: 8 / 24,
+				heldReason: 'sheet_too_small'
+			}),
+			judgeDay('2030-06-15', {
+				pairsJudged: 20,
+				pairsUsable: 16,
+				disagreementRate: 0.2,
+				unclearRate: 0.5,
+				heldReason: 'sheet_too_small'
+			})
+		],
+		heading: '15 Jun, the newest day',
+		entries: [
+			'Disagreed with the second reading 20% of 20 pairs',
+			'Could not tell 50% of the 16 that agreed'
+		],
+		dots: {
+			'2030-06-11':
+				'11 Jun: 20% of 30 pairs disagreed with the second reading, and 33% of the 24 that agreed could not tell.',
+			'2030-06-15':
+				'15 Jun: 20% of 20 pairs disagreed with the second reading, and 50% of the 16 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, 20% of 50 pairs disagreed with their own second reading, and 40% of the 40 that agreed could not tell. Both rates are past their marks.'
+	},
+	{
+		// A share that is not zero and rounds below one percent prints under one.
+		// A 0 would say no pair disagreed, and one did.
+		preset: 1,
+		state: '1 of its 300 pairs disagreed, a share that rounds below one percent',
+		days: [
+			judgeDay('2030-06-15', { pairsJudged: 300, pairsUsable: 299, disagreementRate: 1 / 300 })
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading <1% of 300 pairs',
+			'Could not tell 0% of the 299 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: <1% of 300 pairs disagreed with the second reading, and 0% of the 299 that agreed could not tell.'
+		},
+		words:
+			'In this one day, <1% of 300 pairs disagreed with their own second reading, and 0% of the 299 that agreed could not tell. Both rates are inside the marks.'
 	}
 ];
 
@@ -1587,28 +1669,28 @@ test.describe('the Judgement panels name their span in every state, on days the 
 		});
 	}
 
-	for (const one of RULE_CASES) {
-		test(`THE ORACLE: merge-line draws its rule at the line its day was built with when ${one.state}`, async ({
-			page
-		}) => {
-			const props = {
-				days: one.days,
-				knobs: { ...LINE_KNOBS, enabled: one.enabled },
-				configuredLine: 0.94,
-				markedApart: null,
-				viewport: windowOfDays(JUDGED_THROUGH, 1, 'right'),
-				...DRAWN_AT
-			};
-			await page.setContent(`<main>${drawn['merge-line'](props)}</main>`);
+	test('THE ORACLE: merge-line draws its rule at the line the newest day was built with, never at one it works out from the rows', async ({
+		page
+	}) => {
+		// The rows, the switch and the lookback say a build on 15 Jun would have
+		// grouped at 0.937, the line a fit applied 3 days before. The day was
+		// built with 0.940, and that is the line the panel is handed.
+		const props = {
+			days: [appliedOn('2030-06-12', 0.937)],
+			knobs: { ...LINE_KNOBS, enabled: true },
+			builtWith: 0.94,
+			markedApart: null,
+			viewport: windowOfDays(JUDGED_THROUGH, 1, 'right'),
+			...DRAWN_AT
+		};
+		await page.setContent(`<main>${drawn['merge-line'](props)}</main>`);
 
-			await expect(page.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', one.rule);
-			// Reader's words stand, and now name the line the rule is drawn at.
-			expect(await said(page, '[data-line-rule-label]')).toBe('The line this one day was built with');
-			expect(await said(page, '[data-line-state]')).toBe(
-				'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
-			);
-		});
-	}
+		await expect(page.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', '0.940');
+		expect(await said(page, '[data-line-rule-label]')).toBe('The line this one day was built with');
+		expect(await said(page, '[data-line-state]')).toBe(
+			'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
+		);
+	});
 
 	for (const one of STRIP_CASES) {
 		test(`THE ORACLE: judge-agreement's strip at the ${one.preset}-day window, when ${one.state}`, async ({
@@ -1661,6 +1743,33 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			} else {
 				expect(await said(page, '[data-agreement-floor-note]')).toBe(one.note);
 			}
+		});
+	}
+
+	for (const preset of [1, 7]) {
+		test(`THE ORACLE: judge-agreement's note and plot labels call each dashed line a mark, and keep "line" for the merge line, at the ${preset}-day window`, async ({
+			page
+		}) => {
+			const days = [
+				judgeDay(JUDGED_THROUGH, { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })
+			];
+			await page.setContent(
+				`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', preset, state: '', days, words: '' }))}</main>`
+			);
+
+			// One word for each thing: a dashed limit is a mark, and a line is the
+			// merge line and nothing else. The words are Reader's, the same at every window.
+			expect(
+				await said(page, '[data-console-panel="Whether the judge agrees with itself"] .panel-note')
+			).toBe(
+				'Every pair is read twice, with the two summaries swapped. A "disagreed" dot shows how often a pair\'s two readings disagreed. A "could not tell" dot shows how often the pairs whose two readings agreed could not tell. When a day\'s rate is past its own dashed mark, the run does not move the merge line that day.'
+			);
+			const labels = await page
+				.locator('[data-agreement-marker-label]')
+				.evaluateAll((nodes) =>
+					nodes.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
+				);
+			expect(labels).toEqual(['15% - the "disagreed" mark', '35% - the "could not tell" mark']);
 		});
 	}
 });
@@ -2299,7 +2408,7 @@ test.describe('at one day no sentence needs a second day, on days the test build
 		return {
 			days: dates.map(lineDay),
 			knobs: LINE_KNOBS,
-			configuredLine: 0.94,
+			builtWith: 0.94,
 			markedApart: null,
 			viewport: windowOfDays(JUDGED_THROUGH, preset, 'right'),
 			...DRAWN_AT
@@ -2555,6 +2664,53 @@ test('THE ORACLE: the span picked on one console route is the span the next one 
 	for (const surface of await windowed(page)) {
 		expect(surface.days, `${surface.name} ignored the span carried from Hardware`).toBe(14);
 	}
+});
+
+/** The span the control holds, and every span the route's windowed surfaces draw. */
+async function heldAndDrawn(page: Page) {
+	return {
+		held: Number(await page.locator('[data-window-control]').getAttribute('data-window-days')),
+		drawn: [...new Set((await windowed(page)).map((surface) => surface.days))]
+	};
+}
+
+/** Click a route's tab and wait for that route's panels. The router follows the
+ * link with no page load, which a mark left on `window` proves: a load would
+ * clear it, and a page load is the move the case above already takes. */
+async function followTab(page: Page, route: string) {
+	await page.evaluate(() => Object.assign(window, { stayedOnPage: true }));
+	await page.locator(`[data-console-tab="${route}"]`).click();
+	await expect(page.locator(`[data-console-panels="${route}"]`)).toBeVisible();
+	expect(
+		await page.evaluate(() => 'stayedOnPage' in window),
+		'the tab loaded a page, so the move this case is about never happened'
+	).toBe(true);
+}
+
+test('THE ORACLE: after a tab click, the control holds the span the next route draws', async ({
+	page
+}) => {
+	// The case above moves with a page load. An operator moves with the tabs, and
+	// the router then mounts the next route under the same layout and drops the
+	// last one, with the stored span read again by the route that arrives. The
+	// control used to stay on 14 days there while every Judgement panel drew 1.
+	// So the control is compared with what the page draws, never with a number
+	// the data holds, and every check retries until the route has settled.
+	await page.goto('/console/');
+	await hydrated(page);
+	await setWindow(page, 1);
+
+	await followTab(page, 'judgement');
+	await expect.poll(() => heldAndDrawn(page)).toEqual({ held: 1, drawn: [1] });
+	await expect(page.locator('[data-window-preset="1"] input')).toBeChecked();
+	await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
+
+	// Back the other way, on a span picked on the route the tab led to.
+	await setWindow(page, 7);
+	await followTab(page, 'pipelines');
+	await expect.poll(() => heldAndDrawn(page)).toEqual({ held: 7, drawn: [7] });
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+	await expect(page.locator('[data-window-preset="7"] input')).toBeEnabled();
 });
 
 /** The three numbers the source section prints about its own window. */

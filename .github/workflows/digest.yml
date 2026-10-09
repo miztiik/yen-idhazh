@@ -488,6 +488,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # Start before checkout so elapsed time includes setup, as plan and work do.
+      - name: Stamp the assemble clock
+        run: |
+          set -euo pipefail
+          echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -504,7 +510,8 @@ jobs:
           name: plan
           path: ${{ needs.plan.outputs.plan_dir }}/
 
-      # The probe needs the downloaded plan and an otherwise idle runner.
+      # Before the embeddings and the site build, which want the runner the
+      # bandwidth reading wants.
       - name: What machine this job drew
         continue-on-error: true
         run: |
@@ -574,6 +581,21 @@ jobs:
         run: |
           set -euo pipefail
           python -m idhazh derived-paths --day-dir "$DAY_DIR" >> "$GITHUB_OUTPUT"
+
+      # Record elapsed time before committing; commit and push time are excluded,
+      # as they are for plan and work. No server log or counters: assemble stands
+      # no model server up, so those two readings are not its to take.
+      - name: What this job cost
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python -m idhazh job-clock \
+            --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
+            --job assemble \
+            --shard 0 \
+            --job-started-at "${JOB_STARTED_AT:-}"
 
       # After a rejected push, regenerate derived files against the new tip.
       # Refresh named files only; do not discard this run's rendered charts.

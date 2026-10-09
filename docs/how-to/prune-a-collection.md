@@ -101,7 +101,8 @@ range you typed is taken whole unless you ask for a smaller bite:
 
 ```
 idhazh telemetry prune --target content-similarity-judge-fitted-thresholds \
-  --since 2025-01-01 --until 2025-12-31 --no-dry-run --max-deletes 30
+  --since 2025-01-01 --until 2025-12-31 --no-dry-run --max-deletes 30 \
+  --run-id 2026-10-08-1 --commit <full sha of the checkout>
 ```
 
 Which ledgers this may be pointed at, and which are refused and why, are in

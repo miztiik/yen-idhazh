@@ -12,7 +12,6 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.run_plan import RunPlan
 from idhazh.telemetry import silicon
 
 #: One committed capture of llama-server's own log, so the four-field stamp the
@@ -28,6 +27,11 @@ SERVER_METRICS = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom"
 #: the reader is asked for cannot drift apart.
 FINGERPRINT_DAY = "2026-09-16"
 
+#: The run that day. The stage needs this and the day, and reads no plan: a
+#: machine reading is about the job rather than about the work the job did,
+#: which is what lets a workflow that plans nothing still take one.
+A_RUN_ID = f"{FINGERPRINT_DAY}-1"
+
 
 def raw_files(state: Path) -> list[ledger.RawFile]:
     """Every raw file of the fingerprint day, oldest first, each with the envelope of its writer."""
@@ -38,18 +42,6 @@ def settled(state: Path) -> list[HostFingerprintRow]:
     """The fingerprint day as every reader reads it: its raw files, settled."""
     return ledger.load_days(
         state, LedgerName.HOST_FINGERPRINT, [FINGERPRINT_DAY], model=HostFingerprintRow
-    )
-
-
-def a_plan() -> RunPlan:
-    """The smallest plan this stage needs: a date and a run id."""
-    return RunPlan.model_validate(
-        {
-            "date": "2026-09-16",
-            "run_id": "2026-09-16-1",
-            "generated_at": "2026-09-16T00:00:00Z",
-            "items": [],
-        }
     )
 
 
@@ -322,7 +314,8 @@ def test_the_stage_files_this_job_its_own_raw_file(
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     row = silicon.stage_fingerprint(
-        a_plan(),
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         settings=a_probe(),
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,
@@ -351,14 +344,24 @@ def test_a_second_attempt_at_one_shard_writes_beside_the_first_and_wins(
     files survive on disk, one work unit between them, and every reader keeps the
     higher attempt.
     """
-    plan, settings = a_plan(), a_probe()
+    settings = a_probe()
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     silicon.stage_fingerprint(
-        plan, settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
     )
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     second = silicon.stage_fingerprint(
-        plan, settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
     )
 
     written = raw_files(tmp_path)
@@ -376,11 +379,12 @@ def test_a_second_call_in_one_attempt_is_read_as_one_row(
     and a reader keeps the later of those, never both.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    plan, settings = a_plan(), a_probe()
+    settings = a_probe()
 
     for _ in range(2):
         silicon.stage_fingerprint(
-            plan,
+            date=FINGERPRINT_DAY,
+            run_id=A_RUN_ID,
             settings=settings,
             state_root=tmp_path,
             commit_sha=SEED_COMMIT,
@@ -400,7 +404,12 @@ def test_the_switch_being_off_writes_nothing_and_still_returns(tmp_path: Path) -
     settings.app.observability.host_fingerprint = False
 
     row = silicon.stage_fingerprint(
-        a_plan(), settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
     )
 
     assert row is None
@@ -415,7 +424,12 @@ def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) 
     reader, because that file is where the writer's own rendering lands.
     """
     silicon.stage_fingerprint(
-        a_plan(), settings=a_probe(), state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=a_probe(),
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
     )
 
     (written,) = raw_files(tmp_path)
@@ -441,9 +455,10 @@ def test_the_probe_and_the_job_clock_settle_into_one_row(
     that came back changed would be the clock overwriting the machine.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    plan, settings = a_plan(), a_probe()
+    settings = a_probe()
     probe = silicon.stage_fingerprint(
-        plan,
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         settings=settings,
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,
@@ -451,7 +466,8 @@ def test_the_probe_and_the_job_clock_settle_into_one_row(
         job=ServerJob.WORK,
     )
     whole = silicon.stage_job_clock(
-        plan,
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         settings=settings,
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,
@@ -489,7 +505,12 @@ def test_a_job_that_died_before_its_clock_leaves_a_usable_half_row(tmp_path: Pat
     and everything the probe measured about the machine is still true.
     """
     silicon.stage_fingerprint(
-        a_plan(), settings=a_probe(), state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=a_probe(),
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
     )
 
     (row,) = settled(tmp_path)
@@ -511,7 +532,8 @@ def test_a_clock_with_no_stamp_and_no_log_reports_absence_rather_than_zero(
     neither.
     """
     clock = silicon.stage_job_clock(
-        a_plan(),
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         settings=a_probe(),
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,
@@ -539,12 +561,18 @@ def test_the_clock_is_a_later_write_of_the_probes_own_work_unit(
     a job, never a half-row beside a whole one.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    plan, settings = a_plan(), a_probe()
+    settings = a_probe()
     probe = silicon.stage_fingerprint(
-        plan, settings=settings, state_root=tmp_path, commit_sha=SEED_COMMIT, shard=0
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=settings,
+        state_root=tmp_path,
+        commit_sha=SEED_COMMIT,
+        shard=0,
     )
     whole = silicon.stage_job_clock(
-        plan,
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         settings=settings,
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,
@@ -566,7 +594,8 @@ def test_the_switch_being_off_records_no_clock_either(tmp_path: Path) -> None:
     settings.app.observability.host_fingerprint = False
 
     clock = silicon.stage_job_clock(
-        a_plan(),
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
         settings=settings,
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,

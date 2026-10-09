@@ -58,14 +58,10 @@
 	);
 
 	// Raw, because a source is an object of getters and a deep proxy of it would
-	// be a copy of the route's state rather than the route's state.
+	// be a copy of the route's state rather than the route's state. Only drawn
+	// from: the slot decides which route holds it.
 	let handed = $state.raw<WindowSource | null>(null);
-	provideWindowSlot({
-		fill: (source) => (handed = source),
-		clear: (source) => {
-			if (handed === source) handed = null;
-		}
-	});
+	provideWindowSlot((source) => (handed = source));
 
 	/** What the route loaded, read from the page rather than handed in, because
 	 * the layout is drawn before the route's script runs. */

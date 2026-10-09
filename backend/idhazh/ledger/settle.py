@@ -1,27 +1,18 @@
-"""Which rows of a committed file repeat a key, and what dropping them costs.
+"""Which ledgers a CSV settlement covers, and which rows of a committed file repeat a key.
 
-A second attempt at one execution can land the same row twice, and the union
-merge that stacks two pushes cannot tell that from two runs writing different
-rows. This is the pass that settles it after the merge, which is the one moment
-both sides have been in the same place.
+A second attempt at one execution could land the same row twice, and the union
+merge that stacked two pushes could not tell that from two runs writing
+different rows. Every ledger that was settled here has moved under `state/raw/`,
+where each write is a file of its own, so the registry below names none and
+nothing rewrites a file after a merge any more.
 """
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 from typing import NamedTuple
 
-from idhazh import day_partition
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import paths
 from idhazh.ledger.csv_file import CsvContract, _read_rows
-from idhazh.ledger.keys import (
-    _PREFERENCES,
-    FITTED_SIMILARITY_THRESHOLD_CARRIED,
-    STORY_SIMILARITY_THRESHOLD_KEY,
-)
 
 
 class KeyedLedger(NamedTuple):
@@ -45,9 +36,9 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     """Every ledger here that says what makes two of its rows the same record.
 
     Each one arrives with its key AND with the contract that can read one of its
-    rows, because the post-merge settlement needs both: it drops a repeated key
-    and it folds a file that came back from the merge carrying two headers, and
-    the second of those is a job only the contract's own reader can do.
+    rows, because the post-merge settlement needed both: it dropped a repeated
+    key and it folded a file that came back from the merge carrying two headers,
+    and the second of those is a job only the contract's own reader can do.
 
     `date` says which files. A run appends only to the shard its own date routes
     to, so a repeat the union merge left behind can only be in a file that run
@@ -77,110 +68,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     read
     (`ledger/raw_files.py`).
 
-    `state/content-similarity-judge/fitted-thresholds/` is registered before
-    anything writes it: the settlement runs over whatever it finds, a missing
-    file settles to nothing, and registering the shape rather than its first
-    writer is what stops two stale checkouts leaving one date fitted twice. Its
-    sibling `scored-pairs/` left when it moved under `state/raw/`, for the reason
-    the trees above did.
-
+    **No ledger is left here.** The judge's scored pairs left when they moved
+    under `state/raw/`, and its fitted line, the last, followed them for the
+    reason the trees above did. The answer is empty whatever `state_dir` and
+    `date` name.
     """
-    if date is not None:
-        return [
-            KeyedLedger(
-                paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date),
-                STORY_SIMILARITY_THRESHOLD_KEY,
-                FittedSimilarityThreshold,
-                FITTED_SIMILARITY_THRESHOLD_CARRIED,
-            ),
-        ]
-    return [
-        KeyedLedger(
-            file,
-            STORY_SIMILARITY_THRESHOLD_KEY,
-            FittedSimilarityThreshold,
-            FITTED_SIMILARITY_THRESHOLD_CARRIED,
-        )
-        for file in day_partition.day_files(
-            paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS)
-        )
-    ]
-
-
-def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
-    """Rewrite the file without any row repeating a key an earlier row holds.
-
-    This is the half of the guarantee `extend_ledger_file`'s filter cannot give. That filter
-    reads the committed file the job checked out, and `actions/checkout` pins a
-    job to the commit its run was triggered at - so a second execution of the
-    same work cannot see rows the first one pushed after that commit. Its append
-    lands them again. On a tree that still carries a union merge driver -
-    `path_classes.UNION_SAFE` lists them -
-    git then concatenates both sides line by line, which is the right answer for
-    two runs writing different rows and exactly the wrong one for two attempts
-    writing the same row.
-    Everywhere else under `state/` that driver went on 2026-09-19 and the second
-    push conflicts at the rebase instead. Measured on this
-    repository 2026-08-31: run `2026-08-29-3` holds six counter rows for four
-    shards and 44 repeated `(date, run_id, item_id)` item-health keys.
-
-    So the file has to be settled once more after the merge, which is the only
-    moment both sides have ever been in one place.
-
-    Rows are matched and rewritten as whole lines rather than re-serialized, so
-    a kept row is byte-identical to the row that was read and a pass that drops
-    nothing leaves no diff. Reading by line is safe for the same reason the merge
-    is: every free-text cell in these contracts is pinned to printable ASCII on
-    one line, so no cell can carry a newline.
-
-    The first row wins unless the key declares otherwise in `_PREFERENCES`. Only
-    `FEED_HEALTH_KEY` does, because it is the only key here whose repeats can
-    disagree: two attempts at one run really did read the address twice and may
-    have got different answers. Everywhere else a repeat is one attempt written
-    down twice, so the rows agree and picking between them would be theatre.
-    The rule travels with the key rather than with the caller, so the workflow
-    step, the CLI stage and a test harness that spells the key out all settle the
-    same file the same way.
-
-    Returns how many rows were dropped, so a caller can log the count.
-    """
-    if not path.exists():
-        return 0
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        lines = handle.readlines()
-    if not lines:
-        return 0
-    header = next(csv.reader(lines[:1]), [])
-    if any(name not in header for name in key):
-        # A shard written before the key existed cannot be checked against it,
-        # and refusing would cost a run its whole commit over an old file.
-        return 0
-    prefer = _PREFERENCES.get(key)
-    columns = [header.index(name) for name in key]
-    seen: dict[tuple[str, ...], tuple[int, dict[str, str]]] = {}
-    kept = [lines[0]]
-    dropped = 0
-    for line in lines[1:]:
-        cells = next(csv.reader([line]), [])
-        if len(cells) <= max(columns):
-            kept.append(line)
-            continue
-        found = tuple(cells[index] for index in columns)
-        held = seen.get(found)
-        if held is not None:
-            dropped += 1
-            if prefer is not None:
-                where, incumbent = held
-                challenger = dict(zip(header, cells, strict=False))
-                if prefer(challenger, incumbent):
-                    kept[where] = line
-                    seen[found] = (where, challenger)
-            continue
-        seen[found] = (len(kept), dict(zip(header, cells, strict=False)))
-        kept.append(line)
-    if dropped:
-        path.write_text("".join(kept), encoding="utf-8", newline="")
-    return dropped
+    return []
 
 
 def repeated_keys(path: Path, key: tuple[str, ...]) -> dict[tuple[str, ...], int]:

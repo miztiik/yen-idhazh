@@ -5,6 +5,7 @@
   "shards": 5,
   "task_names": [
     "compact-candidate-models",
+    "compact-content-similarity-judge-fitted-thresholds",
     "compact-content-similarity-judge-holdout-pairs",
     "compact-content-similarity-judge-merge-line-holdout-scores",
     "compact-content-similarity-judge-metrics",

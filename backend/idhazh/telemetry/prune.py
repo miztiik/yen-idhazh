@@ -113,17 +113,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: list in the change that moves it under `state/raw/` through the ledger door,
 #: as `visual-prunes`, `item-health`, `summary-quality-evals`, `host-fingerprint`,
 #: `counterfactual-scores`, `candidate-models`, `feed-health`, and the judge's
-#: `scored-pairs`, `metrics` and `merge-line-holdout-scores` have: a target that
-#: walked its old folder would select nothing for ever, and on the door it is a
-#: target of the other kind.
-#:
-#: The one `content-similarity-judge` ledger still on CSV is here for the same
-#: reason: a ledger an operator cannot name is a ledger a day cannot be taken
-#: out of. What a reading is about decides where it is filed, never what
-#: executed it.
-_TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-)
+#: `scored-pairs`, `metrics`, `merge-line-holdout-scores` and `fitted-thresholds`
+#: have: a target that walked its old folder would select nothing for ever, and
+#: on the door it is a target of the other kind. No CSV ledger is left here.
+_TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = ()
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
     dict(
