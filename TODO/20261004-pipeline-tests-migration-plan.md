@@ -324,7 +324,6 @@ Table L - Rejected alternatives
   - `backend/tests/gardener/test_sparse_shard.py`
   - `backend/tests/gardener/test_period_inputs.py`
   - `backend/tests/workflows/test_pipeline_tests_workflow.py`
-  - `TODO/20261003-59-csv-ledgers-left-plan.md`
   - `docs/reference/repository-layout.md`
   - `docs/how-to/move-a-ledger-to-parquet.md`
   - `docs/architecture/contracts/ledger-registry.md`

@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -48,6 +48,10 @@ A ledger that goes through the ledger door files under two roots rather than one
 **The four builders above refuse the grain by name.** `path`, `relpath`, `tree_root` and `tree_relpath` each answer with an error that names the ledger and points at the ones that build its addresses: `raw_path`, `compact_path` and `compact_index_path`, with `raw_root` and `compact_root` for the folders a reader walks. So nothing builds a single-file address for a door ledger by accident. `ledger_families.py` counts the named files under each root on a line of its own.
 
 **No ledger files CSV.** `backend/tests/contracts/test_no_csv_ledger_is_left.py` holds three facts: no registry entry carries the `.csv` suffix, and only the three JSON day ledgers it names file outside the door; `.gitattributes` names no union merge driver; and `git ls-files` finds no CSV file under `state/`. `backend/tests/contracts/test_door_ledgers_keep_no_csv_path.py` holds each door ledger to a compaction of its own, and every declaration to folders the registry builds.
+
+This rule concerns committed row storage. Scratch CSV passed between jobs of one workflow and derived browser CSV under `frontend/public/` are not ledger storage. Their `csv_row` and `from_csv_row` codecs and browser readers still have callers.
+
+**The local faithfulness label file is not a registered ledger.** `evals/labels.py` and `utilities/label_queue.py` can append to `state/labels.csv`, but no instance is committed. [Its retention rule](../../concepts/adaptive-pruning.md) keeps it forever. Before registering or committing it, obtain a retention decision: a new door ledger's yearly expiry would shorten that rule, and the no-CSV test refuses a committed CSV instance.
 
 ### The rule a judge ledger follows
 
