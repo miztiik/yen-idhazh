@@ -1933,6 +1933,8 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
     """
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
+    if sys.platform == "win32":
+        (home / "gitconfig").write_text("[core]\n\tlongpaths = true\n", encoding="ascii")
     return {
         **{
             name: value
