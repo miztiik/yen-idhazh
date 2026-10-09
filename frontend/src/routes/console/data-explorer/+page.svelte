@@ -20,6 +20,7 @@
 	import { chooseChart, countChartNotes, type ChosenRoles, type ExplorerChartType } from '$lib/console/explorer/shape';
 	import { CHART_KINDS, MOST_ROLES, type RoleId } from '$lib/console/explorer/chart-roles';
 	import { roleRowLines, roleSlotsPerLine } from '$lib/console/explorer/role-row';
+	import { matchPresetSpan } from '$lib/console/explorer/preset-span';
 	import { describeCutDays, describeDaysRead } from '$lib/console/explorer/days-read';
 	import { gapLines } from '$lib/console/explorer/gaps';
 	import { size, statusSentence } from '$lib/console/explorer/status';
@@ -94,6 +95,7 @@
 	const chartNoteLines = $derived(config.chart_note_lines[readoutBand] ?? config.chart_note_lines[0]);
 	const roleSlots = $derived(roleSlotsPerLine(MOST_ROLES, config.role_slots_per_line)[readoutBand] ?? MOST_ROLES);
 	const roleLines = $derived(roleRowLines(MOST_ROLES, config.role_slots_per_line)[readoutBand] ?? 1);
+	const presetSpan = $derived(matchPresetSpan(fromDay, toDay, todayUtc(), presets));
 	const editorLines = $derived(config.editor_lines_shown[wide ? 1 : 0]);
 	const statusText = $derived(statusLine());
 	const statusTone = $derived(result?.state === 'unreachable' ? 'warn' : 'neutral');
@@ -374,8 +376,7 @@
 			days: windowDays,
 			statement: sql,
 			maxBytes: config.link_max_bytes,
-			from: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : fromDay,
-			end: presets.includes(spanDays()) && toDay === todayUtc() ? undefined : toDay
+			...(presetSpan === null ? { from: fromDay, end: toDay } : {})
 		});
 		history.replaceState(history.state, '', `${address.href}${location.hash}`);
 		linkNotices = [...address.notices];
@@ -408,8 +409,7 @@
 			statement: sql,
 			ledgers: selected,
 			days: windowDays,
-			from: fromDay,
-			end: toDay,
+			...(presetSpan === null ? { from: fromDay, end: toDay } : {}),
 			updatedAt: new Date(Date.now()).toISOString()
 		};
 		const kept = keepSavedQuestion(savedQuestions, next, config.saved_max);
@@ -473,7 +473,7 @@
 		running = true;
 		// What this run asks, read once as it starts: the question, the ledgers and the span may change
 		// while the answer is on its way, and the answer, the link and History all belong to what was asked.
-		const asked = { statement: sql, ledgers: [...selected], days: windowDays, span: span() };
+		const asked = { statement: sql, ledgers: [...selected], days: windowDays, span: span(), custom: presetSpan === null };
 		await replaceAddress();
 		lastRead = null;
 		const started = performance.now();
@@ -495,8 +495,7 @@
 				statement: asked.statement,
 				ledgers: asked.ledgers,
 				days: asked.days,
-				from: asked.span.from,
-				end: asked.span.to,
+				...(asked.custom ? { from: asked.span.from, end: asked.span.to } : {}),
 				rows,
 				ms: lastMs ?? Math.round(performance.now() - started),
 				askedAt: new Date(Date.now()).toISOString()
@@ -587,7 +586,7 @@
 					<div class="editor-head">
 						<label for="explorer-sql"><Icon id="query-editor" /> DuckDB SQL</label>
 						<WindowControl
-							days={windowDays}
+							days={presetSpan}
 							presets={presets}
 							busy={costing || running}
 							ready={ready}

@@ -490,39 +490,6 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
-def test_only_the_collections_this_repository_declares_union() -> None:
-    """A union merge keeps both sides, which is right for a few of these and wrong for the rest.
-
-    Every file under `state/` carried this driver until 2026-09-19. It kept two
-    attempts at one row as readily as two independent rows, and a lost push race
-    is exactly how a second attempt arrives. Each writer owns the file its run,
-    attempt, job and shard name now, so there is nothing for a merge to settle.
-
-    What is left is held against `idhazh.path_classes.UNION_SAFE`, which is this
-    repository's own list of the collections two writers may both append to. The
-    list is one hand-written set rather than two: a line added to
-    `.gitattributes` and not to the list fails here, and so does a list entry
-    with no line behind it. `frontend/public/telemetry/` is in neither - that
-    file is a full rewrite of a day's rows, so a union of two rewrites is a file
-    with every row twice, and assemble regenerates it instead.
-
-    The set is closed rather than a membership check, because what this guards is
-    the pattern nobody chose. A collection that picks up a merge rule in silence
-    has had that rule decided for it, and a new pattern arriving here without its
-    own reason should fail.
-    """
-    attributes = read_text(REPO_ROOT / ".gitattributes")
-    unioned = {
-        line.split()[0]
-        for line in attributes.splitlines()
-        if line and not line.startswith("#") and "merge=union" in line
-    }
-
-    assert unioned == {
-        entry if entry.endswith(".csv") else f"{entry}/**/*.csv" for entry in path_classes.UNION_SAFE
-    }
-
-
 def test_a_commit_that_loses_its_push_cannot_throw_away_what_the_job_already_made() -> None:
     """Run `35660521768`, asked of the workflow file.
 

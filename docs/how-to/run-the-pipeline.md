@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -162,8 +162,9 @@ python -m idhazh telemetry census --date 2026-09-15  # how that day's items ende
 python -m idhazh telemetry item ai-01 --date 2026-09-15
 ```
 
-`show` lists a CSV day tree's files for the date, a door ledger's raw files for
-that day, and the packed day or month file once a compaction has taken it.
+`show` lists a door ledger's raw files for the date, the packed day or month
+file once a compaction has taken it, and the files a day folder outside the
+door holds for that day - a trace, a run's block of the day, the day record.
 
 `census` is the fastest way in: it counts the day's items by stage, outcome and
 failure code, which is the same answer as filtering the census shard by hand.

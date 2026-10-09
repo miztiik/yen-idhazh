@@ -78,12 +78,12 @@ test('a stale build names the inputs that moved, and nothing that is not one', (
 test('canary changes invalidate the canary build independently of source changes', () => {
 	const root = fixture();
 	try {
-		const ledger = join(root, 'backend/var/canary/state/host-fingerprint/2026/09/05.csv');
-		mkdirSync(join(root, 'backend/var/canary/state/host-fingerprint/2026/09'), { recursive: true });
-		writeFileSync(ledger, 'date,value\n2026-09-05,1\n');
+		const ledger = join(root, 'backend/var/canary/state/raw/host-fingerprint/2026/09/05/fixture.jsonl');
+		mkdirSync(join(root, 'backend/var/canary/state/raw/host-fingerprint/2026/09/05'), { recursive: true });
+		writeFileSync(ledger, '{"date":"2026-09-05","value":1}\n');
 		recordBuild(root, 'canary');
 		assert.doesNotThrow(() => assertBuild(root, 'canary'));
-		writeFileSync(ledger, 'date,value\n2026-09-05,2\n');
+		writeFileSync(ledger, '{"date":"2026-09-05","value":2}\n');
 		assert.throws(() => assertBuild(root, 'canary'), /stale inputs/);
 		assert.equal(buildMode(root, {}), 'real');
 		assert.equal(buildMode(root, { STATE_ROOT: root }), 'custom');

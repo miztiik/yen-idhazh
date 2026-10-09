@@ -94,25 +94,17 @@ def test_the_facade_names_its_exports_once() -> None:
         assert hasattr(ledger, name), f"__all__ names {name} and the facade does not bind it"
 
 
-# --- the package and day_shards stay acyclic ---------------------------------
+# --- the package loads on its own ---------------------------------------------
 
 
-@pytest.mark.parametrize("first", ["idhazh.ledger", "idhazh.day_shards"])
-def test_either_module_loads_first_in_a_cold_interpreter(first: str) -> None:
-    """Both orders, each in a process that has imported nothing of ours.
+def test_the_package_loads_first_in_a_cold_interpreter() -> None:
+    """In a process that has imported nothing of ours, the facade and every module it names load.
 
-    The `day_shards` order is the load-bearing one: it forces that module's own
-    top-level import of this package against a package nobody has built yet.
-
-    **It does not replace the check above it.** Measured 2026-09-27 by promoting
-    the import on purpose: both orders still loaded, because the facade happens
-    to import `csv_file` before `rows`, so the name `day_shards` asks for is
-    already bound by the time it asks. Reorder the facade and the same promotion
-    raises. The check above is what holds the rule; this one says the package
-    loads at all.
+    A same-process import proves nothing here: this suite has already imported
+    every module by the time it runs.
     """
-    done = _fresh_interpreter(f"import {first}")
-    assert done.returncode == 0, f"importing {first} first fails:\n{done.stderr}"
+    done = _fresh_interpreter("import idhazh.ledger")
+    assert done.returncode == 0, f"importing idhazh.ledger first fails:\n{done.stderr}"
 
 
 def test_the_facade_does_not_load_pyarrow() -> None:
@@ -142,8 +134,8 @@ def test_the_facade_does_not_load_pyarrow() -> None:
 # than with the code under test is forbidden, so all five were removed:
 #
 # - test_only_path_classes_reads_the_writer_name_patterns: the writer-name
-#   patterns (`_SEGMENT_NAME`, `_SEGMENT_SUFFIX`, `_REPAIR_NAME`,
-#   `_REPAIR_STAMP` in ledger/filenames.py) are now private. Ruff's TID251
+#   patterns (`_SEGMENT_NAME` and `_SEGMENT_SUFFIX` in ledger/filenames.py)
+#   are now private. Ruff's TID251
 #   (banned-api, see pyproject.toml) flags any import of them from outside
 #   `path_classes.py` - a one-file, one-import-graph check, not a tree walk.
 #

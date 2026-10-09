@@ -103,7 +103,7 @@ rendered charts. The fourth item sorts last by time and loads after the fixture'
 initial shell.
 This tests lazy content without opening a larger real published day.
 
-The plan stage registers its raw feed-health CSV files under the `state` root
+The plan stage registers its raw feed-health files under the `state` root
 after its ledger write. It derives only its own filenames from its UTC days
 and writer identity. The canary registers its fixed feed-health files through
 the same helper. A frontend consumer selects state entries with the `feed-health/`

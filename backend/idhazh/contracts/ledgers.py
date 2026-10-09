@@ -55,8 +55,10 @@ class Grain(StrEnum):
 
     Removal condition: `docs/concepts/telemetry-intent.md` requires every tree
     under `state/` to reach one pattern. A member is deleted by the migration
-    that empties it, and the enum with the last of them. Six shapes are recorded
-    because all six are really in use right now, not because six is a design.
+    that empties it, and the enum with the last of them. Five shapes are recorded
+    because all five are really in use right now, not because five is a design.
+    No committed ledger files CSV under any of them: every one that did has
+    moved through the door.
 
     `RAW_AND_COMPACT` is that one pattern. A ledger that files this way goes
     through the door in `ledger/persist.py` and sits under the two roots,
@@ -67,7 +69,6 @@ class Grain(StrEnum):
     FLAT = "flat"
     DAY_FILE = "day"
     DAY_TREE = "tree"
-    MONTH_FILE = "month"
     STAMPED = "stamp"
     RAW_AND_COMPACT = "raw-and-compact"
 
@@ -79,7 +80,6 @@ _NEEDS_A_STEM: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: False,
     Grain.DAY_TREE: False,
-    Grain.MONTH_FILE: False,
     Grain.STAMPED: False,
     Grain.RAW_AND_COMPACT: False,
 }
@@ -87,7 +87,6 @@ _NEEDS_A_SUFFIX: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: True,
     Grain.DAY_TREE: False,
-    Grain.MONTH_FILE: True,
     Grain.STAMPED: True,
     Grain.RAW_AND_COMPACT: False,
 }
