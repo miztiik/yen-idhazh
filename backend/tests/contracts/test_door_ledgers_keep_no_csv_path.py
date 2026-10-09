@@ -27,7 +27,6 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.ledger import arrow_schema, keys
-from idhazh.ledger.paths import TRIAL_TRACES_DIRNAME
 
 pytestmark = pytest.mark.contract
 
@@ -110,6 +109,7 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
         for root in policy.state_roots
         for tier in ("raw", "compact")
     }
+    declared_trial_trace_folders = set(tasks["trials"].owns or ())
 
     stray = sorted(
         f"config/gardener/{name}.json owns {folder}"
@@ -118,10 +118,7 @@ def test_every_folder_a_declaration_owns_is_one_the_registry_builds() -> None:
         if folder.split("/")[0] == ledger.STATE_DIRNAME
         and folder not in built
         and folder not in declared_trial_folders
-        and not (
-            name == "trials"
-            and folder.startswith(f"state/{TRIAL_TRACES_DIRNAME}/")
-        )
+        and not (name == "trials" and folder in declared_trial_trace_folders)
     )
 
     assert stray == [], (

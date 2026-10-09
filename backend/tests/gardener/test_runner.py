@@ -541,7 +541,7 @@ def test_a_named_trial_root_selects_its_period_and_ignores_unconfigured_children
 ) -> None:
     """Only a configured trial root and a named date are in the pass's listing."""
     stray = (
-        "state/trial-traces/pipeline-tests/production-settings/"
+        "state/raw/traces/pipeline-tests/production-settings/"
         "2026/06/25/2026-06-25.txt"
     )
     checkout, settings = a_garden_with_the_complement(
@@ -617,9 +617,9 @@ def test_trials_owns_only_its_configured_roots(tmp_path: Path) -> None:
 
     owns = settings.tasks["trials"].owns
     assert set(owns) == {
-        "state/trial-traces/pipeline-tests/production-settings",
-        "state/trial-traces/pipeline-tests/no-visual-plan",
-        "state/trial-traces/pipeline-tests/parallel-summarization",
+        "state/raw/traces/pipeline-tests/production-settings",
+        "state/raw/traces/pipeline-tests/no-visual-plan",
+        "state/raw/traces/pipeline-tests/parallel-summarization",
     }
     sweeps = runner.owner_of("trials", settings.tasks)
     assert all(sweeps(folder) and sweeps(f"{folder}/x.csv") for folder in owns)

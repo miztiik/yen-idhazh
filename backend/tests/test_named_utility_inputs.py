@@ -176,11 +176,11 @@ def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:
     root = "fixture"
     # `gather` reads raw ledger files tier-first, from `state/raw/pipeline-tests/<root>/<ledger>/`
     # (`ledger.overlay_registry`), and traces from their own sibling root at
-    # `state/trial-traces/pipeline-tests/<root>/` (module docstring). Written-to and
+    # `state/raw/traces/pipeline-tests/<root>/` (module docstring). Written-to and
     # artifact-shaped paths differ for both cases, so both sides are tracked.
     written = (
         f"raw/{TRIAL_STATE_PREFIX}/{root}/feed-health/2026/09/01/a.parquet",
-        f"trial-traces/{TRIAL_STATE_PREFIX}/{root}/2026/09/01/a.jsonl",
+        f"raw/traces/{TRIAL_STATE_PREFIX}/{root}/2026/09/01/a.jsonl",
         f"raw/{TRIAL_STATE_PREFIX}/{root}/published/2026/09/01/a.parquet",
     )
     wanted = (

@@ -122,7 +122,7 @@ def test_a_c1_case_traces_folder_lists_each_named_day_folder(tmp_path: Path) -> 
             "lifecycle_status": "active",
             "dry_run": True,
             "max_deletes_per_run": None,
-            "owns": ["state/trial-traces/pipeline-tests/case-2026-09-20"],
+            "owns": ["state/raw/traces/pipeline-tests/case-2026-09-20"],
             "window": {"unit": "days", "value": 90},
         }
     )
@@ -135,7 +135,7 @@ def test_a_c1_case_traces_folder_lists_each_named_day_folder(tmp_path: Path) -> 
         today=date(2026, 9, 27),
     )
 
-    root = tmp_path / "state" / "trial-traces" / "pipeline-tests" / "case-2026-09-20"
+    root = tmp_path / "state" / "raw" / "traces" / "pipeline-tests" / "case-2026-09-20"
     assert root / "2026" / "09" / "20" in paths
     assert root / "2026" / "09" / "21" in paths
     assert root / "2026" / "09" / "22" in paths
