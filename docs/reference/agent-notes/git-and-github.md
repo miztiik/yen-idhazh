@@ -21,6 +21,15 @@ Checks for agents using Git and GitHub. Follow the
 - Resolve conflicts from both changes' intent. Do not take `--ours` or `--theirs` for every file without checking what it discards.
 - A documentation branch based on a feature branch can retain its old code after that feature is squash-merged. Merge current main, keep its tested code and verify that the final diff changes only the intended documents.
 
+## Local Git fixtures
+
+- Address a generated bare repository with `git --git-dir <path>`, not by
+  changing into it and relying on discovery. `safe.bareRepository=explicit`
+  refuses implicit discovery even when the test created the repository.
+  Exercise both `explicit` and `all` with subprocess-scoped settings; do not
+  change the machine's Git policy to make a test pass. Apply the explicit
+  address to tree comparisons as well as history inspection.
+
 ## The `gh` CLI
 
 - Confirm the repository and authenticated account before a write. Never print or export tokens to check an account.
