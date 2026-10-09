@@ -11,7 +11,7 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { costLabel } from '../src/lib/charts/cost';
+import { costLabel, costShapeOptions } from '../src/lib/charts/cost';
 import { extractionLabel } from '../src/lib/charts/extraction-trend';
 import { FLEET_HINT, fleetHintOne } from '../src/lib/charts/fleet';
 import { coverage, coverageSentence, noModelRuleNote } from '../src/lib/charts/frame';
@@ -33,7 +33,7 @@ import {
 	reasonsLabel,
 	unexplainedNote
 } from '../src/lib/console/doubt-reasons';
-import { matchHeadline, matchLabel, matchPoints, type EvalDay } from '../src/lib/console/eval-instruments';
+import { EVAL_PANELS, matchHeadline, matchLabel, matchPoints, matchTitle, type EvalDay } from '../src/lib/console/eval-instruments';
 import {
 	clampNote,
 	heldNote,
@@ -112,6 +112,20 @@ test('the counterfactual cost chart names the days it prices', () => {
 	expect(costLabel('running', 7)).toBe(
 		`The counterfactual cost of these 7 days, added up day by day. ${owed}`
 	);
+});
+
+test('THE ORACLE: one-day titles and cost choices name one day, while seven-day words stay unchanged', () => {
+	expect(matchTitle(1)).toBe('Summary faithfulness for this one day');
+	expect(matchTitle(7)).toBe('Summary faithfulness, day by day');
+	expect(EVAL_PANELS.find((panel) => panel.id === 'faithfulness')?.title).toBe(matchTitle(7));
+	expect(costShapeOptions(1)).toEqual([
+		{ value: 'daily', text: 'This one day' },
+		{ value: 'running', text: 'Running total' }
+	]);
+	expect(costShapeOptions(7)).toEqual([
+		{ value: 'daily', text: 'Day by day' },
+		{ value: 'running', text: 'Running total' }
+	]);
 });
 
 test('the chart-drawing verdict names the one day, since one day has no median day', () => {
