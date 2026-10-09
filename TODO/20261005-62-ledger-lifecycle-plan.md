@@ -87,7 +87,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L30 | The merge line's no-fit rule names the line a build used | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | H | DONE | fluffy-dollop | #1408 | Plan 62 row l30 |
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | DONE | probable-journey | #1414 | Plan 62 row l31 |
 | L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | DONE | cuddly-sniffle | #1409 | Plan 62 row l32 |
-| L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | DONE | ubiquitous-system | - | Plan 62 row l33 |
+| L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | DONE | ubiquitous-system | #1482 | Plan 62 row l33 |
 | L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `frontend/tests/console-window.spec.ts`), L52 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | DONE | urban-winner | #1447 | Plan 62 row l35 |
 | L36 | Hardware's one-sided line leaves out a day whose only run was refused | L28, L29 | M | DONE | psychic-goggles | #1421 | Plan 62 row l36 |
@@ -108,7 +108,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L51 | Judgement's agreement panel words follow the rates they judge | L39, L40 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | U | DONE | scaling-meme | #1463 | Plan 62 row l51 |
 | L52 | Judgement names the line each build recorded | L38, L35 (holds `frontend/tests/console-window.spec.ts`), L40 (holds `frontend/tests/console-window.spec.ts`) | V | DONE | verbose-couscous | #1469 | Plan 62 row l52 |
 | L53 | Hardware reads a machine record with no job the same way everywhere | - | W | DONE | fuzzy-doodle | #1459 | Plan 62 row l53 |
-| L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | - | Plan 62 row l54 |
+| L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | #1479 | Plan 62 row l54 |
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | PENDING | - | - | - |
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
