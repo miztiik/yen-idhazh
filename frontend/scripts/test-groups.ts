@@ -43,7 +43,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'payload-ceilings',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
-		'publication',
+		'publication', 'recorded-line',
 		'run-axis', 'run-yield',
 		'settings-moved', 'similarity-ledgers', 'span-sentences', 'span-words', 'statement', 'raw-listed-through',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',

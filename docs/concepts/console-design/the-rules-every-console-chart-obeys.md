@@ -400,11 +400,16 @@ that draws the population cannot draw the distance.
 
 **So the axis is the line and one day's legal fall, never the band.** It runs
 from two days' fall below the line to one day's fall above it. The line is the
-one the newest published day was built with. With
-`adaptive_dedup_threshold.enabled` off, that is `floor_min`. With it on, it is
-the newest line a fit applied in the days a build looks back over, or
-`floor_min` if no fit applied one
+one the newest published day was built with: the line its last build wrote into
+that day's run record. Where the record holds none - a day built before 18 Sep
+2026, or a record the site build cannot read - the rule a build follows works
+it out. With `adaptive_dedup_threshold.enabled` off, that is `floor_min`. With
+it on, it is the newest line a fit applied in the days a build looks back over,
+or `floor_min` if no fit applied one
 ([autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md#what-chose-094-measured-on-the-cosine-alone)).
+The record comes first because the nightly fit files its row after most of that
+day's builds ran, so the rule alone can name a line no build used. The merge
+line's rule and the verdict split are drawn at the same line.
 The fall cap is off `config/idhazh.json`, so the window is the same width every
 day and two days of this panel compare. The cap is not a score
 in the config: it is `max_down_bins` slots of `bin_width`, and the contract
