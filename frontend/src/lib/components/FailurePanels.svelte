@@ -43,6 +43,7 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import ChartReadout from './ChartReadout.svelte';
 	import { failureLoad, type FailurePoint, type FailureStage } from '$lib/charts/glance';
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
@@ -193,18 +194,12 @@
 	 * every point, so nothing is lost by keeping segments to two or more here.
 	 */
 	function segments(points: readonly FailurePoint[]): string[] {
-		const runs: string[][] = [];
-		let current: string[] = [];
-		points.forEach((point, index) => {
-			if (point.rate === null) {
-				if (current.length > 1) runs.push(current);
-				current = [];
-				return;
-			}
-			current.push(`${centre(index)},${rateY(point.rate)}`);
-		});
-		if (current.length > 1) runs.push(current);
-		return runs.map((run) => run.join(' '));
+		return indexedRuns(points, (point) => point.rate !== null)
+			.filter((run) => run.length > 1)
+			.map((run) => run.flatMap((index) => {
+				const rate = points[index].rate;
+				return rate === null ? [] : [`${centre(index)},${rateY(rate)}`];
+			}).join(' '));
 	}
 
 	// The base each band stacks on - the running total of the bands beneath it,

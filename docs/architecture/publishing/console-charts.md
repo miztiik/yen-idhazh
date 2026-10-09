@@ -70,6 +70,14 @@ disclosure. Do not colour a source as healthy or unhealthy without an agreed rul
 
 ## A share under the floor gets no mark
 
+Hand-written line runs split at every caller-defined gap through
+[indexedRuns](../../../frontend/src/lib/charts/indexed-runs.ts). The helper
+retains original positions and every nonempty run. Each chart owns its gap
+predicate and singleton rendering: four draw lines only for two or more
+points; stage timings also break at measured zero and keep singleton runs
+without drawing them as lines. The d3 date-series chart keeps its library's
+`line().defined()` rule.
+
 Below `console.min_attempts_for_rate`, a share is not a measurement. The chart
 draws no mark for it; the readout strip and the column's accessible name print
 the counts instead.

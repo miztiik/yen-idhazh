@@ -396,4 +396,22 @@ test.describe('calculated history is not build history', () => {
 			await expect(page.locator('.panel-note')).not.toContainText('The solid line');
 		}
 	});
+
+	test('drawn proposed lines stop at held days and leave a singleton unjoined', async ({ page }) => {
+		const days = Array.from({ length: 7 }, (_, index) => {
+			const day = fitted(`2030-06-${24 + index}`, 0.93, 0.93);
+			return index === 2 || index === 5
+				? { ...day, proposed: null, heldReason: 'sheet_too_small' as const }
+				: day;
+		});
+		await show(page, 7, days);
+		const applied = (await page.locator('[data-line-series="applied"]').getAttribute('points'))?.split(' ');
+		expect(applied).toHaveLength(7);
+		const proposed = await page.locator('[data-line-series="proposed"]').evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('points'))
+		);
+		expect(proposed).toEqual([applied?.slice(0, 2).join(' '), applied?.slice(3, 5).join(' ')]);
+		await expect(page.locator('[data-line-held-mark]')).toHaveCount(2);
+		await expect(page.locator('[data-line-day="2030-06-30"]')).toHaveCount(1);
+	});
 });

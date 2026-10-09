@@ -43,6 +43,7 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import { grouped } from '$lib/charts/series';
 	import { daysBetween, daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
@@ -321,12 +322,9 @@
 	 * neighbouring dots is one polyline, and a dot with no neighbour stands alone.
 	 * Joined across such a day, the line would draw a value there. */
 	function runsOf(points: readonly { x: number; y: number | null }[]): string[] {
-		const runs: string[][] = [[]];
-		for (const { x, y } of points) {
-			if (y === null) runs.push([]);
-			else runs[runs.length - 1].push(`${x},${y}`);
-		}
-		return runs.filter((run) => run.length > 1).map((run) => run.join(' '));
+		return indexedRuns(points, (point) => point.y !== null)
+			.filter((run) => run.length > 1)
+			.map((run) => run.map((index) => `${points[index].x},${points[index].y}`).join(' '));
 	}
 	const disagreeRuns = $derived(
 		runsOf(marks.map((mark) => ({ x: mark.x, y: mark.reading?.disagreeY ?? null })))
