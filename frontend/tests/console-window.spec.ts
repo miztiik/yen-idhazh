@@ -2010,7 +2010,7 @@ test.describe('the Judgement panels name their span in every state, on days the 
 
 	for (const width of [390, 1280]) {
 		for (const theme of ['light', 'dark']) {
-			test(`THE ORACLE L62: near-top date and mark labels stay separate at ${width}px in ${theme}`, async ({
+			test(`THE ORACLE: near-top date and mark labels stay separate at ${width}px in ${theme}`, async ({
 				page
 			}) => {
 				await page.setViewportSize({ width, height: 800 });
