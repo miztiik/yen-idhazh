@@ -20,7 +20,7 @@ import dataclasses
 
 import pytest
 
-from idhazh.contracts.collection_prune import Recovery, StopReason
+from idhazh.contracts.collection_prune import Recovery, StopReason, stop_for
 from idhazh.contracts.gardener_events import TaskOutcome
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.gardener import report
@@ -169,7 +169,11 @@ def test_no_sentence_a_task_can_be_told_says_a_member_is_gone() -> None:
 
 @pytest.mark.parametrize("fault", list(GardenerFault))
 def test_a_task_a_fault_stopped_is_told_its_fault_s_own_sentence(fault: GardenerFault) -> None:
-    word = TaskOutcome.FAILED if fault is GardenerFault.RAISED else TaskOutcome.DEFERRED
+    word = (
+        TaskOutcome.FAILED
+        if stop_for(fault) is StopReason.FAILED
+        else TaskOutcome.DEFERRED
+    )
 
     assert report.next_step(word, fault) == report.WHY[fault]
 

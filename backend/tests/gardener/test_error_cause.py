@@ -22,7 +22,7 @@ import pytest
 
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.gardener import error_cause
-from idhazh.gardener.error_cause import ErrorCause
+from idhazh.gardener.error_cause import ErrorCause, ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 
 pytestmark = pytest.mark.contract
@@ -134,6 +134,13 @@ def test_every_other_error_is_a_code_defect(error: Exception) -> None:
     assert error_cause.classify(error) is ErrorCause.RAISED
 
 
+def test_only_the_typed_named_refusal_needs_manual_action() -> None:
+    refusal = ManualActionError("the data needs a person's decision")
+
+    assert error_cause.classify(refusal) is ErrorCause.MANUAL_ACTION
+    assert error_cause.classify(ValueError(str(refusal))) is ErrorCause.RAISED
+
+
 @pytest.mark.parametrize(
     ("needed", "cause"),
     [
@@ -143,7 +150,7 @@ def test_every_other_error_is_a_code_defect(error: Exception) -> None:
     ],
 )
 def test_one_rule_decides_the_download_budget(needed: int, cause: ErrorCause) -> None:
-    """More than the whole budget is a defect a person resolves; less waits for a wake with room."""
+    """The raw aggregate error stays a defect; an explicit period refusal wraps it by name."""
     spent = OverBudgetError(needed=needed, room=100_000, budget=1_048_576)
 
     assert error_cause.classify(spent) is cause
@@ -153,6 +160,7 @@ def test_one_rule_decides_the_download_budget(needed: int, cause: ErrorCause) ->
     ("cause", "fault"),
     [
         (ErrorCause.API_UNAVAILABLE, GardenerFault.API_UNAVAILABLE),
+        (ErrorCause.MANUAL_ACTION, GardenerFault.MANUAL_ACTION),
         (ErrorCause.RAISED, GardenerFault.RAISED),
         (ErrorCause.BUDGET_SPENT, GardenerFault.RAISED),
         (ErrorCause.GONE, GardenerFault.RAISED),
@@ -160,7 +168,7 @@ def test_one_rule_decides_the_download_budget(needed: int, cause: ErrorCause) ->
     ],
     ids=lambda value: value.value,
 )
-def test_a_stop_records_api_unavailable_or_raised(
+def test_a_stop_records_the_fault_its_cause_declares(
     cause: ErrorCause, fault: GardenerFault
 ) -> None:
     """A 404 on a read is a wrong request, not a member gone, so a stop for it is a defect."""

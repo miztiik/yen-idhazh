@@ -246,8 +246,8 @@ one writer into an older day, and a compaction takes its file at the next wake
 
 | Exit | What it means | Retried |
 | --- | --- | --- |
-| 0 | every task ran and the record landed, or had already landed. A task whose row says `deferred` - GitHub's API did not answer, or a period waits for a range that starts earlier or for a person - is in this code too: it is no code defect, and its row names why. Also 0, with a warning, when nothing landed because the shard's work is out of date: `main` changed one of its paths after the commit it ran on (`stale`), or every try failed and `main` moved after the last one (`lost`) | a `stale` or `lost` shard's work is done again at the next wake, and so is a deferred task's |
-| 1 | a task failed for a code defect - its row says `failed`, with the fault `raised`, and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, which a task that chooses its periods by the budget never does, so that is a code defect too; either way the record still landed. Or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; a download over the ceiling goes on failing until a person fixes the task that passed it |
+| 0 | every task ran and the record landed, or had already landed. A task whose row says `deferred` - GitHub's API did not answer, a range starts after a ready period, or a named packed-file problem waits for repair - is in this code too: it is retryable, and its row names why. Also 0, with a warning, when nothing landed because the shard's work is out of date: `main` changed one of its paths after the commit it ran on (`stale`), or every try failed and `main` moved after the last one (`lost`) | a `stale` or `lost` shard's work is done again at the next wake, and so is a deferred task's |
+| 1 | a task failed for a code defect or a named refusal only a person can settle - its row says `failed`, with the fault `raised` or `manual-action`, and its siblings still ran - or the shard's tasks downloaded more than `max_downloaded_mb`, which a task that chooses its periods by the budget never does, so that aggregate overrun is a code defect; in each task-failure case the record still landed. Or the files under the shard's folders could not be listed, and then no task ran and nothing landed | at the next wake; `manual-action` and aggregate download overruns keep failing until a person resolves them |
 | 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, one record path with two sets of bytes, or a deletion of a file the commit did not list | never; a person fixes it |
 | 3 | `main` refused the push: every try failed, and `main` did not move after the last one (`refused`) | at the next wake |
 
@@ -350,11 +350,12 @@ the cause in `fault`, one closed word declared in
 
 | # | `fault` | `stopped_because` | What stopped the pass | What happens next |
 | --- | --- | --- | --- | --- |
-| 1 | `raised` | `failed` | A code defect: any error no other word names, including an answer from GitHub that refuses the request itself, and a period larger than the shard's whole download budget | The shard exits 1, and a person reads the log |
-| 2 | `api-unavailable` | `deferred` | GitHub's API answered 429, 5xx, or a 403 with `x-ratelimit-remaining: 0` or any `retry-after` header; or a connection failed or timed out | The next wake asks again; nothing inside a wake does |
-| 3 | `range-starts-late` | `deferred` | A range a person named starts after a period that is ready before it | The person widens the range |
-| 4 | `no-month-to-reopen` | `deferred` | A raw day sits in a month the monthly mark is past that no monthly entry names | Its files wait for a person ([ledger-compaction.md](ledger-compaction.md#a-late-file)) |
-| 5 | `packed-file-unreadable` | `deferred` | A packed day or month file a re-run or a late file would be settled into cannot be read, or is not there | A person restores the file from git history |
+| 1 | `raised` | `failed` | A code defect or unclassified failure: any error no other word names, including an ordinary forbidden answer from GitHub and the synthetic check that the shard as a whole passed its download budget | The shard exits 1, and a person reads the log |
+| 2 | `manual-action` | `failed` | One of eight recognized compaction refusals: an unclosed month inside a year; an oversized year file; an unindexed month file that disagrees with its days; a Rule R or Rule L file with the wrong envelope; an index whose ledger or period identity disagrees with its path; a raw-day-folder entry that is not a file; one period larger than the whole download budget; or an established tree with yearly expiry enabled and no yearly index | The shard exits 1; the task's error event and record call for a person's action |
+| 3 | `api-unavailable` | `deferred` | GitHub's API answered 429, 5xx, or a 403 with `x-ratelimit-remaining: 0` or any `retry-after` header; or a connection failed or timed out | The next wake asks again; nothing inside a wake does |
+| 4 | `range-starts-late` | `deferred` | A range a person named starts after a period that is ready before it | The person widens the range |
+| 5 | `no-month-to-reopen` | `deferred` | A raw day sits in a month the monthly mark is past that no monthly entry names | Its files wait for a person ([ledger-compaction.md](ledger-compaction.md#a-late-file)) |
+| 6 | `packed-file-unreadable` | `deferred` | A packed day or month file a re-run or a late file would be settled into cannot be read, or is not there | A person restores the file from git history |
 
 `recovered` lists every fault the pass recorded instead of stopping, one note for
 each period or member it took or adopted, in the order it met them:
@@ -420,9 +421,9 @@ the months a report-only monthly window names ends `dry-run` too. A report a
 task files on every pass is not work. `next` is one fixed sentence for the word, or the
 fault's own sentence when a fault stopped the task; no sentence says a member
 is gone. A `failed` task's event is an error, a `deferred` task's event is a
-warning, and every other ending is information. A period refused for a cause a
-person settles is a warning too, so an error from a task always means a code
-defect.
+warning, and every other ending is information. A refused period takes its
+level from the stop its fault produces: `failed` is an error and `deferred` is
+a warning. An error can therefore mean a code defect or a named manual action.
 
 **An exception is named by its type and where it was raised, never by its
 text.** `error` is the type, such as `ValueError`. `where` is the deepest line
@@ -503,8 +504,8 @@ summary is rendered from that event and the `task-finished` of each task that
 ran and nothing else, so it cannot say what the log does not. Top to bottom:
 
 - one heading: what the exit code means, the tasks a code defect stopped, the
-  tasks deferred, then the exit code, such as "No task failed; deferred:
-  `workflow-runs` (exit 0)";
+  tasks that need manual action, the tasks deferred, then the exit code, such
+  as "No task failed; deferred: `workflow-runs` (exit 0)";
 - where the record went, or why nothing landed: one sentence for each landing
   word and each word for a stop;
 - what the tasks downloaded against `max_downloaded_mb`, and, past it, that a
@@ -930,29 +931,40 @@ is refused by name when it loads. The gardener's row keeps its four fold
 cells, because rows written while a fold ran still carry them, and removing a
 persisted field needs a migration that buys nothing here (Fowler).
 
-**2026-10-07: only a code defect turns a run red, and every stop says why in one
-word.** A stop for a cause outside the code - GitHub's API not answering, a
-person's range that starts late, a period that waits for a person - ends
-`deferred` and leaves the shard's exit code alone; only `failed`, whose fault is
-always `raised`, asks a person for work through a red job. The word is closed,
-and the sentence a person reads is rendered from it, because a stored free-text
-reason could carry fetched text into the record and no reader can act on prose
-(the owner, decision S2 and the recovery theme, 2026-10-04). Exception text is
-never stored for the same reason (Fowler, 2026-10-04). There is no word for an
-interruption: both wrappers caught every error, so a code defect would have
-been recorded as one, ended `deferred`, and left the job green (Fowler review,
-2026-10-04). Nothing inside a wake asks GitHub again, because the next wake
-already does and nothing yet says how often its API is unavailable; how often
-`deferred` appears on the record is what would price a retry library (Fowler
-review, 2026-10-04). One function, `error_cause.classify`, reads every error a
-pass meets, in a module of its own rather than the GitHub driver, because the
-walk, the runner, the ledger prune and the compaction's download
-budget all ask it, and the walk could not import the driver that imports it
-(Fowler, 2026-10-07). A missing packed file a re-run or a late file would be
-settled into takes the word an unreadable one does, `packed-file-unreadable`,
-because a packed file its index names and the tree lacks is already treated as
-unreadable when its month or year closes, and a person fixes both the same way
-(Fowler, 2026-10-07).
+**2026-10-07: every stop says why, and retryable faults stay green.** A stop
+for a cause outside the code - GitHub's API not answering, a
+person's range that starts late, a period that can wait for repair - ends
+`deferred` and leaves the shard's exit code alone. `failed` asks a person for
+work through a red job, with `raised` for a code defect or unclassified failure
+and, since 2026-10-09, `manual-action` for one of the eight recognized
+refusals. The word is closed, and the sentence a person reads is rendered from
+it, because a stored free-text reason could carry fetched text into the record
+and no reader can act on prose (the owner, decision S2 and the recovery theme,
+2026-10-04; manual-action decision, 2026-10-09). Exception text is never stored
+for the same reason (Fowler, 2026-10-04). There is no word for an interruption:
+both wrappers catch every error, so an unclassified code failure is `raised`
+and red rather than silently deferred (Fowler review, 2026-10-04). Nothing
+inside a wake asks GitHub again, because the next wake already does and nothing
+yet says how often its API is unavailable; how often `deferred` appears on the
+record is what would price a retry library (Fowler review, 2026-10-04). One
+function, `error_cause.classify`, reads every error a pass meets, in a module of
+its own rather than the GitHub driver, because the walk, the runner, the ledger
+prune and the compaction's download budget all ask it, and the walk could not
+import the driver that imports it (Fowler, 2026-10-07). A missing packed file a
+re-run or a late file would be settled into takes the word an unreadable one
+does, `packed-file-unreadable`, because a packed file its index names and the
+tree lacks is already treated as unreadable when its month or year closes, and
+a person fixes both the same way (Fowler, 2026-10-07).
+
+**2026-10-09: a known manual refusal is red without being called a defect.**
+Only `ManualActionError` produces `manual-action`; arbitrary `ValueError`,
+input/output errors, malformed current payloads, missing read-side migrations
+and unnamed failures remain `raised`. `stop_for` names every fault explicitly,
+and a refused period's event level comes from that stop, so both failed faults
+are errors and every deferred fault is a warning. A period larger than the
+whole download budget is manual action at its named refusal site. The
+after-the-run aggregate budget check remains `raised`, because it means a task
+bypassed that site (owner approval and Fowler review, 2026-10-09).
 
 **2026-10-07: every line a task logs is one event, and nothing beside it says
 the same thing in prose.** JSON lines, so a program and a person read one line

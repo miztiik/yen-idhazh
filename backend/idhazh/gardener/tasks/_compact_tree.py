@@ -51,9 +51,9 @@ gives the longest run of a step's periods, oldest first, whose fetch fits what
 is left of it, read off the listing's own sizes, and `fetch` fetches that run
 in one download. The first period that does not fit stops the step
 (`stop_over_budget`), as `error_cause` reads the budget: `ceiling` when a later
-wake has room for it, `failed` by name, fault `raised`, when the period alone
-is larger than the whole budget, which only a person can raise. Either way the
-pass logs one `DownloadOverBudget` event with the bytes and the budget.
+wake has room for it, `failed` by name, fault `manual-action`, when the period
+alone is larger than the whole budget, which only a person can raise. Either
+way the pass logs one `DownloadOverBudget` event with the bytes and the budget.
 
 **A period a step will not take is said once, by name** (`refuse`): one
 `PeriodRefused` event with the step, the record's fault word, the ledger's own
@@ -134,8 +134,9 @@ class Stop:
     because: StopReason
     #: The day, month or year the next pass takes first.
     resume_from: str
-    #: Why a fault stopped the step: `raised` beside `failed`, every other word
-    #: beside `deferred`. None for a stop at the cap or the budget.
+    #: Why a fault stopped the step: `raised` or `manual-action` beside
+    #: `failed`, every other word beside `deferred`. None for a stop at the cap
+    #: or the budget.
     fault: GardenerFault | None = None
 
 
@@ -164,17 +165,20 @@ def stop_over_budget(which: LedgerName, covers: str, spent: OverBudgetError) -> 
     `spent.needed` is what fetching the period alone downloads, and
     `spent.budget` the shard's whole budget, both in bytes. `error_cause`
     decides by its one rule: `ceiling` when a later wake, with its whole budget,
-    has room for the period; `failed`, fault `raised`, when the period alone is
-    larger than the whole budget, because no wake could ever take it and only a
-    person can raise `max_downloaded_mb`. The event is an error then, and
-    information otherwise.
+    has room for the period; `failed`, fault `manual-action`, when the period
+    alone is larger than the whole budget, because no wake could ever take it
+    and only a person can raise `max_downloaded_mb`. The event is an error then,
+    and information otherwise.
     """
     failed = error_cause.classify(spent) is ErrorCause.RAISED
-    stop = (
-        Stop(StopReason.FAILED, covers, GardenerFault.RAISED)
-        if failed
-        else Stop(StopReason.CEILING, covers)
-    )
+    if failed:
+        refusal = error_cause.ManualActionError(
+            "one period is larger than the whole download budget"
+        )
+        fault = error_cause.fault_of(error_cause.classify(refusal))
+        stop = Stop(stop_for(fault), covers, fault)
+    else:
+        stop = Stop(StopReason.CEILING, covers)
     event_log.emit(
         DownloadOverBudget(
             ledger=which,
@@ -435,12 +439,12 @@ class CompactTree:
         than `most` readable files gives the oldest `most`, the order settling
         relies on, and the rest wait in its folder: the next wake takes them as
         it takes a re-run. An entry of the folder that is not a file at all is
-        refused with `ValueError`, because there is no file to move aside.
+        refused for manual action, because there is no file to move aside.
         """
         folder = ledger.read_day_folder(self.state_dir, self.ledger, day)
         for path, _why in folder.unreadable:
             if not path.is_file():
-                raise ValueError(
+                raise error_cause.ManualActionError(
                     f"{path.name} in the raw folder of {day} is not a file, so it cannot be "
                     "moved aside"
                 )
@@ -543,32 +547,40 @@ class CompactTree:
         step: CompactionStep,
         period: str,
         *,
-        fault: GardenerFault = GardenerFault.RAISED,
+        fault: GardenerFault | None = None,
         ledger_fault: LedgerFault | None = None,
-        failure: BaseException | None = None,
+        failure: Exception | None = None,
     ) -> Stop:
         """A period `step` will not take, said once by name, and the stop it ends the step with.
 
-        `fault` is the record's word: `raised`, a defect, unless the caller names
-        a cause outside the code, which defers the pass instead. `ledger_fault`
-        is the ledger's own word when a file is missing, and `failure` the
-        exception that refused the period, named by its type and place only.
-        Its mark stays below the period either way.
+        `fault` is the record's word when the caller already knows it. Otherwise
+        `failure` is classified by type, and a missing failure is a defect.
+        `ledger_fault` is the ledger's own word when a file is missing. The
+        exception is named by type and place only. Its mark stays below the
+        period either way.
         """
+        resolved = (
+            fault
+            if fault is not None
+            else GardenerFault.RAISED
+            if failure is None
+            else error_cause.fault_of(error_cause.classify(failure))
+        )
+        stopped = stop_for(resolved)
         error, where = event_log.cause_of(failure)
         event_log.emit(
             PeriodRefused(
                 ledger=self.ledger,
                 step=step,
                 period=period,
-                fault=fault,
+                fault=resolved,
                 ledger_fault=ledger_fault,
                 error=error,
                 where=where,
             ),
-            level=logging.ERROR if fault is GardenerFault.RAISED else logging.WARNING,
+            level=logging.ERROR if stopped is StopReason.FAILED else logging.WARNING,
         )
-        return Stop(stop_for(fault), period, fault)
+        return Stop(stopped, period, resolved)
 
     def entries_now(self) -> Entries:
         """Each index as the pass holds it at this moment, kept apart from what follows."""

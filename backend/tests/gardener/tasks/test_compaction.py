@@ -230,6 +230,36 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
     assert outcome.stopped_because is StopReason.EXHAUSTED and disjoint(outcome)
 
 
+def test_a_raw_day_folder_entry_that_is_not_a_file_needs_manual_action(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """There is no file to move aside, so the day and every ledger file stay unchanged."""
+    root = tmp_path / "checkout"
+    for period in (Period.DAILY, Period.MONTHLY, Period.YEARLY):
+        an_index(root, period, [])
+    filed(root, a_pass("2026-09-20"))
+    nested = state(root) / "raw" / VISUALS.value / "2026" / "09" / "20" / "sub"
+    nested.mkdir()
+    (nested / "stray.txt").write_text("stray\n", encoding="ascii")
+    before = files_under(root)
+
+    with caplog.at_level(logging.ERROR):
+        outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
+
+    assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
+        StopReason.FAILED,
+        "2026-09-20",
+        GardenerFault.MANUAL_ACTION,
+    )
+    refused = the_event(caplog.records, PeriodRefused)
+    assert (refused.step, refused.error) == (
+        CompactionStep.PACK_DAYS,
+        "ManualActionError",
+    )
+    assert files_under(root) == before
+    assert disjoint(outcome)
+
+
 def test_a_first_pass_starts_at_its_oldest_raw_day_and_a_quiet_day_has_no_file(
     tmp_path: Path,
 ) -> None:
