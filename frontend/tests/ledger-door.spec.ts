@@ -1300,6 +1300,9 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 			expect(browser.result).toEqual([one.answer, one.answer, one.reach]);
 			expect(browser.warned).toHaveLength(1);
 			expect(browser.warned[0].startsWith(`[ledger] ${one.fault} ${LEDGER} state/${one.names}: `), browser.warned[0]).toBe(true);
+			if (one.fault === 'not-packed') {
+				expect(browser.warned[0]).toBe(`[ledger] not-packed host-fingerprint state/compact/host-fingerprint/index/daily.json: This record is not packed yet.`);
+			}
 
 			const root = fixtureTreeWithout(...one.without);
 			try {

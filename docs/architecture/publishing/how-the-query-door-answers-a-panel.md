@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -46,7 +46,7 @@ of four nothings without inspecting an error:
 | --- | --- | --- |
 | 1 | `ok`, with the rows | At least one row matched. The rows are what the files hold, sorted by the requested columns left to right; the door never merges two rows, because the compaction already wrote one row per record |
 | 2 | `quiet` | Every day asked for is covered and nothing matched, or the whole span lies after the newest day compacted or before the ledger began. A filter that matches nothing is `quiet`, never an empty `ok` |
-| 3 | `missing` | The ledger has no `daily.json`: it is not published, or it is published and not packed yet ([what the site holds](#what-the-site-holds-for-the-door)). Its fault is `not-packed` |
+| 3 | `missing` | The ledger has no `daily.json`: it is not packed yet ([what the site holds](#what-the-site-holds-for-the-door)). A panel reads only published ledgers. Its fault is `not-packed` |
 | 4 | `unreachable`, at a day | The first day the door could not answer, and the console says why. A file the ledger should hold and does not is named as one of four faults ([below](#when-a-file-is-missing)); the other causes are a named file that arrived at the wrong length or could not be fetched, an index this build will not act on, and an engine that could not run the query |
 
 `ok` and `quiet` carry `first`, the first day the answer covers: the span's own
@@ -196,7 +196,7 @@ it learns where a record's rows stop when none of them is in the window:
 | --- | --- | --- |
 | 1 | `ok`, with `first`, `through` and `lastRows` | `through` is the newest day any index names, a month counting through its last UTC day and a year through 31 December: the same day a slice returns. `first` is the oldest day any index names, a month counting from its first day and a year from its 1 January. `lastRows` is the newest period whose file holds rows - a day, a month or a year, as the index names it, a day before a month before a year - or `null` when no entry holds a row. Its `fault` is `index-missing` when there is no `monthly.json` or no `yearly.json`, and `first`, `through` and `lastRows` are then what the indexes that are there name |
 | 2 | `quiet` | No index names a day yet |
-| 3 | `missing` | There is no `daily.json`: the ledger is not published, or it is published and not packed yet. Its fault is `not-packed` |
+| 3 | `missing` | There is no `daily.json`: the ledger is not packed yet. A panel reads only published ledgers. Its fault is `not-packed` |
 | 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
 
 It reads all three indexes at the same time through the page's keeper, so a slice
@@ -225,7 +225,8 @@ and this is what each one draws:
 | 4 | `day-missing` | A day between the oldest and the newest packed day that no index names | `unreachable` at that day | Unchanged |
 
 **Each fault prints one console line**, in one shape - the fault, the ledger,
-the committed path, what is wrong and what fixes it:
+the committed path and what is wrong. A remedy follows only when the fault
+identifies one:
 
 ```text
 [ledger] file-missing summary-quality-evals state/compact/summary-quality-evals/daily/2026/09/12.parquet: daily.json names it; it is not there. Reload; if it stays, re-pack that day.
@@ -298,8 +299,12 @@ staged tree.
   `state/compact/<ledger>/`, stages nothing for that ledger and prints one line
   in the build log that names it. The door then finds no `daily.json` and
   answers `missing`: the route's note says the record is not packed yet, and
-  the Data explorer says the ledger has no days on this site yet. A compact
-  folder deleted by accident reads the same way, and that log line and the
+  the Data explorer's status, answer and chart say the ledger is not packed
+  yet through `explorerMissingSentence`. Its publication membership comes
+  from `ledger.published`; a ledger outside that list still says it is not
+  on this site. The browser-console fault says "This record is not packed
+  yet.", without a publication remedy or a promise about the next upkeep.
+  A compact folder deleted by accident reads the same way, and that log line and the
   bundle gate's report, which names the ledger, are the only signs of it.
 - **A published ledger with some of its indexes but not all three stops the
   build**, which names the ledger and each missing index. A browser asks for a

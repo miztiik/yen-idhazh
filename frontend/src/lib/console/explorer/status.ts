@@ -2,6 +2,7 @@ import { megabytes } from '$lib/assist/session';
 import type { FetchCost } from '$lib/data/ledger';
 import { daysBetween } from '$lib/data/slice';
 import { plural as countNoun, shortDate } from '$lib/format';
+import { explorerMissingSentence } from '$lib/console/waiting';
 
 export type ExplorerStatusState =
 	| 'idle'
@@ -28,6 +29,7 @@ export type ExplorerStatusInput = {
 	ms?: number | null;
 	read?: FetchCost | null;
 	ledger?: string;
+	published?: boolean;
 	through?: string;
 	linkNotices?: readonly string[];
 	notice?: string | null;
@@ -66,7 +68,7 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
-			return `Did not run. ${input.ledger ?? 'This ledger'} is not on this site yet.`;
+			return `Did not run. ${explorerMissingSentence(input.ledger ?? 'This ledger', input.published ?? false, false)}`;
 		case 'unreachable-engine':
 			return 'Did not run. The query engine did not start.';
 		case 'unreachable-files':
