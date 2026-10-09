@@ -126,6 +126,7 @@ from idhazh.gardener.outcome import (
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.site_weight import BYTES_PER_MB
+from utilities.publish_to_repo import PushOutcome, publish
 
 #: The one identity every commit in this repository carries. The same two values
 #: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
@@ -466,71 +467,6 @@ def _what_staging_missed(shard: Shard, checkout: Checkout, index: Path) -> str |
         if checkout.remote_blob(path) is not None:
             return f"{path} was deleted, did not stage, and {REMOTE}/{BRANCH} still holds it"
     return None
-
-
-@dataclass(frozen=True, slots=True)
-class PushOutcome:
-    """What one shard's push loop came to: its exit code, and how the commit came to rest.
-
-    `landing` is None when the loop refused the shard itself - a folder named as
-    a file, a record two runs claimed, or a staging check that failed - and then
-    it names no try. `stale_paths` are the paths main changed after the shard's
-    commit, sorted, and only a `stale` landing names them.
-    """
-
-    exit_code: int
-    landing: ShardLanding | None = None
-    push_try: int | None = None
-    stale_paths: tuple[str, ...] = ()
-
-
-def publish(
-    shard: Shard,
-    *,
-    attempts: int,
-    repo: Path,
-    say: Callable[[str], None] = print,
-) -> PushOutcome:
-    """Land this shard on main, trying again on a newer tip, `attempts` times at most.
-
-    It hands back how the commit came to rest, as its word from `ShardLanding`
-    and the try it came to rest on, and says only the refusals no landing word
-    names. The shard's `shard-published` event says the rest once.
-    """
-    refused = _refuse_a_directory(shard, repo)
-    if refused is not None:
-        say(f"shard {shard.index}: {refused}")
-        return PushOutcome(exit_code=EXIT_INTEGRITY)
-    checkout = Checkout(repo)
-    written, deleted = sorted(shard.written_paths), sorted(shard.deleted_paths)
-    compared = sorted((shard.written_paths | shard.deleted_paths) - {shard.record_path})
-    base = ""
-    for attempt in range(1, attempts + 1):
-        base = checkout.fetch()
-        landed = checkout.remote_blob(shard.record_path)
-        if landed is not None:
-            if landed == checkout.local_blob(shard.record_path):
-                return PushOutcome(EXIT_OK, ShardLanding.ALREADY_ON_MAIN, attempt)
-            say(
-                f"shard {shard.index}: {shard.record_path} is on {BRANCH} with other bytes, "
-                "so two runs claimed one record"
-            )
-            return PushOutcome(exit_code=EXIT_INTEGRITY)
-        stale = checkout.changed_on_main(compared)
-        if stale:
-            return PushOutcome(EXIT_OK, ShardLanding.STALE, attempt, tuple(stale))
-        index = checkout.stage(written, deleted)
-        missed = _what_staging_missed(shard, checkout, index)
-        if missed is not None:
-            say(f"shard {shard.index}: {missed}")
-            return PushOutcome(exit_code=EXIT_INTEGRITY)
-        if checkout.push(checkout.commit(index, shard.message)):
-            return PushOutcome(EXIT_OK, ShardLanding.LANDED, attempt)
-        if attempt < attempts:
-            sleep_with_jitter(attempt)
-    if checkout.fetch() != base:
-        return PushOutcome(EXIT_OK, ShardLanding.LOST, attempts)
-    return PushOutcome(EXIT_PUSH_REFUSED, ShardLanding.REFUSED, attempts)
 
 
 def read_the_listing(
