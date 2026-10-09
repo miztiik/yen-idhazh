@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-09
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -66,7 +66,8 @@ Every candidate stage must read its scratch config, including planning and verdi
 writing, so it cannot alter production's seen records or published data.
 Prompts are shipped code, never dispatch text, paths or overrides.
 
-Validation writes verdicts under `state/pipeline-tests/`. Measurements commits
+Validation writes verdicts under `state/raw/pipeline-tests/` (tier-first,
+compacted under `state/compact/pipeline-tests/`). Measurements commits
 only the `runtime` job's host record there; other measurement outputs are artifacts.
 Keep write permissions on the jobs that need them. Do not treat expiring artifacts
 as durable records; their retention is declared by each upload step.
@@ -79,8 +80,10 @@ runners finish after a failure. The report must fail for an enabled case with no
 summary or with an item outside the plan. This tests execution, not model quality
 or comparative speed across different runner machines.
 
-Give each case its own state root at `state/pipeline-tests/<case>` to prevent
-filename collisions. The case slug is separate from the shared
+Give each case its own trial root named `<case>` to prevent filename
+collisions - ledgers land tier-first at `state/raw/pipeline-tests/<case>/` and
+`state/compact/pipeline-tests/<case>/`, traces at
+`state/trial-traces/pipeline-tests/<case>/`. The case slug is separate from the shared
 `run.trial_state_dirname` root. Only the commit job has write permission; validate
 downloaded rows and config-derived paths before staging them. Gather only the plan's
 named UTC day from each declared ledger, not a trial root's accumulated history.

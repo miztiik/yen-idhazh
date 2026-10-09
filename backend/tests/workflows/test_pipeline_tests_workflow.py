@@ -862,7 +862,16 @@ def test_the_gather_verb_prints_nothing_a_step_could_mistake_for_output(
     test_case = _settings().test_cases[0]
     state = tmp_path / "state"
     if wrote:
-        _a_downloaded_tree(state / TRIAL_STATE, test_case=test_case.id)
+        with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, test_case.id))):
+            trace = traces.committed_trace_path(
+                state,
+                run_id=TEST_CASE_RUN_ID,
+                attempt=TEST_CASE_ATTEMPT,
+                job=TEST_CASE_JOB_KIND,
+                shard=TEST_CASE_SHARD,
+            )
+        trace.parent.mkdir(parents=True, exist_ok=True)
+        trace.write_text('{"kind":"span","name":"item","duration_ms":1}\n', encoding="utf-8")
     else:
         state.mkdir(parents=True)
 
@@ -916,7 +925,7 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
 
     assert len(staged) == 2 * len(test_cases), "a traces root and a raw root for every case"
     for test_case in test_cases:
-        assert (state / TRIAL_STATE / test_case.id).is_dir()
+        assert (state / ledger.paths.TRIAL_TRACES_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
         assert (state / ledger.paths.RAW_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
     with ledger.use_registry(
         ledger.overlay_registry((TRIAL_STATE_PREFIX, test_cases[0].id))
