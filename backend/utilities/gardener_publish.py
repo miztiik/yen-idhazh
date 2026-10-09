@@ -133,7 +133,7 @@ from utilities.publish_to_repo import publish as publish_request
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 #: The one identity every commit in this repository carries. The same two values
-#: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
+#: `backend/utilities/publication_git.py` sets, which a test holds in step.
 COMMITTER_NAME: Final = "miztiik"
 COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 

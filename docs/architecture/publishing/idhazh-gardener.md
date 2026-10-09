@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -127,7 +127,7 @@ flowchart TB
     RUN["for each task in the shard:<br/>select from names, fetch<br/>what it reads, report, delete"]
     OWNED{"every path a task<br/>wrote or deleted inside<br/>that task's owns?"}
     OUTSIDE["exit 2<br/>the ownership<br/>claim is wrong"]
-    LANDED{"this shard's record<br/>already on origin/main?"}
+    LANDED{"all exact shard operations<br/>already on origin/main?"}
     STALE{"main changed one of<br/>the shard's paths after<br/>the commit it ran on?"}
     STALEW["stale: a warning,<br/>nothing lands"]
     REAPPLY["an index of its own from<br/>origin/main: the same writes<br/>set, the same deletions out"]
@@ -535,8 +535,9 @@ none: it never runs as a step on GitHub.
 
 ## Landing the commit
 
-`backend/utilities/gardener_publish.py` is the only code that pushes. It is the
-entry point a shard runs: it reads the commit the checkout is at, calls the
+`backend/utilities/gardener_publish.py` owns shard orchestration, not a push loop.
+It calls the shared `backend/utilities/publish_to_repo.py` with independent
+task permissions and exact completed operations. It reads the checkout commit, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
 shard's live tasks wrote and deleted, every report any of its
 tasks filed, and the commit message. Each attempt fetches `main` and builds the
@@ -554,14 +555,15 @@ and tries again on the new tip. No wait follows the last attempt. A deletion of
 a file the commit did not list lands nothing, and the shard exits 2: a task
 decided it from something other than the commit.
 
-**The record decides whether the shard already landed.** Its bytes are unique to
-the shard, so `main` holding that path with those bytes means an earlier attempt
-landed and this one stops with 0; the same path with other bytes is exit 2.
+**Every exact operation decides whether the shard already landed.** A matching
+record alone is insufficient: all confirmed write blobs/modes and all completed
+deletions must match main. The private index is invocation-specific; no foreign
+pre-staged change is read. Filtered/indexed bytes must match the SHA256 evidence.
 
 **A shard whose paths `main` changed lands nothing.** After each fetch the
 publisher compares the commit the shard ran on with `main`, over every path the
-shard writes or deletes but its record, with `git diff-tree -r --no-renames
---name-only`, in groups below Windows' command-line limit. A path it lists is one
+shard writes or deletes, including its record, by exact mode/object entries,
+in groups below Windows' command-line limit. A changed entry is one
 `main` changed after the shard's commit, so the shard's version of it is older
 than `main`'s. A re-run is the usual cause: it checks out its run's commit again,
 after later runs have landed, and it names its record afresh, so the record check
@@ -1036,7 +1038,7 @@ The part comes first because no later wake can undo it, and on a dry run
 
 - [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md) - every knob, and every refusal the loader makes.
 - [ledger-compaction.md](ledger-compaction.md) - how a ledger's daily, monthly and yearly files are packed and dropped.
-- [committing.md](committing.md) - how every other job commits, and why the gardener stages its own files.
+- [committing.md](committing.md) - the shared private-index publisher and each caller's policy.
 - [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - the gardener's ledger, and what one of its rows holds.
 - [../contracts/ledger-registry.md](../contracts/ledger-registry.md) - the grain that ledger files at, and the builders that refuse it.
 - [../contracts/persistence.md](../contracts/persistence.md) - the two roots a compaction writes under, and how a ledger is read back from every kind of file.

@@ -146,7 +146,14 @@ The shapes, and where each one lives once written:
 
 ### A new row ledger ships with its header, not with its first run
 
-`backend/utilities/commit_and_push.py` stages every path a job owns in one `git add`. A path that is not in the checkout makes that call fail, and the program then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. A CSV ledger with no first row therefore shipped as a header-only file. No state ledger needs one now: the feed retirements and the similarity holdout marks were the last two, and both moved under `state/raw/`, where each writer creates its own file and the step that commits it stages `state` whole.
+The shared publisher stages only confirmed completed files, never a directory.
+An absent raw folder is not an operation or an error. A failed producer's
+completed output is kept separately from its failure status, so one missing
+ledger cannot suppress another completed ledger. No header-only state ledger
+is needed. `PublicationReceipt`, version `2026-10-09`, is the simple invocation
+evidence contract: existing `WriterIdentity` and `writes: relative-path -> SHA256`.
+Its fixture roundtrips canonically with LF. It grants no permissions and is not
+a committed publication/audit ledger.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
