@@ -17,9 +17,10 @@ a connection that failed.
 - **409 or 422, `NOT_DELETABLE`.** On a delete, GitHub will not delete the
   member: the pass records its id as `not-deletable`, counts it against the
   ceiling, and goes on.
-- **429, any 5xx, `URLError`, `TimeoutError` or `ConnectionError`,
-  `API_UNAVAILABLE`.** The pass ends `deferred` with the fault
-  `api-unavailable`, and the next wake asks again.
+- **A 403 with `x-ratelimit-remaining: 0` or `retry-after`, 429, any 5xx,
+  `URLError`, `TimeoutError` or `ConnectionError`, `API_UNAVAILABLE`.** The
+  pass ends `deferred` with the fault `api-unavailable`, and the next wake asks
+  again.
 - **`OverBudgetError` no larger than the whole budget, `BUDGET_SPENT`.** A
   compaction step stops at `ceiling` for a wake with room.
 - **`OverBudgetError` larger than the whole budget, `RAISED`.** No wake could
@@ -32,10 +33,12 @@ a connection that failed.
 says the request was wrong, not that a member went, so a stop for any cause but
 `API_UNAVAILABLE` records the fault `raised` (`fault_of`).
 
-**The answer is read from the error's type and status code alone, never from
-its text.** An error's text can carry what the pass read, and the record keeps
-none of it (Guardrail #11). Nothing inside a wake asks again: the next wake
-already does, and nothing yet says how often GitHub's API is unavailable.
+**The answer is read from the error's type, status code and the response header
+interface, never from its text.** Header names are case-insensitive, and only
+the two closed temporary-refusal signals above are read. An error's text can
+carry what the pass read, and the record keeps none of it (Guardrail #11).
+Nothing inside a wake asks again: the next wake already does, and nothing yet
+says how often GitHub's API is unavailable.
 """
 
 from __future__ import annotations
@@ -63,6 +66,17 @@ NOT_DELETABLE_STATUSES: Final = frozenset(
 #: The answer that says too many requests were sent: the API is there, and busy.
 RATE_LIMITED: Final = HTTPStatus.TOO_MANY_REQUESTS
 
+#: GitHub's response header stating how many requests remain in the current
+#: rate-limit window. This is a protocol name and cannot vary by deployment.
+RATE_LIMIT_REMAINING_HEADER: Final = "x-ratelimit-remaining"
+
+#: HTTP's response header stating that a refusal is temporary. This is a
+#: protocol name and cannot vary by deployment.
+RETRY_AFTER_HEADER: Final = "retry-after"
+
+#: GitHub's literal response value for an exhausted rate-limit window.
+NO_REQUESTS_REMAINING: Final = "0"
+
 #: Every status code from this one up to `SERVER_ERRORS_END`, exclusive, is a
 #: server error: GitHub's side failed, not the request.
 SERVER_ERRORS_START: Final = HTTPStatus.INTERNAL_SERVER_ERROR
@@ -85,13 +99,23 @@ class ErrorCause(StrEnum):
     RAISED = "raised"
 
 
+def _forbidden_is_api_unavailable(error: urllib.error.HTTPError) -> bool:
+    """Whether a 403's case-insensitive headers say the API is temporarily unavailable."""
+    return error.code == HTTPStatus.FORBIDDEN and (
+        error.headers.get(RATE_LIMIT_REMAINING_HEADER) == NO_REQUESTS_REMAINING
+        or error.headers.get(RETRY_AFTER_HEADER) is not None
+    )
+
+
 def classify(error: Exception) -> ErrorCause:
-    """What this error means to the pass that met it, from its type and status code alone."""
+    """What this error means, from its type, status and closed response-header signals."""
     if isinstance(error, urllib.error.HTTPError):
         if error.code in GONE_STATUSES:
             return ErrorCause.GONE
         if error.code in NOT_DELETABLE_STATUSES:
             return ErrorCause.NOT_DELETABLE
+        if _forbidden_is_api_unavailable(error):
+            return ErrorCause.API_UNAVAILABLE
         if error.code == RATE_LIMITED or SERVER_ERRORS_START <= error.code < SERVER_ERRORS_END:
             return ErrorCause.API_UNAVAILABLE
         return ErrorCause.RAISED
