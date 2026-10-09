@@ -217,7 +217,7 @@
 
 <Panel
 	title="Where the merge line sits"
-	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. ${windowDays === 1 ? 'The shaded band is as far as the line was allowed to fall that day.' : 'The shaded band at each day is as far as the line was allowed to fall in one day.'}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip across the plot is where the ${markedApart.count} pairs a person marked as two stories sit: they score ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}, the strip is the part of that inside this plot, and a line inside it merges one of them.`}`}
+	note={`${windowDays === 1 ? 'The applied reading is the score two stories had to reach that day to be read as one story. The proposed reading is what the evidence asked for. The shaded band is as far as the applied reading was allowed to fall that day.' : 'The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. The shaded band at each day is as far as the line was allowed to fall in one day.'}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip across the plot is where the ${markedApart.count} pairs a person marked as two stories sit: they score ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}, the strip is the part of that inside this plot, and ${windowDays === 1 ? 'an applied reading' : 'a line'} inside it merges one of them.`}`}
 >
 	<div
 		data-windowed="merge-line"

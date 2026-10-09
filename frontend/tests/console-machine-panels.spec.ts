@@ -561,6 +561,18 @@ test.describe('the machine record names which state it is in', () => {
 });
 
 test.describe('which machines ran our jobs, day by day', () => {
+	test('THE ORACLE: the platform title names one day, while seven-day words stay unchanged', async ({ page }) => {
+		await page.goto('/console/machine/');
+		for (const preset of [1, 7]) {
+			await page.locator(`[data-window-preset="${preset}"] input`).waitFor({ state: 'attached' });
+			await expect(page.locator(`[data-window-preset="${preset}"] input`)).toBeEnabled();
+			await page.locator(`[data-window-preset="${preset}"]`).click();
+			await expect(page.locator('[data-console-panel-id="platform-mix"] .panel-title')).toHaveText(
+				preset === 1 ? 'Which machines ran our jobs for this one day' : 'Which machines ran our jobs, day by day'
+			);
+		}
+	});
+
 	async function openFleet(page: Page): Promise<void> {
 		await page.goto('/console/machine/');
 		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');

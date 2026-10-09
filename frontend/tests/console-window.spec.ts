@@ -5,6 +5,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
+import { build } from 'esbuild';
+import { compile, preprocess } from 'svelte/compiler';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import svelteConfig from '../svelte.config.js';
 import {
 	daysInWindow,
 	monthsInWindow,
@@ -30,6 +34,12 @@ import { memoryHeld } from '../src/lib/console/machine/memory-held';
 import type { JudgeDay, LineDay } from '../src/lib/console/merge-line';
 import { shortDate } from '../src/lib/format';
 import { telemetryRow } from './support/telemetry-row';
+
+declare global {
+	interface Window {
+		oneDayWords: { draw: (name: string, props: Record<string, unknown>) => void };
+	}
+}
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -2337,6 +2347,8 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	}) => {
 		// Reading 0.50 and writing 0.30: the smaller half is 37.5 percent of the column.
 		await draw(page, 'CounterfactualCostPanel', costProps(1, [runWork(JUDGED_THROUGH, 1_000_000, 200_000)]));
+		await expect(page.locator('[data-shape-option="daily"]')).toHaveText('This one day');
+		await expect(page.locator('[data-shape-option="running"]')).toHaveText('Running total');
 		expect(await said(page, '[data-cost-measured]')).toBe(
 			'The smaller half measures 37.5 percent of the column, so both halves draw as bands rather than as a printed figure.'
 		);
@@ -2364,6 +2376,8 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			'CounterfactualCostPanel',
 			costProps(7, [runWork('2030-06-10', 1_000_000, 200_000), runWork(JUDGED_THROUGH, 2_000_000, 500_000)])
 		);
+		await expect(page.locator('[data-shape-option="daily"]')).toHaveText('Day by day');
+		await expect(page.locator('[data-shape-option="running"]')).toHaveText('Running total');
 		expect(await said(page, '[data-cost-measured]')).toBe(
 			'The smaller half of the busiest day measures 17.1 percent of the tallest column, so both halves draw as bands rather than as a printed figure.'
 		);
@@ -2580,9 +2594,26 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			'The merge line for this one day, on the whole range a fitted line may take'
 		);
 		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
-			`${LINE_NOTE} The shaded band is as far as the line was allowed to fall that day.`
+			'The applied reading is the score two stories had to reach that day to be read as one story. The proposed reading is what the evidence asked for. The shaded band is as far as the applied reading was allowed to fall that day.'
 		);
 		expect(await stripOf(page, 'merge-line')).toEqual({ heading: '15 Jun', hint: null });
+	});
+
+	test('THE ORACLE: the merge note names a reading inside the tinted strip at one day, without changing seven-day words', async ({ page }) => {
+		for (const preset of [1, 7]) {
+			await draw(page, 'MergeLinePlot', {
+				...lineProps(preset, [JUDGED_THROUGH]),
+				markedApart: { low: 0.94, high: 0.95, count: 3 }
+			});
+			expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
+				(preset === 1
+					? 'The applied reading is the score two stories had to reach that day to be read as one story. The proposed reading is what the evidence asked for. The shaded band is as far as the applied reading was allowed to fall that day.'
+					: `${LINE_NOTE} The shaded band at each day is as far as the line was allowed to fall in one day.`) +
+				(preset === 1
+					? ' The tinted strip across the plot is where the 3 pairs a person marked as two stories sit: they score 0.9400 to 0.9500, the strip is the part of that inside this plot, and an applied reading inside it merges one of them.'
+					: ' The tinted strip across the plot is where the 3 pairs a person marked as two stories sit: they score 0.9400 to 0.9500, the strip is the part of that inside this plot, and a line inside it merges one of them.')
+			);
+		}
 	});
 
 	test('the merge line is a day over seven days, with a band at each day', async ({ page }) => {
@@ -2598,6 +2629,212 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			hint: DEFAULT_KEYS
 		});
 	});
+
+		/** Mount the real record surfaces on generated inputs, with their real keyboard actions. */
+		test.describe('remaining one-day words and keys on generated records', () => {
+			let browserCode: string;
+
+			test.beforeAll(async () => {
+				const kit: {
+					paths: { base: string; assets?: string; relative?: boolean };
+					appDir?: string;
+				} = svelteConfig.kit;
+				const result = await build({
+					stdin: {
+						contents: `
+							import { mount } from 'svelte';
+							import Voices from './src/routes/console/voices/+page.svelte';
+							import ProcessorLost from './src/lib/console/machine/ProcessorLostPanel.svelte';
+							import StageTimings from './src/lib/components/StageTimings.svelte';
+							const components = { Voices, ProcessorLost, StageTimings };
+							export function draw(name, props) {
+								mount(components[name], { target: document.querySelector('main'), props });
+							}`,
+						resolveDir: process.cwd()
+					},
+					bundle: true,
+					write: false,
+					format: 'iife',
+					globalName: 'oneDayWords',
+					conditions: ['browser'],
+					define: {
+						__SVELTEKIT_PATHS_BASE__: JSON.stringify(kit.paths?.base ?? ''),
+						__SVELTEKIT_PATHS_ASSETS__: JSON.stringify(kit.paths?.assets ?? ''),
+						__SVELTEKIT_APP_DIR__: JSON.stringify(kit.appDir ?? '_app'),
+						__SVELTEKIT_PATHS_RELATIVE__: JSON.stringify(kit.paths?.relative ?? true)
+					},
+					alias: {
+						$lib: resolve('src/lib'),
+						'$app/paths': resolve('node_modules/@sveltejs/kit/src/runtime/app/paths/internal/server.js')
+					},
+					plugins: [{
+						name: 'real-svelte-components',
+						setup(bundler) {
+							bundler.onLoad({ filter: /\.svelte$/ }, async ({ path }) => {
+								const pre = await preprocess(readFileSync(path, 'utf8'), vitePreprocess(), { filename: path });
+								return {
+									contents: compile(pre.code, { filename: path, generate: 'client', css: 'injected' }).js.code,
+									resolveDir: resolve(path, '..')
+								};
+							});
+						}
+					}]
+				});
+				browserCode = result.outputFiles[0].text;
+			});
+
+			async function drawRecord(page: Page, name: string, props: Record<string, unknown>) {
+				await page.route('**/l34-generated-records', (route) => route.fulfill({
+					contentType: 'text/html',
+					body: '<!doctype html><html><body><main></main></body></html>'
+				}));
+				await page.goto('/l34-generated-records');
+				await page.addScriptTag({ content: browserCode });
+				await page.evaluate(({ name, props }) => window.oneDayWords.draw(name, props), { name, props });
+			}
+
+			function voiceData(preset: number, recordedDates: string[]) {
+				const feedDates = windowDates(preset);
+				const squares = recordedDates.map((date) => ({ date, state: 'nothing', label: `${shortDate(date)}: it decided nothing that day.` }));
+				return {
+					ui: { site_title: 'Generated records' },
+					console: { default_window_days: preset, window_presets: [1, 7], today_anchor: 'right', min_attempts_for_rate: 5, source_rows: 10 },
+					windowDay: JUDGED_THROUGH,
+					chart: CHART,
+					carries: { voices: '' },
+					recordNotes: {},
+					standing: null,
+					sourceHealth: null,
+					sourceCutsByWindow: [{ days: preset, articles: 0, measured: false, cost: null }],
+					feedDates,
+					feedRecord: { runs: 0 },
+					quarantineAfter: 5,
+					feedsHidden: 0,
+					feeds: ['feed-a', 'feed-b'].map((feedId) => ({
+						feedId, resting: false, streak: 0, failures: 0,
+						marks: { empty: true, track: 1, band: 'unknown' },
+						days: feedDates.map((date) => ({ date, outcome: 'answered', label: `${shortDate(date)}: answered.` }))
+					})),
+					retiring: {
+						dates: recordedDates, dwellDays: 14, autoRetire: false,
+						alarmPoint: 0.5, clear: 0, hidden: 0,
+						rows: [{
+							sourceId: 'source-a', title: 'source-a', squares, share: 0.5,
+							daysUnder: 0, daysLeft: null, retiresOn: null, retired: false,
+							marks: { empty: true, track: 1, band: 'unknown' }, readout: 'Nothing was decided.'
+						}],
+						completeDates: recordedDates.length, minCompleteDays: 14, minDecisions: 10,
+						unjudgedHidden: 0,
+						unjudged: ['source-b'].map((sourceId) => ({
+							sourceId, title: sourceId, squares, readout: 'Nothing was decided.'
+						}))
+					}
+				};
+			}
+
+			for (const preset of [1, 7]) {
+				test(`THE ORACLE: feed words at ${preset} day(s) preserve real feed navigation`, async ({ page }) => {
+					await drawRecord(page, 'Voices', { data: voiceData(preset, windowDates(7)) });
+					const group = page.locator('[data-windowed="feed-outcomes"]');
+					const strip = page.locator('[data-readout="feed-outcomes"] [data-readout-subject]');
+					await expect(group).toHaveAttribute('aria-label', preset === 1
+						? "Every feed's reading for this one day, one square per feed. Arrow keys move between feeds. Escape returns to the first feed."
+						: "Every feed's days, one square a day. Arrow keys read a square, Escape returns to the first feed's newest day.");
+					await expect(strip).toHaveText(preset === 1 ? 'feed-a, 15 Jun 2030, this one day' : 'feed-a, 15 Jun 2030, its newest day');
+					await expect(page.locator('[data-readout-hint="feed-outcomes"]')).toHaveText(preset === 1
+						? 'Point at a square to read it. Arrow keys move between feeds. Escape returns to the first feed.'
+						: "Point at a square to read it. Left and Right step through a feed's days, Up and Down move between feeds, Escape returns to rest.");
+					await group.focus();
+					await group.press('ArrowDown');
+					await group.press('ArrowDown');
+					await expect(strip).toHaveText(preset === 1 ? 'feed-b, 15 Jun 2030' : 'feed-b, 9 Jun 2030');
+					await group.press('Escape');
+					await expect(strip).toContainText(preset === 1 ? ', this one day' : ', its newest day');
+					if (preset === 1) {
+						await group.press('ArrowRight');
+						await group.press('ArrowRight');
+						await expect(strip).toHaveText('feed-b, 15 Jun 2030');
+					}
+				});
+
+				for (const recordDays of [1, 7]) {
+					test(`THE ORACLE: source words use their own ${recordDays}-day record at the ${preset}-day window`, async ({ page }) => {
+						await drawRecord(page, 'Voices', { data: voiceData(preset, windowDates(recordDays)) });
+						const group = page.locator('[data-retiring="table"]');
+						const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+						await expect(group).toHaveAttribute('aria-label', recordDays === 1
+							? "Every source's reading for the one recorded day, one square per source. Arrow keys move between sources. Escape returns to the first source."
+							: "Every source's days, one square a day. Arrow keys read a square, Escape returns to the first source's newest day.");
+						await expect(strip).toHaveText(recordDays === 1 ? 'source-a, 15 Jun 2030, its one recorded day' : 'source-a, 15 Jun 2030, its newest day');
+						await expect(page.locator('[data-readout-hint="source-yield"]')).toHaveText(recordDays === 1
+							? 'Point at a square to read it. Arrow keys move between sources. Escape returns to the first source.'
+							: "Point at a square to read it. Left and Right step through a source's days, Up and Down move between sources, Escape returns to rest.");
+						await group.focus();
+						await group.press('ArrowDown');
+						await group.press('ArrowDown');
+						await expect(strip).toHaveText(recordDays === 1 ? 'source-b, 15 Jun 2030' : 'source-b, 9 Jun 2030');
+						await group.press('Escape');
+						await expect(strip).toContainText(recordDays === 1 ? ', its one recorded day' : ', its newest day');
+					});
+				}
+			}
+
+			for (const state of ['quiet', 'named', 'no-day'] as const) {
+				test(`THE ORACLE: one-day processor tiles say where keys go when ${state}`, async ({ page }) => {
+					const tile = { key: JUDGED_THROUGH, label: '15 Jun 2030', short: '15', state: 'quiet', worstPct: 0, says: 'under 1%', from: 2, outOf: 2 };
+					const days = state === 'no-day' ? [] : [tile];
+					await drawRecord(page, 'ProcessorLost', {
+						span: { days, from: days.length * 2, outOf: days.length * 2, named: state === 'named' ? tile : null, daysRecording: days.length },
+						run: { runId: '2030-06-14-1', date: '2030-06-14', from: 4, outOf: 4,
+							shards: [0, 1].map((shard) => ({ ...tile, key: String(shard), label: `Part ${shard}`, short: String(shard) })) },
+						days: 1, windowDays: 1, markedAt: 1, namedAt: 5, readoutMaxShare: 1
+					});
+					const group = page.locator('.grains');
+					const strip = page.locator('[data-readout="processor-lost"] [data-readout-subject]');
+					await expect(group).toHaveAttribute('aria-label', state === 'no-day'
+						? 'The share of the processor lost, one tile per part of the newest run. There is no tile for this one day. Arrow keys move between tiles. Escape returns to the first tile.'
+						: "The share of the processor lost, one tile for this one day and one per part of the newest run. Arrow keys move between tiles. Escape returns to the day's tile.");
+					await expect(strip).toHaveText(state === 'no-day' ? 'Part 0, the first tile' : '15 Jun 2030, this one day');
+					await expect(page.locator('[data-readout-hint="processor-lost"]')).toHaveText(state === 'no-day'
+						? 'Point at a tile to read it. Arrow keys move between tiles. Escape returns to the first tile.'
+						: "Point at a tile to read it. Arrow keys move between tiles. Escape returns to the day's tile.");
+					await group.focus();
+					await group.press('End');
+					await expect(strip).toHaveText('Part 1');
+					await group.press('ArrowLeft');
+					await expect(strip).toHaveText('Part 0');
+					await group.press('Escape');
+					await expect(strip).toHaveText(state === 'no-day' ? 'Part 0, the first tile' : '15 Jun 2030, this one day');
+				});
+			}
+
+			test('THE ORACLE: seven-day processor words remain unchanged', async ({ page }) => {
+				const tile = { key: JUDGED_THROUGH, label: '15 Jun 2030', short: '15', state: 'quiet', worstPct: 0, says: 'under 1%', from: 2, outOf: 2 };
+				await drawRecord(page, 'ProcessorLost', {
+					span: { days: [tile], from: 2, outOf: 2, named: null, daysRecording: 1 },
+					run: { runId: null, date: null, from: 0, outOf: 0, shards: [] },
+					days: 7, windowDays: 7, markedAt: 1, namedAt: 5, readoutMaxShare: 1
+				});
+				await expect(page.locator('.grains')).toHaveAttribute('aria-label', 'The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest.');
+				await expect(page.locator('[data-readout="processor-lost"] [data-readout-subject]')).toHaveText('15 Jun 2030, the newest day');
+				await expect(page.locator('[data-readout-hint="processor-lost"]')).toHaveText('Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest.');
+			});
+
+			test('THE ORACLE: the stage note names the items within one day and keeps seven-day words', async ({ page }) => {
+				for (const preset of [1, 7]) {
+					const timing = { ms: 100, timed: 2 };
+					await drawRecord(page, 'StageTimings', {
+						days: windowDates(preset).map((date) => ({ date, items: 2, fetch: timing, extract: timing, summarize: timing })),
+						span: windowOfDays(JUDGED_THROUGH, preset, 'right'), ...DRAWN_AT
+					});
+					await expect(page.locator('h2 + p')).toHaveText(
+						(preset === 1 ? 'Median time per item for this one day.' : 'Median per item, each day.') +
+						' Each gridline is ten times the one below, so the same slowdown looks the same at 40 ms and at 100 s.' +
+						(preset === 1 ? ' Nothing changed about how the summaries are written inside this one day.' : ' Nothing changed about how the summaries are written inside these 7 days.')
+					);
+				}
+			});
+		});
 
 	/** The record panel's props around the days a case builds, at one window. */
 	function gatesProps(preset: number, days: JudgeDay[]): Record<string, unknown> {
