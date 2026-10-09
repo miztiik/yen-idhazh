@@ -46,6 +46,12 @@
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
     "explorer_chart_min_rows": 4,
+    "explorer_chart_note_lines": [
+      3,
+      3,
+      2,
+      2
+    ],
     "explorer_chrome": "console",
     "explorer_counter_from_share": 1.0,
     "explorer_editor_lines_shown": [

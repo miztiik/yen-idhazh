@@ -72,12 +72,13 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 17 | The date chart leaves out a row whose day is NULL and says how many it left out | 16 | O | DONE | musical-umbrella | #1341 | Explorer chart skips a null day |
 | 18 | The Data explorer's panel pictures pass again at every width and theme | 12 | P | DONE | urban-goggles | - | Explorer captures fit again |
 | 19 | The reader chooses the chart and the columns it draws | 10 | Q | DONE | p55r19 | #1449 | p55-row19-worker |
-| 20 | The explorer draws Side by side, Which days and Flow | 19; plan 52 row 2 | R | BLOCKED | - | - | - |
+| 20 | The explorer draws Side by side, Which days and Flow | 19, 26; plan 52 row 2 | R | BLOCKED | - | - | - |
 | 21 | The site build checks that each published file carries its contract's columns | - | Q | DONE | p55r21 | #1390 | p55-row21-worker |
 | 22 | The page keeps a copy of each ledger's columns, and a question may name one that no file in its span has | 21 | R | DESCOPED | - | - | - |
 | 23 | The column rail reads the copy, and the query engine starts on the first Run | 19, 22 | S | DESCOPED | - | - | - |
 | 24 | The page reads each index once before a run, and the ledger list raises no accessibility warning | 10 | Q | DONE | p55fix1 | #1435 | executing owner |
 | 25 | The panel pictures open the tab that holds each Data explorer panel | 10 | Q | DONE | p55fix2 | #1453 | executing owner |
+| 26 | The chart keeps its room: the foot reserves only the notes an answer can give, and a short window scrolls the page | 19 | Q | DONE | upgraded-lamp | #1475 | executing owner |
 | 27 | Ctrl+Enter runs a question only when Run could, and History keeps the question each run asked | 4 | Q | DONE | p55fix3 | #1461 | executing owner |
 | 28 | A day tile marks only its preset ending today, and saved questions and runs keep dates only for custom spans | 6 | Q | DONE | upgraded-lamp | #1472 | executing owner |
 
@@ -1574,6 +1575,8 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 29 | **A line an open list scrolls to, or gives focus to, stops clear of the filter** (`scroll-padding`), so focus is never hidden under the filter that stays at the list's head | Row 19's worker, 2026-10-08 |
   | 30 | **A choice tile's word starts at the start of its cell, not in its centre, in every caller.** The hidden weight-600 copy already holds the tile's width, but a centred word still moved its start by half the difference when its weight changed: under 3 px with the Windows face, which a browser reports as no shift, and about 4 px with the Linux face CI draws, which it reports. An unchecked word now leaves that difference after itself, at most a few pixels | Row 19's worker, 2026-10-08 |
 
+- **Made obsolete by row 26:** Jony's E6 row (the foot reserves `explorer_readout_lines[band]` lines on every answer) and decision 20 (the plot is floored at `console.chart_height`, and a shorter box scrolls inside). Decision 19 stands: D3, D4 and D5 stand in the foot.
+
 - **Not in this row:** The three new chart kinds from A2, saved or shared chart choices, a new chart type, a generator for chart roles, a split role on Over time (`One line for each`), `Before and after` (`paired`), and a lower explorer floor for Paired and Spread. The priced items wait for a real question that needs them.
 
 ---
@@ -1841,6 +1844,57 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 1 | **A test shows a panel behind a tab by pressing its tab, found by `aria-controls`**, as a reader would, never by a route's name or a tab's words | Executing owner, 2026-10-08 |
 
 - **Not in this row:** `frontend/tests/panel-sufficiency.spec.ts` presses the Chart tab by its name for `data-explorer-shape` in three places. It moves to `showPanel()` once row 19 (#1449), which edits that file, has merged.
+
+---
+
+### Row #26 - The chart keeps its room: the foot reserves only the notes an answer can give, and a short window scrolls the page
+
+- **Scope:** found while reviewing row 19 (#1449) on 2026-10-08. From 1024 px the window sets the Chart tab's height, and row 19 gives the drawing what is left after the strip, the role row and a foot that reserves `console.explorer_readout_lines[band]` lines on every answer. Most answers give no note, so the foot is an empty band: at 1024 x 768 the drawing gets 102 px and the reader sees the main figure and the top 40 px of the plot, and at 1440 x 900 the plot's x axis is cut off above an empty 70 px foot. The plot keeps its 220 px floor (`console.chart_height`) and the drawing scrolls inside a page that does not, which breaks row 12's decision 3: "each half keeps the minimum its parts need, and a window too short for both makes the page scroll; nothing is clipped". Jony ruled two changes on 2026-10-08. **The foot reserves room only for the notes the answer can give** (his A6). **The result region keeps the minimum its parts need** (his G3), so a window too short for the whole chart scrolls the page, and the drawing never scrolls a plot.
+- **Specification:**
+
+  1. **k is the number of notes the answer can give**: D3, D4 and D5 of row 19's Table D, under any chart and any column its roles can take. It is counted when an answer arrives, from the answer's columns, rows and cap, with the same tests `chartNotes` uses, and never from the reader's choices. D3 counts when, for some column the `Date` role can take, the page's own `Lines` would leave a number column out as too flat to draw. D4 counts when some column the `Date` role can take holds a row with no day. D5 counts when the answer is capped. k may count a note that never shows, which leaves an empty line; it never counts too few, because with k = 0 the foot has no height. The reader's choices decide only whether a note's text shows.
+  2. **The foot's height** is k x `console.explorer_chart_note_lines[band]` x `--leading-sm` + 2 x `--space-1` when k > 0, and 0, with no padding, when k = 0. A longer note scrolls inside the foot. D3, D4 and D5 stay in the foot, in `chartNotes` order (row 19's decision 19); R4 holds.
+  3. **The knob** `console.explorer_chart_note_lines` is the lines one note reserves, one value for each band, narrow to wide, cut at `frame.breakpoints_px`. Default `[2, 2, 1, 1]`: below 1024 px a note can wrap and the page scrolls; from 1024 px one sentence fits one line. Each value is at least 1. `console.explorer_readout_lines` is again the status bar's knob only.
+  4. **Through a run** the foot keeps the last answer's k, with no text, while the run is busy and when it ends refused, missing, unreachable or failed. Before the first answer k is 0. A quiet answer is an answer, and its k is 0. So a Run moves the drawing's bottom edge at most once, when an answer with another k arrives.
+  5. **The result region's floor**, `--result-floor`, is the strip's height + the role row's height + the drawing's floor, each from its own band formula. The drawing's floor is one main-figure line + `--space-3` + `--idle-height` (`console.chart_height`) + the readout's room + one comparison line + `--space-3`. The readout's room is the tallest readout under a plot, the date chart's: `--space-3` + `--space-1` + `--space-2` + three readout lines, each `--text-xs` on the 1.5 line it inherits, 78 px (decision 8). The main figure and the comparison each take a line-height token, so their lines are known before they are drawn. Each formula is written once, as a custom property that the page and `ShapePanel.svelte` both read.
+  6. **From 1024 px** the workbench's rows are `minmax(max-content, 1fr) minmax(var(--result-floor), 1fr)`, and the region keeps `min-block-size: 0`. **Below 1024 px** the result region is `max(100svh, var(--result-floor))` tall.
+  7. **The plot's floor** is `console.chart_height` less the foot's height, so the plot and the foot together are never shorter than `console.chart_height`, and at the region's floor the drawing holds its figure, plot, readout and comparison without scrolling. The plot is the svg's box, edge included; the readout under it is not the plot (decision 8). A ranked list longer than its box still scrolls inside the drawing, as before: it is a list, not a plot drawn at the box's height. A readout longer than its room - many series on a narrow window, or a hint on two lines below 640 px - scrolls inside the drawing too, and the plot does not give way.
+  8. The region's floor follows the band and the pointer only, never the tab, the chart, the columns or the answer (R2).
+
+- **What a reader sees change:** On most answers the Chart tab has no empty band under the drawing, and the whole chart shows. At 1440 x 900 every chart is drawn whole with no scroll of any kind: the region stands at its floor, 457 px, and the Over time plot is 220 px tall with no note, 191 px with one and 150 px with three; Paired and Spread, whose readout is 22 px shorter, draw 22 px taller. The question half there is 321 px tall, 8 px more than it needs. On a window shorter than about 890 to 950 px from 1024 px wide - 950 px at 1024 px wide, 890 px at 1440 px - which is most laptop windows, the page scrolls to show the whole chart, instead of the drawing scrolling inside a page that does not: at 1024 x 768 the page scrolls about 183 px, and nothing scrolls inside the drawing. These figures are computed from readings of the base build and the formula (decision 8); the pull request records the readings of the built row. A note under the chart stays in sight.
+- **Files touched:**
+  - `frontend/src/lib/console/explorer/shape.ts` (the count k, beside `chartNotes`)
+  - `frontend/src/lib/console/explorer/ShapePanel.svelte` (the foot's height, the plot's floor, and the comments at its top and over `.chart-foot`)
+  - `frontend/src/routes/console/data-explorer/+page.svelte` (k through a run, the knob's value for the band, `--result-floor` and the workbench's rows)
+  - `config/appearance.json`, `backend/idhazh/contracts/knobs/console.py`, `frontend/src/lib/server/config.ts`, `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
+  - `frontend/tests/console-data-explorer-shape.spec.ts`, `frontend/tests/console-data-explorer-still.spec.ts`, `frontend/tests/console-data-explorer-window.spec.ts`
+  - `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md`, `docs/concepts/config/appearance.md`
+  - this plan: row 19's section gains a line, and row 20's Reckoner line depends on row 26
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected checks, at least `console-data-explorer-shape.spec.ts`, `console-data-explorer-still.spec.ts`, `console-data-explorer-window.spec.ts` and `console-data-explorer.spec.ts`; `pytest backend/tests/test_appearance_config.py backend/tests/contracts/test_app_config.py`; `python backend/utilities/doc_load.py` on the two docs before and after; the CLAUDE.md section 12 browser check for `/console/data-explorer/` at 390, 768 and 1440 px in light and dark, and at 1024 x 768, with zero new console errors and zero new 404s. CI runs the full suite.
+- **Checks:**
+  - A unit check in `console-data-explorer-shape.spec.ts` asserts k with literal answers: an answer with no note gives 0; a flat number column gives 1; a null day gives 1; a capped answer gives 1; all three give 3; and a flat column that shows only under a second date column still counts.
+  - I1: at 390 x 844, 768 x 1024, 1024 x 768 and 1440 x 900, the result region is at least `--result-floor` tall, computed from the page's own tokens. With an answer that can give k notes, `[data-chart-foot]` is as tall as rule 2. With one that can give none, the drawing box's bottom equals the Chart panel's bottom within 0.5 px. The drawing box of a plotted chart does not scroll, and the plot's height (the svg's box) plus the foot's is at least `console.chart_height`. At 1440 x 900 the page does not scroll. At 1024 x 768 the region is exactly `--result-floor` tall, and the page's last scroll position shows the comparison.
+  - I3 also runs with an answer that gives a note. On Ranked, where D3 and D4 do not show, the foot keeps their lines empty.
+  - I4 gains a step: pick a `Date` column with a null day, then one with none, and uncheck a line while D3 shows. The foot's box equals its first reading within 0.5 px, and only its text changes.
+  - I6: across Runs of the same answer, and through a busy and a failed run, the drawing box and the foot equal their first reading within 0.5 px.
+  - I5 and I15 do not change.
+  - The window spec: at 1440 x 900 and 1920 x 1080 the page does not scroll, as row 12 asks. At 1024 x 768, where the window is shorter than the workbench's floor, the page scrolls by exactly that difference, and a wide answer still does not stretch the page.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **The foot reserves room only for the notes the answer can give**, k x `console.explorer_chart_note_lines[band]` lines, and none when it can give none (A6) | Jony, 2026-10-08 |
+  | 2 | **k depends only on the answer**, and may count too many but never too few; the reader's choices decide only whether a note's text shows | Jony, 2026-10-08 |
+  | 3 | **Through a busy or failed run the foot keeps the last answer's k**, with no text (B6) | Jony, 2026-10-08 |
+  | 4 | **The result region keeps the minimum its parts need, so a short window scrolls the page and never the drawing** (G3). It restores row 12's decision 3, keeps the owner's rulings of 2026-10-05 and 2026-10-06, and replaces row 19's decision 20 | Jony, 2026-10-08 |
+  | 5 | **The plot and the foot share `console.chart_height`**: the plot's floor is that height less the foot's | Jony, 2026-10-08 |
+  | 6 | **A ranked list longer than its box still scrolls inside the drawing.** "The drawing does not scroll" binds a plot drawn at the box's height, and a ranked list is a list | Executing owner, 2026-10-08 |
+  | 7 | **The window spec's no-scroll check at 1024 x 768 asked more than row 12's own check**, which names 1440 x 900 and 1920 x 1080. At 1024 x 768 the page scrolls by the floor's excess (decision 4) | Executing owner, 2026-10-08 |
+  | 8 | **The floor reserves the chart's readout, and the plot is the svg** (K4). Every plotted chart draws a readout under its svg - 78 px for the date chart, 56 px for Paired and Spread - and rule 5 as first written left it out, so a plot at its floor still scrolled inside the drawing: about 80 px at 1024 x 768 and 70 px at 1440 x 900. The drawing's floor reserves the date chart's readout, and the svg's box, edge included, and the foot share `console.chart_height`. Sharing that height between the svg and its readout instead was rejected: it is a second, lower plot height for the same charts, the G2 this row leaves out | Jony, 2026-10-08 |
+  | 9 | **The result region's top rule is an inset shadow, not a border**, so the region's box is exactly its rows: a 1 px border took 1 px from the floor, and the drawing scrolled by it. Row 19's decision 21 did the same for the strip | Jony, 2026-10-08 |
+  | 10 | **The window spec's check that the drawing scrolls under a still strip draws a ranked list of thirty rows**, which still scrolls inside the drawing (decision 6), because at 1024 x 768 a plotted chart no longer does. Every assertion in it is unchanged | Row 26's worker, 2026-10-08 |
+
+- **Not in this row:** a lower plot floor for the explorer alone (Jony's G2: a second floor for the same charts, and laptop windows would still need the page to scroll), moving the main figure or the comparison (G4: it breaks chart rule 7 or R4, and gains about 33 px of the 100 px needed), and setting the readout's text on the `--text-xs` line pair, which would make its line a token but changes every console chart's readout (Jony's P4).
 
 ---
 

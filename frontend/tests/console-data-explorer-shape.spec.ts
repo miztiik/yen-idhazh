@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
 
-import { chartNotes, chooseChart, chooseDateSeriesDays, openingType, resolveRoles, type ChosenRoles, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
+import { chartNotes, chooseChart, chooseDateSeriesDays, countChartNotes, openingType, resolveRoles, type ChosenRoles, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import { AT_MOST_SENTENCE, CHART_KINDS, MOST_ROLES, SERIES_TOKENS, chartKind, pillFace, pillName, roleOptions } from '../src/lib/console/explorer/chart-roles';
 import { roleRowLines, roleSlotsPerLine } from '../src/lib/console/explorer/role-row';
 import { tooFewSentence } from '../src/lib/console/waiting';
@@ -750,6 +750,36 @@ test('T4: every sentence for a pick that cannot draw is Susan\'s, word for word,
 	expect(pillName(chartKind('dateSeries').roles[0], [], [])).toBe('Date: None');
 	expect(pillFace(roleOptions(chartKind('pairedScatter').roles[2], []), [''])).toEqual({ name: 'Row number', more: '' });
 	expect(chartNotes({ kind: 'none', code: 'no-number', reason: '' }, bounds, true, 1000), 'a box that draws nothing has no notes').toEqual([]);
+});
+
+test('the foot keeps room for each note the answer can give, counted from the answer alone', () => {
+	const dated: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }];
+	const level: Row[] = [{ day: '2026-08-17', a: '100', b: '90' }, { day: '2026-08-18', a: '80', b: '70' }];
+	expect(countChartNotes(dated, level, bounds, false), 'an answer with no note').toBe(0);
+	expect(countChartNotes(dated, [], bounds, false), 'a quiet answer').toBe(0);
+	expect(countChartNotes(dated, [{ day: '2026-08-17', a: '100', b: '1' }, { day: '2026-08-18', a: '80', b: '2' }], bounds, false), 'a flat number column').toBe(1);
+	expect(countChartNotes(dated, [...level, { day: null, a: '60', b: '50' }], bounds, false), 'a null day').toBe(1);
+	expect(countChartNotes(dated, level, bounds, true), 'a capped answer').toBe(1);
+	expect(countChartNotes(dated, [{ day: '2026-08-17', a: '100', b: '1' }, { day: null, a: '80', b: '2' }], bounds, true), 'all three').toBe(3);
+	expect(countChartNotes([{ name: 'name', type: 'VARCHAR' }, { name: 'a', type: 'INTEGER' }], [{ name: 'x', a: '1' }, { name: null, a: '0' }], bounds, false), 'no date column, so no flat line and no missing day').toBe(0);
+	// Every row has a day under `first`, the date column Over time opens on, so that chart shows no
+	// note. Under `second` only the rows where `b` is small have a day, so there `b` would draw flat
+	// and a row is left out: the answer can give both notes, and the reader's pick decides only
+	// which of them show.
+	const twoDates: Column[] = [{ name: 'first', type: 'DATE' }, { name: 'second', type: 'DATE' }, { name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }];
+	const shifted: Row[] = [
+		{ first: '2026-08-17', second: null, a: '100', b: '90' },
+		{ first: '2026-08-18', second: '2026-08-18', a: '100', b: '1' },
+		{ first: '2026-08-19', second: '2026-08-19', a: '90', b: '1' },
+		{ first: '2026-08-20', second: '2026-08-20', a: '95', b: '2' }
+	];
+	const notesUnder = (date: string) => chartNotes(chooseChart(twoDates, shifted, bounds, 'dateSeries', { dateSeries: { date: [date] } }).shape, bounds, false, 1000);
+	expect(notesUnder('first'), 'Over time on the first date column shows a note').toEqual([]);
+	expect(notesUnder('second')).toEqual([
+		'"b" is left out: it is under 5% of "a", so it would draw flat.',
+		'1 row holds null in the column "second", so the chart does not draw it. It is in the table.'
+	]);
+	expect(countChartNotes(twoDates, shifted, bounds, false), 'the flat column under the second date column was not counted').toBe(2);
 });
 
 test('every role word fits the eight characters a pill gives it, and the role table holds three roles at most', () => {

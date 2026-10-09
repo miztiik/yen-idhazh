@@ -610,6 +610,14 @@ class ConsoleConfig(Model):
             "smaller of this and the most roles any chart the explorer draws has."
         ),
     )
+    explorer_chart_note_lines: tuple[int, int, int, int] = Field(
+        default=(2, 2, 1, 1),
+        description=(
+            "Lines one note under the Data explorer's chart reserves, for the four "
+            "frame breakpoint bands from narrowest to widest. The foot reserves them "
+            "for each note the answer can give, and no room when it can give none."
+        ),
+    )
     explorer_notice_ms: int = Field(
         default=6000,
         ge=0,
@@ -892,6 +900,8 @@ class ConsoleConfig(Model):
             raise ValueError("console.explorer_readout_lines must hold four positive values")
         if any(slots < 1 for slots in self.explorer_role_slots_per_line):
             raise ValueError("console.explorer_role_slots_per_line must hold four positive values")
+        if any(lines < 1 for lines in self.explorer_chart_note_lines):
+            raise ValueError("console.explorer_chart_note_lines must hold four positive values")
         if any(lines < 1 for lines in self.explorer_editor_lines_shown):
             raise ValueError("console.explorer_editor_lines_shown must hold two positive values")
         if (
