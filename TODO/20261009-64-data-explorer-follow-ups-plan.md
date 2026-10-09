@@ -9,7 +9,7 @@
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Give each verified open finding from the delivered Data explorer a row that can settle it. |
-| Hard scope - in | Remeasure extraction before changing its dependency ceiling; make the corpus-history tests independent of implicit bare-repository discovery; measure browser range reads from the committed archive; make choosing an example undoable. |
+| Hard scope - in | Remeasure extraction before changing its dependency ceiling; make the corpus-history tests independent of implicit bare-repository discovery; measure browser range reads from the committed archive; make choosing an example or saved question undoable. |
 | Hard scope - out | See the table below. |
 | ESCALATE triggers | 1. Changing the trust boundary, contamination meaning, a persisted contract or the model requires owner approval before implementation.<br>2. A measurement cannot settle its question: report what is missing and the smallest measurement that would settle it; do not treat an unmeasured path as passing.<br>3. A proposed archive change needs another host, content-policy origin or publication mechanism: ask the owner.<br>4. A row overlaps an active row's named files: hold that row or agree a release point before editing. |
 | Chosen strategy | Keep verified defects separate from measurements. Retain current production behavior until a measurement supports a change. This closure carries findings, not approval to weaken their controls. |
@@ -19,7 +19,7 @@
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
-| The raw-HTML search exclusion for the console | The client-only explorer still receives the common fallback document. | The owner's ruling on PR #1474, owned by plan 62's row titled "Every console route asks search engines to leave it out". |
+| Search-engine requirements for the console | The client-only explorer keeps the common fallback; exclusion from search results is not guaranteed. | A new owner request; the current [delivery rule](../docs/architecture/publishing/data-explorer-state.md#design-rationale) requires no crawler-specific document. |
 | Wider console migrations and new chart types | Existing purpose-built panels keep their current readers; the explorer keeps its delivered charts. | Their owning plans and a separately approved outcome. |
 | Changing production Git configuration or rewriting history | Test fixes cannot repair a separately misconfigured production runner. | A demonstrated production failure and owner approval for the required operation. |
 
@@ -94,7 +94,7 @@
 
 ## 5. Row #4 - Choosing an example is one undoable edit
 
-- **Scope:** Make choosing an example replace the SQL and its selected ledgers and span as one edit that Undo can restore, without running the question.
+- **Scope:** Make choosing an example or saved question replace the SQL and its selected ledgers and span as one edit that Undo can restore, without running the question.
 - **Files touched:**
   - `frontend/src/lib/console/explorer/QueryEditor.svelte`
   - `frontend/src/routes/console/data-explorer/+page.svelte`
@@ -102,12 +102,12 @@
   - `docs/how-to/query-a-ledger-from-the-console.md`
   - `docs/concepts/console-design/how-the-data-explorer-shares-the-window.md`
   - `TODO/20261009-64-data-explorer-follow-ups-plan.md`
-- **Acceptance gates:** Read the editor's existing native textarea and input path before adding a replacement operation. Use the selector, then the explorer route spec and its selected checks. Browser smoke covers 390, 768 and 1440 px, both themes, the explorer and one other console page. Check keyboard Undo and Redo, empty text, a selection within typed SQL, two successive example choices and no automatic Run. Keep native typing history; do not substitute a second editor. Run `doc_load.py` for changed Markdown.
-- **Oracle:** Type a question, choose different ledgers and a custom span, choose an example, then press Ctrl+Z in the editor: the prior SQL, ledgers and exact dates return; Redo restores the example, and neither action runs it. This cannot certify every browser's native undo behavior, so record the browsers exercised.
+- **Acceptance gates:** Read the editor's existing native textarea and input path before adding a replacement operation. Use the selector, then the explorer route spec and its selected checks. Browser smoke covers 390, 768 and 1440 px, both themes, the explorer and one other console page. Check keyboard Undo and Redo, empty text, a selection within typed SQL, two successive choices of examples or saved questions and no automatic Run. Keep native typing history; do not substitute a second editor. Run `doc_load.py` for changed Markdown.
+- **Oracle:** Type a question, choose different ledgers and a custom span, choose an example, then press Ctrl+Z in the editor: the prior SQL, ledgers and exact dates return; Redo restores the example, and neither action runs it. Repeat with a saved question. This cannot certify every browser's native undo behavior, so record the browsers exercised.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `pick(example)` still assigns `sql = example.sql`; it offers no replacement operation that preserves textarea undo. | Direct code at Plan 55 closure. |
+| 1 | `pick(example)` and `pickSaved(question)` directly assign SQL; neither offers a replacement operation that preserves textarea undo. The original question-strip rule promised one undoable edit for both choices. | Direct code and the delivered plan's section 2.16, rule 3. |
 | 2 | Preserve the original one-edit intent. Expose replacement through the existing editor and keep any companion ledger/span history in runtime memory only. No saved-question contract or storage format changes. | Delivered Data explorer's example-selection intent; CLAUDE.md section 0d. |
 | 3 | Document Undo only when its browser test passes. Existing docs correctly make no such promise. | CLAUDE.md sections 9 and 13. |
 
