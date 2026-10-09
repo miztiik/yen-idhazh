@@ -2059,6 +2059,12 @@ def _scripted_origin(
     return origin, runner
 
 
+#: The suffix a scripted writer's file carries. `rebuild_day.py` writes and reads
+#: each one as CSV, its own scratch format: the race under test is about who
+#: wrote a name, never about what format a ledger files.
+WRITER_SUFFIX: Final = ".csv"
+
+
 def _a_writer(execution: str) -> str:
     """The filename one assemble job owns inside a day directory.
 
@@ -2072,6 +2078,7 @@ def _a_writer(execution: str) -> str:
         attempt=1,
         job=ServerJob.ASSEMBLE,
         shard=0,
+        suffix=WRITER_SUFFIX,
     )
 
 

@@ -96,7 +96,7 @@ def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], t
 def _dated_paths(
     root: Path, days: tuple[date, ...], months: tuple[str, ...], *, monthly: bool
 ) -> set[Path]:
-    """Named day and month paths in the common dated-tree layouts."""
+    """Named day and month paths in the dated-tree layouts a retention task walks."""
     paths: set[Path] = set()
     if monthly:
         for month in months:
@@ -108,9 +108,7 @@ def _dated_paths(
                     root / f"{month}.csv",
                     root / f"{month}.json",
                     root / f"{month}.parquet",
-                    folder.with_suffix(".csv"),
                     folder.with_suffix(".parquet"),
-                    folder / "settled.csv",
                 }
             )
     else:
@@ -119,7 +117,6 @@ def _dated_paths(
             paths.update(
                 {
                     folder,
-                    folder.with_suffix(".csv"),
                     folder.with_suffix(".json"),
                     folder.with_suffix(".jsonl"),
                     folder.with_suffix(".parquet"),

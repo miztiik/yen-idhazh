@@ -1,31 +1,14 @@
-"""What a `<YYYY>/<MM>/<DD>.csv` day tree is, in one place.
+"""What one `<YYYY>/<MM>/<DD>` date segment is, and which days a window of `n` days names.
 
 The peer of `month_partition`, and both stay live because both grains do. A
 month stem is a filename, so one predicate settles it. A day is a path of three
-segments, so the question is a walk: which entries the tree may hold, which it
-refuses, and which days a window of `n` days names.
+segments, so the questions here are what one segment may be, which empty date
+folders a deleted file leaves behind, and which days a window names.
 
-Two collections read a day tree when this module was written - `state/published/`
-and `state/visual-prunes/` - and they read it through one private helper inside
-`ledger`. More state ledgers were moving to this grain, so the helper came out
-here before it was imported from seven places. That is the shape
-`month_partition` was created on 2026-09-08 to end: three directories each
-carrying their own answer to "is this name a month", and one file left alone in
-one ledger and deleted in another. The cleanup record and the published record
-have since moved under `state/raw/`, where a day is a folder of writer files that
-`ledger/raw_files.py` walks, and so has the similarity judge's fitted line, the
-last ledger this walked. The prune verb's CSV branch still walks with it.
-
-**Nothing inside a day tree is skipped.** A name this cannot place stops the
-read. A glob answers "what matched" and says nothing about what did not, so a
-file the reader cannot place would sit in a state directory unread and
-unmentioned - which is how a reader starts missing rows with nobody noticing.
-
-That is stricter than `month_partition`, and deliberately. A month directory is
-the top of its own ledger and is allowed to hold something that is not the
-collection at all. Below a year directory here, every name is written by one
-`append_*` and by nothing else, so a name this walk cannot read means something
-else is writing there.
+Every reader of a day folder asks this module what a segment is - the ledger
+door's raw day folders (`ledger/raw_files.py`), the gardener's names-only walk
+of them (`gardener/named_trees.py`) and the trial-ledger check
+(`utilities/pipeline_test_ledgers.py`) - so the rule is written once.
 
 **A segment is ASCII digits, and the clause is written out.** `\\d` in a `str`
 pattern matches another script's numerals, so `re.fullmatch(r"\\d{2}", stem)`
@@ -34,25 +17,19 @@ refuses it - through how CPython compiles its own digit class rather than
 through anything this module asked for. A detail of a parser is not a rule.
 `month_partition.is_month_stem` states the same clause for the same reason.
 
-The clause refuses one thing the regex version let through: an EMPTY directory
-named in another script's numerals. The old walk entered it, found nothing to
-refuse, and yielded nothing - a stray tolerated in a tree whose whole rule is
-that nothing is tolerated.
-
 `retention.dated_days` walks a different day tree and does not move here. Its
-days are DIRECTORIES under `frontend/public/digest/` rather than CSV files, and
-at its root it skips a name it cannot read instead of refusing it, because that
-root is shared with things that are not the day tree. One walk per shape, for
-the same reason there is one predicate per grain.
+days are DIRECTORIES under `frontend/public/digest/`, and at its root it skips
+a name it cannot read instead of refusing it, because that root is shared with
+things that are not the day tree. One walk per shape, for the same reason there
+is one predicate per grain.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import Final, NoReturn
+from typing import Final
 
 #: A year is four digits; a month and a day are two.
 YEAR_WIDTH: Final = 4
@@ -65,88 +42,26 @@ def is_segment(name: str, width: int) -> bool:
     `str.isdigit` on its own accepts another script's numerals, and so does the
     `\\d` this replaced. The `isascii` clause is the load-bearing half.
 
-    Public because `day_shards` walks the same three segments one grain deeper.
-    Two copies of this clause is the shape this module exists to end.
+    Public because every day-folder reader asks it. Two copies of this clause is
+    the shape this module exists to end.
     """
     return len(name) == width and name.isascii() and name.isdigit()
-
-
-def _refuse_stray(entry: Path, root: Path) -> NoReturn:
-    """Nothing inside a day tree may be ignored, so an odd name stops the read."""
-    raise ValueError(
-        f"{root.parent.name}/{root.name} holds "
-        f"{entry.relative_to(root).as_posix()}, which is not a YYYY/MM/DD day file. "
-        "A file the reader cannot place is how it starts missing rows, so it "
-        "refuses the read rather than skipping the file."
-    )
-
-
-def day_files(root: Path) -> Iterator[Path]:
-    """Every `<root>/YYYY/MM/DD.csv`, oldest first.
-
-    Walked rather than globbed, so that every entry is accounted for and the
-    ones this cannot place are refused rather than passed over.
-
-    A missing directory yields nothing, because a clone with no history is what
-    a fresh checkout has and not a fault.
-    """
-    if not root.is_dir():
-        return
-    for year in sorted(root.iterdir()):
-        if not (year.is_dir() and is_segment(year.name, YEAR_WIDTH)):
-            _refuse_stray(year, root)
-        for month in sorted(year.iterdir()):
-            if not (month.is_dir() and is_segment(month.name, SEGMENT_WIDTH)):
-                _refuse_stray(month, root)
-            for day in sorted(month.iterdir()):
-                if not (day.is_file() and day.suffix == ".csv"):
-                    _refuse_stray(day, root)
-                if not is_segment(day.stem, SEGMENT_WIDTH):
-                    _refuse_stray(day, root)
-                try:
-                    date_type.fromisoformat(f"{year.name}-{month.name}-{day.stem}")
-                except ValueError:
-                    _refuse_stray(day, root)
-                yield day
-
-
-def month_of(day_file: Path) -> str:
-    """The `<YYYY-MM>` a day file falls in, read off its own path.
-
-    The path is the record, so a caller that has walked the tree never has to
-    open a file to learn which month it belongs to.
-    """
-    return f"{day_file.parent.parent.name}-{day_file.parent.name}"
-
-
-def date_of(day_file: Path) -> str:
-    """The `<YYYY-MM-DD>` a day file holds, read off its own path.
-
-    The peer of `month_of`, and both exist because a boundary is either a month
-    or a day. The gardener's `telemetry-aggregate` task compares a month because
-    its windows are months; the prune verb compares a day, because an operator
-    names its range in days. A caller
-    with a day boundary that spelled this itself would be the second place the
-    path layout is written down.
-    """
-    return f"{month_of(day_file)}-{day_file.stem}"
 
 
 def drop_empty_day_dirs(day: Path) -> None:
     """Remove every date directory a deleted file leaves empty behind it.
 
-    Not tidiness: `day_files` above walks every year and month directory it
+    Not tidiness: a reader of a day tree walks every year and month directory it
     finds, so a deletion that left them would make the walk cost more each year
     while removing the rows that walk exists to read.
 
-    It climbs while the directory's own name is a date segment, which is what
-    makes one helper answer for both shapes. A `<DD>.csv` day file leaves a month
-    and a year; a writer's file inside a `<DD>/` day directory leaves a day, a
-    month and a year, one level deeper. A ledger root is never a date segment, so
-    the climb stops there without being told where there is.
+    It climbs while the directory's own name is a date segment. A file inside a
+    `<DD>/` day folder leaves a day, a month and a year; a published copy named
+    for its month leaves nothing. A ledger root is never a date segment, so the
+    climb stops there without being told where there is.
 
-    Here rather than beside any one caller, because every ledger that deletes a
-    day file owes the same thing to the same walk. It was spelled twice until
+    Here rather than beside any one caller, because every task that deletes a
+    dated file owes the same thing to the same walk. It was spelled twice until
     2026-09-16 - once in `retention` and once in `evals.writer`, whose copy said
     in its own docstring that it existed because `retention` imports that module
     rather than the other way round. A shape's rule belongs with the shape, and
@@ -163,23 +78,6 @@ def drop_empty_day_dirs(day: Path) -> None:
         except OSError:
             return
         directory = directory.parent
-
-
-def days_by_month(root: Path) -> dict[str, list[Path]]:
-    """Every day file under `root`, grouped by its month, oldest month first.
-
-    What a monthly consumer of a day-filed ledger needs: a published mirror and a
-    fold both keep a month boundary while the ledger below them files by day
-    (`docs/concepts/partitions.md`). The grouping is the whole of the bridge, so
-    it is written once here rather than once per consumer.
-
-    `day_files` refuses a name it cannot place, so a ledger this returns a month
-    for is a ledger that walked clean.
-    """
-    months: dict[str, list[Path]] = {}
-    for day in day_files(root):
-        months.setdefault(month_of(day), []).append(day)
-    return months
 
 
 def days_in_window(today: str, within_days: int) -> list[str]:
