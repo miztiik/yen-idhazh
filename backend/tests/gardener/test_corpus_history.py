@@ -124,7 +124,11 @@ class History:
         return checkout
 
     def on_origin(self, *args: str) -> str:
-        return git(self.origin, *args)
+        return git(self.root, "--git-dir", str(self.origin), *args)
+
+    def tree(self, commitish: str) -> str:
+        """The tree of one commit in the explicitly addressed bare origin."""
+        return self.on_origin("rev-parse", f"{commitish}^{{tree}}").strip()
 
     def chain(self) -> list[str]:
         """Origin's `main` along first parents, oldest first, as `sha subject`."""
@@ -210,14 +214,14 @@ def test_the_squash_collapses_the_commits_at_or_before_the_cut_and_keeps_every_l
     ]
     root, after, recent, harvest, recorded = (sha for sha, _ in chain)
     assert history.on_origin("rev-list", "--parents", "-n", "1", root).split() == [root]
-    assert tree(history.origin, root) == tree(checkout, boundary)
+    assert history.tree(root) == tree(checkout, boundary)
     for replayed, subject in ((after, "a change just after the cut"), (recent, "a recent change")):
         original = history.shas[subject]
-        assert tree(history.origin, replayed) == tree(checkout, original)
+        assert history.tree(replayed) == tree(checkout, original)
         assert history.on_origin("log", "-1", "--format=%an %aI", replayed) == git(
             checkout, "log", "-1", "--format=%an %aI", original
         )
-    assert tree(history.origin, harvest) == tree(checkout, tip), "the tip's tree moved"
+    assert history.tree(harvest) == tree(checkout, tip), "the tip's tree moved"
     for gone in ("the root", "an old change", "a change at the cut"):
         assert history.shas[gone] not in history.on_origin("rev-list", "--all")
     authored = history.on_origin("log", "-1", "--format=%aI", root).strip()
@@ -299,7 +303,7 @@ def test_a_merge_above_the_boundary_is_replayed_with_the_tip_tree_intact(
     assert squash(checkout) == 0
 
     newest = history.chain()[-2].split(" ", 1)[0]
-    assert tree(history.origin, newest) == tree(checkout, tip)
+    assert history.tree(newest) == tree(checkout, tip)
 
 
 def test_a_merge_that_carried_its_own_change_is_refused_before_anything_is_pushed(
@@ -363,11 +367,20 @@ def test_a_replay_that_conflicts_is_aborted_and_nothing_is_pushed(
     assert history.on_origin("rev-parse", "main").strip() == tip
 
 
+@pytest.mark.parametrize("bare_repository_policy", ("explicit", "all"))
 def test_a_wake_with_nothing_old_enough_records_the_run_and_pushes_without_force(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    bare_repository_policy: str,
 ) -> None:
     """Recorded anyway, so the next wake is not due again - and a second run that day adds nothing."""
     quiet_git(tmp_path, monkeypatch)
+    config_count = int(os.environ.get("GIT_CONFIG_COUNT", "0"))
+    monkeypatch.setenv("GIT_CONFIG_KEY_" + str(config_count), "safe.bareRepository")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_" + str(config_count), bare_repository_policy)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", str(config_count + 1))
+    assert git(tmp_path, "config", "--get", "safe.bareRepository").strip() == bare_repository_policy
     history = History(tmp_path, declared=a_declaration())
     history.add("2026-05-01T09:00:00Z", "the root")
     history.add("2026-06-01T09:00:00Z", "a recent change")
@@ -433,7 +446,7 @@ def test_a_commit_that_lands_after_the_tip_was_read_is_refused_by_the_lease_and_
     ]
     replayed, recorded = (line.split(" ", 1)[0] for line in chain[-2:])
     assert replayed != raced, "the commit is replayed inside the rewritten history"
-    assert tree(history.origin, replayed) == tree(racer, raced), "a file it changed is missing"
+    assert history.tree(replayed) == tree(racer, raced), "a file it changed is missing"
     assert history.on_origin("diff", "--name-only", replayed, recorded).split() == [
         "corpus/corpus.meta.json"
     ]
