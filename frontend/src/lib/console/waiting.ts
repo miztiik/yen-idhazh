@@ -221,10 +221,10 @@ export function explorerQuietSentence(): string {
 	return 'Your question ran and matched no rows.';
 }
 
-export function explorerMissingSentence(ledger: string, published: boolean): string {
+export function explorerMissingSentence(ledger: string, published: boolean, explainUnasked = true): string {
 	return published
-		? `${ledger} has no days on this site yet.`
-		: `${ledger} is not on this site yet, so nothing was asked of it.`;
+		? `${ledger} is not packed yet.`
+		: `${ledger} is not on this site yet${explainUnasked ? ', so nothing was asked of it' : ''}.`;
 }
 
 export function explorerUnreachableSentence(ledger: string | null, day: string | null, fault: string | null): string {

@@ -42,6 +42,20 @@ test('THE ORACLE: beside a ledger that began four years ago the action line coun
 	await expect(page.locator('.answer-note')).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
 });
 
+test('a ledger that stopped before the window cannot supply the first day in the action line or answer note', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(20, 14) },
+		{ ledger: 'seen', pinned: PINNED, days: everyDay(4, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint', 'seen'], 'SELECT (SELECT count(*) FROM "host-fingerprint") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows');
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('from 2 ledgers over 5 UTC days, from 11 Jun 2030 through 15 Jun 2030.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['0', '5']]);
+	await expect(page.locator('.answer-note')).toHaveText('Read from 5 UTC days, 11 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the seen record before 11 Jun 2030 are not on this site.');
+});
+
 test('the action line stops on the ledger\'s last listed day, not the window\'s last day', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 3) });
 	await openExplorer(page, PINNED);

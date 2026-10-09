@@ -199,7 +199,7 @@
 			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
 		}
 		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
-		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
+		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger, published: published.includes(result.ledger) });
 		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
 		const empty = emptyLedgerLines();
 		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
@@ -719,7 +719,7 @@
 		{:else if result.state === 'refused'}
 			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
 		{:else if result.state !== 'ok'}
-			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? explorerMissingSentence(result.ledger, published.includes(result.ledger)) : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
 		{/if}
 	{/key}
 {/snippet}

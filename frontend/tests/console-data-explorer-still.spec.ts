@@ -12,6 +12,38 @@ import { statusSentence } from '../src/lib/console/explorer/status';
 /** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
 const PINNED = '2030-06-15';
 
+for (const surface of ['status', 'answer', 'chart'] as const) {
+	test(`a published ledger with no compact index says not packed yet in the ${surface}`, async ({ page, context }) => {
+		const requested: string[] = [];
+		await context.addInitScript(() => Object.defineProperty(globalThis, '__RAW_LISTED_THROUGH__', { value: {}, configurable: true }));
+		await context.route('**/state/compact/published/**', (route) => {
+			requested.push(new URL(route.request().url()).pathname);
+			return route.fulfill({ status: 404 });
+		});
+		await openExplorer(page, PINNED);
+		await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
+		await runExplorer(page);
+		await expectAnswer(page, 'missing');
+		expect(requested.some((name) => name.endsWith('/state/compact/published/index/daily.json'))).toBe(true);
+		if (surface === 'chart') await page.getByRole('tab', { name: 'Chart' }).click();
+		const shown = surface === 'status'
+			? page.locator('[data-explorer-action-line]')
+			: page.locator(`[data-console-panel-id="data-explorer-${surface === 'answer' ? 'rows' : 'shape'}"] [data-state="missing"]`);
+		await expect(shown).toHaveText(surface === 'status' ? 'Did not run. published is not packed yet.' : 'published is not packed yet.');
+	});
+}
+
+test('an unpublished ledger still says not on this site', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await context.route('**/state/compact/feed-health/**', (route) => route.fulfill({ status: 404 }));
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['feed-health'], 'SELECT count(*) AS rows FROM "feed-health"', false);
+	await runExplorer(page);
+	await expectAnswer(page, 'missing');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Did not run. feed-health is not on this site yet.');
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toHaveText('feed-health is not on this site yet, so nothing was asked of it.');
+});
+
 type Box = { x: number; y: number; width: number; height: number };
 type ShiftSource = {
 	nodeName: string;
@@ -429,7 +461,8 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows. Read 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 0, bytes: 0, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows.');
 	expect(statusSentence({ state: 'refused' })).toBe('Did not run. The reason is where the answer would be.');
-	expect(statusSentence({ state: 'missing', ledger: 'published' })).toBe('Did not run. published is not on this site yet.');
+	expect(statusSentence({ state: 'missing', ledger: 'published', published: true })).toBe('Did not run. published is not packed yet.');
+	expect(statusSentence({ state: 'missing', ledger: 'feed-health', published: false })).toBe('Did not run. feed-health is not on this site yet.');
 	expect(statusSentence({ state: 'unreachable-engine' })).toBe('Did not run. The query engine did not start.');
 	expect(statusSentence({ state: 'unreachable-files' })).toBe('Did not run. The ledger files could not be fetched.');
 	const longest = statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 123, ms: 99999 } });

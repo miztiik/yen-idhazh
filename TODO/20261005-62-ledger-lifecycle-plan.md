@@ -87,7 +87,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L30 | The merge line's no-fit rule names the line a build used | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | H | DONE | fluffy-dollop | #1408 | Plan 62 row l30 |
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | DONE | probable-journey | #1414 | Plan 62 row l31 |
 | L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | DONE | cuddly-sniffle | #1409 | Plan 62 row l32 |
-| L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | PENDING | - | - | - |
+| L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | DONE | ubiquitous-system | #1482 | Plan 62 row l33 |
 | L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `frontend/tests/console-window.spec.ts`), L52 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | DONE | urban-winner | #1447 | Plan 62 row l35 |
 | L36 | Hardware's one-sided line leaves out a day whose only run was refused | L28, L29 | M | DONE | psychic-goggles | #1421 | Plan 62 row l36 |
@@ -108,14 +108,15 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L51 | Judgement's agreement panel words follow the rates they judge | L39, L40 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | U | DONE | scaling-meme | #1463 | Plan 62 row l51 |
 | L52 | Judgement names the line each build recorded | L38, L35 (holds `frontend/tests/console-window.spec.ts`), L40 (holds `frontend/tests/console-window.spec.ts`) | V | DONE | verbose-couscous | #1469 | Plan 62 row l52 |
 | L53 | Hardware reads a machine record with no job the same way everywhere | - | W | DONE | fuzzy-doodle | #1459 | Plan 62 row l53 |
-| L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | - | Plan 62 row l54 |
+| L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | #1479 | Plan 62 row l54 |
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | PENDING | - | - | - |
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
-| L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | PENDING | - | - | - |
+| L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
+| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | PENDING | - | - | - |
 
 ## 2. Shared declarations
 
@@ -1534,7 +1535,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 ### Row #L33 - Every sentence for a record the door answers missing says it is not packed yet
 
 - **Scope:** Every sentence the console prints for a published record or ledger that the door answers `missing` says it is not packed yet, never that it is not published or not on this site; a ledger outside `ledger.published` keeps the words that say it is not on this site. Level 1.
-- **The fault** (row L25's ruling, 2026-10-07): since L7 (#1370), a published ledger with no compact folder answers `missing`, so for a published record `missing` means not packed yet (Table F, F1). Row L25 fixed the platform-mix panel's line. A search of `frontend/src/` on `main` at 6861bbd21 finds three more:
+- **The fault** (row L25's ruling, 2026-10-07; symbols and sentences rechecked on `main` at 9ecd28c86 on 2026-10-09): since L7 (#1370), a published ledger with no compact folder answers `missing`, so for a published record `missing` means not packed yet (Table F, F1). Row L25 fixed the platform-mix panel's line. A search of `frontend/src/` finds three more:
   1. `faultLine` in `frontend/src/lib/data/slice-reader.ts` (line 153), the browser-console line for `not-packed`: "it is not there: this record is not packed, or not published. Turn on whichever is off, or wait for the next upkeep run." A slice or a reach is read for a panel, which reads only published ledgers, or at build time, which reads every committed ledger, so "not published" is never why.
   2. `statusSentence` in `frontend/src/lib/console/explorer/status.ts` (line 67), the data explorer's action line for `missing`: "Did not run. {ledger} is not on this site yet." The page prints it for every `missing` answer (`+page.svelte` line 166), while the answer under it says "{ledger} has no days on this site yet." for a published ledger (`explorerMissingSentence` in `frontend/src/lib/console/waiting.ts`).
   3. The data explorer's chart panel for a `missing` answer (`frontend/src/routes/console/data-explorer/+page.svelte` line 647): "Part of the data is not on this site, so nothing to draw."
@@ -1542,10 +1543,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/data/slice-reader.ts` (sentence 1)
   - `frontend/src/lib/console/explorer/status.ts` (sentence 2)
   - `frontend/src/routes/console/data-explorer/+page.svelte` (hands `statusSentence` the `missing` ledger, and holds sentence 3)
+  - `frontend/src/lib/console/waiting.ts` (found during execution: Reader ruled that the published answer's "has no days on this site yet" must also say "is not packed yet"; the existing helper now supplies status, answer and chart, retaining unpublished words)
   - `frontend/tests/console-data-explorer-still.spec.ts` (pins sentence 2 for a ledger named `published`)
   - `frontend/tests/ledger-door.spec.ts` (the door's `missing` and `not-packed` cases; no test reads sentence 1 today)
   - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (lines 49 and 199 say a panel's `missing` is a ledger that "is not published, or it is published and not packed yet")
-  - Left as they are: `frontend/src/lib/console/waiting.ts`, whose `explorerMissingSentence` already says "has no days on this site yet" for a published ledger and "is not on this site yet" only for one that is not; `frontend/src/lib/console/explorer/LedgerList.svelte`, which says "not on this site" only for a ledger outside `ledger.published`; `frontend/src/lib/console/explorer/days-read.ts`, which speaks of days the site copy trimmed; `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, row L25's line; `frontend/src/lib/console/recording.ts`, whose route note says the record has not been packed yet
+  - Left as they are: `frontend/src/lib/console/explorer/LedgerList.svelte`, which says "not on this site" only for a ledger outside `ledger.published`; `frontend/src/lib/console/explorer/days-read.ts`, which speaks of days the site copy trimmed; `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, row L25's line; `frontend/src/lib/console/recording.ts`, whose route note says the record has not been packed yet
   - Row L21 lists `status.ts`, the explorer page and `console-data-explorer-still.spec.ts` too, so the two rows run one at a time (Table A, A6)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-data-explorer-still.spec.ts --spec ledger-door.spec.ts`; `npm --prefix frontend run check`; `doc_load.py` on the page; the browser smoke of the data explorer and of the Hardware route with a published ledger's index requests answered 404, reading the page and its browser console. CI: the pull request runs what `ciAnswer` selects; every group runs on the merge push.
 - **Oracle:** in `ledger-door.spec.ts` and `console-data-explorer-still.spec.ts`, on answers the test builds (Table D, D3): the `not-packed` console line says the record is not packed yet and never "not published"; the explorer's action line for a published ledger that the door answers `missing` never says it is not on this site, and for a ledger outside `ledger.published` still does. On `main` the first says "not packed, or not published" and the second says "is not on this site yet" for both, which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 2).
@@ -1555,7 +1557,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | For a published record, `missing` means not packed yet, never not published, since L7 (#1370) | Row L25, decisions 1 and 3; the owner, 2026-10-07 |
-| 2 | Reader chooses the words (CLAUDE.md section 14), as row L25's "The machine record is not packed yet." did, in the route note's own words and never "published", and rules whether sentence 3 reads as not published | To be ruled at dispatch (Reader) |
+| 2 | Reader ruled: console fault "This record is not packed yet."; published status "Did not run. {ledger} is not packed yet."; shared published chart and answer "{ledger} is not packed yet."; unpublished shared chart and answer "{ledger} is not on this site yet, so nothing was asked of it."; unpublished status "Did not run. {ledger} is not on this site yet." The old chart sentence reads as publication absence, and the published answer "has no days on this site yet" also needs to change. Remove "Turn on whichever is off" and the unsupported promise about the next upkeep run. Membership in `ledger.published` separates the meanings; use the existing shared waiting helper | Reader, 2026-10-09 |
 | 3 | L33 waits for L25 (#1384), which settled what `missing` means and fixed the platform-mix panel's line | The owner, 2026-10-07 |
 | 4 | Level 1: the words of three lines; a wrong version is obvious and local | The owner, 2026-10-07 |
 
@@ -2455,7 +2457,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (searched on current `origin/main` for `firstDayRead`, `endDay`, `readFrom` and the generated-ledger cases):
   - `frontend/src/lib/data/ask-reader.ts` (`firstDayRead`, which must exclude plans that read no day)
   - `frontend/tests/ledger-lifecycle.spec.ts` (the existing integration cases build ledgers and drive the real `readAsk` path; add the generated-ledger Oracle there)
-  - Read, no change unless the answer note needs its own page assertion: `frontend/tests/console-data-explorer.spec.ts` (the browser route and answer-note checks)
+  - `frontend/tests/console-data-explorer.spec.ts` (found during execution: the generated-ledger page case checks the action line and rendered answer note for a selected ledger that stopped before the window)
+  - `docs/architecture/publishing/how-the-query-door-answers-a-written-question.md` (found during execution: the shared reader's span rule excludes a ledger that read no day from both bounds)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the selected ledger-lifecycle spec; `npm --prefix frontend run check`. Coordinate with plan 55's owner before changing anything under `frontend/src/lib/data/`. CI: the pull request runs the selected frontend specs; every group runs on the merge push.
 - **Oracle:** Build one selected ledger whose `through` is before the window and a second whose first actual read is later than the window start but whose range overlaps the window. The answer's `readFrom` and the Data explorer's line name the second ledger's first read day, not the day supplied by the ledger that read nothing. Keep the existing cases where ledgers overlap and where one answer ends early; do not add disjoint-range counting.
 
@@ -2548,3 +2551,33 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the component tests as the only check | They do not prove that one rendered page binds all three panels to the recorded line | Nothing to build, and the full-page binding remains unchecked | Row L52's Follow-up 3; plan owner, 2026-10-09 |
+
+### Row #L62 - The agreement chart's date and mark labels stay clear near the plot top
+
+- **Scope:** Keep a measured day's local date label and a dashed mark's label readable and separate when both reach the plot's upper-right corner, using the smallest placement Jony rules for this chart. Level 1; no persisted shape changes.
+- **The fault** (L55's discovered defect, explicitly left open in #1483's Follow-ups and decision 8; read at branch head `edbaeea98aa28df3012178968fe73dc7ad60780f`, not claimed finished): `strandedLabels` prints a measured day's date when the axis dropped its tick and an immediately adjacent day has no reading. Near the plot's right edge, the date can reach a dashed mark's label. L55 raises the date clear of that label's box, then clamps its position to `box.top + 2`. Where the mark itself is near the plot top, the clamp can pull the date back into the box it just cleared. A quiet window whose rounded axis ends only slightly above the higher mark can reach this case. Advisor willingness to leave it open is not evidence that the labels are separate.
+- **Files touched** (named files read on the L55 branch; verify symbols and file lists again after its exact merge):
+  - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (`strandedLabels`, `markLabelBoxes` and the rendered local date and dashed-mark labels; held by L55, L57 and L56 while each runs)
+  - `frontend/tests/console-window.spec.ts` (the generated-day regression beside L55's date-label clearance cases; held by L55, L57, L34 and L45 while each runs)
+  - `docs/architecture/publishing/console-charts.md` (the agreement chart's date-label placement rule, updated with Jony's settled choice; also held by L55 and L56 while each runs)
+  - Read only: `frontend/src/lib/charts/frame.ts` (`labelWidth`, `AXIS_LABEL_PX` and the shared plot frame). Do not change shared geometry in this row or copy its machinery into the chart.
+- **Acceptance gates:** local: inspect `npm --prefix frontend run test:changed -- --list`, run `npm --prefix frontend run test:changed -- --spec console-window.spec.ts` for the regression and existing chart cases, and run `npm --prefix frontend run check`; run `doc_load.py` before and after changing the owning page. Complete integrated browser smoke on Judgement and one other console route; inspect the rendered labels at 390px and 1280px viewport widths in both themes, including empty and all-unread windows. Jony chooses placement; Susan reviews ship sufficiency, including the generated worst case. CI: follow the exact PR head's selected console checks; every group runs on the merge push. Record inputs, commands, results and counts outside the repository; do not repeat unchanged worker checks.
+- **Oracle:** In the existing window spec, generate bounded days that put a measured day with a dropped axis tick beside an unread day near the right edge, and put the higher dashed mark near `box.top` so L55's top clamp is triggered after its clearance step. Assert that the actual rendered date-label and mark-label bounding boxes do not intersect, and that the date stays readable inside the plot, at 390px and 1280px in both themes. Keep the existing non-top clearance case and all-unread behavior unchanged. Before dispatch, verify that this new check fails on a separate copy of the exact landed L55 commit for the label overlap, with that copy's code and test settings; absence of `strandedLabels` before L55 is not defect evidence. If the landed code no longer reproduces the overlap, report the result and correct the row before dispatch rather than inventing a failure. Bounding boxes prove separation and containment, not whether the placement preserves the date's association with its day or the mark's meaning; Jony and Susan settle those.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | This is the unfinished near-top collision L55 discovered, not a new claim that L55's ordinary mark-label clearance failed or that its advisor resolved the corner. L55's existing row and section stay unchanged in this upkeep change | Plan coordinator, 2026-10-09; L55's Follow-ups and decision 8 |
+| 2 | L62 waits for L55's landed implementation and L57's edits to the same chart and window spec, and for L34 and L45's edits to the shared window spec. At dispatch compare every named Files touched list against all active rows, including L56's chart and owning-page edits; hold and record any further file dependency before starting | Plan coordinator, 2026-10-09 |
+| 3 | Jony selects the smallest local placement that retains the date's link to its day and the dashed mark's meaning. No position, axis change or hidden label is prescribed here. Susan reviews whether the result is sufficient to ship in both themes and widths | To be ruled at execution (Jony and Susan) |
+| 4 | Reuse the shared geometry and the chart's existing label-box calculations. If consultation finds that a new surface or shared contract scope is necessary, stop for human scope approval; do not duplicate machinery or take an owner waiver | Plan coordinator, 2026-10-09; section 0 and CLAUDE.md section 6 |
+| 5 | Level 1: one chart's local label placement changes; a wrong version is visible and local. No persisted shape moves. The executing change records any durable placement rule in the owning page, and no production code cites this plan | Plan coordinator, 2026-10-09 |
+
+**Rejected alternatives**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Treat L55's ordinary clearance case or its advisor's deferral as closure | Neither proves separation after the near-top clamp; the discovered defect would have no executable work | Nothing to build, and overlapping dates and mark labels remain possible | Plan coordinator, 2026-10-09 |
+| 2 | Hide the date or choose a sideways move before Jony's consultation | A hidden date loses the fact the label restores; a floating date can lose its link to the dot it names | Less placement work, but reduced reading clarity that has not been approved | L55's Jony ruling; Plan coordinator, 2026-10-09 |
+| 3 | Add a second geometry helper or change the shared frame to avoid choosing local placement | Shared machinery already supplies label sizes and the plot frame; no evidence yet calls for a wider change | More code to keep in step, or a shared-scope change requiring human approval | Plan coordinator, 2026-10-09 |
