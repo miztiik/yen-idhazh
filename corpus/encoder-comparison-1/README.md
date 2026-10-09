@@ -171,6 +171,26 @@ any calibration/holdout split. The existing vector frame covers 817 of the 935
 sheet rows; the other 118 need additional embeddings and must remain explicitly
 unscored, not silently dropped from a claim about the whole sheet.
 
+### Partial model-judged comparison
+
+The 2026-10-09 reading uses the 140 judgments at commit
+`126ca3256b5d04adc587096e2973bd63c77fb50e`, with no human review. Four uncertain
+rows, one repeated pair and eleven unique pairs without saved vectors are
+excluded. There are no conflicting repeat verdicts, and each included summary
+matches the text originally encoded. The remaining 124 unique pairs comprise
+60 same-event and 64 different-event decisions.
+
+On that identical sample, average precision is 0.8998 for GTE-small, 0.8669 for
+Jina v5 nano text-matching, and 0.8616 for MiniLM. ROC AUC is respectively
+0.9052, 0.8878 and 0.8820. These are computed with scikit-learn from cosine
+similarities of the saved normalized vectors. The controls come from run
+`37850950040`; Jina comes from `37895396586`.
+
+This is a partial, model-written sample, not a held-out or human-validated test.
+No threshold is selected on it and no final winner is declared. It already
+shows why the title-derived proxy is not a selector: Jina leads that proxy but
+does not lead this judged sample.
+
 **Nobody. There are none.** This set has no human judgement in it at all, and
 that changes what every number on it means.
 
