@@ -980,7 +980,7 @@ def test_a_month_file_no_entry_names_that_holds_other_rows_than_its_days_is_refu
     assert (outcome.stopped_because, outcome.resume_from, outcome.fault) == (
         StopReason.FAILED,
         "2026-09",
-        GardenerFault.RAISED,
+        GardenerFault.MANUAL_ACTION,
     )
     assert held.read_bytes() == before
     assert mark(root, Period.MONTHLY) is None

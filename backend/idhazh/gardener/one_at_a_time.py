@@ -226,11 +226,12 @@ class Pass:
     handled, by this pass or the ones before it, on a pass that walked from a
     mark. It is None on every other pass.
 
-    `fault` is why the pass stopped when a fault stopped it: `raised` on a
-    failed pass, every other word on a deferred one, and None on a pass that
-    ran out or met its ceiling. `recovered` is every fault it recorded instead
-    of stopping, in the order it met them: a member its collection would not
-    delete, or a period a compaction rebuilt, moved aside or recorded lost.
+    `fault` is why the pass stopped when a fault stopped it: `raised` or
+    `manual-action` on a failed pass, a retryable word on a deferred one, and
+    None on a pass that ran out or met its ceiling. `recovered` is every fault
+    it recorded instead of stopping, in the order it met them: a member its
+    collection would not delete, or a period a compaction rebuilt, moved aside
+    or recorded lost.
 
     `idle_outcome` is the word for a pass that found nothing to do, which only
     the pass can choose: nothing has reached its line yet, the ledger holds

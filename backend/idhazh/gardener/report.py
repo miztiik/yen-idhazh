@@ -49,6 +49,9 @@ from idhazh.gardener.one_at_a_time import Pass
 #: What a person reads for each fault word, beside where the pass stopped.
 WHY: Final[Mapping[GardenerFault, str]] = {
     GardenerFault.RAISED: "a code defect stopped it, and the log names the error",
+    GardenerFault.MANUAL_ACTION: (
+        "a known refusal needs a person's action before the next wake can continue"
+    ),
     GardenerFault.API_UNAVAILABLE: "GitHub's API did not answer, so the next wake asks again",
     GardenerFault.RANGE_STARTS_LATE: (
         "the range named starts after a period that is ready before it; widen the range to "

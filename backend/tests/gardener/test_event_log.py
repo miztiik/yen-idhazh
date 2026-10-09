@@ -44,7 +44,7 @@ from idhazh.contracts.gardener_events import (
     TaskOutcome,
     TaskPlanned,
 )
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.gardener import event_log
 from idhazh.gardener.one_at_a_time import Window
@@ -120,6 +120,38 @@ def emitted(caplog: pytest.LogCaptureFixture, event: Model) -> logging.LogRecord
         event_log.emit(event)
     (record,) = caplog.records
     return record
+
+
+def test_a_manual_action_finished_event_is_an_error_with_the_closed_fault(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    event = TaskFinished(
+        task="compact-gardener",
+        outcome=TaskOutcome.FAILED,
+        dry_run=False,
+        seen=0,
+        selected=0,
+        taken=[],
+        written=[],
+        bytes_freed=0,
+        stopped_because=StopReason.FAILED,
+        fault=GardenerFault.MANUAL_ACTION,
+        error="ManualActionError",
+        recovered=[],
+        next="a known refusal needs a person's action before the next wake can continue",
+        duration_ms=1,
+    )
+    with caplog.at_level(logging.INFO, logger=event_log.__name__):
+        event_log.emit(event, level=logging.ERROR)
+
+    (record,) = caplog.records
+    held = event_log.payload(record)
+    assert isinstance(held, TaskFinished)
+    assert (record.levelno, held.fault, held.error) == (
+        logging.ERROR,
+        GardenerFault.MANUAL_ACTION,
+        "ManualActionError",
+    )
 
 
 def test_an_event_is_one_line_of_ascii_json_named_first_with_every_none_left_out(

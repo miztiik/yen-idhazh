@@ -254,11 +254,12 @@ class TaskOutcome(StrEnum):
     holds; a pass that found nothing to do ends on the idle word it chose itself.
     """
 
-    #: A code defect stopped the task. The only outcome that turns the job red.
+    #: A code defect or a named refusal only a person can settle stopped the
+    #: task. The only outcome that turns the job red.
     FAILED = "failed"
-    #: A cause outside the code stopped it: GitHub's API did not answer, or a
-    #: period waits for a range that starts earlier or for a person. The job
-    #: stays green, and the next wake resumes.
+    #: A retryable cause stopped it: GitHub's API did not answer, or a period
+    #: waits for a range that starts earlier or for a recoverable packed-file
+    #: repair. The job stays green, and the next wake resumes.
     DEFERRED = "deferred"
     #: It found work and only reported it.
     DRY_RUN = "dry-run"
@@ -581,7 +582,10 @@ class ShardPublished(Model):
     attempt: int = Field(ge=1, description="Which attempt of that run.")
     tasks: list[Slug] = Field(description="The tasks the shard was to run, in the order they run.")
     failed_tasks: list[Slug] = Field(
-        description="The tasks whose row says `failed`: a code defect stopped each one."
+        description=(
+            "The tasks whose row says `failed`: a code defect or a named manual action "
+            "stopped each one."
+        )
     )
     landing: ShardLanding | None = Field(
         default=None,

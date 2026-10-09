@@ -78,6 +78,7 @@ from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.gardener import ledger_marks, named_trees, schedule
+from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch
 from idhazh.gardener.tasks._compaction_periods import newest_due
 from idhazh.gardener.tasks._monthly_period import days_of, first_kept_month, shift
@@ -107,7 +108,7 @@ def rebuild(
         return
     if Period.YEARLY not in tree.indexed:
         if policy.yearly_prune_enable:
-            raise ValueError(
+            raise ManualActionError(
                 f"{tree.ledger.value} index/yearly.json is missing in an established compact "
                 "tree with yearly_prune_enable; restore it before running compaction"
             )

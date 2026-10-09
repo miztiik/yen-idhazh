@@ -51,15 +51,17 @@ in the ledger's history, and it is packed again from its raw files**, noted
 **A file that cannot be read is moved aside, and the rest of its day packs.**
 Its envelope or a row this build refuses moves it to the ledger's set-aside
 folder, under its path (`CompactTree.set_aside`), and the day's entry counts it
-in `set_aside`; a day taken again keeps the count it had and adds to it. **A
-day holding more than `max_raw_files_per_period` readable files packs its
-oldest that many**, and the rest stay in its folder: the mark moves past the
-day, the pass ends `ceiling` at it, and the next wake takes the rest in as it
-takes a re-run. Nothing is decided for a day that is refused, so a refused day
-keeps every file. The pass writes its final daily index once, then deletes raw
-files, so before the index lands raw files survive. The daily mark is the
-newest day the indexes name, so a raw file left after the index landed sits in
-a day at or below the mark, and the next wake takes that day again.
+in `set_aside`; a day taken again keeps the count it had and adds to it. An
+entry in the raw day folder that is not a file cannot be moved aside, so the
+day fails with `manual-action` and keeps everything. **A day holding more than
+`max_raw_files_per_period` readable files packs its oldest that many**, and the
+rest stay in its folder: the mark moves past the day, the pass ends `ceiling`
+at it, and the next wake takes the rest in as it takes a re-run. Nothing is
+decided for a day that is refused, so a refused day keeps every file. The pass
+writes its final daily index once, then deletes raw files, so before the index
+lands raw files survive. The daily mark is the newest day the indexes name, so
+a raw file left after the index landed sits in a day at or below the mark, and
+the next wake takes that day again.
 
 **The step takes only the days whose fetch fits the shard's download budget**,
 oldest first, read off the listing's sizes before anything is downloaded. The

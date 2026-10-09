@@ -33,7 +33,7 @@ RECORD: Final = "state/raw/gardener/2026/10/08/0b6f8a52-4f0e-4c55-9a7a-3d1b2c9e7
 
 
 def a_failure(**changed: Any) -> TaskFinished:
-    """A task a code defect stopped while it worked on one day."""
+    """A failed task stopped while it worked on one day."""
     said: dict[str, Any] = {
         "task": "defect",
         "outcome": TaskOutcome.FAILED,
@@ -114,6 +114,20 @@ def test_a_failed_task_adds_one_error_after_its_group_naming_its_fault_and_its_p
     assert bare == (
         "::error title=defect::raised (KeyError): a code defect stopped it, and the log names "
         "the error"
+    )
+    _, (_, manual) = around(
+        a_failure(
+            task="compact-gardener",
+            fault=GardenerFault.MANUAL_ACTION,
+            error="ManualActionError",
+            where="idhazh.gardener.tasks._absent_indexes:111",
+            next="a known refusal needs a person's action before the next wake can continue",
+        )
+    )
+    assert manual == (
+        "::error title=compact-gardener::manual-action while it worked on 2026-09-20 "
+        "(ManualActionError at idhazh.gardener.tasks._absent_indexes:111): a known refusal "
+        "needs a person's action before the next wake can continue"
     )
     _, (_, unnamed) = around(a_failure(fault=None, error=None, where=None))
     assert unnamed.startswith("::error title=defect::failed while it worked on 2026-09-20: ")

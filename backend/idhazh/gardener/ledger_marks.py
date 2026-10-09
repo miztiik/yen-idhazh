@@ -51,6 +51,7 @@ from idhazh.contracts.file_envelope import Period, Tier
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import named_trees
+from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import FileListing
 
 
@@ -128,7 +129,7 @@ def _read_index(path: Path, ledger_name: LedgerName, period: Period) -> CompactI
     """One of this ledger's indexes, or a refusal naming it."""
     held = CompactIndex.read(path)
     if (held.ledger, held.period) != (ledger_name, period):
-        raise ValueError(
+        raise ManualActionError(
             f"{path.name} does not describe the {ledger_name.value} {period.value} period"
         )
     return held
@@ -181,7 +182,7 @@ def adopt(
         period,
         covers,
     ):
-        raise ValueError(
+        raise ManualActionError(
             f"{found.name} sits where the {ledger_name.value} {period.value} file for {covers} "
             f"goes, and its envelope says {said.tier.value} {said.ledger.value} "
             f"{said.period.value if said.period else 'raw'} {said.covers}, so it is not adopted"

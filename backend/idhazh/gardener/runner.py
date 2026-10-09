@@ -34,12 +34,13 @@ tree.
 
 **A task that stops still has a row, and the row says why.** Every error a task
 meets is read once for what it means (`error_cause`). A code defect ends its row
-`failed` with the fault `raised`; a cause outside the code - GitHub's API that
-did not answer, or a period that waits for a later wake or a person - ends it
-`deferred` with a word that names it. Its siblings still run either way, and
-what it had already done is on the row, because the core carries it out of any
-stop part way. **Only a failed row, or a shard over its download budget, makes
-the shard exit 1**; a deferred one leaves the exit code as it was.
+`failed` with the fault `raised`; an explicit refusal only a person can settle
+ends it `failed` with `manual-action`. A cause outside the code - GitHub's API
+that did not answer, or a period waiting for a later wake or a named repair -
+ends it `deferred` with a word that names it. Its siblings still run either
+way, and what it had already done is on the row, because the core carries it
+out of any stop part way. **Only a failed row, or a shard over its download
+budget, makes the shard exit 1**; a deferred one leaves the exit code as it was.
 
 **Every task is handed the folders it walks, judged against the commit.** A
 folder the commit holds is walked whether the checkout holds it or not, because

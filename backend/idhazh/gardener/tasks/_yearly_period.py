@@ -74,6 +74,7 @@ from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import GITHUB_LARGE_FILE_BYTES
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import ledger_marks, named_trees
+from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 from idhazh.gardener.tasks._monthly_period import days_of
@@ -195,7 +196,7 @@ def _build[C: Contract](
     if unreadable:
         built = render([month for month in sorted(held) if month not in unreadable])
     if built is not None and len(built.data) > GITHUB_LARGE_FILE_BYTES:
-        raise ValueError(
+        raise ManualActionError(
             f"its file would be {len(built.data)} bytes, over GitHub's large-file line of "
             f"{GITHUB_LARGE_FILE_BYTES}, so its month files are kept"
         )
@@ -233,7 +234,14 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
     if left:
         # The monthly index does not name those months and their days are still
         # there, so they never closed: a person decides, and nothing moves.
-        return (tree.refuse(_STEP, year, ledger_fault=ledger.LedgerFault.DAY_MISSING),)
+        return (
+            tree.refuse(
+                _STEP,
+                year,
+                ledger_fault=ledger.LedgerFault.DAY_MISSING,
+                failure=ManualActionError("the year contains a month that never closed"),
+            ),
+        )
     files = {
         month: named_trees.compact_file(
             tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month

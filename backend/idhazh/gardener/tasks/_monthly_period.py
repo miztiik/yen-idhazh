@@ -89,6 +89,7 @@ from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.gardener import event_log, ledger_marks, named_trees, schedule
+from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 
@@ -396,7 +397,9 @@ def _keep_own[C: Contract](
                 # Its own file is at its path, no monthly entry names it, and it
                 # holds other rows than its days. Nothing is written over a
                 # packed file no entry names, so the month waits for a person.
-                return (tree.refuse(_STEP, month),)
+                raise ManualActionError(
+                    "an unindexed month file disagrees with the rows in its day files"
+                )
         except ValueError as refusal:
             return (tree.refuse(_STEP, month, failure=refusal),)
         _keep(tree, adopted)
