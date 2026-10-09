@@ -107,13 +107,15 @@ function standInKey(id) {
 	return createHash('sha256').update(id).digest('hex');
 }
 
-/** Write one writer's rows into a day-filed store.
+/** Write one writer's rows into a day folder of the staged rows.
  *
- * The name is `<run_id>-<attempt>-<job>-<shard>.csv` and the reader parses it,
- * so the shard is two digits or the file is refused. One process builds the
- * whole fixture, so it is one attempt and one shard - and `assemble` is the job
- * that measures a whole published day in production, which is why the Python
- * half of this fixture names it too.
+ * One file a run, named `<run_id>-<attempt>-<job>-<shard>.csv`, so two runs of
+ * one day never share a file. `build_canary_day.py --file-fixture-rows` reads
+ * each row through its contract and files it through the ledger door under the
+ * run its own `run_id` cell names. One process builds the whole fixture, so it
+ * is one attempt and one shard - and `assemble` is the job that measures a whole
+ * published day in production, which is why the Python half of this fixture
+ * names it too.
  */
 function writeDayShard(root, day, runId, columns, rows) {
 	const at = join(root, day.slice(0, 4), day.slice(5, 7), day.slice(8, 10));
@@ -972,11 +974,10 @@ function writeItemHealthCanary() {
 		...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
 		...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900])
 	];
-	// The ledger files one CSV a writer inside a day directory
-	// (`docs/concepts/partitions.md`), so each row goes where its own date cell
-	// and its own run id send it. Both indexes are read off `COLUMNS` rather than
-	// written down, and only `version` precedes them - a schema date, which
-	// carries no comma.
+	// The staged rows sit one file a writer inside a day folder, so each row goes
+	// where its own date cell and its own run id send it. Both indexes are read
+	// off `COLUMNS` rather than written down, and only `version` precedes them -
+	// a schema date, which carries no comma.
 	const dateAt = COLUMNS.indexOf('date');
 	const runAt = COLUMNS.indexOf('run_id');
 	const byWriter = new Map();

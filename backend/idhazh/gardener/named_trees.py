@@ -1,9 +1,8 @@
 """Which members does a dated tree hold, read from a listing's names and never from the disk?
 
-Each tree a gardener task keeps has a grammar: a `YYYY/MM/DD/` folder of writer
-files beside a closed month's own `settled.csv`, a published day's folder of
+Each tree a gardener task keeps has a grammar: a published day's folder of
 pictures, `YYYY-MM` month files, a trace under its day's folders, a ledger's raw
-day folders. The walk that reads each grammar off the disk lives beside the
+day folders and its compact files. The walk that reads each grammar off the disk lives beside the
 pipeline code that writes it. A gardener task reads the same grammar off the
 names its `FileListing` holds, which is what lets it decide from a commit whose
 files it never downloaded.
@@ -32,7 +31,7 @@ from datetime import date
 from pathlib import Path
 from typing import NoReturn
 
-from idhazh import day_partition, day_shards, ledger, month_partition
+from idhazh import day_partition, ledger, month_partition
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.gardener_events import RawFileSkipped
@@ -56,67 +55,6 @@ def _below(
         else [path for folder in folders for path in listing.files_under(folder)]
     )
     return sorted(tuple(path[base:].split("/")) for path in files)
-
-
-def _real_day(year: str, month: str, day: str) -> bool:
-    """Whether three segments spell a real calendar day in ASCII digits."""
-    if not (
-        day_partition.is_segment(year, day_partition.YEAR_WIDTH)
-        and day_partition.is_segment(month, day_partition.SEGMENT_WIDTH)
-        and day_partition.is_segment(day, day_partition.SEGMENT_WIDTH)
-    ):
-        return False
-    try:
-        date.fromisoformat(f"{year}-{month}-{day}")
-    except ValueError:
-        return False
-    return True
-
-
-def _refuse_a_shard(root: Path, parts: tuple[str, ...]) -> NoReturn:
-    raise ValueError(
-        f"{root.parent.name}/{root.name} holds {'/'.join(parts)}, which is not a file inside "
-        "a YYYY/MM/DD day directory, nor a closed month's settled.csv. A file the reader "
-        "cannot place is how it starts missing rows, so it refuses the read rather than "
-        "skipping the file."
-    )
-
-
-def shard_files(listing: FileListing, root: Path) -> Iterator[Path]:
-    """Every writer file of a `YYYY/MM/DD/` day tree, and each settled month's file, oldest first.
-
-    The twin of `day_shards.shard_files(root, days=UNBOUNDED_WINDOW)`: a file
-    that is neither a `.csv` inside a real day's folder nor a `settled.csv`
-    directly inside a real month's folder is refused. Like the twin, the whole
-    tree is placed before its first file is handed on, so a stray anywhere stops
-    the walk before it yields anything.
-    """
-    found: list[Path] = []
-    for parts in _below(listing, root):
-        settled_month = (
-            len(parts) == 3
-            and parts[2] == day_shards.SETTLED_NAME
-            and _real_day(parts[0], parts[1], "01")
-        )
-        if not settled_month and (
-            len(parts) != 4
-            or not _real_day(*parts[:3])
-            or Path(parts[3]).suffix != day_shards.SUFFIX
-        ):
-            _refuse_a_shard(root, parts)
-        found.append(root.joinpath(*parts))
-    yield from found
-
-
-def shards_by_month(listing: FileListing, root: Path) -> dict[str, list[Path]]:
-    """Every writer file of a day tree, grouped by its month, oldest month first.
-
-    The twin of `day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)`.
-    """
-    months: dict[str, list[Path]] = {}
-    for shard in shard_files(listing, root):
-        months.setdefault(day_shards.date_of(shard)[:7], []).append(shard)
-    return months
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,3 +1,0 @@
-version,model_id,is_incumbent,selected,leaderboard_hhem,leaderboard_provenance,measured_hhem,articles,date,run_id,commit_sha,runner,verdict,detail
-2026-09-18,candidate-0,False,False,0.8,reported,0.28,9,2026-09-19,2026-09-19-1,aaaaaaa,fixture,confirmed,first response
-2026-09-18,candidate-extra,False,False,0.8,reported,0.04,4,2026-09-19,2026-09-19-1,aaaaaaa,fixture,confirmed,first response

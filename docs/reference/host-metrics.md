@@ -452,7 +452,8 @@ derived from the strings rather than typed by hand, so grouping by it is stable
 even when a vendor changes how it spells a name.
 
 `flags` is the one judgement call. Its vocabulary IS closed - `WATCHED_FLAGS` -
-but it holds a set rather than one value, and a CSV cell holds a scalar. A joined
+but it holds a set rather than one value, and every cell of this row holds one
+scalar. A joined
 string keeps one column; the cost is that a reader of the schema cannot see the
 closed set and has to open the contract.
 
@@ -508,33 +509,30 @@ job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job tha
 records a machine and stages nothing fails without an edit
 ([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
 
-**A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
-is the registry that pairs a ledger with what makes two of its rows one record,
-and this ledger was not in it - which
+**A repeated row now settles, and it could not have before.** Until 2026-09-16
+nothing paired this ledger with what makes two of its rows one record, which
 cost nothing while nothing was committed and would have cost a double-counted
 machine the moment something was. A job runs on one machine, so two rows under
 one `(date, run_id, job, shard)` are one machine written down twice, and the
 fleet distribution is the one question this record exists to answer. The first
 row wins; there is nothing to choose between two attempts that read the same
-host. Authority: Fowler, 2026-09-16.
+host. The door settles them by that key, `HOST_FINGERPRINT_KEY` in
+`backend/idhazh/ledger/keys.py`, whenever a reader asks. Authority: Fowler, 2026-09-16.
 
-**Staging the shared path was not enough, and 2026-09-16 is the file that proves
-it.** The day was staged, committed and pushed by ten jobs of one run, and
-`state/host-fingerprint/2026/09/16.csv` is header-only. Each job appended to one
-path in its own checkout, the pushes raced, and a merge driver settling two
-appends could not help: a rebase hands a job the tip, the job replays its own
-append, and the last writer to win a race carries whatever its checkout held.
-**A shared path is the defect; a settlement rule on top of it is a repair.**
+**Staging a shared path was not enough, and 2026-09-16 proved it.** The day was
+staged, committed and pushed by ten jobs of one run, and its shared day file held
+only a header. Each job appended to one path in its own checkout, the pushes
+raced, and a merge driver settling two appends could not help: a rebase hands a
+job the tip, the job replays its own append, and the last writer to win a race
+carries whatever its checkout held. **A shared path is the defect; a settlement
+rule on top of it is a repair.**
 
-So from 2026-09-17 no job opens a shared day file. Each writes
-`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, which names
-the run, the try at it, the job and the shard - four cells that make a filename
-one writer's alone. Since 2026-09-22 that file is the ledger rather than a copy
-waiting to be folded, so a run that died leaves its rows in the day they belong
-to and nothing has to catch up. The ledger has since moved to the ledger door,
-and the rule holds there too: every write is a raw file the door names for its
-writer
-([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
+So no job opens a shared day file. Every write is a raw file under
+`state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` that the ledger door names for its
+writer - the run, the try at it, the job and the shard - so a file is one
+writer's alone, and a run that died leaves its rows in the day they belong to
+with nothing to catch up
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#the-ledgers-on-the-door)).
 
 **The attempt is the writer's, and in no column of the contract.** GitHub keeps
 the run id stable across a re-run and increments the attempt. The door files each

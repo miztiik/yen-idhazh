@@ -446,8 +446,8 @@ worked or failed: the event says it once.
 **A crash prints where it broke, never what it said.** When an exception ends
 a program the gardener's workflow runs - the plan, a shard, the due check or the
 squash - or a command a person runs on gardener code - `idhazh gardener
-list-tasks`, `plan-shards` or `run-task`, `idhazh telemetry prune`, or the
-ledger migrator, `backend/utilities/migrate_to_parquet.py` - the trace names the
+list-tasks`, `plan-shards` or `run-task`, or `idhazh telemetry prune` - the
+trace names the
 exception and each exception chained to it by its type, and each frame by its
 module and line, such as `idhazh.config:310`, in Python's own layout. It never
 prints a message, an argument or a local, because a message can quote a ledger
@@ -455,7 +455,7 @@ row or what GitHub's API or a file returned (Guardrail #11). `__main__` in a
 frame is the program the step ran, or the command's own entry. The exit code is
 still Python's own, 1, and the squash prints the same trace when a run cannot be
 recorded, then exits 2. The printer is `backend/idhazh/crash_trace.py`. The four
-programs and the migrator install it before they call their `main`, `idhazh
+programs install it before they call their `main`, `idhazh
 gardener` installs it as its `main` starts, and `idhazh telemetry` only for
 `prune`: its other four subcommands, like every other `idhazh` verb, still print
 Python's own trace. An exception raised while a program or command imports its
@@ -464,7 +464,7 @@ nothing those imports run reads fetched text, and the only file other than code
 the commands' imports read is `config/ledgers.json`. A refusal a program or
 command ends on with a sentence of its own keeps its words: the due check's, the
 config refusal `idhazh gardener` prints, and the refusals `idhazh telemetry
-prune` and the migrator print.
+prune` prints.
 
 **What stays printed text.** A check that refuses the shard, before its tasks
 run or after, a download over the budget, which names the three heaviest
