@@ -115,7 +115,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
-| L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
+| L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | DONE | legendary-telegram | - | Check recorded line across judgement |
 | L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
 | L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | #1497 | Rest voices on newest source day |
 
@@ -2593,6 +2593,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **The fault** (row L52's Fowler Follow-up 3, 2026-10-08): the existing logic and panel tests do not render the full page, so they cannot catch the page binding one of its panels to a different line.
 - **Files touched** (existing browser harnesses searched on current `origin/main`):
   - `frontend/tests/console-judgement-verdict.spec.ts` (the existing browser test opens and renders the Judgement route; extend it only if it can serve the generated case)
+  - `frontend/tests/support/judgement-route.ts` (found during execution: compiles a fixed named inventory of real route modules on generated JSON, producer-written console band and packed Parquet; serves private preview output)
   - Read, no change unless Fowler rules a fixture helper necessary: `frontend/tests/recorded-line.spec.ts` (the recorded-line boundary cases) and `frontend/src/routes/console/judgement/+page.server.ts` (the page loader)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the selected Judgement route spec; `npm --prefix frontend run check`. Use real generated data and the recorded-data boundary, not mocks. If the existing harness cannot render that case, stop for Fowler's ruling on a feasible harness; do not add a stub. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** Render one page from a built case whose recorded line differs from the fitted-row rule, and assert the same recorded value in all three panels on that page. On current `origin/main`, component tests can pass without proving the page's three bindings agree.
@@ -2604,6 +2605,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 1 | L61 waits for L59 and L60 so the page test checks their settled wording and mark meaning; the earlier window-control slot L42 is merged as #1464 and no longer blocks this test | Plan owner, 2026-10-09 |
 | 2 | The route test uses the existing browser harness and real built fixtures. If that boundary cannot support the case, Fowler rules the next step; no mock or stub substitutes for it | Plan owner, 2026-10-09 |
 | 3 | Level 1: this adds an integration check for three existing page bindings and changes no production behavior | Plan owner, 2026-10-09 |
+| 4 | Use a private compiled SvelteKit build and preview with unchanged production configuration. Copy a fixed named module inventory, including the two real Data explorer entries required by the engine-asset plugin and the shared indexed-runs module from L56. Do not discover imports: a new module must be named before compilation can use it. Keep cache and output private. The development-server trial failed initialization even after cache isolation, not a binding assertion. Generated data passes through the real readers and console-band producer; no loader stub or production change substitutes for that boundary | Fowler; plan coordinator approved the feasible harness and corrected its input-growth boundary, 2026-10-09 |
+| 5 | Preserve the solid fitted-history meaning from L60. Check each panel's recorded-build rule separately against a distinct written value. Outside-repository evidence changes one actual compiled getter at a time in private output, proves its original assertion fails on the fitted value while the other two remain correct, then restores exact bytes. The committed test checks only the unchanged real page and does not depend on emitted identifiers | Plan coordinator, 2026-10-09 |
 
 **Rejected alternatives**
 
