@@ -66,7 +66,7 @@ Its read carries `collect.published_window_days`, and the committed config sets 
 
 Size it from the ceiling. A run plans at most `run.safety_ceiling_per_run` items, which the committed config sets to 80, and the schedule fires five times a day - so a day writes at most 400 rows and a year at most about 146,000.
 
-The whole read holds one month's rows and the answer at a time, whatever the history holds. `backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` doubles the months held and checks that the peak stays flat. The read times measured on 2026-09-08 were of a file layout this ledger no longer keeps, so they are not repeated here; git history holds them. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
+The whole read folds one held month into the answer before it reads the next, whatever the history holds. `backend/tests/test_ledger.py::test_the_unbounded_cover_reads_one_held_month_at_a_time` builds six months and checks that the unbounded path asks for each held month. This is a behavior check, not a peak-memory measurement. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
 ## The item-health summary keeps a month but files through the door
 
