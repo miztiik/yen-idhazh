@@ -1,6 +1,7 @@
 <script lang="ts">
-	/** The console shell: the title, the strip, the sentence that dates the
-	 * record, and the verdict band, drawn once above every route.
+	/** The console shell: the search instruction, the title, the strip, the
+	 * sentence that dates the record, and the verdict band, drawn once above
+	 * every route.
 	 *
 	 * The band is the answer to "is the pipeline working", and it is the first
 	 * thing the console asks for - `+layout.ts` beside this file fetches
@@ -134,6 +135,14 @@
 	 * groups, or one untitled group, has nothing to jump between. */
 	const contents = $derived((routeData.panelGroups ?? []).filter((group) => group.title !== ''));
 </script>
+
+<!-- The console is the operator's own record of the pipeline, never a page for
+     a reader arriving from search. That is part of what the console is, not a
+     setting, and `noindex` is the fixed protocol word search engines read for
+     it. The shared layout keeps every new console route under the same rule. -->
+<svelte:head>
+	<meta name="robots" content="noindex" />
+</svelte:head>
 
 <section class="py-6" data-surface="operator" data-console-route={active} data-console-chrome={chrome}>
 	<h1 id="console-top" class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text" class:sr-only={workbench}>

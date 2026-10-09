@@ -158,6 +158,14 @@ page, and a route that sets no title keeps the one the route before it set.
 route's title to its literal words, after a tab click and on a page load, and
 checks that no two routes share one. A new route's title takes the same pattern.
 
+**Search engines do not list any console route.** The console is the operator's
+own record of the pipeline, not a page for a reader arriving from search, so
+`console/+layout.svelte` puts one `noindex` tag above every route. This is a
+fixed property of the console rather than a setting. Keeping the tag in the
+shared layout also covers a route added later without asking its page to repeat
+the rule. `console-nav.spec.ts` checks exactly one tag after a page load and a
+tab click, and in each prerendered document with JavaScript off.
+
 ## From the wide breakpoint up the strip sticks, and it is one row
 
 A long route - Hardware is four groups and fifteen panels - put the days control

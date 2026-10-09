@@ -103,7 +103,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L46 | The site build bakes the raw days the data explorer may read | - | Q | DONE | automatic-garbanzo | #1427 | Plan 62 row l46 |
 | L47 | Hardware's started line counts a day whose only run is machine records alone | L36 | O | DONE | super-couscous | #1441 | Plan 62 row l47 |
 | L48 | The Data explorer's line under an answer ends on the last day it read | L12, L46, plan 55's row "The reader chooses the chart and the columns it draws" (holds `frontend/src/routes/console/data-explorer/+page.svelte` as well as `frontend/tests/console-data-explorer.spec.ts`) | R | DONE | glowing-doodle | - | Plan 62 row l48 |
-| L49 | Every console route asks search engines not to list it | L38, plan 55's row "The reader chooses the chart and the columns it draws", L42 | S | PENDING | - | - | - |
+| L49 | Every console route asks search engines not to list it | L38, plan 55's row "The reader chooses the chart and the columns it draws", L42 | S | DONE | super-doodle | - | Plan 62 row l49 |
 | L50 | Two console tests prove what they claim | - | T | DONE | cautious-bassoon | #1445 | Plan 62 row l50 |
 | L51 | Judgement's agreement panel words follow the rates they judge | L39, L40 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | U | DONE | scaling-meme | #1463 | Plan 62 row l51 |
 | L52 | Judgement names the line each build recorded | L38, L35 (holds `frontend/tests/console-window.spec.ts`), L40 (holds `frontend/tests/console-window.spec.ts`) | V | DONE | verbose-couscous | - | Plan 62 row l52 |
@@ -2132,16 +2132,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #L49 - Every console route asks search engines not to list it
 
-- **Scope:** Every console route carries `<meta name="robots" content="noindex" />` in its head, so a search engine that crawls it does not list it. Level to be set from the search below.
+- **Scope:** Every console route carries `<meta name="robots" content="noindex" />` in its head, so a search engine that crawls it does not list it. Level 1.
 - **The gap** (row L43's report, finding 1, 2026-10-08): a search of `frontend/src/routes/console/` for `noindex` finds it on three routes, Pipelines, Hardware and Summaries, and finds it on none of Judgement, Voices and Data explorer; the site ships no `frontend/static/robots.txt`. A search engine that crawls the console may list those three routes.
 - **Why CI did not catch it:** `.github/workflows/ci.yml`'s `robots` job runs `pytest backend/tests/test_extract.py`, which checks the article extractor's own RFC 9309 `robots.txt` parsing for sources this project crawls. It reads nothing under `frontend/src/routes/console/` and asserts no console-route meta tag, so a console route with no `noindex` tag passes that job every time.
-- **Files touched** (found by a search on `origin/main` at 3ba1b39b8 for `noindex` under `frontend/src/routes/console/`, for `robots` under `.github/workflows/` and `backend/tests/`, and for `robots.txt` under `frontend/static/`; search again at dispatch):
-  - `frontend/src/routes/console/judgement/+page.svelte` (sets no `noindex`; held by L38)
-  - `frontend/src/routes/console/voices/+page.svelte` (sets no `noindex`)
-  - `frontend/src/routes/console/data-explorer/+page.svelte` (sets no `noindex`; held by plan 55's row "The reader chooses the chart and the columns it draws")
-  - `frontend/src/routes/console/+layout.svelte` (a candidate home for one shared tag, if Fowler rules for it; L42 changes this file for the days control, so coordinate before dispatch)
-  - `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/routes/console/model/+page.svelte` (already set `noindex`; read, to confirm the pattern a shared or per-page fix follows)
-  - `.github/workflows/ci.yml` (the `robots` job; read, to say why it did not catch this)
+- **Files touched** (searched again on `origin/main` at 75b726d54; found during execution):
+  - `frontend/src/routes/console/+layout.svelte` (one shared tag above every console route)
+  - `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/routes/console/model/+page.svelte` (remove the three page copies, so no route gets the tag twice)
+  - `frontend/tests/console-nav.spec.ts` (the Oracle joins the six existing title cases, with no extra page visits, and checks each prerendered document with JavaScript off)
+  - `docs/architecture/publishing/what-sits-above-every-console-route.md` (the shared rule, its reason and its check)
+  - Read, unchanged: `frontend/src/routes/console/judgement/+page.svelte`, `frontend/src/routes/console/voices/+page.svelte`, `frontend/src/routes/console/data-explorer/+page.svelte`, `.github/workflows/ci.yml` and `backend/tests/test_extract.py`
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list` for the affected specs; `npm --prefix frontend run check`; the browser smoke of each console route, reading its rendered head. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** on a page the test builds, or on the canary page: every console route's rendered head carries `<meta name="robots" content="noindex" />`. On `origin/main` Judgement, Voices and Data explorer carry no such tag, which is what lets this check fail.
 
@@ -2149,14 +2148,18 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Fowler rules the shape: one tag in a shared place such as `console/+layout.svelte`, or one tag on each page | To be ruled at dispatch (Fowler) |
-| 2 | Level set from the search: a missing tag on three pages, fixed by one line each or by one shared line, following a pattern three other pages already set; a wrong version is obvious and local | Plan owner, 2026-10-08 |
+| 1 | Put one tag in `console/+layout.svelte` and remove the three page copies. Unlike the title, the tag is identical on every route; the shared place covers routes added later, preserves the rule that adding a route needs no layout edit, and avoids the held Data explorer page | Fowler, 2026-10-09 |
+| 2 | Level 1: one shared head tag replaces three identical page tags, and one browser spec pins the rendered head. A wrong version is obvious and local | This row's worker, 2026-10-09 (found during execution) |
+| 3 | Keep `noindex` as a protocol constant in source. The console is the operator's own record and never a page for a reader arriving from search, so listing it is not a tunable state and a config switch would add a second value nobody should turn on | Fowler, 2026-10-09 |
+| 4 | Put the Oracle in the six existing title tests, at the same page-load and tab-click points, and in the existing no-script loop. This proves exactly one tag without adding page visits | Fowler, 2026-10-09 |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | As today | A search engine that crawls the console may list Judgement, Voices or Data explorer, pages built for no reader who does not already use this console | Nothing to build, and three routes a search engine may index | Row L43's report, finding 1 |
+| 2 | One tag on every page | All three routes added after the first split missed the copy, a future route could miss it again, and it would wait on the in-flight Data explorer page for no reader benefit | Six copies to hold in step, plus one more for every route added | Fowler, 2026-10-09 |
+| 3 | A `console.search_engines_may_list` config switch | The only second value would list the operator's pipeline record, which is not a supported console state | A schema field, its reader, documentation and tests for a switch nobody should turn on | Fowler, 2026-10-09 |
 
 ### Row #L50 - Two console tests prove what they claim
 

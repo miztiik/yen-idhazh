@@ -14,15 +14,17 @@ import { uiConfig } from '../src/lib/server/config';
  * every panel it hides still ships inside the one document. Five prerendered
  * routes with real anchors pass.
  *
- * Five things this file protects that a screenshot cannot. The labels are the
+ * Six things this file protects that a screenshot cannot. The labels are the
  * words the owner chose, so a paraphrase fails. The ids and the paths under
  * them did NOT move when two of the labels changed on 2026-08-31, which is what
  * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
  * and a route is a noun. Since 2026-09-12 the strip has to FIT - six tabs
  * on one row at 1440 and no more than three at 360 and 320, with no box
- * overlapping another. And each route's title in the browser names that route,
- * after a tab click as well as on a page load.
+ * overlapping another. Each route's title in the browser names that route,
+ * after a tab click as well as on a page load. And each route's head asks
+ * search engines not to list it, exactly once, in the document as served and
+ * in the page a script draws.
  */
 
 /** The owner's words, and the paths they sit on. Typed out on purpose: this is
@@ -334,13 +336,25 @@ async function hydrated(page: Page) {
 	await expect(page.locator('[data-window-preset] input').first()).toBeEnabled();
 }
 
-test.describe('the title names the route on screen', () => {
+/** What every console route's head asks of a search engine: do not list this
+ * page. Typed out, like the titles above. Counted in the head the browser holds,
+ * so two copies fail as surely as none. */
+async function asksNotToBeListed(page: Page, where: string) {
+	const robots = page.locator('head meta[name="robots"]');
+	await expect(robots, `${where}: the head does not carry exactly one robots tag`).toHaveCount(1);
+	await expect(
+		robots,
+		`${where}: the robots tag does not ask search engines not to list the page`
+	).toHaveAttribute('content', 'noindex');
+}
+
+test.describe('the head names the route on screen and asks search engines not to list it', () => {
 	for (const route of ROUTES) {
 		// Every route is reached from Pipelines, where an operator starts, and
 		// Pipelines from the tab after it.
 		const from = route.id === 'pipelines' ? ROUTES[1] : ROUTES[0];
 
-		test(`THE ORACLE: ${route.path} names itself after a tab click from ${from.label} and on a page load`, async ({
+		test(`THE ORACLE: ${route.path} names itself and asks search engines not to list it, after a tab click from ${from.label} and on a page load`, async ({
 			page
 		}) => {
 			await page.goto(from.path);
@@ -358,9 +372,17 @@ test.describe('the title names the route on screen', () => {
 				await page.evaluate(() => performance.timeOrigin),
 				'the tab loaded a new page, so this was a page load and not a tab click'
 			).toBe(opened);
+			await asksNotToBeListed(page, `${route.path} after a tab click from ${from.path}`);
 
 			await page.goto(route.path);
 			await expect(page, `${route.path} on a page load`).toHaveTitle(titleOf(route.id));
+			// Counted once the script has run, so a copy the script adds to the
+			// served one is counted too.
+			await expect(page.locator('[data-console-strip]')).toHaveAttribute(
+				'data-console-strip-live',
+				'yes'
+			);
+			await asksNotToBeListed(page, `${route.path} on a page load`);
 		});
 	}
 
@@ -524,13 +546,18 @@ test.describe('the routes that name something they do not draw', () => {
 });
 
 test.describe('with no script at all', () => {
-	test('each route is its own complete document and every link resolves', async ({ browser }) => {
+	test('each route is its own complete document, asks search engines not to list it, and every link resolves', async ({
+		browser
+	}) => {
 		const context = await browser.newContext({ javaScriptEnabled: false });
 		const page = await context.newPage();
 
 		for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
 			const response = await page.goto(route.path);
 			expect(response?.status(), `${route.path} did not answer`).toBe(200);
+
+			// The document as served is what a search engine that runs no script reads.
+			await asksNotToBeListed(page, `${route.path} with no script`);
 
 			// The band, the strip and the carry are all in the prerendered document.
 			await expect(page.locator('[data-console-band]'), `${route.path} lost the band`).toHaveCount(

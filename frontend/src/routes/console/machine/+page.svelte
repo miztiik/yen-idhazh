@@ -102,7 +102,6 @@
 
 <svelte:head>
 	<title>Hardware &mdash; Console &mdash; {data.ui.site_title}</title>
-	<meta name="robots" content="noindex" />
 </svelte:head>
 
 <!-- The title, the strip, the band and the days control are the shell and live
