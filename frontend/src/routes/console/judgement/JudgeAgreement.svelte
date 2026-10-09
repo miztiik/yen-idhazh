@@ -277,9 +277,8 @@
 	 * Raised clear of either dashed mark's own label where the two would
 	 * otherwise overlap - a stranded day can sit at a mark's own height, and
 	 * near the plot's right edge the two labels compete for the same corner
-	 * (Jony, 2026-10-09). Left open: a mark within about `AXIS_LABEL_PX * 2`
-	 * of the plot's own top, where this clearance and the top clamp below
-	 * could still collide; narrow enough to leave until it is hit.
+	 * Where that position cannot fit inside the plot, place the date below
+	 * the dot and clear of the mark labels, keeping it centred on its day.
 	 */
 	const strandedLabels = $derived(
 		marks.flatMap((mark, index) => {
@@ -299,14 +298,22 @@
 						: Math.min(disagreeY, unclearY);
 			if (topY === null) return [];
 			const width = labelWidth(dayMonth(mark.date));
-			let y = topY - 8;
-			for (const markBox of markLabelBoxes) {
-				const box_ = { top: y - AXIS_LABEL_PX, bottom: y, left: mark.x - width / 2, right: mark.x + width / 2 };
-				if (boxesOverlap(box_, markBox)) y = Math.min(y, markBox.top - 2);
+			const labelBox = (y: number) => ({
+				top: y - AXIS_LABEL_PX, bottom: y,
+				left: mark.x - width / 2, right: mark.x + width / 2
+			});
+			const boxes = [...markLabelBoxes].sort((a, b) => a.top - b.top);
+			let y = Math.max(topY - 8, box.top + AXIS_LABEL_PX);
+			for (const markBox of boxes.toReversed()) {
+				if (boxesOverlap(labelBox(y), markBox)) y = markBox.top - 2;
 			}
-			// Clamped so the label's own ascender never climbs past the plot's top
-			// margin, where an isolated dot sits close enough to the axis top.
-			return [{ date: mark.date, x: mark.x, y: Math.max(y, box.top + 2) }];
+			if (labelBox(y).top < box.top) {
+				y = topY + 8 + AXIS_LABEL_PX;
+				for (const markBox of boxes) {
+					if (boxesOverlap(labelBox(y), markBox)) y = markBox.bottom + 2 + AXIS_LABEL_PX;
+				}
+			}
+			return [{ date: mark.date, x: mark.x, y }];
 		})
 	);
 

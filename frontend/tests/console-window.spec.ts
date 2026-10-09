@@ -1987,8 +1987,19 @@ test.describe('the Judgement panels name their span in every state, on days the 
 		await expect(stranded).toHaveCount(1);
 		const markLabel = page.locator('[data-agreement-marker-label="disagreement"]');
 		await expect(markLabel).toHaveCount(1);
-		const strandedBox = await stranded.evaluate((node) => (node as SVGTextElement).getBBox());
-		const markBox = await markLabel.evaluate((node) => (node as SVGTextElement).getBBox());
+		const strandedBox = await stranded.evaluate((node) => {
+			const { x, y, width, height } = (node as SVGTextElement).getBBox();
+			return { x, y, width, height };
+		});
+		const markBox = await markLabel.evaluate((node) => {
+			const { x, y, width, height } = (node as SVGTextElement).getBBox();
+			return { x, y, width, height };
+		});
+		for (const box of [strandedBox, markBox]) {
+			expect(Object.values(box).every(Number.isFinite), 'label coordinates must be finite').toBe(true);
+			expect(box.width).toBeGreaterThan(0);
+			expect(box.height).toBeGreaterThan(0);
+		}
 		const overlap =
 			strandedBox.x < markBox.x + markBox.width &&
 			strandedBox.x + strandedBox.width > markBox.x &&
@@ -1996,6 +2007,71 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			strandedBox.y + strandedBox.height > markBox.y;
 		expect(overlap, 'the stranded label sits on top of the mark label at the right edge').toBe(false);
 	});
+
+	for (const width of [390, 1280]) {
+		for (const theme of ['light', 'dark']) {
+			test(`THE ORACLE: near-top date and mark labels stay separate at ${width}px in ${theme}`, async ({
+				page
+			}) => {
+				await page.setViewportSize({ width, height: 800 });
+				const days = [
+					judgeDay('2030-06-02', { pairsJudged: 100, pairsUsable: 90, disagreementRate: 0.1 }),
+					judgeDay('2030-06-14', {
+						pairsJudged: 100, pairsUsable: 90, disagreementRate: 0.1, unclearRate: 0.39
+					})
+				];
+				await page.setContent(
+					`<html data-theme="${theme}"><body><main>${drawn['judge-agreement']({
+						...propsOf({ surface: 'judge-agreement', preset: 14, state: '', days, words: '' }),
+						width: width - 32,
+						limits: { disagreementMax: 0.15, unclearMax: 0.39 }
+					})}</main></body></html>`
+				);
+				const date = page.locator('[data-agreement-stranded-label="2030-06-14"]');
+				await expect(date).toHaveText('14 Jun');
+				await expect(date).toHaveAttribute('aria-hidden', 'true');
+				const dateBox = await date.evaluate((node) => {
+					const { x, y, width, height } = (node as SVGTextElement).getBBox();
+					return { x, y, width, height };
+				});
+				const markBoxes = await page.locator('[data-agreement-marker-label]').evaluateAll(
+					(nodes) => nodes.map((node) => {
+						const { x, y, width, height } = (node as SVGTextElement).getBBox();
+						return { x, y, width, height };
+					})
+				);
+				for (const markBox of markBoxes) {
+					for (const box of [dateBox, markBox]) {
+						expect(Object.values(box).every(Number.isFinite), 'label coordinates must be finite').toBe(true);
+						expect(box.width).toBeGreaterThan(0);
+						expect(box.height).toBeGreaterThan(0);
+					}
+					expect(
+						dateBox.x < markBox.x + markBox.width &&
+						dateBox.x + dateBox.width > markBox.x &&
+						dateBox.y < markBox.y + markBox.height &&
+						dateBox.y + dateBox.height > markBox.y,
+						'the top clamp pulls the date back into a mark label'
+					).toBe(false);
+				}
+				const plot = await page.locator('[data-windowed="judge-agreement"] svg > line').first()
+					.evaluate((node) => ({
+						left: Number(node.getAttribute('x1')),
+						right: Number(node.getAttribute('x2')),
+						bottom: Number(node.getAttribute('y1'))
+					}));
+				const top = await page.locator('[data-windowed="judge-agreement"] svg > line').nth(1)
+					.getAttribute('y1');
+				expect(dateBox.x).toBeGreaterThanOrEqual(plot.left);
+				expect(dateBox.x + dateBox.width).toBeLessThanOrEqual(plot.right);
+				expect(dateBox.y).toBeGreaterThanOrEqual(Number(top));
+				expect(dateBox.y + dateBox.height).toBeLessThanOrEqual(plot.bottom);
+				const dotX = await page.locator('[data-agreement-day="2030-06-14"] circle').first()
+					.getAttribute('cx');
+				expect(Number(await date.getAttribute('x')), 'the date stays over its own day').toBe(Number(dotX));
+			});
+		}
+	}
 
 	for (const preset of [1, 7]) {
 		test(`THE ORACLE: judge-agreement's note and plot labels call each dashed line a mark, and keep "line" for the merge line, at the ${preset}-day window`, async ({

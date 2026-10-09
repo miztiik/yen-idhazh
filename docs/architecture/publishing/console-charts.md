@@ -126,9 +126,11 @@ beside its topmost dot, `aria-hidden` since the day's accessible name already
 carries it, where the thinning dropped its tick and an immediate neighbour
 read nothing. Keep this label clear of a mark's own label: read each dashed
 mark's label as the small box it occupies and raise the date label above any
-box it would otherwise sit on. A mark close enough to the plot's own top can
-still collide with that date label's own clamp; this is left open until a
-real window reaches it.
+box it would otherwise sit on. Keep the whole date label inside the plot.
+If clearing a mark above would push the date past the plot top, place it
+below its topmost dot and clear it downward past any mark-label box it meets.
+Keep the date centred on its day's column in either position. Do not clamp
+it back into a mark label, hide it or move it sideways.
 
 ## Every chart with a shared column carries a pointer readout
 
@@ -253,6 +255,7 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
 - A fixed axis that stops at a mark hides exactly the reading a mark exists to show: how far past it a day went. Niceing the axis from the data as well as the marks keeps every share visible without ever pinning one to a line it does not sit on.
 - A thinned-out tick label is a deliberate trade against a wide window; it is not supposed to take a day's only date with it when that day also lost its neighbour's reading. A floating label kept clear of a mark's own label answers both without widening the shared thinning itself.
+- A date that cannot clear a mark above stays centred on its day below the dot. Its horizontal position still names the day; neither dashed mark nor its label moves to make room.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
 - Failure rate remains unboxed in the item-telemetry viewport. A fixed box would add a slot to a group whose panels flow to their own empty states. The page names a missing or failed month once; the chart uses short state sentences and keeps its quiet-window sentence for a successful empty read.
