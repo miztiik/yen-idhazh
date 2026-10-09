@@ -576,7 +576,9 @@
 			data-readout-records={feedRecords.length}
 			tabindex="0"
 			role="group"
-			aria-label="Every feed's days, one square a day. Arrow keys read a square, Escape returns to the first feed's newest day."
+			aria-label={windowDays === 1
+				? "Every feed's reading for this one day, one square per feed. Arrow keys move between feeds. Escape returns to the first feed."
+				: "Every feed's days, one square a day. Arrow keys read a square, Escape returns to the first feed's newest day."}
 			use:markReadout={{
 				count: feedRecords.length,
 				walk: Math.max(1, stripDates.length),
@@ -693,8 +695,10 @@
 					resting={feedPicked === null}
 					name="feed-outcomes"
 					maxShare={data.chart.readout_max_share}
-					restingNote=", its newest day"
-					hint="Point at a square to read it. Left and Right step through a feed's days, Up and Down move between feeds, Escape returns to rest."
+					restingNote={windowDays === 1 ? ', this one day' : ', its newest day'}
+					hint={windowDays === 1
+						? 'Point at a square to read it. Arrow keys move between feeds. Escape returns to the first feed.'
+						: "Point at a square to read it. Left and Right step through a feed's days, Up and Down move between feeds, Escape returns to rest."}
 				/>
 			{/if}
 
@@ -733,7 +737,9 @@
 				: 'no source has a day on record, so there is no square to read; agreed with Susan'}
 			tabindex={retiringRecords.length > 0 ? 0 : undefined}
 			role="group"
-			aria-label="Every source's days, one square a day. Arrow keys read a square, Escape returns to the first source's newest day."
+			aria-label={strip.dates.length === 1
+				? "Every source's reading for the one recorded day, one square per source. Arrow keys move between sources. Escape returns to the first source."
+				: "Every source's days, one square a day. Arrow keys read a square, Escape returns to the first source's newest day."}
 			use:markReadout={{
 				count: retiringRecords.length,
 				walk: Math.max(1, strip.dates.length),
@@ -887,8 +893,10 @@
 						resting={retiringPicked === null}
 						name="source-yield"
 						maxShare={data.chart.readout_max_share}
-						restingNote=", its newest day"
-						hint="Point at a square to read it. Left and Right step through a source's days, Up and Down move between sources, Escape returns to rest."
+						restingNote={strip.dates.length === 1 ? ', its one recorded day' : ', its newest day'}
+						hint={strip.dates.length === 1
+							? 'Point at a square to read it. Arrow keys move between sources. Escape returns to the first source.'
+							: "Point at a square to read it. Left and Right step through a source's days, Up and Down move between sources, Escape returns to rest."}
 					/>
 				{/if}
 

@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -348,6 +348,19 @@ Every windowed sentence takes its day words from one helper,
 
 A sentence that counts something other than the window's days - runs, a rule's
 own span, the days a record read - keeps its own count.
+
+A record strip can have several selectable records on one date. Keep the
+keys that move between feeds, sources or tiles, but do not describe them as
+stepping through dates. A source retirement strip follows its own recorded
+dates, not the window control: only a record with one date says `its one
+recorded day`. The processor strip keeps the newest run's parts selectable
+beside the day's tile, or names the first tile when the day has none.
+
+At the one-day preset, panel titles say `for this one day` rather than `day
+by day`, and the cost switch's daily choice says `This one day`. The stage
+timing note says `Median time per item for this one day`: the median is over
+items, not days. A merge chart's one-day note names the applied and proposed
+readings rather than promising lines or a standalone point it does not draw.
 
 ## A section keeps the sentence that decides and loses the sentence that narrates
 

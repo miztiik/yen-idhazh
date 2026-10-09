@@ -16,7 +16,7 @@
 		costColumns,
 		costLabel,
 		costOverDays,
-		COST_SHAPES,
+		costShapeOptions,
 		DEFAULT_COST_SHAPE,
 		type CostShape
 	} from '$lib/charts/cost';
@@ -136,7 +136,7 @@
 						bind:shape={costShape}
 						name="cost-shape"
 						label="Which shape to draw the counterfactual in"
-						options={COST_SHAPES}
+						options={costShapeOptions(windowDays)}
 					/>
 				</div>
 

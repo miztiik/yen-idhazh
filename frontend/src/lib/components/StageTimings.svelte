@@ -368,7 +368,8 @@
 	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
+		{calendar.length === 1 ? 'Median time per item for this one day.' : 'Median per item, each day.'}
+		Each gridline is ten times the one below, so the same slowdown looks
 		the same at 40 ms and at 100 s.
 		{#if coverageNote}
 			<!-- One sentence for the whole chart, above the plot. It was one note per
