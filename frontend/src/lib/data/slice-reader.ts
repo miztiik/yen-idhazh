@@ -154,7 +154,7 @@ export function faultLine(ledger: LedgerName, met: FaultMet): string {
 	if (met.fault === 'not-packed') {
 		return line(
 			indexPath(ledger, 'daily'),
-			'it is not there: this record is not packed, or not published. Turn on whichever is off, or wait for the next upkeep run.'
+			'This record is not packed yet.'
 		);
 	}
 	if (met.fault === 'index-missing') {
