@@ -1,4 +1,4 @@
-"""Does every gardener program and operator command print a crash as where it broke, never what it said?
+"""Does every idhazh command and gardener program print where it crashed, never what it said?
 
 Each case runs one program the way its job does, or one command the way a
 person types it, in a fresh interpreter, through a driver. The driver raises an
@@ -18,6 +18,10 @@ No workflow runs the two operator commands. Both run through the package's
 `__main__.py`, which calls the `main` the console script calls, and `run-task`
 stands for the gardener's three subcommands, which share one `main`.
 
+The package cases run `idhazh work --config <missing planted path>` through the
+installed console script and through `python -m idhazh`. The missing config ends
+the command before it can start network work.
+
 The last test holds the four workflow programs to every command in the workflow
 that starts Python, so a fifth program cannot land without a case here. What
 the trace holds for any chain is `test_crash_trace.py`.
@@ -25,6 +29,7 @@ the trace holds for any chain is `test_crash_trace.py`.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -55,6 +60,13 @@ WORKFLOW: Final = "idhazh-gardener.yml"
 #: The package's own entry: the console script `idhazh` and `python -m idhazh`
 #: both call the `main` this runs.
 IDHAZH_ENTRY: Final = REPO_ROOT / "backend" / "idhazh" / "__main__.py"
+
+#: The router both package entry forms call.
+IDHAZH_ROUTER: Final = REPO_ROOT / "backend" / "idhazh" / "cli.py"
+
+#: Both installed forms of the package command. They must install the same
+#: process-wide crash boundary before routing a verb.
+IDHAZH_FORMS: Final = ("console-script", "python-module")
 
 #: What a fetched page might say, planted in the driver's exception; and the part
 #: of it that the program's input path carries too, which no line may hold.
@@ -222,6 +234,45 @@ def main_call(program: Path) -> str:
     return f"  __main__:{calls[0]}"
 
 
+def subprocess_environment() -> dict[str, str]:
+    """The process environment without Python path overrides or GitHub step outputs."""
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("PYTHON") and name not in STEP_VARIABLES
+    }
+
+
+def installed_console_script() -> Path:
+    """The `idhazh` script installed beside the interpreter running this test."""
+    name = "idhazh.exe" if os.name == "nt" else "idhazh"
+    script = Path(sys.executable).with_name(name)
+    assert script.is_file(), f"{script} is missing; install the package before this test"
+    return script
+
+
+def test_the_top_router_installs_the_crash_trace_before_any_other_action() -> None:
+    """Reading argv or handing off first would leave a command outside the boundary."""
+    tree = ast.parse(IDHAZH_ROUTER.read_text(encoding="utf-8"))
+    functions = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"
+    ]
+    assert len(functions) == 1
+    body = functions[0].body
+    if (
+        isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    first = body[0]
+    assert isinstance(first, ast.Expr)
+    assert isinstance(first.value, ast.Call)
+    assert isinstance(first.value.func, ast.Attribute)
+    assert isinstance(first.value.func.value, ast.Name)
+    assert (first.value.func.value.id, first.value.func.attr) == ("crash_trace", "install")
+
+
 def programs_started(script: str) -> set[str]:
     """What each command of a step's script that starts Python runs: the word after it."""
     words = shlex.split(script, comments=True)
@@ -237,11 +288,7 @@ def test_a_crash_prints_each_exceptions_type_and_frames_and_never_its_text(
     tmp_path: Path, crash: Crash
 ) -> None:
     arguments, ended_by = crash.inputs(tmp_path)
-    env = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith("PYTHON") and name not in STEP_VARIABLES
-    }
+    env = subprocess_environment()
     flags = ["-I", "-S"] if crash.installs_nothing else []
     if not crash.installs_nothing:
         env["PYTHONPATH"] = str(REPO_ROOT / "backend")
@@ -265,6 +312,39 @@ def test_a_crash_prints_each_exceptions_type_and_frames_and_never_its_text(
     assert "LookupError" in trace
     assert CONTEXT in trace
     assert main_call(crash.program) in trace
+
+
+@pytest.mark.parametrize("entry", IDHAZH_FORMS)
+def test_every_idhazh_entry_scrubs_a_work_crash(
+    tmp_path: Path, entry: str
+) -> None:
+    """Both installed entry forms fail on real input before any network work can begin."""
+    missing = tmp_path / PLANTED
+    command = (
+        [str(installed_console_script())]
+        if entry == "console-script"
+        else [sys.executable, "-m", "idhazh"]
+    )
+
+    done = subprocess.run(
+        [*command, "work", "--config", str(missing)],
+        cwd=tmp_path,
+        env=subprocess_environment(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 1, "Python's own code for an uncaught exception"
+    assert done.stdout == ""
+    assert PLANTED not in done.stderr, done.stderr
+    printed = done.stderr.splitlines()
+    assert HEADER in printed, done.stderr
+    trace = printed[printed.index(HEADER) :]
+    assert [line for line in trace if not TRACE_LINE.fullmatch(line)] == []
+    assert trace[-1] == "FileNotFoundError"
+    assert any(line.startswith("  idhazh.cli:") for line in trace)
+    assert any(line.startswith("  idhazh.config:") for line in trace)
 
 
 def test_every_command_the_workflow_starts_python_with_runs_a_program_crashed_here() -> None:

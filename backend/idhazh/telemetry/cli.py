@@ -41,7 +41,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, crash_trace
+from idhazh import config
 from idhazh.assemble import day_dir, utc_now
 from idhazh.telemetry import inventory, item, prune, republish
 
@@ -128,9 +128,6 @@ READERS: Final[dict[str, Callable[..., list[str]]]] = {
 def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.subcommand == "prune":
-        # A crash prints where it broke: a message can quote a ledger row it read.
-        crash_trace.install()
 
     settings = config.load(args.config)
     logging.basicConfig(
