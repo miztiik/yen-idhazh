@@ -386,11 +386,31 @@ function cutOf(plans: readonly LedgerPlan[]): CutDays[] {
 	return plans.flatMap((one) => (one.cutBefore === null ? [] : [{ ledger: one.ledger, before: one.cutBefore }]));
 }
 
-/** The first day any selected ledger's answer reads. A ledger's answer starts on `from`, the
- *  window's first day, unless its earlier days were cut or the repository could not give them;
- *  then it starts on the day `cutBefore` or `unanswered` names. */
+/** The day one ledger's answer starts on: `from`, the window's first day, unless its earlier days
+ *  were cut or the repository could not give them; then the day `cutBefore` or `unanswered` names. */
+function startDay(one: LedgerPlan, from: DateStamp): DateStamp {
+	return one.cutBefore ?? one.unanswered?.before ?? from;
+}
+
+/** The first day any selected ledger's answer reads. */
 function firstDayRead(plans: readonly LedgerPlan[], from: DateStamp): DateStamp {
-	return plans.map((one) => one.cutBefore ?? one.unanswered?.before ?? from).sort()[0] ?? from;
+	return plans.map((one) => startDay(one, from)).sort()[0] ?? from;
+}
+
+/** The last day one ledger's answer reads: the earlier of `to`, the window's last day, and
+ *  `through`, the newest day the ledger lists. `null` when its answer starts after that day, as for
+ *  a ledger that began after the window, because it read no day of the window. */
+function endDay(one: LedgerPlan, from: DateStamp, to: DateStamp): DateStamp | null {
+	if (one.through === null) return null;
+	const end = one.through < to ? one.through : to;
+	return startDay(one, from) > end ? null : end;
+}
+
+/** The last day any selected ledger's answer reads. A ledger that read no day of the window
+ *  never moves it. */
+function lastDayRead(plans: readonly LedgerPlan[], from: DateStamp, to: DateStamp): DateStamp {
+	const ends = plans.map((one) => endDay(one, from, to)).filter((day): day is DateStamp => day !== null).sort();
+	return ends[ends.length - 1] ?? to;
 }
 
 async function plan(
@@ -647,7 +667,7 @@ async function answerHeld(
 		const named = { cut: planned.cost.cut, unanswered: planned.unanswered, gaps: gapsOf(planned.ledgers) };
 		return answer.rows.length === 0
 			? { state: 'quiet', columns, read, ...named }
-			: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, readFrom: firstDayRead(planned.ledgers, opts.from), unpackedDays: planned.cost.unpackedDays, ...named };
+			: { state: 'ok', columns, rows: answer.rows, capped: answer.capped, read, readFrom: firstDayRead(planned.ledgers, opts.from), readTo: lastDayRead(planned.ledgers, opts.from, opts.to), unpackedDays: planned.cost.unpackedDays, ...named };
 	} catch (error) {
 		return { state: 'refused', because: { kind: 'engine-error', message: error instanceof Error ? error.message : String(error) } };
 	}
@@ -657,7 +677,7 @@ async function answerHeld(
  *  names are cut from the window, and `cut` names each such ledger with that day; `archive` is read
  *  only for days the site copy may have dropped. A ledger the archive cannot give those days for is
  *  read from the site's days alone, and `unanswered` names it with the day its answer starts on. An
- *  answer with rows names in `readFrom` the first day it read. */
+ *  answer with rows names in `readFrom` and `readTo` the first and last day it read. */
 export async function readAsk(
 	keeper: PageKeeper,
 	archive: ArchiveTier | null,
