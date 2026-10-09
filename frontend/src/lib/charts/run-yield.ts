@@ -22,6 +22,7 @@
 import type { DayMetrics } from '$lib/server/payload';
 import type { ReadoutInputSeries } from './readout';
 import { grouped } from './series';
+import { indexedRuns } from './indexed-runs';
 import { daysInWindow, type TimeWindow } from './viewport';
 
 /** The cells this chart reads, and only those.
@@ -126,18 +127,8 @@ export function plannedDays(columns: readonly RunYieldDay[]): boolean[] {
  * has a share, so a lone point is already on the page, and a one-point polyline
  * draws nothing at all. */
 export function yieldRuns(columns: readonly RunYieldDay[]): number[][] {
-	const runs: number[][] = [];
-	let current: number[] = [];
-	columns.forEach((column, index) => {
-		if (column.yield === null) {
-			if (current.length > 1) runs.push(current);
-			current = [];
-			return;
-		}
-		current.push(index);
-	});
-	if (current.length > 1) runs.push(current);
-	return runs;
+	return indexedRuns(columns, (column) => column.yield !== null)
+		.filter((run) => run.length > 1);
 }
 
 /** The three counts, what each is called, and the fill it is drawn in.
