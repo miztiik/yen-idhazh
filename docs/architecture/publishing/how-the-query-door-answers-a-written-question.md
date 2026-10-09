@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 The query door can run one operator-written, read-only DuckDB statement over the ledgers and UTC days the page chose. The statement sees views, not files.
 
@@ -80,6 +80,8 @@ The archive uses its own page keeper and its own three compact indexes. It choos
 
 `through` is the newest UTC day any selected tier can answer. A daily entry counts as that day. A month counts through its last UTC day. A year counts through 31 December. A staged writer listing can move `through` later than the packed indexes.
 
+`SpanCost` carries estimated `readFrom` and `readTo`, computed from the same ledger plans and day functions as the answer's bounds. Both are null when no selected ledger reads a day. The action line counts the inclusive UTC dates between these bounds, not the selected window or a sum of each ledger's days. This is an estimate: if an archive file fails during the run, that ledger is planned again from the site alone, and the answer reports those actual bounds.
+
 `FetchCost` is the keeper's reading for this call. A whole file counts at the bytes that arrived. A file read by byte range counts at the whole indexed length, because the page cannot see which ranges the engine read and that length is the most the read can cost. `alreadyHeld` counts files the keeper already had registered before this call. The Data explorer page action line prints the whole-file bytes the page keeper still holds in the engine; byte-range files are opened for one call and dropped, so they do not inflate the reload total.
 
 ## Unreachable fields
@@ -115,6 +117,8 @@ A question this browser keeps, saved or recently run, is read back with the same
 The engine module is unchanged. The only module importing `@duckdb/duckdb-wasm` remains `frontend/src/lib/data/engine.ts`. The browser's shipped `connect-src` policy applies to the engine worker, so a statement that tries to read an unlisted origin is refused by the browser. The boundary test builds its support page with the same policy directives as `svelte.config.js` and asserts the refused request never reaches the network.
 
 ## Design rationale
+
+**The next run and its answer count the same calendar span.** A selected window can include days before a ledger started or after it stopped. Pricing those as days the run reads overstates its reach. The action line uses the existing planner's bounds through `SpanCost`, rather than another copy of the date rule in the page. One calendar span keeps overlapping dates from being counted once per ledger, and keeps the count consistent with the answer's span line. The estimate remains separate from the actual answer because an archive file can fail after it was priced.
 
 **Days before a ledger began are cut from a window, not refused.** The owner ruled on 2026-10-05: when a Data explorer question begins before a ledger's first day, the explorer cuts that ledger's earlier days from the selected window and names that first day, as it already did with no archive set. The rejected choice kept refusing such a question and changed only the test data. Ledgers start, pause, resume and stop, so a day before a ledger's first is outside the ledger, not a missing file. The cut moves only the start of that ledger's answer, and only later: the page still opens on the current day, a preset still ends on it, and a ledger that began years ago never moves a window into the past.
 

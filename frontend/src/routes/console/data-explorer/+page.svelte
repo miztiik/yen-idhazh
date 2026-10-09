@@ -50,7 +50,7 @@
 	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} });
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
@@ -202,7 +202,7 @@
 		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
 		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
 		const empty = emptyLedgerLines();
-		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
+		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
 	function siteFromText(): string {
 		const span = runSpan;
@@ -450,7 +450,7 @@
 		if (!ready) return;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} };
+			cost = { files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} };
 			ledgerColumns = [];
 			return;
 		}
