@@ -28,7 +28,7 @@
 # nothing here is on any reader's path. The `commit` job appends what each test
 # case wrote under that test case's own trial roots - its raw ledgers
 # tier-first at `state/raw/pipeline-tests/<id>/` and its traces at
-# `state/trial-traces/pipeline-tests/<id>/` - which no console page reads; every
+# `state/pipeline-tests/<id>/traces/` - which no console page reads; every
 # other job keeps `contents: read`. What the runners produced - the article
 # text included - leaves only as an artifact.
 #
