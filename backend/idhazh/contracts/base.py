@@ -145,8 +145,16 @@ class ServerJob(StrEnum):
     them.** The ledger door names a file's writer from this set, so a job has to
     be in it before the first file carries its name. A migration job moves rows
     already recorded, and the gardener's two jobs compact, age out and rewrite
-    what earlier runs wrote. None of the three records a new row, which is what
-    `MAINTENANCE_JOBS` below says.
+    what earlier runs wrote.
+
+    **What they write is still a new row, and the door gates it like any other.**
+    The gardener's task job files its own record of a wake, which nothing
+    recorded before it. Until 2026-10-08 a frozenset here exempted these three
+    from the lifecycle check on a raw write, on the reading that none of them
+    records a new row - and no live caller ever matched that reading. The
+    compact tier is the one that is never gated, and it is `persist_period`
+    that says so, because repacking a day that is already recorded is not a new
+    row.
     """
 
     # digest.yml, in the order a run reaches them.
@@ -172,16 +180,6 @@ class ServerJob(StrEnum):
     SAVE_COUNCIL_RESULTS = "save_council_results"
     # A command a person runs on their own machine, outside any workflow.
     OPERATOR = "operator"
-
-
-#: The jobs whose writes file rows again rather than record new ones. The
-#: ledger door skips a raw write into a paused or retired family unless the
-#: writer is one of these, because skipping a maintenance write would lose rows
-#: that were already recorded while the run reported success. A fact about the
-#: vocabulary rather than a knob, so it sits beside it.
-MAINTENANCE_JOBS: Final[frozenset[ServerJob]] = frozenset(
-    {ServerJob.MIGRATE, ServerJob.RUN_TASKS, ServerJob.HISTORY}
-)
 
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly

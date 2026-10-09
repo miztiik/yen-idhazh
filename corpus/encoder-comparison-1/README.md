@@ -244,12 +244,28 @@ can separate equally well while one leaves far more room between the two groups
 for a decision to sit in. A compressed scale makes any fixed cut-off harder to
 place and more fragile when the corpus shifts.
 
-**Articles a second** was taken on the runner, under the same four threads
-production gets. The two projected minutes follow from it: one for re-encoding
-all 15,122 published articles once, one for a normal day's 337. Both matter -
-GitHub stops a job at 6 hours, and the day's job also has to summarize.
+**Articles a second** was taken on the runner. **It is not a selection
+criterion.** A batch is about a thousand articles and gets three hours, so the
+slowest encoder measured here finishes in a ninth of its session and the
+fastest in a hundredth. Nothing in that range changes whether a batch
+completes.
 
-**Peak memory** is the whole process against the runner's 16 GB.
+The figure is kept for two narrower purposes: deciding how long a comparison
+like this one takes to run, and pricing the one-time cost of re-encoding the
+whole archive if the encoder ever changes.
+
+**Treat the figure as the machine's, not the model's.** Two runs of
+`gte-base` - same code, same pairs, same kind of runner - returned 8.4 articles
+a second and then 0.8, while three other encoders repeated to within one
+percent. In the same run a 335-million parameter model finished in 2h 13m and a
+109-million one took 3h 34m. A hosted runner is whatever silicon it drew, and
+cache size and memory bandwidth differ between them. Each shard now records the
+processor it ran on, so a figure can be read against its machine instead of
+being read as the model's.
+
+**Peak memory** is the whole process against the runner's 16 GB. This one does
+bite: the batch also runs the summariser, and a large encoder plus a loaded
+language model is where the limit is reached.
 
 ## What was removed
 

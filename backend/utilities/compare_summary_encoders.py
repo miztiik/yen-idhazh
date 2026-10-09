@@ -198,10 +198,24 @@ def build_pairs(items: list[dict[str, Any]], settings: dict[str, Any]) -> dict[s
     slot_of = {index: slot for slot, index in enumerate(touched)}
     return {
         "texts": [items[index]["summary"] for index in touched],
+        # Which article each encoded position belongs to. A later job reads the
+        # kept vectors and has to know whose they are.
+        "urls": [items[index]["url"] for index in touched],
+        "days": [items[index]["day"] for index in touched],
         "same": [[slot_of[a], slot_of[b]] for a, b in same],
         "different": [[slot_of[a], slot_of[b]] for a, b in different],
         "ambiguous": [[slot_of[a], slot_of[b]] for a, b in ambiguous],
         "related": [[slot_of[a], slot_of[b]] for a, b in related],
+        # The day each pair sits on, so a resample can draw whole days. Pairs
+        # that share an article or a wire story move together, and drawing
+        # pairs one at a time would treat them as independent when they are
+        # not.
+        "pair_days": {
+            "same": [items[a]["day"] for a, _ in same],
+            "different": [items[a]["day"] for a, _ in different],
+            "ambiguous": [items[a]["day"] for a, _ in ambiguous],
+            "related": [items[a]["day"] for a, _ in related],
+        },
     }
 
 
@@ -315,12 +329,16 @@ def stage_score(args: argparse.Namespace) -> None:
     # not always the number of threads a maths library will use. A rate that
     # looks slow is a different problem from a rate taken on one thread, and
     # nothing in the output told them apart.
-    torch.set_num_threads(settings["encode"]["threads"])
+    #
+    # Zero in the settings means take the machine's own count, so a bigger
+    # runner is used without anybody editing a number.
+    asked = settings["encode"]["threads"] or os.cpu_count() or 1
+    torch.set_num_threads(int(asked))
     reading.threads_used = int(torch.get_num_threads())
     reading.processors_available = os.cpu_count() or 1
     save()
-    print(f"{chosen['slug']}: asked for {settings['encode']['threads']} threads, "
-          f"using {reading.threads_used} of {reading.processors_available} "
+    print(f"{chosen['slug']}: asked for {asked} threads, using "
+          f"{reading.threads_used} of {reading.processors_available} "
           f"processors", flush=True)
 
     try:
@@ -383,6 +401,17 @@ def stage_score(args: argparse.Namespace) -> None:
 
     vectors = np.concatenate(encoded)
 
+    # Kept, because the next job needs them and nothing else can produce them
+    # cheaply. Which pairs are worth a person's judgement depends on where the
+    # encoders disagree, and that question cannot be asked of a score - it
+    # needs the positions the scores came from. One encoder's opinion of which
+    # pairs are hard would bias the set towards that encoder.
+    if args.vectors_out is not None:
+        args.vectors_out.parent.mkdir(parents=True, exist_ok=True)
+        np.save(args.vectors_out, vectors)
+        print(f"{chosen['slug']}: wrote {vectors.shape} to {args.vectors_out}",
+              flush=True)
+
     def score(pairs_list: list[list[int]]) -> Any:
         left = vectors[[p[0] for p in pairs_list]]
         right = vectors[[p[1] for p in pairs_list]]
@@ -405,7 +434,7 @@ def stage_score(args: argparse.Namespace) -> None:
         settings["corpus"]["published_articles"] / per_second / 60, 1
     )
     reading.minutes_for_one_day = round(
-        settings["corpus"]["articles_a_day"] / per_second / 60, 2
+        settings["corpus"]["articles_a_batch"] / per_second / 60, 2
     )
 
     # Where the uncertain pairs land. Nobody knows whether they match, so this
@@ -604,6 +633,11 @@ def main() -> None:
     one.add_argument("--slug", required=True)
     one.add_argument("--pairs", type=Path, required=True)
     one.add_argument("--out", type=Path, required=True)
+    one.add_argument(
+        "--vectors-out",
+        type=Path,
+        help="keep the vectors, so a later job can ask where encoders disagree",
+    )
     one.set_defaults(run=stage_score)
 
     merge = stages.add_parser("collect", help="merge the readings")
