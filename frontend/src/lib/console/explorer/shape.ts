@@ -230,6 +230,11 @@ function datedRowsOf(rows: readonly Row[], dateColumn: string | undefined): read
 	return dateColumn === undefined ? rows : rows.filter((row) => dayValue(row[dateColumn]) !== null);
 }
 
+/** The rows a date chart leaves out because `dateColumn` gives them no day. */
+function rowsWithNoDayIn(rows: readonly Row[], dateColumn: string): number {
+	return rows.length - datedRowsOf(rows, dateColumn).length;
+}
+
 /** The page's own column for one role (Table A), given the roles before it, which a later role's
  *  choice may depend on: the date chart's lines are read from the rows with a day, and the ranked
  *  list ranks by a number that does not name its rows. */
@@ -292,7 +297,7 @@ function dateSeriesShape(roles: readonly RoleState[], rows: readonly Row[], boun
 		};
 	}
 	const datedRows = datedRowsOf(rows, dateColumn);
-	const rowsWithNoDay = rows.length - datedRows.length;
+	const rowsWithNoDay = rowsWithNoDayIn(rows, dateColumn);
 	if (datedRows.length === 0 && rowsWithNoDay > 0) {
 		return {
 			kind: 'none',
@@ -469,6 +474,26 @@ export function chartNotes(shape: ExplorerShape, bounds: ExplorerShapeBounds, ca
 	}
 	if (capped) notes.push(`Drawn from the first ${plural(maxRows, 'row', 'rows')}.`);
 	return notes;
+}
+
+/** The columns one role of the date chart can take, in the answer's order. */
+function dateChartColumns(id: RoleId, columns: readonly Column[]): string[] {
+	const role = chartKind('dateSeries').roles.find((one) => one.id === id);
+	return role === undefined ? [] : roleOptions(role, columns).map((option) => option.value);
+}
+
+/** How many of the notes under a drawn chart this answer can give, whatever chart and columns the
+ *  reader picks: the room the foot keeps. It reads the answer alone - its columns, its rows and
+ *  whether it stopped at its cap - with the tests the notes themselves are written from, so it may
+ *  count a note that never shows but never misses one that can: a number column the page's own
+ *  lines leave out as flat under some column the `Date` role can take, a row with no day in some
+ *  such column, and the cap. */
+export function countChartNotes(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds, capped: boolean): number {
+	const dateColumns = dateChartColumns('date', columns);
+	const numbers = dateChartColumns('lines', columns);
+	const flat = dateColumns.some((dateColumn) => lineSplit(numbers, datedRowsOf(rows, dateColumn), bounds.seriesFloorShare).flat.length > 0);
+	const noDay = dateColumns.some((dateColumn) => rowsWithNoDayIn(rows, dateColumn) > 0);
+	return [flat, noDay, capped].filter(Boolean).length;
 }
 
 /** One UTC day on the date chart's axis, and the answer's row for it: `null` on a lost day. */
