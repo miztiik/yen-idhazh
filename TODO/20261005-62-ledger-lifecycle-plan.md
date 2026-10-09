@@ -114,7 +114,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | DONE | bookish-telegram | - | Make agreement numbers match verdicts |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
-| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
+| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | - | Align merge chart meaning |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
 | L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | PENDING | - | - | - |
 | L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | PENDING | - | - | - |
@@ -2562,6 +2562,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (searched on current `origin/main` for the solid series, note, recorded-line reader and route loader):
   - `frontend/src/routes/console/judgement/MergeLinePlot.svelte` (the solid series and its note)
   - `frontend/tests/console-judgement-line.spec.ts` (the rendered chart and note)
+  - `frontend/tests/console-window.spec.ts` (found during execution: three L34 merge-note and accessible-name cases assert the old build-used meaning; preserve their one-day structure and L45's held/count cases)
+  - `docs/concepts/console-design.md` (calculated-history meaning and its reason)
+  - `docs/architecture/publishing/autotune-content-similarity.md` (found during execution: distinguish the solid fit series from the empty recorded-build rule; ownership cleared by the plan coordinator)
   - If the ruling says the solid mark means the line a build used: `frontend/src/lib/server/recorded-line.ts` (the bounded `run.json` reader) and `frontend/src/routes/console/judgement/+page.server.ts` (the Judgement loader), with a real-data test for the added reads
   - Read, no change unless the ruling calls for a persisted-shape change: `backend/idhazh/contracts/run_manifest.py` (`RunRecord.same_story_floor_applied`). Table C, C1 stops any persisted contract change.
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then `console-judgement-line.spec.ts` and `console-window.spec.ts`, plus `recorded-line.spec.ts` if the loader or recorded-line reader changes; `npm --prefix frontend run check`; browser smoke of the Judgement route at 14- and 30-day windows containing fitted rows whose values disagree with recorded run lines, with the switch off. CI: the pull request runs the console specs; every group runs on the merge push.
@@ -2571,7 +2574,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Decide whether the solid mark represents the fitted row or the line the build used, and choose words that say exactly that | To be ruled at dispatch (Fowler and Reader) |
+| 1 | The solid mark keeps each fitted row's final value; its proposal, step band and held counts remain one fitting process. Notes, readout and accessible names say that a build may have used another line. Tint crossing is conditional, not a recorded merge. Keep the generic panel title and L52's newest recorded-build comparisons. No new reads or persisted meanings | Fowler and Reader, before implementation, 2026-10-09; reason in docs/concepts/console-design.md |
 | 2 | L60 is row L52's Reader Follow-up 2, on a different mark from L52's three recorded-line rules | Plan owner, 2026-10-09 |
 | 3 | L60 waits for L34 and L45, which hold `MergeLinePlot.svelte` and the shared window spec while their work runs | Plan owner, 2026-10-09 |
 | 4 | The existing `same_story_floor_applied` field is available. If the ruling requires a new or changed persisted shape, Table C, C1 stops the row for contract review | Plan owner, 2026-10-09 |
