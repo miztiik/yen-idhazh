@@ -135,6 +135,14 @@ No new chart library, type classifier or picker behaviour is added.
 Flow's optional explorer readout also places the last column's labels toward
 the plot's interior. A label outside the last node would be clipped at the
 panel edge. Callers without this readout keep their label positions.
+Spread's existing static chart/readout has a labelled focus group in the
+explorer. Tab reaches its numbers after Values, with no stop for an empty role
+slot. Its shared component and all other callers stay unchanged.
+Jony, 2026-10-09: the existing chart-choice group may scroll horizontally to
+show the checked tile. Its stillness check compares tile positions and word
+starts in that group's content coordinates. All other boxes remain in viewport
+coordinates, and the chosen tile must be wholly visible inside the group's
+client aperture. Scrolling is not a layout change.
 
 Jony, 2026-10-09: Flow's stage width comes from `--space-3`; its branch gap
 comes from `--space-2`. The existing measure pass resolves inherited tokens to

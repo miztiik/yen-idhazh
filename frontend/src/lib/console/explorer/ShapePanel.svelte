@@ -191,27 +191,27 @@
 					<p class="shape-lede" data-lede>{lede(active)}</p>
 					<div class="shape-drawing" bind:this={drawing}>
 						{#if active.type === 'partsOfOne'}
-				{@const drawn = rows.slice(0, active.rowsDrawn)}
-				{@const parts = partsOfOne(drawn.map((row) => ({ label: text(row, active.labelColumn), parts: active.barColumns.flatMap((column) => { const value = numericValue(row, column); return value === null ? [] : [{ label: column, value }]; }) })), { order: active.barColumns, overlapping: true, tokens: SERIES_TOKENS.slice(0, active.barColumns.length) })}
-				{@const records = drawn.map((row) => factsOf(text(row, active.labelColumn), active.barColumns.map((column, index) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column), swatch: `var(${SERIES_TOKENS[index]})` })), 'null'))}
-				<PartsOfOne geometry={parts} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Side by side: ${[active.labelColumn, ...active.barColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} />
-				{#if active.moreRows > 0}<p data-shape-tail>{active.moreRows} more {active.moreRows === 1 ? 'row is' : 'rows are'} in the table.</p>{/if}
-				<p data-comparison={active.comparison}>{active.comparison}.</p>
-			{:else if active.type === 'tileStrip'}
-				{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
-				{@const tiles = tileStrip(days.map(({ day, row }) => { const value = row === null ? null : truthValue(row, active.markColumn); return { date: day, state: value === null ? 'absent' : value ? 'fired' : 'quiet' }; }))}
-				{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-1)', values: days.map(({ row }) => { const value = row === null ? null : truthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
-				<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
-					<TileStrip geometry={tiles} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Which days: ${active.dateColumn}, ${active.markColumn}`} width={chartWidth} height={chartHeight} readout={tileReadout} stateWords={{ fired: 'true', quiet: 'false', absent: 'null' }} />
-				</div>
-				<p data-comparison={active.comparison}>{active.comparison}.</p>
-			{:else if active.type === 'flow'}
-				{@const plotFrame = frame(chartWidth, chartHeight)}
-				{@const stages = rows.map((row) => ({ label: text(row, active.stageColumn), arrived: numericValue(row, active.arrivedColumn) as number, left: numericValue(row, active.wentOnColumn) as number, drops: active.droppedColumns.map((column) => ({ label: column, count: numericValue(row, column) as number })) }))}
-				{@const flowGeometry = flow(stages, { frame: plotFrame, narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap })}
-				{@const records = rows.map((row) => factsOf(text(row, active.stageColumn), [active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].map((column) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column) })), 'null'))}
-				<Flow geometry={flowGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} tooltips={false} />
-				<p data-comparison={active.comparison}>{active.comparison}.</p>
+							{@const drawn = rows.slice(0, active.rowsDrawn)}
+							{@const parts = partsOfOne(drawn.map((row) => ({ label: text(row, active.labelColumn), parts: active.barColumns.flatMap((column) => { const value = numericValue(row, column); return value === null ? [] : [{ label: column, value }]; }) })), { order: active.barColumns, overlapping: true, tokens: SERIES_TOKENS.slice(0, active.barColumns.length) })}
+							{@const records = drawn.map((row) => factsOf(text(row, active.labelColumn), active.barColumns.map((column, index) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column), swatch: `var(${SERIES_TOKENS[index]})` })), 'null'))}
+							<PartsOfOne geometry={parts} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Side by side: ${[active.labelColumn, ...active.barColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} />
+							{#if active.moreRows > 0}<p data-shape-tail>{active.moreRows} more {active.moreRows === 1 ? 'row is' : 'rows are'} in the table.</p>{/if}
+							<p data-comparison={active.comparison}>{active.comparison}.</p>
+						{:else if active.type === 'tileStrip'}
+							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
+							{@const tiles = tileStrip(days.map(({ day, row }) => { const value = row === null ? null : truthValue(row, active.markColumn); return { date: day, state: value === null ? 'absent' : value ? 'fired' : 'quiet' }; }))}
+							{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-1)', values: days.map(({ row }) => { const value = row === null ? null : truthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
+							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
+								<TileStrip geometry={tiles} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Which days: ${active.dateColumn}, ${active.markColumn}`} width={chartWidth} height={chartHeight} readout={tileReadout} stateWords={{ fired: 'true', quiet: 'false', absent: 'null' }} />
+							</div>
+							<p data-comparison={active.comparison}>{active.comparison}.</p>
+						{:else if active.type === 'flow'}
+							{@const plotFrame = frame(chartWidth, chartHeight)}
+							{@const stages = rows.map((row) => ({ label: text(row, active.stageColumn), arrived: numericValue(row, active.arrivedColumn) as number, left: numericValue(row, active.wentOnColumn) as number, drops: active.droppedColumns.map((column) => ({ label: column, count: numericValue(row, column) as number })) }))}
+							{@const flowGeometry = flow(stages, { frame: plotFrame, narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap })}
+							{@const records = rows.map((row) => factsOf(text(row, active.stageColumn), [active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].map((column) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column) })), 'null'))}
+							<Flow geometry={flowGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} tooltips={false} />
+							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'dateSeries'}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const seriesColumns = active.seriesColumns}
@@ -235,7 +235,9 @@
 						{:else}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
-							<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
+							<div tabindex="0" role="group" aria-label={`Spread readout: ${active.valueColumn}`} data-chart-readout-focus>
+								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
+							</div>
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{/if}
 					</div>

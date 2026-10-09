@@ -769,6 +769,8 @@ for (const view of VIEWS) {
 	});
 }
 
+test.describe('row20 Flow controls on touch', () => {
+test.use({ hasTouch: true });
 test('row20 I7, I9 and I10: Flow keeps long names, its floating Dropped list and one readout tab stop', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await openExplorer(page, PINNED);
@@ -809,10 +811,19 @@ test('row20 I7, I9 and I10: Flow keeps long names, its floating Dropped list and
 	}
 	await page.locator('[data-shape-choice="distribution"]').click();
 	await page.getByRole('tab', { name: 'Chart' }).focus();
-	for (const next of [page.locator('[data-shape-choice="distribution"] input'), pill(page, 'values').locator('summary'), page.locator('[data-chart-type="distribution"][tabindex]')]) {
+	for (const next of [page.locator('[data-shape-choice="distribution"] input'), pill(page, 'values').locator('summary'), page.locator('[data-chart-readout-focus]')]) {
 		await page.keyboard.press('Tab');
 		await expect(next).toBeFocused();
 	}
+	await openChart(page, "SELECT DATE '2026-01-01' + i::INTEGER AS day, i AS summary_prefill_tokens_per_s, i AS b, i AS c, i AS d FROM range(0, 170) AS t(i)");
+	await page.locator('[data-shape-choice="dateSeries"]').click();
+	await page.setViewportSize({ width: 1400, height: 900 });
+	const lines = pill(page, 'lines');
+	await expect(lines.locator('summary')).toHaveAttribute('aria-label', 'Lines: summary_prefill_tokens_per_s, b, c, d');
+	await expect(lines.locator('.pill-more')).toHaveText(', 3 more');
+	expect(await lines.locator('.pill-more').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+	expect(await lines.locator('[data-pill-name]').evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+});
 });
 
 /** Wait two frames, so a layout shift the last action caused has been reported. */
@@ -838,11 +849,18 @@ async function chartReading(page: Page): Promise<ChartReading> {
 			boxes[name] = read(node);
 		}
 		document.querySelectorAll('[role="tab"]').forEach((tab) => (boxes[`tab ${tab.textContent?.trim()}`] = read(tab)));
-		document.querySelectorAll('[data-shape-choice]').forEach((tile) => (boxes[`tile ${tile.getAttribute('data-shape-choice')}`] = read(tile)));
+		const choices = document.querySelector('.shape-actions') as HTMLElement;
+		boxes['shape choices'] = read(choices);
+		// The approved horizontal scroll reveals a checked tile; compare layout in its content coordinates.
+		document.querySelectorAll('[data-shape-choice]').forEach((tile) => {
+			const box = read(tile);
+			box.x += choices.scrollLeft;
+			boxes[`tile ${tile.getAttribute('data-shape-choice')}`] = box;
+		});
 		const starts: Record<string, { x: number; y: number }> = {};
 		document.querySelectorAll('[data-shape-choice] .choice-shown').forEach((word) => {
 			const { x, y } = word.getBoundingClientRect();
-			starts[`word ${word.closest('[data-shape-choice]')?.getAttribute('data-shape-choice')}`] = { x, y };
+			starts[`word ${word.closest('[data-shape-choice]')?.getAttribute('data-shape-choice')}`] = { x: x + choices.scrollLeft, y };
 		});
 		const slots = [...document.querySelectorAll('[data-role-slot]')];
 		slots.forEach((slot) => (boxes[`slot ${slot.getAttribute('data-role-slot')}`] = read(slot)));
@@ -1055,6 +1073,13 @@ for (const view of VIEWS) {
 				await settle(page);
 				expectChartStill(before, await chartReading(page), `${from} to ${to}`);
 				await expect(page.locator(`[data-shape-choice="${to}"] input`)).toBeFocused();
+				const visible = await page.locator(`[data-shape-choice="${to}"]`).evaluate((tile) => {
+					const group = tile.closest('.shape-actions') as HTMLElement;
+					const box = tile.getBoundingClientRect();
+					const left = group.getBoundingClientRect().left + group.clientLeft;
+					return box.left >= left - 0.5 && box.right <= left + group.clientWidth + 0.5;
+				});
+				expect(visible, `${to}: selected tile is not whole in the scroll group's aperture`).toBe(true);
 			}
 		}
 		// Over time names the flat line in the foot; Ranked, where that note and the one for rows with

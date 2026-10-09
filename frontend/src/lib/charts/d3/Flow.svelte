@@ -103,9 +103,9 @@
 				fill-opacity={node.drop ? LOST : 1}
 			/>
 			<text
-				x={readout !== null && node.column === geometry.columns - 1 ? node.x - LABEL_GAP : node.x + node.width + LABEL_GAP}
+				x={readout !== null && geometry.columns > 1 && node.column === geometry.columns - 1 ? node.x - LABEL_GAP : node.x + node.width + LABEL_GAP}
 				y={node.y + node.height / 2}
-				text-anchor={readout !== null && node.column === geometry.columns - 1 ? 'end' : undefined}
+				text-anchor={readout !== null && geometry.columns > 1 && node.column === geometry.columns - 1 ? 'end' : undefined}
 				dy="0.32em"
 				fill="var(--color-text)"
 				font-size={AXIS_LABEL_PX}>{node.label} {grouped(node.value)}</text

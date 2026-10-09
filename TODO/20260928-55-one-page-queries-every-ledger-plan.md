@@ -1714,6 +1714,8 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 13 | Flow reads node width from `--space-3` and node gap from `--space-2`, resolved to CSS pixels in the existing measure pass; no frame-margin or old engine gap is reused | Jony, 2026-10-09 |
   | 14 | The explorer disables Flow's ribbon titles through an optional prop, and anchors the final column's labels inward when it carries a readout, so values remain readable without changing other callers | Row 20 worker, 2026-10-09 |
   | 15 | The three charts and Flow's shared list pass visual sufficiency in light and dark; no further craft change is needed | Susan, 2026-10-09 |
+  | 16 | Spread's existing static readout had no Tab stop. The explorer gives its chart/readout a labelled focus group to meet I10, without changing the shared component or its drawing | Row 20 worker, 2026-10-09 |
+  | 17 | I3 compares tile x and word starts after adding the tile group's own scrollLeft. Every other coordinate remains in viewport space, the container box stays fixed, and the selected tile must be wholly visible. This preserves row 19's approved scroll, not a layout change | Jony, 2026-10-09 |
 
 - **Not in this row:** Plan 52 row 2's unrelated shared chart work, `paired`, `overlapTimeline`, saved chart choices, a new chart type, and any layout code or layout knob edit.
 
