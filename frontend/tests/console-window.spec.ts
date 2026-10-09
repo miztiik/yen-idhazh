@@ -1091,6 +1091,93 @@ const STRIP_CASES: {
 	words: string;
 }[] = [
 	{
+		preset: 7,
+		state: 'a share just above its mark must not print as the mark itself',
+		days: [
+			judgeDay('2030-06-15', { pairsJudged: 46, pairsUsable: 39, disagreementRate: 7 / 46 })
+		],
+		heading: '15 Jun, the newest day with numbers',
+		entries: [
+			'Disagreed with the second reading just above 15% of 46 pairs',
+			'Could not tell 0% of the 39 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: just above 15% of 46 pairs disagreed with the second reading, and 0% of the 39 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, just above 15% of 46 pairs disagreed with their own second reading, and 0% of the 39 that agreed could not tell. The share that disagreed is just above its 15% mark.'
+	},
+	{
+		preset: 7,
+		state: 'a held day prints a share just above its mark without rounding it onto the mark',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 46,
+				pairsUsable: 39,
+				disagreementRate: 7 / 46,
+				heldReason: 'judge_unstable'
+			})
+		],
+		heading: '15 Jun, the newest day with numbers',
+		entries: [
+			'Disagreed with the second reading just above 15% of 46 pairs',
+			'Could not tell 0% of the 39 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: just above 15% of 46 pairs disagreed with the second reading, and 0% of the 39 that agreed could not tell.'
+		},
+		words:
+			'The two readings disagreed on just above 15% of 46 pairs in these 7 days. No line was fitted on 1 of 7 days, because a rate was past its mark on that day.'
+	},
+	{
+		preset: 1,
+		state: 'agreement counts of a thousand or more print with separators',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 1390,
+				pairsUsable: 1118,
+				disagreementRate: 272 / 1390,
+				unclearRate: 56 / 1118
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 20% of 1,390 pairs',
+			'Could not tell 5% of the 1,118 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 20% of 1,390 pairs disagreed with the second reading, and 5% of the 1,118 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 20% of 1,390 pairs disagreed with their own second reading, and 5% of the 1,118 that agreed could not tell. The 20% that disagreed is past its mark.'
+	},
+	{
+		preset: 1,
+		state: 'could not tell just above its own mark keeps the agreed denominator',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 40,
+				pairsUsable: 37,
+				disagreementRate: 3 / 40,
+				unclearRate: 13 / 37
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 8% of 40 pairs',
+			'Could not tell just above 35% of the 37 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 8% of 40 pairs disagreed with the second reading, and just above 35% of the 37 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 8% of 40 pairs disagreed with their own second reading, and just above 35% of the 37 that agreed could not tell. The share that could not tell is just above its 35% mark.'
+	},
+	{
 		preset: 1,
 		state: 'its day read 4 pairs, too few for a share',
 		days: [judgeDay('2030-06-15', { pairsJudged: 4, pairsUsable: 3, disagreementRate: 0.25 })],

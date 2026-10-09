@@ -39,7 +39,11 @@ Five rules hold for every number the console prints:
 
 - **A count of that day's items, not a score.** No value between zero and one
  reaches the screen, and no cell prints a decimal. A share prints as whole
- percent.
+ percent. Counts of 1,000 or more use the shared thousands separator, never
+ the machine's locale. Where an agreement share rounds to its mark's printed
+ figure but is not equal to the mark, it prints `just above 15%` or
+ `just below 15%`, using that mark's own figure. This applies to the sentence,
+ the daily readout and the dot's name. At exact equality it prints `15%`.
 - **No ledger column name on screen.** `hhem`, `hedge_dropped` and
  `truncation_flagged` are how the file spells it. The page spells what it
  means.
@@ -69,6 +73,12 @@ Otherwise it names the share that is past,
 `The 20% that disagreed is past its mark.` or
 `The 39% that could not tell is past its mark.`, or it ends
 `Both rates are past their marks.` (Reader, 2026-10-08, plan 62's row L39.)
+When rounding would hide the side of the mark, the verdict instead says
+`The share that disagreed is just above its 15% mark.` or
+`The share that could not tell is just above its 35% mark.`, with `just below`
+for the corresponding inside share. The dashed mark labels keep their
+existing figures. Extra decimal places cannot settle this: a smaller
+difference would still round away.
 
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, a run whose rows cannot be made into one run is left out of the
