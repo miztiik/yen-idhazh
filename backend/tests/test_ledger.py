@@ -6,8 +6,9 @@ import csv
 import io
 import json
 from collections.abc import Collection, Sequence
+from datetime import UTC, datetime, timedelta, tzinfo
 from datetime import date as date_type
-from datetime import timedelta
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Final
 
@@ -819,13 +820,23 @@ def test_load_visual_prunes_reports_every_day_the_tree_holds_oldest_first(
     ]
 
 
-def test_a_second_attempt_replaces_its_first_and_another_run_is_kept(tmp_path: Path) -> None:
+def test_a_second_attempt_replaces_its_first_and_another_run_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """One row per pass: a re-run of one attempt replaces it, a second run adds its own.
 
     GitHub re-runs a failed job into the same run id, so the second attempt's
     file carries the first attempt's work unit and only the higher attempt is
     read. A second run of the same day is a different unit, and a different pass.
+    All writes share one millisecond, so file hashes can put run 2 first.
     """
+
+    class FixedClock:
+        @staticmethod
+        def now(tz: tzinfo) -> datetime:
+            return datetime(2026, 9, 7, tzinfo=UTC).astimezone(tz)
+
+    monkeypatch.setattr(import_module("idhazh.ledger.persist"), "datetime", FixedClock)
     state = tmp_path / "state"
     file_prune(state, prune_row(on="2026-09-07", run="1", before=100))
     file_prune(state, prune_row(on="2026-09-07", run="1", before=200), attempt=2)
@@ -833,10 +844,11 @@ def test_a_second_attempt_replaces_its_first_and_another_run_is_kept(tmp_path: P
 
     rows = ledger.load_visual_prunes(state)
 
-    assert [(row.run_id, row.payload_bytes_before) for row in rows] == [
-        ("2026-09-07-1", 200),
-        ("2026-09-07-2", 300),
-    ]
+    assert len(rows) == 2
+    assert {row.run_id: row.payload_bytes_before for row in rows} == {
+        "2026-09-07-1": 200,
+        "2026-09-07-2": 300,
+    }
 
 
 def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(

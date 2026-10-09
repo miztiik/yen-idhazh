@@ -124,7 +124,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
 | 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
 | 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - two stalls seen in CI; a row to fix it is now due** |
-| 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
+| 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | CLOSED 2026-10-09 (plan 60 row 44) |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
 | 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
@@ -503,34 +503,25 @@ reads that walk a whole raw root - `ledger.raw_days`, `list_raw_files` and
 The fix above stops that warning in a read of named days, and a walk it keeps
 still logs it.
 
-## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
+## 58 - A ledger test expects an order for two runs written in the same millisecond (CLOSED 2026-10-09)
 
-**A ledger test failed once because two runs of one day came back in the
-other order.**
+**The test now checks replacement and preservation without ordering the runs.**
 `backend/tests/test_ledger.py::test_a_second_attempt_replaces_its_first_and_another_run_is_kept`
-writes three visual-prune files for one day, back to back: run 1, run 1's
-second attempt, then run 2. It expects run 1's row before run 2's. In CI run
-37221095434, attempt 1, at about 17:37 UTC on 2026-10-04, it read run 2's row
-first, and a re-run of the job passed. The likely cause, an estimate, is how a
-day's files are ordered: by the millisecond each was written, then by the
-file's id (`_order` in `backend/idhazh/ledger/raw_files.py`). The part of that
-id after the clock is a hash (`file_id` in `backend/idhazh/ledger/filenames.py`),
-so two files written in one millisecond sort by the hash, which that function's
-own docstring calls arbitrary.
+pins the writer clock to 2026-09-07 00:00:00.000 UTC. In a copy of main at
+`86fca9a542ca0456fec3eb2b1009574cda10ea7d`, the old positional assertion
+fails: run 2 comes before run 1 because their file hashes break the
+same-millisecond tie. The cause is confirmed, not estimated.
 
-**Doing nothing costs a red `gates` job now and then, and a re-run.** The read
-is not wrong. `load_visual_prunes` promises the oldest day first and one row
-per run, not an order for two runs of one day, and nothing outside the tests
-calls it.
+**Who reads it:** the backend contract suite reads the two visual-prune runs
+this test writes. No production caller reads `load_visual_prunes`; its
+oldest-day-first, one-row-per-run contract is unchanged.
 
-**The next move is a worker's.** Write the three files with the clock held at
-one millisecond and see whether the order follows the hash; that confirms the
-cause. Then the test compares the day's rows without an order, because what it
-is about is the attempt that replaced its first and the run that was kept.
-Level 1 - one test.
-
-Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
+**What settles it:** exactly two returned rows and the literal mapping
+`{"2026-09-07-1": 200, "2026-09-07-2": 300}` prove that run 1 keeps
+attempt 2's value and run 2 keeps its original value. The row count exposes
+duplicates; the mapping exposes missing runs and stale attempts. The test
+does not sort loaded rows or claim an order between independent runs.
+Plan 60 row 44 closes this Level 1 test defect.
 
 ## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (OPEN)
 
