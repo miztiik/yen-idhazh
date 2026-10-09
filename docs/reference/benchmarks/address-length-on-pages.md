@@ -94,4 +94,4 @@ GitHub changing its Pages front end or request-line limit would make this readin
 
 - [../documentation-structure.md](../documentation-structure.md) - what a benchmark record carries.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - how local tests and CI divide the checks.
-- [../../../TODO/20260928-55-one-page-queries-every-ledger-plan.md](../../../TODO/20260928-55-one-page-queries-every-ledger-plan.md) - row 5, which uses this reading.
+- [../../architecture/publishing/data-explorer-state.md](../../architecture/publishing/data-explorer-state.md) - shared-address behavior that uses this reading.
