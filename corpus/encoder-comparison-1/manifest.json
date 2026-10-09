@@ -1,8 +1,8 @@
 {
  "version": "2026-10-09",
- "taken_at": "2026-10-09T07:40:57Z",
- "commit": "ba4064cb89c5d2b7b6c41ab70ae42545ac676b75",
- "workflow_run": "https://github.com/miztiik/yen-idhazh/actions/runs/37895396586",
+ "taken_at": "2026-10-09T10:16:56Z",
+ "commit": "25ffec158e1676c0bb400fadd2798b398a21bd93",
+ "workflow_run": "https://github.com/miztiik/yen-idhazh/actions/runs/37909985697",
  "runner": {
   "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
   "python": "3.12.15",
@@ -42,12 +42,9 @@
  },
  "pair_set_sha256": "7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb",
  "encoders_selected": [
-  "embeddinggemma-two",
-  "jina-v5-nano"
- ],
- "encoders_asked": 2,
- "encoders_measured": 1,
- "encoders_unavailable": [
   "embeddinggemma-two"
- ]
+ ],
+ "encoders_asked": 1,
+ "encoders_measured": 1,
+ "encoders_unavailable": []
 }
