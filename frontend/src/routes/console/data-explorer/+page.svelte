@@ -50,7 +50,7 @@
 	let initializing = $state(true);
 	let running = $state(false);
 	let refreshing = $state(false);
-	let cost = $state<SpanCost>({ files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} });
+	let cost = $state<SpanCost>({ files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} });
 	let lastMs = $state<number | null>(null);
 	let lastRead = $state<FetchCost | null>(null);
 	let result = $state<AskResult | null>(null);
@@ -199,10 +199,10 @@
 			return statusSentence({ state: 'quiet', ms: lastMs, read: lastRead });
 		}
 		if (result?.state === 'refused') return statusSentence({ state: 'refused' });
-		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger });
+		if (result?.state === 'missing') return statusSentence({ state: 'missing', ledger: result.ledger, published: published.includes(result.ledger) });
 		if (result?.state === 'unreachable') return statusSentence({ state: result.fault === 'engine' ? 'unreachable-engine' : 'unreachable-files' });
 		const empty = emptyLedgerLines();
-		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, days: spanDays(), firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
+		return `${statusSentence({ state: 'idle', files: cost.files, bytes: cost.bytes, ledgers: selected.length, readFrom: cost.readFrom, readTo: cost.readTo, firstRun: lastMs === null })}${empty ? ` ${empty}` : ''}`;
 	}
 	function siteFromText(): string {
 		const span = runSpan;
@@ -450,7 +450,7 @@
 		if (!ready) return;
 		const picked = selectedPublished;
 		if (picked.length === 0) {
-			cost = { files: 0, bytes: 0, unpackedDays: [], cut: [], through: {} };
+			cost = { files: 0, bytes: 0, readFrom: null, readTo: null, unpackedDays: [], cut: [], through: {} };
 			ledgerColumns = [];
 			return;
 		}
@@ -698,6 +698,7 @@
 			slotsPerLine={roleSlots}
 			capped={drawnAnswer?.capped ?? false}
 			maxRows={config.max_rows}
+			narrowBelow={data.frame.breakpoints_px[0]}
 			onRoles={chooseRole}
 			placeholder={drawnAnswer === null ? chartState : null}
 		/>
@@ -712,13 +713,13 @@
 		{#if running}
 			<div class="answer-state shimmer" data-state="loading"></div>
 		{:else if result === null}
-			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
+			<div class="answer-state" data-explorer-idle>Run a question, and its answer can be drawn here.</div>
 		{:else if result.state === 'quiet'}
 			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
 		{:else if result.state === 'refused'}
 			<div class="answer-state" data-state="refused">The question did not run, so nothing to draw.</div>
 		{:else if result.state !== 'ok'}
-			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? 'Part of the data is not on this site, so nothing to draw.' : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
+			<div class="answer-state" class:warn={result.state === 'unreachable'} data-state={result.state}>{result.state === 'missing' ? explorerMissingSentence(result.ledger, published.includes(result.ledger)) : result.state === 'unreachable' ? 'The data could not be fetched, so nothing to draw.' : 'The answer did not arrive, so nothing to draw.'}</div>
 		{/if}
 	{/key}
 {/snippet}

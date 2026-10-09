@@ -19,24 +19,36 @@
 	 * the day keeps its column, so the strip still prints its counts. It is the
 	 * failure chart's rule for the same floor.
 	 *
-	 * **The axis is the two knobs and never the data.** Neither rate can reach 1
-	 * without the run holding first, so 0 to 1 would leave half the plot in a
-	 * region the data cannot enter. Fitted to the data, a healthy two percent
-	 * would fill the panel and say the judge is in trouble.
+	 * **Every day of the window is a column.** A day that read no pair draws no
+	 * dot and carries no name, both lines break there, and the strip can still
+	 * select it and says why it holds no reading. Spaced only over the days
+	 * that read a pair, a line would join straight across a day nobody measured
+	 * (Jony, 2026-10-09).
+	 *
+	 * **The axis holds both marks and every share that draws a dot, niced to a
+	 * whole tick step.** A top fixed at the looser mark would clip a share past
+	 * it onto the mark's own line, which hides the one reading this panel
+	 * exists to show. Fitted to the shares alone, a healthy two percent would
+	 * still fill the panel and read as trouble, so the two marks are always in
+	 * the set the axis nices from.
 	 */
 	import {
+		AXIS_LABEL_PX,
 		chartWidth,
 		dayColumns,
 		dayTicks,
 		frame,
+		labelWidth,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
-	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
+	import { grouped } from '$lib/charts/series';
+	import { daysBetween, daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { dayMonth, plural } from '$lib/format';
+	import { dayMonth } from '$lib/format';
 	import {
 		agreementCorridor,
 		describeUnclear,
@@ -46,6 +58,14 @@
 		type JudgeDay
 	} from '$lib/console/merge-line';
 	import { countDays, nameSpan } from '$lib/console/span-words';
+
+	/** One day's dots and strip words, for a day that read a pair. */
+	interface Reading {
+		day: JudgeDay;
+		disagreeY: number | null;
+		unclearY: number | null;
+		said: { disagreed: string; unclear: string; name: string };
+	}
 
 	let {
 		days,
@@ -79,19 +99,38 @@
 	 * no rate, and a zero on the line would say the judge agreed with itself
 	 * perfectly on a day it was never asked. */
 	const read = $derived(drawn.filter((day) => day.pairsJudged > 0));
-	const corridor = $derived(agreementCorridor(limits));
+	/** Every day of the window, oldest first, once at least one day read a pair.
+	 * None while no day did: the sentence already says so, and a strip of
+	 * columns that would all print the same empty line says it again at each
+	 * one. */
+	const dates = $derived(read.length === 0 ? [] : daysInWindow(viewport));
+	const readOn = $derived(new Map(read.map((day) => [day.date, day] as const)));
+	/** The days that carry a row here, read or not. A row that read no pair had
+	 * no readings come in; a day with no row at all may not be packed yet, or
+	 * may have had no run - this page cannot tell those two apart. */
+	const rowOn = $derived(new Set(drawn.map((day) => day.date)));
+
+	/** Whether a share is a measurement: the pairs it is taken over reach the
+	 * floor. One rule for which shares draw a dot and which the axis nices from. */
+	function reachesFloor(pairs: number): boolean {
+		return pairs >= attemptsFloor;
+	}
+	/** Every share that draws a dot, which joins the two marks in the set the
+	 * axis is niced from. */
+	const shares = $derived(
+		read.flatMap((day) => [
+			...(reachesFloor(day.pairsJudged) ? [day.disagreementRate] : []),
+			...(reachesFloor(day.pairsUsable) ? [day.unclearRate] : [])
+		])
+	);
+	const corridor = $derived(agreementCorridor(limits, shares));
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	const yAxis = $derived(
 		linearAxis(corridor, [box.bottom, box.top], { tickCount: 4, zero: false, nice: false })
 	);
-	const columnsX = $derived(dayColumns(read.length, box, 2));
-	const ticks = $derived(
-		dayTicks(
-			read.map((day) => day.date),
-			{ density: tickDensity, columns: columnsX }
-		)
-	);
+	const columnsX = $derived(dayColumns(dates.length, box, 2));
+	const ticks = $derived(dayTicks(dates, { density: tickDensity, columns: columnsX }));
 
 	function px(value: number): number {
 		return Math.round(value * 10) / 10;
@@ -99,6 +138,14 @@
 
 	function percent(share: number): string {
 		return `${Math.round(share * 100)}%`;
+	}
+
+	/** One dashed mark's own label text, shared between drawing it and keeping
+	 * a stranded date label (below) off it. */
+	function markLabel(name: 'disagreement' | 'unclear', at: number): string {
+		return name === 'disagreement'
+			? `${percent(at)} - the "disagreed" mark`
+			: `${percent(at)} - the "could not tell" mark`;
 	}
 
 	/** One day's two readings in words: what the strip prints at that day, and
@@ -114,12 +161,13 @@
 		const date = dayMonth(day.date);
 		const disagreedCount = day.disagreementRate * day.pairsJudged;
 		const disagreed =
-			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor) ??
-			`${Math.round(disagreedCount)} of ${plural(day.pairsJudged, 'pair', 'pairs')}`;
+			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor, limits.disagreementMax) ??
+			`${grouped(Math.round(disagreedCount))} of ${formatPairs(day.pairsJudged)}`;
 		const unclear = describeUnclear(
 			day.unclearRate * day.pairsUsable,
 			day.pairsUsable,
-			attemptsFloor
+			attemptsFloor,
+			limits.unclearMax
 		);
 		return {
 			disagreed,
@@ -133,36 +181,157 @@
 
 	/** Where a share sits on the axis, or null where the pairs it is taken over
 	 * are under the floor: there it is not a measurement, and a dot at its height
-	 * would place a share the strip calls too few to report. */
+	 * would place a share the strip calls too few to report. The axis is niced
+	 * from every drawn share, so no share can fall above it. */
 	function heightOf(share: number, pairs: number): number | null {
-		if (pairs < attemptsFloor) return null;
-		return px(yAxis.scale(Math.min(share, corridor[1])));
+		if (!reachesFloor(pairs)) return null;
+		return px(yAxis.scale(share));
 	}
 
+	/** What the strip says at a column with no reading. A day whose row read no
+	 * pair had no readings come in; a day with no row at all may not be packed
+	 * yet, or there may have been none - the page does not know which. Neither
+	 * says the judge did nothing. The words are Reader's. */
+	const NO_READINGS = 'No readings came in for this day';
+	const NO_NUMBERS = 'The numbers for this day are not here yet, or there are none';
+
+	/** One column a day of the window: where it sits, and either its reading or
+	 * why it holds none. */
 	const marks = $derived(
-		read.map((day, index) => ({
-			date: day.date,
-			x: px(columnsX[index]),
-			disagreeY: heightOf(day.disagreementRate, day.pairsJudged),
-			unclearY: heightOf(day.unclearRate, day.pairsUsable),
-			day,
-			said: readingsOf(day)
-		}))
+		dates.map((date, index) => {
+			const day = readOn.get(date);
+			const reading: Reading | null =
+				day === undefined
+					? null
+					: {
+							day,
+							disagreeY: heightOf(day.disagreementRate, day.pairsJudged),
+							unclearY: heightOf(day.unclearRate, day.pairsUsable),
+							said: readingsOf(day)
+						};
+			return {
+				date,
+				x: px(columnsX[index]),
+				unread: reading !== null ? null : rowOn.has(date) ? NO_READINGS : NO_NUMBERS,
+				reading
+			};
+		})
+	);
+
+	/** Only the columns with a reading: what the dots and their accessible
+	 * names draw from. An unread day keeps its column for the axis and the
+	 * strip, but draws no mark and carries no name - it has nothing to name
+	 * (Jony's ruling). */
+	const drawnMarks = $derived(
+		marks.flatMap((mark) =>
+			mark.reading === null ? [] : [{ date: mark.date, x: mark.x, reading: mark.reading }]
+		)
+	);
+
+	/** The dates the shared axis gives a tick to. `dayTicks` samples a fixed
+	 * number of evenly spaced days before it ever looks at which ones hold a
+	 * reading (`chart.tick_density`), so a day can carry a real dot and no
+	 * axis tick at all - never thinned down to a bare mark, simply never
+	 * sampled. */
+	const tickedDates = $derived(new Set(ticks.map((tick) => tick.date)));
+
+	/** The two limits, named, in drawing order: shared between the template's
+	 * own loop and the mark-label boxes below, so the two cannot name the
+	 * limits differently. */
+	const limitRules = $derived([
+		{ at: limits.disagreementMax, name: 'disagreement' as const },
+		{ at: limits.unclearMax, name: 'unclear' as const }
+	]);
+
+	/** Each dashed mark's own label, as the small box it occupies: text-anchor
+	 * `end` at the plot's right edge, so its left edge is its width back from
+	 * there. Read, never drawn from - kept only so a stranded date label
+	 * (below) does not land on top of one. */
+	const markLabelBoxes = $derived(
+		limitRules.map(({ name, at }) => {
+			const baseline = yAxis.scale(at) - 4;
+			const width = labelWidth(markLabel(name, at));
+			return { top: baseline - AXIS_LABEL_PX, bottom: baseline, left: box.right - width, right: box.right };
+		})
+	);
+
+	function boxesOverlap(
+		a: { top: number; bottom: number; left: number; right: number },
+		b: { top: number; bottom: number; left: number; right: number }
+	): boolean {
+		return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+	}
+
+	/** A day's own date, drawn beside its topmost dot, for a day whose axis
+	 * tick the sampling above left out while the day immediately before or
+	 * after it, inside the drawn window, held no reading.
+	 *
+	 * Not every day with a dot and no tick: at a wide preset most days carry a
+	 * reading, and labelling each one the sampling skipped would print dozens
+	 * of dates over the marks the chart is about. A day with an unread
+	 * neighbour on either side has no tick close enough on that side for a
+	 * glancing reader to read its date off of, which this fires on; a window
+	 * with few gaps has few or no such days (Jony and Susan, 2026-10-09). The
+	 * label repeats what the day's own accessible name already says, so it is
+	 * `aria-hidden`.
+	 *
+	 * Raised clear of either dashed mark's own label where the two would
+	 * otherwise overlap - a stranded day can sit at a mark's own height, and
+	 * near the plot's right edge the two labels compete for the same corner
+	 * Where that position cannot fit inside the plot, place the date below
+	 * the dot and clear of the mark labels, keeping it centred on its day.
+	 */
+	const strandedLabels = $derived(
+		marks.flatMap((mark, index) => {
+			if (mark.reading === null || tickedDates.has(mark.date)) return [];
+			const before = marks[index - 1];
+			const after = marks[index + 1];
+			const hasUnreadNeighbour =
+				(before !== undefined && before.reading === null) ||
+				(after !== undefined && after.reading === null);
+			if (!hasUnreadNeighbour) return [];
+			const { disagreeY, unclearY } = mark.reading;
+			const topY =
+				disagreeY === null
+					? unclearY
+					: unclearY === null
+						? disagreeY
+						: Math.min(disagreeY, unclearY);
+			if (topY === null) return [];
+			const width = labelWidth(dayMonth(mark.date));
+			const labelBox = (y: number) => ({
+				top: y - AXIS_LABEL_PX, bottom: y,
+				left: mark.x - width / 2, right: mark.x + width / 2
+			});
+			const boxes = [...markLabelBoxes].sort((a, b) => a.top - b.top);
+			let y = Math.max(topY - 8, box.top + AXIS_LABEL_PX);
+			for (const markBox of boxes.toReversed()) {
+				if (boxesOverlap(labelBox(y), markBox)) y = markBox.top - 2;
+			}
+			if (labelBox(y).top < box.top) {
+				y = topY + 8 + AXIS_LABEL_PX;
+				for (const markBox of boxes) {
+					if (boxesOverlap(labelBox(y), markBox)) y = markBox.bottom + 2 + AXIS_LABEL_PX;
+				}
+			}
+			return [{ date: mark.date, x: mark.x, y }];
+		})
 	);
 
 	/** One rate's line, broken wherever that rate has no dot: each run of
 	 * neighbouring dots is one polyline, and a dot with no neighbour stands alone.
 	 * Joined across such a day, the line would draw a value there. */
 	function runsOf(points: readonly { x: number; y: number | null }[]): string[] {
-		const runs: string[][] = [[]];
-		for (const { x, y } of points) {
-			if (y === null) runs.push([]);
-			else runs[runs.length - 1].push(`${x},${y}`);
-		}
-		return runs.filter((run) => run.length > 1).map((run) => run.join(' '));
+		return indexedRuns(points, (point) => point.y !== null)
+			.filter((run) => run.length > 1)
+			.map((run) => run.map((index) => `${points[index].x},${points[index].y}`).join(' '));
 	}
-	const disagreeRuns = $derived(runsOf(marks.map((mark) => ({ x: mark.x, y: mark.disagreeY }))));
-	const unclearRuns = $derived(runsOf(marks.map((mark) => ({ x: mark.x, y: mark.unclearY }))));
+	const disagreeRuns = $derived(
+		runsOf(marks.map((mark) => ({ x: mark.x, y: mark.reading?.disagreeY ?? null })))
+	);
+	const unclearRuns = $derived(
+		runsOf(marks.map((mark) => ({ x: mark.x, y: mark.reading?.unclearY ?? null })))
+	);
 
 	/** How many pairs the window read altogether: what the disagreed share is
 	 * taken over, printed beside it. */
@@ -176,8 +345,10 @@
 	const unclear = $derived(
 		read.reduce((total, day) => total + day.unclearRate * day.pairsUsable, 0)
 	);
-	const disagreeShare = $derived(rateWithDenominator(disagreed, judged, attemptsFloor));
-	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor));
+	const disagreeShare = $derived(
+		rateWithDenominator(disagreed, judged, attemptsFloor, limits.disagreementMax)
+	);
+	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor, limits.unclearMax));
 	/** Each share against its own mark, read off the share itself and never off
 	 * why a day was held: the run first checks whether the record holds enough
 	 * to fit on, so a day held for that can carry a share past its mark. A share
@@ -186,8 +357,20 @@
 	const unclearPast = $derived(agreed > 0 && unclear / agreed > limits.unclearMax);
 	/** The disagreed share against its mark, for the sentences that judge that
 	 * share alone. The words are Reader's. */
+	function describeVerdict(
+		numerator: number,
+		denominator: number,
+		mark: number,
+		reading: string
+	): string {
+		const shown = wholePercent(numerator, denominator, mark);
+		if (shown !== wholePercent(numerator, denominator)) {
+			return `The share that ${reading} is just ${numerator / denominator > mark ? 'above' : 'below'} its ${percent(mark)} mark`;
+		}
+		return `The ${shown}% that ${reading} is ${numerator / denominator > mark ? 'past' : 'inside'} its mark`;
+	}
 	const disagreedVerdict = $derived(
-		`The ${wholePercent(disagreed, judged)}% that disagreed is ${disagreedPast ? 'past' : 'inside'} its mark`
+		describeVerdict(disagreed, judged, limits.disagreementMax, 'disagreed')
 	);
 	/** Where the sentence prints both shares, the verdict on the two: the state
 	 * it names and the words that close the sentence. The words are Reader's. */
@@ -198,7 +381,7 @@
 		if (unclearPast)
 			return {
 				state: 'unclear-past',
-				said: `The ${wholePercent(unclear, agreed)}% that could not tell is past its mark.`
+				said: `${describeVerdict(unclear, agreed, limits.unclearMax, 'could not tell')}.`
 			};
 		return { state: 'inside', said: 'Both rates are inside the marks.' };
 	});
@@ -207,43 +390,54 @@
 			.length
 	);
 
+	function formatPairs(count: number): string {
+		return `${grouped(count)} ${count === 1 ? 'pair' : 'pairs'}`;
+	}
+
 	/** Why a dot is missing, as a caption under the window sentence wherever the
 	 * chart left one out. Not while the whole window is too few for a share: that
-	 * sentence already says so. One column shows no gap, so it keeps the rule
-	 * alone. The words are Reader's. */
+	 * sentence already says so. Only the days that read a pair count: a day with
+	 * no reading is not under the floor, and its own strip entry already says
+	 * why it is empty. One such day shows no gap, so it keeps the rule alone.
+	 * The words are Reader's. */
 	const floorNote = $derived.by(() => {
-		const leftOut = marks.some((mark) => mark.disagreeY === null || mark.unclearY === null);
+		const readings = drawnMarks.map((mark) => mark.reading);
+		const leftOut = readings.some((one) => one.disagreeY === null || one.unclearY === null);
 		if (!leftOut || disagreeShare === null) return null;
-		const fewer = `fewer than ${plural(attemptsFloor, 'pair', 'pairs')}`;
+		const fewer = `fewer than ${formatPairs(attemptsFloor)}`;
 		const rule = `A day has no "disagreed" dot if ${fewer} were read twice, and no "could not tell" dot if ${fewer} agreed.`;
-		if (marks.length === 1) return rule;
-		return marks.some((mark) => mark.disagreeY !== null || mark.unclearY !== null)
+		if (readings.length === 1) return rule;
+		return readings.some((one) => one.disagreeY !== null || one.unclearY !== null)
 			? `${rule} The chart shows a gap where a dot is left out, and that day's counts are still above.`
 			: `${rule} So the chart has no dots, and each day's counts are still above.`;
 	});
 
 	/** A day's two readings, as its strip prints them and as its marks name them:
-	 * every word of the sentence is in the strip at that day. */
+	 * every word of the sentence is in the strip at that day. A column with no
+	 * reading says why in its own words, and the strip rests on the newest day
+	 * WITH a reading, because the newest one or two days of a window are often
+	 * still unread. */
 	const readout = $derived(
 		readoutOf({
 			type: 'dateSeries',
-			columns: marks.map((mark) => dayMonth(mark.day.date)),
+			columns: marks.map((mark) => dayMonth(mark.date)),
 			series: [
 				{
 					label: 'Disagreed with the second reading',
 					swatch: 'var(--chart-1)',
-					values: marks.map((mark) => mark.day.disagreementRate),
-					format: (_: number, column: number) => marks[column].said.disagreed
+					values: marks.map((mark) => mark.reading?.day.disagreementRate ?? null),
+					format: (_: number, column: number) => marks[column].reading!.said.disagreed
 				},
 				{
 					label: 'Could not tell',
 					swatch: 'var(--chart-3)',
-					values: marks.map((mark) => mark.day.unclearRate),
-					format: (_: number, column: number) => marks[column].said.unclear
+					values: marks.map((mark) => mark.reading?.day.unclearRate ?? null),
+					format: (_: number, column: number) => marks[column].reading!.said.unclear
 				}
 			],
-			notMeasured: 'No pair was read twice on this day',
-			resting: 'last'
+			notMeasured: NO_NUMBERS,
+			notMeasuredAt: marks.map((mark) => mark.unread),
+			resting: 'newest'
 		})
 	);
 	const count = $derived(readout.columns.length);
@@ -301,7 +495,7 @@
 				<!-- The two limits, drawn whether or not a series is. They are what the
 				     panel is about: a reader sees where the run stops rather than
 				     subtracting one number from another. -->
-				{#each [{ at: limits.disagreementMax, name: 'disagreement' }, { at: limits.unclearMax, name: 'unclear' }] as rule (rule.name)}
+				{#each limitRules as rule (rule.name)}
 					<line
 						x1={box.left}
 						x2={box.right}
@@ -320,9 +514,7 @@
 						font-size="10"
 						data-agreement-marker-label={rule.name}
 					>
-						{rule.name === 'disagreement'
-							? `${percent(rule.at)} - the "disagreed" mark`
-							: `${percent(rule.at)} - the "could not tell" mark`}
+						{markLabel(rule.name, rule.at)}
 					</text>
 				{/each}
 
@@ -345,31 +537,52 @@
 					/>
 				{/each}
 
-				{#each marks as mark (mark.date)}
+				{#each drawnMarks as mark (mark.date)}
 					<g
 						role="img"
-						aria-label={mark.said.name}
+						aria-label={mark.reading.said.name}
 						data-agreement-day={mark.date}
-						data-agreement-judged={mark.day.pairsJudged}
+						data-agreement-judged={mark.reading.day.pairsJudged}
 					>
-						{#if mark.disagreeY !== null}
-							<circle cx={mark.x} cy={mark.disagreeY} r="2.5" fill="var(--chart-1)" />
+						{#if mark.reading.disagreeY !== null}
+							<circle cx={mark.x} cy={mark.reading.disagreeY} r="2.5" fill="var(--chart-1)" />
 						{/if}
-						{#if mark.unclearY !== null}
-							<circle cx={mark.x} cy={mark.unclearY} r="2.5" fill="var(--chart-3)" />
+						{#if mark.reading.unclearY !== null}
+							<circle cx={mark.x} cy={mark.reading.unclearY} r="2.5" fill="var(--chart-3)" />
 						{/if}
 					</g>
 				{/each}
 
 				{#each ticks as tick (tick.index)}
+					{#if tick.text}
+						<text
+							x={px(columnsX[tick.index])}
+							y={box.bottom + 16}
+							text-anchor={tick.anchor}
+							fill="var(--color-text-tertiary)"
+							font-size="10"
+							data-day-tick={tick.date}
+						>
+							{tick.text}
+						</text>
+					{/if}
+				{/each}
+
+				<!-- A day whose own axis tick the shared sampling skipped, with an
+				     unread neighbour on at least one side: the one case a glancing
+				     reader has no nearby tick to read its date off of. Repeats the
+				     day's own accessible name, so it carries none of its own. -->
+				{#each strandedLabels as label (label.date)}
 					<text
-						x={px(columnsX[tick.index])}
-						y={box.bottom + 16}
-						text-anchor={tick.anchor}
+						x={label.x}
+						y={label.y}
+						text-anchor="middle"
 						fill="var(--color-text-tertiary)"
 						font-size="10"
+						aria-hidden="true"
+						data-agreement-stranded-label={label.date}
 					>
-						{dayMonth(tick.date)}
+						{dayMonth(label.date)}
 					</text>
 				{/each}
 			</svg>
@@ -380,7 +593,7 @@
 			at={selected}
 			name="judge-agreement"
 			maxShare={readoutMaxShare}
-			restingNote=", the newest day"
+			restingNote=", the newest day with numbers"
 		/>
 
 		<p class="agreement-note">
@@ -390,7 +603,7 @@
 				>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
-					>{plural(judged, 'pair', 'pairs')}
+					>{formatPairs(judged)}
 					{judged === 1 ? 'was' : 'were'} read twice in {nameSpan(windowDays)}. That is too few
 					to report a share, so the counts are above.</span
 				>
@@ -408,7 +621,7 @@
 			{:else if agreed < attemptsFloor}
 				<span data-agreement-state="few-agreed"
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearSaid} could not tell. {disagreedVerdict}, and {agreed} is too few to report a
+					{unclearSaid} could not tell. {disagreedVerdict}, and {grouped(agreed)} is too few to report a
 					share.</span
 				>
 			{:else}

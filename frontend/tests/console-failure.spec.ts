@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { failureLoad } from '../src/lib/charts/glance';
@@ -161,6 +161,24 @@ test('a day too thin to divide breaks the line rather than drawing a share', () 
 	expect(fetch.points[1]).toMatchObject({ rate: 1 / 9, reached: 9 });
 });
 
+test('drawn rate lines stop at gaps, keep measured zero and leave singleton dots unjoined', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '7'));
+	await openServed(page, (window) => [6, 5, 3, 2, 0].flatMap((ago) =>
+		items(dayBefore(window.end, ago), `day-${ago}`, 'publish', 'ok', 8)
+	));
+	for (const stage of STAGES) {
+		const marks = await page.locator(`[data-rate-mark="${stage}"]`).evaluateAll((nodes) =>
+			nodes.map((node) => `${node.getAttribute('cx')},${node.getAttribute('cy')}`)
+		);
+		expect(marks).toHaveLength(5);
+		const lines = await page.locator(`[data-rate-line="${stage}"]`).evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('points'))
+		);
+		expect(lines).toEqual([marks.slice(0, 2).join(' '), marks.slice(2, 4).join(' ')]);
+		expect(new Set(marks.map((point) => point.split(',')[1])).size).toBe(1);
+	}
+});
+
 test('every rate the chart prints carries its denominator in the same sentence', async ({
 	page
 }) => {
@@ -260,6 +278,47 @@ test('a window too thin to divide states that, and never a rate', async ({ page 
 	await expect(page.locator('[data-failure-low-sample]')).toBeVisible();
 });
 
+test('a held month file says the chart is waiting, not empty', async ({ page }) => {
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => (release = resolve));
+	let requested = 0;
+	await page.route('**/telemetry/*.csv', async (route) => {
+		requested += 1;
+		await held;
+		await route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+	});
+
+	try {
+		await page.goto('/console/');
+		await expect.poll(() => requested, 'the page did not request a month file').toBeGreaterThan(0);
+		await expect(page.locator('[data-failure-loading]')).toHaveText(
+			'Reading the monthly files. This chart is not ready yet.'
+		);
+		await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
+		await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
+	} finally {
+		release();
+	}
+});
+
+test('a month file that returns 404 says the chart is unavailable, not empty', async ({ page }) => {
+	let requested = 0;
+	await page.route('**/telemetry/*.csv', async (route) => {
+		requested += 1;
+		await route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+	});
+
+	await page.goto('/console/');
+	await expect.poll(() => requested, 'the page did not request a month file').toBeGreaterThan(0);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
+		'data-telemetry-fetching',
+		'no'
+	);
+	await expect(page.locator('[data-failure-unavailable]')).toHaveText('This chart is unavailable.');
+	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
+	await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
+});
+
 test('a window holding nothing renders, and says so rather than drawing zero', async ({ page }) => {
 	// Six items on the window's newest day and none before it. Narrowed to seven days
 	// the window draws them; one step back it holds nothing, which is the state.
@@ -272,7 +331,9 @@ test('a window holding nothing renders, and says so rather than drawing zero', a
 
 	// A column of zeroes reads as a run that went badly. An empty window went
 	// nowhere at all, and the page has to say which.
-	await expect(page.locator('[data-failure-empty]')).toBeVisible();
+	await expect(page.locator('[data-failure-empty]')).toHaveText(
+		'No item was planned in these 7 days, so there is no rate to give and no volume to give it against.'
+	);
 	await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 });

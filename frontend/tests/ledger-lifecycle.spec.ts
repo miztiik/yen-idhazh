@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { windowOfDays, type TimeWindow } from '../src/lib/charts/viewport';
 import { recordNotes } from '../src/lib/console/recording';
 import { describeCutDays, describeDaysRead } from '../src/lib/console/explorer/days-read';
-import { readAsk } from '../src/lib/data/ask-reader';
+import { readAsk, readAskCost } from '../src/lib/data/ask-reader';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { readColumns } from '../src/lib/data/ledger-columns';
@@ -86,6 +86,66 @@ const INDEXES = ['daily', 'monthly', 'yearly'].map((period) => `compact/${LEDGER
 /** A panel's slice of the built ledger: the day each row was filed under, and its number in that day. */
 const slicing = (from: string, to: string): SliceOptions => ({ columns: ['date', 'n'], from, to });
 const dayFile = (day: string): string => `compact/${LEDGER}/daily/${day.replaceAll('-', '/')}.parquet`;
+
+test('the cost estimate names the same read bounds for late starts, early ends and ledgers with no day in the window', async () => {
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger: LEDGER, pinned: PINNED, days: everyDay(4, 0) });
+	await buildLedger(root, { ledger: 'seen', pinned: PINNED, days: [{ ago: 1461, state: 'empty' }, ...everyDay(13, 0)] });
+	await buildLedger(root, { ledger: 'item-health', pinned: PINNED, days: everyDay(4, 3) });
+	const site = aPage(servedFrom(root, SITE).fetcher);
+	try {
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: '2030-06-11', readTo: '2030-06-15'
+		});
+		expect(await readAskCost(site, null, [LEDGER, 'seen'], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: '2030-06-02', readTo: '2030-06-15'
+		});
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', '2030-06-12', {})).toMatchObject({
+			readFrom: '2030-06-11', readTo: '2030-06-12'
+		});
+		expect(await readAskCost(site, null, [LEDGER], PINNED, PINNED, {})).toMatchObject({
+			readFrom: '2030-06-15', readTo: '2030-06-15'
+		});
+		expect(await readAskCost(site, null, ['item-health'], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: '2030-06-11', readTo: '2030-06-12'
+		});
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', '2030-06-10', {})).toMatchObject({
+			readFrom: null, readTo: null
+		});
+		expect(await readAskCost(site, null, [], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: null, readTo: null
+		});
+	} finally {
+		await site.release();
+	}
+});
+
+test('a ledger that stopped before the window cannot supply the first day read beside a later-starting ledger', async () => {
+	const root = test.info().outputPath('state');
+	await buildLedger(root, { ledger: LEDGER, pinned: PINNED, days: everyDay(20, 14) });
+	await buildLedger(root, { ledger: 'seen', pinned: PINNED, days: everyDay(4, 0) });
+	const site = aPage(servedFrom(root, SITE).fetcher);
+	const ledgers = [LEDGER, 'seen'] as const;
+	const sql = `SELECT (SELECT count(*) FROM "${LEDGER}") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows`;
+	try {
+		expect(await readAskCost(site, null, [LEDGER], '2030-06-02', PINNED, {})).toMatchObject({
+			readFrom: null, readTo: null
+		});
+		const cost = await readAskCost(site, null, ledgers, '2030-06-02', PINNED, {});
+		const answer = await readAsk(site, null, { ...question('2030-06-02', PINNED, sql), ledgers }, {});
+		expect.soft(cost).toMatchObject({ readFrom: '2030-06-11', readTo: PINNED });
+		expect.soft(answer).toMatchObject({
+			state: 'ok', readFrom: '2030-06-11', readTo: PINNED,
+			rows: [{ fingerprint_rows: '0', seen_rows: '5' }]
+		});
+		expect(daysReadLines(answer, PINNED)).toEqual([
+			'Read from 5 UTC days, 11 Jun 2030 to 15 Jun 2030.',
+			'Days of the seen record before 11 Jun 2030 are not on this site.'
+		]);
+	} finally {
+		await site.release();
+	}
+});
 
 test.describe('a ledger the test builds', () => {
 	test('answers the rows it was built with, reads its empty day as quiet, and names its lost day', async () => {

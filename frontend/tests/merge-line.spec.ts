@@ -31,6 +31,7 @@ import {
 	mergeTotals,
 	rateWithDenominator,
 	silentTail,
+	wholePercent,
 	type JudgeDay,
 	type LineDay,
 	type MergeDay,
@@ -240,8 +241,12 @@ test.describe('where the merge line sits', () => {
 	test('a held day is counted and a window with none says nothing at all', () => {
 		// Null rather than "0 days were held": a sentence a reader has to parse to
 		// learn that nothing happened is a sentence that should not be there.
-		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of 30 days.');
+		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 recorded day in this 30-day window.');
 		expect(heldNote(LINE.slice(0, 3), 30)).toBeNull();
+		expect(heldNote([LINE[3], { ...LINE[3], date: '2026-09-20' }], 7)).toBe(
+			'Nothing was fitted on 2 recorded days in this 7-day window.'
+		);
+		expect(heldNote([], 7)).toBeNull();
 	});
 });
 
@@ -261,13 +266,28 @@ test.describe('the judge, and what the record still needs', () => {
 		};
 	}
 
-	test('the agreement axis is zero to the looser of the two limits', () => {
-		// Not 0 to 1: neither rate can reach 1 without the run holding first, so
-		// half the plot would be a region the data cannot enter. Not fitted to the
-		// data either - a healthy two percent drawn full height says the judge is
-		// in trouble when it is not.
-		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.35]);
+	test('the agreement axis holds both marks, niced outward to a whole step', () => {
+		// Niced rather than exact, like every other console axis: 0.35 itself is
+		// not a round step at four ticks, so the looser mark ends up with 24px of
+		// headroom above it on a 190px plot instead of sitting on the plot's edge.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.4]);
 		expect(agreementCorridor({ disagreementMax: 0.4, unclearMax: 0.35 })).toEqual([0, 0.4]);
+	});
+
+	test('a share past both marks widens the axis rather than drawing pinned to one', () => {
+		// A share past its own mark is the one reading this panel exists to show,
+		// so the axis grows to hold it instead of clipping it onto the mark's own
+		// line (Jony, 2026-10-09, row L55).
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.4])).toEqual([
+			0, 0.4
+		]);
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.97])).toEqual([
+			0, 1
+		]);
+		// A share under both marks never narrows the axis below them.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.02])).toEqual([
+			0, 0.4
+		]);
 	});
 
 	test('a record with nothing in it still draws three bars at zero', () => {
@@ -401,6 +421,28 @@ test.describe('the judge, and what the record still needs', () => {
 		expect(describeUnclear(1, 467, 5)).toBe('<1% of the 467 that agreed');
 		// No pair agreed, so nothing was counted and no count prints.
 		expect(describeUnclear(0, 0, 5)).toBe('not counted, no pair agreed');
+	});
+
+	test('agreement counts use the same thousands separator as the merge count', () => {
+		expect(rateWithDenominator(272, 1390, 5)).toBe('20% of 1,390 pairs');
+		expect(describeUnclear(56, 1118, 5)).toBe('5% of the 1,118 that agreed');
+		expect(rateWithDenominator(1, 1000, 5)).toBe('<1% of 1,000 pairs');
+		expect(describeUnclear(1, 1000, 5)).toBe('<1% of the 1,000 that agreed');
+		expect(describeUnclear(1, 1000, 1001)).toBe('1 of the 1,000 that agreed');
+	});
+
+	test('rounding cannot hide which side of an agreement mark a share is on', () => {
+		expect(rateWithDenominator(7, 46, 5, 0.15)).toBe('just above 15% of 46 pairs');
+		expect(describeUnclear(13, 37, 5, 0.35)).toBe('just above 35% of the 37 that agreed');
+		expect(rateWithDenominator(7, 47, 5, 0.15)).toBe('just below 15% of 47 pairs');
+		expect(describeUnclear(13, 38, 5, 0.35)).toBe('34% of the 38 that agreed');
+		expect(wholePercent(150001, 1000000, 0.15)).toBe('just above 15');
+		expect(wholePercent(149999, 1000000, 0.15)).toBe('just below 15');
+		expect(wholePercent(15, 100, 0.15)).toBe('15');
+		expect(wholePercent(35, 100, 0.35)).toBe('35');
+		expect(wholePercent(20.1, 100, 0.2)).toBe('just above 20');
+		expect(rateWithDenominator(1, 4, 5, 0.25)).toBeNull();
+		expect(describeUnclear(1, 3, 5, 0.35)).toBe('1 of the 3 that agreed');
 	});
 });
 

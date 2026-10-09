@@ -12,6 +12,38 @@ import { statusSentence } from '../src/lib/console/explorer/status';
 /** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
 const PINNED = '2030-06-15';
 
+for (const surface of ['status', 'answer', 'chart'] as const) {
+	test(`a published ledger with no compact index says not packed yet in the ${surface}`, async ({ page, context }) => {
+		const requested: string[] = [];
+		await context.addInitScript(() => Object.defineProperty(globalThis, '__RAW_LISTED_THROUGH__', { value: {}, configurable: true }));
+		await context.route('**/state/compact/published/**', (route) => {
+			requested.push(new URL(route.request().url()).pathname);
+			return route.fulfill({ status: 404 });
+		});
+		await openExplorer(page, PINNED);
+		await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
+		await runExplorer(page);
+		await expectAnswer(page, 'missing');
+		expect(requested.some((name) => name.endsWith('/state/compact/published/index/daily.json'))).toBe(true);
+		if (surface === 'chart') await page.getByRole('tab', { name: 'Chart' }).click();
+		const shown = surface === 'status'
+			? page.locator('[data-explorer-action-line]')
+			: page.locator(`[data-console-panel-id="data-explorer-${surface === 'answer' ? 'rows' : 'shape'}"] [data-state="missing"]`);
+		await expect(shown).toHaveText(surface === 'status' ? 'Did not run. published is not packed yet.' : 'published is not packed yet.');
+	});
+}
+
+test('an unpublished ledger still says not on this site', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await context.route('**/state/compact/feed-health/**', (route) => route.fulfill({ status: 404 }));
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['feed-health'], 'SELECT count(*) AS rows FROM "feed-health"', false);
+	await runExplorer(page);
+	await expectAnswer(page, 'missing');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Did not run. feed-health is not on this site yet.');
+	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-state="missing"]')).toHaveText('feed-health is not on this site yet, so nothing was asked of it.');
+});
+
 type Box = { x: number; y: number; width: number; height: number };
 type ShiftSource = {
 	nodeName: string;
@@ -418,7 +450,9 @@ test('Susan 2026-10-07: checked choice tiles keep their bold-word width in every
 
 test('M11: status words stay in the reserved lines and never scroll sideways', async ({ page, context }) => {
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
-	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, days: 90, firstRun: true })).toBe('Run reads 123 files, 64.0 MB from 4 ledgers over 90 UTC days. It also starts the query engine.');
+	expect(statusSentence({ state: 'idle', files: 123, bytes: 67_108_864, ledgers: 4, readFrom: '2030-03-18', readTo: PINNED, firstRun: true })).toBe('Run will read 123 files, 64.0 MB from 4 ledgers over 90 UTC days, from 18 Mar 2030 through 15 Jun 2030. It also starts the query engine.');
+	expect(statusSentence({ state: 'idle', files: 1, bytes: 491, ledgers: 1, readFrom: PINNED, readTo: PINNED })).toBe('Run will read 1 file, 1 KB from 1 ledger over 1 UTC day: 15 Jun 2030.');
+	expect(statusSentence({ state: 'idle', ledgers: 1, readFrom: null, readTo: null })).toBe('Run will read 0 files, 0.0 MB from 1 ledger over 0 UTC days.');
 	expect(statusSentence({ state: 'costing' })).toBe('Choosing a ledger fetches one day of it to list its columns.');
 	expect(statusSentence({ state: 'running-fetch', files: 123, bytes: 67_108_864 })).toBe('Fetching 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'running-query' })).toBe('Running the question.');
@@ -427,7 +461,8 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows. Read 123 files, 64.0 MB.');
 	expect(statusSentence({ state: 'quiet', ms: 99999, read: { files: 0, bytes: 0, alreadyHeld: 45, ms: 99999 } })).toBe('Ran in 100.0 s and matched no rows.');
 	expect(statusSentence({ state: 'refused' })).toBe('Did not run. The reason is where the answer would be.');
-	expect(statusSentence({ state: 'missing', ledger: 'published' })).toBe('Did not run. published is not on this site yet.');
+	expect(statusSentence({ state: 'missing', ledger: 'published', published: true })).toBe('Did not run. published is not packed yet.');
+	expect(statusSentence({ state: 'missing', ledger: 'feed-health', published: false })).toBe('Did not run. feed-health is not on this site yet.');
 	expect(statusSentence({ state: 'unreachable-engine' })).toBe('Did not run. The query engine did not start.');
 	expect(statusSentence({ state: 'unreachable-files' })).toBe('Did not run. The ledger files could not be fetched.');
 	const longest = statusSentence({ state: 'answered', ms: 99999, read: { files: 123, bytes: 67_108_864, alreadyHeld: 123, ms: 99999 } });
@@ -435,7 +470,7 @@ test('M11: status words stay in the reserved lines and never scroll sideways', a
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		const status = page.locator('[data-workbench-region="status"]');
-		await expect(status).toContainText('Run reads');
+		await expect(status).toContainText('Run will read');
 		await chooseExplorerQuestion(page, ['published'], 'SELECT * FROM "published" WHERE false');
 		await runExplorer(page);
 		await expectAnswer(page, 'quiet');
@@ -737,9 +772,92 @@ test('M17: keyboard order follows the visual order at desktop and phone widths',
  *  role of every chart has a column to pick and another to change to. Two date columns pick no
  *  chart of their own, so the tiles start with none checked. */
 const CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, TIMESTAMP '2026-01-01 06:00:00' + INTERVAL (i) DAY AS stamp, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other, 0 AS tiny FROM range(0, 170) AS t(i)";
-const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution'] as const;
-/** The lines the role row takes, by the four widths in `VIEWS`, when the chart with the most roles has three. */
-const ROLE_LINES: Record<number, number> = { 1440: 1, 1024: 1, 768: 2, 390: 3 };
+const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution', 'partsOfOne', 'tileStrip', 'flow'] as const;
+/** The lines the role row reserves, with Flow's four roles, even when another chart is drawn. */
+const ROLE_LINES: Record<number, number> = { 1440: 1, 1024: 2, 768: 2, 390: 4 };
+
+for (const view of VIEWS) {
+	test.describe(`row20 role band ${view.width}`, () => {
+	test.use({ hasTouch: view.width < 1024 });
+	test(`row20 I1: Flow uses four roles without moving Spread's boxes at ${view.width}px`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		await openChart(page, "SELECT 's' || i AS stage, 170-i AS arrived, 169-i AS went, 1 AS dropped FROM range(0, 170) AS t(i)");
+		await page.locator('[data-shape-choice="flow"]').click();
+		await settle(page);
+		const read = () => page.locator('[data-chart-roles]').evaluate((node) => ({
+			height: node.getBoundingClientRect().height,
+			tops: [...node.querySelectorAll('summary')].map((pill) => Math.round(pill.getBoundingClientRect().top))
+		}));
+		const flowRow = await read();
+		expect(new Set(flowRow.tops).size).toBe(ROLE_LINES[view.width]);
+		expect(flowRow.height).toBe({ 390: 196, 768: 100, 1024: 76, 1440: 40 }[view.width]);
+		const sizes = await tokens(page);
+		expect(flowRow.height).toBeCloseTo(ROLE_LINES[view.width] * sizes.control + (ROLE_LINES[view.width] - 1) * sizes.space1 + 2 * sizes.space1, 0);
+		await page.locator('[data-shape-choice="distribution"]').click();
+		await settle(page);
+		expect(Math.abs((await read()).height - flowRow.height)).toBeLessThanOrEqual(0.5);
+	});
+	});
+}
+
+test.describe('row20 Flow controls on touch', () => {
+test.use({ hasTouch: true });
+test('row20 I7, I9 and I10: Flow keeps long names, its floating Dropped list and one readout tab stop', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await openChart(page, "SELECT 's' || i AS stage, 170-i AS summary_prefill_tokens_per_s, 169-i AS went, 1 AS dropped FROM range(0, 170) AS t(i)");
+	await page.locator('[data-shape-choice="flow"]').click();
+	for (const width of [390, 768, 1024, 1399, 1400, 1440]) {
+		await page.setViewportSize({ width, height: 900 });
+		await settle(page);
+		await expect(pill(page, 'arrived').locator('summary')).toHaveAttribute('aria-label', 'Arrived: summary_prefill_tokens_per_s');
+		const name = await pill(page, 'arrived').locator('[data-pill-name]').evaluate((node) => ({ width: node.clientWidth, content: node.scrollWidth }));
+		if (width !== 1399) expect(name.content).toBeLessThanOrEqual(name.width);
+		if (width === 1399 || width === 1400) {
+			const tops = await page.locator('[data-chart-roles] summary').evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().top)));
+			expect(new Set(tops).size).toBe(width === 1399 ? 2 : 1);
+		}
+	}
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.locator('[data-workbench-region="answer"]').evaluate((node) => node.scrollIntoView({ block: 'start' }));
+	const before = await page.evaluate(() => window.scrollY);
+	await pill(page, 'dropped').locator('summary').click();
+	const list = await pill(page, 'dropped').locator('[data-pill-list]').boundingBox();
+	expect(list!.y).toBeGreaterThanOrEqual(0);
+	expect(list!.y + list!.height).toBeLessThanOrEqual(844);
+	expect(await page.evaluate(() => window.scrollY)).toBe(before);
+	await page.keyboard.press('Escape');
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.getByRole('tab', { name: 'Chart' }).focus();
+	for (const next of [
+		page.locator('[data-shape-choice="flow"] input'),
+		pill(page, 'stage').locator('summary'),
+		pill(page, 'arrived').locator('summary'),
+		pill(page, 'wentOn').locator('summary'),
+		pill(page, 'dropped').locator('summary'),
+		page.locator('[data-chart-type="flow"][tabindex], [data-chart-type="flow"] ol[tabindex]')
+	]) {
+		await page.keyboard.press('Tab');
+		await expect(next).toBeFocused();
+	}
+	await page.locator('[data-shape-choice="distribution"]').click();
+	await page.getByRole('tab', { name: 'Chart' }).focus();
+	for (const next of [page.locator('[data-shape-choice="distribution"] input'), pill(page, 'values').locator('summary'), page.locator('[data-chart-readout-focus]')]) {
+		await page.keyboard.press('Tab');
+		await expect(next).toBeFocused();
+	}
+	await openChart(page, "SELECT DATE '2026-01-01' + i::INTEGER AS day, i AS summary_prefill_tokens_per_s, i AS b, i AS c, i AS d FROM range(0, 170) AS t(i)");
+	await page.locator('[data-shape-choice="dateSeries"]').click();
+	await page.setViewportSize({ width: 1400, height: 900 });
+	const lines = pill(page, 'lines');
+	await expect(lines.locator('summary')).toHaveAttribute('aria-label', 'Lines: summary_prefill_tokens_per_s, b, c, d');
+	await expect(lines.locator('.pill-more')).toHaveText(', 3 more');
+	expect(await lines.locator('.pill-more').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+	expect(await lines.locator('[data-pill-name]').evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+});
+});
 
 /** Wait two frames, so a layout shift the last action caused has been reported. */
 async function settle(page: Page) {
@@ -764,11 +882,18 @@ async function chartReading(page: Page): Promise<ChartReading> {
 			boxes[name] = read(node);
 		}
 		document.querySelectorAll('[role="tab"]').forEach((tab) => (boxes[`tab ${tab.textContent?.trim()}`] = read(tab)));
-		document.querySelectorAll('[data-shape-choice]').forEach((tile) => (boxes[`tile ${tile.getAttribute('data-shape-choice')}`] = read(tile)));
+		const choices = document.querySelector('.shape-actions') as HTMLElement;
+		boxes['shape choices'] = read(choices);
+		// The approved horizontal scroll reveals a checked tile; compare layout in its content coordinates.
+		document.querySelectorAll('[data-shape-choice]').forEach((tile) => {
+			const box = read(tile);
+			box.x += choices.scrollLeft;
+			boxes[`tile ${tile.getAttribute('data-shape-choice')}`] = box;
+		});
 		const starts: Record<string, { x: number; y: number }> = {};
 		document.querySelectorAll('[data-shape-choice] .choice-shown').forEach((word) => {
 			const { x, y } = word.getBoundingClientRect();
-			starts[`word ${word.closest('[data-shape-choice]')?.getAttribute('data-shape-choice')}`] = { x, y };
+			starts[`word ${word.closest('[data-shape-choice]')?.getAttribute('data-shape-choice')}`] = { x: x + choices.scrollLeft, y };
 		});
 		const slots = [...document.querySelectorAll('[data-role-slot]')];
 		slots.forEach((slot) => (boxes[`slot ${slot.getAttribute('data-role-slot')}`] = read(slot)));
@@ -888,7 +1013,7 @@ for (const view of VIEWS) {
 		closeBox(tableStrip, await strip());
 		await page.getByRole('tab', { name: 'Table' }).click();
 		await openChart(page);
-		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(4);
+		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(7);
 		await expect(page.locator('.result-tabs').getByRole('button', { name: /^Copy as/ })).toHaveCount(0);
 		await page.locator('[data-shape-choice="pairedScatter"]').click();
 		await settle(page);
@@ -911,7 +1036,7 @@ for (const view of VIEWS) {
 		expect(Math.abs(placed.top - placed.panelTop), 'the role row is not the panel\'s first row').toBeLessThanOrEqual(0.5);
 		expect(Math.abs(placed.top - placed.stripBottom), 'the role row does not start at the strip\'s foot').toBeLessThanOrEqual(0.5);
 		expect(Math.abs(placed.bottom - placed.drawingTop), 'the role row does not end at the drawing\'s top').toBeLessThanOrEqual(0.5);
-		expect(new Set(placed.pillTops).size, 'the pills stand on the wrong number of lines').toBe(ROLE_LINES[view.width]);
+		expect(new Set(placed.pillTops).size, 'the pills stand on the wrong number of lines').toBe(Math.ceil(3 / (view.width >= 1400 ? 4 : view.width >= 1024 ? 3 : view.width >= 640 ? 2 : 1)));
 		const rows = ROLE_LINES[view.width];
 		expect(placed.height).toBeCloseTo(rows * sizes.control + (rows - 1) * sizes.space1 + 2 * sizes.space1, 0);
 		// I15: the role row takes height, not width, so the plot still covers the panel's width.
@@ -981,6 +1106,13 @@ for (const view of VIEWS) {
 				await settle(page);
 				expectChartStill(before, await chartReading(page), `${from} to ${to}`);
 				await expect(page.locator(`[data-shape-choice="${to}"] input`)).toBeFocused();
+				const visible = await page.locator(`[data-shape-choice="${to}"]`).evaluate((tile) => {
+					const group = tile.closest('.shape-actions') as HTMLElement;
+					const box = tile.getBoundingClientRect();
+					const left = group.getBoundingClientRect().left + group.clientLeft;
+					return box.left >= left - 0.5 && box.right <= left + group.clientWidth + 0.5;
+				});
+				expect(visible, `${to}: selected tile is not whole in the scroll group's aperture`).toBe(true);
 			}
 		}
 		// Over time names the flat line in the foot; Ranked, where that note and the one for rows with

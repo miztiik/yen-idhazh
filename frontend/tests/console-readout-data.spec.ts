@@ -92,4 +92,33 @@ test.describe('the strip is the key', () => {
 			})
 		).toThrow(/hand null/);
 	});
+
+	test("a column's own reason overrides the shared not-measured word", () => {
+		// Judgement's agreement chart carries two reasons a column holds no
+		// reading: a day whose row read no pair, and a day with no row at all
+		// (row L55). One word for every chart that does not need the distinction,
+		// a reason per column for the one that does.
+		const strip = readoutOf({
+			type: 'dateSeries',
+			columns: ['Mon', 'Tue', 'Wed'],
+			series: [{ label: 'Read', swatch: null, values: [1, null, null], format: String }],
+			notMeasured: 'Nothing was read on this day',
+			notMeasuredAt: [null, 'No readings came in for this day', null],
+			resting: 'first'
+		});
+		// Omitted at Mon, where there is a reading to print instead. Named at
+		// Tue. Falls back to the shared word at Wed, where the chart named none.
+		expect(strip.notMeasuredAt).toEqual([null, 'No readings came in for this day', null]);
+
+		expect(() =>
+			readoutOf({
+				type: 'dateSeries',
+				columns: ['Mon', 'Tue'],
+				series: [{ label: 'Read', swatch: null, values: [null, null], format: String }],
+				notMeasured: 'Nothing was read on this day',
+				notMeasuredAt: [null],
+				resting: 'last'
+			})
+		).toThrow(/1 reasons for 2 columns/);
+	});
 });

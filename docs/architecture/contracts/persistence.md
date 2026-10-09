@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -256,6 +256,8 @@ Every job installs the same set, so whichever job saves `setup-python`'s pip cac
 **The door ships before any committed byte moves.** Moving a ledger's committed data is one-way, and keeping it out of the change that lays the door lets either be reverted alone.
 
 **2026-09-28: the union ranks on each row, and a compact file keeps each row's writer.** A compact file holds many work units under one envelope, so ranking on the file's `attempt` would rank the compaction rather than the writers. Each row keeps the identity cells its raw file gave it, the one settlement - `raw_files.settle_rows` - reads them, and the door refuses a row whose own cells contradict its writer's. The file-level pick it replaced is gone, so a raw union and a compact rebuild cannot disagree (Fowler).
+
+**2026-10-09: a trial trace file gets its own sibling root, `state/trial-traces/`, instead of nesting under `state/traces/`.** The two folders keep different retention windows, so their claims cannot overlap: production traces are pruned at 7 days and a trial trace needs 90, and nesting the trial inside production's folder would let production's own prune sweep a trial's trace file before the trial's report-only retention policy (`config/gardener/trials.json`) ever saw it. `overlay_registry()`'s TRACES branch replaces the committed `("traces",)` prefix outright with `(TRIAL_TRACES_DIRNAME, *segments)` rather than splicing segments in ahead of it, so a trial trace lands at `state/trial-traces/pipeline-tests/<case>/<YYYY>/<MM>/<DD>/`, a sibling of `state/traces/`, never a child of it. `claimed_roots()` lists both, so neither reads as a stray. `config._refuse_overlapping_claims` is unchanged: siblings do not overlap, so there is nothing for that guard to refuse (user ruling, 2026-10-09).
 
 ## See also
 

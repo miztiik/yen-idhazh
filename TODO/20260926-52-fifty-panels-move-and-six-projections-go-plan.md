@@ -751,6 +751,8 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 
 ### Row #2 - The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout
 
+- **Already carried by plan 55 row 20:** optional readouts for PartsOfOne, TileStrip and Flow; explorer-only native tooltip removal; caller part colours (K2), tile thresholds only with readings (K3), caller tile-state words (K4), and an opt-in shared Flow count verdict for a truthful fallback lede. Every other caller keeps its defaults.
+
 - **Scope:** section 2.5 and the colour table of section 2.4. **No pixel moves**, except that dark `--chart-6` takes its re-tuned value, and no route row edits `frontend/src/lib/charts/d3/` or a shared chart component this row changes afterwards. The settings line's data is row 5's; this row declares `ModelRule` in `frontend/src/lib/charts/d3/model-rule.ts` and makes `dateSeries` take it.
 - **Files touched:**
   - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (adapt the shipped caller to the chart props, preserving its host-only rule declaration)

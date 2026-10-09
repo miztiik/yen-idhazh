@@ -17,6 +17,76 @@ const PINNED = '2030-06-15';
 const JOIN_LEDGERS = ['published', 'item-health'] as const satisfies readonly LedgerName[];
 const JOIN_SQL = 'SELECT \'published x item-health\' AS pair, CAST(count(*) AS VARCHAR) AS rows FROM "published" p, "item-health" h';
 
+test('THE ORACLE: the action line counts five days for a ledger that begins inside a fourteen-day window', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 5 files, 2 KB from 1 ledger over 5 UTC days, from 11 Jun 2030 through 15 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await expect(page.locator('.answer-note')).toHaveText('Read from 5 UTC days, 11 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
+});
+
+test('THE ORACLE: beside a ledger that began four years ago the action line counts the fourteen dates once', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 0) },
+		{ ledger: 'seen', pinned: PINNED, days: [{ ago: 1461, state: 'empty' }, ...everyDay(13, 0)] });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint', 'seen'], 'SELECT (SELECT count(*) FROM "host-fingerprint") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 19 files, 9 KB from 2 ledgers over 14 UTC days, from 2 Jun 2030 through 15 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['5', '14']]);
+	await expect(page.locator('.answer-note')).toHaveText('Read from 14 UTC days, 2 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
+});
+
+test('a ledger that stopped before the window cannot supply the first day in the action line or answer note', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'),
+		{ ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(20, 14) },
+		{ ledger: 'seen', pinned: PINNED, days: everyDay(4, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint', 'seen'], 'SELECT (SELECT count(*) FROM "host-fingerprint") AS fingerprint_rows, (SELECT count(*) FROM "seen") AS seen_rows');
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('from 2 ledgers over 5 UTC days, from 11 Jun 2030 through 15 Jun 2030.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	expect(await tableRows(page)).toEqual([['0', '5']]);
+	await expect(page.locator('.answer-note')).toHaveText('Read from 5 UTC days, 11 Jun 2030 to 15 Jun 2030. 1 row shown. Days of the seen record before 11 Jun 2030 are not on this site.');
+});
+
+test('the action line stops on the ledger\'s last listed day, not the window\'s last day', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(4, 3) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="14"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 2 files, 1 KB from 1 ledger over 2 UTC days, from 11 Jun 2030 through 12 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await expect(page.locator('.answer-note')).toHaveText('Read from 2 UTC days, 11 Jun 2030 to 12 Jun 2030. 1 row shown. Days of the host-fingerprint record before 11 Jun 2030 are not on this site.');
+});
+
+test('the action line names one UTC day', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await page.locator('[data-window-preset="1"]').click();
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 1 file, 1 KB from 1 ledger over 1 UTC day: 15 Jun 2030. It also starts the query engine.', { timeout: 60_000 });
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	await expect(page.locator('.answer-note')).toHaveText('Read from 1 UTC day, 15 Jun 2030. 1 row shown.');
+});
+
+test('the action line counts no day before a ledger starts', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'host-fingerprint', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['host-fingerprint'], 'SELECT count(*) AS rows FROM "host-fingerprint"');
+	await page.getByRole('textbox', { name: 'From (UTC)' }).fill('2030-06-02');
+	await page.getByRole('textbox', { name: 'To (UTC)' }).fill('2030-06-14');
+	await expect(page.locator('[data-explorer-action-line]')).toHaveText('Run will read 0 files, 0.0 MB from 1 ledger over 0 UTC days. It also starts the query engine.', { timeout: 60_000 });
+});
+
 function addDays(day: string, delta: number): string {
 	const date = new Date(`${day}T00:00:00Z`);
 	date.setUTCDate(date.getUTCDate() + delta);
@@ -78,7 +148,7 @@ test('THE ORACLE: Data explorer opens as the sixth tab and renders its two panel
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-shape"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toHaveText('Run a question, and its answer can be drawn here.');
 	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('This page holds');
 });
 
@@ -296,7 +366,7 @@ test('opened from a link, the page reads each index and listing once before a ru
 	});
 	// The link names no question, so the editor stays empty and Run stays off: wait for the cost line instead.
 	await openExplorer(page, PINNED, { address: '?ledgers=host-fingerprint&days=14', ready: false });
-	await expect(page.locator('[data-explorer-action-line]')).toContainText('Run reads', { timeout: 60_000 });
+	await expect(page.locator('[data-explorer-action-line]')).toContainText('Run will read', { timeout: 60_000 });
 	expect(read.length, 'the page read no index, so this test proves nothing').toBeGreaterThan(0);
 	expect(read.filter((file, at) => read.indexOf(file) !== at), 'a file was read twice before Run').toEqual([]);
 });
@@ -612,7 +682,7 @@ test('THE ORACLE: a shared address fills the editor and does not run itself', as
 	await expect(page.locator('[data-explorer-answer]')).toHaveCount(0);
 	await expect(page.locator('[data-explorer-action-line]')).not.toContainText('Answered in');
 	await expect(page.locator('[data-console-panel-id="data-explorer-rows"] [data-explorer-idle]')).toContainText('Press Run');
-	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toContainText('If the answer holds a number');
+	await expect(page.locator('[data-console-panel-id="data-explorer-shape"] [data-explorer-idle]')).toHaveText('Run a question, and its answer can be drawn here.');
 	await expect(page.locator('[data-explorer-columns]')).toContainText('published.');
 	expect(fetched, 'a shared link fetched more than the newest day before Run').toEqual(['compact/published/daily/2030/06/15.parquet']);
 	const beforeType = page.url();
@@ -790,7 +860,7 @@ test('THE ORACLE: every chart case draws its type with a populated readout', asy
 
 /** One answer every chart can draw: a row a UTC day, a name a row, and three number columns. */
 const EVERY_CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other FROM range(0, 170) AS t(i)";
-const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution'] as const;
+const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution', 'partsOfOne', 'tileStrip', 'flow'] as const;
 
 /** Open a role's pill on the Chart tab and pick the line for `column` in its list. */
 async function pickColumn(page: Page, role: string, column: string) {
@@ -805,7 +875,7 @@ test('T6: Draw it as is radio tiles for every chart on every answer, none disabl
 	const group = page.getByRole('group', { name: 'Draw it as' });
 	const tiles = group.locator('input[type="radio"]');
 	const expectEveryTile = async (label: string) => {
-		await expect(tiles, label).toHaveCount(4);
+		await expect(tiles, label).toHaveCount(7);
 		expect(await tiles.evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)), label).toEqual([...CHART_TYPES]);
 		for (const tile of await tiles.all()) await expect(tile, label).toBeEnabled();
 	};

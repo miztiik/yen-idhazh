@@ -22,13 +22,19 @@
 	import Distribution from '$lib/charts/d3/Distribution.svelte';
 	import { pairedScatter } from '$lib/charts/d3/pairedScatter';
 	import PairedScatter from '$lib/charts/d3/PairedScatter.svelte';
-	import { readoutOf } from '$lib/charts/readout';
+	import { partsOfOne } from '$lib/charts/d3/partsOfOne';
+	import PartsOfOne from '$lib/charts/d3/PartsOfOne.svelte';
+	import { tileStrip } from '$lib/charts/d3/tileStrip';
+	import TileStrip from '$lib/charts/d3/TileStrip.svelte';
+	import { flow } from '$lib/charts/d3/flow';
+	import Flow from '$lib/charts/d3/Flow.svelte';
+	import { factsOf, readoutOf } from '$lib/charts/readout';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { rank } from '$lib/charts/rank';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import ColumnPicker from '$lib/console/explorer/ColumnPicker.svelte';
 	import { MOST_ROLES, SERIES_TOKENS, type ExplorerChartType, type RoleId } from '$lib/console/explorer/chart-roles';
-	import { IN_THE_ANSWER, chartNotes, chooseDateSeriesDays, numericValue, type ExplorerChart, type ExplorerShape, type ExplorerShapeBounds } from './shape';
+	import { IN_THE_ANSWER, chartNotes, chooseDateSeriesDays, numericValue, readTruthValue, type ExplorerChart, type ExplorerShape, type ExplorerShapeBounds } from './shape';
 	import { printCell } from './answer';
 
 	let {
@@ -42,6 +48,7 @@
 		slotsPerLine = MOST_ROLES,
 		capped = false,
 		maxRows,
+		narrowBelow = 0,
 		onRoles,
 		placeholder = null
 	}: {
@@ -59,6 +66,8 @@
 		slotsPerLine?: number;
 		capped?: boolean;
 		maxRows: number;
+		/** The first configured frame breakpoint; zero keeps server-only callers wide. */
+		narrowBelow?: number;
 		onRoles: (type: ExplorerChartType, role: RoleId, values: string[]) => void;
 		/** What the drawing holds while there is no answer to draw: a state's sentence or its shimmer. */
 		placeholder?: Snippet | null;
@@ -70,12 +79,19 @@
 	let foot = $state<HTMLDivElement | null>(null);
 	let chartWidth = $state(760);
 	let chartHeight = $state(untrack(() => floorHeight));
+	let nodeWidth = $state(0);
+	let nodeGap = $state(0);
 
 	const slots = Array.from({ length: MOST_ROLES }, (_, index) => index);
 	const active = $derived(chart.shape);
 	const notes = $derived(placeholder === null ? chartNotes(active, bounds, capped, maxRows) : []);
 	// The drawing and the foot are drawn again, never moved, when the chart or a column changes.
 	const drawingKey = $derived(JSON.stringify([placeholder === null, chart.type, chart.roles.map((state) => state.chosen)]));
+	const flowDrawing = $derived.by(() => {
+		if (active.kind !== 'chart' || active.type !== 'flow') return null;
+		const stages = rows.map((row) => ({ label: text(row, active.stageColumn), arrived: numericValue(row, active.arrivedColumn) as number, left: numericValue(row, active.wentOnColumn) as number, drops: active.droppedColumns.map((column) => ({ label: column, count: numericValue(row, column) as number })) }));
+		return flow(stages, { frame: frame(chartWidth, chartHeight), narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap, includeCountsStatus: true });
+	});
 
 	function text(row: Row, column: string): string {
 		const spec = columns.find((one) => one.name === column) ?? { name: column, type: 'VARCHAR' };
@@ -88,8 +104,16 @@
 			const main = next.mainFigure;
 			return main === null ? `${next.days} UTC ${next.days === 1 ? 'day' : 'days'}` : `${text({ [main.column]: main.value }, main.column)} ${main.column} on ${main.date}`;
 		}
-		if (next.type === 'rankedList') return next.mainFigure === null ? `${rows.length} rows` : `${next.mainFigure.label}: ${text({ [next.mainFigure.column]: next.mainFigure.value }, next.mainFigure.column)} ${next.mainFigure.column}`;
+		if (next.type === 'rankedList' || next.type === 'partsOfOne') return next.mainFigure === null ? `${rows.length} rows` : `${next.mainFigure.label}: ${text({ [next.mainFigure.column]: next.mainFigure.value }, next.mainFigure.column)} ${next.mainFigure.column}`;
 		if (next.type === 'pairedScatter') return next.mainFigure;
+		if (next.type === 'tileStrip') {
+			const days = chooseDateSeriesDays(next.dateColumn, rows, lostDays);
+			return `"${next.markColumn}" was true on ${days.filter(({ row }) => row !== null && readTruthValue(row, next.markColumn) === true).length} of ${days.length} UTC ${days.length === 1 ? 'day' : 'days'}`;
+		}
+		if (next.type === 'flow' && flowDrawing?.kind === 'stepped' && flowDrawing.countsConsistent === false) {
+			const last = rows[rows.length - 1];
+			return `${text(last, next.stageColumn)}: ${text(last, next.wentOnColumn)} ${next.wentOnColumn}`;
+		}
 		return next.mainFigure ?? `${rows.length} rows`;
 	}
 
@@ -121,6 +145,13 @@
 		if (drawing !== null) chartWidth = Math.max(1, Math.floor(drawing.getBoundingClientRect().width));
 		if (box === null || stack === null) return;
 		const style = getComputedStyle(box);
+		const rootPixels = parseFloat(getComputedStyle(document.documentElement).fontSize);
+		const readSpacingPixels = (token: string) => {
+			const value = style.getPropertyValue(token).trim();
+			return parseFloat(value) * (value.endsWith('rem') ? rootPixels : value.endsWith('em') ? parseFloat(style.fontSize) : 1);
+		};
+		nodeWidth = readSpacingPixels('--space-3');
+		nodeGap = readSpacingPixels('--space-2');
 		const room = box.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
 		const rest = stack.getBoundingClientRect().height - chartHeight;
 		// What the plot's box holds beside the height it was drawn at: its edge.
@@ -168,7 +199,26 @@
 				<div class="shape-stack" bind:this={stack}>
 					<p class="shape-lede" data-lede>{lede(active)}</p>
 					<div class="shape-drawing" bind:this={drawing}>
-						{#if active.type === 'dateSeries'}
+						{#if active.type === 'partsOfOne'}
+							{@const drawn = rows.slice(0, active.rowsDrawn)}
+							{@const parts = partsOfOne(drawn.map((row) => ({ label: text(row, active.labelColumn), parts: active.barColumns.flatMap((column) => { const value = numericValue(row, column); return value === null ? [] : [{ label: column, value }]; }) })), { order: active.barColumns, overlapping: true, tokens: SERIES_TOKENS.slice(0, active.barColumns.length) })}
+							{@const records = drawn.map((row) => factsOf(text(row, active.labelColumn), active.barColumns.map((column, index) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column), swatch: `var(${SERIES_TOKENS[index]})` })), 'null'))}
+							<PartsOfOne geometry={parts} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Side by side: ${[active.labelColumn, ...active.barColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} />
+							{#if active.moreRows > 0}<p data-shape-tail>{active.moreRows} more {active.moreRows === 1 ? 'row is' : 'rows are'} in the table.</p>{/if}
+							<p data-comparison={active.comparison}>{active.comparison}.</p>
+						{:else if active.type === 'tileStrip'}
+							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
+							{@const tiles = tileStrip(days.map(({ day, row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return { date: day, state: value === null ? 'absent' : value ? 'fired' : 'quiet' }; }))}
+							{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-1)', values: days.map(({ row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
+							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
+								<TileStrip geometry={tiles} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Which days: ${active.dateColumn}, ${active.markColumn}`} width={chartWidth} height={chartHeight} readout={tileReadout} stateWords={{ fired: 'true', quiet: 'false', absent: 'null' }} />
+							</div>
+							<p data-comparison={active.comparison}>{active.comparison}.</p>
+						{:else if active.type === 'flow'}
+							{@const records = rows.map((row) => factsOf(text(row, active.stageColumn), [active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].map((column) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column) })), 'null'))}
+							<Flow geometry={flowDrawing} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Flow: ${[active.stageColumn, active.arrivedColumn, active.wentOnColumn, ...active.droppedColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} tooltips={false} />
+							<p data-comparison={active.comparison}>{active.comparison}.</p>
+						{:else if active.type === 'dateSeries'}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const seriesColumns = active.seriesColumns}
 							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
@@ -191,7 +241,10 @@
 						{:else}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
-							<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+							<div tabindex="0" role="group" aria-label={`Spread readout: ${active.valueColumn}`} data-chart-readout-focus>
+								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
+							</div>
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{/if}
 					</div>

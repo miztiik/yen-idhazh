@@ -154,5 +154,21 @@
     "site_bytes": 40705036,
     "site_files": 96,
     "version": "2026-09-09"
+  },
+  {
+    "date": "2026-10-09",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 216,
+    "runs": [
+      {"charts_drafted": 11,"decided": 72,"decision_ms": 6,"failed": 8,"n": 1,"planned": 80,"prefiltered": 0,"run_id": "2026-10-09-37895507410","skipped": 0,"source_list_stale": false,"started_at": "2026-10-09T06:49:28Z","status": "partial","succeeded": 72},
+      {"charts_drafted": 20,"decided": 68,"decision_ms": 14,"failed": 12,"n": 2,"planned": 80,"prefiltered": 0,"run_id": "2026-10-09-37909663948","skipped": 0,"source_list_stale": false,"started_at": "2026-10-09T09:12:01Z","status": "partial","succeeded": 68},
+      {"charts_drafted": 24,"decided": 76,"decision_ms": 3,"failed": 4,"n": 3,"planned": 80,"prefiltered": 0,"run_id": "2026-10-09-37936395840","skipped": 0,"source_list_stale": false,"started_at": "2026-10-09T13:23:17Z","status": "partial","succeeded": 76}
+    ],
+    "site_bytes": 41136557,
+    "site_files": 98,
+    "version": "2026-09-09"
   }
 ]

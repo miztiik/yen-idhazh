@@ -13,6 +13,7 @@
  * the arithmetic is checked without a day off the archive (Guardrail #12).
  */
 
+import { linearAxis } from '../charts/frame';
 import { grouped } from '../charts/series';
 import { dayMonth, shortDate } from '../format';
 import { countDays, nameSpan } from './span-words';
@@ -135,9 +136,16 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
 
 /** A share as a whole percent, and `<1` where a share that is not zero rounds
  * below one percent: a `0` there would say none was counted, and some was. The
- * console's rule for every number it prints. */
-export function wholePercent(numerator: number, denominator: number): string {
+ * console's rule for every number it prints. Beside a mark, say which side
+ * a share is on when rounding would print the mark's own figure. */
+export function wholePercent(numerator: number, denominator: number, mark?: number): string {
 	const share = (numerator / denominator) * 100;
+	if (mark !== undefined && Math.round(share) === Math.round(mark * 100)) {
+		const rate = numerator / denominator;
+		if (rate !== mark) {
+			return `just ${rate > mark ? 'above' : 'below'} ${Math.round(mark * 100)}`;
+		}
+	}
 	return share > 0 && share < 0.5 ? '<1' : String(Math.round(share));
 }
 
@@ -213,7 +221,7 @@ export function clampNote(days: readonly LineDay[], windowDays: number): string 
 	return `The clamp held the line back on ${held} of ${countDays(windowDays)}.`;
 }
 
-/** How many days in the window fitted nothing, in one sentence, or null.
+/** How many recorded days in the window fitted nothing, in one sentence, or null.
  *
  * A held day breaks the proposed series rather than joining across it: a line
  * drawn through a day nothing was fitted on claims a measurement nobody took.
@@ -222,7 +230,7 @@ export function clampNote(days: readonly LineDay[], windowDays: number): string 
 export function heldNote(days: readonly LineDay[], windowDays: number): string | null {
 	const held = days.filter((day) => day.heldReason !== 'none').length;
 	if (held === 0) return null;
-	return `Nothing was fitted on ${held} of ${countDays(windowDays)}.`;
+	return `Nothing was fitted on ${held} recorded ${held === 1 ? 'day' : 'days'} in this ${windowDays}-day window.`;
 }
 
 // --- Whether the judge agrees with itself, and what the record still needs ------
@@ -263,16 +271,23 @@ export interface GateNeed {
 	targetText: string;
 }
 
-/** The agreement axis: zero to the looser of the two limits, never the data.
+/** The agreement axis: zero to the looser of the two limits, widened to clear
+ * any share the chart draws, and niced to a whole tick step.
  *
- * Both rates are bounded by the two knobs that hold the run, and the looser of
- * the two carries both series and both markers. Not 0 to 1: neither rate can
- * reach 1 without the run holding first, so half the plot would be a region the
- * data cannot enter. Not fitted to the data either - a rate of 0.02 drawn full
- * height says the judge is in trouble when it is not.
+ * Both rates are bounded below by the two knobs that hold the run, so a
+ * healthy two percent still draws against them rather than filling the panel
+ * and reading as trouble. But a share past its own mark is the one reading
+ * this panel exists to show, and a top fixed at the looser mark would clip
+ * that share onto the mark's own line and hide how far past it the day went
+ * (Jony, 2026-10-09). So the top is niced from both marks and every drawn
+ * share, through the one rule every console axis nices by
+ * (`linearAxis` in `../charts/frame`), never from the marks alone.
  */
-export function agreementCorridor(limits: AgreementLimits): [number, number] {
-	return [0, Math.max(limits.disagreementMax, limits.unclearMax)];
+export function agreementCorridor(
+	limits: AgreementLimits,
+	shares: readonly number[] = []
+): [number, number] {
+	return linearAxis([limits.disagreementMax, limits.unclearMax, ...shares], [0, 1]).domain;
 }
 
 /** The three bars, in the order the record fills them.
@@ -425,10 +440,11 @@ export function silentTail(squares: readonly FoldSquare[]): number {
 export function rateWithDenominator(
 	numerator: number,
 	denominator: number,
-	floor: number
+	floor: number,
+	mark?: number
 ): string | null {
 	if (denominator < floor) return null;
-	return `${wholePercent(numerator, denominator)}% of ${denominator} pairs`;
+	return `${wholePercent(numerator, denominator, mark)}% of ${grouped(denominator)} pairs`;
 }
 
 /** "Could not tell" in words, against the pairs whose two readings agreed: the
@@ -439,8 +455,13 @@ export function rateWithDenominator(
  * took. A real share that rounds away prints `<1`, as the merge share does. The
  * words are Reader's.
  */
-export function describeUnclear(unclear: number, agreed: number, floor: number): string {
+export function describeUnclear(
+	unclear: number,
+	agreed: number,
+	floor: number,
+	mark?: number
+): string {
 	if (agreed === 0) return 'not counted, no pair agreed';
-	if (agreed < floor) return `${Math.round(unclear)} of the ${agreed} that agreed`;
-	return `${wholePercent(unclear, agreed)}% of the ${agreed} that agreed`;
+	if (agreed < floor) return `${grouped(Math.round(unclear))} of the ${grouped(agreed)} that agreed`;
+	return `${wholePercent(unclear, agreed, mark)}% of the ${grouped(agreed)} that agreed`;
 }
