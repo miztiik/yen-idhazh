@@ -56,6 +56,8 @@ export interface FlowOptions {
 	nodeWidth: number;
 	/** Clear pixels between two things in one column. */
 	nodeGap: number;
+	/** Include the shared count verdict on a stepped result, for a caller's headline. */
+	includeCountsStatus?: boolean;
 }
 
 export interface FlowNode {
@@ -107,6 +109,8 @@ export interface SteppedGeometry {
 	/** Why this is a list where a diagram was asked for, or null where the
 	 * list is what the panel asked for. */
 	note: string | null;
+	/** Present only when requested: all stage totals and adjacent counts match. */
+	countsConsistent?: boolean;
 }
 
 function checked(stages: readonly FlowStageInput[]): void {
@@ -290,6 +294,8 @@ export function flow(
 	checked(stages);
 	if (stages.length === 0 || stages[0].arrived <= 0) return null;
 	const note = imbalance(stages);
-	if (note !== null) return stepped(stages, note);
-	return opts.narrow ? stepped(stages, null) : diagram(stages, opts);
+	const geometry = note !== null ? stepped(stages, note) : opts.narrow ? stepped(stages, null) : diagram(stages, opts);
+	return opts.includeCountsStatus && geometry.kind === 'stepped'
+		? { ...geometry, countsConsistent: note === null }
+		: geometry;
 }

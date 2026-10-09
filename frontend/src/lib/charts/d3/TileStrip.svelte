@@ -12,6 +12,8 @@
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import type { Tile, TileGeometry } from './tileStrip';
+	import { markReadout, type Readout } from '$lib/charts/readout';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 
 	let {
 		geometry,
@@ -19,7 +21,10 @@
 		name,
 		label,
 		width,
-		height
+		height,
+		readout = null,
+		readoutMaxShare = 1,
+		stateWords = { fired: 'fired', quiet: 'quiet', absent: 'not recorded' }
 	}: {
 		geometry: TileGeometry | null;
 		empty: EmptyDrawing;
@@ -27,29 +32,40 @@
 		label: string;
 		width: number;
 		height: number;
+		readout?: Readout | null;
+		readoutMaxShare?: number;
+		stateWords?: Record<Tile['state'], string>;
 	} = $props();
+	let selected = $state<number | null>(null);
 
 	function titleOf(tile: Tile): string {
-		if (tile.state === 'absent') return `${tile.date}: not recorded`;
+		if (tile.state === 'absent') return `${tile.date}: ${stateWords.absent}`;
 		const reading = tile.reading === null ? '' : `, ${tile.reading}`;
-		return `${tile.date}: ${tile.state}${reading}`;
+		return `${tile.date}: ${stateWords[tile.state]}${reading}`;
 	}
 </script>
 
 {#if geometry === null}
 	<EmptyState drawing={empty} {height} {width} {name} {label} />
 {:else}
+	<div data-readout-columns={readout === null ? undefined : readout.columns.length}>
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<ol
 		class="tiles"
 		data-chart-type="tileStrip"
 		data-chart-name={name}
-		aria-label="{label} - {geometry.counts.fired} fired, {geometry.counts.quiet} quiet, {geometry
-			.counts.absent} not recorded"
+		aria-label="{label} - {geometry.counts.fired} {stateWords.fired}, {geometry.counts.quiet} {stateWords.quiet}, {geometry.counts.absent} {stateWords.absent}"
+		tabindex={readout === null ? undefined : 0}
+		use:markReadout={{ count: geometry.tiles.length, walk: 'row', onSelect: (index) => selected = index }}
 	>
-		{#each geometry.tiles as tile (tile.date)}
-			<li class="tile {tile.state}" data-tile-state={tile.state} title={titleOf(tile)}></li>
+		{#each geometry.tiles as tile, index (tile.date)}
+			<li class="tile {tile.state}" data-tile-state={tile.state} data-readout-at={readout === null ? undefined : index} title={readout === null ? titleOf(tile) : undefined}></li>
 		{/each}
 	</ol>
+	{#if readout !== null}
+		<ChartReadout {readout} at={selected} {name} maxShare={readoutMaxShare} hint="Point at a UTC day to read it. Left and Right step through the days, Escape returns to the newest." restingNote=", the newest UTC day" />
+	{/if}
+	</div>
 {/if}
 
 <style>

@@ -117,7 +117,7 @@ data, out of a repository that was public all along
 
 ## Data explorer route
 
-The Data explorer route fetches the ledger registry at `config/ledgers.json`, then uses the query door to fetch only the indexes and data files its chosen ledgers and days require. Its two panels are `data-explorer-ask` and `data-explorer-rows`; the chart panel is later work.
+The Data explorer route fetches the ledger registry at `config/ledgers.json`, then uses the query door to fetch only the indexes and data files its chosen ledgers and days require. Its three panels are `data-explorer-ask`, `data-explorer-rows` and `data-explorer-shape`; they appear in one column, in that order, at every width.
 
 ## Retention
 

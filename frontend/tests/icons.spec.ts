@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ICON_IDS, ICONS, type IconId } from '../src/lib/icons/generated';
@@ -19,6 +18,17 @@ const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ICON_DIRECTORY = join(FRONTEND, 'src', 'lib', 'icons');
 const SVG_DIRECTORY = join(ICON_DIRECTORY, 'svg');
 const ICON_BYTE_BUDGET = 40 * 1024;
+
+test('the three explorer chart icons are pinned unmodified Lucide sources', () => {
+	const provenance = readFileSync(join(ICON_DIRECTORY, 'PROVENANCE.md'), 'utf8').replace(/\s+/g, ' ');
+	for (const [id, source] of [['shape-side-by-side', 'align-start-vertical'], ['shape-days', 'calendar-check'], ['shape-flow', 'split']]) {
+		const svg = readFileSync(join(SVG_DIRECTORY, `${id}.svg`));
+		expect(svg.toString()).toContain('<!-- @license lucide-static v0.544.0 - ISC -->');
+		expect(svg.toString()).toContain(`class="lucide lucide-${source}"`);
+		expect(provenance).toContain(`\`${id}\` from Lucide \`${source}\`, SHA-256 is \`${createHash('sha256').update(svg).digest('hex')}\``);
+		expect(ICON_IDS).toContain(id);
+	}
+});
 
 function manifestIcons(): string[] {
 	const manifest = JSON.parse(readFileSync(join(ICON_DIRECTORY, 'manifest.json'), 'utf8')) as {
@@ -64,7 +74,9 @@ function iconComponentSource(): string {
 }
 
 function invalidIconIdDiagnostics(): readonly ts.Diagnostic[] {
-	const directory = mkdtempSync(join(tmpdir(), 'idhazh-icon-contract-'));
+	const results = join(FRONTEND, 'test-results');
+	mkdirSync(results, { recursive: true });
+	const directory = mkdtempSync(join(results, 'idhazh-icon-contract-'));
 	const fixture = readFileSync(join(FRONTEND, 'tests', 'fixtures', 'icons', 'invalid-id.ts.txt'), 'utf8');
 	const module = join(ICON_DIRECTORY, 'generated.ts').replaceAll('\\', '/');
 	const options: ts.CompilerOptions = {

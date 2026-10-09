@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KILL_FILE } from '../src/lib/offline';
-import { openExplorer, runExplorer } from './support/explorer-answer';
+import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
@@ -321,6 +321,20 @@ for (const route of PICTURED) {
 				.toEqual([]);
 			const loaded: Shot[] = [];
 			for (const id of listed.panels) loaded.push(await shot(page, id, `${id}--${width}--${theme}--loaded.png`));
+			if (route === 'data-explorer') {
+				for (const [type, sql] of [
+					['partsOfOne', "SELECT * FROM (VALUES ('first', 10, 8, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)"],
+					['tileStrip', "SELECT * FROM (VALUES (DATE '2026-08-17', true), (DATE '2026-08-18', false), (DATE '2026-08-19', NULL::BOOLEAN)) AS t(day, ok)"],
+					['flow', "SELECT * FROM (VALUES ('first', 10, 8, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)"]
+				]) {
+					await chooseExplorerQuestion(page, ['published'], sql);
+					await runExplorer(page);
+					await showPanel(page, 'data-explorer-shape');
+					await page.locator(`[data-shape-choice="${type}"]`).click();
+					await expect(page.locator(`[data-chart-type="${type}"]`)).toBeVisible();
+					loaded.push(await shot(page, 'data-explorer-shape', `data-explorer-shape-${type}--${width}--${theme}--loaded.png`));
+				}
+			}
 			notes.push(...loaded.map(line));
 
 			// A route that reads no rows after it arrives has no fetch to fail, and

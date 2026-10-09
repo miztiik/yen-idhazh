@@ -32,7 +32,7 @@ export interface TileInput {
 export interface TileOptions {
 	/** The fill threshold, then the naming threshold. The first may not sit
 	 * above the second. */
-	thresholds: readonly [number, number];
+	thresholds?: readonly [number, number];
 }
 
 export interface Tile {
@@ -53,8 +53,11 @@ export interface TileGeometry {
 }
 
 /** The strip, or null where there are no days or nothing was recorded on any. */
-export function tileStrip(tiles: readonly TileInput[], opts: TileOptions): TileGeometry | null {
-	const [marked, named] = opts.thresholds;
+export function tileStrip(tiles: readonly TileInput[], opts: TileOptions = {}): TileGeometry | null {
+	if (opts.thresholds === undefined && tiles.some((tile) => tile.reading !== undefined)) {
+		throw new Error('A tile with a reading needs fill and naming thresholds.');
+	}
+	const [marked, named] = opts.thresholds ?? [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
 	if (!(marked <= named)) {
 		throw new RangeError(`The fill threshold ${marked} sits above the naming threshold ${named}.`);
 	}

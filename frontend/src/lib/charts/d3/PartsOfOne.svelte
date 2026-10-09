@@ -11,6 +11,8 @@
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import type { PartsGeometry } from './partsOfOne';
+	import { markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 
 	let {
 		geometry,
@@ -18,7 +20,9 @@
 		name,
 		label,
 		width,
-		height
+		height,
+		readout = null,
+		readoutMaxShare = 1
 	}: {
 		geometry: PartsGeometry | null;
 		empty: EmptyDrawing;
@@ -26,7 +30,11 @@
 		label: string;
 		width: number;
 		height: number;
+		readout?: readonly ReadoutFacts[] | null;
+		readoutMaxShare?: number;
 	} = $props();
+	let selected = $state<number | null>(null);
+	const records = $derived(readout === null ? [] : recordsOf(readout));
 </script>
 
 {#if geometry === null}
@@ -37,21 +45,25 @@
 		data-chart-type="partsOfOne"
 		data-chart-name={name}
 		data-parts-overlapping={geometry.overlapping ? 'yes' : 'no'}
+		data-readout-records={readout === null ? undefined : records.length}
 	>
+		{#if readout === null}
 		<ul class="parts-key" aria-label="{label} - the parts, in order">
 			{#each geometry.key as part (part.label)}
 				<li><span class="swatch" style="background: var({part.token})"></span>{part.label}</li>
 			{/each}
 		</ul>
-		<ol class="parts-rows" aria-label={label}>
-			{#each geometry.rows as row (row.label)}
-				<li class="parts-row">
+		{/if}
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<ol class="parts-rows" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', onSelect: (index) => selected = index }}>
+			{#each geometry.rows as row, index (row.label)}
+				<li class="parts-row" data-readout-at={readout === null ? undefined : index}>
 					<span class="parts-name">{row.label}</span>
 					<span class="parts-track" class:overlapping={geometry.overlapping}>
 						{#each row.segments as segment (segment.label)}
 							<span
 								class="parts-segment"
-								title="{segment.label}: {segment.value}"
+								title={readout === null ? `${segment.label}: ${segment.value}` : undefined}
 								style="inset-inline-start: {segment.start}; inline-size: {segment.size}; background: var({segment.token})"
 							></span>
 						{/each}
@@ -60,6 +72,9 @@
 				</li>
 			{/each}
 		</ol>
+		{#if readout !== null}
+			<ChartReadout readout={records[selected ?? 0] ?? null} {name} maxShare={readoutMaxShare} resting={selected === null} hint="Point at a row to read it. Up and Down step through the rows, Escape returns to the first." />
+		{/if}
 	</div>
 {/if}
 

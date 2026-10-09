@@ -12,12 +12,12 @@
 import type { Column } from '../../data/slice-shapes';
 import { classifyType, isDay, isNumber } from './type-family';
 
-export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution';
+export type ExplorerChartType = 'dateSeries' | 'rankedList' | 'pairedScatter' | 'distribution' | 'partsOfOne' | 'tileStrip' | 'flow';
 
-export type RoleId = 'date' | 'lines' | 'name' | 'rankBy' | 'across' | 'up' | 'values';
+export type RoleId = 'date' | 'lines' | 'name' | 'rankBy' | 'across' | 'up' | 'values' | 'bars' | 'markIf' | 'stage' | 'arrived' | 'wentOn' | 'dropped';
 
 /** The columns a role can take: a date or a timestamp, a whole number or a decimal, or any column. */
-export type RoleTakes = 'day' | 'number' | 'any';
+export type RoleTakes = 'day' | 'number' | 'truth' | 'any';
 
 export type ChartRole = {
 	id: RoleId;
@@ -35,8 +35,8 @@ export type ChartRole = {
 export type ChartKind = {
 	type: ExplorerChartType;
 	/** The word on the type's tile and the start of its chart's accessible name. */
-	option: 'Over time' | 'Ranked' | 'Paired' | 'Spread';
-	icon: 'shape-series' | 'shape-ranked' | 'shape-scatter' | 'shape-distribution';
+	option: 'Over time' | 'Ranked' | 'Paired' | 'Spread' | 'Side by side' | 'Which days' | 'Flow';
+	icon: 'shape-series' | 'shape-ranked' | 'shape-scatter' | 'shape-distribution' | 'shape-side-by-side' | 'shape-days' | 'shape-flow';
 	roles: readonly ChartRole[];
 };
 
@@ -51,7 +51,10 @@ export const CHART_KINDS: readonly ChartKind[] = [
 	{ type: 'dateSeries', option: 'Over time', icon: 'shape-series', roles: [role('date', 'Date', 'day'), role('lines', 'Lines', 'number', { several: true })] },
 	{ type: 'rankedList', option: 'Ranked', icon: 'shape-ranked', roles: [role('name', 'Name', 'any'), role('rankBy', 'Rank by', 'number')] },
 	{ type: 'pairedScatter', option: 'Paired', icon: 'shape-scatter', roles: [role('across', 'Across', 'number'), role('up', 'Up', 'number'), role('name', 'Name', 'any', { needed: false, rowNumber: true })] },
-	{ type: 'distribution', option: 'Spread', icon: 'shape-distribution', roles: [role('values', 'Values', 'number')] }
+	{ type: 'distribution', option: 'Spread', icon: 'shape-distribution', roles: [role('values', 'Values', 'number')] },
+	{ type: 'partsOfOne', option: 'Side by side', icon: 'shape-side-by-side', roles: [role('name', 'Name', 'any'), role('bars', 'Bars', 'number', { several: true })] },
+	{ type: 'tileStrip', option: 'Which days', icon: 'shape-days', roles: [role('date', 'Date', 'day'), role('markIf', 'Mark if', 'truth')] },
+	{ type: 'flow', option: 'Flow', icon: 'shape-flow', roles: [role('stage', 'Stage', 'any'), role('arrived', 'Arrived', 'number'), role('wentOn', 'Went on', 'number'), role('dropped', 'Dropped', 'number', { several: true, needed: false })] }
 ];
 
 /** The most roles any chart has: the number of slots the role row holds, empty slots included. */
@@ -80,6 +83,7 @@ export function chartKind(type: ExplorerChartType): ChartKind {
 function takes(role: ChartRole, column: Column): boolean {
 	if (role.takes === 'any') return true;
 	const family = classifyType(column.type);
+	if (role.takes === 'truth') return family === 'truth';
 	return role.takes === 'day' ? isDay(family) : isNumber(family);
 }
 

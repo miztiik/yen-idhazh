@@ -61,6 +61,9 @@
 			{#if item.icon === 'shape-ranked'}<Icon id="shape-ranked" />{/if}
 			{#if item.icon === 'shape-scatter'}<Icon id="shape-scatter" />{/if}
 			{#if item.icon === 'shape-distribution'}<Icon id="shape-distribution" />{/if}
+			{#if item.icon === 'shape-side-by-side'}<Icon id="shape-side-by-side" />{/if}
+			{#if item.icon === 'shape-days'}<Icon id="shape-days" />{/if}
+			{#if item.icon === 'shape-flow'}<Icon id="shape-flow" />{/if}
 			<span class="choice-word" data-shown={item.shown}>
 				<span class="choice-shown" aria-hidden="true">{item.shown}</span>
 			</span>
