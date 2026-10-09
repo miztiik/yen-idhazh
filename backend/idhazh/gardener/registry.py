@@ -29,6 +29,7 @@ from types import MappingProxyType, ModuleType
 from typing import Final
 
 from idhazh.contracts.knobs.gardener import TaskKind, TaskLifecycleStatus, TaskPolicy
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
@@ -51,6 +52,7 @@ class TaskModule:
     stem: str
     kind: TaskKind
     run: Callable[[TaskContext], Pass]
+    owned_ledgers: tuple[LedgerName, ...] = ()
 
 
 def _module_name(task: str) -> str:
@@ -110,7 +112,12 @@ def _discovered(
                     f"{qualified} declares no task. A task module holds {KIND_NAME}, a "
                     f"TaskKind, and {RUN_NAME}, which takes a TaskContext and returns a Pass"
                 )
-            found[stem] = TaskModule(stem=stem, kind=kind, run=run)
+            declared = getattr(module, "OWNED_LEDGERS", ())
+            if not isinstance(declared, tuple) or any(
+                not isinstance(which, LedgerName) for which in declared
+            ):
+                raise DiscoveryError(f"{qualified}.OWNED_LEDGERS must be a tuple of LedgerName")
+            found[stem] = TaskModule(stem=stem, kind=kind, run=run, owned_ledgers=declared)
     return MappingProxyType(found)
 
 

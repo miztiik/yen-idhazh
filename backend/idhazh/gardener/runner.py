@@ -108,7 +108,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import error_cause, event_log, registry, report, shards
+from idhazh.gardener import error_cause, event_log, ownership, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.error_cause import ErrorCause
@@ -116,11 +116,13 @@ from idhazh.gardener.file_listing import FileListing, OverBudgetError
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
 from idhazh.telemetry import silicon
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
+VENUE_LEDGERS: Final = (LedgerName.GARDENER, LedgerName.HOST_FINGERPRINT)
 
 #: The timestamp shape every instant in a record takes: UTC, to the second.
 _INSTANT: Final = "%Y-%m-%dT%H:%M:%SZ"
@@ -170,6 +172,11 @@ def preflight(
             f"tasks/{', tasks/'.join(f'{stem}.py' for stem in unused)} serves no active or "
             "paused declaration. Declare the task it runs, or delete the module"
         )
+    for name, module in bound.items():
+        try:
+            ownership.owned_prefixes(tasks[name], module.owned_ledgers)
+        except ValueError as error:
+            raise registry.DiscoveryError(f"{name}: {error}") from error
     return bound
 
 
@@ -179,9 +186,13 @@ def _nested(path: str, folder: str) -> bool:
     return inner[: len(outer)] == outer
 
 
-def owner_of(name: str, tasks: Mapping[str, TaskPolicy]) -> Callable[[str], bool]:
+def owner_of(
+    name: str,
+    tasks: Mapping[str, TaskPolicy],
+    declared: tuple[LedgerName, ...] = (),
+) -> Callable[[str], bool]:
     """Whether a path sits inside one of this task's configured folders."""
-    folders = tuple(tasks[name].owns)
+    folders = ownership.owned_prefixes(tasks[name], declared)
     return lambda path: any(_nested(path, folder) for folder in folders)
 
 
@@ -453,8 +464,10 @@ def _append_path_for(ran: _Ran, appended: str, *, today: str | None = None) -> P
     return None
 
 
-def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
-    owns = owner_of(ran.name, tasks)
+def _refuse_a_path_outside(
+    ran: _Ran, tasks: Mapping[str, TaskPolicy], declared: tuple[LedgerName, ...]
+) -> None:
+    owns = owner_of(ran.name, tasks, declared)
     outside = [
         path for path in _touched(ran) if not owns(path) and _append_path_for(ran, path) is None
     ]
@@ -683,7 +696,7 @@ def run(
             event_log.emit(_planned(name, context, resolved[name], period_range))
             done = _run_one(name, bound[name], context)
             finished.append(_said_finished(done))
-            _refuse_a_path_outside(done, settings.tasks)
+            _refuse_a_path_outside(done, settings.tasks, bound[name].owned_ledgers)
             _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
             written, taken = _landed(done)
@@ -736,6 +749,23 @@ def run(
         record_path=recorded,
         written_paths=frozenset({recorded, *machine, *wrote}),
         deleted_paths=frozenset(deleted),
+        owned_prefixes=frozenset(
+            [
+                *(staging.staged_path(which) for which in VENUE_LEDGERS),
+                *(
+                    prefix
+                    for name in names
+                    for prefix in ownership.owned_prefixes(
+                        settings.tasks[name], bound[name].owned_ledgers
+                    )
+                ),
+                *(
+                    staging.staged_path(which)
+                    for name in names
+                    for which in settings.tasks[name].appends_to
+                ),
+            ]
+        ),
         message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )
     failed = any(each.failed for each in ran) or too_heavy is not None

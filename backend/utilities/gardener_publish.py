@@ -104,7 +104,7 @@ from idhazh.contracts.gardener_events import (
 from idhazh.contracts.knobs.gardener import GardenerConfig
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import cli as gardener_cli
-from idhazh.gardener import event_log, github_collections, run_summary, runner
+from idhazh.gardener import event_log, github_collections, ownership, run_summary, runner
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.file_listing import (
     FileListing,
@@ -497,6 +497,14 @@ def publish(
     and the try it came to rest on, and says only the refusals no landing word
     names. The shard's `shard-published` event says the rest once.
     """
+    outside = sorted(
+        path
+        for path in shard.written_paths | shard.deleted_paths
+        if not any(ownership.contains(path, prefix) for prefix in shard.owned_prefixes)
+    )
+    if outside:
+        say(f"shard {shard.index}: {outside[0]} is outside its declared owned paths")
+        return PushOutcome(exit_code=EXIT_INTEGRITY)
     refused = _refuse_a_directory(shard, repo)
     if refused is not None:
         say(f"shard {shard.index}: {refused}")

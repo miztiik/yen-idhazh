@@ -541,8 +541,14 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
         "a ledger path spelled here is a path a second tenant's output never reaches"
     )
     assert _normalize_condition(step["if"], "the commit step") == (
-        "needs.draw.outputs.committed_paths != ''"
+        "always() && needs.draw.outputs.committed_paths != ''"
     )
+    assert environment["PUBLICATION_RECEIPT"] == (
+        "backend/var/council/${{ needs.draw.outputs.run_id }}/publication-${{ github.run_attempt }}.json"
+    )
+    settle = _script(_step(_judges(), "save_council_results", "name", "Settle each date"), "")
+    assert "|| failed=1" in settle
+    assert 'exit "$failed"' in settle
 
 
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:

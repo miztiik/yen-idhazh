@@ -54,6 +54,9 @@ Environment:
   REGENERATE_COMMAND        optional: the producer that rebuilds them
   DROP_RACED_ASSETS_COMMAND optional: deletes this attempt's rendered assets
                             from the paths the tip already publishes
+  PUBLICATION_RECEIPT      optional: a named exact-write receipt. Refuses every
+                            changed file outside the declared paths or absent
+                            from the receipt, before any staging or commit.
 
 Commands and REFRESH_PATHS are split on spaces; their arguments cannot contain
 spaces. REFRESH_PATHS and REGENERATE_COMMAND are paired.
@@ -403,7 +406,10 @@ def _replay_publication_inventory(
 
 
 def _resolve_what_this_job_owns(
-    tip: str, identity: str, publication_delta: PublicationDelta | None
+    tip: str,
+    identity: str,
+    publication_delta: PublicationDelta | None,
+    confirmed: frozenset[str] | None = None,
 ) -> bool:
     """Settle every conflicted path this job wrote, and stop the push on every other one.
 
@@ -432,11 +438,12 @@ def _resolve_what_this_job_owns(
         _warn("the rebase stopped with no conflicted path to settle")
         return False
     for path in conflicted:
-        if path == PUBLICATION_INVENTORY_PATH:
+        if confirmed is None and path == PUBLICATION_INVENTORY_PATH:
             if not _replay_publication_inventory(tip, publication_delta):
                 return False
             continue
-        if not _this_job_wrote(path, identity):
+        owned = path in confirmed if confirmed is not None else _this_job_wrote(path, identity)
+        if not owned:
             _warn("a conflicted path this job did not write stops the push:")
             _warn(f"  path: {path}")
             _warn(f"  this job: {identity}")
@@ -566,6 +573,30 @@ def main(argv: Sequence[str]) -> int:
     if not staged_paths:
         _warn("commit_and_push.py needs at least one path to stage")
         return 2
+    declarations = tuple(staged_paths)
+    confirmed: frozenset[str] = frozenset()
+    receipt_path = os.environ.get("PUBLICATION_RECEIPT")
+    if receipt_path:
+        from utilities.publication_inputs import confirmed_paths
+
+        changed: set[str] = set()
+        for command in (
+            ("diff", "--name-only", "-z", "--no-renames", "HEAD", "--"),
+            ("ls-files", "--others", "--exclude-standard", "-z"),
+        ):
+            listed = _git(*command, capture=True)
+            if listed.returncode != 0:
+                _warn("could not check the collecting job's changed paths")
+                return 2
+            changed.update(filter(None, listed.stdout.split("\0")))
+        try:
+            staged_paths = list(
+                confirmed_paths(staged_paths, receipt_path=Path(receipt_path), changed=changed)
+            )
+        except (OSError, ValueError) as error:
+            _warn(f"publication refused: {error}")
+            return 2
+        confirmed = frozenset(staged_paths)
 
     # Split on spaces, so no path and no argument may carry one. A workflow
     # writes each of these as a folded scalar, which arrives as one line of
@@ -593,6 +624,9 @@ def main(argv: Sequence[str]) -> int:
             "DROP_RACED_ASSETS_COMMAND needs REGENERATE_COMMAND: "
             "only a rebuilding job commits the drops"
         )
+        return 2
+    if receipt_path and regenerate:
+        _warn("a confirmed-write publication cannot rebuild its files during a retry")
         return 2
 
     # The identity this job's own files carry. `ledger.segment_name` names a
@@ -643,6 +677,11 @@ def main(argv: Sequence[str]) -> int:
         _say(nothing_staged_message)
         _report_rebased(rebased)
         return 0
+    if receipt_path:
+        listed = _git("diff", "--cached", "--name-only", "-z", "--no-renames", capture=True)
+        if listed.returncode != 0 or set(filter(None, listed.stdout.split("\0"))) != confirmed:
+            _warn("publication refused: the index does not contain exactly the confirmed changes")
+            return 2
     if _git("commit", "-m", message).returncode != 0:
         _warn("could not commit what this job produced")
         _report_rebased(rebased)
@@ -660,8 +699,32 @@ def main(argv: Sequence[str]) -> int:
     failures = 0
     window_opened: float | None = None
     stamps = Stamps()
+    publication_base = "HEAD^"
     while True:
         attempt += 1
+        if receipt_path:
+            listed = _git(
+                "diff-tree",
+                "--no-commit-id",
+                "-r",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                publication_base,
+                "HEAD",
+                capture=True,
+            )
+            delta = set(filter(None, listed.stdout.split("\0")))
+            if listed.returncode != 0 or not delta <= confirmed:
+                _warn("publication refused: the commit contains unconfirmed changes")
+                _report_rebased(rebased)
+                return 2
+            try:
+                confirmed_paths(declarations, receipt_path=Path(receipt_path), changed=delta)
+            except (OSError, ValueError) as error:
+                _warn(f"publication refused: {error}")
+                _report_rebased(rebased)
+                return 2
         step_started = time.monotonic()
         pushed = _git("push")
         stamps.push_ms = _elapsed_ms(step_started)
@@ -743,7 +806,7 @@ def main(argv: Sequence[str]) -> int:
         replayed = _git("-c", "merge.directoryRenames=false", "rebase", "FETCH_HEAD")
         if replayed.returncode != 0:
             settled = _resolve_what_this_job_owns(
-                "FETCH_HEAD", identity, publication_delta
+                "FETCH_HEAD", identity, publication_delta, confirmed if receipt_path else None
             ) and (
                 _git(
                     "-c",
@@ -760,6 +823,7 @@ def main(argv: Sequence[str]) -> int:
                     _warn("the rebase could not be aborted")
                 break
         stamps.rebase_ms = _elapsed_ms(step_started)
+        publication_base = "FETCH_HEAD"
         if not refresh:
             continue
         # Keep the content, drop the commit: the producer is about to rewrite

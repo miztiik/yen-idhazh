@@ -716,13 +716,24 @@ def _dispatch(
         # Beside its siblings: it runs after every shard has reported and calls
         # no model of its own. It is also the one council verb that writes under
         # `state/`, so it is the one that is handed the root.
-        council_session.settle(
-            settings.app.council,
-            date=args.date or _today(),
-            run_id=_council_run(parser, args.stage, args.run_id),
-            state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
-            commit_sha=args.commit,
-        )
+        from idhazh.council import publication
+
+        run_id = _council_run(parser, args.stage, args.run_id)
+        state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
+        identity = council_session._identify_writer(run_id=run_id, commit_sha=args.commit)
+        with publication.record(
+            state_dir=state_dir,
+            identity=identity,
+            prefixes=council_session.publication_paths(settings.app.council),
+            destination=publication.receipt_path(identity),
+        ):
+            council_session.settle(
+                settings.app.council,
+                date=args.date or _today(),
+                run_id=run_id,
+                state_dir=state_dir,
+                commit_sha=args.commit,
+            )
         return 0
 
     if args.stage == "council-shard":

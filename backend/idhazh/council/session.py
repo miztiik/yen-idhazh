@@ -38,6 +38,7 @@ from idhazh.council import metrics_sink
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import tenant, tenants
 from idhazh.council.tenancy import ShardResult, Tenant
+from idhazh.ledger import staging
 
 _log: Final = logging.getLogger(__name__)
 
@@ -62,6 +63,37 @@ OUTCOMES_DIRNAME: Final = "outcomes"
 #: How a recorded instant is spelled. The contract pins the shape, and this is
 #: the one place a council row is stamped with it.
 STARTED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+VENUE_LEDGERS: Final = (LedgerName.COUNCIL_RUN_RECORDS, LedgerName.HOST_FINGERPRINT)
+
+
+def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
+    """The venue's and hosted tenants' declarations, never a blanket state claim."""
+    hosted = tenants(council.tenants)
+    if not hosted:
+        return ()
+    if any(
+        path in ("state", "state/raw", "state/compact")
+        for host in hosted
+        for path in host.committed_paths
+    ):
+        raise ValueError("a tenant must declare its own paths, not a blanket state root")
+    return tuple(
+        dict.fromkeys(
+            [
+                *(staging.staged_path(which) for which in VENUE_LEDGERS),
+                *(path for host in hosted for path in host.committed_paths),
+            ]
+        )
+    )
+
+
+def _settle_owned(
+    host: Tenant, *, date: DateStamp, run_id: RunId, state_dir: Path, identity: WriterIdentity
+) -> ShardResult:
+    from idhazh.council import publication
+
+    with publication.scope(state_dir=state_dir, prefixes=host.committed_paths):
+        return host.settle(date=date, run_id=run_id, state_dir=state_dir, identity=identity)
 
 
 def scratch_root(date: DateStamp) -> Path:
@@ -184,7 +216,8 @@ def settle(
                 work_part_index=None,
                 work_part_count=shard_width(council, host),
                 work=partial(
-                    host.settle,
+                    _settle_owned,
+                    host,
                     date=date,
                     run_id=run_id,
                     state_dir=state_dir,

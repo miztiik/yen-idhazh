@@ -23,7 +23,7 @@ from typing import Final
 from idhazh import config
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.registry import tenants
-from idhazh.council.session import shard_width
+from idhazh.council.session import publication_paths, shard_width
 from idhazh.ledger import staging
 
 #: How many jobs one repository may have running at once. GitHub's number, not
@@ -65,14 +65,7 @@ def committed_paths(config_dir: Path) -> tuple[str, ...]:
     whatever the tenant inside it wrote. A night with no tenant writes nothing at
     all and names nothing, which is what keeps the commit step skipped.
     """
-    council = config.load(config_dir).app.council
-    hosted = tenants(council.tenants)
-    if not hosted:
-        return ()
-    staged = [COUNCIL_LEDGER]
-    for host in hosted:
-        staged += [path for path in host.committed_paths if path not in staged]
-    return tuple(staged)
+    return publication_paths(config.load(config_dir).app.council)
 
 
 def _parallel(count: int) -> int:

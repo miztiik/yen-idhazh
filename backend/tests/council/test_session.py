@@ -22,6 +22,7 @@ from conftest import REPO_ROOT, read_text
 from idhazh import cli, config, ledger
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
@@ -525,6 +526,11 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
     assert envelope.identity.shard == 0
     assert envelope.identity.producer == "council.session"
     assert envelope.identity.git_sha == A_SHA
+    receipt = PublicationReceipt.from_json(
+        (session.COUNCIL_ROOT / A_RUN / "publication-1.json").read_text(encoding="utf-8")
+    )
+    assert receipt.identity == envelope.identity
+    assert set(receipt.writes) == {first[0].path.relative_to(state_root.parent).as_posix()}
     assert {
         (row.evaluation_step, row.work_part_index)
         for row in ledger.load_days(
@@ -541,6 +547,12 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=2, dead=())
     retried = ledger.read_day_files(state_root, LedgerName.COUNCIL_RUN_RECORDS, A_DATE)
     assert len(retried) == 2, "the door keeps each physical attempt for settlement"
+    second = next(raw for raw in retried if raw.envelope.identity.attempt == 2)
+    receipt = PublicationReceipt.from_json(
+        (session.COUNCIL_ROOT / A_RUN / "publication-2.json").read_text(encoding="utf-8")
+    )
+    assert receipt.identity == second.envelope.identity
+    assert set(receipt.writes) == {second.path.relative_to(state_root.parent).as_posix()}
     stored = [
         ledger.load_stored([raw.path], model=CouncilRunRecord)
         for raw in retried

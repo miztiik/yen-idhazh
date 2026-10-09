@@ -380,9 +380,11 @@ jobs:
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
         run: |
           set -euo pipefail
-          echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
-            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}"
-          done
+          failed=0
+          while read -r judged; do
+            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" || failed=1
+          done < <(echo "$COUNCIL_DATES" | jq -r 'unique[]')
+          exit "$failed"
 
       # One call and one push, over every path the night's tenants named. The
       # venue spells none of them: a list of one tenant's paths is a list that
@@ -397,7 +399,7 @@ jobs:
       # Skipped when no tenant is registered: `git add` with no path is an error
       # rather than a no-op, and a night that judged nothing has nothing to say.
       - name: Commit what the night's tenants wrote
-        if: needs.draw.outputs.committed_paths != ''
+        if: always() && needs.draw.outputs.committed_paths != ''
         env:
           # Every date the night settled, not just the one it opened on. A
           # message naming one date on a two-date commit sends a reader looking
@@ -406,6 +408,7 @@ jobs:
           NOTHING_STAGED_MESSAGE: "the night's tenants wrote nothing"
           PUSH_FAILED_MESSAGE: "could not push what the night judged"
           COMMITTED_PATHS: ${{ needs.draw.outputs.committed_paths }}
+          PUBLICATION_RECEIPT: backend/var/council/${{ needs.draw.outputs.run_id }}/publication-${{ github.run_attempt }}.json
         run: |
           set -euo pipefail
           # Word splitting is the point: the paths arrive as one space-separated

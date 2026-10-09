@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -284,14 +284,35 @@ over every path the night's tenants named. Two processes never share a path.
 `fail-fast` is off. **A unit that dies costs its own work and nothing else** -
 the settle runs anyway and keeps everything the surviving units produced.
 
-**The venue spells no ledger path.** A list of one tenant's paths is a list that
-never commits a second tenant's output, so the paths come back from
-`committed_paths` on the protocol and reach the commit step as one job output. A
+**Writers declare their paths beside themselves.** Tenant paths come back from
+`committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
+`HOST_FINGERPRINT` beside its session; their staging paths come from the ledger
+registry. The combined declarations reach the commit step as one job output. A
 night with no tenant registered stages nothing, and the step is skipped: `git
 add` with no path is an error rather than a no-op. A ledger that files through
 the door is named by its folder under `state/raw/`, because the collecting job
 writes only raw files and the gardener packs them later. On a night that files
-nothing there the folder is absent, and the commit step skips the absent path.
+nothing there, no exact file from that folder is staged.
+
+**A declared directory is not permission to sweep it.** As the collecting job
+finishes atomic writes, it records their exact paths and byte digests in
+`backend/var/council/<run_id>/publication-<attempt>.json`. Each tenant is held to
+its own paths, and a raw file must carry this attempt's writer identity and its
+canonical ledger path. The named receipt survives a later tenant's failure and
+accumulates the dates of one attempt, without reading the committed archive.
+It confirms bytes; only declarations grant permission.
+
+**The shared publisher stages exact confirmed files, not those directories.**
+With `PUBLICATION_RECEIPT` set, `commit_and_push.py` refuses every tracked,
+untracked or already staged modification outside the declarations or absent
+from the receipt, before committing or pushing. It checks the named files'
+digests and the exact staged set, so a sibling tenant or shard cannot ride
+along. Each retry checks the commit's paths and confirms its bytes again, so a
+clean text merge cannot silently alter a receipted output. The existing
+rebase-and-push retries remain; council does not adopt the
+gardener's separate publisher. The collecting loop settles each distinct date,
+continues after a failed date, and still offers completed writes for publication
+while preserving the failure status.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the
