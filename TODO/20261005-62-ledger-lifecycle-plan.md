@@ -110,14 +110,14 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L53 | Hardware reads a machine record with no job the same way everywhere | - | W | DONE | fuzzy-doodle | #1459 | Plan 62 row l53 |
 | L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | #1479 | Plan 62 row l54 |
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | DONE | fictional-disco | #1483 | Plan 62 row l55 |
-| L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | DONE | stunning-bassoon | - | Share console line-gap rule |
+| L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | DONE | stunning-bassoon | #1499 | Share console line-gap rule |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | DONE | bookish-telegram | #1491 | Make agreement numbers match verdicts |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
 | L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
-| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | PENDING | - | - | - |
+| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | - | Rest voices on newest source day |
 
 ## 2. Shared declarations
 
@@ -2679,3 +2679,11 @@ Table J - alternatives to correcting the observed selection
 | J1 | Treat L34's wording review or its seven-day judged-row case as closure | Neither tests an unjudged-only resting selection; the oldest date can still claim to be newest | Nothing to build, and a false date remains on the untouched readout | L34's recorded finding; plan coordinator, 2026-10-09 |
 | J2 | Fold the correction into L34 or L45 | L34 keeps the selection rule unchanged, and L45 owns Judgement; changing either would mix a separate discovered capability defect into its assigned work | Reopen another row's scope and checks, delaying its merge and increasing shared-file conflict risk | Plan coordinator, 2026-10-09 |
 | J3 | Select the globally newest square or rewrite shared readout selection before reading the existing intent | Either can replace first-source precedence or alter other panels without settling what the heading promises | A broader design and named dependent checks; inspect the mixed-date case and seek human scope approval to price it before taking it | Plan coordinator, 2026-10-09; Reader resolves meaning, not scope permission |
+
+**Extras found during execution**
+
+The owning record-readout page also needed the unchanged first-source rule
+written beside its record-strip rule. The coordinator reserved
+`docs/concepts/console-design/the-rules-every-console-chart-obeys.md` for that
+small explanation. The mixed-date case keeps the first judged source even
+when an unjudged source has a newer day. Shared readout code is unchanged.
