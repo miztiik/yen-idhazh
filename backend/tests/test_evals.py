@@ -14,7 +14,7 @@ import hashlib
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from conftest import (
@@ -38,7 +38,13 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import writer
-from idhazh.evals.hhem import HHEM_REVISION, HhemScorer, is_pinned, weights_digest
+from idhazh.evals.hhem import (
+    HHEM_REVISION,
+    HhemScorer,
+    _with_transformers_5_tied_weights,
+    is_pinned,
+    weights_digest,
+)
 from idhazh.evals.metrics import (
     EVIDENTIAL_TERMS,
     HEDGE_TERMS,
@@ -775,6 +781,27 @@ def test_the_configured_scorer_revision_is_immutable() -> None:
     """It was the branch name `main` until 2026-08-26. A branch moves, and a
     faithfulness floor read off a moving instrument measures nothing (Guardrail #10)."""
     assert is_pinned(HHEM_REVISION)
+
+
+def test_the_hhem_adapter_initializes_the_transformers_5_tied_weight_map() -> None:
+    """The pinned remote class predates the field Transformers 5 reads while loading."""
+
+    class LegacyHhem:
+        _tied_weights_keys: ClassVar[dict[str, str]] = {
+            "classifier.weight": "shared.weight"
+        }
+
+        def __init__(self, marker: str) -> None:
+            self.marker = marker
+
+    compatible = _with_transformers_5_tied_weights(LegacyHhem)
+    model = compatible("loaded")
+
+    assert model.marker == "loaded"
+    assert model.all_tied_weights_keys == {
+        "t5.transformer.encoder.embed_tokens.weight": "t5.transformer.shared.weight",
+        "classifier.weight": "shared.weight",
+    }
 
 
 @pytest.mark.parametrize("revision", ["main", "v2.1", "refs/heads/main", ""])

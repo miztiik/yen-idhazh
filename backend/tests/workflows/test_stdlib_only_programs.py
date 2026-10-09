@@ -8,12 +8,16 @@ due check runs on a shallow checkout before any install at all, and it is what
 decides whether the job goes on to rewrite `main`. The history job's squash
 program keeps its push and the refusal in front of it drivable by a test with
 nothing of this project loaded. The gardener's plan job splits the tasks into
-shards on a checkout of two folders, and installs nothing at all. The Pages
-workflow decides whether to publish on a bare checkout, before any install.
+shards on a sparse checkout, and installs nothing at all. The Pages workflow
+decides whether to publish on a bare checkout, before any install.
+The gardener's programs import the package's crash printer as they start, to
+print a crash without its text, so the printer is held to the same, and so is
+the package's `__init__.py`, which Python runs first.
 
 Module scope only. A name imported inside a function is resolved when that
 function runs, and the squash program imports `idhazh` in the one function that
-reads its declaration.
+reads its declaration. A relative import names a module of ours, so it counts as
+outside the standard library.
 """
 
 from __future__ import annotations
@@ -27,7 +31,9 @@ import pytest
 from conftest import read_text
 
 from ._harness import (
+    CRASH_TRACE_MODULE,
     GARDENER_PLAN_MODULE,
+    PACKAGE_INIT_MODULE,
     PRUNE_PUSH_MODULE,
     PUBLISH_DECISION_MODULE,
     SQUASH_DUE_MODULE,
@@ -36,25 +42,32 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
-#: Every program held to this, named one by one. A sixth program a broken job
-#: reaches for is declared here or it is held to nothing.
+#: Every program held to this, and the two files Python runs when the gardener's
+#: programs import the printer as they start, named one by one. A sixth program
+#: a broken job reaches for is declared here or it is held to nothing.
 STANDALONE_PROGRAMS: Final = (
     TAKE_STATE_MODULE,
     SQUASH_DUE_MODULE,
     PRUNE_PUSH_MODULE,
     GARDENER_PLAN_MODULE,
     PUBLISH_DECISION_MODULE,
+    CRASH_TRACE_MODULE,
+    PACKAGE_INIT_MODULE,
 )
 
 
 def _imports_at_module_scope(source: str, filename: str) -> list[str]:
-    """Every module a program names at import time, by the name it writes."""
+    """Every module a program names at import time, by the name it writes.
+
+    A relative import keeps its leading dots, so its first part is empty and it
+    is never read as a module of the standard library.
+    """
     named: list[str] = []
     for node in ast.parse(source, filename=filename).body:
         if isinstance(node, ast.Import):
             named.extend(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            named.append(node.module)
+        elif isinstance(node, ast.ImportFrom):
+            named.append("." * node.level + (node.module or ""))
     return named
 
 

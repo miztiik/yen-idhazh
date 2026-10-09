@@ -13,10 +13,12 @@ instantiated or type-checked.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.ledger import CsvContract, CsvRecord
 
 
@@ -147,6 +149,20 @@ class Tenant(Protocol):
         """
         ...
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
-        """Count, fit, or do nothing, once a date after every shard has reported."""
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
+        """Count, fit, or do nothing, once a date after every shard has reported.
+
+        The one member that writes under `state/`, so the council hands it the
+        state root and the writer identity of the job that saves the night's
+        results. A tenant files its own rows through the ledger door under that
+        identity, naming its own stage as the producer, so every file the job
+        commits names the run, the attempt and the commit that wrote it.
+        """
         ...

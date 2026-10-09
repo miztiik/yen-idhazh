@@ -1,29 +1,36 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-09
 
-How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
+How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
 ## The two roots
 
 Everything the door writes sits under one of two folders inside `state/`, and nothing else:
 
 ```
-state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet    many writers, each file written once
-state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet    one writer: what a compaction left
-state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet
-state/compact/<ledger>/yearly/<YYYY>/<YYYY>.parquet      only where the compaction packs years
-state/compact/<ledger>/index/<period>.json
-state/compact/<ledger>/<period>/watermark.json
+state/raw/<folders>/<YYYY>/<MM>/<DD>/<file_id>.parquet    many writers, each file written once
+state/compact/<folders>/daily/<YYYY>/<MM>/<DD>.parquet    one writer: what a compaction left
+state/compact/<folders>/monthly/<YYYY>/<MM>.parquet
+state/compact/<folders>/yearly/<YYYY>/<YYYY>.parquet      only where the compaction packs years
+state/compact/<folders>/index/<period>.json
 ```
 
-`<ledger>` is always the `LedgerName` value. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
+`<folders>` is the registry `prefix` for that ledger inside the door root. Most door ledgers' prefix is their `LedgerName` value. A ledger inside a family files under the family's folder: the similarity judge's scored pairs file under `content-similarity-judge/scored-pairs` while the file envelope still says `scored-pairs`. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
-Five builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root` for the folder a reader walks, and `raw_path`, `compact_path`, `compact_index_path` and `watermark_path` for the files. `raw_path` is built from `raw_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the gardener's `trials` task never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
+Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root`, `compact_folder` and `compact_root` for the folders, and `raw_path`, `compact_path` and `compact_index_path` for the files. `compact_folder` is the folder that holds everything one ledger packed, and `compact_root` and `compact_index_path` are built from the same spelling of it. `raw_path` is built from `raw_root` and `compact_path` from `compact_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the gardener's `trials` task never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
 
-`.gitattributes` gives every data file, index and watermark under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
+The repository's production root is `state/`. A trial compaction may name
+additional state roots in `CompactionPolicy.state_roots`; below each one, the
+same builders write `raw/<folders>/` and `compact/<folders>/`. A
+`compact-trial-<folder>` declaration owns exactly those two folders for its
+ledger, where `<folder>` is the ledger's door folder with `/` written `-`. The
+production `compact-<folder>` declaration still governs production
+retention and prune refusals.
+
+`.gitattributes` gives every data file and index under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
 
 The path builders resolve each absolute state root once per process. The root's
 location must stay fixed for that process. Candidate paths are still resolved
@@ -83,7 +90,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 | Call | What it answers |
 | --- | --- |
-| `list_raw_files(state_dir, ledger, days=None)` | every file under `raw/<ledger>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first; `days` names the only days to open |
+| `list_raw_files(state_dir, ledger, days=None)` | every file under `raw/<folders>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first; `days` names the only days to open |
 | `read_day_files(state_dir, ledger, day)` | one day's files, oldest first, or a `ValueError` naming the first one it cannot read - for the compaction, which deletes what it read and so may not skip a file |
 | `raw_days(state_dir, ledger)` | which days have a raw folder holding something, from folder names alone |
 | `settle_rows(files, key)` | the current rows of a union, each file's rows passed on their own, oldest file first: one file's rows per `unit_id`, then the first row of each `key` |
@@ -91,13 +98,13 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines.
 
-**The first row of a key wins, unless the key declares a preference.** Every ledger that reads this way keeps one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, a gardener task's pass per `(date, run_id, task)`, a census row per `(date, run_id, item_id)`, a measurement per `(url_key, output_digest, scorer_version)`, and a machine row per `(date, run_id, job, shard)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a preference in `ledger/keys.py` keeps the later row where the preference says so. Item-health's does: a work shard files a census row as the item settles and assemble files one for the whole day afterwards, and the row that names the machine that ran the item, `machine_job`, is kept. Either way a row is kept or dropped whole, and a cell only the dropped row filled is named in a warning.
+**The first row of a key wins, unless the key declares a preference.** Every ledger that reads this way keeps one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, a gardener task's pass per `(date, run_id, task)`, a census row per `(date, run_id, item_id)`, a measurement per `(url_key, output_digest, scorer_version)`, and a machine row per `(date, run_id, job, shard)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a preference in `ledger/keys.py` keeps the later row where the preference says so. Item-health's does: a work shard files a census row as the item settles and assemble files one for the whole day afterwards, and the row that names the machine that ran the item, `machine_job`, is kept. The hand marks' does too: of two marks of one pair of addresses, the one with the later `marked_on` is kept, and on the same day the one filed later. Either way a row is kept or dropped whole, and a cell only the dropped row filled is named in a warning.
 
 **A file this build cannot read is skipped, with one warning that names it**: a newer row shape, a row today's model refuses, a file that is not a ledger file, or one whose envelope names another ledger or another day than the folder it sits in. Only `ValueError` is caught. A missing parquet engine raises `ImportError`, and that stops the run, because skipping every file for it would read as a ledger with no history. For the retirements the direction is the safe one: a skipped file costs one request to an address that is probably still gone, and the next run files it again. **The compaction never skips**: `read_day_files` stops that day, because a file it could not read would be deleted unread.
 
 ## What an index entry says
 
-`state/compact/<ledger>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields.
+`state/compact/<folders>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`: the ledger, the period, and one entry for each period the packing recorded, ascending by what it covers. One entry carries six fields. The nullable `expired_through` field records the newest deleted UTC year on a yearly index only; writers omit an absent mark, older payloads read it as null, and entries at or before it are refused. The indexes are also the only record of how far a compaction has packed: it works out where the next pass starts from their newest entries and this expiry mark ([ledger-compaction.md](../publishing/ledger-compaction.md#yearly-expiry)).
 
 | Field | What it says |
 | --- | --- |
@@ -107,7 +114,7 @@ The paths come back ascending by the day each file covers, never by path string.
 | `lost_days` | The UTC days inside a monthly or yearly entry whose rows were recorded lost, ascending. Always empty on a daily entry, where a lost day is a `lost` entry of its own |
 | `set_aside` | How many files were moved aside unread while the period was packed. The period's file holds every other row |
 
-**An empty or a lost period is an entry with no file, never a missing entry.** So a reader tells three things apart without opening a file: a quiet day (`empty`, or `rows: 0`), a day with no record (`lost`, or listed in its month's or year's `lost_days`), and a hole - a day between packed days that no entry names, which is a fault ([ledger-compaction.md](../publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). A lost day reaches a panel as a day with no record, never as a day with no rows ([how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#which-files-a-span-reads)).
+**An empty or a lost period is an entry with no file, never a missing entry.** So a reader tells three things apart without opening a file: a quiet day (`empty`, or `rows: 0`), a day with no record (`lost`, or listed in its month's or year's `lost_days`), and a hole - a day between packed days that no entry names, which is a fault ([ledger-compaction.md](../publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). A lost day reaches a panel as a day with no record, never as a day with no rows ([how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#which-files-a-span-reads)). Which entries each stage of a ledger's life leaves, from declared and never packed to stopped, is [ledger-lifecycle.md](ledger-lifecycle.md).
 
 **An index written before entries had a state reads as all `packed`.** The three later fields default to `packed`, no lost day and nothing set aside, so no committed index is rewritten, and a zero-row file written earlier stays a valid `packed` entry. The contract refuses an `empty` or `lost` entry that counts rows or bytes, a `lost` month or year, `lost_days` on a daily entry, and a lost day outside its entry's period, out of order or named twice.
 
@@ -125,11 +132,11 @@ The paths come back ascending by the day each file covers, never by path string.
 | `held_days(state_dir, ledger)`, `held_months(state_dir, ledger)` | which days and months the ledger holds rows for, read from the indexes and the raw folder names alone, so no data file is opened. A packed year names all its months and days |
 | `month_days(month)` | every UTC day of a `YYYY-MM` month, for a caller that reads a month through `load_days` |
 
-**`load_days` settles each day on its own**, as the CSV reader settled a day. So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once.
+**`load_days` settles each day on its own.** So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once. The hand marks are the exception a reader owns: a person marks a pair again on a later day, so `similarity.holdout.marked_pairs` applies the key's preference once more across the days it reads, and the pair is read once, with its newest mark.
 
 **A hole is served and reported.** From the first day the compact periods cover to the newest day they reach, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
 
-**An entry with no file serves its days with no rows.** The reader looks for no file for an `empty` period or a `lost` day, so neither is `file-missing`, and neither is a hole, because an index names it. A day an index records lost is one warning a read, naming the days, because nothing is missing that a re-pack could restore. `CompactEntry.names_file` is the one reading of whether an entry has a file. The migration's check in `backend/idhazh/ledger/stored_output.py` takes it too: it counts an entry with no file as a recorded period, and refuses a compact file found at that period's path.
+**An entry with no file serves its days with no rows.** The reader looks for no file for an `empty` period or a `lost` day, so neither is `file-missing`, and neither is a hole, because an index names it. A day an index records lost is one warning a read, naming the days, because nothing is missing that a re-pack could restore. `CompactEntry.names_file` is the one reading of whether an entry has a file. The check in `backend/idhazh/ledger/stored_output.py`, which `backend/utilities/pipeline_test_state_verifier.py` runs over a trial state root, takes it too: it counts an entry with no file as a recorded period, and refuses a compact file found at that period's path.
 
 `ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, which violates the fixed-size input rule in [CLAUDE.md](../../../CLAUDE.md) Guardrail #12. A reader of item-health, summary-quality-evals or host-fingerprint names its days and calls `load_days`; one that calls `load_ledger_rows` is asking about the whole history and must use a fixed-size input.
 
@@ -139,7 +146,7 @@ The paths come back ascending by the day each file covers, never by path string.
 
 **The envelope refuses a key it does not declare**, and it looks for one before it looks for a missing key. So a file that still carries a retired key is refused by that key's name, and never read as a file that is only missing a key.
 
-**A key is also a column only when a query filters or groups on it.** Row-group statistics let a reader skip a whole file on such a column without decompressing it. Measured 2026-09-24: a column that never varies costs about 250 bytes whatever the row count, so the eight identity columns cost about 2,000 bytes - 26 percent of a 3-row raw file, 6 percent of a 420-row month file. The columns are the row's own `version`, then `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`. **A contract field of the same name as one of them is that column instead**, so a row's own value is never overwritten, and the envelope still carries the writer's. Four contracts declare such a field: `HostFingerprintRow` its `run_id`, `job` and `shard`, and `VisualPruneRow`, `EvalRow` and `ItemHealthRow` their `run_id`. **A field that would mean something else under one of those names was renamed before its ledger moved.** The union ranks on each row's `attempt` cell, so `EvalRow`'s own attempt - which try at the summary produced the text - is `summary_attempt`. The envelope's `job` and `shard` name the writer, and assemble files census rows for items it did not run, so the machine that took an item's readings is `ItemHealthRow`'s `machine_job` and `machine_shard`. A committed CSV heading with an old name still reads, through each model's `from_csv_row`.
+**A key is also a column only when a query filters or groups on it.** Row-group statistics let a reader skip a whole file on such a column without decompressing it. Measured 2026-09-24: a column that never varies costs about 250 bytes whatever the row count, so the eight identity columns cost about 2,000 bytes - 26 percent of a 3-row raw file, 6 percent of a 420-row month file. The columns are the row's own `version`, then `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`. **A contract field of the same name as one of them is that column instead**, so a row's own value is never overwritten, and the envelope still carries the writer's. Four contracts declare such a field: `HostFingerprintRow` its `run_id`, `job` and `shard`, and `VisualPruneRow`, `EvalRow` and `ItemHealthRow` their `run_id`. **A field that would mean something else under one of those names was renamed before its ledger moved.** The union ranks on each row's `attempt` cell, so `EvalRow`'s own attempt - which try at the summary produced the text - is `summary_attempt`. The envelope's `job` and `shard` name the writer, and assemble files census rows for items it did not run, so the machine that took an item's readings is `ItemHealthRow`'s `machine_job` and `machine_shard`. A payload written under an old name still reads, through each model's before-validator.
 
 `content_sha256` is taken over the rows as canonical JSON lines whatever the container, so a copy can be proven a copy after a rename.
 
@@ -173,9 +180,11 @@ The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `
 | a `StrEnum` | string, never a dictionary column | as annotated |
 | an `IntEnum` | int64 | as annotated |
 | `tuple[str, ...]`, of `str` or any alias or `StrEnum` | list of string | as annotated |
+| a `Literal[...]` whose every choice is a plain `str` | string | as annotated |
+| a `Literal[...]` whose every choice is a plain `int` | int64 | as annotated |
 | anything else | a `TypeError` naming the field | - |
 
-A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract.
+A date stays a string: it is a stamp a person reads in a diff and in a path, and a second type would be a second spelling of one value. The tuple row is there for `FeedRetirementRow`, whose evidence is a tuple of run ids and a tuple of dates. An `IntEnum` - `ItemHealthRow`'s `tier` is one - stays its number, the value its JSON form already carries, so a query filters on the number a person reads in the contract. A fixed choice, such as the judge's model name, is stored as its value. A choice set that mixes types, or holds a `bool`, `None` or an enum member, is refused by name: its column would not say what it holds.
 
 ## Swapping the engine
 
@@ -188,9 +197,9 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 
 **A footer records its engine's version, so two engines never write identical bytes.** That breaks nothing: nothing compares a data file's bytes, only whether a path exists.
 
-## Moving a ledger onto the door
+## The ledgers on the door
 
-Ten ledgers have moved, producer and reader together. Two moved on 2026-09-28: `state/feed-retirements.csv` and the `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` day files. Their registry entries switched to `raw-and-compact`, and their `merge=union` lines in `.gitattributes` and `path_classes.UNION_SAFE` went, because a file with one writer has nothing for a union to settle. The next three are the ledgers the console reads: the `state/item-health/`, `state/scores/` and `state/host-fingerprint/` day trees, which filed one CSV per writer under each day and were settled on every read. Their registry entries switched to `raw-and-compact` as well. The last five moved between 2026-10-01 and 2026-10-03 through the program below: `counterfactual-scores` and `candidate-models`, which no reader depended on; `seen` and `published`, whose union drivers went with them; and `feed-health`, which the Voices page reads from its packed files. The ledgers still on CSV, and what blocks each one, are in [ledger-registry.md](ledger-registry.md#ledgers-outside-raw-and-compact).
+Every ledger whose rows a later run settles files through the door. The table says who writes each one, who reads it, and which day a row is filed under. What a new ledger owes before its first row is in [ledger-registry.md](ledger-registry.md#onboarding-and-offboarding).
 
 | Ledger | Writer now | Reader now | Files under |
 | --- | --- | --- | --- |
@@ -205,16 +214,22 @@ Ten ledgers have moved, producer and reader together. Two moved on 2026-09-28: `
 | published items | `ledger.append_published`, called by the assemble stage | `ledger.load_published`, one month at a time when it reads every published day | the digest day it is given, because the row has no `date` field |
 | feed health | `stages.plan`, through `ledger.persist` | `ledger.load_health`, and the Voices page through `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` | the day its `date` names |
 | run plans | `stages.plan`, through `ledger.persist` | `stages.common._load_plan`, through `ledger.load_days` for one named UTC day, keeping the plan of the run `--execution` names | the day its `date` names |
+| council run records | `council.session._collect`, through `ledger.persist` in the `save_council_results` job | the Records explorer, through the ledger door | the judged day its `date` names |
+| similarity judge's scored pairs | `stages.count_verdicts`, through `ledger.persist` in the `save_council_results` job, under the council's writer identity | `stages.set_merge_line`, through `ledger.load_story_similarity_pairs` for the judged day | the judged day its `date` names |
+| similarity judge's metrics | `council.metrics_sink.collect_judge_metrics`, called by `stages.count_verdicts` in the same job and under the same identity | nothing yet | the judged day its `date` names |
+| similarity judge's fitted merge line | `stages.set_merge_line`, through `ledger.persist` in the same job and under the same identity | `stages.set_merge_line` and a build's `similarity.applied.applied_line`, through `ledger.load_fitted_thresholds`; the Judgement page through `fittedLines` in `frontend/src/lib/server/similarity-ledger.ts`, which reads packed days only | the day its `date` names |
+| holdout marks | `backend/utilities/sample_sheet.py --harvest`, a person's command, through `ledger.persist` with job `operator` | `similarity.holdout.marked_pairs`, and the Judgement page through `markedPairs` in `frontend/src/lib/server/similarity-holdout.ts`, both over `similarity.holdout_reach_days` | the day the marks were made, because the row has no `date` field |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. `backend/tests/workflows/test_ledger_door_jobs.py` holds that for every step that runs an `idhazh` command. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 
-**The first two ledgers' committed CSV moved once, on 2026-09-28, through a one-shot migration.** It read the CSV, wrote one file per day through the door, read each file back field for field and cell for cell against the CSV row it came from, and only then deleted the CSV. The files it wrote carry `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, which is why `ServerJob` keeps `migrate`: a reader names those files' writer from it. No CSV of either ledger is left on `main`, and a run that checked out the CSV layout cannot push its append over the deleted file, so the program had nothing left to move and was deleted on 2026-09-28; git history holds it.
+`council-settle` passes its workflow commit SHA to `council.session._collect`.
+The save job records its workflow attempt, job name and council run in the file
+envelope, while the row names the judged date, tenant, step and part. A retry's
+later attempt wins when the reader settles rows by `unit_id`. The same identity
+reaches each tenant through `Tenant.settle`, and a tenant changes only the
+producer, so the judge's files name the same run, attempt and commit.
 
-**One command moves named months of a ledger's CSV onto the door: `backend/utilities/migrate_to_parquet.py`.** The `CSV_LEDGERS` table in `backend/utilities/ledger_migration/csv_layouts.py` records each old path and retention window. It reads both the per-writer day tree and the shared `YYYY/MM/DD.csv` layout in required, repeated `--month YYYY-MM` inputs. The other modules of `backend/utilities/ledger_migration/` validate each selected row, file it through the door, and prove the CSV's filled cells before any CSV is deleted. `backend/idhazh/ledger/stored_output.py` checks actual raw files and relevant indexed compact periods. The command accepts repeated `--state-dir` roots. The repository's `state/` root packs only those months through the declared compaction task; packing is live and the monthly deletion window only reports. Year packing requires all twelve months to be named. Other roots are raw-only because no reader opens packed trial data. The reusable move procedure and completion checks are in [Move a ledger to Parquet](../../how-to/move-a-ledger-to-parquet.md).
-
-**It refuses a ledger that cannot move yet, before it reads a file**, with exit 1 and the reason: a ledger the registry still files as CSV, which has no door to move into; a ledger with no `compact-<ledger>` declaration, so nothing says which days are packed; and one whose compaction keeps less than its CSV was kept, which would delete at its first live pass days the CSV still held. `--ledger` repeats. With none named, a run or a `--check` takes every ledger in the table that the registry files as `raw-and-compact`, so a check passes while the ledgers still on CSV keep writing it.
-
-Running it again is safe. Every raw file carries `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_to_parquet`, so the same run id replaces its earlier write. A late CSV file in a named month is folded onto the rows the door already holds and is proven again. `--check` exits 1 while a CSV file of a named ledger remains in any supplied root and month. **The table, program and tests are deleted when no ledger a program writes is left on CSV**: the map in [ledger-registry.md](ledger-registry.md#ledgers-outside-raw-and-compact) lists none, and the owner's named-month checks find no remaining CSV. A file a person edits by hand, such as `holdout-pairs.csv`, does not hold the program back.
+**Some raw files name `migrate` as their job.** One-shot programs copied the committed files of earlier layouts onto the door, read every row back before they deleted the old file, and named themselves that way. `ServerJob` keeps `migrate` so a reader can still name those files' writer. Each program was deleted once it had nothing left to move; git history holds them.
 
 **The eval ledger moved as `scores` and was renamed `summary-quality-evals` afterwards** ([ledger-registry.md](ledger-registry.md#design-rationale)). The one-shot migration moved `state/raw/scores/`, `state/compact/scores/` and `state/score-index/` to their new names. It read every old file, wrote every new one, read each back through this build's own readers, and only then deleted the old files. It proved that ledger rows, settled days and recorded measurements stayed equal. The migration is complete, and its utility and tests were removed on 2026-10-02.
 
@@ -242,10 +257,13 @@ Every job installs the same set, so whichever job saves `setup-python`'s pip cac
 
 **2026-09-28: the union ranks on each row, and a compact file keeps each row's writer.** A compact file holds many work units under one envelope, so ranking on the file's `attempt` would rank the compaction rather than the writers. Each row keeps the identity cells its raw file gave it, the one settlement - `raw_files.settle_rows` - reads them, and the door refuses a row whose own cells contradict its writer's. The file-level pick it replaced is gone, so a raw union and a compact rebuild cannot disagree (Fowler).
 
+**2026-10-09: a trial trace file gets its own sibling root, `state/trial-traces/`, instead of nesting under `state/traces/`.** The two folders keep different retention windows, so their claims cannot overlap: production traces are pruned at 7 days and a trial trace needs 90, and nesting the trial inside production's folder would let production's own prune sweep a trial's trace file before the trial's report-only retention policy (`config/gardener/trials.json`) ever saw it. `overlay_registry()`'s TRACES branch replaces the committed `("traces",)` prefix outright with `(TRIAL_TRACES_DIRNAME, *segments)` rather than splicing segments in ahead of it, so a trial trace lands at `state/trial-traces/pipeline-tests/<case>/<YYYY>/<MM>/<DD>/`, a sibling of `state/traces/`, never a child of it. `claimed_roots()` lists both, so neither reads as a stray. `config._refuse_overlapping_claims` is unchanged: siblings do not overlap, so there is nothing for that guard to refuse (user ruling, 2026-10-09).
+
 ## See also
 
 - [ledger-registry.md](ledger-registry.md) - the registry, the lifecycle statuses and the check every writer asks.
-- [state-ledgers.md](state-ledgers.md) - the CSV trees: what each ledger answers, and why it files at the grain it does.
+- [ledger-lifecycle.md](ledger-lifecycle.md) - which entries each stage of a ledger's life leaves in its indexes.
+- [state-ledgers.md](state-ledgers.md) - what each ledger answers, and why it files at the grain it does.
 - [schemas.md](schemas.md) - how a contract is declared, versioned and read back.
 - [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - why `state/` moves to parquet under two roots.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3, Guardrail #8, Guardrail #11, sections 2 and 11.

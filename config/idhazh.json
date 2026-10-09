@@ -73,7 +73,7 @@
     "max_future_hours": 6.0,
     "max_per_source": 2,
     "max_source_share_per_day": 0.05,
-    "published_window_days": -1,
+    "published_window_days": 730,
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
     "reliability_floor": 0.5,
@@ -223,6 +223,7 @@
     "published": [
       "candidate-models",
       "counterfactual-scores",
+      "gardener",
       "host-fingerprint",
       "item-health",
       "published",
@@ -275,6 +276,7 @@
       "console/band.json": 2000,
       "state/compact/candidate-models/index/": 2200,
       "state/compact/counterfactual-scores/index/": 2200,
+      "state/compact/gardener/index/": 2064,
       "state/compact/host-fingerprint/index/": 2200,
       "state/compact/item-health/index/": 2200,
       "state/compact/published/index/": 2200,
@@ -304,7 +306,7 @@
     "site_budget_mb": 800
   },
   "run": {
-    "max_parallel": 4,
+    "max_parallel": 8,
     "qualification_repeats": 3,
     "qualify_on_the_production_path": true,
     "safety_ceiling_per_day": 400,
@@ -313,7 +315,11 @@
     "shard_timeout_minutes": 200,
     "shard_wrap_up_minutes": 12,
     "success_floor_pct": 70,
+    "trial_case_dirname": null,
     "trial_state_dirname": null
+  },
+  "similarity": {
+    "holdout_reach_days": 730
   },
   "summarize": {
     "asks_for_a_visual_plan": true,

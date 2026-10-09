@@ -414,22 +414,24 @@ export function judgeTrends(reading: PanelReading): Verdict {
 
 /** The four things a console panel can be when it has nothing to draw. */
 export const NOTHINGS = ['loading', 'quiet', 'missing', 'unreachable'] as const;
-export type Nothing = (typeof NOTHINGS)[number];
+export const REFUSED_NOTHINGS = ['loading', 'quiet', 'missing', 'unreachable', 'refused'] as const;
+export type BasicNothing = (typeof NOTHINGS)[number];
+export type Nothing = (typeof REFUSED_NOTHINGS)[number];
 
 /** Gate 8: the four nothings are four different pictures to a reader. */
-export function judgeNothings(id: string, readings: Record<Nothing, PanelReading>): Verdict {
+export function judgeNothings(id: string, readings: Record<Nothing, PanelReading>, states: readonly Nothing[] = NOTHINGS): Verdict {
 	const seen = (state: Nothing): string => {
 		const { words, ground } = readings[state].nothing;
 		return `${words}|${ground === null ? 'no box' : hex(ground)}`;
 	};
 	const alike: string[] = [];
-	for (let first = 0; first < NOTHINGS.length; first += 1) {
-		for (let second = first + 1; second < NOTHINGS.length; second += 1) {
-			if (seen(NOTHINGS[first]) === seen(NOTHINGS[second])) alike.push(`${NOTHINGS[first]} and ${NOTHINGS[second]}`);
+	for (let first = 0; first < states.length; first += 1) {
+		for (let second = first + 1; second < states.length; second += 1) {
+			if (seen(states[first]) === seen(states[second])) alike.push(`${states[first]} and ${states[second]}`);
 		}
 	}
 	return alike.length === 0
-		? { gate: 8, pass: true, says: `${id} draws waiting, quiet, missing and unreachable as four different pictures` }
+		? { gate: 8, pass: true, says: `${id} draws ${states.join(', ')} as different pictures` }
 		: { gate: 8, pass: false, says: `${id} draws ${alike.join(', ')} as the same picture, so a reader cannot tell them apart` };
 }
 

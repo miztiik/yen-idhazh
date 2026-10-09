@@ -3,14 +3,14 @@
 `tests/fixtures/gardener/prune-oracle/windows.json` froze each knob the old state
 cleanup read, key by key, before the ones that moved left for the declarations of
 the tasks that read them. Each is read back here out of the declaration that took
-it, and the three that stayed in `config/idhazh.json` are read back from there as
-well, so a window that changed while it moved fails by name. A window changed on
-purpose after it moved is named below with its reason.
+it in the recorded pre-expiry config, and the three that stayed in
+`config/idhazh.json` are read back from there as well. This checks the original
+move, not the owner's later change to finite yearly retention.
 
 A window whose declaration went when its ledger moved to the ledger door is read
-from the migrator's table of how long each moved ledger's CSV was kept, which
-`backend/tests/ledger_migration/test_csv_layouts.py` holds the ledger's compaction
-to.
+from where it went: feed health's months from its compaction's monthly window in
+the recorded pre-expiry config, and the first-sight and lens-weight days from the
+reader knobs that stayed in `config/idhazh.json`.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ from typing import Any, Final
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
+from gardener._historical_config import PRE_YEARLY_CONFIG
+from idhazh import config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.gardener import (
     CompactionPolicy,
@@ -32,10 +34,6 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
     Window,
 )
-from idhazh.contracts.ledger_name import LedgerName
-from utilities.ledger_migration.csv_layouts import CSV_LEDGERS
-
-from ._task import declared
 
 pytestmark = pytest.mark.contract
 
@@ -73,23 +71,22 @@ def _series(policy: TaskPolicy, name: str) -> Window:
 
 def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     frozen: dict[str, Any] = json.loads(WINDOWS.read_text(encoding="utf-8"))
-    tasks = declared()
-    folded, scores, machine, pictures = (
+    tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
+    app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    folded, scores, machine, health, pictures = (
         tasks["telemetry-aggregate"],
         tasks["compact-summary-quality-evals"],
         tasks["compact-host-fingerprint"],
+        tasks["compact-feed-health"],
         tasks["visual-prune"],
     )
     assert isinstance(scores, CompactionPolicy)
     assert isinstance(machine, CompactionPolicy)
+    assert isinstance(health, CompactionPolicy)
     now: dict[str, Any] = {
-        "collect.seen_window_days": _days(CSV_LEDGERS[LedgerName.SEEN].old_window),
-        "lens_weights.window_days": _days(
-            CSV_LEDGERS[LedgerName.COUNTERFACTUAL_SCORES].old_window
-        ),
-        "observability.feed_health_keep_months": _months(
-            CSV_LEDGERS[LedgerName.FEED_HEALTH].old_window
-        ),
+        "collect.seen_window_days": app.collect.seen_window_days,
+        "lens_weights.window_days": app.lens_weights.window_days,
+        "observability.feed_health_keep_months": _months(health.monthly_window),
         "observability.host_fingerprint_keep_months": _months(machine.monthly_window),
         "observability.item_health_aggregate_keep_months": _months(_series(folded, "aggregate")),
         "observability.item_health_full_grain_months": _months(_series(folded, "full-grain")),

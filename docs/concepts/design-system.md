@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-05
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -32,6 +32,7 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 | `--movement-*` | Whether a change improved or worsened a measure |
 | `--source-swatch-*` | Source identity and the read-state ring |
 | `--tint-*` | Restrained surface treatments |
+| `--type-*` | The family of a column's data type, as readable text |
 
 Do not substitute one family for another. A categorical series colour must not imply confidence. A source tint must not become an unreadable chart stroke.
 
@@ -116,7 +117,7 @@ Gates 1-4 apply to surfaces; gate 5 applies to drawings. Gates 6-10 apply to con
 | 5 | Exactly one `data-comparison` sentence containing "against" | Missing or duplicate comparison; composition instead declares `composition`, shows at least two stacked fills and states why on its owning page |
 | 6 | Every trend declares `data-model-rule` | `yes` without a settings-change rule or a visible no-change sentence; `no` without a reason of at least five words |
 | 7 | Drawn columns have declared readers | A column remains in `UNREAD_CELLS` |
-| 8 | Waiting, quiet, missing and unreachable are visibly distinct | Any two states have the same visible words and placeholder treatment |
+| 8 | Waiting, quiet, missing, unreachable and refused are visibly distinct where a panel can refuse input | Any two states have the same visible words and placeholder treatment |
 | 9 | The readout strip is declared and drawn | Missing readout attributes or an absent declared strip |
 | 10 | Queries request columns within a bounded date range | A query asks for a whole ledger or leaves its date range open |
 

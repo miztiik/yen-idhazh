@@ -6,9 +6,9 @@ wants two integers out of it, so this writes those integers once, at
 publication, into `frontend/public/run-days/<YYYY-MM>.json`.
 
 The shape is `PublicRunDay` and the month file is a JSON array of them, newest
-day last. Three console reads answer off this one row - `loadManifests`,
-`publishedItems` and `publishedCharts` - because they share a key, a window and
-a producer.
+day last. Two console reads answer off this one row - `loadManifests`, and
+`publishedCharts`, which takes a day's articles and the charts among them off
+one open of its payload - because they share a key, a window and a producer.
 
 **One month costs one month, for ever.** A month holds at most 31 days whatever
 the archive grows to, so re-reading the month a run wrote into is constant cost

@@ -13,8 +13,10 @@
  * the arithmetic is checked without a day off the archive (Guardrail #12).
  */
 
+import { linearAxis } from '../charts/frame';
 import { grouped } from '../charts/series';
 import { dayMonth, shortDate } from '../format';
+import { countDays, nameSpan } from './span-words';
 
 /** The two fields the count reads. A published item carries far more; taking
  * only these two keeps a test fixture to two keys a row. */
@@ -113,21 +115,13 @@ export function mergeState(totals: MergeTotals): MergeState {
 	return totals.merges === 0 ? 'no-merges' : 'merged';
 }
 
-/** The span the control is holding, written the way a person says it.
- *
- * `1` is one of the presets, and `these 1 days` is what a plain template prints
- * for it. */
-function span(windowDays: number): string {
-	return windowDays === 1 ? 'this one day' : `these ${windowDays} days`;
-}
-
 /** The sentence under the chart, one per state. */
 export function mergeNote(totals: MergeTotals, windowDays: number): string {
 	switch (mergeState(totals)) {
 		case 'no-days':
 			return 'No published day is in this window, so nothing here can be counted.';
 		case 'no-merges':
-			return `No story in ${span(windowDays)} was grouped with another. Every one ran on its own.`;
+			return `No story in ${nameSpan(windowDays)} was grouped with another. Every one ran on its own.`;
 		default: {
 			// Singular is spelled out rather than templated over: one day with one
 			// fold would otherwise read "1 stories were folded".
@@ -135,9 +129,24 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
 				totals.merges === 1
 					? '1 story was folded into another'
 					: `${grouped(totals.merges)} stories were folded into another`;
-			return `${folded} over ${span(windowDays)}. The biggest group held ${totals.largest} stories, on ${dayMonth(totals.largestOn)}.`;
+			return `${folded} over ${nameSpan(windowDays)}. The biggest group held ${totals.largest} stories, on ${dayMonth(totals.largestOn)}.`;
 		}
 	}
+}
+
+/** A share as a whole percent, and `<1` where a share that is not zero rounds
+ * below one percent: a `0` there would say none was counted, and some was. The
+ * console's rule for every number it prints. Beside a mark, say which side
+ * a share is on when rounding would print the mark's own figure. */
+export function wholePercent(numerator: number, denominator: number, mark?: number): string {
+	const share = (numerator / denominator) * 100;
+	if (mark !== undefined && Math.round(share) === Math.round(mark * 100)) {
+		const rate = numerator / denominator;
+		if (rate !== mark) {
+			return `just ${rate > mark ? 'above' : 'below'} ${Math.round(mark * 100)}`;
+		}
+	}
+	return share > 0 && share < 0.5 ? '<1' : String(Math.round(share));
 }
 
 /** The share, in type, with the denominator it is a share of.
@@ -152,9 +161,7 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
  */
 export function mergeRate(totals: MergeTotals, windowDays: number): string | null {
 	if (totals.days === 0 || totals.merges === 0 || totals.published === 0) return null;
-	const share = (totals.merges / totals.published) * 100;
-	const printed = share < 0.5 ? '<1' : String(Math.round(share));
-	return `That is ${printed}% of the ${grouped(totals.published)} stories ${span(windowDays)} published.`;
+	return `That is ${wholePercent(totals.merges, totals.published)}% of the ${grouped(totals.published)} stories ${nameSpan(windowDays)} published.`;
 }
 
 // --- Where the merge line sits -------------------------------------------------
@@ -209,12 +216,12 @@ export function clampEnvelope(days: readonly LineDay[]): { low: number; high: nu
 export function clampNote(days: readonly LineDay[], windowDays: number): string {
 	const held = days.filter((day) => day.clampKind !== 'none').length;
 	if (held === 0) {
-		return `The clamp has not held the line back on any of the last ${windowDays} days.`;
+		return `The clamp has not held the line back in ${nameSpan(windowDays)}.`;
 	}
-	return `The clamp held the line back on ${held} of the last ${windowDays} days.`;
+	return `The clamp held the line back on ${held} of ${countDays(windowDays)}.`;
 }
 
-/** How many days in the window fitted nothing, in one sentence, or null.
+/** How many recorded days in the window fitted nothing, in one sentence, or null.
  *
  * A held day breaks the proposed series rather than joining across it: a line
  * drawn through a day nothing was fitted on claims a measurement nobody took.
@@ -223,7 +230,7 @@ export function clampNote(days: readonly LineDay[], windowDays: number): string 
 export function heldNote(days: readonly LineDay[], windowDays: number): string | null {
 	const held = days.filter((day) => day.heldReason !== 'none').length;
 	if (held === 0) return null;
-	return `Nothing was fitted on ${held} of these ${windowDays} days.`;
+	return `Nothing was fitted on ${held} recorded ${held === 1 ? 'day' : 'days'} in this ${windowDays}-day window.`;
 }
 
 // --- Whether the judge agrees with itself, and what the record still needs ------
@@ -233,11 +240,16 @@ export interface JudgeDay {
 	date: string;
 	/** What share of the judged pairs the two readings disagreed about. */
 	disagreementRate: number;
-	/** What share of the agreed readings were UNCLEAR. */
+	/** What share of the agreed readings were UNCLEAR: a share of `pairsUsable`,
+	 * never of `pairsJudged`. */
 	unclearRate: number;
-	/** How many pairs a judging shard actually read. The denominator both rates
-	 * are a share of, so a panel can print it in the same sentence. */
+	/** How many pairs a judging shard actually read. The denominator of
+	 * `disagreementRate`, so a panel can print it in the same sentence. */
 	pairsJudged: number;
+	/** How many of those got two readings that agreed: the denominator of
+	 * `unclearRate`. The fitted row's own count, never worked out from the
+	 * disagreed share, so every figure on a panel names one agreed count. */
+	pairsUsable: number;
 	negativesOnRecord: number;
 	aboveLineOnRecord: number;
 	daysOnRecord: number;
@@ -259,16 +271,23 @@ export interface GateNeed {
 	targetText: string;
 }
 
-/** The agreement axis: zero to the looser of the two limits, never the data.
+/** The agreement axis: zero to the looser of the two limits, widened to clear
+ * any share the chart draws, and niced to a whole tick step.
  *
- * Both rates are bounded by the two knobs that hold the run, and the looser of
- * the two carries both series and both markers. Not 0 to 1: neither rate can
- * reach 1 without the run holding first, so half the plot would be a region the
- * data cannot enter. Not fitted to the data either - a rate of 0.02 drawn full
- * height says the judge is in trouble when it is not.
+ * Both rates are bounded below by the two knobs that hold the run, so a
+ * healthy two percent still draws against them rather than filling the panel
+ * and reading as trouble. But a share past its own mark is the one reading
+ * this panel exists to show, and a top fixed at the looser mark would clip
+ * that share onto the mark's own line and hide how far past it the day went
+ * (Jony, 2026-10-09). So the top is niced from both marks and every drawn
+ * share, through the one rule every console axis nices by
+ * (`linearAxis` in `../charts/frame`), never from the marks alone.
  */
-export function agreementCorridor(limits: AgreementLimits): [number, number] {
-	return [0, Math.max(limits.disagreementMax, limits.unclearMax)];
+export function agreementCorridor(
+	limits: AgreementLimits,
+	shares: readonly number[] = []
+): [number, number] {
+	return linearAxis([limits.disagreementMax, limits.unclearMax, ...shares], [0, 1]).domain;
 }
 
 /** The three bars, in the order the record fills them.
@@ -301,6 +320,37 @@ export function gateNeeds(
 			targetText: `${gates.minimumAboveLine} needed - these are the whole precision reading`
 		}
 	];
+}
+
+/** The row the three bars read: the newest one dated on or before `through`,
+ * the window's last day, or null where the record holds none by then.
+ *
+ * Inside the window or before it. The record is cumulative and changes only when
+ * a run writes a row - a record that empties is a run's row too - so a window
+ * with no row leaves the record as its newest earlier row counted it. Reading
+ * only the window's rows drew three bars at zero there, the picture of a record
+ * that holds nothing.
+ */
+export function findNewestRow(rows: readonly JudgeDay[], through: string): JudgeDay | null {
+	let newest: JudgeDay | null = null;
+	for (const row of rows) {
+		if (row.date <= through && (newest === null || row.date > newest.date)) newest = row;
+	}
+	return newest;
+}
+
+/** The note for a window that holds no row while an earlier day does: the day
+ * the bars stand on, the window they are not from, and that nothing ran since.
+ *
+ * "Started again" is said only where that row says so. A row of zeros alone does
+ * not prove it, so it takes the plain words. The words are Reader's.
+ */
+export function describeEarlierRow(row: JudgeDay, windowDays: number): string {
+	const what =
+		row.heldReason === 'inputs_changed'
+			? 'The record was started again'
+			: 'The bars show what the record held';
+	return `${what} on ${shortDate(row.date)}, before ${nameSpan(windowDays)}. No run has recorded anything since.`;
 }
 
 /** What one square on the strip says about one date. */
@@ -383,13 +433,35 @@ export function silentTail(squares: readonly FoldSquare[]): number {
  *
  * Null under `min_attempts_for_rate`: a share over four pairs is not a
  * measurement, and printing one invites a decision the evidence cannot carry.
- * The counts still print - that is the rule `FailurePanels` already runs on.
+ * The counts still print - that is the rule `FailurePanels` already runs on. A
+ * real share that rounds away prints `<1`: a `0` would say no pair disagreed,
+ * and one did.
  */
 export function rateWithDenominator(
 	numerator: number,
 	denominator: number,
-	floor: number
+	floor: number,
+	mark?: number
 ): string | null {
 	if (denominator < floor) return null;
-	return `${Math.round((numerator / denominator) * 100)}% of ${denominator} pairs`;
+	return `${wholePercent(numerator, denominator, mark)}% of ${grouped(denominator)} pairs`;
+}
+
+/** "Could not tell" in words, against the pairs whose two readings agreed: the
+ * only pairs its share is taken over, so the count beside it is theirs.
+ *
+ * The floor counts those pairs too. Under it the counts print and no share, and
+ * where no pair agreed nothing was counted, so a 0 would claim a reading nobody
+ * took. A real share that rounds away prints `<1`, as the merge share does. The
+ * words are Reader's.
+ */
+export function describeUnclear(
+	unclear: number,
+	agreed: number,
+	floor: number,
+	mark?: number
+): string {
+	if (agreed === 0) return 'not counted, no pair agreed';
+	if (agreed < floor) return `${grouped(Math.round(unclear))} of the ${grouped(agreed)} that agreed`;
+	return `${wholePercent(unclear, agreed, mark)}% of the ${grouped(agreed)} that agreed`;
 }

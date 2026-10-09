@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -32,12 +32,6 @@ tree by a file sink opened on its own path helper, and a head by the compaction
 reading its own declared table of them; all three count, because all three die
 with the runner. It names no ledger itself, so a thirteenth one is covered the
 day its writer lands rather than the day somebody remembers to add it to a list.
-
-The same file holds the second half of that. A ledger that declares a key must be
-in `ledger.keyed_paths`, the registry that pairs each ledger with what makes two
-of its rows one record, and a ledger that declares none must be absent from it.
-The two sides are compared as sets rather than as a subset, so the registry's one
-deliberate absence has to stay the one its own docstring claims.
 
 **A rebase refuses to start while a tracked file is modified.** A file committed
 with CRLF against a `text eol=lf` attribute is the trap: every Linux checkout
@@ -85,10 +79,9 @@ gone.
 **Writer-owned rows rebase; shared derived output must be prepared again.**
 
 The plan job and work shards write rows with one writer per file. A shard's rows
-go to a CSV named
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, or through
-the ledger door to a raw file under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, and
-either name belongs to that writer. Those paths rebase independently.
+go through the ledger door to a raw file under
+`state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, and that name belongs to that writer.
+Those paths rebase independently.
 
 `actions/checkout` still starts from the trigger commit. Other runs can move
 the state before this job begins, so the plan job first takes a current base.
@@ -112,9 +105,12 @@ attempts writing the same row, and an appending stage cannot tell them apart: it
 filters against the file it checked out, and `actions/checkout` pins the job to
 the commit its run was triggered at. A settling pass ran after each rebase to
 take the repeats back out. Both are gone: the union driver is off every head, no
-commit step settles CSV day trees, and a second attempt that really does race its own
-first attempt now stops at the rebase instead of landing a row twice.
-`path_classes.UNION_SAFE` lists every tree that still keeps a union driver.
+commit step settles a day's rows, and a second attempt that really does race its own
+first attempt now stops at the rebase instead of landing a row twice. No path
+keeps a union driver: the fitted merge line's day files were the last, and lost
+theirs when that ledger moved under `state/raw/`.
+[`test_no_csv_ledger_is_left.py`](../../../backend/tests/contracts/test_no_csv_ledger_is_left.py)
+fails on any `.gitattributes` line that gives one back.
 `state/visual-prunes/**` lost its driver on 2026-09-28, and `state/published/**`
 and `state/seen/**` lost theirs when those ledgers moved under `state/raw/`,
 where every run files a file of its own. Two runs of one day that both meet a
@@ -154,8 +150,7 @@ items and current committed state.
 
 **`DERIVED` names what the rebuild owns, and after 2026-09-22 that is almost
 nothing under `state/`.** It carries the day's `digest.json` and `run.json`, the
-published projections under `frontend/public/`, `state/day-metrics` and the
-closed-day fold. The list lives in
+published projections under `frontend/public/` and `state/day-metrics`. The list lives in
 [`backend/idhazh/path_classes.py`](../../../backend/idhazh/path_classes.py) and the
 `Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
 it was a space-split string in the workflow, under a header warning that no path
@@ -176,9 +171,7 @@ and immutable input batches let preparation recreate only the accepted rows.
 **`state/day-metrics` remains a shared daily projection.** It is one whole-file-per-day JSON that
 assemble rewrites from the day's rows, so two runs of one day do land on one
 path, a text merge of two JSON objects is not JSON, and the rebuild answers the
-race in milliseconds. The closed-day fold stays for the same reason and is the
-one entry the rebuild command leaves out: `idhazh assemble` re-emits no fold, so
-a job that handed it back would delete it rather than rebuild it.
+race in milliseconds.
 
 **The charts in that directory are the other way to lose the day, and they get
 their own answer.** A chart used to be filed as `<vertical>-<NN>.svg`, numbered
@@ -234,7 +227,7 @@ migration did.
 Git's own names for the two sides of a conflict invert between a rebase and a
 merge, so a design that reasons in them is a design nobody can check. The
 writer's identity is already in the filename instead.
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv` names the
+`state/traces/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.jsonl` names the
 run, the try at that run, the job and the shard inside it, and GitHub allocates
 the execution number inside the run id, so no second writer can take that name.
 
@@ -267,21 +260,10 @@ case needs a second read of the index to catch. Git's spelling for keeping one
 side of a conflict exits 0 and changes nothing when the side it is asked for is
 the deleted one, so the path is left unmerged with no error anywhere and a
 return code of zero walks straight past it into a rebase that cannot continue.
-Nothing but retention, the closed-day fold or a person can have taken a file
+Nothing but retention or a person can have taken a file
 named for this job, so putting it back is not a resolution this program may make.
 The message prints one identity, because one is all there is: a second field
 would always be empty.
-
-**No job here commits a closed-day fold any more, and a conflicted one would be
-refused whole.** The gardener now folds each CSV day tree and lands
-the fold through its own commit loop
-([idhazh-gardener.md](idhazh-gardener.md#the-closed-day-fold)), so this program
-never writes a `settled.csv`. If one ever reached the resolver it carries no
-writer's name, so the rule above answers no and the push stops - and that is the
-right answer rather than a gap. Settling it per path is what loses rows: taking
-the tip's copy leaves this job's *deletion* of a straggler file standing - a
-deletion is not a conflict, so git keeps it - and the straggler's rows then exist
-in no file at all, at exit 0.
 
 For writer-owned rows, a second ownership catalogue would repeat the filename's
 identity. The prepared-path list instead names derived files that must be
@@ -353,11 +335,13 @@ exist until after the push.
 
 Git reads a directory whose files all moved away as having been RENAMED to
 wherever they went, and applies that guess to a file the other side added into
-the emptied directory. The closed-day fold drains a day directory every time it
-runs, so a sibling writing a brand-new file into that day is read as writing
-into a directory that no longer exists, and the rebase stops with
+the emptied directory. The closed-day fold drained a day directory every time it
+ran, so a sibling writing a brand-new file into that day was read as writing
+into a directory that no longer existed, and the rebase stopped with
 `CONFLICT (file location)` over a tree that was correct. The segment ledger was
-the first place this bit; deleting it moved the drain rather than removing it.
+the first place this bit and the fold the second. Neither drains a directory
+now; the flag stays because it loses nothing, and a pass that moves a
+directory's files elsewhere would meet the same guess.
 
 So every rebase in the program runs with `-c merge.directoryRenames=false`. Proved
 in a scratch repository on 2026-09-22: the same replay conflicts with the guess
@@ -410,11 +394,9 @@ scheduled run rebuilds it, and timing the merge is the thing that prevents it.
 
 **A column the contract says it dropped is dropped on the way in.** One slice of
 this is not a timing problem at all. `ItemHealthRow` already declares, in
-`DROPPED_CELLS`, every heading it stopped naming that nothing replaced - it had
-to while the census was a CSV day tree, because `ledger.migrate_header` refused
-to append to a committed day file whose heading was neither a current column nor
-one the reader said it carried. So the committed side of that row has read those
-headings since the day each one left. The per-item payload a work shard seals
+`DROPPED_CELLS`, every heading it stopped naming that nothing replaced, so the
+committed side of that row has read those headings since the day each one left.
+The per-item payload a work shard seals
 did not, and run 35537015073 lost
 its digest to the gap: `cgroup_peak_bytes` left the row at 22:22, the rebuild at
 23:24 read payloads sealed at 20:54, and `extra="forbid"` refused a key the
@@ -444,11 +426,12 @@ Four wider fixes were considered and none is taken.
 same day may work at once, and that is what everything above is for.
 
 **What makes it safe is the filename.** Every committed path a job of this
-workflow writes carries that run's own identity -
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, and
+workflow writes carries a name no other writer can take - a raw file the ledger
+door names under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, a trace named for its
+run, attempt, job and shard, and
 `state/digest-fragments/<YYYY>/<MM>/<DD>/<run>.json` for the published day. Two
 runs at once therefore name two files rather than one, the rebase applies both
-whole, and the read settles them: a ledger through its day directory, the
+whole, and the read settles them: a ledger through the door's reader, the
 published day by folding one block per run in `("completed_at", "run_id")`
 order. Nothing derived is left on a shared path, and a conflicted path is
 resolved only by the job whose identity the name carries.

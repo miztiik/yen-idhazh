@@ -98,10 +98,10 @@
       "ledgers": [
         {
           "name": "item-health-summary",
-          "grain": "month",
+          "grain": "raw-and-compact",
           "prefix": ["item-health-summary"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },
@@ -173,24 +173,24 @@
       "ledgers": [
         {
           "name": "scored-pairs",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "scored-pairs"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         },
         {
           "name": "fitted-thresholds",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "fitted-thresholds"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         },
         {
           "name": "holdout-pairs",
-          "grain": "flat",
-          "prefix": ["content-similarity-judge"],
-          "stem": "holdout-pairs",
-          "suffix": ".csv"
+          "grain": "raw-and-compact",
+          "prefix": ["content-similarity-judge", "holdout-pairs"],
+          "stem": null,
+          "suffix": null
         },
         {
           "name": "score-distribution",
@@ -208,32 +208,17 @@
         },
         {
           "name": "metrics",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "metrics"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         },
         {
           "name": "merge-line-holdout-scores",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
           "stem": null,
-          "suffix": ".csv"
-        }
-      ]
-    },
-    {
-      "name": "llm-council",
-      "lifecycle_status": "active",
-      "description": "How each unit of the nightly judging workflow ended, and what it cost.",
-      "onboarded": "2026-09-21",
-      "ledgers": [
-        {
-          "name": "shard-outcomes",
-          "grain": "day",
-          "prefix": ["llm-council", "shard-outcomes"],
-          "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },
@@ -307,6 +292,21 @@
           "name": "run-plan",
           "grain": "raw-and-compact",
           "prefix": ["run-plan"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "council-run-records",
+      "lifecycle_status": "active",
+      "description": "How each step of the nightly judging workflow ended, and what it cost.",
+      "onboarded": "2026-10-05",
+      "ledgers": [
+        {
+          "name": "council-run-records",
+          "grain": "raw-and-compact",
+          "prefix": ["council-run-records"],
           "stem": null,
           "suffix": null
         }

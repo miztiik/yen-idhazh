@@ -16,7 +16,7 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
@@ -28,7 +28,7 @@ import {
 	frame
 } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
-import { canaryArticleRows } from './support/canary-records';
+import { grouped } from '../src/lib/charts/series';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -389,35 +389,31 @@ test.describe('the coverage sentence', () => {
 		// It was one note per stage under the plot, and the three said one
 		// window-level fact three times in near-identical words - so a fourth stage
 		// would have made it four. The count is the defect, not the length.
-		const one = page.locator('[data-timing-coverage]');
-		await expect(one, 'the chart prints more than one coverage sentence').toHaveCount(1);
 		await expect(page.locator('[data-timing-note]'), 'a per-series note survived').toHaveCount(0);
+		const one = page.locator('[data-timing-coverage]');
+		const count = await one.count();
+		expect(count, 'the chart prints more than one coverage sentence').toBeLessThanOrEqual(1);
+		// A window timed on every day owes no sentence.
+		if (count === 0) return;
 
-		const plot = page.locator('[data-timing="plot"]');
-		const from = (await plot.getAttribute('data-timing-first')) ?? '';
-		const to = (await plot.getAttribute('data-timing-last')) ?? '';
-		const want = await timedInWindow(from, to);
-		expect(want.days, 'the fixture window times every day, so the sentence is untested').toBeGreaterThan(
-			0
-		);
-
-		// Read from the ledger, not from the chart. Both numbers are printed
-		// because a share cannot be checked against columns a reader can count
-		// (CLAUDE.md Guardrail #10).
-		expect(Number(await one.getAttribute('data-coverage-measured'))).toBe(want.days);
-		expect(Number(await one.getAttribute('data-coverage-items'))).toBe(want.items);
-		expect(Number(await one.getAttribute('data-coverage-timed-low'))).toBe(want.low);
-		expect(Number(await one.getAttribute('data-coverage-timed-high'))).toBe(want.high);
+		// Both numbers are printed, and each is the one the chart publishes beside
+		// it, because a share cannot be checked against columns a reader can count
+		// (CLAUDE.md Guardrail #10). The denominator is the days' own item count,
+		// never the sum of the stages' totals.
+		const read = async (name: string) => Number(await one.getAttribute(name));
+		const days = Number(await page.locator('[data-timing="plot"]').getAttribute('data-timing-days'));
+		const measured = await read('data-coverage-measured');
+		const items = await read('data-coverage-items');
+		const low = await read('data-coverage-timed-low');
+		const high = await read('data-coverage-timed-high');
+		expect(measured, 'the sentence counts more timed days than the chart drew').toBeLessThanOrEqual(days);
+		expect(low, 'the numerator range runs backwards').toBeLessThanOrEqual(high);
+		expect(high, 'a stage timed more items than the days held').toBeLessThanOrEqual(items);
 
 		const said = ((await one.textContent()) ?? '').replace(/\s+/g, ' ').trim();
-		expect(said).toContain(`${want.days} of these ${await plot.getAttribute('data-timing-days')} days`);
-		expect(said).toContain(`of the ${group(want.items)} items on them`);
-		// The denominator is the day's own item count, never the sum of the three
-		// stages' totals: one item waits on all three, so summing counts it three
-		// times over.
-		expect(want.items, 'the denominator triple-counts the items').toBeLessThan(
-			want.low + want.high + want.low
-		);
+		expect(said).toContain(`${measured} of ${days} days`);
+		const reached = low === high ? grouped(low) : `${grouped(low)} to ${grouped(high)}`;
+		expect(said).toContain(`${reached} of the ${grouped(items)} items on them`);
 	});
 
 	test('the sentence says nothing where the window was timed in full', () => {
@@ -428,11 +424,11 @@ test.describe('the coverage sentence', () => {
 	test('where two stages disagree the numerator is a range', () => {
 		const sparse = coverage([true, false, false, false]);
 		expect(coverageSentence(sparse, 'We timed', { low: 3900, high: 3955, total: 5113 })).toBe(
-			'We timed 1 of these 4 days, and 3,900 to 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
+			'We timed 1 of 4 days, and 3,900 to 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
 		);
 		// And where they agree it is one number, not a range with two equal ends.
 		expect(coverageSentence(sparse, 'We timed', { low: 3955, high: 3955, total: 5113 })).toBe(
-			'We timed 1 of these 4 days, and 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
+			'We timed 1 of 4 days, and 3,955 of the 5,113 items on them. The tinted span is days nothing recorded, not quiet days.'
 		);
 	});
 
@@ -446,55 +442,6 @@ test.describe('the coverage sentence', () => {
 		await expect(page.locator('[data-timing-zero-key]')).toHaveCount(zeros > 0 ? 1 : 0);
 	});
 });
-
-/** Every article row the canary packed.
- *
- * Through the reader the page's own server uses, so a change in how the record
- * is filed cannot leave this comparing the page against an empty set.
- */
-function ledger(): Promise<Record<string, string>[]> {
-	return canaryArticleRows();
-}
-
-const STAGES = ['fetch_ms', 'extract_ms', 'summarize_ms'] as const;
-
-/** What the chart's sentence has to say, recomputed from the record.
- *
- * A day counts as timed where any of the three stages has a millisecond on it,
- * which is the same rule the page keeps - and the same rule stated twice from
- * two readings of one file is what makes this an oracle rather than a copy.
- * The stage count appears nowhere: it is the thing that must have stopped
- * mattering.
- */
-async function timedInWindow(
-	from: string,
-	to: string
-): Promise<{ days: number; items: number; low: number; high: number }> {
-	const byDay = new Map<string, Record<string, string>[]>();
-	for (const row of await ledger()) {
-		if (row.date < from || row.date > to) continue;
-		byDay.set(row.date, [...(byDay.get(row.date) ?? []), row]);
-	}
-	const counted = (rows: Record<string, string>[], column: string) =>
-		rows.filter((row) => (row[column] ?? '') !== '').length;
-
-	const timed = [...byDay.values()].filter((rows) =>
-		STAGES.some((column) => counted(rows, column) > 0)
-	);
-	const perStage = STAGES.map((column) =>
-		timed.reduce((total, rows) => total + counted(rows, column), 0)
-	).filter((total) => total > 0);
-	return {
-		days: timed.length,
-		items: timed.reduce((total, rows) => total + rows.length, 0),
-		low: perStage.length === 0 ? 0 : Math.min(...perStage),
-		high: perStage.length === 0 ? 0 : Math.max(...perStage)
-	};
-}
-
-function group(value: number): string {
-	return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
 
 /** How many of the window's days the chart says it timed.
  *

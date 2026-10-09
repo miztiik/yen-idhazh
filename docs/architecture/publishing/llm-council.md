@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-08
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -288,7 +288,20 @@ the settle runs anyway and keeps everything the surviving units produced.
 never commits a second tenant's output, so the paths come back from
 `committed_paths` on the protocol and reach the commit step as one job output. A
 night with no tenant registered stages nothing, and the step is skipped: `git
-add` with no path is an error rather than a no-op.
+add` with no path is an error rather than a no-op. A ledger that files through
+the door is named by its folder under `state/raw/`, because the collecting job
+writes only raw files and the gardener packs them later. On a night that files
+nothing there the folder is absent, and the commit step skips the absent path.
+
+**The collecting job hands each tenant the identity it files under.**
+`council.session.settle` builds one writer identity for the night: `run_id` the
+council run, `job` `save_council_results`, `shard` 0, the run's attempt, and the
+`--commit` the job checked out. It files the council's own record with it and
+passes it to each tenant's `Tenant.settle`. A tenant names its own producer and
+changes nothing else, so every raw file the night commits says which run, job
+and commit wrote it. The similarity judge's `count_verdicts` files its scored
+pairs and its metrics this way, and its `set_merge_line` files the night's
+fitted merge line.
 
 There is no regeneration command on that call. The council is the only writer of
 a tenant's own ledger and `concurrency` runs one council at a time, so a lost
@@ -421,8 +434,8 @@ executed it.
 
 | Layer | Owns | Stored |
 | --- | --- | --- |
-| Council pipeline observability | Did the pipeline work - which units started, which finished, which stopped on their own clock, what each cost | `state/llm-council/` |
-| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the ledger paths it commits, the nights it is behind on, and three units of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
+| Council pipeline observability | Did the pipeline work - which steps started, which finished, which stopped on their own clock, what each cost | `state/raw/council-run-records/`, later packed under `state/compact/council-run-records/` |
+| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the ledger paths it commits, the nights it is behind on, and its three steps of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
 | The shipping capability | The plumbing only. Takes a validated row a judge hands it and gets it committed. Declares nothing about what is in it | code, not data |
 | Judge metrics | Entirely the judge's - its units, its funnel, its own contract | under that judge's own slug |
 
@@ -445,8 +458,9 @@ judge although the council is what runs it, is
 ## A unit uploads what it measured, and the collecting job commits it
 
 Each unit writes one file on its own runner, the workflow uploads that
-directory, and the collecting job downloads every one of them and appends each
-row to the ledger the tenant named.
+directory, and the collecting job downloads every one of them and files each
+row through the ledger door, into the ledger the tenant named, under the date
+it judged.
 
 **An artifact rather than a commit, and the reason is that a commit would not
 reach the reader.** Every checkout in this workflow names no ref, so each job is
@@ -521,7 +535,7 @@ that action runs is a commit call all the same.
 
 **It is not about a merge conflict.** The council used to argue this as many
 writers racing into one union-merged day file. That premise died on 2026-09-19
-when `merge=union` left the judged-pairs ledger, and quoting it today invites a
+when the union merge driver left the judged-pairs ledger, and quoting it today invites a
 reader to retire the guard along with it. The conflict that segments exist to
 solve - more than one job committing into one ledger file - is priced in
 [its own rationale below](#design-rationale-the-councils-own-path-not-a-segment-per-writer),
@@ -537,20 +551,19 @@ the three nights these uploads keep.
 
 ## The venue keeps its own record of every unit it ran
 
-The council starts a clock, calls the tenant, and files one row of its own on
-the way out - into
-[../../../backend/idhazh/ledger/rows.py](../../../backend/idhazh/ledger/rows.py)'s
-`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`, through the same
-shipping path a tenant's own row travels on. The row says which unit ran, for
-which tenant, under which name, how it ended, how long it took, and what the
-work inside it cost the model. It says nothing that needs a name for the unit of
-work, so it reads the same whether the tenant made four hundred model calls or
-none.
+The council starts a clock and calls the tenant. On the way out, it ships a row
+for that step to `council-settle`, which files the date's rows through
+`ledger.persist` under `state/raw/council-run-records/` and later compacts them
+under `state/compact/council-run-records/`. The row says which step ran, for
+which tenant, how it ended, how long it took, and what the work inside it cost
+the model. It says nothing that needs a name for the unit of work, so it reads
+the same whether the tenant made four hundred model calls or none.
 
-**Five units a tenant, not four.** Picking the work and counting what came back
-are units too, and both can die. They file at reserved numbers below zero, `-1`
-and `-2`, carrying the run's real width - so a night whose count died leaves a
-row saying so instead of leaving the venue blind.
+Each tenant has two steps that run once a date and one evaluation step for each
+part of the split. The row names one of `select_judge_work`,
+`evaluate_work_part` or `combine_judge_results`. Only an evaluation row carries
+`work_part_index`; every row carries `work_part_count`, so a missing part row
+shows which report did not arrive.
 
 **The cost cells come off what the tenant handed back, and out of nothing else.**
 The council opens no ledger of a tenant's and reads no field of a tenant's own
@@ -558,20 +571,19 @@ contract. A tenant with no model hands back empty cells, and empty is not zero:
 zero would read as a model that answered nothing, which is a different fact and
 only one of the two is a defect.
 
-**A unit that died files nothing, and that is the record.** The outcome
-vocabulary is three words - `completed`, `stopped_on_deadline`, `nothing_to_do` -
-and none of them says "this died". A unit the platform killed could not write
-one anyway. What says it is the missing row read against the `shards` cell its
-siblings carry: three rows that each say the work was split four ways is a night
-with one unit missing, and an operator needs nothing else to see it. A unit that
-ran out of its own clock is the opposite case and does file a row, because it
-stopped itself and had something to report.
+**A step that died before returning files no row, and that is the record.** The
+outcome vocabulary is three words - `completed`, `stopped_on_deadline`,
+`nothing_to_do` - and none says "this died". A step the platform killed could
+not write one anyway. For evaluation, a missing row against `work_part_count`
+shows which part did not report. A step that ran out of its own clock is the
+opposite case and does file a row, because it stopped itself and had something
+to report.
 
-**The ledger is seeded with a `.gitkeep` and never with a header-only day file.**
-A header with no rows under it is a real day to the partition walker, so one
+**The raw ledger is not seeded with a `.gitkeep` or a header-only file.** A
+header with no rows under it is a real day to the partition walker, so one
 would put a permanent day in the prune target and the day inventory that no
-council run ever had. A night with nothing to record therefore writes no file at
-all, and the commit step still finds its directory.
+council run ever had. A night with no hosted tenant therefore writes no file;
+the commit step skips the absent path.
 
 ### Design rationale: the venue files the row, not the tenant
 
@@ -597,15 +609,18 @@ the only memory risk in the design. Carmack, 2026-09-21.
 
 ## Design rationale: the council's own path, not a segment per writer
 
-The digest pipeline gives every writer its own segment inside the day, at
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
-council does not, and one reason survives.
+The digest pipeline gives every writer its own file inside the day, a raw file
+the ledger door names under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`. The council
+does not need one per unit, and one reason survives.
 
 **A segment solves a conflict this workflow does not have.** It exists for the
 case where more than one job commits into one ledger file - the digest pipeline
 has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
-carrying the run id, which is the property a segment exists to provide.
+carrying the run id, which is the property a segment exists to provide. The
+council's record, the scored pairs, the judge's metrics and the fitted merge
+line now all file through the ledger door, where each write is a raw file named
+for its writer, so no council write appends to a day file.
 
 **The second reason went with the staging ledger on 2026-09-22.** A compaction
 verb used to fold every waiting segment of every ledger and delete what it read,

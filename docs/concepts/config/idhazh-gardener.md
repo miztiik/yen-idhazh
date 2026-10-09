@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-08
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -13,11 +13,12 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-10-03` | The UTC day this file's shape last changed |
+| `version` | `2026-10-06` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push. If every try fails and main did not move, main refused the push, and the shard exits 3. If main moved, other writers are landing, and the shard warns and exits 0 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
-| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes, before the shard exits 1. A shard checks out only its code and config, so this is the day and month folders its tasks read. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate. Its first reset is to about twice the largest `downloaded_bytes` the first thirty scheduled wakes record ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
+| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes. A shard checks out only its code and config, so this is the day and month folders its tasks read. A compaction takes only the periods that fit what is left of it and stops at `ceiling` at the first that does not, or fails by name on a period larger than the whole of it. A shard that downloads more anyway runs its tasks, lands its record and exits 1, because a task downloaded without choosing by the budget. The number is an estimate. Reset it from what the wakes that did not stop at it downloaded, because one that stopped at it records the budget rather than what it needed ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
+| `first_ledger_year` | `"2026"` | The UTC year, as `YYYY`, from which a compaction looks for year and month files when one of a ledger's indexes is absent and is rebuilt from the files in the year folders it names ([ledger-compaction.md](../../architecture/publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). No folder from before it is named, because no ledger holds a row from before it: the repository was created on 2026-08-20. Required, with no default, so the loader refuses a file that leaves it out |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard
@@ -28,9 +29,10 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Twenty ship today:
-five `retention` tasks, two `collection` tasks, twelve `compaction` tasks (below)
-and `corpus-squash`, the one `history` task (below).
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Thirty ship today:
+five `retention` tasks, two `collection` tasks, twenty-two `compaction` tasks -
+nineteen for ledgers and three for trial roots (below) - and `corpus-squash`,
+the one `history` task (below).
 There is no `name` key inside a declaration. Both plan writers open the same
 named list, so adding an unrelated file cannot change a wake's plan.
 
@@ -41,7 +43,7 @@ Every declaration carries these keys, whatever its kind:
 | `lifecycle_status` | `active`, `paused` or `retired`, no default | `active` runs at every wake. `paused` does not run and keeps its claim. `retired` never runs again, and its declaration stays as the record of how far back its tree reached |
 | `kind` | `retention`, `collection`, `compaction` or `history` | Which member reads the rest of the file, and which module may serve it |
 | `window` | `{unit: days, value}`, `{unit: months, value}` or `{unit: forever}` | How far back the task keeps what it owns. `value` is at least 1, so no window includes today, and `forever` carries no value |
-| `lookback` | a count, optional | Extra earlier periods a scheduled pass checks beyond the period that just expired. Defaults to 7 days or 2 months; the pass reports only the periods it names. A compaction's day step also reads it as how many months before the month of its newest due day a first pass looks back for its oldest raw day ([ledger-compaction.md](../../architecture/publishing/ledger-compaction.md#a-day)) |
+| `lookback` | a count, optional | Extra earlier periods a scheduled pass checks beyond the period that just expired. Defaults to 7 days or 2 months; the pass reports only the periods it names. A compaction has no scheduled window, so for it this is only how many months before the month of its newest due day a first pass looks back for its oldest raw day; raw days older than that stay raw ([ledger-compaction.md](../../architecture/publishing/ledger-compaction.md#a-day)) |
 | `dry_run` | `bool`, no default | True reports what a live pass would take and takes nothing |
 | `max_deletes_per_run` | a count, or `null` | The most one pass deletes. `null` is no ceiling and `0` is a survey. A collection pruned through GitHub's API spends a request a delete, so `null` there can use up the token's hourly allowance on one backlog |
 | `owns` or `owns_everything_else_under` | a list of folders | Exactly one of the two. `owns` names repository-relative folders; the second is the complement: every folder under its roots that no other task owns and no ledger family claims |
@@ -52,9 +54,9 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. `fold`, `{after_days, dry_run, settles_months}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. With `settles_months` (default `false`), once `after_days` whole days have passed since a month ended, every file of that month becomes one `settled.csv` in the month's folder. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
+| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. A `fold` block is refused by name: the closed-day fold it switched on is gone, because no ledger files a writer's CSV file into a day folder now |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days. `mark_lookback_days`, default 7, at least 1: how many UTC days of the gardener's record, today included, a pass reads to find the day its last pass handled through. With no row in reach it starts with no mark, which is correct and only slower ([how the mark is used](../../architecture/publishing/idhazh-gardener.md#the-collection-tasks)) |
-| `compaction` | `ledger` and the ten keys in [the table below](#the-keys-of-a-compaction), each required: none has a default, so the file holds every number a pass runs with. Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the periods are how far back it keeps, and `max_periods_per_run` is its budget, spent on days, months, years and old months dropped separately |
+| `compaction` | `ledger` and the keys in [the table below](#the-keys-of-a-compaction). Packing keys are required; the two yearly expiry keys have compatibility defaults. Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the periods are how far back it keeps, and `max_periods_per_run` is its budget, spent separately on days, months, years, old months dropped and indexed years expired |
 | `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
 ## The retention declarations that ship
@@ -62,18 +64,13 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 Each deletes what it owns past its window, and each ships `dry_run: true`. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
-No current task carries a `fold` block. Feed-health is packed through the
-ledger door, so it is not a CSV day tree. The generic fold remains available to
-a future retention task that owns a registered CSV day tree.
-The digest workflow ran that same fold live on every run until the gardener
-took it over, and a fold changes no answer a reader gets. No current task sets
-`fold.settles_months`.
 Why each tree gets the age it has is
 [retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
 
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
-| `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
+| `telemetry-aggregate` | `frontend/public/telemetry`; appends `item-health-summary` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health`, `state/compact/item-health` and `state/raw/item-health-summary`, so it finds due and already summarised months whichever shard it lands in |
+| `compact-item-health-summary` | `state/raw/item-health-summary`, `state/compact/item-health-summary` | 36 calendar months after year-end | the summary follows the same reviewed yearly policy as the other ledgers |
 | `traces` | `state/traces` | 7 days | an item inspection reads recent trace detail; item health keeps its stage measurements |
 | `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
 | `digest-fragments` | `state/digest-fragments` | 390 days | 30 days times `retention.image_months`, the window the archive page states; past it a run's block of a day is a second copy nothing reads |
@@ -81,61 +78,69 @@ Why each tree gets the age it has is
 
 ## The compaction declarations that ship
 
-Each moves one ledger's rows out of its raw files into one file a day and then
-one file a month, and deletes what it moved. A declaration that sets
-`monthly_keep_days` also packs each finished year's month files into one file a
-year. Four of the twelve set it, `compact-candidate-models`,
-`compact-published`, `compact-run-plan` and `compact-summary-quality-evals`,
-whose `monthly_keep_days` (93) is how many whole days
-after a UTC year ends each waits to pack that year. Each ledger's own
-`monthly_keep_days` sets its wait, a ledger the site publishes included, and the
-loader checks only that the value can take effect: at least `daily_keep_days`
-plus 32 days. How a pass runs is
-[../../architecture/publishing/ledger-compaction.md](../../architecture/publishing/ledger-compaction.md).
-Eight pack live - `compact-item-health`, `compact-host-fingerprint`,
-`compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen`,
-`compact-published`, `compact-feed-health` and `compact-summary-quality-evals` -
-and the other four ship
-`dry_run: true`. Each owns its
-ledger's two folders,
-`state/raw/<ledger>` and `state/compact/<ledger>`. Six set
-`month_deletes_dry_run` to `false`, so `compact-item-health` and
-`compact-host-fingerprint` delete what their monthly windows drop, and a
-`dry_run` turned `false` later turns a window live with it.
-`compact-counterfactual-scores`, `compact-candidate-models`, `compact-seen`,
-`compact-published` and `compact-feed-health` set it to `true`:
-packing runs live in the change that moves a ledger to the door, because it
-writes every row into a coarser file before it deletes one, and the window only
-reports what it would delete ([the two switches](#the-keys-of-a-compaction)).
-`compact-run-plan` sets it to `true` as well, and ships `dry_run: true`, so a
-pass of it only reports what it would pack.
+All nineteen ledger declarations pack live. They keep day files until 45 whole days
+after their month ends, then month files until 93 whole days after their year
+ends. Indexed year files expire 36 calendar months after that UTC year ends.
+For example, 2026 expires on 2030-01-01 at 00:00 UTC. Each declaration has
+`dry_run: false`, `monthly_window: {unit: forever}`, `yearly_keep_months: 36`
+and `yearly_prune_enable: true`. The monthly forever window preserves rows
+until yearly packing; it does not mean years survive forever.
 
-| Task | Ledger | Keeps | Why |
-| --- | --- | --- | --- |
-| `compact-gardener` | `gardener`, the gardener's own record | day files for 45 to 76 days, then 13 month files | no task limited this ledger before it moved, so nothing sets a floor |
-| `compact-visual-prunes` | `visual-prunes`, the picture cleanup's report of every pass | the same as `compact-gardener` | the same |
-| `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
-| `compact-counterfactual-scores` | `counterfactual-scores`, what another lens weight would have scored | day files for 45 to 76 days, then 2 month files | its floor is the 90-day console preset. One month reaches back only 73 days at the shortest, while two reach back at least 104. It packs live and its window only reports, as the 30-day window on its CSV did |
-| `compact-candidate-models` | `candidate-models`, the verdicts on candidate models | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | a verdict is why a model was adopted or refused, so none is dropped, and nothing deleted its CSV either. It packs live and its window only reports. Only a qualification writes it, under its trial root, which nothing packs |
-| `compact-seen` | `seen`, the first sight of every address | day files for 45 to 76 days, then 2 month files | its floor is `collect.seen_window_days`, 90 days, the days the collector reads. 45 days and the fewest days 2 months can hold reach back 104 days; 1 month would reach only 73. It packs live and its window only reports. The prune verb refuses it: a day taken out of it lets the next run find every address that day held as new |
-| `compact-published` | `published`, every address a digest carried | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | `collect.published_window_days` is -1, which reads every day, so the loader refuses any window that drops a month. It packs live. The prune verb refuses it: it is the guard against publishing one story twice |
-| `compact-run-plan` | `run-plan`, the plan each run hands to the stages after it | day files for 45 to 76 days, then every month file until its year is packed 93 days after it ends, then one year file for ever | a later stage reads only the plan of the day it names, so no reader sets a floor. It ships `dry_run: true`, so a pass only reports what it would pack |
-| `compact-item-health` | `item-health`, the census | day files for 31 to 62 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it. It packs live, with `daily_keep_days` 31: the shortest wait no GitHub re-run can outlast ([why 31](../../architecture/publishing/ledger-compaction.md#design-rationale)) |
-| `compact-summary-quality-evals` | `summary-quality-evals`, the eval ledger | day files for 45 to 76 days, then every month file until its year is packed `monthly_keep_days` after it ends, then one year file for ever | every eval row is kept for ever and nothing summarises a month, so it may pack a month or a year and never drops one |
-| `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is `public_machine_keep_months`, 14 months, because the published machine shard is folded from this ledger; its CSV was kept the same 14 months. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
-| `compact-feed-health` | `feed-health`, what every feed did on every run | day files for 45 to 76 days, then 14 month files | its floor is the widest console read, 366 days, which can open 14 month files, and its CSV was kept the same 14 months. It packs live and its window only reports. Nothing older is summarised, because no older total has a reader |
+Each declaration owns `state/raw/<folder>` and `state/compact/<folder>`, where
+`<folder>` is its ledger's door folder: the ledger's name, or the family's
+folder and then that name for a ledger filed inside its family's folder, such as
+`content-similarity-judge/merge-line-holdout-scores` for the holdout score,
+`content-similarity-judge/scored-pairs` for the judge's scored pairs,
+`content-similarity-judge/fitted-thresholds` for the fitted merge line and
+`content-similarity-judge/holdout-pairs` for the hand marks. Each is called
+`compact-<folder>` with `/` written `-`.
+The raw-day packing wait remains one whole day for every ledger.
 
-**The last four are the ledgers the console reads**, and the console reads their
-packed files and nothing newer. All four pack live, so a finished day reaches
-the console within about 48 hours while daily wakes succeed. Scores keep every
-row: their forever window drops no month, and packing removes a source file
-only after preserving its rows in a coarser file.
+Table A. All nineteen declarations use the same packing and expiry settings.
+
+| ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
+| --- | --- | --- |
+| A1 | `compact-candidate-models` | 45 days / 93 days / 36 calendar months |
+| A2 | `compact-council-run-records` | 45 days / 93 days / 36 calendar months |
+| A3 | `compact-counterfactual-scores` | 45 days / 93 days / 36 calendar months |
+| A4 | `compact-feed-health` | 45 days / 93 days / 36 calendar months |
+| A5 | `compact-feed-retirements` | 45 days / 93 days / 36 calendar months |
+| A6 | `compact-gardener` | 45 days / 93 days / 36 calendar months |
+| A7 | `compact-host-fingerprint` | 45 days / 93 days / 36 calendar months |
+| A8 | `compact-item-health` | 45 days / 93 days / 36 calendar months |
+| A9 | `compact-item-health-summary` | 45 days / 93 days / 36 calendar months |
+| A10 | `compact-published` | 45 days / 93 days / 36 calendar months |
+| A11 | `compact-run-plan` | 45 days / 93 days / 36 calendar months |
+| A12 | `compact-seen` | 45 days / 93 days / 36 calendar months |
+| A13 | `compact-summary-quality-evals` | 45 days / 93 days / 36 calendar months |
+| A14 | `compact-visual-prunes` | 45 days / 93 days / 36 calendar months |
+| A15 | `compact-content-similarity-judge-merge-line-holdout-scores` | 45 days / 93 days / 36 calendar months |
+| A16 | `compact-content-similarity-judge-scored-pairs` | 45 days / 93 days / 36 calendar months |
+| A17 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
+| A18 | `compact-content-similarity-judge-holdout-pairs` | 45 days / 93 days / 36 calendar months |
+| A19 | `compact-content-similarity-judge-fitted-thresholds` | 45 days / 93 days / 36 calendar months |
+
+`item-health-summary` has a declaration but no generated rows yet.
+`telemetry-aggregate` remains `dry_run: true`; it produces summaries only for
+months older than its 14-month full-grain window. The repository began in 2026,
+so no month has reached that age. Its `aggregate: forever` setting describes
+its output, not a reader that requires every summary year to survive. The
+summary ledger's own compaction governs its yearly expiry.
+
+The console reads packed files, so live packing still makes a finished day
+available within about 48 hours while daily wakes succeed. Published-address
+deduplication reads 730 days, or two years. Older evaluation and publication
+history may be deleted by the reviewed yearly policy.
+The [compaction page](../../architecture/publishing/ledger-compaction.md#yearly-expiry)
+owns expiry, restart progress and missing-index handling.
+This configuration change deletes no live data. The earliest possible expiry
+for the repository's 2026 yearly files is 2030-01-01 at 00:00 UTC.
 
 ### The keys of a compaction
 
-Each declaration writes every one of these, and the loader refuses one that
-leaves a key out, naming it. Nothing is filled in from code, so the file a
-person reads holds every number a pass runs with.
+Each declaration writes every setting. The loader names a missing packing
+key. The two yearly expiry keys have compatibility defaults for older
+declarations: no finite expiry and pruning disabled.
 
 | # | Key | What it sets |
 | --- | --- | --- |
@@ -143,11 +148,14 @@ person reads holds every number a pass runs with.
 | 2 | `month_deletes_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it, and packs those days and months like the rest; the pass's record counts the files a live pass would drop at that wake in `selected` and not in `deleted`. `false` lets the window delete them |
 | 3 | `daily_keep_days` | How many days after a UTC month ends it is absorbed into its month file. At least 31 |
 | 4 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
-| 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file, kept for ever. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
-| 6 | `max_periods_per_run` | The most days, and separately the most months and the most years, one pass packs, and separately the most months past `monthly_window` it drops, oldest first |
-| 7 | `max_raw_files_per_period` | The most raw files one period is built from in one pass. A day holding more is refused and kept |
+| 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
+| 6 | `max_periods_per_run` | The most days, and separately the most months and the most years, one pass packs; separately the most months past `monthly_window` it drops and the most indexed years it expires, oldest first |
+| 7 | `max_raw_files_per_period` | The most raw files one period is built from in one pass. A day holding more packs its oldest that many, and the rest wait in its folder for the next wake |
 | 8 | `compact_after_days` | How many whole days after a UTC day ends before it may be packed, counted from 00:00 UTC on the day after it |
-| 9 | `prune_refusal` | Whether `idhazh telemetry prune` may take a range of days out of the ledger. `null` lets it; a sentence refuses the ledger, and the command prints that sentence as the reason. `compact-summary-quality-evals` gives one, because every eval row is kept for ever ([how the prune reads it](../../how-to/prune-a-collection.md)) |
+| 9 | `prune_refusal` | Whether `idhazh telemetry prune` may take a range of days out of the ledger. `null` lets it; a sentence refuses the ledger, and the command prints that sentence as the reason. This protects manual deletion, not the configured yearly expiry ([how the prune reads it](../../how-to/prune-a-collection.md)) |
+| 10 | `yearly_keep_months` | Calendar months after the UTC year-end instant before an indexed year expires. At least 1; `null` keeps years forever. A finite value requires `monthly_keep_days`. Older declarations default to `null` |
+| 11 | `yearly_prune_enable` | `true` deletes due indexed years; `false` keeps them. Requires finite `yearly_keep_months` when enabled. Older declarations default to `false`. The whole task's `dry_run` still prevents every change |
+| 12 | `state_roots` | Unique, safe repository-relative roots, default `["state"]`. A trial declaration names only trial roots; its ownership is exactly its ledger's raw and compact folders under each root |
 
 **Two switches, because packing loses no row and the monthly window does.** A
 pass packs a raw day into a day file, a month of day files into a month file
@@ -157,6 +165,14 @@ has just written into the coarser one. The monthly window deletes rows. So
 whether the window's deletions are among the changes: a ledger can pack live
 while its window only reports, and a person turns the window live after reading
 what it would take. With `dry_run` `true` a pass changes nothing either way.
+
+The trial compactions are `compact-trial-item-health`,
+`compact-trial-host-fingerprint` and `compact-trial-candidate-models`. They pack
+live only under the roots they name. Each keeps 31 daily days and a three-month
+window, reports monthly deletion without deleting, and leaves yearly expiry
+disabled. This reaches the gardener's 90-day `trials` window. The production
+`compact-<folder>` remains the only declaration used for production retention
+and prune refusals.
 
 ## The collection declarations that ship
 
@@ -215,15 +231,19 @@ refused push. The person's ruling of 2026-09-29 added the two keys.
 
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a
-fold's as well as the task's own, and every compaction's
-`month_deletes_dry_run`, which is live only while its task's own `dry_run` is
-`false` too. It names the live ones as its exceptions, each with the decision
-beside it: `corpus-squash`'s `dry_run`, the `dry_run` and the
-`month_deletes_dry_run` of `compact-item-health` and
-`compact-host-fingerprint`, the `dry_run` of `compact-counterfactual-scores`,
-`compact-candidate-models`, `compact-seen`, `compact-published` and
-`compact-feed-health`, and both switches of `compact-summary-quality-evals`,
-whose forever window drops no rows. A task
+fold's as well as the task's own; every compaction's `month_deletes_dry_run`,
+which is live only while its task's own `dry_run` is `false` too; and every
+`yearly_prune_enable`, which is live only when it is `true` and its task's own
+`dry_run` is `false`. It names the live ones as its exceptions, each with the
+decision beside it: `corpus-squash`'s `dry_run`; the `dry_run` and the
+`yearly_prune_enable` of all fourteen compactions, `compact-gardener` among
+them, under the owner's approval of 2026-10-07; the same two of each compaction
+for a ledger moved onto the door since, under that approval and the owner's
+direction of 2026-10-05 that a moved ledger takes its retention and upkeep with
+it; and the `month_deletes_dry_run`
+of `compact-feed-retirements`, `compact-gardener`, `compact-host-fingerprint`,
+`compact-item-health`, `compact-summary-quality-evals` and
+`compact-visual-prunes`, whose forever monthly windows drop no month. A task
 earns its first deletion from a person reading its records, so turning one live
 is an edit to that list, never a side effect of the change that added the task.
 
@@ -238,7 +258,7 @@ names the file an operator edits and the rule it broke.
 | Two tasks that own one folder, or a folder inside the other's, whatever their status | Both would delete in it. A retired task keeps its claim |
 | More than one task using the complement form | Each would claim what the other claims |
 | An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
-| The declaration that governs `seen`, `counterfactual-scores` or `published` keeping less than the days `collect.seen_window_days`, `lens_weights.window_days` or `collect.published_window_days` reads back: its retention task while the ledger is on CSV, its compaction once it moves | A reader still opens those days. `collect.published_window_days` is `-1`, which reads every day, so nothing may delete `published`. A ledger no declaration governs is deleted by nothing, so it meets every floor |
+| The declaration that governs `seen`, `counterfactual-scores`, `published` or `holdout-pairs` keeping less than the days `collect.seen_window_days`, `lens_weights.window_days`, `collect.published_window_days` or `similarity.holdout_reach_days` reads back: its retention task while the ledger is on CSV, its compaction once it moves | A reader still opens those days. `collect.published_window_days` and `similarity.holdout_reach_days` are 730, or two years. A negative value reads every day and is refused under enabled finite pruning. A ledger no declaration governs is deleted by nothing, so it meets every floor |
 | `telemetry-aggregate` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
 | A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
 | An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
@@ -247,8 +267,9 @@ names the file an operator edits and the rule it broke.
 | The declaration that governs the host-fingerprint ledger - its compaction - keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from that ledger, so a source month deleted while its published month is kept is a shard nothing can rebuild |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
-| `fold.settles_months` beside a `window` of days | A settled month's file names no day, so a window of days would take it whole once the month's first day aged out, and with it the rows of every later day the window still keeps |
-| A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
+| A compaction not called `compact-<folder>`, or `compact-trial-<folder>` for trial roots, where `<folder>` is its ledger's door folder with each `/` written `-` | One compaction a ledger folder, found by name, and separate names keep trial retention from governing production |
+| A trial compaction whose roots are not trial roots, or whose ownership differs from the ledger's raw and compact folders under those roots | The declaration cannot pack or delete another ledger's paths |
+| Duplicate or unsafe `state_roots` | A root is explicit and relative, not a traversal or a second spelling of one input |
 | A compaction that leaves out any key in [the table above](#the-keys-of-a-compaction) | Nothing fills a setting in from code, so a missing one is named rather than guessed |
 | A key that a declaration's kind does not have, such as a misspelt or renamed key | Nothing would read it. The loader names it, so a person sees which line to change |
 | A collection task not called `<collection>.json`, or whose `window` is not whole days | One task a collection, found by name; a pass counts a member's age in days |
@@ -266,6 +287,17 @@ rather than to `backend/utilities/corpus_history.py`. **The deletion of a folder
 is refused by the commit loop, where the deletions are known.
 
 ## Design rationale
+
+Owner @kumarsnaveen_microsoft approved this policy on 2026-10-07 for all fourteen
+ledgers, including the four report-only tasks that now run live. Older
+published deduplication and evaluation history may be lost. A ledger moved onto
+the door since takes the same policy with it, because the owner directed on
+2026-10-05 that a moved ledger takes its retention and upkeep with it:
+`MOVED_LEDGER_TASKS` in `backend/tests/contracts/test_gardener_config.py` names
+each one. The owning
+[compaction rationale](../../architecture/publishing/ledger-compaction.md#design-rationale)
+records the safety design. The yearly boolean is a permanent operator choice,
+not a second packing implementation.
 
 **Score packing must run for score charts to refresh.** On 2026-10-04,
 kumarsnaveen requested a fix for console charts that had stopped updating.
@@ -299,11 +331,7 @@ ledger's months.** For `item-health` that is the `full-grain` series of
 Five cases: a bounded floor against a bounded pair compares; a bounded floor
 against a pair kept forever passes; a floor kept forever against a bounded pair is
 refused, because a person chose never to delete that ledger; forever against
-forever passes; and a ledger no task ever limited has no floor. How long a moved
-ledger's CSV was kept is not a declaration: `CSV_LEDGERS` in
-`backend/utilities/ledger_migration/csv_layouts.py` records it, and its test holds every
-moved ledger's committed compaction to it, so no retired retention task stays
-behind owning a folder nothing writes.
+forever passes; and a ledger no task ever limited has no floor.
 
 **A cleanup age lives in the declaration of the task that deletes by
 it.** Eleven keys left `config/idhazh.json` - the ledger ages, the trial window,

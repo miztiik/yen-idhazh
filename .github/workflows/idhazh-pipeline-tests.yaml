@@ -26,9 +26,11 @@
 #
 # It publishes nothing a reader sees. No step writes `frontend/public/` and
 # nothing here is on any reader's path. The `commit` job appends what each test
-# case wrote under that test case's own trial root, `state/pipeline-tests-<id>/`,
-# which no console page reads; every other job keeps `contents: read`. What the
-# runners produced - the article text included - leaves only as an artifact.
+# case wrote under that test case's own trial roots - its raw ledgers
+# tier-first at `state/raw/pipeline-tests/<id>/` and its traces at
+# `state/pipeline-tests/<id>/traces/` - which no console page reads; every
+# other job keeps `contents: read`. What the runners produced - the article
+# text included - leaves only as an artifact.
 #
 # The faithfulness scorer is skipped. It is a second model download, and
 # whether a summary is faithful is the qualification's question, not this one's.

@@ -37,7 +37,7 @@ from conftest import (
 
 from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
@@ -311,7 +311,7 @@ def _a_drawn_row(
         {
             "date": date,
             "run_id": f"{date}-1",
-            "shard": shard,
+            "work_part_index": shard,
             "pair_key": derive_text_digest(keys[0] + keys[1]),
             "left_url_key": keys[0],
             "right_url_key": keys[1],
@@ -1433,7 +1433,7 @@ def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
     assert row.decode_seconds_max <= row.decode_seconds_total, (
         "one call cannot have taken longer than every call added up"
     )
-    assert (row.date, row.run_id, row.shard) == (day.date, _a_council_run(day.date), 0)
+    assert (row.date, row.run_id, row.work_part_index) == (day.date, _a_council_run(day.date), 0)
     assert (row.judge_model, row.prompt_digest, row.grammar_digest) == (
         stamp.judge_model,
         stamp.prompt_digest,

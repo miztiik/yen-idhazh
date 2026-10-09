@@ -38,6 +38,7 @@
 		mergeTotals,
 		type MergeDay
 	} from '$lib/console/merge-line';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
 		days,
@@ -199,7 +200,9 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label="Stories folded into another a day, over {windowDays} days"
+				aria-label={windowDays === 1
+					? `Stories folded into another in ${nameSpan(windowDays)}`
+					: `Stories folded into another a day, over ${countDays(windowDays)}`}
 				use:pointerReadout={{
 					marks: readoutMarks(bars.map((one) => one.dotX)),
 					width: box.width,

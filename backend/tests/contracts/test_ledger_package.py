@@ -2,8 +2,7 @@
 
 Checks over named files or a single fixed interpreter run do not scan the
 package tree. What each one has to be able to fail is the property the move
-could break: the facade shape, the write-path composition, the load order and
-the pyarrow probe.
+could break: the facade shape, the load order and the pyarrow probe.
 
 A caller reaching a name the facade does not bind is a mypy `attr-defined`
 error, not a check here. A module outside this package importing the writer-name
@@ -24,28 +23,12 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
-from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.ledger import filenames, paths
 
 pytestmark = [pytest.mark.contract, pytest.mark.slow]
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 BACKEND: Final = REPO_ROOT / "backend"
 PACKAGE: Final = BACKEND / "idhazh" / "ledger"
-
-#: One fixed writer, so the composition and the old inline rule are compared on
-#: the same four identity cells rather than on two sets that happen to agree.
-A_DAY: Final = "2026-09-18"
-A_RUN: Final = "2026-09-18-1"
-AN_ATTEMPT: Final = 2
-A_JOB: Final = ServerJob.WORK
-A_SHARD: Final = 7
-
-#: Every tree a writer files a segment into, in one fixed order.
-WRITTEN_INTO: Final[tuple[LedgerName, ...]] = tuple(
-    sorted(DAY_TREES, key=lambda member: member.value)
-)
 
 
 def _fresh_interpreter(body: str) -> subprocess.CompletedProcess[str]:
@@ -111,51 +94,17 @@ def test_the_facade_names_its_exports_once() -> None:
         assert hasattr(ledger, name), f"__all__ names {name} and the facade does not bind it"
 
 
-# --- the day-shard write path composes to the address it always had ----------
+# --- the package loads on its own ---------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "tree", WRITTEN_INTO, ids=[member.value for member in WRITTEN_INTO]
-)
-def test_a_writers_day_shard_is_the_day_directory_plus_the_writers_name(
-    tree: LedgerName, tmp_path: Path
-) -> None:
-    """The one write path rewritten rather than moved, so nothing else covers it.
+def test_the_package_loads_first_in_a_cold_interpreter() -> None:
+    """In a process that has imported nothing of ours, the facade and every module it names load.
 
-    `day_shard_path` used to hold the join in its own body. It now composes the
-    day directory from the registry with the writer's name from the filename
-    grammar, and this says the two spell the same address - in both forms, for
-    every tree a writer files into.
+    A same-process import proves nothing here: this suite has already imported
+    every module by the time it runs.
     """
-    name = filenames.segment_name(run_id=A_RUN, attempt=AN_ATTEMPT, job=A_JOB, shard=A_SHARD)
-    built = ledger.day_shard_path(
-        tmp_path, tree, date=A_DAY, run_id=A_RUN, attempt=AN_ATTEMPT, job=A_JOB, shard=A_SHARD
-    )
-    assert built == paths.path(tmp_path, tree, A_DAY) / name
-    assert ledger.day_shard_relpath(
-        tree, date=A_DAY, run_id=A_RUN, attempt=AN_ATTEMPT, job=A_JOB, shard=A_SHARD
-    ) == f"{paths.relpath(tree, A_DAY)}/{name}"
-
-
-# --- the package and day_shards stay acyclic ---------------------------------
-
-
-@pytest.mark.parametrize("first", ["idhazh.ledger", "idhazh.day_shards"])
-def test_either_module_loads_first_in_a_cold_interpreter(first: str) -> None:
-    """Both orders, each in a process that has imported nothing of ours.
-
-    The `day_shards` order is the load-bearing one: it forces that module's own
-    top-level import of this package against a package nobody has built yet.
-
-    **It does not replace the check above it.** Measured 2026-09-27 by promoting
-    the import on purpose: both orders still loaded, because the facade happens
-    to import `csv_file` before `rows`, so the name `day_shards` asks for is
-    already bound by the time it asks. Reorder the facade and the same promotion
-    raises. The check above is what holds the rule; this one says the package
-    loads at all.
-    """
-    done = _fresh_interpreter(f"import {first}")
-    assert done.returncode == 0, f"importing {first} first fails:\n{done.stderr}"
+    done = _fresh_interpreter("import idhazh.ledger")
+    assert done.returncode == 0, f"importing idhazh.ledger first fails:\n{done.stderr}"
 
 
 def test_the_facade_does_not_load_pyarrow() -> None:
@@ -185,8 +134,8 @@ def test_the_facade_does_not_load_pyarrow() -> None:
 # than with the code under test is forbidden, so all five were removed:
 #
 # - test_only_path_classes_reads_the_writer_name_patterns: the writer-name
-#   patterns (`_SEGMENT_NAME`, `_SEGMENT_SUFFIX`, `_REPAIR_NAME`,
-#   `_REPAIR_STAMP` in ledger/filenames.py) are now private. Ruff's TID251
+#   patterns (`_SEGMENT_NAME` and `_SEGMENT_SUFFIX` in ledger/filenames.py)
+#   are now private. Ruff's TID251
 #   (banned-api, see pyproject.toml) flags any import of them from outside
 #   `path_classes.py` - a one-file, one-import-graph check, not a tree walk.
 #

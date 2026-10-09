@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 Three surfaces stand on a full console route: the strip - the route tabs and the
 days control on one row - the sentence under it that says how complete the
@@ -23,7 +23,13 @@ through `frontend/src/lib/console/chrome.ts`. Workbench chrome keeps `#console-t
 as a screen-reader heading and draws only the compact, non-sticky strip. It does
 not draw the completeness sentence, band, no-script note, span sentence, jump
 links or route carry line. The route must then draw its own span and Run controls
-inside its workbench toolbar.
+inside its workbench. Workbench chrome also gives the route the whole window:
+`app.css` lifts the console's width cap and leaves out the site footer for it,
+the section steps out of the frame's gutter while the header keeps it, and from
+1024 px the frame is the window's height, so the route's workbench fills what the
+header and the strip leave
+([how the Data explorer shares the window](../../concepts/console-design/how-the-data-explorer-shares-the-window.md)).
+No other route changes.
 
 Which panel sits on which route is [console.md](console.md); how any figure is
 allowed to read is
@@ -130,6 +136,28 @@ radius, elevation, frame width, both ramps. The shapes they share live in
 rather than in three scoped `<style>` blocks, because three copies are three
 identities that happen to agree today.
 
+## The browser's title names the route's tab
+
+Each console route sets its own page title: the words a browser shows in its tab,
+its history and a bookmark, not the `Console` heading on the page. The title is
+the route's tab label, spelled as on its tab, then `Console`, then the site's
+title from `ui.site_title`, joined by an em dash with a space each side. In a
+route's `+page.svelte` that is
+`Judgement &mdash; Console &mdash; {data.ui.site_title}`.
+
+**The route's own word comes first.** A narrow browser tab shows only the start
+of its title, and an operator may have several console routes open at once, so
+six titles that opened with `Console` would look alike. The site's other titles
+take the same order, the most specific part first and the site's name last.
+`Console` stays in the middle because a bare route word, such as `Voices`, could
+name a page for readers in a history list.
+
+**Every route sets its own title.** A tab click moves between routes inside the
+page, and a route that sets no title keeps the one the route before it set.
+[console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts) holds each
+route's title to its literal words, after a tab click and on a page load, and
+checks that no two routes share one. A new route's title takes the same pattern.
+
 ## From the wide breakpoint up the strip sticks, and it is one row
 
 A long route - Hardware is four groups and fifteen panels - put the days control
@@ -199,10 +227,11 @@ a colour change at the moment it sticks.
 
 ## The sentence under the strip dates the record
 
-Every chart on the console draws the newest days that exist rather than the last
-N days, so when the record stops a chart gains no gap at its right edge - it
-slides back in time and looks as full as it did the day before. The sentence
-under the strip is what tells a stopped pipeline from a quiet one:
+Every window on the console ends on the newest day the site published rather than
+on the reader's day, so when the pipeline stops publishing a chart gains no gap at
+its right edge - it holds the last window it drew and looks as full as it did the
+day before. The sentence under the strip is what tells a stopped pipeline from a
+quiet one:
 
 ```
 The latest run on this page finished at 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.
@@ -409,6 +438,9 @@ work below the first screen without adding a fact this route judges. The route
 declares the chrome as data from `console.explorer_chrome`; the layout does not
 infer it from the route name. What this removes is the global verdict while the
 operator is on the Data explorer; one tab press shows it on the other routes.
+Since 2026-10-05 it also removes the site footer from that route, so the
+workbench can reach the window's bottom edge (owner request, Jony's layout); the
+wordmark leads to the home page, whose footer carries the same links.
 
 **The days control rides the strip at every width, not only where the strip
 sticks.** One control in one place keeps the keyboard order, the screen-reader

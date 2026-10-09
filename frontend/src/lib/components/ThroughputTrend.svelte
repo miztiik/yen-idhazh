@@ -45,7 +45,8 @@
 		width,
 		reference,
 		tickDensity,
-		readoutMaxShare
+		readoutMaxShare,
+		windowDays
 	}: {
 		days: ThroughputDay[];
 		height: number;
@@ -53,6 +54,9 @@
 		reference: string;
 		tickDensity: number;
 		readoutMaxShare: number;
+		/** The days the window holds. At one day no second day ever comes, so
+		 * the line under the chart does not wait for one. */
+		windowDays: number;
 	} = $props();
 
 	const SERIES = [
@@ -277,6 +281,13 @@
 				? shortDate(calendar[0])
 				: `${shortDate(calendar[0])} to ${shortDate(calendar[calendar.length - 1])}`
 	);
+	/** What the chart is, to a screen reader. One day is neither per day nor
+	 * ordered left to right, so one day drawn is named by its date alone. */
+	const label = $derived(
+		calendar.length === 1
+			? `Model tokens per second, ${span}`
+			: `Model tokens per second per day, ${span}, oldest day on the left`
+	);
 </script>
 
 <h3 class="mt-6 text-[0.9375rem] font-semibold text-text">Model tokens per second</h3>
@@ -313,7 +324,7 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label={`Model tokens per second per day, ${span}, oldest day on the left`}
+				aria-label={label}
 				data-throughput-days={calendar.length}
 				data-throughput-first={calendar[0] ?? ''}
 				data-throughput-last={calendar[calendar.length - 1] ?? ''}
@@ -505,7 +516,7 @@
 						newest.writeTps,
 						previous.writeTps
 					)} on {previous.date}.
-				{:else}
+				{:else if windowDays > 1}
 					One day so far. A second day gives it something to move against.
 				{/if}
 			</p>

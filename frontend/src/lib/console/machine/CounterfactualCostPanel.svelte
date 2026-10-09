@@ -16,10 +16,11 @@
 		costColumns,
 		costLabel,
 		costOverDays,
-		COST_SHAPES,
+		costShapeOptions,
 		DEFAULT_COST_SHAPE,
 		type CostShape
 	} from '$lib/charts/cost';
+	import { nameSpan, openWithSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
 
 	let {
@@ -77,6 +78,8 @@
 	const costThinnest = $derived(
 		costShapes.thinnestShare === null ? null : (costShapes.thinnestShare * 100).toFixed(1)
 	);
+	/** One column drawn has no tallest or busiest column beside it. */
+	const oneColumn = $derived(costShapes.days.length === 1);
 </script>
 
 <div data-windowed="machine-cost" data-window-days={windowDays}>
@@ -84,12 +87,15 @@
 		heading="h3"
 		id="counterfactual-cost"
 		title="What this would have cost somewhere else"
-		note="A counterfactual and never a bill: nothing bills us, so the wall clock alone cannot say whether the runner time was a good trade - four figures and one column a day, over the last {windowDays} days."
+		note="A counterfactual and never a bill: nothing bills us, so the wall clock alone cannot say whether the runner time was a good trade - {windowDays ===
+		1
+			? `four figures and one column for ${nameSpan(windowDays)}`
+			: `four figures and one column a day, over ${nameSpan(windowDays)}`}."
 		tone="info"
 	>
 		{#if runs.length === 0}
 			<p class="empty" data-machine-panel-empty="cost">
-				No run in these {days} days recorded a token count, so there is nothing to price.
+				No run in {nameSpan(days)} recorded a token count, so there is nothing to price.
 			</p>
 		{:else}
 			<RateControl {configured} bind:inputRate bind:outputRate bind:source={rateSource} />
@@ -104,7 +110,7 @@
 					<dd class="tabular-nums">{money(outputCost, rate.currency, 2)}</dd>
 				</div>
 				<div data-cost="total">
-					<dt>These {days} days</dt>
+					<dt>{openWithSpan(days)}</dt>
 					<dd class="tabular-nums">{money(totalCost, rate.currency, 2)}</dd>
 				</div>
 				<div data-cost="per-article">
@@ -130,13 +136,13 @@
 						bind:shape={costShape}
 						name="cost-shape"
 						label="Which shape to draw the counterfactual in"
-						options={COST_SHAPES}
+						options={costShapeOptions(windowDays)}
 					/>
 				</div>
 
 				{#if costShapes.days.length === 0}
 					<p class="empty" data-cost-absent="days">
-						No run in these {days} days carries a date, so there is nothing to lay on a
+						No run in {nameSpan(days)} carries a date, so there is nothing to lay on a
 						time axis. The four figures above still hold.
 					</p>
 				{:else}
@@ -150,6 +156,7 @@
 						readoutName="counterfactual-cost"
 						readoutMaxShare={chart.readout_max_share}
 						{grid}
+						{windowDays}
 						restingNote=", the newest day"
 						hint="Point at a day to read it. Left and Right step through them, Escape returns to the newest."
 					/>
@@ -159,11 +166,16 @@
 				     took rather than asserting the bands were safe to draw. -->
 				<p class="reads" data-cost-measured>
 					{#if costThinnest === null}
-						Nothing split in this window, so the columns carry no bands.
+						{days === 1
+							? `Nothing split in ${nameSpan(days)}, so the column carries no bands.`
+							: 'Nothing split in this window, so the columns carry no bands.'}
 					{:else if costShapes.splitTooThin}
 						Reading and writing are one column here. The smaller half measures {costThinnest}
-						percent of the tallest day, which draws under a pixel, and a band a browser paints
-						nothing for teaches a reader the half is zero.
+						percent of {oneColumn ? 'the column' : 'the tallest day'}, which draws under a pixel, and
+						a band a browser paints nothing for teaches a reader the half is zero.
+					{:else if oneColumn}
+						The smaller half measures {costThinnest} percent of the column, so both halves draw as
+						bands rather than as a printed figure.
 					{:else}
 						The smaller half of the busiest day measures {costThinnest} percent of the tallest
 						column, so both halves draw as bands rather than as a printed figure.

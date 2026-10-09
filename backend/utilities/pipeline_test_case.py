@@ -41,7 +41,7 @@ from idhazh import ledger, run_context
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import plan as plan_stage
 
@@ -104,26 +104,29 @@ def _stage(
     ]
 
 
-def _file_the_plan(drawn: RunPlan, *, trial_state_dirname: str) -> None:
+def _file_the_plan(drawn: RunPlan, *, trial_case_dirname: str) -> None:
     """File the drawn plan into one test case's trial ledger, where its stages read it.
 
-    The trial root is spelled from the working folder, as every other path here is,
-    and the workflow runs this program from the checkout `idhazh` resolves.
+    Every case shares the trial root but reads its plan beside its own ledgers.
+    This runs in the same process as `run()`, never through `idhazh`'s own CLI
+    dispatch, so it enters the registry overlay itself rather than relying on
+    one a stage subprocess would already be inside.
     """
-    ledger.persist(
-        Path(ledger.STATE_DIRNAME) / trial_state_dirname,
-        [drawn],
-        ledger=LedgerName.RUN_PLAN,
-        covers=drawn.date,
-        identity=WriterIdentity(
-            run_id=drawn.run_id,
-            attempt=run_context.run_attempt(),
-            job=ServerJob.PLAN,
-            shard=0,
-            producer=PRODUCER,
-            git_sha=UNNAMED_COMMIT,
-        ),
-    )
+    with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, trial_case_dirname))):
+        ledger.persist(
+            Path(ledger.STATE_DIRNAME),
+            [drawn],
+            ledger=LedgerName.RUN_PLAN,
+            covers=drawn.date,
+            identity=WriterIdentity(
+                run_id=drawn.run_id,
+                attempt=run_context.run_attempt(),
+                job=ServerJob.PLAN,
+                shard=0,
+                producer=PRODUCER,
+                git_sha=UNNAMED_COMMIT,
+            ),
+        )
 
 
 def _refuse(message: str) -> int:
@@ -175,7 +178,7 @@ def run(
     shutil.rmtree(run_root, ignore_errors=True)
     shutil.rmtree(test_case_root / "run", ignore_errors=True)
     run_root.mkdir(parents=True)
-    _file_the_plan(drawn, trial_state_dirname=test_case.trial_state_dirname)
+    _file_the_plan(drawn, trial_case_dirname=test_case.id)
 
     shards = settings.shard_count()
     started = time.monotonic()

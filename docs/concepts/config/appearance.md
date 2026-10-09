@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -92,16 +92,17 @@ The console knobs are:
 - `console.feed_rows`
 - `console.completeness_grace_days`
 - `console.explorer_chrome`
-- `console.explorer_readout_lines`
+- `console.explorer_readout_lines`: status-bar line reservations for the Data explorer, narrow to wide. Default `[4, 3, 4, 3]`.
+- `console.explorer_role_slots_per_line`: the most role pills one line of the Data explorer's Chart tab holds, narrow to wide, by the same four bands. Default `[1, 2, 3, 4]`.
+- `console.explorer_chart_note_lines`: the lines one note under the Data explorer's chart reserves, narrow to wide, by the same four bands. Default `[2, 2, 1, 1]`: below 1024 px a note can wrap, and from 1024 px one sentence fits one line. Each value is at least 1.
 - `console.explorer_notice_ms`
 - `console.explorer_row_page`
 - `console.explorer_max_rows`
 - `console.explorer_max_fetch_bytes`
 - `console.explorer_query_max_chars`
-- `console.explorer_rail_rem`
+- `console.explorer_link_max_bytes`
 - `console.explorer_editor_lines_shown`
 - `console.explorer_strip_shown`
-- `console.explorer_answer_svh`
 - `console.explorer_cell_max_ch`
 - `console.explorer_bar_spread_share`
 - `console.explorer_counter_from_share`
@@ -125,7 +126,14 @@ failures cost the most articles, and the feeds that failed at least once. Both
 state their tail in one sentence rather than offering more rows, because a
 ranking is read from the top and a tail is a number, not a page.
 
-The Data explorer route reads the `console.explorer_*` knobs. They bound the route chrome, the SQL editor, the row cap, the fetch ceiling, the fixed status-bar lines, the notice lifetime, the answer region and the example questions. `console.explorer_chrome` lets the route ask the layout for compact workbench chrome without the layout reading a route name. `console.explorer_editor_lines_shown` and `console.explorer_answer_svh` are fixed sizes: a long question, a long note or many answer rows scrolls inside its region instead of moving the page. `console.explorer_max_fetch_bytes` is 64 MiB. Measured 2026-10-04 on a local real build in Chromium with the CPU slowed 4x, on a shared i7-1265U laptop: a question fetching 9.9 MB (10,379,116 bytes, 138 files, six ledgers over 30 days) answered in 6,435 ms, 6,209 ms and 5,926 ms on the page clock; the wall times were 10,120 ms, 9,644 ms and 10,163 ms. No main-thread task passed 1 second - the three longest were 546 ms, 328 ms and 857 ms - so 64 MiB stands. The site holds only 22.5 MB today, so 64 MiB itself is untested until a ledger holds 90 days. The status bar prints the bytes the page keeper still holds, not the sum of every call's possible fetch cost, so a byte-range year file does not inflate the reload total.
+`today_anchor` (`right`) says where every console window places the site's
+newest published day, the day the console treats as today: `right` makes it the
+window's last day, and `centre` puts it in the middle, with room after it for
+days not yet published. That day, and never the build clock or a record's own
+newest day, is what every window on every route is placed on
+([which-console-surfaces-follow-the-window-and-which-say-why-not.md](../../architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md#one-window-governs-the-page)).
+
+The Data explorer route reads the `console.explorer_*` knobs. They bound the route chrome, the SQL editor, the row cap, the fetch ceiling, the length of a shared link, the fixed status-bar lines, the notice lifetime and the example questions. `console.explorer_chrome` lets the route ask the layout for compact workbench chrome without the layout reading a route name. `console.explorer_link_max_bytes` is the most bytes a link's path and query may hold and still carry the question; a longer link carries the ledgers and the days only. It is 8,192, the longest request target GitHub Pages answered ([../../reference/benchmarks/address-length-on-pages.md](../../reference/benchmarks/address-length-on-pages.md)), so a host with another limit is one edit. No knob sets a region's size: the workbench fills the window, and each region takes its share of it, except that the result region never takes less than the room a chart `console.chart_height` tall needs with its figure, readout and comparison, so a window too short for that scrolls the page ([how-the-data-explorer-shares-the-window.md](../console-design/how-the-data-explorer-shares-the-window.md)). `console.explorer_role_slots_per_line` sets how many of the Chart tab's role pills share one line in each band: a line holds the smaller of the knob and the most roles any chart the page draws has. Flow has four roles, so the role row takes 4, 2, 2 and 1 lines from the narrowest band to the widest under the defaults, for every chosen chart. `console.explorer_chart_note_lines` sets the lines each note under the chart reserves in each band: the foot reserves that many for each note the answer can give, and no room when it can give none, so on most answers the plot has the whole room. `console.explorer_editor_lines_shown` is the fewest lines the SQL editor shows: below 1024 px the editor is exactly that tall, and from 1024 px it fills its share and never drops under it. A long question, a long note or many answer rows scroll inside their region instead of moving the page. `console.explorer_max_fetch_bytes` is 64 MiB. Measured 2026-10-04 on a local real build in Chromium with the CPU slowed 4x, on a shared i7-1265U laptop: a question fetching 9.9 MB (10,379,116 bytes, 138 files, six ledgers over 30 days) answered in 6,435 ms, 6,209 ms and 5,926 ms on the page clock; the wall times were 10,120 ms, 9,644 ms and 10,163 ms. No main-thread task passed 1 second - the three longest were 546 ms, 328 ms and 857 ms - so 64 MiB stands. The site holds only 22.5 MB today, so 64 MiB itself is untested until a ledger holds 90 days. The status bar prints the bytes the page keeper still holds, not the sum of every call's possible fetch cost, so a byte-range year file does not inflate the reload total.
 
 `window_presets` is the list of spans the console's window control offers, and
 one control sets the span for every section that follows it. Five presets rather

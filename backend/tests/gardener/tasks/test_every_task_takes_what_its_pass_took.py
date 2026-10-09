@@ -49,7 +49,12 @@ _REPLACED_NO_PASS: Final[dict[str, str]] = {}
 
 #: Each recorded task that no longer does what its pass did to a tree it still
 #: owns, why, and the test file that holds what it does now.
-_NO_LONGER_ITS_PASS: Final[dict[str, str]] = {}
+_NO_LONGER_ITS_PASS: Final[dict[str, str]] = {
+    "trials": (
+        "It now owns only declared nested trace folders; "
+        "backend/tests/gardener/tasks/test_trials_task.py holds that behavior."
+    )
+}
 
 #: The ledgers whose CSV day trees moved onto the ledger door after the record
 #: was taken. Their rows sit under `state/raw/` and `state/compact/`, and each

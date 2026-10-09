@@ -16,6 +16,7 @@
  */
 
 import type { EChartsOption } from 'echarts';
+import { nameSpan } from '$lib/console/span-words';
 import { dayMonth, shortDate } from '$lib/format';
 import { readoutOf, type Readout } from './readout';
 import { costOf, money, valueGutter, type CostRate, type RunWork } from './machine';
@@ -42,6 +43,13 @@ export const COST_SHAPES: { value: CostShape; text: string }[] = [
 	{ value: 'daily', text: 'Day by day' },
 	{ value: 'running', text: 'Running total' }
 ];
+
+/** Name the daily shape for the window without changing either choice. */
+export function costShapeOptions(windowDays: number): typeof COST_SHAPES {
+	return windowDays === 1
+		? COST_SHAPES.map((option) => option.value === 'daily' ? { ...option, text: 'This one day' } : option)
+		: COST_SHAPES;
+}
 
 /** Reading, at the bottom of the stack. The same colour the read-against-written
  * panel gives it, so one quantity keeps one colour down the route. */
@@ -274,12 +282,16 @@ export function costColumns(shapes: CostShapes, shape: CostShape, currency: stri
  *
  * The word stays in the sentence. A shape described without it is a shape that
  * reads as a bill, and a reader using a screen reader gets the description
- * rather than the axis.
+ * rather than the axis. A column a day and a total added day by day both need a
+ * second day, so a window of one day describes its one column, or its total.
  */
 export function costLabel(shape: CostShape, days: number): string {
+	const one = days === 1;
 	const drawn =
 		shape === 'running'
-			? 'added up day by day'
-			: 'one column a day, reading at the bottom and writing on top';
-	return `The counterfactual cost of these ${days} days, ${drawn}. What the work would have cost at a hosted provider's rate, never an amount owed.`;
+			? one
+				? 'in total'
+				: 'added up day by day'
+			: `${one ? 'one column' : 'one column a day'}, reading at the bottom and writing on top`;
+	return `The counterfactual cost of ${nameSpan(days)}, ${drawn}. What the work would have cost at a hosted provider's rate, never an amount owed.`;
 }

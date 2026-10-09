@@ -111,14 +111,18 @@ STATE_ROOT: Path = config.REPO_ROOT / ledger.STATE_DIRNAME
 
 
 def state_root_of(settings: config.Settings, *, base: Path) -> Path:
-    """Where a run under these settings files its ledgers: `base`, or its trial folder.
+    """Where a run under these settings files its ledgers.
 
     A trial run - a bench, a qualification, a pipeline test - takes production's
-    code path and must not be readable as a production day, so its whole state
-    root moves under `run.trial_state_dirname`.
+    code path and must not be readable as a production day, so its state root
+    moves under `run.trial_state_dirname`, with an optional case child.
     """
     dirname = settings.app.run.trial_state_dirname
-    return base / dirname if dirname else base
+    if dirname is None:
+        return base
+    root = base / dirname
+    case_dirname = settings.app.run.trial_case_dirname
+    return root / case_dirname if case_dirname is not None else root
 
 
 #: Where a shard leaves its recorded input manifest for the assemble stage.

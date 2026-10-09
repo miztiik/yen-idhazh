@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-09
 
-**Thirty-two defects are open.** Four of them need evidence or a ruling before any code
+**Forty defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -25,18 +25,40 @@ fixes it. Defect 48 was filed the same day, while plan 51's row 5 merged: GitHub
 its squash merges in local time, and one account setting is the first thing to
 try. Defects 49 to 52 were filed on 2026-09-30, when plan 50 closed, from what
 its workers found outside their own rows. Defect 50 was already fixed that day;
-defect 51 is the third that needs evidence, because one abort is not enough to
-find its cause. Defects 53 and 54 were filed the same day from two findings plan
+defect 51 needed evidence, because one abort is not enough to find its cause,
+until a second abort reproduced it on 2026-10-08. Defects 53 and 54 were filed
+on 2026-09-30 as well, from two findings plan
 50's rows wrote down and never filed, and 54 has a date: the first squash that
 rewrites history is due on 2026-10-29. Defect 55 was filed on 2026-10-04 from
 Fowler's review of plan 60: a page names a test that two pull requests deleted.
 Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
-57 is the fourth that needs evidence, because one stall is not enough to find
-its cause. Defect 59 was filed on 2026-10-05 by plan 60's row 10: reading named
+57 needed evidence too, because one stall is not enough to find its cause,
+until a second stall came in main's own checks on 2026-10-08. Defect 59 was
+filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
-holds.
+holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
+explorer fetches each chosen ledger's three indexes twice. Defects 61 and 62
+were filed the same day from plan 62's rows L7 and L20: three backend command
+lines stamp log records in local time, and in a worktree with no `.venv` the
+test launcher hands its inner run a Python it then refuses. Defect 63 was
+filed the same day by plan 62's text update after row L7: the plan status
+utility's docstring shows a usage that does not work and a no-install claim
+that is not true. Defects 64 and 65 were filed the same day by the plan text
+update after plan 60's row 21: the canary's telemetry step refuses a
+repository path spelled with a short name, which plan 62's row L25 met, and a
+retention task run over a person's range that finds nothing ends `not-due`,
+which plan 60's row 21 found. Defect 66 was filed on 2026-10-08 by a plan text
+update (#1437): the plan status utility splits a quoted row title wherever
+"and" appears in it. Defect 67 was filed the same day from the checks of plan
+62's row L37 (#1431): a browser test that failed once and passed when run
+again. It is the third that needs evidence, because one failure is not enough
+to find its cause. Defect 68 was filed the same day from plan 62's row L40
+(#1448): the merge line's hold has no floor on its pair count. Whether one
+pair may hold a run is Andre's to rule, so it is the fourth that needs
+evidence or a ruling. Defect 60 closed the same day: #1435 made the data
+explorer read each index once before a run.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -69,7 +91,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
-| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | **OPEN - a person settles which ruling holds** |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | CLOSED 2026-10-04 - the council record rationale ([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant)) keeps machine details out of each row |
 | 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed ledger is exposed** |
 | 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
 | 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
@@ -95,15 +117,355 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
 | 49 | The local test selector sends a backend test helper to every frontend group | 2 | **OPEN - two patterns in the selector and their truth-table cases** |
 | 50 | A publisher link on the home page named a story the page did not draw, so a news run's site build failed | 2 | CLOSED 2026-09-30 (PR #1168) |
-| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - not reproduced; a second abort opens a row** |
+| 51 | The canary builder's score-key step aborted once at exit, after printing its whole answer | 2 | **OPEN - reproduced twice; a row to fix it is now due** |
 | 52 | Reading one month of a packed ledger downloads every month file of its year | 3 | **OPEN - costs nothing until a compaction runs live** |
 | 53 | The `traces` upkeep task cannot date eight old trace files, so it never deletes them | 2 | **OPEN - matters from the day the task deletes live** |
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
-| 56 | A byte-range test counts a correct 304 as a failure | 1 | **OPEN - the cause is settled; one test changes** |
-| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - one stall seen; make it come back before changing code** |
+| 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - two stalls seen in CI; a row to fix it is now due** |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
+| 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
+| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
+| 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
+| 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
+| 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
+| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+| 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
+| 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
+| 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
+| 69 | A re-run of a day that predates fragments may record a line it did not use | 5 | **OPEN - reasoned, not measured; measure the preserved day and its run record before any contract decision** |
+| 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
+
+## 70 - The raw-listing test does not check the value included in the built site (OPEN)
+
+**The test's title promises a build check, but its assertions read only staged
+files.** In `frontend/tests/published-ledgers.spec.ts`, the test
+`raw-day listings are complete, bounded and become the baked listed-through value`
+calls `rawListedThrough(STATIC)` and compares it with days found by reading the
+staged listings again. It does not read `__RAW_LISTED_THROUGH__` from the built
+page. The production binding in `frontend/vite.config.ts` instead calls
+`rawListedThrough()` with no argument.
+
+**The production path is fixed; the integration check is still missing.**
+PR #1427 made the default path relative to the script and added generated-tree
+tests of that default. Those tests do not prove that the build passes the
+result to the page. A future edit that supplies another folder or an empty
+object in `vite.config.ts` can leave the published-listing test green while
+the page reads no raw day. This is a test gap, not evidence of a current
+incorrect build. Confirmed by reading the named test, script and build binding;
+no application test was rerun for this documentation change.
+
+**The receiving work is one bounded integration check.** Build a generated
+state root with two selected ledgers and two named raw days per ledger. Assert
+written-out newest days from the value the real build supplies to the browser,
+not from another listing read. Include a raw-day query with written-out rows.
+Keep the existing default-path unit cases. No test reads the committed archive
+or reaches the network.
+
+**Acceptance:** the generated case passes with the production binding and
+fails when that binding supplies `{}` or the wrong staged folder. It must
+exercise the actual built page, including its raw-day selection. Do not merely
+rename the existing test or compare two readers of the same files.
+
+This receives the unfinished test finding from PR #1427, reported in plan 62
+row L46 and deferred by its Table B, B7. The finding is preserved here before
+that completed plan is deleted; it is not claimed fixed.
+
+## 69 - A re-run of a day that predates fragments may record a line it did not use (OPEN)
+
+**`stage_assemble` keeps the published day unchanged when its previous
+`digest.json` predates run fragments, but still writes the selected floor to
+the new `run.json`.** The branch is in
+`backend/idhazh/stages/assemble.py`: it assigns `day = previous_day` and skips
+`assemble_day`, then builds the new manifest with
+`same_story_floor_applied=same_story.floor_min`. The field description in
+`backend/idhazh/contracts/run_manifest.py` says it is the line the run grouped
+the day at. Reasoned from the code, not measured. No such day is the newest
+published day.
+
+**The smallest measurement is one generated two-run case.** First build a day
+with a known `same_story_floor_applied` value and its matching digest. Then
+make the next run take the `predates_fragments` branch with the adaptive switch
+enabled and a different selected line. Compare the digest before and after,
+then compare the new run record's `same_story_floor_applied` with the value
+that built the preserved digest. This establishes whether the new persisted
+record names a line the day did not use.
+
+**The possible consequence is persisted meaning, not a missing field.** If the
+measurement confirms the mismatch, the existing `RunRecord` value would say
+that a preserved day was grouped at a floor it never used. Any correction to
+that persisted meaning must stop at Table C, C1 for contract review; this entry
+does not choose a fix, change backend code or change a shape.
+
+Found in plan 62's row L52 follow-up 4, while recording #1469's findings, and
+filed on 2026-10-09.
+
+## 68 - The merge line's hold has no floor on its pair count, so one pair can hold a run (OPEN)
+
+**A day on which the judge read one pair, and its two readings disagreed, can
+hold the merge line where it was.** `set_merge_line.py`
+(`backend/idhazh/stages/set_merge_line.py`) works out the day's two rates over
+however many pairs it read: "disagreed" over the pairs read twice, and "could
+not tell" over the pairs whose two readings agreed. It hands both to `gates` in
+`backend/idhazh/similarity/fit.py`, which holds the run, as `JUDGE_UNSTABLE` or
+`JUDGE_UNCERTAIN`, when a rate passes its mark, `disagreement_max` or
+`unclear_max`. No floor counts the pairs behind the rate. The console prints no
+share for fewer than `console.min_attempts_for_rate` pairs
+(`config/appearance.json`), so the run can hold the line on a share the console
+calls too few to report. Reasoned from the code, not measured: once the record
+is large enough to pass the gate on its size, which `gates` checks first, one
+disagreeing pair on a day is enough.
+
+**The console now shows such a day as held, with its counts.** Since #1448
+(plan 62's row L40), the Judgement page's agreement chart draws no dot for a
+rate under that floor, and its strip prints the day's counts, while the merge
+line above it marks the day held.
+
+**Doing nothing costs a line that stays where it was on a day whose evidence
+is one pair, once the merge switch is on.** While
+`assemble.same_story.adaptive_dedup_threshold.enabled` in `config/idhazh.json`
+is `false`, every build groups at the committed floor, whatever the fit holds.
+
+**The next move is a ruling, not code: whether one pair should hold a run is a
+question for whoever owns the merge line's fit, Andre's area (CLAUDE.md section
+14).** If Andre rules a floor, the fix is in `gates` or in what
+`set_merge_line.py` hands it, with a test on pairs the test builds. Level 2 -
+the rule that holds the line, which the fitted rows record and the Judgement
+page draws.
+
+Found by plan 62's row L40 (#1448), its third follow-up, and filed on
+2026-10-08.
+
+## 67 - A browser test of a summary with a paragraph break failed once, and passed when run again (OPEN)
+
+**One browser test found no story drawn as two paragraphs, once.** "A summary
+with a paragraph break is drawn as two paragraphs"
+(`frontend/tests/item-card.spec.ts`, line 318), in the `reader` project,
+failed in CI run 37779056528, attempt 1, at 12:49 UTC on 2026-10-08, in the
+checks of #1431 (browser job 113317369182). The page drew stories, so the
+check at line 334 passed, but none of them drew more than one paragraph, so
+the check at line 336, "the canary story with a break drew one paragraph",
+found none where the canary gives exactly one. A re-run of the job, attempt 2
+(job 113323035071), passed. #1431 changed the cost of one article on Hardware
+(`frontend/src/lib/console/machine/article-cost.ts`), two console specs, one
+docs page and plan 62. It did not touch that spec, or
+`frontend/src/lib/components/DigestItem.svelte`, which draws each paragraph of
+a summary.
+
+**Doing nothing costs a red browser job each time it comes back, and a
+re-run.** How often that is, nobody knows: it has been seen once. The run's
+trace is in its `playwright-traces` artifact, which expires on 2026-10-15.
+
+**The next move is a worker's: make the failure come back where it can be
+watched.** Run this one test in the `reader` project a few hundred times with
+Playwright's `--repeat-each` on a canary build, and read the trace of a run
+that fails: it shows whether the story with a break had not been drawn yet,
+or was drawn as one paragraph. The spec's `open` waits for the page to load
+and for its theme, not for every story, so check the first case first. A
+raised timeout or a retry would hide the cause, not explain it (CLAUDE.md
+Guardrail #5). Level 2 - the fix may be in `DigestItem.svelte`, which every
+reader sees, rather than in the test.
+
+Found in the checks of plan 62's row L37 (#1431), and filed on 2026-10-08.
+
+## 66 - The plan status utility splits a quoted row title wherever "and" appears in it (OPEN)
+
+**A Depends-on cell that quotes another row's title loses a piece of that
+title to the parser, whenever the title itself contains the word "and".**
+`backend/utilities/plan_status.py`, line 343, reads a Depends-on cell with
+`for piece in re.split(r",|;| and ", text):`, which splits on the literal
+substring " and " anywhere in the cell, including inside a quoted title. Plan
+62's row L48 depends on plan 55's row "The reader chooses the chart and the
+columns it draws"; the parser splits that title at its own " and ", so it
+looks for a row named `plan 55's row "The reader chooses the chart` and a row
+named `the columns it draws" (holds ...)`, finds neither, and reports two
+false `dependency-not-found` findings for L48 (seen on a direct run against
+`origin/main`, and carried by #1432).
+
+**The next move is a worker's: stop splitting inside a quoted title**, such as
+by matching a quoted span first and splitting only the text outside it, or by
+reading the Depends-on cell's row references with a dedicated small parser
+instead of a blanket `re.split`. Level 1 - one regular expression in one
+function; a wrong version shows as a spurious finding against a row whose
+dependency is in fact present, which a reader can confirm from the cell
+itself.
+
+Found on 2026-10-08, confirmed on `origin/main` by a direct run of
+`plan_status.py --plan` against plan 62.
+
+## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
+
+**A retention task that a person runs with `--from` and `--to`, and that finds
+nothing, ends `not-due` instead of `outside-range`.** `TaskContext.period_range`
+in `backend/idhazh/gardener/context.py` holds either the range a person named
+or, on a scheduled wake, the window the runner built: `runner.run` fills it
+from `scheduled_range` when no range was named. A retention task reads that one
+field, so it cannot tell the two apart, and its pass keeps the idle word
+`not-due` that `Pass` in `backend/idhazh/gardener/one_at_a_time.py` starts
+with. Only the compaction chooses its own idle word, and it is `outside-range`
+whenever a person named a range. `task-planned` still shows the range a person
+named, because the runner hands that event the range itself, not the field.
+Plan 60's row 21 found it on 2026-10-07.
+
+**Doing nothing costs a person who named a range the wrong advice about it.**
+`task-finished` says "nothing has reached its line yet", the sentence for a
+scheduled wake. The one that helps is the sentence for `outside-range`:
+"nothing that may be taken is inside the range named; widen it, or run the
+task without one".
+
+**The next move is a worker's: keep the person's range apart from the scheduled
+window on `TaskContext`, and let a retention pass that finds nothing inside a
+person's range end `outside-range`, as the compaction's does.** Level 1 - the
+idle word of a retention task run by hand; a wrong version shows on the first
+such run.
+
+Found by plan 60's row 21 (#1387), and filed on 2026-10-07.
+
+## 64 - The canary's telemetry step refuses a repository path spelled with a short name (OPEN)
+
+**Where `TEMP` is a short 8.3 name, with a `~1` in it, a canary build in a copy
+under it stops in its telemetry step with `ValueError: ... is not in the
+subpath of ...`.** `main()` in
+`backend/idhazh/telemetry/publish/public_telemetry.py` prints each shard it
+writes as `path.relative_to(config.REPO_ROOT)` (lines 237 and 248).
+`config.REPO_ROOT` is resolved (`backend/idhazh/config.py` line 61), so it
+spells the long name. The shard's path comes from `--public`, which
+`frontend/scripts/build-canary.mjs` passes as it spelled the copy's path, and
+`main()` does not resolve it, so the two spellings of one folder do not
+compare. Plan 62's row L25 met it on 2026-10-07 (Windows, Python 3.14.2).
+
+**Doing nothing costs a canary build in any copy named by a short `TEMP`,
+after the build's earlier steps have run.**
+[run-the-gates.md](../docs/how-to/run-the-gates.md#run-a-new-test-against-the-base-commit)
+now names the base-commit copy by the long form of `TEMP` (row L25, #1384),
+which steers around it; a copy named any other way still stops.
+
+**The next move is a worker's: resolve the path before `relative_to`, in both
+places `main()` prints one.** Level 1 - two lines of one command's output; a
+wrong version stops the first canary build that meets a short name.
+
+Found by plan 62's row L25 (#1384), and filed on 2026-10-07.
+
+## 63 - The plan status utility does not do what its docstring says (OPEN)
+
+**`backend/utilities/plan_status.py`'s docstring does not match the command it
+describes.** Its own usage line reads `python backend/utilities/plan_status.py
+--plan 23    # one plan`, but `--plan` is `action="append", required=True,
+help="Named plan path. Repeatable."`: it takes a path, such as
+`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`, not a bare plan
+number, so the docstring's own example fails before it reads a line. The same
+docstring says the utility "imports nothing from idhazh and reads no
+configuration, so it runs from a fresh clone with any supported Python and no
+install," but `read_plans()` does `from utilities.named_inputs import
+named_files`, an import that only resolves once the project is installed; run
+that same example with a Python that has not installed the project, and the
+command stops with `ModuleNotFoundError: No module named 'utilities'`. Plan
+62's text update confirmed both after row L7, on 2026-10-07.
+
+**Doing nothing costs a worker who copies the docstring's own example into a
+terminal: the bare number is refused, and on a fresh clone with no install the
+same line fails at its first import, though the docstring promises neither
+failure.**
+
+**The next move is a worker's: correct the docstring's example to a real plan
+path, and either make the no-install claim true by moving the import inside
+the project, or drop the claim and say what install the command needs.**
+Level 1 - a docstring and, if the owner keeps the no-install claim, one
+import; a wrong version is obvious on the next run.
+
+Found by plan 62's text update after row L7, and filed on 2026-10-07.
+
+## 62 - In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses (OPEN)
+
+**In a worktree with no `.venv`, `npm run test:changed` stops with "The
+selected Python executable does not exist." whenever it selects a test
+group.** `pythonPath` in `frontend/scripts/run-checks.ts` finds no `.venv` and
+falls back to the bare name `python`, or `python3` off Windows (line 182). The
+launcher starts its test lock with that name, which the system finds on the
+`PATH`, and hands the same name to the run inside the lock as `IDHAZH_PYTHON`
+(line 220). That run calls `pythonPath` again, which requires `IDHAZH_PYTHON`
+to name a file that exists (lines 174 to 176), and a bare name does not. So the
+fallback can never work. Plan 62's row L20 met it on 2026-10-07.
+
+**Doing nothing costs a stopped check in every worktree without a `.venv`, and
+the time to find out why.** The workaround is to set `IDHAZH_PYTHON` to the
+full path of a Python, or to set up `.venv` first, as
+[run-the-gates.md](../docs/how-to/run-the-gates.md#set-up-the-backend-environment)
+says. [gates-and-builds.md](../docs/reference/agent-notes/gates-and-builds.md)
+carries the symptom and the workaround where an agent looks for them.
+
+**The next move is a worker's: hand the inner run a full path.** One way is for
+the fallback to ask that Python for its own path, `sys.executable`, before it
+hands the path on. Level 1 - one function of the test launcher, and a wrong
+version stops the first check that uses it.
+
+Found by plan 62's row L20 (#1371), and filed on 2026-10-07.
+
+## 61 - Three backend command lines stamp log records in local time (OPEN)
+
+**Three backend command lines stamp each log record with the machine's local
+time, not UTC** (CLAUDE.md section 2). `backend/idhazh/cli.py` line 541,
+`backend/idhazh/gardener/cli.py` line 87 and `backend/idhazh/telemetry/cli.py`
+line 135 set the format `%(asctime)s %(levelname)s %(name)s %(message)s` and
+keep the clock `logging` uses by default, which is local time. The stamp names
+no zone, so nothing on the line says which clock it read. Plan 62's row L7 saw
+it on 2026-10-07: `site-weight` printed 11:46 when it was 09:46 UTC.
+
+**The three do not share one logging setup.** Each command line calls
+`logging.basicConfig` on its own (lines 539, 85 and 133), with the same three
+arguments.
+
+**Doing nothing puts every log time off by its machine's distance from UTC:
+two hours on the machine where row L7 saw it.** A GitHub runner's local time is
+UTC, so a workflow's log is right, and the fault shows only on a machine set to
+another zone, such as a developer's.
+
+**The gardener's part is fixed by plan 60's row "Every gardener log line is one
+JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
+install one handler through `settings_or_none`, and each line it writes carries
+`at`, the record's own instant in UTC as ISO-8601 with `Z`.
+`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
+in the test process and in a fresh one. The other two command lines,
+`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
+local time and need a fix of their own: the records they log carry a UTC time
+and say so, with a test that reads one. Level 1 - the time printed on each log
+line, and a wrong version shows on the first line.
+
+Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
+
+## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (CLOSED 2026-10-08)
+
+**When the data explorer opens, it fetches each chosen ledger's three indexes
+twice.** Plan 62's row L10 saw it on 2026-10-07, on the live site and on a
+local build, both before and after its own change (#1360). An index is fetched
+with `cache: 'no-store'` (`frontend/src/lib/data/fetched-bytes.ts`), so the
+second read is a request of its own, not a copy the browser kept. The likely
+cause, an estimate from reading the page and not measured, is two callers that
+each read the indexes: `updateCostAndColumns` in
+`frontend/src/routes/console/data-explorer/+page.svelte` asks for the window's
+cost (`askCost`), then for each ledger's columns, through `askColumns` since
+#1360 and through a `DESCRIBE` sent to `ask` before it.
+
+**Doing nothing costs three extra small requests for each chosen ledger, every
+time the page opens.** What the page shows is not wrong.
+
+**Closed on 2026-10-08 by #1435**, plan 55's row "The page reads each index once
+before a run, and the ledger list raises no accessibility warning". The cause
+was not the two callers guessed above: the page keeper
+(`frontend/src/lib/data/page-keeper.ts`) keeps each index's read, so
+`askCost` and `askColumns` share one. Opened from a link or a kept run, the
+page started a cost pass for the restored selection, and `refreshRegistry()`
+then called `startAfresh()`, which dropped every index the page had read, so
+the next pass read them all again. On `origin/main` at 62da7be9a,
+`refreshRegistry` drops the page's reads only when the reader presses Refresh,
+and the test "opened from a link, the page reads each index and listing once
+before a run" in `frontend/tests/console-data-explorer.spec.ts` checks, on a
+ledger it builds, that no `.json` file under `state/` is read twice before Run.
+Level 1.
+
+Found by plan 62's row L10 (#1360), and filed on 2026-10-07.
 
 ## 59 - Reading named days of a door ledger lists every raw day folder the ledger holds (OPEN)
 
@@ -134,6 +496,12 @@ being published twice, so each is checked by name.
 
 Found on 2026-10-05 by plan 60's row 10 (#1307), whose `workflow-runs` task reads
 seven named days of the gardener's own record at every wake.
+
+Since #1335 a ledger's raw root can also hold a `set-aside/` folder, and the
+reads that walk a whole raw root - `ledger.raw_days`, `list_raw_files` and
+`named_trees.raw_days` - log it as a stray folder (plan 60's row 18 report).
+The fix above stops that warning in a read of named days, and a walk it keeps
+still logs it.
 
 ## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
 
@@ -184,33 +552,49 @@ all on the red run and 361 on the green one: 7 percent less time, not more. A
 page script that never finished and a browser that stopped drawing look the
 same in this trace, so it cannot say which one happened.
 
+**A second stall came in main's own checks.** "THE ORACLE: every fact is
+reachable without a mouse > the platform reads the figure by the sentence, not
+by its marks" (`frontend/tests/item-visual.spec.ts`, line 471), another test of
+the same spec, failed in CI run 37796300534, the checks main ran on f668b3e62
+(#1439), in its browser job (job 113376700083) at 15:02 UTC on 2026-10-08.
+`page.evaluate` waited out the test's 180-second limit at line 123, where
+`drawnDay` calls `revealDayDrawings`: the step the first stall stopped in. The
+next commit on main that CI ran on, 60f33fa4b (#1440, run 37799982887), passed
+it. #1439 changed the Judgement route, the module it reads its line from, that
+module's test, the test group list, one docs page and plan 62, and not that
+spec or its helper. The two stalls meet the bar this entry set: a second stall
+in CI opens a row.
+
 **Doing nothing costs a red browser job each time it comes back, three runner
-minutes and a re-run.** How often that is, nobody knows: it has been seen once.
+minutes and a re-run.** How often that is, nobody knows: it has been seen
+twice in CI, on 2026-10-04 and on 2026-10-08.
 
 **The next move is a worker's: make the stall come back where it can be
 watched.** Run this one test a few hundred times with Playwright's
 `--repeat-each`. At 1.6 seconds a run, 400 runs take about 11 minutes, an
 estimate. A stall caught that way shows whether a page script or the browser
 stopped. If none comes back, a second stall in CI opens a row, as defect 51
-does. The run's trace is kept in its `playwright-traces` artifact until
-2026-10-11. A raised timeout or a retry would hide the stall, not explain it
-(CLAUDE.md Guardrail #5). Level 2 - the fix is in the day page or in a helper
-that three specs share.
+does. The first run's trace is kept in its `playwright-traces` artifact until
+2026-10-11, and the second run's artifact expires on 2026-10-15. A raised
+timeout or a retry would hide the stall, not explain it (CLAUDE.md
+Guardrail #5). Level 2 - the fix is in the day page or in a helper that three
+specs share.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
+different tests, and filed on 2026-10-04. Seen again on 2026-10-08 in main's
+checks of #1439.
 
-## 56 - A byte-range test counts a correct 304 as a failure (OPEN)
+## 56 - A byte-range test counts a correct 304 as a failure (FIXED 2026-10-06)
 
-**A browser test of reading a year file by byte range failed once on a 304
+**A browser test of reading a year file by byte range keeps failing on a 304
 that its own setup makes correct.** "A year file whose ETag changed after the
 browser kept part of it is still read by byte range"
 (`frontend/tests/ledger-ranges.spec.ts`, line 310 today and 271 on the commit
-that failed) failed in CI run 37218615995, attempt 1, at about 17:00 UTC on
-2026-10-04, and a re-run of the job passed. The test lets the browser keep an
-answer for 1 second, reads the year file, gives the file a new ETag (its
-`redeploy` step), waits 2 seconds, reads the file again from a new page, and
-expects the test's host to answer every GET with a 206.
+that failed first) failed first in CI run 37218615995, attempt 1, at about
+17:00 UTC on 2026-10-04, and a re-run of the job passed. The test lets the
+browser keep an answer for 1 second, reads the year file, gives the file a new
+ETag (its `redeploy` step), waits 2 seconds, reads the file again from a new
+page, and expects the test's host to answer every GET with a 206.
 
 **The host's own request log settles the cause.** The run's
 `playwright-traces` artifact keeps it, as `ledger-ranges/requests.json`, until
@@ -222,19 +606,35 @@ asks that only when its copy is older than the 1 second the test allows, so
 the read took longer than that, and the host answered 304, which is right. The
 read's answer still matched the disk, which the test checks first.
 
-**Doing nothing costs a red browser job whenever that read takes more than a
-second, and a re-run.** The site is not wrong: Pages lets the browser keep an
-answer for 600 seconds, and 304 is the right answer to a browser checking its
-copy.
+**It failed twice more the same way, and the second time in main's own
+checks.** CI run 37382246965, the checks of #1326, failed it on attempt 1 (job
+id 112007006566) at about 22:28 UTC on 2026-10-05, and a re-run of the job
+passed. CI run 37427112258, the checks main ran when #1328 merged, failed it
+in the browser job (job id 112149278674) at about 07:05 UTC on 2026-10-06, and
+that run stays red. The failed assertion prints the request it counted. In
+both runs that request is a GET for byte 0 of
+`compact/host-fingerprint/yearly/2026/2026.parquet`, answered 304 with no
+body. Its `If-None-Match` names the ETag the host was serving:
+`"6ac43266-4fe1"` in run 37382246965 and `"6ac4ab97-4fe1"` in run
+37427112258. Its address carries a `read` mark that no other read uses
+(`read=37617a44d53a84f5` and `read=f9688832d6ad26de`), so the copy the browser
+checked came from that same read. That is the request the host's log showed
+the first time, so the cause is the same.
 
-**The next move is a worker's.** Only what the first read kept has to be out
-of date, so the test can let the browser keep answers for the site's 600
-seconds again before the second read starts. Every GET of the second read is
-then a 206, and the test still reads a file whose ETag changed. Level 1 - one
-test.
+**Doing nothing costs a red browser job whenever that read takes more than a
+second, and a re-run.** It has cost that three times in three days, and once
+it was the one failure that turned main's own checks red. The site is not
+wrong: Pages lets the browser keep an answer for 600 seconds, and 304 is the
+right answer to a browser checking its copy.
+
+**Fixed on 2026-10-06 by #1354.** The test sets the host back to Pages' 600
+seconds after its 2-second wait and before the second read starts, so only what
+the first read kept is stale and every GET of the second read is a 206. Level 1 -
+one test.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
+different tests, and filed on 2026-10-04. The two later failures were added on
+2026-10-06.
 
 ## 55 - The query-door page names a deleted test, so nothing may hold the rule it states (OPEN)
 
@@ -262,6 +662,13 @@ published ledger's page-weight key, and what the build copies.
 If one does, the page names it instead, Level 0. If none does, restore a
 bounded test that reads only named config and never scans the frontend tree,
 Level 2.
+
+On 2026-10-08 the page stopped naming the deleted test, and says instead that
+no test checks the rule. A search of `backend/tests/contracts/` on `origin/main`
+at 702b00be7 found none that does. The rule holds today: the one panel that
+asks the door, `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, asks
+it for `host-fingerprint`, which is published. The bounded test is still the
+next move.
 
 Found by Fowler's review of plan 60 on 2026-10-04 (item 17), and filed the same
 day.
@@ -397,7 +804,14 @@ so a second one opens a row to reproduce and fix it. A retry in
 parquet, so it is not the fix (CLAUDE.md Guardrail #5). Level 2 - the canary
 build, and every browser group behind it, read this program's answer.
 
-Found on 2026-09-30 by plan 50's row 9, on the merge of #1166.
+**A second abort reproduced it.** In PR #1428's first browser job (CI run
+37773872779, attempt 1, job 113299900513), the same step printed its whole
+answer and then aborted the same way, on 2026-10-08; attempt 2 passed. The two
+occurrences now meet the bar this entry set: a second abort opens a row to
+reproduce and fix it.
+
+Found on 2026-09-30 by plan 50's row 9, on the merge of #1166. Reproduced on
+2026-10-08 in PR #1428's first browser job.
 
 ## 50 - A publisher link on the home page named a story the page did not draw, so a news run's site build failed (CLOSED 2026-09-30)
 
@@ -437,6 +851,13 @@ all eight frontend groups, and so a canary site build. Counted on `main` on
 2026-09-30, the same rule catches all 14 helpers under `backend/tests/` and the 14
 test modules two folders down, in `backend/tests/gardener/tasks/`. A row that
 edits one helper is asked to run the whole local suite for it.
+
+Plan 60's row 35 met it on 2026-10-08: `frontend/scripts/test-scope.ts` takes a
+backend test module as one only at most one folder under `backend/tests/`, so a
+change to `backend/tests/gardener/tasks/test_yearly_expiry.py` alone falls to
+"shared or unknown input; full coverage", which selects every frontend group and
+turns on CI's browser job (`ciAnswer` does so for any group but `backend` and
+`logic`).
 
 **The home is `test-scope.ts`**: send a file under `backend/tests/` that is not a
 test module to the backend group alone, since no frontend test or script reads
@@ -804,7 +1225,7 @@ committed header, or the contract's own field list.
 
 Execution owner: this plan's row 26 worker; for each key cell, a bounded fixture pair differing only in that cell must stay separate, and dropping the cell must fail without deriving the expected answer from the key constant.
 
-## 25 - `host_model` is a column nothing fills, and two rulings disagree (OPEN)
+## 25 - `host_model` is a column nothing fills, and two rulings disagree (CLOSED 2026-10-04)
 
 `backend/idhazh/contracts/council_shard_outcome.py` declares `host_model`. No
 writer fills it.
@@ -816,8 +1237,10 @@ rejected recording the machine per shard, on the grounds that the digest
 pipeline already characterises the same runner pool and the probe wants 1.9 GiB
 on a job whose two processes already hold up to 9.02 GiB in 16 GB.
 
-Both cannot be right. A person settles which, and then the column is either
-filled or migrated out the way defect 24 describes.
+The council record rationale
+([llm-council.md](../docs/architecture/publishing/llm-council.md#the-venue-files-the-row-not-the-tenant))
+keeps machine details out of each row. The replacement contract refuses a
+filled legacy cell during migration.
 
 Found 2026-09-21, while the council's own record was being built.
 

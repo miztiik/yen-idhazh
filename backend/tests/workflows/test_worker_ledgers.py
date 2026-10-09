@@ -10,10 +10,11 @@ import pytest
 from conftest import REPO_ROOT, writer_identity
 from retention._trees import health_row
 
-from idhazh import ledger, path_classes, telemetry
+from idhazh import ledger, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemStage
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
@@ -267,9 +268,42 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("plan", COMMIT_STEPS["plan"]),
         ("assemble", FINGERPRINT_STEP),
+        ("assemble", JOB_CLOCK_STEP),
         ("assemble", HARVEST_STEP),
         ("assemble", REVIEW_STEP),
     }
+
+
+def test_every_job_that_records_a_machine_also_closes_its_row() -> None:
+    """A probe with no clock is a half-row for ever, and nothing said so.
+
+    The probe opens the row at job start and the clock fills the four cells only
+    the end of a job can know. A job that runs one and not the other leaves a row
+    that reads as a job which cost nothing to run - and `assemble` did exactly
+    that from 2026-09-17, because it took the probe and nobody noticed the other
+    half was missing.
+
+    Asked of every probing job rather than of a list written again here, so a new
+    job that takes the probe owes the clock without an edit to this test.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    for job_name in sorted(FINGERPRINT_JOBS):
+        names = [step.get("name") for step in _steps(workflow, job_name)]
+        assert JOB_CLOCK_STEP in names, (
+            f"the {job_name} job records a machine and never closes the row: it has "
+            f"{FINGERPRINT_STEP!r} and no {JOB_CLOCK_STEP!r}, so job_seconds stays empty"
+        )
+        assert names.index(FINGERPRINT_STEP) < names.index(JOB_CLOCK_STEP), (
+            f"the {job_name} job clocks itself before it has measured the machine"
+        )
+        script = _substitute(
+            _script(_step(workflow, job_name, "name", JOB_CLOCK_STEP), f"job {job_name} clock")
+        )
+        assert JOB_CLOCK_COMMAND in script, f"{job_name} must run {JOB_CLOCK_COMMAND}"
+        assert f"{FINGERPRINT_JOB_FLAG} {FINGERPRINT_JOBS[job_name]}" in script, (
+            f"the {job_name} job does not clock itself as {FINGERPRINT_JOBS[job_name]}, so the "
+            "clock's half would land on another job's row"
+        )
 
 
 def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
@@ -367,66 +401,39 @@ def test_the_eval_rows_travel_with_the_shard_that_filed_them() -> None:
         assert (REPO_ROOT / carrier).is_dir(), f"{carrier} must be in a fresh checkout"
 
 
-def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_union() -> None:
+def test_a_file_one_writer_owns_takes_no_merge_driver() -> None:
     """Asked of git rather than of a pattern matcher written here.
 
     `.gitattributes` is the file that decides, so the question goes to the tool
     that reads it. A second implementation of its globbing could agree with this
     test and disagree with the merge.
 
-    Two classes and two answers. A file named for one run, attempt, job and
-    shard has exactly one writer, so there is nothing for a driver to settle and
-    git answers `unspecified` - its ordinary text merge, which stops the push if
-    two sides ever did change one of them. A collection two jobs append
-    independent rows to takes `merge=union`, and `idhazh.path_classes.UNION_SAFE` is
-    this repository's own list of those. The list is read here rather than
-    copied, so a collection that joins it without a line in `.gitattributes`
-    fails in the same commit.
-
-    Every tree under `state/` carried a union driver until 2026-09-19, which is
-    what let a second attempt at one job stack a row the first attempt had
-    already pushed. `state/feed-health` was the tree that showed why the
-    written-once name replaced it: two plan jobs of one night can hold different
-    verdicts on one feed, and a union there kept both and made the
-    disagreement quiet.
+    A file named for one run, attempt, job and shard has exactly one writer, so
+    there is nothing for a driver to settle and git answers `unspecified` - its
+    ordinary text merge, which stops the push if two sides ever did change one
+    of them. Every tree under `state/` carried a union driver until 2026-09-19,
+    which is what let a second attempt at one job stack a row the first attempt
+    had already pushed.
 
     No path has to exist. `check-attr` matches a name against the rules and
     never opens a file, and a committed date literal in a test is a date that
     stops being interesting.
     """
     one_writer = [
-        ledger.day_shard_relpath(
-            which,
-            date=SUBSTITUTED_DATE,
-            run_id=f"{SUBSTITUTED_DATE}-1",
-            attempt=1,
-            job=ServerJob.WORK,
-            shard=1,
-        )
-        for which in DAY_TREES
-    ]
-    one_writer.append(
         telemetry.committed_trace_relpath(
             run_id=f"{SUBSTITUTED_DATE}-1", attempt=1, job=ServerJob.WORK, shard=1
         )
-    )
-    shared = [
-        entry if entry.endswith(".csv") else f"{entry}/2026/01/01/a.csv"
-        for entry in path_classes.UNION_SAFE
     ]
 
     answered = subprocess.run(
-        ["git", "check-attr", "merge", "--", *one_writer, *shared],
+        ["git", "check-attr", "merge", "--", *one_writer],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
     ).stdout.splitlines()
 
-    assert answered == [
-        *(f"{path}: merge: unspecified" for path in one_writer),
-        *(f"{path}: merge: union" for path in shared),
-    ]
+    assert answered == [f"{path}: merge: unspecified" for path in one_writer]
 
 
 @requires_bash
@@ -482,22 +489,32 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
 
 
 def test_assemble_hands_back_no_tree_a_worker_wrote_into() -> None:
-    """Handing a day tree back would delete the rows this job is about to commit.
+    """Handing a writer's tree back would delete the rows this job is about to commit.
 
     A lost race is answered by restoring the refreshed paths from the tip and
     running the producer again. That is right for a file two runs rebuild to
-    different bytes, and it is destructive for a day tree: the restore takes the
-    tip's copy of the whole directory, so this attempt's own file in it - named
-    for this run and written by nothing else - goes with it and the producer does
-    not write it again.
+    different bytes, and it is destructive for a tree of written-once files: the
+    restore takes the tip's copy of the whole directory, so this attempt's own
+    file in it - named for this run and written by nothing else - goes with it
+    and the producer does not write it again.
 
-    Asked of every declared tree rather than of the ones a shard happens to fill
-    today, so a tree that joins the set is covered the day it is declared.
+    Asked of every tree a writer files its own file into - the trace tree and
+    each door ledger's raw folder - rather than of the ones a shard happens to
+    fill today, so a ledger that joins the door is covered the day it is
+    declared.
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+    state = Path(ledger.STATE_DIRNAME)
+    written_once = [
+        ledger.tree_root(state, LedgerName.TRACES).as_posix(),
+        *(
+            ledger.raw_root(state, which).as_posix()
+            for which in LedgerName
+            if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+        ),
+    ]
 
-    for which in DAY_TREES:
-        tree = f"{ledger.STATE_DIRNAME}/{which.value}"
+    for tree in written_once:
         covered = [path for path in refreshed if tree == path or tree.startswith(f"{path}/")]
         assert not covered, (
             f"{covered} hands back {tree}, and a writer's own file in it is deleted by "

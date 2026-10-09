@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-09
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -245,7 +245,11 @@ column - four series or one - and the rules are not negotiable per chart:
  lie along one line and wrap only when the next one does not fit. Each value
  keeps the room its widest reading needs, so an entry does not shift sideways as
  the pointer moves from `9` to `1,204` - and never more room than the strip is
- wide. The strip is a CSS container and the reserve is capped at its width, so on
+ wide. A day nothing measured prints its not-measured sentence once, in place of
+ every entry, so that sentence is no entry's reading and holds no room in any of
+ them; a phone's strip would otherwise put every value on a line of its own the
+ moment its window held such a day. The strip is a CSS container and the
+ reserve is capped at its width, so on
  a phone a value whose widest reading would not fit takes the strip's width
  rather than pushing the page sideways, and every value that does fit keeps its
  room at every width. Measured 2026-09-28: an uncapped reserve pushed
@@ -262,6 +266,14 @@ column - four series or one - and the rules are not negotiable per chart:
 - **It opens on a resting column and is never blank.** The prerendered document
  carries that column's numbers in words, so a reader with no script still gets
  one column read out to him, and the panel never changes size as it fills.
+- **A strip of one column names no resting column and no keys.** At the 1-day
+ window, and wherever one column is all a chart drew, the heading is the column
+ alone, `15 Jun 2030` and never `15 Jun 2030, the newest day`, and the hint line
+ says nothing of Left, Right or Escape, because each needs a second column. Where
+ one column still offers an action, the line says only that: `Click or Enter
+ lists this one day's jobs.` Otherwise the line keeps its room, blank and hidden
+ from screen readers, so no panel changes height with the window. Reader chose
+ the words and Jony the room, on 2026-10-07.
 
 An engine-drawn chart takes the same strip through
 [../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte). The action goes on
@@ -331,6 +343,12 @@ and the panel never changes size. A tap selects a record and leaves it
 selected, because a thumb cannot hover. Such a chart carries
 `data-readout-records` with the count.
 
+Voices' source strip rests on the first judged source's newest recorded day.
+If no source is judged, it uses the first unjudged source's newest recorded
+day. This is the newest day of that source, not the newest day across all
+sources. Escape and a mouse leaving return to the same record; an empty or
+absent record offers no square readout.
+
 **No chart mark carries a `title` attribute or an SVG `<title>`.** A native
 tooltip needs a mouse held still over the mark: a thumb cannot raise it, a
 keyboard cannot raise it, and on a 7 px square it covers the neighbours being
@@ -387,9 +405,19 @@ as of 2026-09-19 while the scores it sits between run from 0.73 to 0.99. A panel
 that draws the population cannot draw the distance.
 
 **So the axis is the line and one day's legal fall, never the band.** It runs
-from two days' fall below the line to one day's fall above it - one fall cap
-either side of `floor_min`, both off `config/idhazh.json`, so the window is the
-same width every day and two days of this panel compare. The cap is not a score
+from two days' fall below the line to one day's fall above it. The line is the
+one the newest published day was built with: the line its last build wrote into
+that day's run record. Where the record holds none - a day built before 18 Sep
+2026, or a record the site build cannot read - the rule a build follows works
+it out. With `adaptive_dedup_threshold.enabled` off, that is `floor_min`. With
+it on, it is the newest line a fit applied in the days a build looks back over,
+or `floor_min` if no fit applied one
+([autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md#what-chose-094-measured-on-the-cosine-alone)).
+The record comes first because the nightly fit files its row after most of that
+day's builds ran, so the rule alone can name a line no build used. The merge
+line's rule and the verdict split are drawn at the same line.
+The fall cap is off `config/idhazh.json`, so the window is the same width every
+day and two days of this panel compare. The cap is not a score
 in the config: it is `max_down_bins` slots of `bin_width`, and the contract
 derives the score from them, so the panel multiplies the same two numbers.
 Measured on the built page at 1440: the margin drew at **5.8 px of a 1033 px

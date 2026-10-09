@@ -41,6 +41,7 @@
 
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../charts/machine';
+import { daysBetween, type TimeWindow } from '../charts/viewport';
 import { inferenceConfig, runConfig } from './config';
 import { machineRecord } from './host-fingerprint';
 import { itemHealthRows } from './ledger-rows';
@@ -282,6 +283,23 @@ export interface MachineRun {
 	clocks: ClockCheck;
 }
 
+/** Whether a run carries the model server's own counters.
+ *
+ * Only the machine record holds the two cells the server itself wrote: the
+ * prompt tokens it read and the seconds it spent reading them. So a run made of
+ * article rows alone carries none, and nor does a run whose machine record
+ * holds the probe and the clocks and neither cell. One cell from one shard is
+ * enough: a run with one written server figure is not a run with none.
+ *
+ * A refused run answers by the same cells. Its figures cannot be read, but
+ * where its machine records hold one of them it was written down that day. It
+ * has no merged shards to read, so `oneRun` records the answer on it.
+ */
+export function carriesServerCounters(run: MachineRun | RefusedRun): boolean {
+	if ('why' in run) return run.serverCountersWritten;
+	return run.promptTokens.from > 0 || run.readSeconds.from > 0;
+}
+
 /** A run whose rows cannot be made into one run, and what stopped it.
  *
  * Never dropped silently. The machine record writes its row in two halves at
@@ -296,6 +314,9 @@ export interface RefusedRun {
 	rows: number;
 	/** Plain words: what could not be reconciled. */
 	why: string;
+	/** Whether one of the run's machine records holds a cell the server itself
+	 * wrote. Two that disagree are still figures written down that day. */
+	serverCountersWritten: boolean;
 }
 
 /** Every run the two ledgers describe, and every run they could not. */
@@ -506,6 +527,15 @@ function foldItem(carry: ItemFold, row: Record<string, string>): void {
 	if (queued !== null) carry.queueWaits.push(queued);
 }
 
+/** Whether one machine row holds a cell the server itself wrote, read the way
+ * `mergeHost` reads it: trimmed, and a number. */
+function holdsServerCounter(row: Record<string, string>): boolean {
+	return (
+		measured((row.server_prompt_tokens ?? '').trim()) !== null ||
+		measured((row.server_prompt_seconds ?? '').trim()) !== null
+	);
+}
+
 /** The machine record's halves for one shard, merged. Null where they disagree. */
 function mergeHost(rows: Record<string, string>[]): HostCells | null {
 	const held = new Map<string, string>();
@@ -698,7 +728,13 @@ function oneRun(
 ): MachineRun | RefusedRun {
 	const rows = hosts.length + health.length;
 	const date = hosts[0]?.date ?? health[0]?.date ?? '';
-	const refuse = (why: string): RefusedRun => ({ runId, date, rows, why });
+	const refuse = (why: string): RefusedRun => ({
+		runId,
+		date,
+		rows,
+		why,
+		serverCountersWritten: hosts.some(holdsServerCounter)
+	});
 
 	const days = new Set([...hosts, ...health].map((row) => row.date ?? ''));
 	if (days.size > 1) {
@@ -906,14 +942,14 @@ export function machineCounters(
 	return { runs, refused };
 }
 
-/** One row per job per run of the machine record, read from its packed files.
+/** One row per job per run of the machine record in `window`, read from its packed files.
  *
  * A job's two halves are one row once packed. Through `STATE_ROOT` like every
  * other ledger read, so a test can point the whole tree at a fixture and a
  * canary build cannot reach the real one.
  */
-export async function hostRows(days: number = LEDGER_WINDOW_DAYS): Promise<Record<string, string>[]> {
-	return (await machineRecord(days)).rows;
+export async function hostRows(window: TimeWindow): Promise<Record<string, string>[]> {
+	return (await machineRecord(window)).rows;
 }
 
 /** What each run's plan decided its shard count was, by run id.
@@ -954,11 +990,11 @@ export function machineLimits(): MachineLimits {
  * The one caller a route needs. Reading happens here and nowhere else, so
  * `machineCounters` stays drivable from a fixture.
  *
- * `days` covers all three reads - both packed ledgers and the manifests - so
+ * `window` covers all three reads - both packed ledgers and the manifests - so
  * they can never answer over different days.
  */
-export async function loadMachineCounters(days: number = LEDGER_WINDOW_DAYS): Promise<MachineCounters> {
-	const hosts = await hostRows(days);
-	const health = await itemHealthRows(days);
-	return machineCounters(hosts, health.rows, plannedShards(days), machineLimits());
+export async function loadMachineCounters(window: TimeWindow): Promise<MachineCounters> {
+	const hosts = await hostRows(window);
+	const health = await itemHealthRows(window);
+	return machineCounters(hosts, health.rows, plannedShards(daysBetween(window.start, window.end)), machineLimits());
 }

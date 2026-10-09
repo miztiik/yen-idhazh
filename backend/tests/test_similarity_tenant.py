@@ -21,6 +21,7 @@ from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJ
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry
 from idhazh.council.tenancy import Tenant
+from idhazh.ledger import staging
 from idhazh.similarity import tenant
 
 #: A night the tests ask this judge about. Any date inside a window would do -
@@ -116,18 +117,34 @@ def test_this_judge_splits_its_work_the_way_its_draw_is_dealt() -> None:
     assert tenant.TENANT.shard_count == config.load(CONFIG_DIR).app.council.shards
 
 
-def test_the_prefix_this_judge_stages_covers_the_store_every_unit_writes() -> None:
-    """One prefix, so a ledger this judge gains later is staged the day it is written.
+def test_this_judge_stages_each_ledger_it_writes_where_the_registry_files_it() -> None:
+    """One staged path a ledger, read off the registry, so a ledger that moves moves its path.
 
-    A list of the ledgers as they stand would commit the day a new one is added
-    and drop it on every night until somebody noticed.
+    The pairs and the instrument rows go through the ledger door, so they are
+    staged under `state/raw/`, and the folders they filed CSV into are staged by
+    nothing - not by name, and not by a parent folder holding them. Every other
+    ledger this judge writes is staged where it still sits.
     """
-    under_the_prefix = ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, A_NIGHT)
-
-    assert tenant.TENANT.committed_paths == (
-        f"{ledger.STATE_DIRNAME}/{ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix[0]}",
+    staged = tenant.TENANT.committed_paths
+    old_csv_folders = (
+        "state/content-similarity-judge/scored-pairs",
+        "state/content-similarity-judge/metrics",
     )
-    assert under_the_prefix.startswith(tenant.TENANT.committed_paths[0] + "/")
+
+    assert staged == tuple(staging.staged_path(which) for which in tenant.WRITTEN_LEDGERS)
+    assert {
+        "state/raw/content-similarity-judge/scored-pairs",
+        "state/raw/content-similarity-judge/metrics",
+    } <= set(staged)
+    assert not [
+        path
+        for path in staged
+        for old in old_csv_folders
+        if old == path or old.startswith(f"{path}/")
+    ], "a staged path still covers a folder the judge no longer writes"
+    assert all(
+        ledger.entry(which).prefix[0] == tenant.JUDGE_ID for which in tenant.WRITTEN_LEDGERS
+    ), "this judge stages a ledger outside its own family"
 
 
 def test_this_judge_names_no_night_the_council_did_not_ask_about(tmp_path: Path) -> None:

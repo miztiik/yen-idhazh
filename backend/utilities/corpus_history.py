@@ -61,8 +61,10 @@ cadence.
 
 It sits here and not in `backend/idhazh/` because it runs git, and nothing in
 the package may start a process (`backend/tests/test_canaries.py`). Its module
-scope is the standard library alone; `idhazh` is imported by the one function
-that reads the declaration and binds the task.
+scope is the standard library alone: `idhazh` is imported by the one function
+that reads the declaration and binds the task, and `idhazh.crash_trace` where
+a crash is printed, so a run that cannot be recorded names the exception's type
+and frames and never its text.
 
 Exit codes:
   0  squashed and pushed, or nothing was old enough and the run was pushed, or a dry run
@@ -81,7 +83,6 @@ import os
 import re
 import subprocess
 import sys
-import traceback
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -395,8 +396,10 @@ def squash_history(
         except CannotRewriteError as refusal:
             print(f"nothing was pushed: {refusal}", file=sys.stderr)
             return EXIT_CANNOT_REWRITE
-        except Exception:
-            traceback.print_exc()
+        except Exception as failure:
+            from idhazh import crash_trace
+
+            crash_trace.print_trace(failure)
             print("nothing was pushed: the run could not be recorded", file=sys.stderr)
             return EXIT_CANNOT_REWRITE
 
@@ -486,6 +489,7 @@ def _squash_as_declared(
         git_sha=_git(repo, "rev-parse", "HEAD").strip(),
         owned_folders=tuple(policy.owns),
         listing=FileListing.from_paths(repo, (), folders=policy.owns),
+        first_ledger_year=settings.config.first_ledger_year,
     )
 
     def record() -> tuple[str, ...]:
@@ -548,4 +552,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # A crash prints where it broke, never what it said. The printer is imported
+    # from this checkout's `backend/`, as the plan job's programs import it.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from idhazh import crash_trace
+
+    crash_trace.install()
     raise SystemExit(main())

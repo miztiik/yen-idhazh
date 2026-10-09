@@ -43,15 +43,19 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import ChartReadout from './ChartReadout.svelte';
 	import { failureLoad, type FailurePoint, type FailureStage } from '$lib/charts/glance';
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { countDays, nameSpan } from '$lib/console/span-words';
+	import type { PanelState } from '$lib/console/waiting';
 	import { shortDate } from '$lib/format';
 
 	let {
 		rows,
 		window,
+		panelState,
 		minAttempts,
 		height,
 		width,
@@ -62,6 +66,7 @@
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
+		panelState: PanelState;
 		minAttempts: number;
 		/** The whole SVG, margins included. */
 		height: number;
@@ -175,7 +180,7 @@
 	 */
 	function sentence(stage: FailureStage): string {
 		if (stage.reached === 0) {
-			return `Nothing reached this stage in these ${windowDays} days.`;
+			return `Nothing reached this stage in ${nameSpan(windowDays)}.`;
 		}
 		if (stage.rate === null) {
 			return `${grouped(stage.failures)} failed of the ${grouped(stage.reached)} that reached it. Too few to give a rate - ${minAttempts} needed.`;
@@ -189,18 +194,12 @@
 	 * every point, so nothing is lost by keeping segments to two or more here.
 	 */
 	function segments(points: readonly FailurePoint[]): string[] {
-		const runs: string[][] = [];
-		let current: string[] = [];
-		points.forEach((point, index) => {
-			if (point.rate === null) {
-				if (current.length > 1) runs.push(current);
-				current = [];
-				return;
-			}
-			current.push(`${centre(index)},${rateY(point.rate)}`);
-		});
-		if (current.length > 1) runs.push(current);
-		return runs.map((run) => run.join(' '));
+		return indexedRuns(points, (point) => point.rate !== null)
+			.filter((run) => run.length > 1)
+			.map((run) => run.flatMap((index) => {
+				const rate = points[index].rate;
+				return rate === null ? [] : [`${centre(index)},${rateY(rate)}`];
+			}).join(' '));
 	}
 
 	// The base each band stacks on - the running total of the bands beneath it,
@@ -254,8 +253,8 @@
 
 	const headline = $derived(
 		load.empty
-			? `No item was planned in these ${windowDays} days.`
-			: `Failure rate against volume, ${windowDays} days. ${load.stages
+			? `No item was planned in ${nameSpan(windowDays)}.`
+			: `Failure rate against volume, ${countDays(windowDays)}. ${load.stages
 					.map((stage) => `${stage.label}: ${sentence(stage)}`)
 					.join(' ')}`
 	);
@@ -330,7 +329,7 @@
 	data-failure-panels
 	data-windowed="failure-rate"
 	data-window-days={windowDays}
-	aria-label="Failure rate against volume, over {windowDays} days"
+	aria-label="Failure rate against volume, over {countDays(windowDays)}"
 >
 	<div class="flex flex-wrap items-baseline justify-between gap-3">
 		<div>
@@ -361,9 +360,17 @@
 		{/if}
 	</div>
 
-	{#if load.empty}
+	{#if load.empty && panelState === 'loading'}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-loading>
+			Reading the monthly files. This chart is not ready yet.
+		</p>
+	{:else if load.empty && panelState !== 'quiet' && panelState !== 'ready'}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-unavailable>
+			This chart is unavailable.
+		</p>
+	{:else if load.empty}
 		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-empty>
-			No item was planned in these {windowDays} days, so there is no rate to give and no volume to
+			No item was planned in {nameSpan(windowDays)}, so there is no rate to give and no volume to
 			give it against.
 		</p>
 	{:else}

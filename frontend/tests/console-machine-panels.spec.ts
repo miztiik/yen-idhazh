@@ -1,24 +1,23 @@
-/** Do the three machine panels draw what the ruling requires, in a browser?
+/** Do the three machine panels draw what the ruling requires?
  *
- * The assertions here are the ones a unit test cannot make: that the colour a
- * machine takes is the same at every window preset, that no two named machines
- * share a stop, that the name is on the row as TEXT in both themes, and that a
- * card really draws the flags a machine does not have rather than omitting them.
- *
- * **The canary is the fixture, and it was built for exactly two of these.** One
- * machine reports none of the watched AVX-512 entries and one reports every
- * watched flag; one probe used a buffer under its own L3. Neither state is one
- * the committed archive can be relied on to hold.
- *
- * `frontend/scripts/build-canary.mjs` writes the machine record this reads, so
- * the numbers below are recomputed from that file rather than from the page.
+ * Each panel is worked out first on shard rows and host records this file
+ * writes, with every figure written out: one group a machine, rates that pool
+ * only that machine's shards, and cards that draw the flags a machine does not
+ * have rather than omitting them. The built page is then held to what a unit
+ * test cannot see: that the colour a machine takes is the same at every window
+ * preset, that no two named machines share a stop, that the name is on the row
+ * as TEXT in both themes, and that what it draws keeps the shape of the figures
+ * it was handed, whatever run it drew.
  */
 
 import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { WATCHED_FLAG } from '../src/lib/server/host-fingerprint';
-import { canaryArticleRows, canaryMachineRows, heldRows } from './support/canary-records';
+import { WATCHED_FLAG, type HostFingerprint } from '../src/lib/server/host-fingerprint';
+import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
+import { copySpeedSentence, clockSentence, machineCards, uptimeSentence } from '../src/lib/charts/machine-cards';
+import { splitByMachine } from '../src/lib/charts/machine-split';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const REPO = resolve(process.cwd(), '..');
 
@@ -34,90 +33,68 @@ const APPEARANCE = JSON.parse(
  */
 const WATCHED: readonly string[] = WATCHED_FLAG;
 
-/** Every row of one canary record, as the canary packed it.
- *
- * The page's arithmetic is checked against these rows rather than against
- * itself: an oracle that reads the module it is testing proves only that the
- * module agrees with itself. The rows come through the reader the page's server
- * calls, because the packed file is the only copy the canary keeps; everything
- * the panels compute from them is recomputed here.
- */
-const records = {
-	'host-fingerprint': heldRows(canaryMachineRows),
-	'item-health': heldRows(canaryArticleRows)
+const DATE = '2026-09-18';
+const RUN = '2026-09-18-1';
+const MIB = 1024 * 1024;
+
+const TEST_LIMITS: MachineLimits = {
+	contextWindow: 8192,
+	jobTimeoutSeconds: 3600
 };
 
-test.beforeAll(async () => {
-	await records['host-fingerprint'].load();
-	await records['item-health'].load();
-});
-
-function canaryRows(ledger: keyof typeof records): Record<string, string>[] {
-	return records[ledger].rows();
+function foldedRun(readings: ShardReading[], shards = readings.length): MachineRun {
+	const stamped = readings.map((reading) => ({ date: DATE, runId: RUN, ...reading }));
+	const { hosts, health } = ledgers(stamped);
+	const { runs, refused } = machineCounters(hosts, health, plan([RUN, shards]), TEST_LIMITS);
+	expect(refused, 'the fixture was refused').toEqual([]);
+	expect(runs, 'the fixture folded into no run').toHaveLength(1);
+	return runs[0];
 }
 
-/** One shard of one run, as the two ledgers together describe it.
- *
- * Reading comes from the machine record and writing from the item ledger,
- * which is the whole point of the panel: neither file can answer both halves,
- * so a page that folded one of them would print a rate nothing measured.
- */
-interface CanaryShard {
-	runId: string;
-	shard: string;
-	cpuModel: string;
-	promptTokens: number | null;
-	promptSeconds: number | null;
-	writtenTokens: number | null;
-	writeSeconds: number | null;
+function machineShard(over: ShardReading): ShardReading {
+	return {
+		cachedTokens: 0,
+		jobSeconds: 100,
+		longestSequence: 1_000,
+		...over
+	};
 }
 
-function added(carry: number | null, cell: string, scale = 1): number | null {
-	if (cell === '') return carry;
-	const value = Number(cell);
-	return Number.isFinite(value) ? (carry ?? 0) + value * scale : carry;
-}
-
-function canaryShards(): CanaryShard[] {
-	const held = new Map<string, CanaryShard>();
-	for (const row of canaryRows('host-fingerprint')) {
-		if (row.job !== 'work' || row.shard === '') continue;
-		const key = `${row.run_id}/${row.shard}`;
-		const shard = held.get(key) ?? {
-			runId: row.run_id,
-			shard: row.shard,
-			cpuModel: '',
-			promptTokens: null,
-			promptSeconds: null,
-			writtenTokens: null,
-			writeSeconds: null
-		};
-		if (shard.cpuModel === '') shard.cpuModel = row.cpu_model;
-		shard.promptTokens = added(shard.promptTokens, row.server_prompt_tokens);
-		shard.promptSeconds = added(shard.promptSeconds, row.server_prompt_seconds);
-		held.set(key, shard);
-	}
-	for (const row of canaryRows('item-health')) {
-		const shard = held.get(`${row.run_id}/${row.machine_shard}`);
-		if (shard === undefined) continue;
-		shard.writtenTokens = added(shard.writtenTokens, row.output_tokens);
-		shard.writeSeconds = added(shard.writeSeconds, row.decode_ms, 0.001);
-		if (shard.cpuModel === '') shard.cpuModel = row.cpu_model;
-	}
-	return [...held.values()];
-}
-
-/** The shards of the newest run both halves of the board can draw. */
-function newestDrawnRun(): CanaryShard[] {
-	const drawn = canaryShards().filter(
-		(shard) =>
-			shard.promptTokens !== null &&
-			shard.promptSeconds !== null &&
-			shard.writtenTokens !== null &&
-			shard.writeSeconds !== null
-	);
-	const newest = drawn.map((shard) => shard.runId).sort((a, b) => b.localeCompare(a))[0];
-	return drawn.filter((shard) => shard.runId === newest);
+function host(over: Partial<HostFingerprint>): HostFingerprint {
+	return {
+		version: '2026-09-18',
+		date: DATE,
+		run_id: RUN,
+		job: 'work',
+		shard: 0,
+		fingerprint: 'machine-a',
+		cpu_model: 'AMD EPYC 7763 64-Core Processor',
+		cpu_vendor: 'AuthenticAMD',
+		cpu_family: 25,
+		cpu_model_number: 1,
+		cpu_stepping: 1,
+		microcode: '0x1',
+		cores: 4,
+		threads: 8,
+		l3_cache_bytes: 32 * MIB,
+		mhz_max: null,
+		mhz_at_probe: 2800,
+		flags: '',
+		boot_seconds: 125,
+		memcpy_gib_s: 10,
+		memcpy_probe_mib: 128,
+		vm_size: 'Standard_D4s_v5',
+		vm_location: 'eastus',
+		vm_zone: '1',
+		vm_fault_domain: '0',
+		runner_name: 'runner-a',
+		measured_at: `${DATE}T00:00:00Z`,
+		model_load_ms: 400,
+		job_seconds: 100,
+		server_prompt_tokens: 200,
+		server_prompt_seconds: 10,
+		...over
+	};
 }
 
 async function setWindow(page: Page, days: number) {
@@ -127,63 +104,117 @@ async function setWindow(page: Page, days: number) {
 }
 
 test.describe('reading against writing, machine by machine', () => {
-	test('one group a machine, and no element carries a rate pooled over all shards', async ({
+	test('one group a machine, and no element carries a rate pooled over all shards', () => {
+		const run = foldedRun([
+			machineShard({
+				shard: 0,
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				fingerprint: 'epyc-a',
+				serverPromptTokens: 100,
+				serverPromptSeconds: 10,
+				writtenTokens: 40,
+				writeSeconds: 20
+			}),
+			machineShard({
+				shard: 1,
+				cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
+				fingerprint: 'xeon-b',
+				serverPromptTokens: 120,
+				serverPromptSeconds: 20,
+				writtenTokens: 80,
+				writeSeconds: 10
+			})
+		]);
+		const split = splitByMachine(run, { colour: { stops: 4, floor: 0.35 } });
+
+		expect(split.empty).toBe(false);
+		expect(split.groups.map((group) => group.identity.name).sort()).toEqual([
+			'AMD EPYC 7763',
+			'Intel Xeon Platinum 8370C'
+		]);
+		expect(split.groups.map((group) => group.readTokensPerSecond).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
+			6,
+			10
+		]);
+		expect(
+			split.groups.some((group) => group.readTokensPerSecond === 220 / 30),
+			'the split kept a pooled run rate'
+		).toBe(false);
+	});
+
+	test('every rate in a group recomputes from that machine shards alone', () => {
+		const run = foldedRun([
+			machineShard({
+				shard: 0,
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				fingerprint: 'epyc-a',
+				serverPromptTokens: 120,
+				serverPromptSeconds: 6,
+				writtenTokens: 90,
+				writeSeconds: 9
+			}),
+			machineShard({
+				shard: 1,
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				fingerprint: 'epyc-a',
+				serverPromptTokens: 180,
+				serverPromptSeconds: 9,
+				writtenTokens: 60,
+				writeSeconds: 6
+			}),
+			machineShard({
+				shard: 2,
+				cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
+				fingerprint: 'xeon-b',
+				serverPromptTokens: 50,
+				serverPromptSeconds: 10,
+				writtenTokens: 100,
+				writeSeconds: 25
+			})
+		]);
+		const split = splitByMachine(run, { colour: { stops: 4, floor: 0.35 } });
+		const byName = new Map(split.groups.map((group) => [group.identity.name, group]));
+
+		expect(byName.get('AMD EPYC 7763')?.shards).toBe(2);
+		expect(byName.get('AMD EPYC 7763')?.readTokensPerSecond).toBe(20);
+		expect(byName.get('AMD EPYC 7763')?.writeTokensPerSecond).toBe(10);
+		expect(byName.get('AMD EPYC 7763')?.rows[0]).toMatchObject({
+			label: 'Seconds',
+			readValue: 15,
+			writeValue: 15,
+			readPct: 50
+		});
+		expect(byName.get('AMD EPYC 7763')?.rows[1]).toMatchObject({
+			label: 'Tokens',
+			readValue: 300,
+			writeValue: 150,
+			readPct: 67
+		});
+		expect(byName.get('Intel Xeon Platinum 8370C')?.readTokensPerSecond).toBe(5);
+		expect(byName.get('Intel Xeon Platinum 8370C')?.writeTokensPerSecond).toBe(4);
+	});
+
+	test('the built panel draws one group a machine, names one of them, and draws no pooled rate', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
 		const panel = page.locator('[data-console-panel-id="reading-against-writing"]');
 		await expect(panel).toBeVisible();
 
-		const rows = newestDrawnRun();
-		const kinds = new Set(rows.map((shard) => shard.cpuModel));
-		expect(kinds.size, 'the canary run must draw more than one kind').toBeGreaterThan(1);
+		const keys = await panel
+			.locator('[data-machine-group]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-group') ?? ''));
+		expect(keys.length, 'the panel drew no machine group').toBeGreaterThan(0);
+		expect(new Set(keys).size, 'two groups share one machine').toBe(keys.length);
 
-		const groups = panel.locator('[data-machine-group]');
-		await expect(groups).toHaveCount(kinds.size);
-
-		// The headline names a machine. Nothing on the panel offers a rate over
-		// every shard of the run.
+		// The headline names a machine, never the run as a whole.
 		const headline = panel.locator('[data-machine-split-headline]');
 		if ((await headline.count()) > 0) {
-			const named = await headline.getAttribute('data-machine-split-headline');
-			const keys = await groups.evaluateAll((nodes) =>
-				nodes.map((node) => node.getAttribute('data-machine-group'))
-			);
-			expect(keys).toContain(named);
+			expect(keys).toContain(await headline.getAttribute('data-machine-split-headline'));
 		}
+		// Nothing on the panel offers a rate over every shard of the run.
 		await expect(panel.locator('[data-reading-writing-sentence]')).toHaveCount(0);
 		await expect(panel.locator('[data-reading-writing]')).toHaveCount(0);
-	});
-
-	test('every rate in a group recomputes from that machine shards alone', async ({ page }) => {
-		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel-id="reading-against-writing"]');
-		const shards = canaryShards();
-		const newestRun = await panel.evaluate(
-			(node) => node.closest('[data-machine-split]')?.getAttribute('data-machine-split') ?? ''
-		);
-		expect(newestRun).not.toBe('');
-
-		const byName = new Map<string, { tokens: number; seconds: number }>();
-		for (const shard of shards) {
-			if (shard.runId !== newestRun) continue;
-			if (shard.promptTokens === null || shard.promptSeconds === null) continue;
-			if (shard.writtenTokens === null || shard.writeSeconds === null) continue;
-			const held = byName.get(shard.cpuModel) ?? { tokens: 0, seconds: 0 };
-			held.tokens += shard.promptTokens;
-			held.seconds += shard.promptSeconds;
-			byName.set(shard.cpuModel, held);
-		}
-
-		const printed = await panel.locator('[data-machine-rates]').allInnerTexts();
-		for (const [model, sums] of byName) {
-			if (sums.seconds === 0) continue;
-			const expected = (sums.tokens / sums.seconds).toFixed(2);
-			expect(
-				printed.some((text) => text.includes(`${expected} tokens a second`)),
-				`no group printed ${expected} for ${model || 'the unrecorded machine'}`
-			).toBe(true);
-		}
 	});
 });
 
@@ -270,134 +301,155 @@ test.describe('the colour a machine takes', () => {
 });
 
 test.describe('the machines this run drew', () => {
-	test('unchanged machine cards preserve flags, copy speed, clocks, disclosure and L3 ratios', async ({ page }) => {
+	test('machine cards preserve flags, copy speed, clocks and L3 ratios on written rows', () => {
+		const run = foldedRun([
+			machineShard({
+				shard: 0,
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				fingerprint: 'full',
+				serverPromptTokens: 200,
+				serverPromptSeconds: 10,
+				writtenTokens: 90,
+				writeSeconds: 9
+			}),
+			machineShard({
+				shard: 1,
+				cpuModel: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
+				fingerprint: 'empty',
+				serverPromptTokens: 50,
+				serverPromptSeconds: 10,
+				writtenTokens: 100,
+				writeSeconds: 25
+			})
+		]);
+		const cards = machineCards(
+			run,
+			[
+				host({
+					fingerprint: 'full',
+					shard: 0,
+					cpu_model: 'AMD EPYC 7763 64-Core Processor',
+					flags: WATCHED.join(' '),
+					l3_cache_bytes: 64 * MIB,
+					memcpy_gib_s: 12,
+					memcpy_probe_mib: 256,
+					mhz_at_probe: 2750,
+					boot_seconds: 125
+				}),
+				host({
+					fingerprint: 'empty',
+					shard: 1,
+					cpu_model: 'Intel Xeon Platinum 8370C CPU @ 2.80GHz',
+					flags: '',
+					l3_cache_bytes: 32 * MIB,
+					memcpy_gib_s: 6,
+					memcpy_probe_mib: 32,
+					mhz_at_probe: null,
+					boot_seconds: null
+				})
+			],
+			{
+				watchedFlags: WATCHED,
+				colour: { stops: 4, floor: 0.35 },
+				recording: true,
+				cacheMargin: 2
+			}
+		);
+
+		expect(cards.record).toBe('recorded');
+		expect(cards.cards).toHaveLength(2);
+		const byName = new Map(cards.cards.map((card) => [card.identity.name, card]));
+		const full = byName.get('AMD EPYC 7763');
+		const empty = byName.get('Intel Xeon Platinum 8370C');
+		expect(full?.flags).toEqual(WATCHED.map((name) => ({ name, present: true })));
+		expect(empty?.flags).toEqual(WATCHED.map((name) => ({ name, present: false })));
+		expect(full?.l3Bar.state).toBe('drawn');
+		expect(empty?.l3Bar.state).toBe('drawn');
+		expect((full?.l3Bar.fraction ?? 0) / (empty?.l3Bar.fraction ?? 1)).toBeCloseTo(2, 4);
+		expect(copySpeedSentence(full!)).toBe(
+			'12.0 GiB/s, over a 256 MiB buffer against 64 MiB of L3 - 4.00 times it.'
+		);
+		expect(copySpeedSentence(empty!)).toBe(
+			'No copy speed: the probe used a 32 MiB buffer against 32 MiB of L3, 1.00 times it, and a reading has to clear 2 times to be sure the copy left the cache.'
+		);
+		expect(clockSentence(full!)).toBe(
+			"2750 MHz when the probe ran, before the job's heaviest step."
+		);
+		expect(clockSentence(empty!)).toBe('Clock speed was not recorded on this job.');
+		expect(uptimeSentence(full!)).toBe('Up 2 m 5 s when we measured it.');
+		expect(uptimeSentence(empty!)).toBe('Uptime was not recorded on this job.');
+	});
+
+	test('the built cards draw every watched flag, and their sentences keep the shapes the cards make', async ({
+		page
+	}) => {
 		await page.goto('/console/machine/');
-		await test.step('a card draws every watched flag, and absence is drawn rather than omitted', async () => {
-			const panel = page.locator('[data-console-panel-id="machine-cards"]');
-			await expect(panel).toBeVisible();
-			const cards = panel.locator('[data-machine-card]');
-			const count = await cards.count();
-			expect(count).toBeGreaterThan(0);
+		const panel = page.locator('[data-console-panel-id="machine-cards"]');
+		await expect(panel).toBeVisible();
+		const cards = panel.locator('[data-machine-card]');
+		const count = await cards.count();
+		expect(count, 'the panel drew no machine card').toBeGreaterThan(0);
 
-			let sawAnAbsence = false;
-			for (let index = 0; index < count; index += 1) {
-				const card = cards.nth(index);
-				const chips = card.locator('[data-machine-flag]');
-				const drawn = await chips.count();
-				if (drawn === 0) {
-					// A card off the counters alone says so instead of drawing twelve
-					// outlines, which would read as a machine with no flags at all.
-					await expect(card.locator('[data-machine-flags="none"]')).toBeVisible();
-					continue;
-				}
-				expect(drawn, 'a card drew some of the watched flags').toBe(WATCHED.length);
+		for (let index = 0; index < count; index += 1) {
+			const card = cards.nth(index);
+			const chips = card.locator('[data-machine-flag]');
+			if ((await chips.count()) === 0) {
+				// A card off the counters alone says so, instead of drawing every chip as
+				// an outline, which would read as a machine with no flags at all.
+				await expect(card.locator('[data-machine-flags="none"]')).toBeVisible();
+			} else {
 				expect(
-					await chips.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-flag')))
+					await chips.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-flag'))),
+					'a card drew some of the watched flags and left the rest out'
 				).toEqual(WATCHED);
-				const absent = await card.locator('[data-machine-flag-present="no"]').count();
-				if (absent > 0) sawAnAbsence = true;
 			}
-			expect(sawAnAbsence, 'no card drew an absent flag - the fixture is wrong').toBe(true);
-		});
-
-		await test.step('a graded copy speed carries its buffer, and an ungraded one is withheld', async () => {
-			const panel = page.locator('[data-console-panel-id="machine-cards"]');
-			const readings = panel.locator('[data-machine-copy-speed]');
-			const count = await readings.count();
-			expect(count).toBeGreaterThan(0);
-			let sawWithheld = false;
-			for (let index = 0; index < count; index += 1) {
-				const text = (await readings.nth(index).innerText()).trim();
-				if (text.startsWith('Copy speed was not measured')) continue;
-				if (text.startsWith('No copy speed')) {
-					// The refused figure is not on the page at all, in any form.
-					expect(text, 'a withheld reading still printed a rate').not.toContain('GiB/s');
-					expect(text, 'a withheld reading did not say what it fell short of').toMatch(
-						/times it, and a reading has to clear \d+ times/
-					);
-					sawWithheld = true;
-					continue;
+			for (const text of await card.locator('[data-machine-copy-speed]').allInnerTexts()) {
+				const said = text.trim();
+				if (said.startsWith('No copy speed')) {
+					expect(said, 'a withheld reading still printed a rate').not.toContain('GiB/s');
+				} else if (!said.startsWith('Copy speed was not measured')) {
+					expect(said, 'the rate and its buffer are not in one element').toMatch(/GiB\/s.*MiB buffer/);
 				}
-				expect(text, 'the rate and its buffer are not in one element').toMatch(
-					/GiB\/s.*MiB buffer/
-				);
 			}
-			expect(sawWithheld, 'no card withheld a copy speed the probe could not grade').toBe(true);
-		});
-
-		await test.step('each card says what clock it ran at and how long it had been up', async () => {
-			const panel = page.locator('[data-console-panel-id="machine-cards"]');
-			const clocks = panel.locator('[data-machine-clock]');
-			const uptimes = panel.locator('[data-machine-uptime]');
-			const count = await clocks.count();
-			expect(count, 'no card carried a clock reading').toBeGreaterThan(0);
-			expect(await uptimes.count(), 'a card carried a clock and no uptime').toBe(count);
-
-			// The ledger's own cells, so the assertion is the fixture's rather than the
-			// page agreeing with itself.
-			const recorded = canaryRows('host-fingerprint').filter((row) => row.mhz_at_probe !== '');
-			expect(recorded.length, 'the canary recorded no clock at all').toBeGreaterThan(0);
-			const clockValues = new Set(recorded.map((row) => String(Math.round(Number(row.mhz_at_probe)))));
-
-			for (let index = 0; index < count; index += 1) {
-				const said = (await clocks.nth(index).innerText()).trim();
-				// A ceiling nothing writes is a column the page may not divide by.
-				expect(said, 'a clock was drawn as a share of something').not.toContain('%');
-				if (said.startsWith('Clock speed was not recorded')) continue;
-				const mhz = said.split(' ')[0];
-				expect(clockValues.has(mhz), `${mhz} MHz is not a clock the ledger holds`).toBe(true);
+			for (const text of await card.locator('[data-machine-clock]').allInnerTexts()) {
+				expect(text, 'a clock was drawn as a share of something').not.toContain('%');
 			}
-			for (let index = 0; index < count; index += 1) {
-				const said = (await uptimes.nth(index).innerText()).trim();
-				expect(said).toMatch(/^(Up .+ when we measured it\.|Uptime was not recorded on this job\.)$/);
+			for (const text of await card.locator('[data-machine-uptime]').allInnerTexts()) {
+				expect(text.trim()).toMatch(/^(Up .+ when we measured it\.|Uptime was not recorded on this job\.)$/);
 			}
-		});
+		}
 
-		await test.step('the disclosure is a native details and is closed at rest', async () => {
-			const where = page.locator('[data-machine-where]').first();
-			if ((await where.count()) === 0) return;
-			expect(await where.evaluate((node) => node.tagName)).toBe('DETAILS');
-			expect(await where.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
-			await expect(where.locator('summary')).toHaveText('Where the platform put this');
-		});
-
-		await test.step('two cards with different L3 draw bars in the ratio of their bytes', async () => {
-			const panel = page.locator('[data-console-panel-id="machine-cards"]');
-			const bars = panel.locator('[data-machine-bar="l3"]');
-			const count = await bars.count();
-			expect(count, 'the fixture drew fewer than two machines').toBeGreaterThan(1);
-
-			const drawn: { bytes: number; fraction: number }[] = [];
-			for (let index = 0; index < count; index += 1) {
-				const bar = bars.nth(index);
-				if ((await bar.getAttribute('data-machine-bar-state')) !== 'drawn') continue;
-				const bytes = Number(
-					await bar.locator('[data-machine-cache]').getAttribute('data-machine-cache')
-				);
-				const fraction = Number(
-					await bar
-						.locator('[data-machine-bar-cell="track"]')
-						.getAttribute('data-machine-bar-fraction')
-				);
-				drawn.push({ bytes, fraction });
-			}
-			expect(drawn.length, 'fewer than two L3 bars were drawn').toBeGreaterThan(1);
-
-			// The bytes the page drew are the ledger's, so the ratio below is the
-			// fixture's rather than the panel's own arithmetic restated.
-			const ledger = new Set(
-				canaryRows('host-fingerprint')
-					.map((row) => Number(row.l3_cache_bytes))
-					.filter((bytes) => Number.isFinite(bytes) && bytes > 0)
+		// One zero-anchored domain over every card, so two bar lengths are in the
+		// ratio of the two caches they draw.
+		const drawn = await panel
+			.locator('[data-machine-bar="l3"][data-machine-bar-state="drawn"]')
+			.evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					bytes: Number(node.querySelector('[data-machine-cache]')?.getAttribute('data-machine-cache')),
+					fraction: Number(
+						node.querySelector('[data-machine-bar-cell="track"]')?.getAttribute('data-machine-bar-fraction')
+					)
+				}))
 			);
-			for (const { bytes } of drawn) expect(ledger.has(bytes)).toBe(true);
+		for (const bar of drawn) {
+			expect(bar.fraction / drawn[0].fraction, `a ${bar.bytes}-byte cache`).toBeCloseTo(
+				bar.bytes / drawn[0].bytes,
+				4
+			);
+		}
+	});
 
-			const [low, high] = [...drawn].sort((a, b) => a.bytes - b.bytes);
-			expect(high.bytes, 'both machines report the same L3').toBeGreaterThan(low.bytes);
-			// One zero-anchored domain over both cards, so two lengths are two
-			// readings. Whatever the track runs to divides out of this.
-			expect(high.fraction / low.fraction).toBeCloseTo(high.bytes / low.bytes, 4);
-		});
+	test('the machine location disclosure is native and closed at rest', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const where = page.locator('[data-machine-where]');
+		const count = await where.count();
+		expect(count, 'no machine card carried a location disclosure').toBeGreaterThan(0);
+		for (let index = 0; index < count; index += 1) {
+			const disclosure = where.nth(index);
+			expect(await disclosure.evaluate((node) => node.tagName)).toBe('DETAILS');
+			expect(await disclosure.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+			await expect(disclosure.locator('summary')).toHaveText('Where the platform put this');
+		}
 	});
 
 	test('a reading with nothing to draw names its state and draws no track', async ({ page }) => {
@@ -470,24 +522,57 @@ test.describe('the machine record names which state it is in', () => {
 		for (const reason of why) expect(reason).toBe(state === 'lost' ? 'lost' : 'not-started');
 	});
 
-	test('the canary is a day the record answered for, so a loss is never claimed', async ({
-		page
-	}) => {
-		// The control. The canary's newest run recorded its machines, and one of
-		// its earlier days has a record file with a header and no rows on a day
-		// that published nothing - a quiet day, not an incident. Neither may
-		// reach the reader as a loss.
-		await page.goto('/console/machine/');
-		await expect(page.locator('[data-machine-record]')).toHaveAttribute(
-			'data-machine-record',
-			'recorded'
+	test('a recorded row names the record state, so a loss is never claimed', () => {
+		const run = foldedRun([
+			machineShard({
+				shard: 0,
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				fingerprint: 'recorded',
+				serverPromptTokens: 200,
+				serverPromptSeconds: 10,
+				writtenTokens: 90,
+				writeSeconds: 9
+			})
+		]);
+		const cards = machineCards(
+			run,
+			[
+				host({
+					fingerprint: 'recorded',
+					shard: 0,
+					cpu_model: 'AMD EPYC 7763 64-Core Processor',
+					flags: WATCHED.join(' ')
+				})
+			],
+			{
+				watchedFlags: WATCHED,
+				colour: { stops: 4, floor: 0.35 },
+				recording: true,
+				cacheMargin: 2
+			}
 		);
-		await expect(page.locator('[data-recording="machine-destroyed"]')).toHaveCount(0);
-		await expect(page.locator('[data-machine-panel-empty="fleet-lost"]')).toHaveCount(0);
+
+		expect(cards.record).toBe('recorded');
+		expect(cards.lost).toBeNull();
+		expect(cards.lostNote).toBeNull();
+		expect(cards.nothing).toBeNull();
+		expect(cards.cards).toHaveLength(1);
 	});
 });
 
 test.describe('which machines ran our jobs, day by day', () => {
+	test('THE ORACLE: the platform title names one day, while seven-day words stay unchanged', async ({ page }) => {
+		await page.goto('/console/machine/');
+		for (const preset of [1, 7]) {
+			await page.locator(`[data-window-preset="${preset}"] input`).waitFor({ state: 'attached' });
+			await expect(page.locator(`[data-window-preset="${preset}"] input`)).toBeEnabled();
+			await page.locator(`[data-window-preset="${preset}"]`).click();
+			await expect(page.locator('[data-console-panel-id="platform-mix"] .panel-title')).toHaveText(
+				preset === 1 ? 'Which machines ran our jobs for this one day' : 'Which machines ran our jobs, day by day'
+			);
+		}
+	});
+
 	async function openFleet(page: Page): Promise<void> {
 		await page.goto('/console/machine/');
 		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');

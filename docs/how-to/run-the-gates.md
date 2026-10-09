@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-09
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -29,7 +29,7 @@ Documentation-only changes run a whitespace check, not either application suite.
 | Group | What it checks | Preparation |
 | --- | --- | --- |
 | `backend` | Named module and integration tests, or the full backend for shared or unknown inputs; ruff and mypy | Existing Python development environment |
-| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium |
+| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. One spec, `similarity-ledgers.spec.ts`, runs the Python backend |
 | `reader` | Reading pages, layout, filters, themes and read state | Canary build |
 | `console` | The operator dashboards | Canary build |
 | `panels` | A picture of every console panel that carries an id, at three widths in both themes; the sufficiency gates' witness panel; the panels `console.judged_panel_ids` opts in | Canary build |
@@ -60,6 +60,10 @@ Keep the section 12 browser smoke for a published-site change.
 The launcher checks the dependencies the selection needs before waiting for a
 test slot. A logic-only run does not probe Python packages or run pytest. It
 uses the existing Python standard-library lock helper for coordination only.
+One logic spec still runs the backend: `similarity-ledgers.spec.ts` files a
+fixture night through the ledger door and packs it, so the Python the launcher
+names needs the backend installed, as CI's site job installs it before
+`test:logic`.
 The tooling self-tests run when the test infrastructure changes, or with
 `--group all`; they are not added to every frontend run. Browser preparation
 still needs the Python producer. The launcher honors `IDHAZH_PYTHON` or
@@ -162,7 +166,9 @@ so it retains the sufficiency checks without generating review pictures.
 For a design review, dispatch CI on the review branch with `panel_captures=true`.
 That run uploads the `panel-captures` artifact on a pass or a fail. Locally,
 prepare the canary build, then run
-`npx playwright test --project panels tests/panel-captures.spec.ts`.
+`npx playwright test --project=panels tests/panel-captures.spec.ts`. Keep the
+`=`: with a space, Playwright reads the spec's path as a second project name
+and runs nothing.
 Leave `SKIP_PANEL_CAPTURES` unset for that command. The
 pictures land in `frontend/test-results/panels/` as
 `<panel-id>--<width>--<theme>--<state>.png` - every width in light and the
@@ -194,8 +200,10 @@ state commits cost nothing here, and `digest.yml` and `backfill.yml` run
 
 A contract change selects both languages and re-reads every committed day,
 because the shape a day is read through is the only thing that can invalidate a
-frozen one. There is no export step and nothing to compare: the three tests that
-bind the frontend's hand copies run inside the backend group.
+frozen one. There is no export step and nothing to compare: the frontend hand
+copies are held by the binding tests listed in the
+[contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
+which run inside the backend group.
 
 ## Direct backend checks
 
@@ -255,7 +263,7 @@ the copy afterwards:
 
 ```powershell
 $python = (Resolve-Path .\.venv\Scripts\python.exe).Path
-$copy = New-Item -ItemType Directory -Path (Join-Path $env:TEMP 'base-commit')
+$copy = New-Item -ItemType Directory -Path (Join-Path (Get-Item $env:TEMP).FullName 'base-commit')
 git archive --format=tar <base-commit> backend config tests pyproject.toml | tar -x -C $copy
 Copy-Item backend\tests\<folder>\test_<changed>.py (Join-Path $copy 'backend\tests\<folder>')
 Push-Location $copy; & $python -m pytest -n 0 backend/tests/<folder>/test_<changed>.py; Pop-Location
@@ -269,6 +277,33 @@ so the new test passes on "the base commit" while it ran the branch. Measured
 2026-10-05: one new test failed with the file in the copy and passed without it.
 The tell is a `rootdir:` line in the output naming a folder outside the copy;
 the copy's own `-q` hides that line when its settings were read.
+
+**A copied test that reads a workflow file needs the base commit's `.github` in
+the copy too:** add it to the archive, or the test fails on a missing file, a
+failure the base commit did not cause (2026-10-07).
+
+**In a copy of an older commit, one test module that cannot load stops the
+whole pytest run at collection:** add `--continue-on-collection-errors` so the
+cases that load still run, and name the module that did not load when you
+report the run (2026-10-08).
+
+**A canary build in the copy needs more of the tree.** Add `frontend` and the
+root `.gitignore` to the archive, run `git init` and commit the copy, and point
+`frontend\node_modules` at an installed one with a directory junction
+(`New-Item -ItemType Junction`); remove the junction with `cmd /c rmdir` before
+the copy, so the removal never reaches the folder it points at. The site build
+fingerprints its inputs through git: with no `.gitignore` its own output counts
+as an input, and it ends with "Build inputs changed during compilation". Run
+`build_canary_day.py` from the copy's root with `PYTHONPATH` set to the copy's
+`backend`, and `build-canary.mjs` from its `frontend` with `IDHAZH_PYTHON` set
+to an installed interpreter, so the copy's code is what packs. Name the copy by
+the long form of `TEMP`, as the block above does. Where `TEMP` is a short 8.3
+name, with a `~1` in it, the canary's telemetry step compares that spelling
+with the long one Python resolves for the repository root, and stops with
+`ValueError: ... is not in the subpath of ...` (2026-10-07, Windows, Python
+3.14.2). Compare entries and names, not bytes, and leave out the one clock: the
+name of each raw file the canary writes after packing holds the time of its
+write, so it differs between any two builds of one commit.
 
 ## Set up the backend environment
 
@@ -299,7 +334,7 @@ Two extras are declared. Install only what you need:
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML` | always - this is the gate set |
-| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
+| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it uses the current `tokenizers` range |
 
 `faithfulness` is the heavy one, and it is the only one a gate does not need. No
 test imports it. Spans need no extra at all: the sink writes a JSON line with the
@@ -374,7 +409,7 @@ anywhere has to be repointed.
 
 | Selector | What it holds |
 | --- | --- |
-| `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the three tests that bind the frontend's hand copies |
+| `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the frontend binding tests listed in the [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) |
 | `-m visual` | The picture's gate and ladder, its validator, the compiler that turns a plan into published marks, and the planted attacks aimed at the picture |
 | `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
 | `-m slow` | Every module whose average test runs over a second |
@@ -454,8 +489,9 @@ Run all three from the repository root. Each must be clean.
 
 **There is no schema export and no drift gate.** Both went on 2026-09-23 with
 the two generated trees they checked. What the frontend copies by hand is held
-in step by three tests in `backend/tests/contracts/`, which `pytest` above runs
-([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+in step by the tests listed in the
+[contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
+which `pytest` above runs.
 
 **There is no shell linter either.** `shellcheck` went on 2026-09-23 with
 `.github/scripts/`, the last shell this repository shipped as a file, and
@@ -498,6 +534,7 @@ npm run check
 npm run build
 npm run bundle-gate
 python -m idhazh site-weight --site-tree build
+python -m idhazh published-columns --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: it compiles
@@ -547,6 +584,15 @@ by that rate at `run.safety_ceiling_per_run` items a day and prints the answer i
 published days, to the alarm point and to the cap. **The size on the line above
 is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
+
+`published-columns` runs on the same built tree, immediately after `site-weight`.
+It reads only the parquet footers under the staged `state/` copy and checks that
+each published ledger file carries the columns its row contract declares. An
+older file that lacks a newer column is reported as history and still passes; a
+current-stamped file with different columns, a shared column with a different
+type, a newer file, or a published ledger without a door contract fails the
+build. A run that reads no parquet file for any published ledger with a door
+contract also fails, because the tree was probably not the built site.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it holds every route named in `config/idhazh.json` under the gzip guardrail
@@ -764,7 +810,11 @@ component's own directory, so a relative import inside it resolves from
 `frontend/test-results/` and finds nothing, while a `$lib/...` import still
 resolves. Write the component's imports through `$lib` and hand it its data as
 props; `frontend/tests/support/server-render.ts` compiles a component with its
-children, pointing each child's import at the child's compiled copy. The
+children, pointing each child's import at the child's compiled copy. A
+build-time constant is missing there too: `Icon.svelte` reads
+`__ICON_STROKE_PX__`, which `vite.config.ts` defines from
+`iconsConfig().stroke_px`, so a spec that renders it sets that global the same
+way first, or `render` throws `ReferenceError`. The
 alternative is a route that exists only to host a test, and that route ships to
 a reader.
 
@@ -814,7 +864,7 @@ Run this from `frontend/` to print the number this checkout will use, which is
 the same derivation the config runs:
 
 ```powershell
-node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
+node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd()).digest().readUInt32BE(0)%10000)"
 ```
 
 Check these conditions before trusting browser evidence.
@@ -840,6 +890,36 @@ Check these conditions before trusting browser evidence.
  screenshot. If it does not match, use the native Playwright capture runner;
  do not label that image with the requested width. A hidden embedded page can
  also suspend animation-frame waits, so make it visible before relying on them.
+
+### A Data explorer test serves the data it checks
+
+A Data explorer browser test that runs a question serves the ledger it asks
+about. It builds that ledger with `frontend/tests/support/ledger-lifecycle.ts`,
+which writes the three indexes and real Parquet files through the query engine.
+It serves the ledger to the page with `serveBuilt` from
+`frontend/tests/support/explorer-answer.ts`, pins its own UTC day with
+`openExplorer(page, day)`, and writes out the rows, files and sentences it
+expects. Serving a built ledger also switches the page's writers' tier off,
+because a built ledger has no writer's files. The archive host stays blocked
+unless the test serves it a root it built, with `serveArchiveToPage`. No test
+works out its expected answer by running the query door again over the canary
+or the committed data (owner ruling, 2026-10-05). The canary keeps only the
+explorer checks that do not depend on what it holds: layout, notices and
+browser storage.
+
+`runExplorer` watches the Run button before clicking it, then waits for that
+run to finish. A fast refusal can finish before the click returns. Watching
+after the click can miss it; checking only the answer can accept an older run.
+
+**Find a test that depends on what the canary holds by moving the canary day.**
+Set `DATE` in `backend/utilities/build_canary_day.py` to a later day, run the
+specs with `npm run test:changed -- --spec <name>`, which builds the canary
+again from the edited file, then set `DATE` back. A test that turns red reads
+what the canary holds. The move is a measurement and is never committed.
+`test:changed` stops a browser run at its first failure, so to count every red
+test, run Playwright on the specs directly against that build. Setting `DATE`
+back needs no clean-up by hand: the canary day build deletes every folder it
+writes before it writes, so the next build holds nothing from the moved day.
 
 ## A chart has no plot until somebody scrolls to it
 
@@ -1040,5 +1120,5 @@ precisely when an operator needs it.
 - [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
 - [../reference/test-selection.md](../reference/test-selection.md) - why a pull request runs only some of these, what that gives up, and what was rejected.
 - [../reference/ci-environment.md](../reference/ci-environment.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the three tests that replaced the drift gate.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) - the frontend binding tests and what each holds.
 - [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.

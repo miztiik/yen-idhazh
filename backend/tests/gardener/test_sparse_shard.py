@@ -26,7 +26,7 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState, Watermark
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
@@ -52,7 +52,9 @@ RUN_ID: Final = "2026-09-27-18012345678"
 AGED: Final = "state/old-days/2026/09/19/2026-09-19.txt"
 FRESH: Final = "state/old-days/2026/09/26/2026-09-26.txt"
 #: A configured trial root and period, both named by the declaration and the wake.
-STRAY: Final = "state/pipeline-tests-production-settings/seen/2026/06/25/2026-06-25.txt"
+STRAY: Final = (
+    "state/trial-traces/pipeline-tests/production-settings/2026/06/25/2026-06-25.txt"
+)
 #: What the fixture compaction reads before it writes its summary.
 COMPACTED: Final = "state/compact/gardener/monthly/2025/08.parquet"
 
@@ -182,10 +184,9 @@ def test_a_listing_github_cannot_size_runs_no_task_and_exits_1(
     )
 
     assert (outcome.exit_code, outcome.record, outcome.landing) == (EXIT_TASK_FAILED, None, None)
-    assert any(
-        "could not be listed, so no task ran" in line and "did not report a size" in line
-        for line in said
-    ), said
+    (line,) = [line for line in said if "could not be listed, so no task ran" in line]
+    assert "(ValueError at idhazh.gardener.file_listing:" in line, line
+    assert "did not report a size" not in line, "the line printed the exception's text"
     assert on_origin(origin, AGED) == FILES[AGED]
 
 
@@ -222,8 +223,8 @@ def test_a_deletion_the_commit_never_listed_lands_nothing(
 
 
 #: The ledger the month-closing shard packs, the wake it closes September on, and
-#: the days of September that hold a row. The planner's window on that wake names
-#: 2025-08 to 2025-10, so September is named by the month step as it runs.
+#: the days of September that hold a row. The planner names only the ledger's
+#: marks on that wake, so September is named by the month step as it runs.
 CLOSED: Final = LedgerName.VISUAL_PRUNES
 CLOSING_WAKE: Final = datetime(2026, 11, 15, 0, 40, tzinfo=UTC)
 SEPTEMBER_ROWS: Final = ("2026-09-12", "2026-09-20")
@@ -289,19 +290,6 @@ def a_ledger_on_origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple
             .to_json()
             .encode("ascii")
         )
-    mark = ledger.watermark_path(state_dir, CLOSED, Period.DAILY)
-    mark.write_bytes(
-        Watermark(
-            version=Watermark.schema_version(),
-            ledger=CLOSED,
-            period=Period.DAILY,
-            through="2026-10-01",
-            advanced_at="2026-10-02T00:41:00Z",
-            run_id="2026-10-02-1",
-        )
-        .to_json()
-        .encode("ascii")
-    )
     git(seeder, "add", "--all")
     git(seeder, "commit", "--quiet", "-m", "a packed ledger")
     git(seeder, "push", "--quiet", "origin", "HEAD:refs/heads/main")
@@ -311,7 +299,7 @@ def a_ledger_on_origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple
 def test_a_month_the_step_names_as_it_runs_is_closed_and_its_deletions_land(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The shard's listing named the planner's window; the month step names September itself.
+    """The shard's listing named only the ledger's marks; the month step names September itself.
 
     September's day files come from the commit when the step names them, arrive
     in the one download that reads them, and their deletions land beside the

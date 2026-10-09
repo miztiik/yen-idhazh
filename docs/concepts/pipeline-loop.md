@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -149,14 +149,12 @@ Three rules hold for all of them:
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 
 **A row ledger more than one job writes gives every writer its own file.** A
-writer writes one file of its own inside the day directory its own rows name -
-a CSV named for its run, its attempt at that run, its job and its shard, or a
-raw file the ledger door names for it - so no two writers of one
-ledger ever share a path, which is what a
-lost push race needs in order to cost a merge rather than the rows. Nothing has
-to be folded first: the file a writer closes is already the ledger, and the
-reader decides what two rows of one key mean at read time -
-`day_shards.settled_rows` for a CSV day, the door's `settle_rows` for a raw one.
+writer writes one raw file of its own inside the day folder its own rows name,
+and the ledger door names that file for it, so no two writers of one ledger
+ever share a path, which is what a lost push race needs in order to cost a
+merge rather than the rows. Nothing has to be folded first: the file a writer
+closes is already the ledger, and the reader decides what two rows of one key
+mean at read time, through the door's `settle_rows`.
 
 `state/host-fingerprint/` was the first ledger through it, from 2026-09-17. Ten
 jobs of one run each draw a machine and each record it, and on 2026-09-16 those
@@ -168,16 +166,12 @@ a repeat is visible to a reader: the count of rows in a day feeds a feed's share
 of the day and the day's own metrics.
 
 **A staging directory sat above all of them until 2026-09-22 and is gone.** A
-writer filed into `state/segments/` and a later fold read it into a `<DD>.csv`
-head, which left every ledger with one path two runs of one day both computed
-bytes for. Now the day directory is the ledger. The gardener's closed-day fold
-still runs, but only over a day no run will write again: it folds that day's
-writer files into one `settled.csv` to save files, and it changes no answer.
-
-The item-health, summary-quality-evals and host-fingerprint ledgers have since moved to the
-ledger door: each writer's file is a raw file under `state/raw/<ledger>/`, and a
-compaction rather than a fold packs a finished day
-([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
+writer filed into `state/segments/` and a later fold read it into one head file
+a day, which left every ledger with one path two runs of one day both computed
+bytes for. Every row ledger has since moved to the ledger door: each writer's
+file is a raw file under `state/raw/<ledger>/`, and a compaction rather than a
+fold packs a finished day
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)).
 
 See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
 

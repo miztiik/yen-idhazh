@@ -41,7 +41,7 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import config
+from idhazh import config, crash_trace
 from idhazh.assemble import day_dir, utc_now
 from idhazh.telemetry import inventory, item, prune, republish
 
@@ -74,7 +74,7 @@ SUBCOMMANDS: Final[tuple[Subcommand, ...]] = (
     Subcommand("publish", "Write one day's projections again from the day already on disk."),
     Subcommand(
         "prune",
-        "Delete one ledger's day files over a range of days. Reports and removes "
+        "Delete one ledger's rows over a range of days. Reports and removes "
         "nothing without --no-dry-run.",
         prune.add_arguments,
     ),
@@ -128,6 +128,9 @@ READERS: Final[dict[str, Callable[..., list[str]]]] = {
 def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.subcommand == "prune":
+        # A crash prints where it broke: a message can quote a ledger row it read.
+        crash_trace.install()
 
     settings = config.load(args.config)
     logging.basicConfig(

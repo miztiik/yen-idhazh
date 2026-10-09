@@ -1,0 +1,294 @@
+{
+  "assist": {
+    "result_limit": 10,
+    "search_min_days": 7,
+    "search_months": 1,
+    "similarity_floor": 0.35
+  },
+  "chart": {
+    "height_px": 220,
+    "hover_readout": true,
+    "palette": "categorical",
+    "readout_max_share": 1,
+    "sparkline_height_px": 36,
+    "tick_density": 6,
+    "width_px": 760
+  },
+  "console": {
+    "absent_hatch_degrees": 45,
+    "band_outlier_rows": 10,
+    "bandwidth_min_kinds": 3,
+    "chart_coverage_pct": 5.0,
+    "chart_height": 220,
+    "chart_minutes_target": 6.0,
+    "chart_rule_days": 14,
+    "chart_width": 760,
+    "completeness_grace_days": 1,
+    "context_cut_off_reason": "length",
+    "context_high_percentile": 99.0,
+    "default_window_days": 14,
+    "doubt_rows": 10,
+    "failure_list_max": 25,
+    "faithfulness_axis_floor_max": 75,
+    "faithfulness_axis_step": 5,
+    "feed_rows": 10,
+    "fleet_dot_max_px": 8,
+    "fleet_min_rows": 160,
+    "fleet_top_kinds": 4,
+    "judged_panel_ids": [
+      "platform-mix"
+    ],
+    "machine_colour_floor_share": 0.4,
+    "machine_colour_stops": 5,
+    "max_window_days": 366,
+    "min_attempts_for_rate": 5,
+    "min_window_days": 1,
+    "model_disk_reads_marked": 1,
+    "model_disk_reads_named": 1,
+    "pan_days": 7,
+    "panel_groups": {
+      "machine": [
+        {
+          "id": "what-the-machine-was-doing",
+          "panels": [
+            "two-clocks",
+            "processor-lost",
+            "disk-reads",
+            "machine-cards",
+            "reading-against-writing",
+            "platform-mix"
+          ],
+          "title": "What the machine was doing"
+        },
+        {
+          "id": "where-the-time-went",
+          "panels": [
+            "shard-board",
+            "tail-trend"
+          ],
+          "title": "Where the time went"
+        },
+        {
+          "id": "how-close-to-the-limits",
+          "panels": [
+            "memory-board",
+            "memory-held",
+            "context-headroom"
+          ],
+          "title": "How close we are to the limits"
+        },
+        {
+          "id": "what-the-model-spends",
+          "panels": [
+            "article-cost",
+            "prompt-reuse",
+            "read-against-written",
+            "counterfactual-cost"
+          ],
+          "title": "What the model spends"
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "pipelines",
+          "panels": [
+            "at-a-glance",
+            "run-health",
+            "site-cost-per-item",
+            "failure-mix",
+            "item-time-split",
+            "throughput-viewport",
+            "stage-timings",
+            "item-cost",
+            "run-timeline",
+            "chart-drawing",
+            "extraction"
+          ],
+          "title": ""
+        }
+      ],
+      "data-explorer": [
+        {
+          "id": "data-explorer",
+          "panels": [
+            "data-explorer-ask",
+            "data-explorer-rows",
+            "data-explorer-shape"
+          ],
+          "title": ""
+        }
+      ]
+    },
+    "plot_min_fill_share": 0.85,
+    "precision_axis_multiple": 10.0,
+    "processor_lost_pct_marked": 1.0,
+    "processor_lost_pct_named": 10.0,
+    "shimmer_after_ms": 400,
+    "source_rows": 10,
+    "timeline_bars": 120,
+    "today_anchor": "right",
+    "window_presets": [
+      1,
+      7,
+      14,
+      30,
+      90
+    ],
+    "zoom_factor": 1.5,
+    "explorer_bar_spread_share": 0.5,
+    "explorer_chrome": "workbench",
+    "explorer_cell_max_ch": 40,
+    "explorer_counter_from_share": 0.9,
+    "explorer_readout_lines": [
+      7,
+      3,
+      4,
+      3
+    ],
+    "explorer_notice_ms": 6000,
+    "explorer_editor_lines_shown": [
+      8,
+      4
+    ],
+    "explorer_examples": [
+      {
+        "id": "p99-by-machine",
+        "title": "p99 job time by machine kind",
+        "ledgers": [
+          "host-fingerprint"
+        ],
+        "days": 14,
+        "sql": "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds, count(job_seconds) AS jobs FROM \"host-fingerprint\" WHERE job_seconds IS NOT NULL GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
+      },
+      {
+        "id": "throughput-by-machine",
+        "title": "Prompt throughput by machine kind",
+        "ledgers": [
+          "host-fingerprint"
+        ],
+        "days": 14,
+        "sql": "SELECT cpu_model, sum(server_prompt_tokens) / sum(server_prompt_seconds) AS prompt_tokens_per_second, count(*) AS jobs FROM \"host-fingerprint\" WHERE server_prompt_seconds > 0 GROUP BY cpu_model ORDER BY prompt_tokens_per_second DESC"
+      },
+      {
+        "id": "feeds-gone-quiet",
+        "title": "Feeds with no good fetch in the span",
+        "ledgers": [
+          "feed-health"
+        ],
+        "days": 14,
+        "sql": "SELECT feed_id, count(*) AS checks, max(checked_at) AS last_checked FROM \"feed-health\" GROUP BY feed_id HAVING count(*) FILTER (WHERE outcome = 'ok') = 0 ORDER BY checks DESC"
+      },
+      {
+        "id": "why-items-failed",
+        "title": "What failed to summarize, and why",
+        "ledgers": [
+          "item-health"
+        ],
+        "days": 14,
+        "sql": "SELECT stage, code, count(*) AS items FROM \"item-health\" WHERE outcome = 'failed' GROUP BY stage, code ORDER BY items DESC"
+      },
+      {
+        "id": "scored-per-day",
+        "title": "Summaries scored, day by day",
+        "ledgers": [
+          "summary-quality-evals"
+        ],
+        "days": 14,
+        "sql": "SELECT date, count(*) AS scored FROM \"summary-quality-evals\" GROUP BY date ORDER BY date"
+      }
+    ],
+    "explorer_max_fetch_bytes": 67108864,
+    "explorer_max_rows": 1000,
+    "explorer_query_max_chars": 6939,
+    "explorer_link_max_bytes": 8192,
+    "explorer_reach_days": 365,
+    "explorer_row_page": 50,
+    "explorer_strip_shown": [
+      3,
+      6
+    ],
+    "explorer_chart_min_rows": 3,
+    "explorer_rank_max": 30,
+    "explorer_saved_max": 20,
+    "explorer_history_max": 10,
+    "explorer_save_name_max_chars": 40,
+    "explorer_series_floor_share": 0.05
+  },
+  "digest": {
+    "archive_page_size": 25,
+    "archive_recent_days": 14,
+    "archive_window_days": 30,
+    "desk_thin_max": 12,
+    "draw_same_story": true,
+    "filter_min_chars": 2,
+    "filter_settle_ms": 120,
+    "items_per_topic": 3,
+    "lead_also_covered_weight": 0.0,
+    "lead_cluster_floor": 3,
+    "lead_max_yesterday": 1,
+    "lead_rank_weight": 1.0,
+    "lead_shared_subject_weight": 0.2,
+    "leading_min": 3,
+    "leading_per_desk": 2,
+    "leading_stories": 5,
+    "offline_bytes_kept": 20000000,
+    "offline_days_kept": 14,
+    "offline_retired_through": 0,
+    "offline_version": 1,
+    "payload_slow_ms": 1200,
+    "pill_move_min": 2,
+    "read_mark_days": 14,
+    "repo_url": "https://github.com/miztiik/yen-idhazh",
+    "sections": [
+      "notice",
+      "leads",
+      "topics",
+      "items"
+    ],
+    "shell_seed_items": 15,
+    "show_filter": true,
+    "site_title": "Yen Idhazh",
+    "source_mark": true,
+    "tagline": "A daily digest that checks its own work.",
+    "theme_default": "dark",
+    "topic_pills_max": 5,
+    "visual_side": "trailing"
+  },
+  "frame": {
+    "breakpoints_px": [
+      640,
+      1024,
+      1400
+    ],
+    "console_max_px": 1600,
+    "gutter_max_px": 32,
+    "gutter_min_px": 16,
+    "measure_ch": 68,
+    "reading_max_px": 1280,
+    "zone_aside_rem": 18.0,
+    "zone_mark_rem": 1.75,
+    "zone_rail_rem": 14.0
+  },
+  "icons": {
+    "size_px": 16,
+    "stroke_px": 1.5,
+    "tint_mode": "semantic",
+    "topic_icons_enabled": true
+  },
+  "motion": {
+    "duration_base_ms": 200,
+    "duration_fast_ms": 120,
+    "enabled": true
+  },
+  "theme": {
+    "display_face_enabled": true,
+    "elevation_enabled": true,
+    "gradient_enabled": true,
+    "movement_bad_dark": "#e3a396",
+    "movement_bad_light": "#96453a",
+    "movement_good_dark": "#7fc9ae",
+    "movement_good_light": "#2f6f5e",
+    "surface_tint_alpha": 0.07
+  },
+  "version": "2026-10-04"
+}

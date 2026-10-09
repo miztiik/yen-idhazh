@@ -46,6 +46,10 @@ declare global {
 	/** Ledgers published on this site, injected by `vite.config.ts`. */
 	const __PUBLISHED_LEDGERS__: string[];
 
+	/** How many UTC days of each published ledger the site copy keeps: the widest
+	 *  `console.window_presets`. Data explorer asks the archive only for older days. */
+	const __SITE_WINDOW_DAYS__: number;
+
 	/** The newest staged raw day listing per ledger. */
 	const __RAW_LISTED_THROUGH__: Partial<Record<string, string>>;
 

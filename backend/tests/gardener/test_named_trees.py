@@ -17,10 +17,9 @@ from typing import Final
 
 import pytest
 
-from idhazh import day_shards, ledger, month_partition, retention
+from idhazh import ledger, month_partition, retention
 from idhazh.build_publication import record_build_inventory
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import named_trees
@@ -57,54 +56,21 @@ def listing_of(repo: Path, folder: str) -> FileListing:
     return FileListing.from_disk(repo, [folder], paths=[repo / folder])
 
 
-SHARD_TREES: Final = {
-    "clean": [
-        "2025/12/31/x.csv",
-        "2026/08/settled.csv",
-        "2026/08/31/late.csv",
-        "2026/09/01/b.csv",
-        "2026/09/01/a.csv",
-        "2026/09/02/settled.csv",
-    ],
-    "a text file in a day": ["2026/09/01/a.csv", "2026/09/02/a.csv", "2026/09/02/notes.txt"],
-    "a day that is no day": ["2026/09/01/a.csv", "2026/09/31/a.csv"],
-    "a month that is no month": ["2026/09/01/a.csv", "2026/13/01/a.csv"],
-    "a file where a day belongs": ["2026/09/01/a.csv", "2026/09/02.csv"],
-    "a file at the root": ["2026/09/01/a.csv", "README"],
-    "a folder in a day": ["2026/09/01/a.csv", "2026/09/02/deep/a.csv"],
-    "a settled month that is no month": ["2026/09/01/a.csv", "2026/13/settled.csv"],
-    "a settled file where a month belongs": ["2026/09/01/a.csv", "2026/settled.csv"],
-}
-
-
-@pytest.mark.parametrize("shape", sorted(SHARD_TREES))
-def test_the_writer_files_of_a_day_tree_are_the_disk_walks(tmp_path: Path, shape: str) -> None:
-    """A closed month's own settled file is a member of both walks, beside its days."""
-    root = plant(tmp_path / "state" / "a-day-tree", SHARD_TREES[shape])
-    listing = listing_of(tmp_path, "state/a-day-tree")
-
-    on_disk = walked(lambda: day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
-    by_name = walked(lambda: named_trees.shard_files(listing, root))
-
-    assert by_name == on_disk
-    assert on_disk[1] is (shape != "clean"), "the tree does not exercise what it is named for"
-
-
 def test_a_walk_covers_the_periods_a_task_named_and_nothing_else_of_its_root(
     tmp_path: Path,
 ) -> None:
     """A wake names day folders one by one, so a walk over the root reads those days alone."""
     root = plant(
         tmp_path / "state" / "a-day-tree",
-        ["2026/09/01/a.csv", "2026/09/02/b.csv", "2026/09/03/c.csv"],
+        ["2026/09/01/a.jsonl", "2026/09/02/b.jsonl", "2026/09/03/c.jsonl"],
     )
     listing = FileListing.from_disk(
         tmp_path, ["state/a-day-tree"], paths=[root / "2026/09/01", root / "2026/09/03"]
     )
 
-    assert list(named_trees.shard_files(listing, root)) == [
-        root / "2026/09/01/a.csv",
-        root / "2026/09/03/c.csv",
+    assert named_trees.files_named(listing, root, ".jsonl") == [
+        root / "2026/09/01/a.jsonl",
+        root / "2026/09/03/c.jsonl",
     ]
     with pytest.raises(PathNotNamedError):
         listing.files_under(root)
@@ -291,11 +257,9 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     state = tmp_path / ledger.STATE_DIRNAME
     compact = {
         ledger.compact_path(state, RAW, Period.YEARLY, "2025"),
-        ledger.watermark_path(state, RAW, Period.YEARLY),
         ledger.compact_path(state, RAW, Period.MONTHLY, "2026-07"),
         ledger.compact_path(state, RAW, Period.DAILY, "2026-08-01"),
         ledger.compact_path(state, RAW, Period.DAILY, "2026-08-02"),
-        ledger.watermark_path(state, RAW, Period.DAILY),
     }
     raw = ledger.raw_root(state, RAW)
     plant(
@@ -308,7 +272,7 @@ def test_the_months_a_ledger_holds_are_the_ones_its_indexes_and_raw_folders_name
     an_index(state, Period.YEARLY, ["2025"])
     an_index(state, Period.MONTHLY, ["2026-07"])
     an_index(state, Period.DAILY, ["2026-08-01", "2026-08-02"])
-    compacted = ledger.watermark_path(state, RAW, Period.DAILY).parent.parent
+    compacted = ledger.compact_root(state, RAW, Period.DAILY).parent
     listing = FileListing.from_disk(
         tmp_path,
         [raw.relative_to(tmp_path).as_posix(), compacted.relative_to(tmp_path).as_posix()],

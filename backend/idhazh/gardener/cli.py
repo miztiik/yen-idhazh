@@ -25,7 +25,6 @@ variable (`idhazh.config`).
 from __future__ import annotations
 
 import argparse
-import logging
 import re
 import sys
 from collections.abc import Sequence
@@ -33,7 +32,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, month_partition
+from idhazh import config, crash_trace, month_partition
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import COMMIT_SHA_PATTERN, RUN_ID_PATTERN
 from idhazh.contracts.knobs.gardener import (
@@ -42,7 +41,7 @@ from idhazh.contracts.knobs.gardener import (
     MonthsWindow,
     RetentionPolicy,
 )
-from idhazh.gardener import listing, runner, shards
+from idhazh.gardener import event_log, listing, runner, shards
 from idhazh.gardener.outcome import EXIT_INTEGRITY
 
 #: The word that reaches this router. `idhazh/cli.py` holds it in one place -
@@ -75,18 +74,19 @@ def add_the_run(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
 
 
-def settings_or_none(config_dir: Path) -> GardenerSettings | None:
-    """The loaded declarations with logging set from them, or None once the refusal is printed."""
+def settings_or_none(config_dir: Path, *, github: bool = False) -> GardenerSettings | None:
+    """The loaded declarations with the event log installed at their level, or None once refused.
+
+    `github` says the caller runs as a step on GitHub, so the log also writes
+    the workflow commands GitHub reads (`event_log.GitHubLines`). Only the
+    landing utility knows that, and it says so.
+    """
     try:
         settings = config.load_gardener(config_dir)
     except ValueError as refusal:
         print(refusal, file=sys.stderr)
         return None
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    event_log.install(settings.app.logging.level.value, github=github)
     return settings
 
 
@@ -151,13 +151,7 @@ def period_range(
     if args.name is None:
         parser.error("--from and --to are available only with one named task")
     policy = settings.tasks[args.name]
-    if isinstance(policy, CompactionPolicy) or isinstance(
-        policy.window, MonthsWindow
-    ) or (
-        isinstance(policy, RetentionPolicy)
-        and policy.fold is not None
-        and policy.fold.settles_months
-    ):
+    if isinstance(policy, CompactionPolicy) or isinstance(policy.window, MonthsWindow):
         if not month_partition.is_month_stem(start) or not month_partition.is_month_stem(end):
             parser.error("--from and --to must be real YYYY-MM months for this task")
         if start > end:
@@ -178,6 +172,8 @@ def period_range(
 
 
 def main(argv: Sequence[str] | None) -> int:
+    # A crash prints where it broke: a message can quote a ledger row or GitHub's answer.
+    crash_trace.install()
     parser = _parser()
     args = parser.parse_args(argv)
     settings = settings_or_none(args.config)

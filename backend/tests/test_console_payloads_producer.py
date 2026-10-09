@@ -13,7 +13,7 @@ import itertools
 import json
 import sys
 from collections.abc import Iterator
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -34,7 +34,7 @@ from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import (
     ModelRole,
     ModelUse,
@@ -48,7 +48,6 @@ from idhazh.contracts.source_health_view import (
     SourcePermission,
 )
 from idhazh.contracts.visual_decision import VisualKind, VisualState
-from idhazh.gardener import closed_day_fold
 from idhazh.month_partition import months_between, oldest_month_kept
 from idhazh.telemetry.publish import (
     console_band,
@@ -915,6 +914,24 @@ def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
     assert "of the 1 GB limit" in band.size.sentence
 
 
+def test_the_band_prints_the_articles_the_headroom_buys(tree: tuple[Path, Path]) -> None:
+    """The room left is a count of articles, never of days.
+
+    Each published day in the widest span grew the tree by 30,000 bytes over the
+    3 articles it published, so one more article costs 10,000 bytes. The newest
+    day measured 1,420,000 bytes, about 1.4 MB, which leaves 1,073,741,824 -
+    1,420,000 = 1,072,321,824 bytes under the 1 GB cap: 107,232 articles, printed
+    at three significant figures. A count of days would need a daily article
+    rate, and nothing here measures one, so the sentence names no day at all.
+    """
+    state, digest = tree
+
+    band = _band(state, digest)
+
+    assert band.size.articles_to_cap == 107_232
+    assert band.size.sentence == "1.4 MB of the 1 GB limit - room for about 107,000 more articles."
+
+
 def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) -> None:
     """Null is a designed state. A band that printed 0 MB and a green verdict
     for a tree nothing has published is a lie a reader cannot see through."""
@@ -1159,23 +1176,15 @@ def _a_writers_day(state: Path, stamp: str, rows: int, *, shard: int) -> None:
     )
 
 
-def _band_after_folding(state: Path, digest: Path) -> Any:
+def _published_band(state: Path, digest: Path) -> Any:
     """The band as `assemble` writes it, with the three figures it hands over.
 
-    Zero, zero and this run's own day. Nothing waits for a fold any more: each
-    writer files its own path under the day its rows name, so a run that died
-    three days ago left those rows in that day rather than in a ledger somebody
-    has to drain. The fields stay on the payload because a reader holding an
-    older day still finds them there.
+    Zero, zero and this run's own day. Nothing waits to be settled any more:
+    each writer files its own path under the day its rows name, so a run that
+    died three days ago left those rows in that day rather than in a ledger
+    somebody has to drain. The fields stay on the payload because a reader
+    holding an older day still finds them there.
     """
-    closed_day_fold.fold(
-        state,
-        DAY_TREES,
-        now=datetime.combine(date.fromisoformat(NEWEST_DAY), time.min, tzinfo=UTC),
-        after_days=7,
-        dry_run=False,
-        period_paths=[ledger.tree_root(state, tree) for tree in DAY_TREES],
-    )
     _publish_all(state, digest, months=set(MONTHS))
     console_band.publish(
         state_root=state,
@@ -1200,7 +1209,7 @@ def test_the_band_carries_the_day_the_record_reaches_and_no_backlog(
     The backlog these three fields were added for cannot happen now. A writer
     files its own path under the day its rows name, so a run that died two days
     ago left its rows in that day rather than in a ledger a later run has to
-    drain, and the fold that follows is a tidy-up rather than a catch-up.
+    drain.
 
     Zero is what the console has to render as silence. A band printing
     `0 days behind` on every clean run would teach an operator to read past the
@@ -1210,7 +1219,7 @@ def test_the_band_carries_the_day_the_record_reaches_and_no_backlog(
     _a_writers_day(state, STALE_DAY, WAITING_ROWS, shard=0)
     _a_writers_day(state, NEWEST_DAY, 2, shard=1)
 
-    band = _band_after_folding(state, digest)
+    band = _published_band(state, digest)
 
     assert band.compaction_lag_days == 0
     assert band.rows_uncompacted == 0
@@ -1234,7 +1243,7 @@ def test_a_band_written_before_the_compaction_fields_still_reads(
     """
     state, digest = tree
     _a_writers_day(state, STALE_DAY, WAITING_ROWS, shard=0)
-    _band_after_folding(state, digest)
+    _published_band(state, digest)
     payload = json.loads(console_band.band_path(digest).read_text(encoding="utf-8"))
     widened = {"compaction_lag_days", "rows_uncompacted", "covers_through"}
     assert widened <= set(payload), "the producer stopped writing the fields this proves"

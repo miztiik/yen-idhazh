@@ -42,13 +42,23 @@ import {
 	DEFAULT_COST_SHAPE
 } from '../src/lib/charts/cost';
 import {
+	carriesServerCounters,
 	machineCounters,
 	machineLimits,
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { ledgers, plan, type ShardReading } from './support/machine-rows';
-import { observabilityConfig, runConfig } from '../src/lib/server/config';
+import { contextCost } from '../src/lib/console/machine/context-cost';
+import { articleCost } from '../src/lib/console/machine/article-cost';
+import { processorLostOverDays } from '../src/lib/console/machine/processor-lost';
+import { diskReads } from '../src/lib/console/machine/disk-reads';
+import { promptReuse } from '../src/lib/console/machine/prompt-reuse';
+import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
+import { describeServerCounters, type ServerCounterNotes } from '../src/lib/server/server-counter-notes';
+import { listRunDays } from '../src/lib/server/run-days';
+import { describeMissingMarkers } from '../src/lib/console/recording';
+import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
+import { observabilityConfig, runConfig, type ObservabilityConfig } from '../src/lib/server/config';
 
 /** `config/idhazh.json` read straight off disk, so a test's expectation comes
  * from the committed file rather than from the reader it is checking. */
@@ -890,6 +900,499 @@ test.describe('what a run reads against what it writes', () => {
 		expect(money(0, 'EUR', 2)).toBe('0.00 EUR');
 		// A real cost never prints as zero. The work was not free.
 		expect(money(0.0027, 'USD', 2)).toBe('<0.01 USD');
+	});
+});
+
+test.describe('a run the counters refuse, handed to every figure built from article rows', () => {
+	// The route hands six figures every article row of the open window, chosen by
+	// date alone, and `machineCounters` refuses a run where one shard filed two
+	// machine records that disagree. So these cases build one refused run and one
+	// accepted run on one day, hand each figure the article rows of both runs and
+	// then of the accepted run alone, and record what the refused run moves. The
+	// last two check the refused-runs box's words against what these find. The
+	// thresholds are today's committed ones; no count below depends on them.
+	const REFUSED = '2026-09-04-1';
+	const ACCEPTED = '2026-09-04-2';
+	const hosts = [
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, serverPromptTokens: 8000, serverPromptSeconds: 200 }),
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, serverPromptTokens: 2000, serverPromptSeconds: 200 }),
+		// Shard 1 again, naming other figures: two servers answered for one shard.
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, serverPromptTokens: 1, serverPromptSeconds: 1 }),
+		hostRow({ date: '2026-09-04', runId: ACCEPTED, shard: 0, serverPromptTokens: 3000, serverPromptSeconds: 100 })
+	];
+	/** One article on shard 0, carrying every cell the six figures read. */
+	const article = (runId: string, index: number, cells: Partial<Record<string, string | number>>) =>
+		healthRow({
+			run_id: runId,
+			item_id: `${runId}-${index}`,
+			machine_shard: 0,
+			item_index: index,
+			n_ctx_configured: 8192,
+			...cells
+		});
+	const refusedRows = [
+		article(REFUSED, 0, {
+			input_tokens: 4000,
+			output_tokens: 300,
+			prefill_ms: 8000,
+			decode_ms: 30_000,
+			summary_input_tokens: 4000,
+			summary_output_tokens: 300,
+			summary_finish_reason: 'length',
+			cpu_busy_pct: 50,
+			item_total_ms: 40_000,
+			llama_rss_bytes: 6_000_000_000,
+			cpu_steal_pct: 12,
+			llama_major_faults: 148_000,
+			os_mem_cached_bytes: 9_000_000_000,
+			weights_pinned: 'False',
+			summary_cache_pct: 5,
+			summary_prefill_tokens_per_s: 12
+		}),
+		article(REFUSED, 1, {
+			input_tokens: 6000,
+			output_tokens: 300,
+			prefill_ms: 12_000,
+			decode_ms: 30_000,
+			summary_input_tokens: 6000,
+			summary_output_tokens: 300,
+			summary_finish_reason: 'length',
+			cpu_busy_pct: 75,
+			item_total_ms: 40_000,
+			llama_rss_bytes: 6_400_000_000,
+			cpu_steal_pct: 3,
+			llama_major_faults: 4100,
+			os_mem_cached_bytes: 6_000_000_000,
+			weights_pinned: 'False',
+			summary_cache_pct: 0,
+			summary_prefill_tokens_per_s: 10
+		})
+	];
+	const acceptedRows = [
+		article(ACCEPTED, 0, {
+			input_tokens: 1000,
+			output_tokens: 200,
+			prefill_ms: 2000,
+			decode_ms: 20_000,
+			summary_input_tokens: 1000,
+			summary_output_tokens: 200,
+			summary_finish_reason: 'stop',
+			cpu_busy_pct: 25,
+			item_total_ms: 40_000,
+			llama_rss_bytes: 5_000_000_000,
+			cpu_steal_pct: 0.25,
+			llama_major_faults: 148_000,
+			os_mem_cached_bytes: 10_000_000_000,
+			weights_pinned: 'True',
+			summary_cache_pct: 80,
+			summary_prefill_tokens_per_s: 40
+		}),
+		article(ACCEPTED, 1, {
+			input_tokens: 2000,
+			output_tokens: 200,
+			prefill_ms: 3000,
+			decode_ms: 20_000,
+			summary_input_tokens: 2000,
+			summary_output_tokens: 200,
+			summary_finish_reason: 'stop',
+			cpu_busy_pct: 25,
+			item_total_ms: 60_000,
+			llama_rss_bytes: 5_100_000_000,
+			cpu_steal_pct: 0.5,
+			llama_major_faults: 0,
+			os_mem_cached_bytes: 10_000_000_000,
+			weights_pinned: 'True',
+			summary_cache_pct: 90,
+			summary_prefill_tokens_per_s: 45
+		})
+	];
+	const bothRuns = [...refusedRows, ...acceptedRows];
+
+	test('the counters refuse one run and keep the other', () => {
+		const { runs, refused } = machineCounters(
+			hosts,
+			bothRuns,
+			plan([REFUSED, 2], [ACCEPTED, 1]),
+			LIMITS
+		);
+		expect(refused.map((run) => run.runId)).toEqual([REFUSED]);
+		expect(refused[0].why).toContain('shard 1');
+		expect(runs.map((run) => run.runId)).toEqual([ACCEPTED]);
+	});
+
+	test("a refused run whose machine records hold the server's own figures carries them", () => {
+		// Shard 1's two records disagree, and each of them holds the server's two cells.
+		const { refused } = machineCounters(hosts, bothRuns, plan([REFUSED, 2], [ACCEPTED, 1]), LIMITS);
+		expect(refused.map((run) => [run.runId, run.serverCountersWritten])).toEqual([[REFUSED, true]]);
+		expect(carriesServerCounters(refused[0])).toBe(true);
+	});
+
+	test('a refused run whose records disagree only about the machine carries no server figure', () => {
+		// Shard 0 filed two records that name two machines, and neither holds a cell the server wrote.
+		const { runs, refused } = machineCounters(
+			[
+				hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, fingerprint: 'f00d' }),
+				hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, fingerprint: 'beef' })
+			],
+			refusedRows,
+			plan([REFUSED, 2]),
+			LIMITS
+		);
+		expect(runs).toEqual([]);
+		expect(refused.map((run) => [run.runId, run.serverCountersWritten])).toEqual([[REFUSED, false]]);
+		expect(refused[0].why).toContain('shard 0 filed two machine records that disagree');
+		expect(carriesServerCounters(refused[0])).toBe(false);
+	});
+
+	test('what a run reads against what it writes counts it', () => {
+		expect(readAgainstWritten(acceptedRows).runs.map((run) => run.runId)).toEqual([ACCEPTED]);
+		const view = readAgainstWritten(bothRuns);
+		expect(view.runs.map((run) => run.runId)).toEqual([REFUSED, ACCEPTED]);
+		expect(view.runs[0]).toEqual({
+			runId: REFUSED,
+			date: '2026-09-04',
+			input: 10_000,
+			output: 600,
+			prefillMs: 20_000,
+			decodeMs: 60_000,
+			items: 2,
+			timed: 2
+		});
+	});
+
+	test('the reading limit counts it', () => {
+		const options = { percentile: 99, cutOffReason: 'length' };
+		const accepted = contextCost(acceptedRows, options).span;
+		expect([accepted.rowsRead, accepted.items, accepted.largest]).toEqual([2, 2, 2200]);
+		expect([accepted.unusedPct, accepted.cutOff, accepted.calls]).toEqual([73, 0, 2]);
+		const both = contextCost(bothRuns, options).span;
+		expect([both.rowsRead, both.items, both.largest]).toEqual([4, 4, 6300]);
+		// The headline moves: the refused run's article is the one that used most
+		// of the limit, and both of its calls ran out of room.
+		expect([both.unusedPct, both.cutOff, both.calls]).toEqual([23, 2, 4]);
+	});
+
+	test('the cost of one article counts it', () => {
+		// The route joins the machine record's processor counts with no run left
+		// out, so the refused run's shard names its processors too.
+		const processors = [REFUSED, ACCEPTED].map((runId) => ({
+			date: '2026-09-04',
+			run_id: runId,
+			shard: 0,
+			threads: 4
+		}));
+		const accepted = articleCost(acceptedRows, processors);
+		expect(accepted.rowsRead).toBe(2);
+		expect([accepted.processorSeconds.from, accepted.processorSeconds.high]).toEqual([2, 60]);
+		expect([accepted.modelSeconds.from, accepted.modelSeconds.high]).toEqual([2, 23]);
+		expect([accepted.addedBytes.from, accepted.addedBytes.high]).toEqual([1, 100_000_000]);
+		const both = articleCost(bothRuns, processors);
+		expect(both.rowsRead).toBe(4);
+		expect([both.processorSeconds.from, both.processorSeconds.high]).toEqual([4, 120]);
+		expect([both.modelSeconds.from, both.modelSeconds.high]).toEqual([4, 42]);
+		expect([both.addedBytes.from, both.addedBytes.high]).toEqual([2, 400_000_000]);
+	});
+
+	test('THE ORACLE: a refused shard whose records disagree about the processors leaves its time out', () => {
+		// Shard 0 of the refused run filed two machine records that disagree: one
+		// names 4 logical processors, the other 8. articleCost is handed the same
+		// shard's one article row (busy 50%, 40s total) with the two records in
+		// one order, then in the other. Picking whichever record came last would
+		// price the shard at 160 processor-seconds (50% of 8 over 40s) with 8
+		// named last, and 80 with 4 named last. The shard is left out in both
+		// orders and counted in `outOf`.
+		const shardArticle = [refusedRows[0]];
+		const namedLast8 = [
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 4 },
+			{ date: '2026-09-04', run_id: REFUSED, shard: 0, threads: 8 }
+		];
+		const namedLast4 = [...namedLast8].reverse();
+		const forward = articleCost(shardArticle, namedLast8);
+		const backward = articleCost(shardArticle, namedLast4);
+		for (const cost of [forward, backward]) {
+			expect(cost.processorSeconds.from).toBe(0);
+			expect(cost.processorSeconds.mid).toBeNull();
+			expect(cost.processorSeconds.outOf).toBe(1);
+			expect(cost.processors).toEqual([]);
+		}
+	});
+
+	test('the processor lost to other tenants counts it', () => {
+		const thresholds = { marked: 1, named: 10 };
+		const accepted = processorLostOverDays(acceptedRows, thresholds);
+		expect([accepted.from, accepted.outOf, accepted.days[0].worstPct]).toEqual([2, 2, 0.5]);
+		expect(accepted.named).toBeNull();
+		const both = processorLostOverDays(bothRuns, thresholds);
+		expect([both.from, both.outOf, both.days[0].worstPct]).toEqual([4, 4, 12]);
+		// The day is named for a share only the refused run's article lost.
+		expect(both.named?.key).toBe('2026-09-04');
+	});
+
+	test('the waits for the disk count it', () => {
+		const marks = { marked: 1, named: 1 };
+		const accepted = diskReads(acceptedRows, marks);
+		expect([accepted.days[0].reads, accepted.days[0].counted, accepted.days[0].excluded]).toEqual([
+			0, 1, 1
+		]);
+		expect(accepted.pinning).toEqual({ held: 1, loose: 0, silent: 0 });
+		expect(accepted.worst).toBeNull();
+		const both = diskReads(bothRuns, marks);
+		expect([both.days[0].reads, both.days[0].counted, both.days[0].excluded]).toEqual([
+			4100, 2, 2
+		]);
+		expect(both.pinning).toEqual({ held: 1, loose: 1, silent: 0 });
+		expect(both.worst?.date).toBe('2026-09-04');
+	});
+
+	test('the prompt reuse counts it', () => {
+		const columns = Object.keys(bothRuns[0]);
+		const accepted = promptReuse(acceptedRows, columns);
+		expect([accepted.rowsRead, accepted.items, accepted.floor?.pct]).toEqual([2, 2, 80]);
+		const both = promptReuse(bothRuns, columns);
+		expect([both.rowsRead, both.items, both.floor?.pct]).toEqual([4, 4, 0]);
+		expect(both.requests[0].read).toEqual({ low: 10, median: 26, high: 45, from: 4 });
+	});
+
+	test("the box says what leaves the run out and what still counts it, in Reader's words", () => {
+		const { runs, refused } = machineCounters(
+			hosts,
+			bothRuns,
+			plan([REFUSED, 2], [ACCEPTED, 1]),
+			LIMITS
+		);
+		// "The run count above" is the route's first line, over the runs the
+		// counters keep: one run, though two filed rows. "Figures that pick
+		// articles by date" are the six cases above, and each one counts it.
+		const open = { days: 7, start: '2026-08-29', end: '2026-09-04' };
+		const firstLine = describeServerCounters({
+			runs,
+			refused,
+			ran: ['2026-09-04'],
+			articleDays: ['2026-09-04'],
+			machineRead: {
+				state: 'read',
+				through: '2026-09-04',
+				first: '2026-09-04',
+				lastRows: { period: 'daily', covers: '2026-09-04' },
+				lostDays: [],
+				setAside: {}
+			},
+			from: open.start,
+			open,
+			offered: [open],
+			observability: {
+				cost_currency: 'USD',
+				cost_input_per_million: 0.2,
+				cost_output_per_million: 0.6,
+				evaluation_enabled: true,
+				host_fingerprint: true,
+				host_fingerprint_bandwidth_cache_multiple: 2,
+				sample_rate: 1
+			}
+		}).intro;
+		expect(firstLine).toBe(
+			'1 run in these 7 days, with figures from the model server itself. 2026-08-29 to 2026-09-04.'
+		);
+		expect(describeRefusedRuns(refused)).toEqual({
+			head:
+				'1 run has records that do not fit together. The run count above does not include it. ' +
+				'Figures that pick articles by date still include the articles of this run.',
+			runs: [
+				{
+					runId: REFUSED,
+					says:
+						'has 5 rows: shard 1 filed two machine records that disagree, so two servers ' +
+						'answered for one shard and neither can be read over the other.'
+				}
+			]
+		});
+	});
+
+	test('the box reads right for several runs and for a run of one row, and is absent with none', () => {
+		const box = describeRefusedRuns([
+			{
+				runId: REFUSED,
+				date: '2026-09-04',
+				rows: 1,
+				why: 'neither ledger holds a shard for this run',
+				serverCountersWritten: false
+			},
+			{
+				runId: '2026-09-03-1',
+				date: '2026-09-03',
+				rows: 4,
+				why: 'its rows disagree about which day the run belongs to',
+				serverCountersWritten: false
+			}
+		]);
+		expect(box?.head).toBe(
+			'2 runs have records that do not fit together. The run count above does not include them. ' +
+				'Figures that pick articles by date still include the articles of these runs.'
+		);
+		expect(box?.runs.map((run) => run.says)).toEqual([
+			'has 1 row: neither ledger holds a shard for this run.',
+			'has 4 rows: its rows disagree about which day the run belongs to.'
+		]);
+		expect(describeRefusedRuns([])).toBeNull();
+	});
+});
+
+test.describe("a refused run is a run the server's figures were written down for, where its records hold them", () => {
+	// One run a day, on shard 0, in the 7 days that end on 15 Jun 2030. A run is kept where its
+	// records fit together, and refused where shard 0 filed two machine records that disagree: about
+	// the server's two cells, or only about the machine. Each case hands the lines what the route
+	// hands them: the kept and refused runs of one `machineCounters` call, every day with a run as
+	// `listRunDays` lists them for the route, and the article record's days.
+	const OPEN = { days: 7, start: '2030-06-09', end: '2030-06-15' };
+	const OBSERVABILITY: ObservabilityConfig = {
+		cost_currency: 'USD',
+		cost_input_per_million: 0.2,
+		cost_output_per_million: 0.6,
+		evaluation_enabled: true,
+		host_fingerprint: true,
+		host_fingerprint_bandwidth_cache_multiple: 2,
+		sample_rate: 1
+	};
+	/** Shard 0's machine record for the run on `date`: the probe and the clock, and the server's two
+	 *  cells where `prompt` is a number. */
+	const machine = (date: string, prompt: number | '' = 900, fingerprint = 'f00d') =>
+		hostRow({
+			date,
+			runId: `${date}-1`,
+			shard: 0,
+			fingerprint,
+			jobSeconds: 600,
+			serverPromptTokens: prompt,
+			serverPromptSeconds: prompt === '' ? '' : prompt / 100
+		});
+	/** Two machine records shard 0 of the run on `date` filed that disagree: about the server's
+	 *  figures, both holding them, or with `server` false only about the machine, neither holding them. */
+	const disagreeing = (date: string, server: boolean) =>
+		server ? [machine(date, 900), machine(date, 901)] : [machine(date, ''), machine(date, '', 'beef')];
+	/** An article that shard 0 of the run on `date` summarised. */
+	const article = (date: string) =>
+		healthRow({ date, run_id: `${date}-1`, item_id: `${date}-item`, machine_shard: 0 });
+	/** What Hardware says about the server's figures over `open`, from the rows built. The read is
+	 *  the 7 days, whichever window is open. */
+	const hardware = (
+		hosts: Record<string, string>[],
+		articleDays: string[],
+		{ recording = true, open = OPEN }: { recording?: boolean; open?: typeof OPEN } = {}
+	) => {
+		const { runs, refused } = machineCounters(hosts, articleDays.map(article), plan(), LIMITS);
+		return describeServerCounters({
+			runs,
+			refused,
+			ran: listRunDays({ runs, refused }, articleDays),
+			articleDays,
+			machineRead: {
+				state: 'read',
+				through: OPEN.end,
+				first: OPEN.start,
+				lastRows: { period: 'daily', covers: hosts.map((row) => row.date).sort().at(-1) ?? OPEN.start },
+				lostDays: [],
+				setAside: {}
+			},
+			from: OPEN.start,
+			open,
+			offered: [...new Set([open, OPEN])],
+			observability: { ...OBSERVABILITY, host_fingerprint: recording }
+		});
+	};
+	/** Every line printed about the server's figures, apart from the first line. */
+	const printed = (notes: ServerCounterNotes): string[] =>
+		[notes.measurementOff, ...Object.values(notes.recording)].filter((line): line is string => line !== null);
+
+	test("a day whose only run was refused, while its records hold the server's figures, is not named; a day of article rows alone still is", () => {
+		// 10 Jun's run carried the server's figures. 12 Jun's only run was refused: shard 0 filed two
+		// machine records that disagree, both holding them. 13 Jun's run is article rows alone.
+		const notes = hardware(
+			[machine('2030-06-10'), ...disagreeing('2030-06-12', true)],
+			['2030-06-10', '2030-06-12', '2030-06-13']
+		);
+		// The first line counts only the runs the counters keep; the box names the refused one.
+		expect(notes.intro).toBe(
+			'2 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'No server figures were written down for 13 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+		]);
+	});
+
+	test('a day whose only run was refused, with no server figure in its records, is still named', () => {
+		// 12 Jun's only run was refused because shard 0's two records name two machines. Neither
+		// holds a cell the server wrote, so no server figures were written down that day.
+		const notes = hardware(
+			[machine('2030-06-10'), ...disagreeing('2030-06-12', false)],
+			['2030-06-10', '2030-06-12']
+		);
+		expect(printed(notes)).toEqual([
+			'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+		]);
+	});
+
+	test("the server's figures start on a refused day whose records hold them, which is not counted as a day without them", () => {
+		// Runs of article rows alone on 9, 10, 11 and 13 Jun. 12 Jun's only run was refused with the
+		// server's figures in both records, and 14 Jun's run carried them.
+		const notes = hardware(
+			[...disagreeing('2030-06-12', true), machine('2030-06-14')],
+			['2030-06-09', '2030-06-10', '2030-06-11', '2030-06-12', '2030-06-13', '2030-06-14']
+		);
+		expect(notes.intro).toBe(
+			'5 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'Server figures started on 12 Jun 2030. Earlier in this window, 3 days had a run but no server figures.',
+			'No server figures were written down for 13 Jun 2030. The speed figures for that day come from the summariser, not the server.'
+		]);
+	});
+
+	test("with measurement off, the newest day recorded is a refused day whose records hold the server's figures", () => {
+		// Switched off after 12 Jun, whose only run was refused with the server's figures in both
+		// records. Article rows kept forming runs on 13 and 14 Jun.
+		const notes = hardware(
+			[machine('2030-06-10'), ...disagreeing('2030-06-12', true)],
+			['2030-06-10', '2030-06-12', '2030-06-13', '2030-06-14'],
+			{ recording: false }
+		);
+		expect(printed(notes)).toEqual([
+			'Measurement is off. Nothing has been recorded since 12 Jun 2030. Turn it on in config/idhazh.json.'
+		]);
+	});
+
+	test("a window whose only run was refused counts 0 runs, in Reader's words, and has no run on record only where the box names none", () => {
+		// 12 Jun's only run was refused, with the server's figures in both records. The box under the
+		// first line names it, and calls that line "the run count above".
+		const refusedOnly = disagreeing('2030-06-12', true);
+		expect(hardware(refusedOnly, ['2030-06-12']).intro).toBe('0 runs in these 7 days. 2030-06-09 to 2030-06-15.');
+		expect(
+			hardware(refusedOnly, ['2030-06-12'], { open: { days: 1, start: '2030-06-12', end: '2030-06-12' } }).intro
+		).toBe('This one day had 0 runs. 2030-06-12.');
+		// A run refused on 5 Jun is outside the window, so the box names no run in it.
+		expect(hardware(disagreeing('2030-06-05', true), ['2030-06-05']).intro).toBe(
+			'No run in these 7 days is on record. 2030-06-09 to 2030-06-15.'
+		);
+	});
+
+	test('a day whose only run was refused and is machine records alone had a run: the started line counts it and the marker line names it', () => {
+		// Runs of article rows alone on 9 and 11 Jun. 10 Jun's only run was refused because shard 0's
+		// two machine records name two machines, and the article record holds no row that day. 13 Jun's
+		// run carried the server's figures. So 3 days before 13 Jun had a run but no server figures.
+		const hosts = [...disagreeing('2030-06-10', false), machine('2030-06-13')];
+		const articleDays = ['2030-06-09', '2030-06-11', '2030-06-13'];
+		const notes = hardware(hosts, articleDays);
+		expect(notes.intro).toBe(
+			'3 runs in these 7 days, 1 of them with figures from the model server itself. 2030-06-09 to 2030-06-15.'
+		);
+		expect(printed(notes)).toEqual([
+			'Server figures started on 13 Jun 2030. Earlier in this window, 3 days had a run but no server figures.'
+		]);
+		// The two charts that mark a setup change read the same days. With the score record not packed,
+		// and no run record naming what ran, they cannot show a change on any day with a run, 10 Jun too.
+		const ran = listRunDays(machineCounters(hosts, articleDays.map(article), plan(), LIMITS), articleDays);
+		expect(describeMissingMarkers({ read: { state: 'not-packed' }, ran, identified: [], open: OPEN })).toBe(
+			'This chart cannot show whether the setup changed on 9 Jun to 11 Jun and 13 Jun 2030, because the score record has not been packed yet. That is a step not yet run. This chart shows every change on the other days.'
+		);
 	});
 });
 

@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-06
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -34,7 +34,7 @@ The other panels still read their ledgers at build time under `$lib/server/`.
 | How close we are to the limits | What is holding the machine's memory | one bar for the tightest moment of each day | What the memory is going to, and which of those parts a reader may add together. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
 | What the model spends | What one article costs the machine | three figures over the span, each a range across the articles that recorded it | What a change to the prompt, the model or how many articles a day runs will cost before the run that pays for it. |
-| What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
+| What the model spends | How much text the model reads again, and how fast it reads | two spans a request, over the window's items | Whether a bigger cache would save wall clock. |
 | What the model spends | How much of a run is reading and how much is writing | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
 | What the model spends | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
 
@@ -291,6 +291,17 @@ would publish an assumption as a measurement. Of the 1,325 committed articles
 that recorded both a busy share and a clock on 2026-09-21, 371 belong to runs
 the machine record never reached, so the panel prints both counts rather than
 quietly dropping the difference. Authority: Susan, Row #12 decision 5.
+
+**A shard whose two machine records disagree about the processor count is
+absent too, the same dash as a shard no record reached.** A refused run can
+carry two host records for one shard, naming different processor counts.
+Picking whichever one came last in the handed-in order would print a figure
+that changes with that order and not with anything the run did - measured
+2026-10-08, the same shard priced at 80 processor-seconds with one record last
+and 160 with the other, nothing about the run having moved between the two.
+The join leaves the shard out instead, the same absence a missing record
+already produces, rather than add a second dash sentence for a case the panel's
+existing one already covers truthfully. Authority: Fowler, 2026-10-08.
 
 **What the panel cannot answer, it names.** The memory step belongs to the
 model's work, and nothing in the ledger says which half of it - the prompt the
@@ -608,8 +619,8 @@ a fill value has to land in.
 Beneath the strip, the section leads with its own denominator: **how many feeds did not fail, out of how many the pipeline read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "did not fail" means "did not fail twice". The rule is `reliability` in `frontend/src/lib/feed-health.ts`, reading the same `failing` the quarantine reads ([../sources/health.md](../sources/health.md)).
 
 **The sentence names its span, because a bounded read cannot prove "never".**
-The read behind it is `feedResults(shardDays(widest))` - the newest packed days
-of the feed record that the widest window preset can reach, and no further.
+The read behind it is `feedResults` over the widest window preset, which ends on
+the newest published day - the packed days of the feed record in it, and no further.
 "Never" claims every run there has been over a read that opens a bounded set of
 files, so it is a claim only a growing read could support (`CLAUDE.md` Guardrail
 #12, owner decision 2026-09-08). The sentence says the feeds "did not fail a

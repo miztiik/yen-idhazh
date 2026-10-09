@@ -1,9 +1,9 @@
-import { expect, test } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { expect, test } from './support/browser';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { failureLoad } from '../src/lib/charts/glance';
 import { failureSeries, type TelemetryRow } from '../src/lib/charts/series';
-import { readCsv } from '../src/lib/server/payload';
+import { dayBefore, items, openServed } from './support/served-telemetry';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -18,15 +18,11 @@ import { telemetryRow } from './support/telemetry-row';
  * sentence, and that a stage under `console.min_attempts_for_rate` prints an
  * explicit low-sample state instead of a rate. A bare percentage fails the row.
  *
- * The canary fixture records no failure at all, which is deliberate elsewhere -
- * the failed-item list is the section that proves the page renders with nothing
- * to show. So the two states that need failures in them are driven as pure
- * functions here, and the two states the fixture DOES reach - a window too thin
- * to divide, and a window holding nothing - are driven in the browser through
- * the controls an operator has.
+ * The rules are driven as pure functions over rows written here, and the page is
+ * driven in the browser over telemetry the test serves it: rows built for the
+ * window the page opened on, so every count below is written out rather than
+ * worked out from what the canary happens to hold.
  */
-
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 
 /** The knob, read from the file the page reads it from. */
 const MIN_ATTEMPTS_FOR_RATE = (
@@ -49,14 +45,6 @@ function row(date: string, id: string, stage: string, outcome: string, code = ''
 		source_words: 400,
 		summary_words: 60
 	});
-}
-
-/** Every telemetry row the canary published, as the page reads them. */
-function canaryRows(): Record<string, string>[] {
-	const shard = join(CANARY, 'state', 'telemetry');
-	return readdirSync(shard)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(shard, name)).rows);
 }
 
 /** Playwright's `toContainText` with a regex reads raw text, so a sentence that
@@ -173,6 +161,24 @@ test('a day too thin to divide breaks the line rather than drawing a share', () 
 	expect(fetch.points[1]).toMatchObject({ rate: 1 / 9, reached: 9 });
 });
 
+test('drawn rate lines stop at gaps, keep measured zero and leave singleton dots unjoined', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '7'));
+	await openServed(page, (window) => [6, 5, 3, 2, 0].flatMap((ago) =>
+		items(dayBefore(window.end, ago), `day-${ago}`, 'publish', 'ok', 8)
+	));
+	for (const stage of STAGES) {
+		const marks = await page.locator(`[data-rate-mark="${stage}"]`).evaluateAll((nodes) =>
+			nodes.map((node) => `${node.getAttribute('cx')},${node.getAttribute('cy')}`)
+		);
+		expect(marks).toHaveLength(5);
+		const lines = await page.locator(`[data-rate-line="${stage}"]`).evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('points'))
+		);
+		expect(lines).toEqual([marks.slice(0, 2).join(' '), marks.slice(2, 4).join(' ')]);
+		expect(new Set(marks.map((point) => point.split(',')[1])).size).toBe(1);
+	}
+});
+
 test('every rate the chart prints carries its denominator in the same sentence', async ({
 	page
 }) => {
@@ -206,112 +212,128 @@ test('every rate the chart prints carries its denominator in the same sentence',
 });
 
 test('the printed denominators are the ones the ledger holds', async ({ page }) => {
-	await page.goto('/console/');
+	// The window's newest day: one item listed and never fetched, four that failed at
+	// fetch, two at extract, one at summarize and six published. Three days earlier:
+	// five published and one that failed at fetch. Down the pipeline, each stage is
+	// reached by what the stage before it let through: fetch by 19 items, 5 failing,
+	// extract by 14, 2 failing, summarize by 12, 1 failing. The item never fetched is
+	// in no stage's count.
+	await openServed(page, (window) => [
+		...items(window.end, 'listed', 'plan', 'failed', 1),
+		...items(window.end, 'fetch', 'fetch', 'failed', 4),
+		...items(window.end, 'extract', 'extract', 'failed', 2),
+		...items(window.end, 'summarize', 'summarize', 'failed', 1),
+		...items(window.end, 'done', 'publish', 'ok', 6),
+		...items(dayBefore(window.end, 3), 'older', 'publish', 'ok', 5),
+		...items(dayBefore(window.end, 3), 'older-fetch', 'fetch', 'failed', 1)
+	]);
 
-	const control = page.locator('[data-viewport-control]');
-	const start = (await control.getAttribute('data-window-start')) ?? '';
-	const end = (await control.getAttribute('data-window-end')) ?? '';
-	expect(start, 'the viewport publishes no window, so there is nothing to count over').not.toBe('');
-
-	// Recomputed from the fixture, down the pipeline order, exactly as the page
-	// claims to: each stage's denominator is what the stage before it let through.
-	const inWindow = canaryRows().filter((r) => r.date >= start && r.date <= end);
-	let reached = inWindow.filter((r) => r.stage !== 'plan').length;
-	expect(reached, 'the window holds nothing, so the counts below are trivial').toBeGreaterThan(0);
-
-	for (const stage of STAGES) {
-		const failures = inWindow.filter((r) => r.outcome === 'failed' && r.stage === stage).length;
+	const expected = [
+		{ stage: 'fetch', reached: 19, failed: 5 },
+		{ stage: 'extract', reached: 14, failed: 2 },
+		{ stage: 'summarize', reached: 12, failed: 1 }
+	];
+	for (const { stage, reached, failed } of expected) {
 		const cell = page.locator(`[data-failure-readout] [data-failure-stage="${stage}"]`);
 		await expect(cell).toHaveAttribute('data-stage-reached', String(reached));
-		await expect(cell).toHaveAttribute('data-stage-failed', String(failures));
-		await expect(cell).toHaveAttribute(
-			'data-stage-low-sample',
-			reached < MIN_ATTEMPTS_FOR_RATE ? 'true' : 'false'
-		);
+		await expect(cell).toHaveAttribute('data-stage-failed', String(failed));
+		await expect(cell).toHaveAttribute('data-stage-low-sample', 'false');
 		// The number in the attribute is the number in the sentence.
 		expect(flat(await page.locator(`[data-panel-rate="${stage}"]`).innerText())).toContain(
-			`${reached.toLocaleString('en-US')} that reached it`
+			`${failed} of the ${reached} that reached it`
 		);
-		reached -= failures;
 	}
 });
 
 test('a day under the threshold gets no mark, and a day over it gets one', async ({ page }) => {
-	await page.goto('/console/');
+	// Four days, each with only published items, so every stage is reached by the
+	// same number: the knob itself and two over it draw a mark, one under it and a
+	// single item do not. Positive evidence and negative evidence together - a count
+	// of zero marks would pass an absence test on a chart that draws nothing at all.
+	await openServed(page, (window) => [
+		...items(window.end, 'at-the-knob', 'publish', 'ok', MIN_ATTEMPTS_FOR_RATE),
+		...items(dayBefore(window.end, 1), 'one-under', 'publish', 'ok', MIN_ATTEMPTS_FOR_RATE - 1),
+		...items(dayBefore(window.end, 2), 'two-over', 'publish', 'ok', MIN_ATTEMPTS_FOR_RATE + 2),
+		...items(dayBefore(window.end, 3), 'alone', 'publish', 'ok', 1)
+	]);
 
-	const control = page.locator('[data-viewport-control]');
-	const start = (await control.getAttribute('data-window-start')) ?? '';
-	const end = (await control.getAttribute('data-window-end')) ?? '';
-	const perDay = new Map<string, number>();
-	for (const r of canaryRows()) {
-		if (r.date < start || r.date > end || r.stage === 'plan') continue;
-		perDay.set(r.date, (perDay.get(r.date) ?? 0) + 1);
-	}
-	const fat = [...perDay.values()].filter((n) => n >= MIN_ATTEMPTS_FOR_RATE).length;
-	const thin = [...perDay.values()].filter((n) => n > 0 && n < MIN_ATTEMPTS_FOR_RATE).length;
-
-	// Positive evidence and negative evidence together. A count of zero marks
-	// would pass an absence test on a chart that draws nothing at all.
-	expect(fat, 'no day in the window is thick enough to draw a mark').toBeGreaterThan(0);
-	expect(thin, 'no day in the window is thin enough to withhold one').toBeGreaterThan(0);
-	await expect(page.locator('[data-rate-mark="fetch"]')).toHaveCount(fat);
-	await expect(page.locator('[data-rate-mark="summarize"]')).toHaveCount(fat);
+	await expect(page.locator('[data-rate-mark="fetch"]')).toHaveCount(2);
+	await expect(page.locator('[data-rate-mark="summarize"]')).toHaveCount(2);
 });
 
 test('a window too thin to divide states that, and never a rate', async ({ page }) => {
-	await page.goto('/console/');
-	await expect(page.locator('[data-window-preset="7"] input')).toBeEnabled();
-
-	// Driven through the controls an operator has: narrow to the shortest
-	// preset, then step back until the window holds fewer items than the knob
-	// asks for. The canary's older days carry one and three items, so this state
-	// is reachable without inventing a fixture for it.
-	await page.locator('[data-window-preset="7"]').click();
-	const control = page.locator('[data-viewport-control]');
-	const back = page.getByRole('button', { name: 'Back' });
-
-	let reached = 0;
-	for (let step = 0; step < 6; step += 1) {
-		await back.click();
-		const start = (await control.getAttribute('data-window-start')) ?? '';
-		const end = (await control.getAttribute('data-window-end')) ?? '';
-		reached = canaryRows().filter(
-			(r) => r.date >= start && r.date <= end && r.stage !== 'plan'
-		).length;
-		if (reached > 0 && reached < MIN_ATTEMPTS_FOR_RATE) break;
-	}
-	expect(reached, 'no window this walk reached is thin enough to test the state').toBeGreaterThan(0);
-	expect(reached).toBeLessThan(MIN_ATTEMPTS_FOR_RATE);
+	// Two items fewer than the knob asks for, both on the window's newest day, so
+	// every stage is reached by too few items to give a rate.
+	const thin = MIN_ATTEMPTS_FOR_RATE - 2;
+	await openServed(page, (window) => items(window.end, 'thin', 'publish', 'ok', thin));
 
 	for (const stage of STAGES) {
-		await expect(
-			page.locator(`[data-failure-readout] [data-failure-stage="${stage}"]`)
-		).toHaveAttribute('data-stage-low-sample', 'true');
+		const cell = page.locator(`[data-failure-readout] [data-failure-stage="${stage}"]`);
+		await expect(cell).toHaveAttribute('data-stage-reached', String(thin));
+		await expect(cell).toHaveAttribute('data-stage-low-sample', 'true');
 		const says = flat(await page.locator(`[data-panel-rate="${stage}"]`).innerText());
-		expect(says, `${stage} gave a rate on ${reached} items`).not.toContain('%');
-		expect(says).toContain('that reached it');
+		expect(says, `${stage} gave a rate on ${thin} items`).not.toContain('%');
+		expect(says).toContain(`the ${thin} that reached it`);
 	}
 	await expect(page.locator('[data-failure-low-sample]')).toBeVisible();
 });
 
-test('a window holding nothing renders, and says so rather than drawing zero', async ({ page }) => {
-	await page.goto('/console/');
-	await expect(page.locator('[data-window-preset="7"] input')).toBeEnabled();
-	await page.locator('[data-window-preset="7"]').click();
+test('a held month file says the chart is waiting, not empty', async ({ page }) => {
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => (release = resolve));
+	let requested = 0;
+	await page.route('**/telemetry/*.csv', async (route) => {
+		requested += 1;
+		await held;
+		await route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+	});
 
-	const control = page.locator('[data-viewport-control]');
-	const back = page.getByRole('button', { name: 'Back' });
-	for (let step = 0; step < 10; step += 1) {
-		await back.click();
-		const start = (await control.getAttribute('data-window-start')) ?? '';
-		const end = (await control.getAttribute('data-window-end')) ?? '';
-		const held = canaryRows().filter((r) => r.date >= start && r.date <= end).length;
-		if (held === 0) break;
+	try {
+		await page.goto('/console/');
+		await expect.poll(() => requested, 'the page did not request a month file').toBeGreaterThan(0);
+		await expect(page.locator('[data-failure-loading]')).toHaveText(
+			'Reading the monthly files. This chart is not ready yet.'
+		);
+		await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
+		await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
+	} finally {
+		release();
 	}
+});
+
+test('a month file that returns 404 says the chart is unavailable, not empty', async ({ page }) => {
+	let requested = 0;
+	await page.route('**/telemetry/*.csv', async (route) => {
+		requested += 1;
+		await route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
+	});
+
+	await page.goto('/console/');
+	await expect.poll(() => requested, 'the page did not request a month file').toBeGreaterThan(0);
+	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
+		'data-telemetry-fetching',
+		'no'
+	);
+	await expect(page.locator('[data-failure-unavailable]')).toHaveText('This chart is unavailable.');
+	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
+	await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
+});
+
+test('a window holding nothing renders, and says so rather than drawing zero', async ({ page }) => {
+	// Six items on the window's newest day and none before it. Narrowed to seven days
+	// the window draws them; one step back it holds nothing, which is the state.
+	await openServed(page, (window) => items(window.end, 'newest', 'publish', 'ok', 6));
+	await page.locator('[data-window-preset="7"]').click();
+	await expect(page.locator('[data-failure-chart]'), 'the newest seven days drew no chart').toHaveCount(1);
+
+	await page.getByRole('button', { name: 'Back' }).click();
+	await expect(page.locator('[data-viewport-control]')).toContainText('0 rows in view');
 
 	// A column of zeroes reads as a run that went badly. An empty window went
 	// nowhere at all, and the page has to say which.
-	await expect(page.locator('[data-failure-empty]')).toBeVisible();
+	await expect(page.locator('[data-failure-empty]')).toHaveText(
+		'No item was planned in these 7 days, so there is no rate to give and no volume to give it against.'
+	);
 	await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 });

@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-08
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -20,10 +20,31 @@ slider was rejected for the same reason: every span is a different number of
 month files to fetch, and the spans between these five cannot be told apart once
 drawn. The narrowest is one day, the cheapest read the console can do.
 
-The viewport default and where today sits are `console.default_window_days` and
-`console.today_anchor`. Arrow keys pan, and `+` / `-` step the window to the next
+The viewport default is `console.default_window_days`, and `console.today_anchor`
+says where the day every window ends on sits in it. Arrow keys pan, and `+` / `-` step the window to the next
 preset, from a labelled focusable control with a visible focus ring; the buttons
 beside it pan with a pointer.
+
+**Every window ends on the site's newest published day**, the newest day the
+site published a digest, which is the day the console treats as today. Every
+route places every span the control offers on that one day, read at build time
+by `windowDay()` in `frontend/src/lib/server/window-day.ts`. Neither the build
+clock nor any record's own newest day places a window, so two builds of the same
+data draw the same windows, and a record whose rows stop leaves its panels empty
+for the window rather than moving the window back to its last rows. A route
+reads exactly the widest window and no day before it
+([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
+When the site has published no day, the window is placed on the build's own UTC
+day: there is nothing to draw either way, and the page still renders.
+
+**The route says when a window is empty because of its record.** A day is
+packed only after it ends, so in normal running the packed records reach the day
+before the newest published day, and every panel built on one draws that day
+with nothing in it. The last line of the route's record notes says so, a step
+quieter than the others, every day. A record whose packed rows stop before the
+window says from when, and names the narrowest window that reaches back to them
+([console-payloads.md](console-payloads.md)). Each route writes its notes once
+for each preset, so the page picks the open window's and fetches nothing.
 
 Three rules keep the control honest and all three are in the contract, so a bad
 config fails the build rather than the page:
@@ -59,6 +80,17 @@ Pipelines is the span Hardware opens on and the other way round -
 [../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
 drives it both ways in one browser session, because a route that writes the key
 and never reads it passes a one-way check.
+
+**A tab click carries the span too, with no page load.** The router mounts the
+next route under the same layout and tears the last one down in the same
+update, and the control then holds the span the next route draws. The same spec
+clicks from Pipelines at 1 day to Judgement, and back at 7 days, and compares
+the control with what the panels draw, never with a number of days. The control
+used to fall back to the configured window there, disabled, while the panels
+drew the stored span, because the last route's teardown read the layout's state
+as it was before the move and emptied the slot the next route had just filled.
+[window-slot.ts](../../../frontend/src/lib/console/window-slot.ts) now keeps which
+route holds the control in a plain variable, which a teardown reads as it is.
 
 **If a telemetry month is absent or cannot be parsed, that month is a gap in the
 charts.** It is not interpolated, and it never white-screens the console.
@@ -100,14 +132,15 @@ count.
 
 ## The surfaces that do not simply follow the span
 
-Each one says so on the page. Three are on Voices, one on Pipelines, and one
-stands on every route.
+Each one says so on the page. Three are on Voices, one on Pipelines, one on
+Judgement, and one stands on every route.
 
 | Surface | Route | What it does | Why |
 | --- | --- | --- | --- |
 | `Feeds that failed` | Voices | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
 | `Sources we may ask, and what they yield` | Voices | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
 | `What the ranking makes of each feed` | Voices | Reads the factor the run applied, over the span the run reduced it on | The run reduced it over `collect.reliability_window_days` when it happened. Redrawing it over seven days would print a number no run ever applied. |
+| `What the record still needs` | Judgement | The three bars read the record's newest row on or before the window's last day, so they show the same counts at every preset; the strip of squares and the count of fitted days follow the span | The record is a running total that changes only when a run writes a row, so its newest row is what it holds whatever span is open. Read from the window's rows alone, a window with no row drew the bars at zero, which is the picture of a record that holds nothing. When the bars stand on a row before the window, the note names its day: `The bars show what the record held on 14 Jun 2030, before this one day.` |
 | `Site size` | every route | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's, whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Minutes per visual` | Pipelines | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
@@ -117,7 +150,7 @@ rules: `Sources cut short most often`
 ([console-truncation.md](console-truncation.md)) and `What one item cost the
 model`
 ([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#it-follows-the-windows-length-not-a-pan)).
-The days they read always end on the newest day the ledger holds. Their rows are
+The days they read always end on the newest published day. Their rows are
 aggregated once per preset at build time - four sets of numbers cost less than
 one fetch, and it keeps the section working with no script at all.
 
@@ -128,12 +161,20 @@ and that oracle is stronger for being exact. A panel outside the list proves it
 honours the control in its own spec, by driving the control to each preset and
 reading the control's own attribute back against the panel's.
 
+**Ten surfaces on Pipelines declare it**, among them `What is failing, by stage`
+and `Where an item's time went`. Both draw exactly the window's days and move
+with a pan, as `Run health` and `Failure rate against volume` do, and each names
+its span in its own accessible label. A day with nothing to draw keeps its
+column, empty, and a window with nothing to draw prints one sentence in the
+chart's room ([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#what-is-failing-by-stage)).
+
 ## The model-change markers read the window as well
 
 `pipelineChanges`, which draws the model-change markers on `/console/` and
 `/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
-read the score record's newest packed days - the widest window preset, the cover
-every other panel on those routes reads - and never the whole ledger. The
+read the score record's packed days in the widest window preset, which ends on
+the newest published day - the cover every other panel on those routes reads -
+and never the whole ledger. The
 `compact-summary-quality-evals` compaction never drops a month: its `monthly_window`
 is `forever`, and a year it packs keeps every row, so turning it live moves
 none of their dates.
@@ -143,8 +184,9 @@ none of their dates.
 The server used to concatenate every committed month and inline all of it, so the
 console document grew for as long as the pipeline ran - a reader downloaded four
 months to look at thirty days, and would have downloaded a year by next summer.
-It reads `console.default_window_days` back from the newest day on record now,
-which is the window the viewport opens on, so the two cannot disagree.
+It reads only the window it is handed now: the widest preset, which ends on the
+newest published day as every other console window does, so the read and the
+windows cannot disagree.
 
 Measured 2026-08-26 on one Windows dev machine, against four months of real row
 volume - the committed August shard (2,000 rows, 171 KB) plus three copies of it
@@ -170,14 +212,72 @@ Two consequences worth stating, because both are the reason this is safe:
  are one arrow key away rather than gone. That fetch path already existed and
  was dead code: with every month in the seed, there was never a month left to
  fetch.
-- **The cutoff is anchored on the newest committed day, never on the build
- clock.** Anchored on today, a corpus that stopped last month would seed an
+- **The read ends on the newest published day, never on the build clock.**
+ Anchored on the build clock, a pipeline that stopped last month would draw an
  empty console - the page would go blank precisely when the pipeline broke,
- which is when an operator needs it.
+ which is when an operator needs it. Run back from the projection's own newest
+ row instead, a projection holding a day after the newest published day cuts
+ the oldest day off the widest window.
 
-The read is bounded too. A window is a count of days, so it straddles a month
-boundary and reads two shards at worst; every older shard is skipped unopened,
-however many the repository has accumulated (`CLAUDE.md` Guardrail #12).
+The read is bounded too. A window is a count of days, so it straddles month
+boundaries and opens one shard for each month it touches - four at most for a
+90-day window. Every other shard is skipped unopened, however many the
+repository has accumulated (`CLAUDE.md` Guardrail #12).
+
+## Design rationale
+
+**Every window ends on the newest published day, not on a record's own rows.**
+The owner ruled this on 2026-10-05. Each route used to end its windows on the
+newest day in whatever rows it held, so a record that stopped writing kept its
+last rows on screen and moved its window into the past, and two records on one
+route could end on different days. Three other days were weighed and refused:
+the build's UTC day (a build that runs before the day's digest ends every window
+on a day with nothing published), each record's newest rows (the past-moving
+window above), and the newest day packing can have reached (it is not the
+current day, and the packing delay differs by ledger).
+
+**The day packing has not reached gets one quiet line on the route, not a mark
+on every panel.** Ruled on 2026-10-06 by Susan and Jony, with Reader on the
+words, after one debate round in which each accepted the other's wording. A
+mark on every date-axis panel is about 20 components in three drawing systems.
+What the line leaves, said rather than implied: on bar and day-strip panels the
+newest day looks like a day with nothing in it, and at the one-day window some
+panels print a sentence that reads as quiet, for example
+`Nothing was timed in this one day.` on Summaries, while the line above them
+says that day is not packed yet. So waiting and quiet still look alike for one
+day on those panels. The follow-up row that marks the unpacked days on bar and
+strip panels, and gives every panel whose whole window is unpacked its own
+sentence, closes it; until it lands, this entry is the record of the gap.
+
+**The record's three bars stand on its newest row, not on the window's.** Ruled
+on 2026-10-07 by Jony, with Reader on the words, after one debate round in which
+Reader added the window to the note, because every windowed panel names its own
+days. A window with no row used to draw the bars at zero while the record still
+held what its newest earlier row counted. Three other pictures were refused: a
+dash in place of each bar (the operator loses how far the record is from each
+gate, an exact count the page already holds), the same bars in a muted fill (an
+exact value made to look doubtful, and a second kind of target bar to say what a
+date already says), and no bars at all (the empty state is the panel, and the
+panel would change height with the window). So bars at zero mean one thing: the
+record holds nothing, because it never held a row or because it emptied. The
+note says the record `was started again` only where that row's own hold reason
+says so; a row of zeros alone does not prove it.
+
+**The failure mix and the item time split follow the window rather than saying
+why not.** Both used to draw every day of every telemetry month the browser had
+fetched, so the days they drew depended on what the operator had opened earlier
+in the session. They could even draw a day after the window's last day. And the
+page counted one window's failures over two spans. A sentence saying why they
+drew more would have described this browser's fetches, not the data. So both
+draw the window's days, pan included, and neither trims an end: a window that
+shrank to the days that timed something would draw a span the control never
+named. A day with no row, or on the time split no item timed from start to
+finish, draws no column and a break in a line, never a zero, and the strip says
+what that day lacks. What the reader gives up: the extra fetched days, which a
+wider preset gives back; and on the failure mix's bars, a day nothing was
+planned on and a day nothing failed on look alike until he points at one. No
+tint tells them apart, because `Run health` and `Failure rate against volume`
+already shade the days nothing was planned on.
 
 ## See also
 

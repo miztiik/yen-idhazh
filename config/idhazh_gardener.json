@@ -1,19 +1,30 @@
 {
   "attempts": 6,
+  "first_ledger_year": "2026",
   "max_downloaded_mb": 128,
   "shards": 5,
   "task_names": [
     "compact-candidate-models",
+    "compact-content-similarity-judge-fitted-thresholds",
+    "compact-content-similarity-judge-holdout-pairs",
+    "compact-content-similarity-judge-merge-line-holdout-scores",
+    "compact-content-similarity-judge-metrics",
+    "compact-content-similarity-judge-scored-pairs",
+    "compact-council-run-records",
     "compact-counterfactual-scores",
     "compact-feed-health",
     "compact-feed-retirements",
     "compact-gardener",
     "compact-host-fingerprint",
     "compact-item-health",
+    "compact-item-health-summary",
     "compact-published",
     "compact-run-plan",
     "compact-seen",
     "compact-summary-quality-evals",
+    "compact-trial-candidate-models",
+    "compact-trial-host-fingerprint",
+    "compact-trial-item-health",
     "compact-visual-prunes",
     "corpus-squash",
     "digest-fragments",
@@ -24,5 +35,5 @@
     "workflow-artifacts",
     "workflow-runs"
   ],
-  "version": "2026-10-03"
+  "version": "2026-10-06"
 }

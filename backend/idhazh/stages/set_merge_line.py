@@ -17,9 +17,11 @@ refused from a day nothing ran.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
-from idhazh import assemble, config, ledger, publication
+from idhazh import assemble, config, ledger
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
     FittedSimilarityThreshold,
@@ -32,6 +34,9 @@ from idhazh.similarity import counting, fit
 from idhazh.similarity.stamps import ScorerStamp, judge_inputs, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.common import LOG, _load_day
+
+#: What every file this stage files names as the module that wrote it.
+PRODUCER: Final = __name__.partition(".")[2]
 
 
 def merge_count(day: DigestDay) -> int:
@@ -69,19 +74,26 @@ def stage_set_merge_line(
     *,
     run_id: str,
     settings: config.Settings,
+    identity: WriterIdentity,
     state_dir: Path | None = None,
     digest_root: Path = common.PUBLIC_ROOT,
 ) -> FittedSimilarityThreshold | None:
-    """Walk the record, damp the move, clamp what is left, and write the day's row.
+    """Walk the record, damp the move, clamp what is left, and file the day's row.
 
     **Every read is bounded** (Guardrail #12). One published day, the fixed-size
-    record, the one day file the date names, and the fitted rows inside a window
-    two knobs set. Nothing walks a collection a run appends to.
+    record, the one day of judged pairs the date names, and the fitted rows
+    inside a window two knobs set, both read through the ledger door. Nothing
+    walks a collection a run appends to.
 
     **`run_id` is the council's own and is handed in.** The run that fitted the
     line is the council night, not the digest run that published the day it read
     - and the digest run's id carries a date prefix a day stale, which a reader
     takes for the day this row's run opened.
+
+    **`identity` is the council's own, for the job that saves the night's
+    results.** The row goes through the ledger door under it, with this stage
+    named as its producer, so the file says which run, which attempt and which
+    commit filed it.
 
     **Today's own row is excluded from every look backwards.** A second attempt
     at one date would otherwise read its own first attempt as yesterday's line
@@ -94,6 +106,7 @@ def stage_set_merge_line(
     same_story = settings.app.assemble.same_story
     knobs = same_story.judging_knobs()
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
+    writer = WriterIdentity.model_validate(identity.model_dump() | {"producer": PRODUCER})
 
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")
     if day is None:
@@ -236,15 +249,12 @@ def stage_set_merge_line(
         prompt_digest=record.prompt_digest,
         grammar_digest=record.grammar_digest,
     )
-    ledger.append_fitted_thresholds(state, date, [row])
-    publication.record_state_files(
-        digest_root.parent,
+    ledger.persist(
         state,
-        paths=[
-            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
-            .relative_to(state)
-            .as_posix()
-        ],
+        [row],
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+        covers=date,
+        identity=writer,
     )
     LOG.info(
         "set-merge-line date=%s run=%s previous=%s proposed=%s applied=%s clamp=%s held=%s "

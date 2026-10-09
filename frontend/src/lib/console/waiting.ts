@@ -20,11 +20,13 @@
  * saying the same thing say it the same way, and so a change of wording is one
  * edit rather than a hunt.
  */
-import { MONTHS } from '$lib/format';
+import { MONTHS, shortDate } from '$lib/format';
 import { megabytes } from '$lib/assist/session';
 import { grouped } from '$lib/charts/series';
 import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
+import { nameSpan } from '$lib/console/span-words';
 import type { AskRefusal } from '$lib/data/ledger';
+import type { UnansweredDays } from '$lib/data/slice-shapes';
 
 export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable' | 'refused';
 
@@ -142,7 +144,7 @@ export function wideningPreset(
  * preset is the only action there is, so it is named with the span it reaches.
  */
 export function quietSentence(days: number, widen: number | null): string {
-	const read = `Nothing was recorded in these ${days} days.`;
+	const read = `Nothing was recorded in ${nameSpan(days)}.`;
 	return widen === null
 		? `${read} No wider window reaches a day that has anything.`
 		: `${read} The ${widen}-day window reaches back to months that do.`;
@@ -177,11 +179,14 @@ export function unreachableSentence(months: readonly string[], heldDays: number)
  * It names the floor, from the value the panel passed in, and how many rows
  * there were, so an operator can tell a window that is too short from a
  * pipeline that stopped. `noun` is the plural the floor counts - `readings`,
- * `kinds` - because "fewer than 160" alone does not say of what.
+ * `kinds` - because "fewer than 160" alone does not say of what. `place` says
+ * where the rows were counted: a windowed panel counts `in this window`, and
+ * the Data explorer, which draws an answer rather than a window, passes
+ * `in the answer`.
  */
-export function tooFewSentence(have: number, floor: number, noun: string): string {
+export function tooFewSentence(have: number, floor: number, noun: string, place = 'in this window'): string {
 	const are = have === 1 ? 'is' : 'are';
-	return `Only ${grouped(have)} of the ${grouped(floor)} ${noun} this chart needs ${are} in this window, so it is not drawn.`;
+	return `Only ${grouped(have)} of the ${grouped(floor)} ${noun} this chart needs ${are} ${place}, so it is not drawn.`;
 }
 
 /** The label on the retry, which carries its own subject.
@@ -216,10 +221,10 @@ export function explorerQuietSentence(): string {
 	return 'Your question ran and matched no rows.';
 }
 
-export function explorerMissingSentence(ledger: string, published: boolean): string {
+export function explorerMissingSentence(ledger: string, published: boolean, explainUnasked = true): string {
 	return published
-		? `${ledger} has no days on this site yet.`
-		: `${ledger} is not on this site yet, so nothing was asked of it.`;
+		? `${ledger} is not packed yet.`
+		: `${ledger} is not on this site yet${explainUnasked ? ', so nothing was asked of it' : ''}.`;
 }
 
 export function explorerUnreachableSentence(ledger: string | null, day: string | null, fault: string | null): string {
@@ -228,6 +233,20 @@ export function explorerUnreachableSentence(ledger: string | null, day: string |
 	}
 	if (fault === null) return `${ledger ?? 'The ledger'} for ${day ?? 'that day'} did not arrive, so the question did not run.`;
 	return `No file on this site holds ${ledger ?? 'the ledger'} for ${day ?? 'that day'}.`;
+}
+
+/** The note an answer prints when the repository, the committed `state/` the archive address points
+ *  at, could not give it a ledger's older days: one sentence a ledger, each naming the ledger's
+ *  first day on this site, where its answer starts, then one retry. Each sentence stays true
+ *  whether the host did not answer, a file was not there, an index could not be read or a file
+ *  arrived at the wrong size, and it names the repository rather than a host, because the address
+ *  is a config value. The retry is a retry, not a fix: Run alone repeats a file the page remembers
+ *  was not there, and Refresh forgets it (Reader and Jony, 2026-10-07). */
+export function explorerUnansweredNote(unanswered: readonly UnansweredDays[]): string {
+	const lines = unanswered.map(
+		({ ledger, before }) => `Days of the ${ledger} record before ${shortDate(before)} are not in this answer, because this page could not read them from the repository.`
+	);
+	return [...lines, 'Press Refresh, then Run, to try again.'].join(' ');
 }
 
 export function explorerChartIdleSentence(): string {

@@ -114,7 +114,8 @@ class ServerJob(StrEnum):
 
     Every value is a job's own id in its workflow file, lowercase, so a reader
     goes from a row to the steps that wrote it with no lookup table in between.
-    A display name would drift from the thing it identifies.
+    A display name would drift from the thing it identifies. `operator`, below,
+    is the one value that names no workflow job.
 
     It sits here, at the bottom of the contract graph, because three ledgers and
     a filename grammar all name a job and none of them owns the vocabulary.
@@ -133,12 +134,27 @@ class ServerJob(StrEnum):
     repository, which is why none of the three is version-stamped for it - a
     stamp says a shape moved, and theirs did not.
 
+    **`operator` is here for a file's writer and not for a column, as `decide`
+    is.** A command a person runs on their own machine, outside any workflow,
+    files a door ledger - the merge line's holdout score - and the door names
+    every file's writer from this set. No row of the three ledgers that carry a
+    `job` column can hold it, so none of them is version-stamped for it; the
+    file envelope, whose writer identity can, is.
+
     **`migrate`, `run-tasks` and `history` are here before any workflow runs
     them.** The ledger door names a file's writer from this set, so a job has to
     be in it before the first file carries its name. A migration job moves rows
     already recorded, and the gardener's two jobs compact, age out and rewrite
-    what earlier runs wrote. None of the three records a new row, which is what
-    `MAINTENANCE_JOBS` below says.
+    what earlier runs wrote.
+
+    **What they write is still a new row, and the door gates it like any other.**
+    The gardener's task job files its own record of a wake, which nothing
+    recorded before it. Until 2026-10-08 a frozenset here exempted these three
+    from the lifecycle check on a raw write, on the reading that none of them
+    records a new row - and no live caller ever matched that reading. The
+    compact tier is the one that is never gated, and it is `persist_period`
+    that says so, because repacking a day that is already recorded is not a new
+    row.
     """
 
     # digest.yml, in the order a run reaches them.
@@ -155,21 +171,15 @@ class ServerJob(StrEnum):
     # verdict. It stands no server up and records no machine, so it names a
     # writer of the candidate-models ledger and of nothing else here.
     DECIDE = "decide"
-    # The jobs that maintain rows rather than record them: a one-off migration,
-    # and the gardener's sharded task job and its history rewrite.
+    # The jobs that maintain rows rather than record them: an operator's range
+    # prune, which files a door day again without the days it takes, and the
+    # gardener's sharded task job and its history rewrite.
     MIGRATE = "migrate"
     RUN_TASKS = "run-tasks"
     HISTORY = "history"
-
-
-#: The jobs whose writes file rows again rather than record new ones. The
-#: ledger door skips a raw write into a paused or retired family unless the
-#: writer is one of these, because skipping a maintenance write would lose rows
-#: that were already recorded while the run reported success. A fact about the
-#: vocabulary rather than a knob, so it sits beside it.
-MAINTENANCE_JOBS: Final[frozenset[ServerJob]] = frozenset(
-    {ServerJob.MIGRATE, ServerJob.RUN_TASKS, ServerJob.HISTORY}
-)
+    SAVE_COUNCIL_RESULTS = "save_council_results"
+    # A command a person runs on their own machine, outside any workflow.
+    OPERATOR = "operator"
 
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
@@ -699,7 +709,7 @@ def renamed_keys[V](data: V, renames: Mapping[str, str]) -> V:
 
     The read-side migration `CLAUDE.md` section 11 owes when a field changes
     name in a shape whose older payloads are never rewritten - a sealed per-item
-    payload, or a committed CSV whose heading still spells the old name. The old
+    payload, or a committed ledger file whose column still spells the old name. The old
     key is moved to the new one only when the new one is absent, so a payload
     that already carries the new name keeps its own value, and an old key beside
     it is dropped rather than left for `extra="forbid"` to refuse.

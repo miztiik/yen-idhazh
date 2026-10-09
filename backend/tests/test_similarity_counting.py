@@ -1,7 +1,7 @@
 """What does the record hold after a day is counted into it, and what is refused?
 
-The arithmetic, and the collecting job that applies it: what it appends beside
-the record is part of what a counted day leaves behind.
+The arithmetic, and the collecting job that applies it: what it files beside
+the record through the ledger door is part of what a counted day leaves behind.
 
 Every record and every row here is built in the test that uses it. Nothing walks
 the committed day tree: the arithmetic is about one record and a handful of rows,
@@ -20,11 +20,12 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 
 from idhazh import atomic_write, config, ledger
-from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
@@ -313,7 +314,7 @@ def a_metrics_row(
         {
             "date": date,
             "run_id": f"{date}-9",
-            "shard": shard,
+            "work_part_index": shard,
             "pairs_dealt": dealt,
             "pairs_read": dealt,
             "pairs_agreed": dealt,
@@ -353,7 +354,7 @@ def a_night(
     verdicts = root / VERDICTS_DIRNAME
     written = [a_metrics_row(shard=unit, date=date) for unit in range(units)]
     for unit, row in enumerate(written):
-        metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
+        metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, name=str(unit), out_dir=shipped)
         atomic_write.write_atomic(
             verdicts
             / session.unit_file(
@@ -369,13 +370,25 @@ def a_night(
     return shipped, verdicts, written
 
 
-def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: Path) -> None:
-    """Cell for cell, and the whole file is compared rather than a column of it.
+def a_saver(run_id: str = A_COUNCIL_RUN) -> WriterIdentity:
+    """The writer the council hands a tenant: the job that saves the night's results."""
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=1,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="council.session",
+        git_sha=SEED_COMMIT,
+    )
 
-    Both ends render through the contract's own columns, so a column one side
-    knows about and the other does not shows up here as a line that is no longer
-    the line the unit wrote - which is the one failure a spot check of two cells
-    would walk straight past.
+
+def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: Path) -> None:
+    """Cell for cell, and the whole row is compared rather than a column of it.
+
+    The units ship through the contract's own columns and the door files through
+    the contract's own fields, so a cell one side knows about and the other does
+    not shows up here as a row that is no longer the row the unit wrote - which
+    is the one failure a spot check of two cells would walk straight past.
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
@@ -388,23 +401,18 @@ def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: 
         shipped_root=shipped,
         verdicts_dir=verdicts,
         settings=settings,
+        identity=a_saver(),
         state_dir=state,
     )
 
-    landed = read_text(ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DATE)).splitlines()
-    out_of_the_units = [
-        read_text(shipped / JUDGE_ID / f"{unit}.csv").splitlines()
-        for unit in range(len(written))
-    ]
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+    landed = ledger.load_days(state, which, [DATE], model=ContentSimilarityJudgeMetrics)
+    (filed,) = ledger.list_raw_files(state, which, days=[DATE])
 
     assert report.metrics_appended == len(written)
     assert report.counted is True, "every unit reported, so the day is counted"
-    assert landed[0] == ",".join(ContentSimilarityJudgeMetrics.csv_columns())
-    assert landed[1:] == [unit[1] for unit in out_of_the_units]
-    assert all(unit[0] == landed[0] for unit in out_of_the_units), (
-        "the units and the ledger name their columns differently, so a row moved "
-        "between them would be read one cell out of place"
-    )
+    assert sorted(landed, key=lambda row: row.work_part_index) == written
+    assert filed.envelope.identity.producer == count_verdicts.PRODUCER
 
 
 def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path) -> None:
@@ -425,13 +433,14 @@ def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path
         shipped_root=shipped,
         verdicts_dir=verdicts,
         settings=settings,
+        identity=a_saver(),
         state_dir=state,
     )
 
     assert settings.app.council.shards > len(written), "a night short of a unit"
     assert (report.counted, report.held_reason) == (False, "shards_missing")
     assert report.metrics_appended == 1
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DATE).exists()
+    assert ledger.list_raw_files(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, days=[DATE])
 
 
 def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> None:
@@ -446,11 +455,97 @@ def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> 
         shipped_root=tmp_path / "nothing-was-uploaded",
         verdicts_dir=tmp_path / "nothing-was-judged",
         settings=settings,
+        identity=a_saver(),
         state_dir=state,
     )
 
     assert report.metrics_appended == 0
-    assert not ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DATE).exists()
+    assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).exists()
+    assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS).exists()
+
+
+#: The commit the save job's command line names, and the attempt the platform
+#: says it is on. Both have to reach every file the night files.
+A_COMMIT: Final = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
+AN_ATTEMPT: Final = 2
+
+
+def test_a_settled_night_files_each_judged_date_through_the_door_and_the_fit_reads_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The oracle for the move: `council-settle --commit` over a fixture night.
+
+    Two judged dates, each settled from the command line the way the save job
+    settles it, over every unit's verdicts and readings. Each date leaves one
+    raw file of judged pairs and one of readings under the judge's own folder of
+    the door's raw root, each filed under the council's writer identity with the
+    counting stage as its producer, and nothing under the folders the two
+    ledgers used to fill as CSV. Each pair and each reading keeps the part that
+    judged it. The fit then reads the day's pairs back through the door: its
+    row counts every pair the night filed for that day.
+    """
+    from test_similarity_fit import a_published_day
+
+    from idhazh import cli
+    from idhazh.stages import common
+
+    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", str(AN_ATTEMPT))
+    a_published_day(common.PUBLIC_ROOT, date=DATE)
+    state = tmp_path / "state"
+    units = config.load(CONFIG_DIR).app.council.shards
+    nights = (AN_EARLIER_DATE, DATE)
+    for date in nights:
+        for unit in range(units):
+            reading = ContentSimilarityJudgeMetrics.model_validate(
+                a_metrics_row(shard=unit, date=date).model_dump() | {"run_id": A_COUNCIL_RUN}
+            )
+            metrics_sink.ship_judge_metrics(
+                reading,
+                judge_id=JUDGE_ID,
+                name=str(unit),
+                out_dir=session.scratch_root(date) / session.METRICS_DIRNAME,
+            )
+            judged = StorySimilarityPair.model_validate(
+                a_row(score=0.55, pair=unit, date=date, run_id=A_COUNCIL_RUN).model_dump()
+                | {"work_part_index": unit}
+            )
+            atomic_write.write_atomic(
+                session.unit_file(date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit),
+                a_verdict_file([judged]),
+            )
+        argv = ["council-settle", "--date", date, "--run-id", A_COUNCIL_RUN]
+        assert cli.main([*argv, "--state-root", str(state), "--commit", A_COMMIT]) == 0
+
+    writer = WriterIdentity(
+        run_id=A_COUNCIL_RUN,
+        attempt=AN_ATTEMPT,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="stages.count_verdicts",
+        git_sha=A_COMMIT,
+    )
+    scored = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
+    metrics = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+    for date in nights:
+        for which in (scored, metrics):
+            (filed,) = ledger.list_raw_files(state, which, days=[date])
+            assert filed.envelope.identity == writer, which
+            assert filed.path.parent == ledger.raw_root(state, which).joinpath(*date.split("-"))
+        pairs = ledger.load_days(state, scored, [date], model=StorySimilarityPair)
+        readings = ledger.load_days(state, metrics, [date], model=ContentSimilarityJudgeMetrics)
+        assert sorted((row.work_part_index, row.pair_key) for row in pairs) == [
+            (unit, a_pair(unit)[2]) for unit in range(units)
+        ]
+        assert sorted(row.work_part_index for row in readings) == list(range(units))
+    assert not (state / JUDGE_ID / "scored-pairs").exists()
+    assert not (state / JUDGE_ID / "metrics").exists()
+
+    (fitted,) = ledger.load_fitted_thresholds(state, today=DATE, within_days=0)
+    assert (fitted.date, fitted.pairs_in_band) == (DATE, units), (
+        "the fit read the day's pairs back through the door"
+    )
 
 
 def a_ruler_moved(settings: config.Settings) -> config.Settings:
@@ -481,6 +576,7 @@ def counted_by(
         shipped_root=shipped,
         verdicts_dir=verdicts,
         settings=settings,
+        identity=a_saver(f"{date}-9"),
         state_dir=state,
     )
 

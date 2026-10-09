@@ -114,10 +114,15 @@
     "context_high_percentile": 95.0,
     "default_window_days": 21,
     "doubt_rows": 6,
-    "explorer_answer_svh": 61,
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
     "explorer_chart_min_rows": 4,
+    "explorer_chart_note_lines": [
+      3,
+      3,
+      2,
+      2
+    ],
     "explorer_chrome": "console",
     "explorer_counter_from_share": 1.0,
     "explorer_editor_lines_shown": [
@@ -173,18 +178,24 @@
       }
     ],
     "explorer_history_max": 11,
+    "explorer_link_max_bytes": 8193,
     "explorer_max_fetch_bytes": 67108865,
     "explorer_max_rows": 1001,
     "explorer_notice_ms": 5001,
     "explorer_query_max_chars": 5777,
-    "explorer_rail_rem": 15.0,
     "explorer_rank_max": 31,
     "explorer_reach_days": 366,
     "explorer_readout_lines": [
+      5,
       4,
+      5,
+      4
+    ],
+    "explorer_role_slots_per_line": [
+      2,
       3,
-      3,
-      2
+      4,
+      5
     ],
     "explorer_row_page": 51,
     "explorer_save_name_max_chars": 41,
@@ -454,7 +465,11 @@
     "shard_timeout_minutes": 90,
     "shard_wrap_up_minutes": 7,
     "success_floor_pct": 80,
+    "trial_case_dirname": "a-case-nobody-runs",
     "trial_state_dirname": "a-trial-nobody-runs"
+  },
+  "similarity": {
+    "holdout_reach_days": 365
   },
   "summarize": {
     "asks_for_a_visual_plan": false,

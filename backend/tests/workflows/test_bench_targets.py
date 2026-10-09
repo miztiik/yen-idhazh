@@ -400,47 +400,48 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         "the committed config is production, so a scheduled run redirects nothing"
     )
 
-    bench_root = tmp_path / ledger.STATE_DIRNAME / BENCH_TRIAL_STATE
     production_root = tmp_path / ledger.STATE_DIRNAME
     settings = config.load()
     settings.app.observability.host_fingerprint = True
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
-    plan = RunPlan.model_validate(
-        {
-            "date": "2026-09-17",
-            "run_id": "2026-09-17-1",
-            "generated_at": "2026-09-17T00:00:00Z",
-            "items": [],
-        }
-    )
+    probe_day, probe_run = "2026-09-17", "2026-09-17-1"
 
+    # The CLI applies this same overlay once, from `trial_state_dirname`, before
+    # any stage opens a ledger (`cli.main`) - so a bench probe is driven the same
+    # way here, over the production state root, rather than against a literal
+    # nested folder a bench no longer writes.
+    with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
+        silicon.stage_fingerprint(
+            date=probe_day,
+            run_id=probe_run,
+            settings=settings,
+            state_root=production_root,
+            commit_sha=SEED_COMMIT,
+            shard=0,
+            job=ServerJob.RUNTIME,
+        )
     silicon.stage_fingerprint(
-        plan,
-        settings=settings,
-        state_root=bench_root,
-        commit_sha=SEED_COMMIT,
-        shard=0,
-        job=ServerJob.RUNTIME,
-    )
-    silicon.stage_fingerprint(
-        plan,
+        date=probe_day,
+        run_id=probe_run,
         settings=settings,
         state_root=production_root,
         commit_sha=SEED_COMMIT,
         shard=0,
         job=ServerJob.WORK,
     )
-    # Each probe files a raw file under its own root's `raw/` folder. The bench
-    # root is INSIDE the production root, so a reader that walked the whole
-    # production tree would count the bench's machine as production's - and the
-    # reads below are how that is asked rather than assumed: each root's own
-    # ledger reader, the one the console panels use, returns its own row alone.
+    # Each probe files a raw file under `state/raw/`, tier-first: the bench's
+    # own folder sits beside `host-fingerprint`, under its own
+    # `pipeline-tests/` segment, rather than production's row ever landing
+    # inside the bench's tree or the reverse - and the reads below are how
+    # that is asked rather than assumed: each root's own ledger reader, the
+    # one the console panels use, returns its own row alone.
     production_rows = ledger.load_days(
-        production_root, LedgerName.HOST_FINGERPRINT, [plan.date], model=HostFingerprintRow
+        production_root, LedgerName.HOST_FINGERPRINT, [probe_day], model=HostFingerprintRow
     )
-    bench_rows = ledger.load_days(
-        bench_root, LedgerName.HOST_FINGERPRINT, [plan.date], model=HostFingerprintRow
-    )
+    with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
+        bench_rows = ledger.load_days(
+            production_root, LedgerName.HOST_FINGERPRINT, [probe_day], model=HostFingerprintRow
+        )
     assert [row.job for row in production_rows] == [ServerJob.WORK], (
         "the bench's machine reached the ledger the console reads"
     )
@@ -453,8 +454,9 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         for path in tmp_path.rglob("*")
         if path.is_file() and LedgerName.HOST_FINGERPRINT in path.parts
     }
-    day = plan.date.replace("-", "/")
-    bench_raw = ledger.raw_root(Path(BENCH_LEDGER_ROOT), LedgerName.HOST_FINGERPRINT)
+    day = probe_day.replace("-", "/")
+    with ledger.use_registry(ledger.overlay_registry((BENCH_TRIAL_STATE,))):
+        bench_raw = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT)
     production_raw = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.HOST_FINGERPRINT)
     bench_files = sorted(
         path for path in written if path.startswith(f"{bench_raw.as_posix()}/{day}/")
@@ -884,7 +886,7 @@ def test_the_fingerprint_job_reaches_the_stage_as_the_enum_it_is_declared_for() 
     `stage_fingerprint` is declared `job: ServerJob`, and the bench passes
     `--job runtime` on the command line. Nothing converted it, so the stage got
     a bare string - harmless until a segment name asked it for `.value`, which
-    is what `write_segment` began doing. Every test of this stage called it with
+    is what the CSV segment writer began doing. Every test of this stage called it with
     the enum directly, so all of them passed while the one caller that matters
     was broken.
 

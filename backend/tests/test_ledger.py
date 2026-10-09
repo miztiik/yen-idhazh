@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Collection, Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
@@ -23,25 +23,21 @@ from conftest import (
     writer_identity,
 )
 
-from idhazh import config, day_shards, ledger, month_partition
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
-from idhazh.contracts.call_cost import COST_FIELDS, CallKind
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
-    DROPPED_CELLS,
-    RETIRED_CELLS,
     FailureCode,
     ItemHealthRow,
     ItemOutcome,
     ItemStage,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.validation_row import ValidationRow
@@ -49,7 +45,6 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files
 from idhazh.telemetry import silicon
 from idhazh.telemetry.source_health import feed_reliability, reliability
-from utilities.ledger_migration.csv_layouts import csv_root
 from utilities.reconcile_prefill import TOLERANCE, reconcile
 
 pytestmark = pytest.mark.contract
@@ -126,33 +121,6 @@ def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> Host
     )
 
 
-def test_a_ledger_that_is_not_a_day_tree_is_refused_by_name(tmp_path: Path) -> None:
-    """A wrong ledger is answered at the call, not by writing a path no reader walks.
-
-    One typed name covers every ledger under `state/`, so a caller can now hand a
-    segment writer a ledger that files no segments. `published` is a day FILE, so
-    this call would have minted a directory where that ledger keeps a file. The
-    message carries the ledger because the caller passed a name, and a refusal
-    that does not repeat it leaves them reading the traceback for it.
-    """
-    row = fingerprint_row()
-
-    assert LedgerName.PUBLISHED not in DAY_TREES, "the refused ledger has to be a real one"
-
-    with pytest.raises(ValueError, match="published is not a day tree"):
-        ledger.write_segment(
-            tmp_path,
-            LedgerName.PUBLISHED,
-            [row],
-            run_id=row.run_id,
-            attempt=1,
-            job=row.job,
-            shard=row.shard,
-        )
-
-    assert not list(tmp_path.rglob("*")), "the refusal wrote nothing"
-
-
 def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySimilarityPair:
     """One judged pair, read from the committed contract fixture and re-dated.
 
@@ -172,25 +140,6 @@ def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySim
             "date": on,
             "run_id": f"{on}-1",
             "judged_by_run_id": judged_by_run_id,
-        }
-    )
-
-
-def council_row(*, on: str = DATE) -> CouncilShardOutcome:
-    """One recorded unit of council work, read from the committed fixture and re-dated.
-
-    Read inside the helper for the reason `pair_row` gives: a fixture that stops
-    parsing fails the test that asked for a row rather than the whole file.
-    """
-    raw = json.loads(
-        read_text(CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json")
-    )
-    return CouncilShardOutcome.model_validate(
-        raw
-        | {
-            "version": CouncilShardOutcome.schema_version(),
-            "date": on,
-            "run_id": f"{on}-1",
         }
     )
 
@@ -386,20 +335,10 @@ def _six_months(state: Path) -> None:
         _published(state, on, [_address(number) for number in numbers])
 
 
-def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
+def test_the_committed_cover_keeps_every_address_within_two_years(
     tmp_path: Path,
 ) -> None:
-    """Oracle, first case: shipping `-1` leaves the guarantee where it was.
-
-    The cover is machinery and this row ships it open, so the assertion that
-    matters is the one saying nothing moved: every address the tree holds, at
-    the earliest date any day file gives it - which is what an unwindowed read
-    of this ledger has always returned.
-
-    The width is read from the committed config rather than spelled here, so
-    narrowing it in `config/idhazh.json` reds this test instead of quietly
-    changing what a reader is shown.
-    """
+    """The approved two-year window retains every address in this six-month fixture."""
     state = tmp_path / "state"
     _six_months(state)
     expected = {
@@ -412,9 +351,7 @@ def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
     }
     committed = config.load(CONFIG_DIR).app.collect.published_window_days
 
-    assert committed == UNBOUNDED_WINDOW, (
-        "the committed cover is open, and the equality below is what that buys"
-    )
+    assert committed == 730
     assert ledger.load_published(state, today=_ANCHOR, within_days=committed) == expected
     assert _whole_ledger(state) == expected, "and the anchor is not read on that path"
 
@@ -596,386 +533,6 @@ def carried_row(
     )
 
 
-#: A generation this ledger has never carried, and that is the point of building
-#: it. The names a row cannot do without - the eleven every row fills, the count
-#: of calls and the five flat totals its own rule holds to their sum - plus every
-#: heading `RETIRED_CELLS` still reads into a current column: the twelve the call
-#: rename retired and the two that named the machine before the ledger door took
-#: `job` and `shard` for its own writer. It is narrower than any generation the
-#: archive holds, so a reader that only ever coped with the shapes the committed
-#: days happen to carry fails here.
-A_RETIRED_GENERATION: Final = (
-    "version",
-    "date",
-    "run_id",
-    "item_id",
-    "url_key",
-    "canonical_url",
-    "vertical",
-    "source_id",
-    "stage",
-    "outcome",
-    "code",
-    "model_calls",
-    *COST_FIELDS,
-    *RETIRED_CELLS,
-)
-
-#: What each dropped heading held, so the reader is asked to throw a VALUE away
-#: rather than only a name. `cgroup_peak_bytes` is empty on every committed row -
-#: that is why it was dropped - so the filled cell here is a case the archive has
-#: never produced and the only way to prove the cell goes with the heading
-#: (`CLAUDE.md` section 13). `max_output_tokens` is the opposite case: it is
-#: filled on every committed row, so a reader that kept dropped cells would carry
-#: it onto every row it moved.
-A_DROPPED_CELL_HELD: Final[dict[str, str]] = {
-    "runner_name": "GitHub Actions 1000031786",
-    "cgroup_peak_bytes": "15032385536",
-    "max_output_tokens": "900",
-}
-
-
-def timed_row(number: int) -> ItemHealthRow:
-    """One row a work shard sealed after its label call, so a reader has cells to move.
-
-    Built through `model_validate` rather than `model_copy`, because the
-    contract's own rules - a call slot fills whole, the flat cells are its sum,
-    and a named job names its shard - are what make this a faithful row of that
-    generation rather than a plausible one.
-    """
-    call = {
-        "prefill_ms": 149_761 + number,
-        "decode_ms": 389_543 + number,
-        "input_tokens": 7_543 + number,
-        "output_tokens": 1_290 + number,
-        "cached_tokens": 1_676 + number,
-    }
-    return ItemHealthRow.model_validate(
-        carried_row(number, source_id="wire").model_dump(mode="json")
-        | {"model_calls": 1, "label_kind": CallKind.LABEL.value}
-        | {f"label_{name}": value for name, value in call.items()}
-        | call
-        | {"machine_job": ServerJob.WORK.value, "machine_shard": 2}
-    )
-
-
-def a_generation(header: tuple[str, ...], rows: Sequence[ledger.CsvRecord]) -> str:
-    """One header and its rows, written the way a run on that generation wrote them.
-
-    Every cell comes from the row's own `csv_row`, read back through the name the
-    heading had then, so the fixture cannot drift from the contract it is meant
-    to predate.
-    """
-    buffer = io.StringIO()
-    out = csv.writer(buffer, lineterminator="\n")
-    out.writerow(header)
-    for row in rows:
-        payload = row.csv_row()
-        out.writerow([payload[RETIRED_CELLS.get(name, name)] for name in header])
-    return buffer.getvalue()
-
-
-def an_archived_day(state: Path, day: str, name: str, text: str) -> None:
-    """One file of a census day, in the CSV layout the retired writers filed it in.
-
-    Nothing writes that layout any more - the census files through the ledger
-    door - but the migration that moves the archive onto the door reads it, so
-    a test that wants one on disk builds it where the migration looks.
-    """
-    root = csv_root(state, LedgerName.ITEM_HEALTH)
-    folder = root / day[:4] / day[5:7] / day[8:10]
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / name).write_text(text, encoding="utf-8", newline="")
-
-
-def migrated_reading(state: Path, day: str) -> list[dict[str, str]]:
-    """One archived census day, settled, the way the migration reads it before filing it."""
-    key = ledger.door_key(LedgerName.ITEM_HEALTH)
-    root = csv_root(state, LedgerName.ITEM_HEALTH)
-    return day_shards.settled_day(root, day, key, ItemHealthRow)
-
-
-@pytest.mark.parametrize("dropped", sorted(DROPPED_CELLS))
-def test_an_older_generation_of_the_census_reads_into_todays_row(
-    tmp_path: Path, dropped: str
-) -> None:
-    """Every heading the census retired or dropped still reads, and only into today's row.
-
-    Nothing appends to an item-health CSV any more, so no header is re-filed on
-    a write. What is left of the CSV archive is read once, by the migration that
-    moves it onto the ledger door, and that read is what these headings still
-    owe. Three kinds of heading, one row:
-
-    - a RETIRED heading moved to another column and is read into it: the twelve
-      `call_*` cells into the two call slots, and the old `job` and `shard` into
-      `machine_job` and `machine_shard`;
-    - a DROPPED heading has no replacement, so its cell is gone from the row the
-      migration files - `runner_name`, because the host record carries the label
-      once a job; `cgroup_peak_bytes`, because the kernel file it was read from is
-      absent on every runner this project has probed; `max_output_tokens`,
-      because the budgets that actually bounded a decode are still on the row;
-    - a column this generation never had reads as absent, never as a number.
-
-    **Driven from the dropped set rather than from one name**, so a column
-    dropped later arrives here with its own case instead of relying on somebody
-    remembering.
-    """
-    state = tmp_path / "state"
-    row = timed_row(1)
-    header = (*A_RETIRED_GENERATION, dropped)
-    assert not set(RETIRED_CELLS.values()) & set(header), (
-        "the fixture names a column that replaced a retired heading, so it proves nothing"
-    )
-    payload = row.csv_row()
-    buffer = io.StringIO()
-    out = csv.DictWriter(buffer, fieldnames=header, lineterminator="\n")
-    out.writeheader()
-    out.writerow(
-        {name: payload[RETIRED_CELLS.get(name, name)] for name in A_RETIRED_GENERATION}
-        | {dropped: A_DROPPED_CELL_HELD[dropped]}
-    )
-    writer = ledger.segment_name(run_id=RUN_ID, attempt=1, job=ServerJob.WORK, shard=2)
-    an_archived_day(state, DATE, writer, buffer.getvalue())
-
-    (cells,) = migrated_reading(state, DATE)
-    read_back = ItemHealthRow.from_csv_row(cells)
-
-    assert dropped not in cells, "a dropped heading is gone from the row the migration files"
-    assert read_back == row, "every retired heading reads into the column that replaced it"
-    assert (read_back.machine_job, read_back.machine_shard) == (ServerJob.WORK, 2)
-    assert read_back.source_words_before_cap is None, (
-        "a column this generation never had is absent, not a number nobody measured"
-    )
-
-
-def test_the_committed_generation_before_the_machine_probe_still_reads(tmp_path: Path) -> None:
-    """A day the archive really holds, read the way the migration reads it.
-
-    `state/item-health/2026/09/16/before-partition.csv` as it was committed, two
-    rows of it kept. It moves in several directions at once: the machine probe's
-    columns are not in it yet, the machine's shard is still under its old heading
-    `shard`, and three cells the row has since dropped are still there. The
-    built generation above covers each heading on its own; this is the shape a
-    real day has, all of them together.
-
-    Read by name on both sides, so a row that lost the wrong cell fails here
-    rather than passing a width check that only counts columns.
-    """
-    state = tmp_path / "state"
-    fixture = STATE_FIXTURES / "item-health-before-the-machine-probe-widened-it.csv"
-    an_archived_day(state, "2026-09-16", ledger.BEFORE_PARTITION_NAME, read_text(fixture))
-    with fixture.open(encoding="utf-8", newline="") as handle:
-        committed = list(csv.DictReader(handle))
-    header = set(committed[0])
-    assert "shard" in header, "the fixture no longer carries the machine's old heading"
-    assert DROPPED_CELLS <= header, "the fixture no longer carries the dropped headings"
-    renamed = {RETIRED_CELLS[name] for name in header if name in RETIRED_CELLS}
-    never = set(ItemHealthRow.csv_columns()) - header - renamed
-    assert never, "the fixture has to predate a column or the absent case proves nothing"
-
-    settled = migrated_reading(state, "2026-09-16")
-
-    assert [cells["item_id"] for cells in settled] == [raw["item_id"] for raw in committed]
-    both = [name for name in committed[0] if name in ItemHealthRow.model_fields]
-    for raw, cells in zip(committed, settled, strict=True):
-        assert {name: cells[name] for name in both} == {name: raw[name] for name in both}, (
-            "a cell both generations name moved"
-        )
-        assert cells["machine_shard"] == raw["shard"], "the old heading reads under the new name"
-        assert not DROPPED_CELLS & set(cells), "a dropped cell went with its heading"
-        assert all(cells[name] == "" for name in never), "a column it never had is absent"
-        assert ItemHealthRow.from_csv_row(cells).item_id == raw["item_id"]
-
-
-#: A feed-health header narrower than the one this checkout writes: the row's
-#: first nine columns, without the five that name the address asked and what its
-#: robots file said. All five are optional, so a row under this header still
-#: reads, and re-filing it has columns to add.
-A_NARROWER_FEED_HEALTH_HEADER: Final = (
-    "version",
-    "run_id",
-    "date",
-    "feed_id",
-    "checked_at",
-    "outcome",
-    "status",
-    "items",
-    "detail",
-)
-
-
-def feed_row(feed_id: str) -> FeedHealthRow:
-    """One feed's verdict for `DATE`, for a test that needs several feeds in one file."""
-    return health_row().model_copy(update={"feed_id": feed_id})
-
-
-def a_feed_file(state: Path, rows: list[FeedHealthRow]) -> Path:
-    """A feed-health CSV file under the header this checkout's contract names.
-
-    The ledger now files through the ledger door, so no writer here makes this
-    file any more. It stands for the committed CSV a migration still reads, which
-    is why it is built from the contract's own columns and nothing else.
-    """
-    path = state / "feed-health" / f"{RUN_ID}.csv"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(a_generation(FeedHealthRow.csv_columns(), rows), encoding="utf-8", newline="")
-    return path
-
-
-def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
-    tmp_path: Path,
-) -> None:
-    """A union merge orders the blocks by which side was being replayed, not by age.
-
-    A merge driver that stacked two header blocks into one file ran on every day
-    file under `state/` until 2026-09-19, and the files it made were carried into
-    the day directories as they stood - so a committed day can still hold two
-    generations, and re-filing it has to read both. The committed day that first
-    showed this had the current header first, because the older run was the one
-    rebasing. The other order is a merge nobody has made here yet, so it is
-    built rather than waited for.
-    """
-    path = tmp_path / "state" / "feed-health" / ledger.BEFORE_PARTITION_NAME
-    path.parent.mkdir(parents=True)
-    stranded, settled = feed_row("older-feed"), feed_row("newer-feed")
-    path.write_text(
-        a_generation(A_NARROWER_FEED_HEALTH_HEADER, [stranded])
-        + a_generation(FeedHealthRow.csv_columns(), [settled]),
-        encoding="utf-8",
-        newline="",
-    )
-
-    moved = ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow))
-
-    assert moved == 1, "only the row under the older header had to move"
-    assert ledger.read_header(path) == FeedHealthRow.csv_columns()
-    with path.open(encoding="utf-8", newline="") as handle:
-        read_back = [FeedHealthRow.from_csv_row(raw) for raw in csv.DictReader(handle)]
-    assert read_back == [stranded, settled]
-
-
-def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
-    tmp_path: Path,
-) -> None:
-    """A pass with nothing to do leaves no diff, so re-filing a ledger twice rewrites nothing."""
-    path = a_feed_file(tmp_path / "state", [health_row()])
-    before = path.read_bytes()
-
-    assert (
-        ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)) == 0
-    )
-    assert path.read_bytes() == before
-
-
-def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
-    tmp_path: Path,
-) -> None:
-    """Widening only. A narrow writer never re-files a wide file down.
-
-    The case is a pass on a checkout that predates a widening: it holds the
-    narrower column list, so re-filing under it would drop every cell the
-    widening added - exit 0, nothing printed, and the cells gone. The refusal
-    costs that pass the step it was called from, which is the cheaper of the two
-    and the one a person can see.
-
-    The narrow side is built rather than checked out: the wide file is what this
-    checkout writes, and the narrow reader is the same contract told it may only
-    place the columns an earlier generation named.
-    """
-    path = a_feed_file(tmp_path / "state", [health_row()])
-    before = path.read_bytes()
-
-    with pytest.raises(ValueError, match="cannot place"):
-        ledger.migrate_header(path, A_NARROWER_FEED_HEALTH_HEADER, ledger.refiler(FeedHealthRow))
-
-    assert path.read_bytes() == before, "not one cell moved"
-    with path.open(encoding="utf-8", newline="") as handle:
-        assert [FeedHealthRow.from_csv_row(raw) for raw in csv.DictReader(handle)] == [health_row()]
-
-
-class _CountedRead:
-    """A read handle that says how many lines were taken out of it.
-
-    Instrumentation rather than a mock: every byte still comes off the real file
-    through the real handle, and this counts what was asked for. A clock would
-    not answer the same question - the machine this runs on is shared, so a
-    timing assertion measures the neighbours.
-    """
-
-    def __init__(self, handle: Any, tally: list[int]) -> None:
-        self._handle = handle
-        self._tally = tally
-
-    def __iter__(self) -> Iterator[str]:
-        for line in self._handle:
-            self._tally[0] += 1
-            yield line
-
-    def readlines(self) -> list[str]:
-        lines: list[str] = self._handle.readlines()
-        self._tally[0] += len(lines)
-        return lines
-
-    def readline(self) -> str:
-        line: str = self._handle.readline()
-        self._tally[0] += 1 if line else 0
-        return line
-
-    def read(self, *args: Any) -> str:
-        text: str = self._handle.read(*args)
-        self._tally[0] += len(text.splitlines())
-        return text
-
-    def __enter__(self) -> _CountedRead:
-        self._handle.__enter__()
-        return self
-
-    def __exit__(self, *exc: object) -> Any:
-        return self._handle.__exit__(*exc)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._handle, name)
-
-
-def counted_reads(monkeypatch: pytest.MonkeyPatch, path: Path) -> tuple[list[int], list[int]]:
-    """Count how often `path` is opened to read, and how many lines come out."""
-    opens = [0]
-    lines = [0]
-    real_open = Path.open
-
-    def opener(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
-        handle = real_open(self, mode, *args, **kwargs)
-        if self != path or "r" not in mode:
-            return handle
-        opens[0] += 1
-        return _CountedRead(handle, lines)
-
-    monkeypatch.setattr(Path, "open", opener)
-    return opens, lines
-
-
-def test_the_header_check_reads_one_line_whatever_the_file_holds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A file already under the contract's header costs a re-file one line.
-
-    Nothing this checkout writes can put a second header into a file: a day
-    tree's writer writes its file whole, and `extend_ledger_file` writes a header
-    only into a file that does not exist yet. So scanning every line of a file
-    whose first line already matches asks a question whose answer cannot have
-    moved since the file was written.
-    """
-    state = tmp_path / "state"
-    path = a_feed_file(state, [feed_row(f"feed-{number:02d}") for number in range(2)])
-    _, lines = counted_reads(monkeypatch, path)
-
-    assert (
-        ledger.migrate_header(path, FeedHealthRow.csv_columns(), ledger.refiler(FeedHealthRow)) == 0
-    )
-
-    assert lines[0] == 1, f"the header check read {lines[0]} lines of a 3-line file"
-
-
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
     """A slot a feed spent and lost is not a slot it filled.
 
@@ -1078,62 +635,97 @@ def test_the_two_ledgers_on_the_door_file_under_the_raw_root() -> None:
     assert ledger.raw_root(state, LedgerName.VISUAL_PRUNES) == Path("state/raw/visual-prunes")
 
 
-def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> None:
-    """The one seeded header left, and it needs one for a reason of its own.
+def test_the_hand_marks_file_inside_the_judges_folder_under_both_door_roots() -> None:
+    """The holdout marks keep the judge's folder and move only under raw and compact.
 
-    A person types this file, so on a fresh clone it holds nothing but its
-    header - and `git add` on a path that is not there aborts the commit step and
-    takes every ledger staged in the same call with it. Whether the checkout
-    carries the file is `backend/utilities/check_seeded_ledgers.py`'s question
-    (`CLAUDE.md` section 13); what stays here is the path the commit step is
-    handed.
+    A harvest files a file of its own under `state/raw/`, so no header-only file
+    has to exist before the first mark, and the gardener packs it under
+    `state/compact/`. What is asserted is the folder each reader opens, which is
+    the part a code change can break.
     """
-    assert (
-        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-        == "state/content-similarity-judge/holdout-pairs.csv"
-    )
-    assert ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS) == Path(
-        "state/content-similarity-judge/holdout-pairs.csv"
-    )
-
-
-def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None:
-    """One nested segment more than every other day tree, and the relpath says so.
-
-    Everything this judge produces hangs off `state/content-similarity-judge/`,
-    so the commit step can stage one prefix. That makes this the first ledger
-    whose day file sits two
-    directories below `state/` rather than one, and a helper that quietly dropped
-    the nest would write a tree nothing else in this file can find.
-    """
-    date = "2026-09-18"
     state = Path("state")
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS
 
-    assert (
-        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
-        == "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
-    )
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date) == Path(
-        "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
+    assert ledger.raw_root(state, which) == Path("state/raw/content-similarity-judge/holdout-pairs")
+    assert ledger.compact_folder(state, which) == Path(
+        "state/compact/content-similarity-judge/holdout-pairs"
     )
 
 
-def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
-    """Its sibling's layout, because the guard reads a window of days across both.
+def judge_identity(*, run_id: str, attempt: int = 1) -> WriterIdentity:
+    """Who files a night's judged pairs: the council's save, with the counting stage producing."""
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=attempt,
+        job=ServerJob.SAVE_COUNCIL_RESULTS,
+        shard=0,
+        producer="stages.count_verdicts",
+        git_sha="a" * 40,
+    )
+
+
+def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from(tmp_path: Path) -> None:
+    """One nested folder more than a ledger that is its own family, and the path says so.
+
+    Everything this judge files hangs off `content-similarity-judge/`, in each of
+    the door's two roots, so a helper that quietly dropped the nest would file a
+    ledger nothing else can find. A pair is filed under the day it was drawn
+    from, never under the day the council judged it.
+    """
+    drawn_on = "2026-09-18"
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
+
+    (filed,) = ledger.persist(
+        tmp_path,
+        [pair_row(on=drawn_on)],
+        ledger=which,
+        covers="2026-09-19",
+        identity=judge_identity(run_id="2026-09-19-7"),
+    )
+
+    assert filed.parent.relative_to(tmp_path).as_posix() == (
+        "raw/content-similarity-judge/scored-pairs/2026/09/18"
+    )
+    assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
+        "compact/content-similarity-judge/scored-pairs"
+    )
+
+
+def fitted_row(*, on: str) -> FittedSimilarityThreshold:
+    """One fitted line, read from the committed contract fixture and re-dated."""
+    return FittedSimilarityThreshold.from_json(
+        read_text(
+            CONTRACT_FIXTURES_DIR
+            / "fitted-similarity-threshold"
+            / "the-clamp-held-a-fall-back-to-the-step.json"
+        )
+    ).model_copy(update={"date": on, "run_id": f"{on}-1"})
+
+
+def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for(tmp_path: Path) -> None:
+    """Its sibling's nest, because the guard reads a window of days across both.
 
     The step-change guard takes a median over the newest fourteen written rows,
-    which `day_partition` answers by walking days backwards. A month file would
-    make that read open weeks it did not ask for.
+    which the reader answers by asking the door for a window of days backwards.
+    Everything this judge files hangs off `content-similarity-judge/`, in each
+    of the door's two roots, so a helper that quietly dropped the nest would file
+    a ledger nothing else can find.
     """
-    date = "2026-09-18"
-    state = Path("state")
-
-    assert (
-        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
-        == "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
+    fitted_on = "2026-09-18"
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+    identity = judge_identity(run_id=f"{fitted_on}-1").model_copy(
+        update={"producer": "stages.set_merge_line"}
     )
-    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date) == Path(
-        "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
+
+    (filed,) = ledger.persist(
+        tmp_path, [fitted_row(on=fitted_on)], ledger=which, covers=fitted_on, identity=identity
+    )
+
+    assert filed.parent.relative_to(tmp_path).as_posix() == (
+        "raw/content-similarity-judge/fitted-thresholds/2026/09/18"
+    )
+    assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
+        "compact/content-similarity-judge/fitted-thresholds"
     )
 
 
@@ -1268,120 +860,7 @@ def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(
     assert "state/raw/visual-prunes/2026/09/07/not-a-ledger-file.parquet" in caplog.text
 
 
-# --- The pass that runs after the merge ------------------------------------
-
-
-def council_unit(shard: int, host: str) -> CouncilShardOutcome:
-    """One unit of a two-unit night, on the machine `host` names - the cell a repeat varies."""
-    return CouncilShardOutcome.model_validate(
-        council_row().model_dump(mode="json") | {"shard": shard, "shards": 2, "host_model": host}
-    )
-
-
-def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: Path) -> None:
-    """First row wins, and a kept row is the line that was read.
-
-    The rule is the one every appending caller already states: a second attempt
-    at one unit of work is skipped, so the ledger keeps describing the attempt
-    that got there first. Rewriting rather than re-serializing is what makes a
-    clean file a no-op - a pass that re-quoted a cell would show up as a diff on
-    every run.
-
-    The council's record is the example because this pass still settles it after
-    every append: two units of one night, then a second attempt at the first
-    unit that drew another machine.
-    """
-    assert (
-        ledger.append_council_shard_outcomes(
-            tmp_path, DATE, [council_unit(0, "first"), council_unit(1, "second")]
-        )
-        == 2
-    )
-    path = ledger.path(tmp_path, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, DATE)
-    header = ",".join(CouncilShardOutcome.csv_columns())
-    clean = path.read_text(encoding="utf-8")
-    assert clean.startswith(header)
-
-    # What a second attempt at one unit leaves behind: the same key twice,
-    # different cells. The machine is the last column, so the line ends on it.
-    kept = clean.splitlines()[1]
-    assert kept.endswith(",first"), "the fixture has to end on the cell the repeat varies"
-    second_attempt = kept.removesuffix(",first") + ",third"
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{second_attempt}\n")
-    assert ledger.repeated_keys(path, ledger.COUNCIL_SHARD_OUTCOME_KEY)
-
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 1
-    assert path.read_text(encoding="utf-8") == clean
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-    assert path.read_text(encoding="utf-8") == clean
-
-
-def test_the_pass_leaves_a_ledger_it_cannot_key_alone(tmp_path: Path) -> None:
-    """A row written before the key existed is not a row to start deleting from.
-
-    Refusing would cost a run the whole commit step it was called from, over a
-    file whose header no longer names every cell the key reads.
-    """
-    path = tmp_path / "shard-outcomes.csv"
-    path.write_text("date,shard\n2026-08-29,0\n2026-08-29,0\n", encoding="utf-8", newline="")
-    before = path.read_bytes()
-
-    assert ledger.drop_repeated_rows(path, ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-    assert path.read_bytes() == before
-    assert ledger.drop_repeated_rows(tmp_path / "absent.csv", ledger.COUNCIL_SHARD_OUTCOME_KEY) == 0
-
-
-def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
-    """Everything here says what makes two of its rows one record, and is settled.
-
-    Five trees left this set on 2026-09-22 and they are the ones to look for if
-    this list ever looks short. Each became a day directory where every writer
-    holds its own file, so two files nobody else can write need no settlement to
-    tell them apart and the repeat this pass existed to drop is one they can no
-    longer make. The feed retirements and the cleanup record left for the same
-    reason when they moved under `state/raw/`.
-
-    Both covers name the same ledgers on a tree with one day of each in it. What
-    separates them is what a second day would add: to the operator's pass, a
-    file; to a run's pass, nothing.
-
-    `state/content-similarity-judge/fitted-thresholds/` is registered before
-    anything writes it, which is why it is built here by hand rather than by an append
-    call. Its sibling `scored-pairs/` has a writer and is filled by one.
-    """
-    ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
-    ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
-    fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
-    fitted.parent.mkdir(parents=True, exist_ok=True)
-    fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
-    named = [
-        (
-            f"content-similarity-judge/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.STORY_SIMILARITY_THRESHOLD_KEY,
-        ),
-        (
-            f"content-similarity-judge/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.STORY_SIMILARITY_PAIR_KEY,
-        ),
-        (
-            f"llm-council/shard-outcomes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.COUNCIL_SHARD_OUTCOME_KEY,
-        ),
-    ]
-
-    every = ledger.keyed_paths(tmp_path, date=None)
-    this_run = ledger.keyed_paths(tmp_path, date=DATE)
-
-    assert [(target.path.relative_to(tmp_path).as_posix(), target.key) for target in every] == named
-    assert [
-        (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
-    ] == named
-    assert not any(
-        tree.value in target.path.relative_to(tmp_path).as_posix()
-        for tree in DAY_TREES
-        for target in every
-    ), "a day tree of writer-owned files has nothing for this pass to settle"
+# --- What settles two rows of one key ---------------------------------------
 
 
 def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
@@ -1389,23 +868,31 @@ def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
 ) -> None:
     """`judged_by_run_id` is in the key because `run_id` cannot tell these two apart.
 
-    `run_id` on this row names the DIGEST run that published the day, so two
-    judging runs over one date write the identical string. Under a key without
-    the judging stamp the settlement would keep the row already in the file and
-    drop every fresh verdict, while the record counted the fresh ones - two
-    descriptions of one day with nothing able to tell them apart. A second
-    attempt at ONE judging run is still one row: both attempts read the same
-    pair the same way.
+    `run_id` on this row names the run that drew the pair, so two judging runs
+    over one draw write the identical string. Under a key without the judging
+    stamp the settlement would keep one row and drop the fresh verdict, while
+    the record counted it - two descriptions of one day with nothing able to
+    tell them apart. A second attempt at ONE judging run is still one row: the
+    door keeps the higher attempt of one writer's work and drops the first.
     """
     first = pair_row()
     again = pair_row(judged_by_run_id=f"{DATE}-7")
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
 
-    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [first]) == 1
-    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [again]) == 1
-    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [again]) == 0
+    ledger.persist(
+        tmp_path, [first], ledger=which, covers=DATE, identity=judge_identity(run_id=f"{DATE}-1")
+    )
+    for attempt in (1, 2):
+        ledger.persist(
+            tmp_path,
+            [again],
+            ledger=which,
+            covers=DATE,
+            identity=judge_identity(run_id=f"{DATE}-7", attempt=attempt),
+        )
 
     kept = ledger.load_story_similarity_pairs(tmp_path, DATE)
-    assert [row.judged_by_run_id for row in kept] == [None, f"{DATE}-7"]
+    assert sorted(row.judged_by_run_id or "" for row in kept) == ["", f"{DATE}-7"]
 
 
 def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_asks(
@@ -1419,9 +906,9 @@ def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_
     any more: each writer owns its own file, so two of them are two attempts and
     the reader keeps the later one.
 
-    Both ledgers at once, because the rule is the same for both: they left
-    `keyed_paths` when each writer got a file of its own. Both now write Parquet
-    through the ledger writer.
+    Both ledgers at once, because the rule is the same for both: nothing settled
+    them after a merge once each writer got a file of its own. Both now write
+    Parquet through the ledger writer.
     """
     state = tmp_path / "state"
     candidate = ValidationRow.model_validate(
@@ -1529,109 +1016,55 @@ def parity_rows(days: int = PARITY_DAYS, *, today: str = DATE) -> list[FeedHealt
     return rows
 
 
-def month_grain_tree(root: Path, rows: list[FeedHealthRow]) -> None:
-    """The ledger as it was filed until 2026-09-13: one `<YYYY-MM>.csv` a month.
-
-    Written here rather than read from the archive, because the layout it
-    describes is not in the tree any more - and a parity claim needs both sides
-    present at once.
-    """
-    columns = FeedHealthRow.csv_columns()
-    by_month: dict[str, list[FeedHealthRow]] = {}
-    for row in rows:
-        by_month.setdefault(row.date[:7], []).append(row)
-    root.mkdir(parents=True, exist_ok=True)
-    for month, held in by_month.items():
-        body = ",".join(columns) + "\n"
-        body += "".join(
-            ",".join(str(row.csv_row()[name]) for name in columns) + "\n" for row in held
-        )
-        (root / f"{month}.csv").write_text(body, encoding="utf-8", newline="")
-
-
-def month_grain_read(root: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
-    """`load_health` as it read the month shards, spelled out so both cases exist.
-
-    A deliberate copy of the retired reader rather than a call into it: the claim
-    is that the answer did not move, and a claim about two grains needs the old
-    one written down somewhere.
-    """
-    rows: list[FeedHealthRow] = []
-    for stem in month_partition.shards_in_window(today, within_days):
-        path = root / f"{stem}.csv"
-        if not path.is_file():
-            continue
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            for raw in csv.DictReader(handle):
-                try:
-                    rows.append(FeedHealthRow.from_csv_row(raw))
-                except (KeyError, ValueError):
-                    continue
-    rows.sort(key=lambda row: (row.date, int(row.run_id.rsplit("-", 1)[1])))
-    return rows
-
-
-def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
+def test_the_day_cover_reads_the_newest_recorded_days_and_reliability_counts_only_those(
     tmp_path: Path,
 ) -> None:
-    """The row Oracle. Moving the files moved no reliability figure.
+    """A cover of `n` days reads the newest `n` recorded days, and reliability counts those rows.
 
-    Built at both grains from ONE row list, so a difference can only come from
-    the reading. Three dates cross one month boundary. With a two-day window, the day reader
-    excludes the oldest date while the month reader opens both month files and
-    includes it. Two dates would not prove the exclusion, so these three are the
-    smallest sample that shows the difference.
+    Three dates cross one month boundary, so with a two-day window the oldest
+    date is outside the cover. Two dates would not prove the exclusion, so these
+    three are the smallest sample that shows it.
 
-    The day cover counts RECORDED days, so the days it names are the newest
-    two on disk. Every day here recorded one, which is why that set and a
-    calendar window over the same tree hold the same dates but for the far end.
+    The cover counts RECORDED days, so the days it names are the newest two on
+    disk. Every day here recorded one, which is why that set and a calendar
+    window over the same tree hold the same dates.
 
-    The reliability maps are compared over the SAME rows on both sides, because
-    that is the claim worth making: `feed_reliability` is untouched by this row,
-    and what could break is which rows reach it.
+    `feed_reliability` is computed here over the named rows by hand, because
+    what could break is which rows reach it.
 
     The test builds these rows rather than reading the committed ledger
     (`CLAUDE.md` section 13, Guardrail #12).
     """
     today = "2026-10-02"
     rows = parity_rows(today=today)
-    day_tree = tmp_path / "day" / "state"
+    state = tmp_path / "state"
     # One call a day, not one a row: the plan job writes its whole read of the
     # day into one file, and a second call under the same identity replaces it.
     a_day: dict[str, list[FeedHealthRow]] = {}
     for row in rows:
         a_day.setdefault(row.date, []).append(row)
     for date_read, day_rows in a_day.items():
-        seed_feed_health(day_tree, date_read, day_rows)
-    month_root = tmp_path / "month" / "state" / "feed-health"
-    month_grain_tree(month_root, rows)
+        seed_feed_health(state, date_read, day_rows)
 
     window = PARITY_WINDOW_DAYS
-    recorded = ledger.held_days(day_tree, LedgerName.FEED_HEALTH)
+    recorded = ledger.held_days(state, LedgerName.FEED_HEALTH)
     named = set(recorded[-window:])
-    from_days = ledger.load_health(day_tree, today=today, within_days=window)
-    from_months = month_grain_read(month_root, today=today, within_days=window)
+    read = ledger.load_health(state, today=today, within_days=window)
 
     assert len(recorded) == PARITY_DAYS
     assert len(named) == window, "the cover counts recorded days, and every day here recorded one"
-    assert {row.date for row in from_days} == named, (
-        "the day case read a day the window did not name"
-    )
-    assert len(from_days) == len(named) * len(PARITY_FEEDS)
-    assert len(from_months) > len(from_days), (
-        "the month shards have to hold rows outside the window or the trade is not shown"
-    )
-    assert from_days == [row for row in from_months if row.date in named]
+    assert {row.date for row in read} == named, "the read reached a day the window did not name"
+    assert read == [row for row in rows if row.date in named]
 
     floor = 0.05
     over_the_same_rows = {
         feed_id: feed_reliability(
-            [row for row in from_months if row.feed_id == feed_id and row.date in named],
+            [row for row in rows if row.feed_id == feed_id and row.date in named],
             floor=floor,
         )
         for feed_id in PARITY_FEEDS
     }
-    measured = reliability(day_tree, today=today, within_days=window, floor=floor)
+    measured = reliability(state, today=today, within_days=window, floor=floor)
 
     assert measured == over_the_same_rows
     assert 0.0 < measured["steady"] < 1.0, "the fixture has to separate the three feeds"
@@ -1663,9 +1096,7 @@ def test_a_re_run_replaces_its_first_try_whichever_carried_articles(tmp_path: Pa
     The preference below never sees the first try's row.
     """
     seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
-    seed_feed_health(
-        tmp_path, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2
-    )
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2)
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 0)]
 
 
@@ -1711,15 +1142,15 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters(tmp_path:
     captures**: the four `.prom` bodies come from run `2026-08-26-5`'s
     `runtime-log-*` artifacts, and the 160 ledger rows are that same run's rows,
     lifted byte for byte out of the day file the run committed and kept as a
-    fixture in the CSV layout they were committed in. Reading the live ledger
+    CSV fixture. Reading the live ledger
     instead put a fuse on a date nobody chose - the day retention rolled that
     day out of `state/`, this test would have gone red on a pull request that
     did not touch it (`CLAUDE.md` section 13).
 
     Both sides are filed through the ledger door into this test's own tree - the
-    census read the way the migration reads the archive, the counters under the
-    job that drew each machine - and the operator's own `reconcile` reads them
-    back, so the figure checked is the figure an operator is shown.
+    census read through its contract, the counters under the job that drew each
+    machine - and the operator's own `reconcile` reads them back, so the figure
+    checked is the figure an operator is shown.
     """
     state = tmp_path / "state"
     machines = []
@@ -1742,10 +1173,10 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters(tmp_path:
         )
     assert len(machines) == 4, "all four shards, or the run figure is not the run"
     assert seed_host_fingerprint(state, machines) == 4
-    census = [
-        ItemHealthRow.from_csv_row(cells)
-        for cells in migrated_reading(STATE_FIXTURES / "prefill-oracle", RECONCILED_DATE)
-    ]
+    with (STATE_FIXTURES / "prefill-oracle" / "item-health.csv").open(
+        encoding="utf-8", newline=""
+    ) as handle:
+        census = [ItemHealthRow.from_csv_row(cells) for cells in csv.DictReader(handle)]
     assert seed_item_health(state, RECONCILED_DATE, census) == len(census)
 
     result = reconcile(state, run_id=RECONCILED_RUN)

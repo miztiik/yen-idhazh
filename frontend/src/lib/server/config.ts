@@ -186,9 +186,9 @@ export interface VisualsConfig {
 
 /** The band the merge line may move in, and the clamps that shape how it moves.
  *
- * Only the keys a console panel draws. The block carries sixteen more - the
- * gates, the judge's own limits, the pair budget, the daily caps - and none of
- * them is a number a chart puts on screen, so none of them is declared here.
+ * Only the keys a console panel reads. The block carries more - the pair
+ * budget, the damping weights, the guard's own window - and no panel reads
+ * them, so none of them is declared here.
  * `band_low` and `band_high` are the score axis; `step_change_multiple` is what
  * the guard fires against. The envelope behind the applied line is drawn from
  * the fitted ROW rather than from config, because it is the cap the run used
@@ -221,6 +221,13 @@ export interface SimilarityConfig {
 	minimum_negatives: number;
 	minimum_above_line: number;
 	minimum_days: number;
+	/** Whether a build groups at a fitted line. Off, every build groups at
+	 * `floor_min`, the committed floor. */
+	enabled: boolean;
+	/** How many days before its own a build looks back for a fitted line. It
+	 * reads its own day too, so 7 is 8 days. With no line there, it groups at the
+	 * committed floor. */
+	applied_lookback_days: number;
 }
 
 export interface ConsoleConfig {
@@ -338,6 +345,7 @@ export interface ExplorerConfig {
 	max_rows: number;
 	max_fetch_bytes: number;
 	query_max_chars: number;
+	link_max_bytes: number;
 	reach_days: number;
 	chart_min_rows: number;
 	rank_max: number;
@@ -345,12 +353,12 @@ export interface ExplorerConfig {
 	history_max: number;
 	save_name_max_chars: number;
 	series_floor_share: number;
-	rail_rem: number;
 	readout_lines: [number, number, number, number];
+	role_slots_per_line: [number, number, number, number];
+	chart_note_lines: [number, number, number, number];
 	notice_ms: number;
 	editor_lines_shown: [number, number];
 	strip_shown: [number, number];
-	answer_svh: number;
 	cell_max_ch: number;
 	bar_spread_share: number;
 	counter_from_share: number;
@@ -504,8 +512,8 @@ const RUN_DEFAULTS: RunConfig = {
 	shard_timeout_minutes: 200
 };
 const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
-// The same four values `SimilarityThresholdConfig` declares in the contract, so
-// a checkout with no config file draws the axis the pipeline would have fitted
+// The same values `SimilarityThresholdConfig` declares in the contract, so a
+// checkout with no config file draws the axis the pipeline would have fitted
 // against rather than an axis this file invented.
 const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	band_low: 0.88,
@@ -518,7 +526,9 @@ const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	unclear_max: 0.35,
 	minimum_negatives: 200,
 	minimum_above_line: 30,
-	minimum_days: 10
+	minimum_days: 10,
+	enabled: false,
+	applied_lookback_days: 7
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
@@ -600,7 +610,8 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	row_page: 50,
 	max_rows: 1000,
 	max_fetch_bytes: 67108864,
-	query_max_chars: 5790,
+	query_max_chars: 6939,
+	link_max_bytes: 8192,
 	reach_days: 365,
 	chart_min_rows: 3,
 	rank_max: 30,
@@ -608,12 +619,12 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	history_max: 10,
 	save_name_max_chars: 40,
 	series_floor_share: 0.05,
-	rail_rem: 14,
-	readout_lines: [7, 3, 4, 3],
+	readout_lines: [4, 3, 4, 3],
+	role_slots_per_line: [1, 2, 3, 4],
+	chart_note_lines: [2, 2, 1, 1],
 	notice_ms: 6000,
-	editor_lines_shown: [8, 10],
-	strip_shown: [3, 6],
-	answer_svh: 60,
+	editor_lines_shown: [8, 4],
+	strip_shown: [0, 6],
 	cell_max_ch: 40,
 	bar_spread_share: 0.5,
 	counter_from_share: 0.9,
@@ -794,6 +805,8 @@ interface RawConfig {
 	/** Which file under `config/models/` holds the active model. The whole
 	 * model left `idhazh.json` on 2026-09-14; this names where it went. */
 	models_file?: string;
+	/** The one `similarity` knob the site reads: how far back the hand marks count. */
+	similarity?: { holdout_reach_days?: number };
 }
 
 /** The active model's own file. Only the one flag a console panel reads.
@@ -1082,6 +1095,22 @@ export function committedWeights(): { cosine_weight: number } {
 	};
 }
 
+/** How many UTC days back from the site's newest published day the hand marks are read.
+ *
+ * Read on its own, like `shell_seed_items`: only the Judgement route's `load`
+ * reads it, and the page draws what it is handed. Both ends are named, as the
+ * backend's reader names them, so 730 reads 731 days and a mark filed before
+ * that stops counting.
+ *
+ * The fallback is the same number `SimilarityConfig.holdout_reach_days`
+ * defaults to, and `backend/tests/contracts/` fails if the two copies drift.
+ */
+const HOLDOUT_REACH_DAYS = 730;
+
+export function holdoutReachDays(): number {
+	return raw().similarity?.holdout_reach_days ?? HOLDOUT_REACH_DAYS;
+}
+
 /** The visual planner's floor, and only that.
  *
  * One knob rather than the whole `visuals` block, because whatever this returns
@@ -1161,6 +1190,7 @@ export function explorerConfig(): ExplorerConfig {
 		max_rows: consoleBlock.explorer_max_rows ?? EXPLORER_DEFAULTS.max_rows,
 		max_fetch_bytes: consoleBlock.explorer_max_fetch_bytes ?? EXPLORER_DEFAULTS.max_fetch_bytes,
 		query_max_chars: consoleBlock.explorer_query_max_chars ?? EXPLORER_DEFAULTS.query_max_chars,
+		link_max_bytes: consoleBlock.explorer_link_max_bytes ?? EXPLORER_DEFAULTS.link_max_bytes,
 		reach_days: consoleBlock.explorer_reach_days ?? EXPLORER_DEFAULTS.reach_days,
 		chart_min_rows: consoleBlock.explorer_chart_min_rows ?? EXPLORER_DEFAULTS.chart_min_rows,
 		rank_max: consoleBlock.explorer_rank_max ?? EXPLORER_DEFAULTS.rank_max,
@@ -1169,12 +1199,12 @@ export function explorerConfig(): ExplorerConfig {
 		save_name_max_chars: consoleBlock.explorer_save_name_max_chars ?? EXPLORER_DEFAULTS.save_name_max_chars,
 		series_floor_share: consoleBlock.explorer_series_floor_share ?? EXPLORER_DEFAULTS.series_floor_share,
 		chrome: consoleBlock.explorer_chrome === 'console' ? 'console' : EXPLORER_DEFAULTS.chrome,
-		rail_rem: consoleBlock.explorer_rail_rem ?? EXPLORER_DEFAULTS.rail_rem,
 		readout_lines: (consoleBlock.explorer_readout_lines ?? EXPLORER_DEFAULTS.readout_lines) as [number, number, number, number],
+		role_slots_per_line: (consoleBlock.explorer_role_slots_per_line ?? EXPLORER_DEFAULTS.role_slots_per_line) as [number, number, number, number],
+		chart_note_lines: (consoleBlock.explorer_chart_note_lines ?? EXPLORER_DEFAULTS.chart_note_lines) as [number, number, number, number],
 		notice_ms: consoleBlock.explorer_notice_ms ?? EXPLORER_DEFAULTS.notice_ms,
 		editor_lines_shown: (consoleBlock.explorer_editor_lines_shown ?? EXPLORER_DEFAULTS.editor_lines_shown) as [number, number],
 		strip_shown: (consoleBlock.explorer_strip_shown ?? EXPLORER_DEFAULTS.strip_shown) as [number, number],
-		answer_svh: consoleBlock.explorer_answer_svh ?? EXPLORER_DEFAULTS.answer_svh,
 		cell_max_ch: consoleBlock.explorer_cell_max_ch ?? EXPLORER_DEFAULTS.cell_max_ch,
 		bar_spread_share: consoleBlock.explorer_bar_spread_share ?? EXPLORER_DEFAULTS.bar_spread_share,
 		counter_from_share: consoleBlock.explorer_counter_from_share ?? EXPLORER_DEFAULTS.counter_from_share,

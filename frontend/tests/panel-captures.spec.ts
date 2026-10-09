@@ -4,10 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KILL_FILE } from '../src/lib/offline';
-import { openExplorer, runExplorer } from './support/explorer-answer';
+import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
+import { showPanel } from './support/panel-tab';
+import { newestDate } from './support/published';
 import { viewsOf } from './support/views';
 
 /**
@@ -38,9 +40,11 @@ import { viewsOf } from './support/views';
  * before anything is taken. Each image is the panel and a band of the page
  * around it, half the gap between panels, so the panel's edge against its
  * ground is in the picture. A strip stuck to the top of the window belongs to
- * no panel, so it is unstuck for the shot. And Playwright cuts a clip to the
- * window without saying so, so the window is grown to fit a tall panel and the
- * image's own size is checked against the box that was asked for.
+ * no panel, so it is unstuck for the shot. A panel taller than the window is
+ * pictured on the page, past the window's edges, at the window the page was
+ * opened at: a window grown to fit it would also grow a panel sized from the
+ * window's height. And Playwright cuts a clip to the page without saying so,
+ * so the image's own size is checked against the box that was asked for.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -188,28 +192,29 @@ interface Shot {
 
 /** One panel, padded by half the gap to its neighbour, checked whole and written. */
 async function shot(page: Page, id: string, file: string): Promise<Shot> {
+	// A panel behind a tab, as the Data explorer's chart is, has no box until its tab is open.
+	await showPanel(page, id);
 	const panel = page.locator(selectorOf(id));
 	const pad = await panel.evaluate((node) => Math.floor((parseFloat(getComputedStyle(node).marginTop) || 0) / 2));
-	// Placed with its top one band below the window's top, not centred.
+	// Placed with its top one band below the window's top, not centred:
 	// `scrollIntoView` centres inside the window less its `scroll-padding-top`,
-	// which the console sets while its strip is stuck, so a panel centred in a
-	// window grown to fit it exactly lands low enough to lose its foot.
-	const placed = async () => {
-		await panel.evaluate((node, gap) => {
-			window.scrollTo({ top: window.scrollY + node.getBoundingClientRect().top - gap, behavior: 'instant' });
-		}, pad);
-		const box = await panel.boundingBox();
-		if (box === null) throw new Error(`${id} has no box to picture`);
-		return box;
-	};
-	let box = await placed();
-	const view = page.viewportSize();
-	if (view === null) throw new Error('the page has no window size');
-	if (box.height + 2 * pad > view.height) {
-		await page.setViewportSize({ width: view.width, height: Math.ceil(box.height + 2 * pad) + 2 });
-		box = await placed();
-	}
-	const size = page.viewportSize() ?? view;
+	// which the console sets while its strip is stuck. Then measured on the
+	// page, which is the picture's frame: a window grown to fit a tall panel
+	// would also grow a panel sized from the window's height - the Data
+	// explorer's answer is one window tall below 1024 px - and picture the page
+	// at a window it was not opened at.
+	const placed = await panel.evaluate((node, gap) => {
+		window.scrollTo({ top: window.scrollY + node.getBoundingClientRect().top - gap, behavior: 'instant' });
+		if (node.getClientRects().length === 0) return null;
+		const at = node.getBoundingClientRect();
+		const root = document.documentElement;
+		return {
+			box: { x: at.left + window.scrollX, y: at.top + window.scrollY, width: at.width, height: at.height },
+			size: { width: root.scrollWidth, height: root.scrollHeight }
+		};
+	}, pad);
+	if (placed === null) throw new Error(`${id} has no box to picture`);
+	const { box, size } = placed;
 	const left = Math.max(0, Math.floor(box.x - pad));
 	const top = Math.max(0, Math.floor(box.y - pad));
 	const clip = {
@@ -223,8 +228,9 @@ async function shot(page: Page, id: string, file: string): Promise<Shot> {
 		`${id} does not fit inside its own picture`
 	).toBe(true);
 
-	const image = await page.screenshot({ clip, style: UNSTUCK, animations: 'disabled' });
-	// A PNG names its own size in bytes 16 to 23. A clip past the window is cut
+	// `fullPage` reads the clip on the page and draws past the window's edges.
+	const image = await page.screenshot({ clip, fullPage: true, style: UNSTUCK, animations: 'disabled' });
+	// A PNG names its own size in bytes 16 to 23. A clip past the page is cut
 	// to it without an error, so this is the only place a short image shows.
 	const drawn = { width: image.readUInt32BE(16), height: image.readUInt32BE(20) };
 	expect(drawn, `the picture of ${id} was cut short of the box it was asked for`).toEqual({
@@ -305,7 +311,8 @@ for (const route of PICTURED) {
 			const asked = recorded(page);
 			await opened(page, listed.address, width, theme);
 			if (route === 'data-explorer') {
-				await openExplorer(page);
+				// A picture of the canary, so the page takes the canary's own newest day as today.
+				await openExplorer(page, newestDate());
 				await runExplorer(page);
 			}
 			await walked(page, listed.panels);
@@ -314,6 +321,20 @@ for (const route of PICTURED) {
 				.toEqual([]);
 			const loaded: Shot[] = [];
 			for (const id of listed.panels) loaded.push(await shot(page, id, `${id}--${width}--${theme}--loaded.png`));
+			if (route === 'data-explorer') {
+				for (const [type, sql] of [
+					['partsOfOne', "SELECT * FROM (VALUES ('first', 10, 8, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)"],
+					['tileStrip', "SELECT * FROM (VALUES (DATE '2026-08-17', true), (DATE '2026-08-18', false), (DATE '2026-08-19', NULL::BOOLEAN)) AS t(day, ok)"],
+					['flow', "SELECT * FROM (VALUES ('first', 10, 8, 2), ('last', 8, 6, 2)) AS t(stage, arrived, went, lost)"]
+				]) {
+					await chooseExplorerQuestion(page, ['published'], sql);
+					await runExplorer(page);
+					await showPanel(page, 'data-explorer-shape');
+					await page.locator(`[data-shape-choice="${type}"]`).click();
+					await expect(page.locator(`[data-chart-type="${type}"]`)).toBeVisible();
+					loaded.push(await shot(page, 'data-explorer-shape', `data-explorer-shape-${type}--${width}--${theme}--loaded.png`));
+				}
+			}
 			notes.push(...loaded.map(line));
 
 			// A route that reads no rows after it arrives has no fetch to fail, and
@@ -326,7 +347,6 @@ for (const route of PICTURED) {
 			if (broken && asked.size > 0) {
 				const first = new Set(asked);
 				const refused = await refusing(page, first);
-				await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
 				await opened(page, listed.address, width, theme);
 				await walked(page, listed.panels);
 				// Every request the first load made has to be made and refused again,

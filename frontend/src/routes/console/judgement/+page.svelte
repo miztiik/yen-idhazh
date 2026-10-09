@@ -60,12 +60,7 @@
 	}
 
 	const viewport = $derived(
-		windowOfDays(
-			data.merges.map((day) => day.date),
-			data.today,
-			windowDays,
-			data.console.today_anchor
-		)
+		windowOfDays(data.windowDay, windowDays, data.console.today_anchor)
 	);
 
 	/** Where the pairs a person read as two stories sit, for the one chart on
@@ -73,6 +68,10 @@
 	const apartSpan = $derived(markedApart(data.holdout.marks));
 	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
 </script>
+
+<svelte:head>
+	<title>Judgement &mdash; Console &mdash; {data.ui.site_title}</title>
+</svelte:head>
 
 <div data-console-panels="judgement">
 	<!-- The title, the strip, the band and the days control are the shell and
@@ -102,7 +101,7 @@
 		width={data.console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
-		configuredLine={data.configuredLine}
+		builtWith={data.builtWith}
 		markedApart={apartAt === null
 			? null
 			: { low: apartAt.min, high: apartAt.max, count: apartSpan.length }}
@@ -136,7 +135,7 @@
 
 	<VerdictSplit
 		record={data.record}
-		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		applied={data.builtWith}
 		discardShare={data.similarity.discard_share}
 		axisMultiple={data.console.precision_axis_multiple}
 		width={data.console.chart_width}
@@ -148,7 +147,7 @@
 		agreedScores={data.holdout.agreedScores}
 		skipped={data.holdout.skipped}
 		marked={data.holdout.marked}
-		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		applied={data.builtWith}
 		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
 		fitted={data.lines.length > 0}
 		weights={data.holdout.weights}

@@ -27,6 +27,7 @@ from idhazh.contracts.pipeline_tests import (
 )
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import setting, window
+from idhazh.stages import common
 from idhazh.telemetry import traces
 from utilities import (
     candidate_pointer,
@@ -114,8 +115,7 @@ CANDIDATE_ACTION: str = "./.github/actions/candidate-config"
 
 SCRATCH_CONFIG: str = "backend/var/candidate-config"
 
-#: Where this dispatch's own ledgers land, as `run.trial_state_dirname`, before
-#: each test case moves its own under a root of its own.
+#: The shared root used by the bench before each test case adds its own slug.
 TRIAL_STATE: str = "pipeline-tests"
 
 #: What the pin step publishes for the model block to read, read off the program
@@ -649,14 +649,12 @@ def test_the_commit_job_stages_the_declared_trial_roots_and_nothing_wider() -> N
         f"the commit step stages a path of its own: {staged['paths']}"
     )
 
-    roots = [test_case.trial_state_dirname for test_case in _settings().test_cases]
+    roots = [test_case.id for test_case in _settings().test_cases]
     assert len(set(roots)) == len(roots), (
-        "two test cases share a trial root, so one overwrites the other"
+        "two test cases share a case slug, so one overwrites the other"
     )
     for root in roots:
-        assert root.startswith(f"{TRIAL_STATE_PREFIX}-"), (
-            f"{root} is not under the prefix the bench and the qualification already use"
-        )
+        assert root in {test_case.id for test_case in _settings().test_cases}
 
 
 def test_trial_gather_reads_the_planned_day_only() -> None:
@@ -749,6 +747,7 @@ TEST_CASE_WRITER: str = ledger.segment_name(
     attempt=TEST_CASE_ATTEMPT,
     job=TEST_CASE_JOB_KIND,
     shard=TEST_CASE_SHARD,
+    suffix=".parquet",
 )
 TEST_CASE_TRACE: str = ledger.segment_name(
     run_id=TEST_CASE_RUN_ID,
@@ -799,10 +798,10 @@ def _a_downloaded_tree(root: Path, *, test_case: str) -> Path:
 def test_the_check_passes_the_two_shapes_a_test_case_really_writes(tmp_path: Path) -> None:
     """A raw census file and a trace, filed under a declared test case's own trial root."""
     test_case = _settings().test_cases[0]
-    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.trial_state_dirname)
+    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.id)
 
     assert (
-        pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.trial_state_dirname})) == []
+        pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.id})) == []
     )
 
 
@@ -840,12 +839,12 @@ def test_the_check_refuses_what_no_test_case_producer_wrote(
     last one is why the check opens the files rather than matching their names.
     """
     test_case = _settings().test_cases[0]
-    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.trial_state_dirname)
-    path = tree / relative.format(test_case=test_case.trial_state_dirname)
+    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.id)
+    path = tree / relative.format(test_case=test_case.id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("not a span\n", encoding="utf-8")
 
-    refused = pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.trial_state_dirname}))
+    refused = pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.id}))
 
     assert refused, f"the check let through {because}"
 
@@ -863,7 +862,16 @@ def test_the_gather_verb_prints_nothing_a_step_could_mistake_for_output(
     test_case = _settings().test_cases[0]
     state = tmp_path / "state"
     if wrote:
-        _a_downloaded_tree(state, test_case=test_case.trial_state_dirname)
+        with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, test_case.id))):
+            trace = traces.committed_trace_path(
+                state,
+                run_id=TEST_CASE_RUN_ID,
+                attempt=TEST_CASE_ATTEMPT,
+                job=TEST_CASE_JOB_KIND,
+                shard=TEST_CASE_SHARD,
+            )
+        trace.parent.mkdir(parents=True, exist_ok=True)
+        trace.write_text('{"kind":"span","name":"item","duration_ms":1}\n', encoding="utf-8")
     else:
         state.mkdir(parents=True)
 
@@ -891,7 +899,7 @@ def test_the_gather_verb_prints_nothing_a_step_could_mistake_for_output(
     assert done.returncode == 0, done.stderr
     assert done.stdout == ""
     if wrote:
-        assert test_case.trial_state_dirname in done.stderr, "a person still reads what arrived"
+        assert test_case.id in done.stderr, "a person still reads what arrived"
     else:
         assert "nothing to push" in done.stderr, "a dispatch that gathered nothing says so"
 
@@ -907,20 +915,22 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
     """
     test_cases = _settings().test_cases
     tree = _a_downloaded_tree(
-        tmp_path / "trial-ledgers", test_case=test_cases[0].trial_state_dirname
+        tmp_path / "trial-ledgers", test_case=test_cases[0].id
     )
     state = tmp_path / "state"
 
     staged = pipeline_test_ledgers.place(
-        tree, state, roots=[test_case.trial_state_dirname for test_case in test_cases]
+        tree, state, roots=[test_case.id for test_case in test_cases]
     )
 
-    assert len(staged) == len(test_cases)
+    assert len(staged) == 2 * len(test_cases), "a traces root and a raw root for every case"
     for test_case in test_cases:
-        assert (state / test_case.trial_state_dirname).is_dir()
-    assert ledger.raw_root(
-        state / test_cases[0].trial_state_dirname, LedgerName.ITEM_HEALTH
-    ).is_dir()
+        assert (state / ledger.paths.TRIAL_TRACES_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
+        assert (state / ledger.paths.RAW_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
+    with ledger.use_registry(
+        ledger.overlay_registry((TRIAL_STATE_PREFIX, test_cases[0].id))
+    ):
+        assert ledger.raw_root(state, LedgerName.ITEM_HEALTH).is_dir()
 
 
 def test_a_config_with_every_test_case_switched_off_is_refused() -> None:
@@ -1117,28 +1127,37 @@ def test_every_test_case_config_the_workflow_writes_loads(
         assert window(served) == (test_case.n_ctx or window(committed))
 
 
-def test_each_test_case_writes_its_own_trial_root(written_test_cases: dict[str, Path]) -> None:
-    """Every test case its own root, and no two of them share a path.
+def test_each_test_case_writes_below_the_shared_root_with_its_own_slug(
+    written_test_cases: dict[str, Path],
+) -> None:
+    """Every test case keeps its own validated child below the bench root.
 
     The dispatch runs one plan, so every test case shares a run id, a job and an
     attempt, and two test cases share each shard number. Those fields are the
-    whole of a writer's filename, so without a root of its own the last test case
-    to write would be the only one anybody could read.
+    whole of a writer's filename, so without a child root of its own the last
+    test case to write would be the only one anybody could read.
 
     Read out of the config each test case really runs on, not out of the helper:
     the helper agreeing with itself says nothing about what `work` opens.
     """
     roots = {
-        test_case_id: config.load(written).app.run.trial_state_dirname
+        test_case_id: (
+            config.load(written).app.run.trial_state_dirname,
+            config.load(written).app.run.trial_case_dirname,
+        )
         for test_case_id, written in written_test_cases.items()
     }
-    declared = {test_case.id: test_case.trial_state_dirname for test_case in _settings().test_cases}
+    declared = {
+        test_case.id: (TRIAL_STATE_PREFIX, test_case.id) for test_case in _settings().test_cases
+    }
 
     assert len(set(roots.values())) == len(roots), f"two test cases share a trial root: {roots}"
-    for test_case_id, root in roots.items():
-        assert root == declared[test_case_id]
-        assert root.startswith(f"{TRIAL_STATE_PREFIX}-"), (
-            f"{root} is outside the prefix the bench and the qualification already use"
+    for test_case_id, (root, case) in roots.items():
+        assert (root, case) == declared[test_case_id]
+        assert common.state_root_of(
+            config.load(written_test_cases[test_case_id]), base=Path("state")
+        ) == Path("state") / TRIAL_STATE / test_case_id, (
+            f"{test_case_id} did not append its case slug under the shared trial root"
         )
 
 
@@ -1352,10 +1371,14 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     )
     trial = next(
         test_case for test_case in one_shard.test_cases if test_case.id == _enabled_id()
-    ).trial_state_dirname
-    filed = ledger.load_days(
-        tmp_path / ledger.STATE_DIRNAME / trial, LedgerName.RUN_PLAN, ["2026-09-14"], model=RunPlan
-    )
+    ).id
+    with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, trial))):
+        filed = ledger.load_days(
+            tmp_path / ledger.STATE_DIRNAME,
+            LedgerName.RUN_PLAN,
+            ["2026-09-14"],
+            model=RunPlan,
+        )
     assert [plan.run_id for plan in filed] == [drawn.run_id], (
         "the drawn plan is filed where this test case's stages read a plan, before they start"
     )

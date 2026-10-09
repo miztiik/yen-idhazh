@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 One question, asked of every file this project writes:
 
@@ -45,9 +45,9 @@ thirty days. The browser's copy of a ledger is held to the same rule: it and the
 ledger it copies must age together.
 
 **3. What replaces it is written and read back before the original goes.** The
-item-health fold writes `state/item-health-summary/<YYYY-MM>.csv` and reads it
-back before the month's rows can go. A fold that wrote a summary nobody re-read
-would trade an unreadable month for an unread one.
+item-health fold writes raw files under `state/raw/item-health-summary/` and
+reads them back before the month's rows can go. A fold that wrote a summary
+nobody re-read would trade an unreadable month for an unread one.
 
 **4. A fuse bounds one run.** The picture cleanup's `max_deletes_per_run`, in
 `config/gardener/visual-prune.json`, is 200, against the
@@ -172,17 +172,17 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/raw/host-fingerprint/`, `state/compact/host-fingerprint/` | Delete (lookup) | 14 months, the `monthly_window` of `config/gardener/compact-host-fingerprint.json` | one job's silicon on one run, so a total over an old month names no machine. The gardener loader refuses that compaction when it keeps less than `public_machine_keep_months`, because the published shard is folded from this ledger |
 | `state/raw/counterfactual-scores/`, `state/compact/counterfactual-scores/` | Delete (lookup) | day files for 45 to 76 days, then 1 month file, the `monthly_window` of `config/gardener/compact-counterfactual-scores.json`. That window only reports today | the lens tuning that will read these scores opens `lens_weights.window_days`, 30 days, and the gardener loader refuses a compaction that keeps less |
 | `state/traces/` | Delete (lookup) | 7 days, the window of `config/gardener/traces.json` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
-| `state/raw/item-health/`, `state/compact/item-health/` | **Fold** -> `state/item-health-summary/` | summarised at 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json`; the rows go at 15 months, the `monthly_window` of `config/gardener/compact-item-health.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
+| `state/raw/item-health/`, `state/compact/item-health/` | **Fold** -> `state/raw/item-health-summary/`, packed under `state/compact/item-health-summary/` | summarised at 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json`; the rows go at 15 months, the `monthly_window` of `config/gardener/compact-item-health.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
 | `state/raw/summary-quality-evals/`, `state/compact/summary-quality-evals/` | Keep | forever, the `monthly_window` of `config/gardener/compact-summary-quality-evals.json`, which may pack a month or a finished year and never drops one | the evidence behind every published quality claim, so every row is kept and a monthly figure is computed from the rows when a chart draws it ([evaluation.md](evaluation.md#design-rationale)) |
 | `state/visuals/` | **Fold** -> `state/visual-aggregate/` | `observability.visuals_full_grain_months` | one row per attempt at a picture, and `none` is the majority outcome by design - so the cause breakdown has to outlive the attempts. The [fold key](#the-visual-fold-key-is-eight-terms-and-it-could-not-wait) is what decides that, and it is settled. No committed instance yet |
-| `state/item-health-summary/` | Keep | forever, the `aggregate` series of `config/gardener/telemetry-aggregate.json` | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
+| `state/raw/item-health-summary/`, `state/compact/item-health-summary/` | Keep | forever, the `monthly_window` of `config/gardener/compact-item-health-summary.json` | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
 | `state/visual-aggregate/` | Keep | `observability.visual_aggregate_keep_months`, null | the same argument again, and one more of its own: it is the only record that a gate ever refused anything. No committed instance yet |
 | `state/raw/published/`, `state/compact/published/` | Keep | forever, the `monthly_window` of `config/gardener/compact-published.json`, which may pack a month or a finished year and never drops one. The **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
-| `state/<run.trial_state_dirname>/raw/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed through the ledger door as one raw file. It lands under the trial root because only a qualification writes it, nothing packs a trial root, and the gardener's `trials` task already bounds that root |
+| `state/<run.trial_state_dirname>/raw/candidate-models/` and its matching compact folder | Pack, then keep for the trial window | 31 daily days plus three months | one verdict a dispatch, filed through the ledger door. `compact-trial-candidate-models` packs only its declared trial roots; monthly deletion is report-only and yearly expiry is disabled |
 
 ### `corpus/` - the rolling training window
 
@@ -345,12 +345,11 @@ a raster family would move every row of the arithmetic above at once.
 
 **The module keeps the name `retention.py` and the concept is documented as
 adaptive pruning.** "Intelligent" claims a property that code reading a date does
-not have. "Compaction" is this repository's own word for merging segments into a
-day's settled file and day files into a month file - the gardener's closed-day
-fold, and `retention.compact_month` one level up, and the gardener's `compaction`
-tasks, which merge a door ledger's raw files into day files and day files into
-month files - so taking it for deletion by age would be one word for two
-operations (O9, `CLAUDE.md` section 0b).
+not have. "Compaction" is this repository's own word for merging files into
+fewer - the gardener's `compaction` tasks, which merge a door ledger's raw files
+into day files and day files into month files, and `retention.compact_month`,
+which folds a month of item health into its summary - so taking it for deletion
+by age would be one word for two operations (O9, `CLAUDE.md` section 0b).
 
 **The register carries no test, and that is a decision rather than an omission.**
 Three shapes were available. A walk of `state/`, `corpus/` and

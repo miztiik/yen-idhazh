@@ -1,6 +1,6 @@
 # Glossary
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 The words this project uses for its own machinery, and where each one is defined.
 
@@ -37,10 +37,10 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **canary** | One of five planted prompt-injection attacks, run against the model to prove the sanitizer holds. The **canary day** is a published day built from them, so the browser suite can attack a real page instead of a fixture | `backend/idhazh/stages/qualify_canaries.py`, `backend/utilities/build_canary_day.py` |
 | **candidate** | A model being judged before it may replace the one in use | [qualification.md](qualification.md) |
 | **census** | A ledger that records **every** planned item, pass and fail alike, so a rate has its denominator beside its numerator. `item-health` is the census, and nothing in it is sampled - it is what every rate on every page divides by | `backend/idhazh/contracts/item_health.py` |
-| **compaction** | Merging many small files into fewer, which saves files and changes no answer. A retention task's closed-day fold settles a closed CSV day's writer files into one `settled.csv`; a gardener `compaction` task moves a door ledger's raw files into one file a day and then one file a month, and deletes what it moved | `backend/idhazh/gardener/closed_day_fold.py`; [../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md) |
+| **compaction** | Merging many small files into fewer, which saves files and changes no answer. A gardener `compaction` task moves a door ledger's raw files into one file a day and then one file a month, and deletes what it moved | [../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md) |
 | **council** | The nightly workflow where models judge borderline same-story pairs and fit the merge line | [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) |
 | **dispatch** | A workflow run somebody started by hand, rather than one the schedule started | [../reference/github-actions.md](../reference/github-actions.md) |
-| **drift gate** | Retired on 2026-09-23 with the generated layer it checked. What binds the frontend's hand copies now is three tests in `backend/tests/contracts/` | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) |
+| **drift gate** | Retired on 2026-09-23 with the generated layer it checked. The current tests that bind the frontend's hand copies, and what each proves, are listed in the contract guide | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) |
 | **family** | One top-level folder under `state/` and the ledgers inside it. It carries what is decided for the folder as a whole: its lifecycle status (`active`, `paused` or `retired`), one plain line saying what it holds, and the UTC day it was onboarded. `content-similarity-judge` is one family of seven ledgers; most families hold one | [../architecture/contracts/ledger-registry.md](../architecture/contracts/ledger-registry.md); the list is `config/ledgers.json`, and `backend/utilities/ledger_families.py` prints it |
 | **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a closed day | [adaptive-pruning.md](adaptive-pruning.md) |
 | **holdout** | Labelled pairs kept out of fitting, so a fitted threshold is scored against something it has never seen | [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md) |
@@ -51,12 +51,12 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |
 | **scratch config** | A copy of `config/` with the model pointer moved, so a candidate can be measured without editing the committed tree. Two keys may differ and no third | `backend/utilities/candidate_pointer.py` |
 | **seen ledger** | The ledger that answers "how old is this?" for an article whose feed carried no date | [pipeline-loop.md](pipeline-loop.md) |
-| **segment** | The rows one writer commits, at `state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. Two writers never share a filename there, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger/filenames.py`, `backend/idhazh/day_shards.py` |
+| **segment** | The rows one writer commits into the day they record, in a file of its own: a raw file the ledger door names for its writer under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, or a trace named `<run_id>-<attempt>-<job>-<shard>.jsonl`. Two writers never share a filename, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger/filenames.py` |
 | **shard** | The batch of items handed to one worker, so a day's work runs in parallel. `run.shard_size` is URLs per worker | `backend/idhazh/contracts/knobs/run.py` |
 | **span** | One timed operation in the telemetry tree | [telemetry.md](telemetry.md) |
 | **span rollup** | A month of spans folded to one row per date, run, shard and span name | [telemetry.md](telemetry.md) |
 | **stage** | One step of the loop, invocable on its own with a file in and a file out | [pipeline-loop.md](pipeline-loop.md) |
-| **trial run** | A run that takes production's exact code path and writes its ledgers to `state/<name>/` instead of `state/`, so it can never be read as a published day. The gardener's `trials` task, whose window is in `config/gardener/trials.json`, is what empties it again | `backend/idhazh/contracts/knobs/run.py`, the `run.trial_state_dirname` field |
+| **trial run** | A run that takes production's exact code path and writes its ledgers to `state/<name>/`, or to `state/<name>/<case>/` when it names a case, so it can never be read as a published day. Compaction owns trial ledgers; the gardener's `trials` task reports files beyond its window under each declared trace folder in `config/gardener/trials.json` | `backend/idhazh/contracts/knobs/run.py`, the `run.trial_state_dirname` and `run.trial_case_dirname` fields |
 | **work order** | One URL that survived deduplication and was chosen for the day. It is `PlannedItem` in code, and nothing but this row calls it a work order | `backend/idhazh/contracts/run_plan.py` |
 
 ## Design rationale

@@ -1,0 +1,160 @@
+{
+  "version": "2026-10-09",
+  "corpus": {
+    "published_articles": 15115,
+    "articles_a_batch": 1000,
+    "batch_session_minutes": 180
+  },
+  "pair_build": {
+    "title_overlap_floor": 0.3,
+    "sensitivity_floors": [0.25, 0.3, 0.35, 0.4],
+    "ambiguous_floor": 0.1,
+    "seed": 20261008,
+    "next_day_window": 1,
+    "min_title_words": 3,
+    "max_pairs_a_side": 8000,
+    "max_ambiguous_pairs": 4000,
+    "max_related_pairs": 2000
+  },
+  "encode": {
+    "batch_size": 32,
+    "max_sequence_length": 256,
+    "threads": 0,
+    "checkpoint_every_articles": 512
+  },
+  "judgment_evaluation": {
+    "expected_judgments": 935,
+    "calibration_fraction": 0.3,
+    "split_seed": 20261009,
+    "precision_target": 0.95,
+    "bootstrap_rounds": 1000,
+    "bootstrap_seed": 20261010,
+    "interval_level": 0.95,
+    "minimum_valid_draws": 100,
+    "reference": "gte-small"
+  },
+  "judgment_vectors": [
+    {
+      "slug": "minilm-l6",
+      "file": "baseline-vectors/vectors-minilm-l6/minilm-l6.npy",
+      "run_id": "37850950040",
+      "artifact": "vectors-minilm-l6"
+    },
+    {
+      "slug": "gte-small",
+      "file": "baseline-vectors/vectors-gte-small/gte-small.npy",
+      "run_id": "37850950040",
+      "artifact": "vectors-gte-small"
+    },
+    {
+      "slug": "jina-v5-nano",
+      "file": "new-vectors-37895396586/jina-v5-nano.npy",
+      "run_id": "37895396586",
+      "artifact": "vectors-jina-v5-nano"
+    },
+    {
+      "slug": "embeddinggemma-two",
+      "file": "new-vectors-37909985697/embeddinggemma-two.npy",
+      "run_id": "37909985697",
+      "artifact": "vectors-embeddinggemma-two"
+    }
+  ],
+  "encoders": [
+    {
+      "slug": "minilm-l6",
+      "model_id": "sentence-transformers/all-MiniLM-L6-v2",
+      "prefix": "",
+      "parameters_millions": 22,
+      "why": "What the search surface runs today. Every other row is read as a gain or a loss against it."
+    },
+    {
+      "slug": "gte-small",
+      "model_id": "thenlper/gte-small",
+      "prefix": "",
+      "parameters_millions": 33,
+      "why": "The same training as gte-base at the same 384 numbers an article the current encoder uses. It asks whether gte-base's lead is its training or its size, and whether the smallest useful vector can carry it."
+    },
+    {
+      "slug": "gte-base",
+      "model_id": "thenlper/gte-base",
+      "prefix": "",
+      "parameters_millions": 109,
+      "why": "Best separation of the six measured, at 0.96 GB. The leader to beat, and the other half of the size-against-training question."
+    },
+    {
+      "slug": "bge-base",
+      "model_id": "BAAI/bge-base-en-v1.5",
+      "prefix": "",
+      "parameters_millions": 109,
+      "why": "The same size as gte-base from a different group. One pair at one size is what separates a training difference from a size difference."
+    },
+    {
+      "slug": "gte-modernbert",
+      "model_id": "Alibaba-NLP/gte-modernbert-base",
+      "prefix": "",
+      "parameters_millions": 149,
+      "why": "The same training again, on a newer foundation than the rest of the list. Sits within forty million parameters of gte-base, so the pair reads as a change of foundation rather than a change of size. It is the one row that asks whether anything has moved since the models here were built."
+    },
+    {
+      "slug": "embeddinggemma-two",
+      "model_id": "google/embeddinggemma-2",
+      "prefix": "task: sentence similarity | query: ",
+      "parameters_millions": 270,
+      "model_options": {
+        "revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+        "config_kwargs": {
+          "vision_config": null,
+          "audio_config": null
+        },
+        "model_kwargs": {"dtype": "float32"}
+      },
+      "encode_options": {"prompt": ""},
+      "why": "The selected October 2026 encoder, loaded text-only. Both summaries use the sentence-similarity instruction. Apache-2.0; this run measures quality and CPU cost, not a production adoption."
+    },
+    {
+      "slug": "jina-v5-nano",
+      "model_id": "jinaai/jina-embeddings-v5-text-nano-text-matching",
+      "prefix": "Document: ",
+      "parameters_millions": 212,
+      "model_options": {
+        "revision": "a75863a1a1ada69eda80f20ae26b5f40b4a823bc",
+        "trust_remote_code": true,
+        "model_kwargs": {"dtype": "float32"}
+      },
+      "encode_options": {"prompt": ""},
+      "why": "The selected February 2026 nano encoder with its official text-matching adapter already merged. Both summaries use Document: once. The merged weights contain about 212M parameters; the multi-adapter model advertises 239M. CC-BY-NC-4.0: evaluation only, not commercial adoption."
+    }
+  ],
+  "set_aside": [
+    {
+      "slug": "e5-base",
+      "model_id": "intfloat/e5-base-v2",
+      "parameters_millions": 109,
+      "why_set_aside": "Measured 0.9910, last of the six. It also packs unrelated pairs at 0.736 similarity against 0.102 for the leader, which leaves the least room anywhere to put a cut."
+    },
+    {
+      "slug": "bge-large",
+      "model_id": "BAAI/bge-large-en-v1.5",
+      "parameters_millions": 335,
+      "why_set_aside": "Measured 0.9917 - below a model a third its size - at 2.5 GB. Three times the memory for less separation is not a trade worth a shard."
+    },
+    {
+      "slug": "mxbai-large",
+      "model_id": "mixedbread-ai/mxbai-embed-large-v1",
+      "parameters_millions": 335,
+      "why_set_aside": "The size it would have tested is already answered: both 335M models measured sit below gte-base at 109M, so a third reading at that size buys a confirmation nobody needs."
+    },
+    {
+      "slug": "bge-m3",
+      "model_id": "BAAI/bge-m3",
+      "parameters_millions": 568,
+      "why_set_aside": "Measured 0.9919 against 0.9942 for a model a fifth its size, at 3.72 GB peak. The batch runs the summariser in the same 16 GB, so that figure is the constraint and the separation does not pay for it. Its one distinctive offer - a meaning vector and word weights from one pass - is worth returning to if word weights are ever wanted."
+    },
+    {
+      "slug": "qwen3-embedding-600m",
+      "model_id": "Qwen/Qwen3-Embedding-0.6B",
+      "parameters_millions": 595,
+      "why_set_aside": "Did not finish inside the session on either attempt, so it has no reading. Nothing above it justifies the wait: six encoders span 0.9905 to 0.9942 and the largest measured sits mid-field."
+    }
+  ]
+}

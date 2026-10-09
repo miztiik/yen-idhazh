@@ -145,8 +145,8 @@ function supersedes(later: FeedEvent, kept: FeedEvent): boolean {
  * A feed is read once in a run, so two rows under one run and feed are two
  * accounts of one event, and counting both counts a run twice. They exist
  * because a second attempt at a run cannot see what the first attempt pushed
- * after its checkout, and the union merge on `state/**\/*.csv` keeps both
- * lines rather than conflicting.
+ * after its checkout, so both attempts file a verdict, and a page handed both
+ * must still count the run once.
  *
  * `discover.settled` is the same reduction over the same rows. The page and the
  * run have to agree about how many times a feed failed, or the console
@@ -271,9 +271,10 @@ export interface Reliability {
 
 /** Whatever span the caller handed it, and the caller says which.
  *
- * The console hands it `feedResults(shardDays(widest))`, so the record is the
- * newest packed days the window control can reach rather than every run there
- * has been. The same span the streak beside each feed is read over, because two
+ * The console hands it `feedResults` over the widest window the control offers,
+ * which ends on the newest published day, so the record is the packed days that
+ * window reaches rather than every run there has been. The same span the streak
+ * beside each feed is read over, because two
  * spans in one section is the defect the shared window exists to remove - and
  * the sentence the page prints names that span rather than claiming all of
  * them (`CLAUDE.md` Guardrail #12).

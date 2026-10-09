@@ -1,6 +1,8 @@
 import { megabytes } from '$lib/assist/session';
 import type { FetchCost } from '$lib/data/ledger';
-import { shortDate } from '$lib/format';
+import { daysBetween } from '$lib/data/slice';
+import { plural as countNoun, shortDate } from '$lib/format';
+import { explorerMissingSentence } from '$lib/console/waiting';
 
 export type ExplorerStatusState =
 	| 'idle'
@@ -21,18 +23,20 @@ export type ExplorerStatusInput = {
 	files?: number;
 	bytes?: number;
 	ledgers?: number;
-	days?: number;
+	readFrom?: string | null;
+	readTo?: string | null;
 	firstRun?: boolean;
 	ms?: number | null;
 	read?: FetchCost | null;
 	ledger?: string;
+	published?: boolean;
 	through?: string;
 	linkNotices?: readonly string[];
 	notice?: string | null;
 };
 
 export function plural(count: number, noun: string): string {
-	return `${count} ${noun}${count === 1 ? '' : 's'}`;
+	return countNoun(count, noun, `${noun}s`);
 }
 
 export function size(bytes: number): string {
@@ -58,26 +62,26 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'running-query':
 			return 'Running the question.';
 		case 'answered':
-			return `Answered in ${elapsed(input.ms)}. Fetched ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}; ${input.read?.alreadyHeld ?? 0} more were already in this page.`;
+			return (input.read?.files ?? 0) === 0 ? `Answered in ${elapsed(input.ms)}.` : `Answered in ${elapsed(input.ms)}. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
 		case 'quiet':
-			return `Ran in ${elapsed(input.ms)} and matched no rows. Fetched ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
+			return (input.read?.files ?? 0) === 0 ? `Ran in ${elapsed(input.ms)} and matched no rows.` : `Ran in ${elapsed(input.ms)} and matched no rows. Read ${plural(input.read?.files ?? 0, 'file')}, ${size(input.read?.bytes ?? 0)}.`;
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
-			return `Did not run. ${input.ledger ?? 'This ledger'} is not on this site yet.`;
+			return `Did not run. ${explorerMissingSentence(input.ledger ?? 'This ledger', input.published ?? false, false)}`;
 		case 'unreachable-engine':
 			return 'Did not run. The query engine did not start.';
 		case 'unreachable-files':
 			return 'Did not run. The ledger files could not be fetched.';
 		case 'idle': {
-			const prefix = `Run reads ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(input.days ?? 0, 'UTC day')}.`;
+			const from = input.readFrom;
+			const to = input.readTo;
+			const days = from && to ? daysBetween(from, to).length : 0;
+			const dates = days === 1 && to ? `: ${shortDate(to)}` : days > 1 && from && to ? `, from ${shortDate(from)} through ${shortDate(to)}` : '';
+			const prefix = `Run will read ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(days, 'UTC day')}${dates}.`;
 			const engine = input.firstRun ? ' It also starts the query engine.' : '';
 			const empty = input.ledger !== undefined && input.through !== undefined ? ` Nothing in ${input.ledger} after ${shortDate(input.through)}.` : '';
 			return `${prefix}${engine}${empty}`;
 		}
 	}
-}
-
-export function statusWithHeld(sentence: string, heldBytes: number): string {
-	return `${sentence} This page holds ${size(heldBytes)} of fetched files; a reload empties it.`;
 }

@@ -37,6 +37,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -152,4 +153,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # A crash prints where it broke, never what it said. Nothing installs the
+    # package here, so the printer is imported from this checkout's `backend/`.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from idhazh import crash_trace
+
+    crash_trace.install()
     raise SystemExit(main())

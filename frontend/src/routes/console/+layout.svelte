@@ -58,14 +58,10 @@
 	);
 
 	// Raw, because a source is an object of getters and a deep proxy of it would
-	// be a copy of the route's state rather than the route's state.
+	// be a copy of the route's state rather than the route's state. Only drawn
+	// from: the slot decides which route holds it.
 	let handed = $state.raw<WindowSource | null>(null);
-	provideWindowSlot({
-		fill: (source) => (handed = source),
-		clear: (source) => {
-			if (handed === source) handed = null;
-		}
-	});
+	provideWindowSlot((source) => (handed = source));
 
 	/** What the route loaded, read from the page rather than handed in, because
 	 * the layout is drawn before the route's script runs. */
@@ -339,13 +335,28 @@
 		text-decoration: underline;
 	}
 
+	/* Workbench chrome runs to the window's edges: the section steps out of the
+	   frame's gutter, the header keeps it, and the strip pads its own sides.
+	   From the wide breakpoint the section is the column the route's workbench
+	   fills, under a frame held to the window's height (`app.css`). */
 	:global([data-console-chrome='workbench']) {
-		padding-top: 0;
+		padding-block: 0;
+		margin-inline: calc(-1 * var(--gutter));
+	}
+
+	@media (min-width: 1024px) {
+		:global([data-console-chrome='workbench']) {
+			display: flex;
+			flex-direction: column;
+			flex: 1 1 0;
+			min-block-size: 0;
+		}
 	}
 
 	:global([data-console-chrome='workbench']) .console-strip {
 		flex-wrap: nowrap;
 		min-block-size: calc(var(--workbench-control) + 1px);
+		padding-inline: var(--space-3);
 		border-block-end: 1px solid var(--item-edge);
 		background: var(--color-bg);
 	}

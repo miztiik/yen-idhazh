@@ -14,9 +14,15 @@
 
 import { expect, test, type Page } from './support/browser';
 import { chartsReady } from './support/charts-ready';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
+import { render } from 'svelte/server';
+import { serverCompiler } from './support/server-render';
+import { windowOfDays } from '../src/lib/charts/viewport';
+import { findBuiltLine } from '../src/lib/console/applied-line';
+import { readRecordedLine } from '../src/lib/server/recorded-line';
+import type { LineDay } from '../src/lib/console/merge-line';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8'));
@@ -163,10 +169,10 @@ test.describe('the sentences count what the chart drew', () => {
 			);
 		const text = (await page.locator('[data-line-clamp-note]').innerText()).trim();
 		if (clamped === 0) {
-			expect(text).toContain('has not held the line back on any');
+			expect(text).toContain('has not held the line back in');
 		} else {
 			expect(text, 'the sentence and the chart disagree about the clamp').toContain(
-				`on ${clamped} of the last`
+				`on ${clamped} of `
 			);
 		}
 	});
@@ -182,7 +188,7 @@ test.describe('the sentences count what the chart drew', () => {
 		expect(Number(await page.locator(`${PANEL} [data-line-rule]`).getAttribute('data-line-rule')))
 			.toBeCloseTo(FLOOR, 3);
 		await expect(page.locator('[data-line-state="no-days"]')).toContainText(
-			'No day has fitted a line yet'
+			'No line was fitted in'
 		);
 
 		const box = await page.locator(`${PANEL} svg`).boundingBox();
@@ -274,5 +280,138 @@ test('the resting heading separates the date from the note', async ({ page }) =>
 	expect(
 		(await day.innerText()).trim(),
 		'the resting heading runs the date into the note'
-	).toMatch(/, the newest day$/);
+	).toMatch(/, the newest recorded day shown$/);
+});
+
+test.describe('calculated history is not build history', () => {
+	let draw: (props: Record<string, unknown>) => string;
+	let styles = '';
+
+	test.beforeAll(async ({}, info) => {
+		const compiled = serverCompiler(info.outputPath('calculated-line'));
+		const rewrites = [
+			['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
+			['$lib/components/Panel.svelte', './Panel.server.mjs']
+		] as const;
+		for (const [file, name] of [
+			['src/lib/components/ChartReadout.svelte', 'ChartReadout'],
+			['src/lib/components/Panel.svelte', 'Panel'],
+			['src/routes/console/judgement/MergeLinePlot.svelte', 'MergeLinePlot']
+		] as const) {
+			const module = await compiled(file, name, rewrites);
+			if (name === 'MergeLinePlot') {
+				const component = (await import(pathToFileURL(module).href)).default;
+				draw = (props) => render(component, { props }).body;
+			}
+		}
+		styles = [...compiled.css.values()].join('\n');
+	});
+
+	function fitted(date: string, previous: number, applied: number): LineDay {
+		return {
+			date, previous, applied, proposed: applied,
+			clampKind: 'none', heldReason: 'none', maxDownStep: 0.01, maxUpStep: 0.01
+		};
+	}
+
+	const rows: LineDay[] = [
+		fitted('2030-06-01', 0.94, 0.93),
+		fitted('2030-06-14', 0.93, 0.93),
+		{ ...fitted('2030-06-15', 0.93, 0.93), proposed: null, heldReason: 'sheet_too_small' },
+		{ ...fitted('2030-06-16', 0.93, 0.925), proposed: 0.91, clampKind: 'step' },
+		fitted('2030-06-30', 0.925, 0.925)
+	];
+
+	async function show(page: Page, preset: number, days: LineDay[] = rows) {
+		const root = test.info().outputPath('digest');
+		// Named generated records, never a scan of the committed archive.
+		for (const date of ['2030-06-01', '2030-06-14', '2030-06-15', '2030-06-16', '2030-06-30']) {
+			const [year, month, day] = date.split('-');
+			const directory = join(root, year, month, day);
+			mkdirSync(directory, { recursive: true });
+			writeFileSync(join(directory, 'run.json'), JSON.stringify({
+				date, runs: [{
+					run_id: `${date}-1`, completed_at: `${date}T12:00:00Z`,
+					same_story_floor_applied: 0.94
+				}]
+			}), 'utf8');
+		}
+		const builtWith = findBuiltLine('2030-06-30', readRecordedLine('2030-06-30', root),
+			days, { enabled: false, applied_lookback_days: 7 }, 0.94);
+		expect(builtWith).toBe(0.94);
+		await page.setContent(`<style>${styles}</style>${draw({
+			days, builtWith, knobs: { band_low: 0.88, band_high: 0.98 },
+			viewport: windowOfDays('2030-06-30', preset, 'right'),
+			height: 220, width: 760, tickDensity: 6, readoutMaxShare: 1,
+			markedApart: { low: 0.92, high: 0.935, count: 3 }
+		})}`);
+	}
+
+	for (const preset of [14, 30]) {
+		test(`THE ORACLE: ${preset} days show the calculated result, not the disabled build line`, async ({ page }) => {
+			await show(page, preset);
+			const panel = page.locator('[data-console-panel="Where the merge line sits"]');
+			await expect(panel.locator('.panel-note')).toContainText(
+				"The solid line is the nightly calculation's final score"
+			);
+			await expect(panel.locator('.panel-note')).toContainText('A build may have used a different line.');
+			await expect(panel.locator('.panel-note')).toContainText('This does not show that a build grouped them.');
+			expect(await panel.locator('[data-readout-row]').evaluateAll(
+				(nodes) => nodes.map((node) => node.getAttribute('data-readout-row'))
+			)).toEqual(['Calculated line', 'Proposed line', 'Change']);
+			await expect(panel.locator('[data-line-day="2030-06-30"]')).toHaveAttribute('data-line-applied', '0.925');
+			// 0.925 maps to 112.5 on this fixed 0.88..0.98 axis; 0.940 maps to 84.
+			const points = await panel.locator('[data-line-series="applied"]').getAttribute('points');
+			expect(points?.split(' ').at(-1)?.split(',')[1]).toBe('112.5');
+			await expect(panel.locator('svg')).toHaveAttribute('aria-label',
+				'Nightly calculated merge lines, on the full allowed score range. Builds may have used different lines.');
+			if (preset === 30) {
+				expect(points?.split(' ').map((point) => point.split(',')[1])).toEqual([
+					'103', '103', '103', '112.5', '112.5'
+				]);
+				await expect(panel.locator('[data-line-held-mark]')).toHaveCount(1);
+				await expect(panel.locator('[data-line-held-note]')).toHaveText(
+					'Nothing was fitted on 1 recorded day in this 30-day window.'
+				);
+				await expect(panel.locator('[data-line-series="proposed"]')).toHaveCount(2);
+			}
+		});
+	}
+
+	test('one day names calculated readings, while an empty or absent fit keeps the recorded build rule', async ({ page }) => {
+		await show(page, 1);
+		await expect(page.locator('.panel-note')).toContainText(
+			"The applied reading is the nightly calculation's final score"
+		);
+		await expect(page.locator('.panel-note')).not.toContainText('The solid line');
+		await expect(page.locator('[data-readout-day]')).toHaveText('30 Jun');
+		for (const days of [[], [fitted('2030-05-01', 0.94, 0.93)]]) {
+			await show(page, 14, days);
+			await expect(page.locator('[data-line-series="applied"]')).toHaveCount(0);
+			await expect(page.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', '0.940');
+			await expect(page.locator('[data-line-state="no-days"]')).toContainText(
+				'The rule is the line the newest day was built with'
+			);
+			await expect(page.locator('.panel-note')).toContainText('The dashed rule shows the line the newest day was built with.');
+			await expect(page.locator('.panel-note')).not.toContainText('The solid line');
+		}
+	});
+
+	test('drawn proposed lines stop at held days and leave a singleton unjoined', async ({ page }) => {
+		const days = Array.from({ length: 7 }, (_, index) => {
+			const day = fitted(`2030-06-${24 + index}`, 0.93, 0.93);
+			return index === 2 || index === 5
+				? { ...day, proposed: null, heldReason: 'sheet_too_small' as const }
+				: day;
+		});
+		await show(page, 7, days);
+		const applied = (await page.locator('[data-line-series="applied"]').getAttribute('points'))?.split(' ');
+		expect(applied).toHaveLength(7);
+		const proposed = await page.locator('[data-line-series="proposed"]').evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('points'))
+		);
+		expect(proposed).toEqual([applied?.slice(0, 2).join(' '), applied?.slice(3, 5).join(' ')]);
+		await expect(page.locator('[data-line-held-mark]')).toHaveCount(2);
+		await expect(page.locator('[data-line-day="2030-06-30"]')).toHaveCount(1);
+	});
 });

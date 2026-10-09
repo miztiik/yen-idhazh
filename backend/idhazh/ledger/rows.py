@@ -7,13 +7,12 @@ cell reaches a committed file without a model having read it.
 Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
 and writes nothing into a paused or retired family; `append_seen` and
 `append_published` ask through `persist`, which asks for every pipeline write.
-`write_item_health_summary` does not ask: it folds rows already recorded, and the
-ageing step reads that fold back before it deletes anything.
 
-Seven readers here read a ledger that lives under `state/raw/` and
-`state/compact/` rather than in a CSV tree - `load_seen`, `load_published`,
-`load_health`, `load_retirements`, `load_visual_prunes`, and the two item-health
-readers `load_settled_failures` and `load_source_counts` - and all seven read it
+Nine readers here read a ledger that lives under `state/raw/` and
+`state/compact/` - `load_seen`, `load_published`,
+`load_health`, `load_retirements`, `load_visual_prunes`, the two item-health
+readers `load_settled_failures` and `load_source_counts`, and the judge's
+`load_story_similarity_pairs` and `load_fitted_thresholds` - and all nine read it
 through `ledger/ledger_files.py`, which reads the yearly files, then the monthly
 files, then the daily files, then the raw days no compact index names, each date
 from exactly one of them. Two of their writers are here, `append_seen` and
@@ -23,44 +22,23 @@ its rows to `persist` itself.
 
 from __future__ import annotations
 
-import csv
-import os
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable
 from pathlib import Path
 from typing import Final
 
 from idhazh import day_partition
-from idhazh.contracts.base import ServerJob
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
-from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import ledger_files, lifecycle, paths
-from idhazh.ledger.csv_file import (
-    CsvRecord,
-    _read_rows,
-    extend_ledger_file,
-    render_file,
-)
-from idhazh.ledger.filenames import segment_name
-from idhazh.ledger.keys import (
-    _TREE_SHAPES,
-    COUNCIL_SHARD_OUTCOME_KEY,
-    DATE_CELL,
-    STORY_SIMILARITY_PAIR_KEY,
-    STORY_SIMILARITY_THRESHOLD_KEY,
-    _refuse_outside_day_trees,
-)
+from idhazh.ledger import ledger_files
 from idhazh.ledger.persist import persist
-from idhazh.ledger.settle import drop_repeated_rows
 
 #: How far back a health read looks, in days the ledger holds. Not a policy - just
 #: enough history to reach into last month, so a quarantine decided on the first
@@ -250,127 +228,38 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     )
 
 
-def append_story_similarity_pairs(
-    state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
-) -> int:
-    """Append a day's judged pairs into that day's own file.
-
-    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write. The
-    key carries `run_id`, so a second
-    RUN of one date keeps its own rows and only a second attempt at one
-    execution is collapsed - both attempts judged the same pair under the same
-    prompt against the same day, so the first row wins and there is nothing to
-    choose between them. Which of two runs the record counts is decided over the
-    whole day when the day is folded, never line by line here.
-
-    **The day file is created even when the day judged nothing.** The commit step
-    names this directory,
-    `git add` runs under `set -euo pipefail`, and a path missing from the working
-    tree aborts the step and costs the ledgers staged beside it.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    recorded = list(rows)
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
-    if not lifecycle.accepts_new_rows(which, len(recorded)):
-        return 0
-    file = paths.path(state_dir, which, date)
-    columns = StorySimilarityPair.csv_columns()
-    if not file.exists():
-        file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(file, columns, recorded)
-    return landed - drop_repeated_rows(file, STORY_SIMILARITY_PAIR_KEY)
-
-
 def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
-    """One named day's judged pairs, and never a second file.
+    """One named day's judged pairs, read through the ledger door, and never a second day.
 
     **Guardrail #12 declaration, and it is the whole point of this ledger's
     shape.** The fold counts one date into the record and the record is then the
-    only thing the fit reads, so this opens the file the date names and stops.
-    It costs the same on the thousandth day as on the third whatever the tree
-    holds beside it.
+    only thing the fit reads, so this asks the door for the day the date names
+    and stops: the three compact indexes, the one file that serves the day, and
+    that day's raw files. It costs the same on the thousandth day as on the third
+    whatever the ledger holds beside it.
 
-    A row that no longer parses stops the read rather than being skipped. A
-    report may drop a day it cannot read; this is evidence being counted into a
-    record that is rewritten whole, and a silently short count is a record that
-    cannot be told from a quiet day.
+    A file this build cannot read is skipped with a warning naming it, the way
+    the door reads every ledger, so a short day is said in the log rather than
+    silently counted as a quiet one.
     """
-    pairs = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
-    return [StorySimilarityPair.from_csv_row(raw) for raw in _read_rows(pairs)]
-
-
-def append_fitted_thresholds(
-    state_dir: Path, date: str, rows: Iterable[FittedSimilarityThreshold]
-) -> int:
-    """Append a run's fitted row into that day's own file.
-
-    Settled against `STORY_SIMILARITY_THRESHOLD_KEY` straight after the write,
-    the way `append_story_similarity_pairs` is. The key is date and run, so a
-    second RUN of one date keeps its own row - two runs fitted two records and
-    both are facts - and only a second attempt at one execution is collapsed.
-
-    **The day file is created even when the fit was held**, and a held day writes
-    a row like any other: a line that moves itself has to leave a record on the
-    days it stayed put, or a reader cannot tell a held day from a day nothing
-    ran. The empty-file half is the same reason `append_story_similarity_pairs`
-    gives - the commit step names this directory and a missing path aborts it
-    under `set -euo pipefail`.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    recorded = list(rows)
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-    if not lifecycle.accepts_new_rows(which, len(recorded)):
-        return 0
-    file = paths.path(state_dir, which, date)
-    columns = FittedSimilarityThreshold.csv_columns()
-    if not file.exists():
-        file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(file, columns, recorded)
-    return landed - drop_repeated_rows(file, STORY_SIMILARITY_THRESHOLD_KEY)
-
-
-def append_council_shard_outcomes(
-    state_dir: Path, date: str, rows: Iterable[CouncilShardOutcome]
-) -> int:
-    """Append a night's recorded units of council work into that date's own file.
-
-    Settled against `COUNCIL_SHARD_OUTCOME_KEY` straight after the write, the
-    way `append_fitted_thresholds` is. A repeat under all four cells is a second
-    attempt at one unit, which ran the same work under the same clock, so the
-    first row wins and there is nothing to choose between them.
-
-    **A night with no unit to record writes no file**, which is the one place
-    this writer differs from the three above it. A header with no rows under it
-    is a real day file to the partition walker, so an empty write here would put
-    a permanent day in the prune target and the day inventory that no council
-    run ever had. The ledger's directory is kept in the checkout by its own
-    `.gitkeep`, so the staged path is there whether or not tonight wrote to it.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    recorded = list(rows)
-    if not recorded:
-        return 0
-    if not lifecycle.accepts_new_rows(LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, len(recorded)):
-        return 0
-    file = paths.path(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date)
-    landed = extend_ledger_file(file, CouncilShardOutcome.csv_columns(), recorded)
-    return landed - drop_repeated_rows(file, COUNCIL_SHARD_OUTCOME_KEY)
+    return ledger_files.load_days(
+        state_dir,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+        [date],
+        model=StorySimilarityPair,
+    )
 
 
 def load_fitted_thresholds(
     state_dir: Path, *, today: str, within_days: int
 ) -> list[FittedSimilarityThreshold]:
-    """Every fitted row in the window, oldest day first.
+    """Every fitted row in the window, read through the ledger door, oldest day first.
 
     **Guardrail #12 declaration.** `day_partition.days_in_window` names both
-    ends, so a cover of `n` days opens at most `n + 1` files and reads exactly
-    those days. The tree is never walked, so the read costs the same on the
-    thousandth day as on the third.
+    ends, so a cover of `n` days asks the door for exactly `n + 1` days: the
+    three compact indexes, the one file that serves each day, and the raw files
+    of the days no index names. The ledger is never walked, so the read costs the
+    same on the thousandth day as on the third.
 
     **The window is in days and the guard's median is in rows, and the caller is
     what reconciles them.** One missed run leaves thirteen rows inside a
@@ -379,16 +268,18 @@ def load_fitted_thresholds(
     for `max(settled_window_days, step_change_window_rows * 2)` days and takes the
     newest rows it finds - a bound set by two knobs rather than by the archive.
 
-    A day the fit never ran has no file, which is not a fault. A row that no
-    longer parses stops the read rather than being skipped: the guard takes a
-    median over these rows, and a silently short list moves that median instead
-    of costing a decision some evidence.
+    A day the fit never ran has no row, which is not a fault. Two runs of one
+    date both keep their row, the later run's last, because the door keeps the
+    order its writers filed in. A file this build cannot read is skipped with a
+    warning naming it, the way the door reads every ledger, so a short window is
+    said in the log rather than silently read as a quiet one.
     """
-    rows: list[FittedSimilarityThreshold] = []
-    for day in reversed(day_partition.days_in_window(today, within_days)):
-        fitted = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, day)
-        rows.extend(FittedSimilarityThreshold.from_csv_row(raw) for raw in _read_rows(fitted))
-    return rows
+    return ledger_files.load_days(
+        state_dir,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+        day_partition.days_in_window(today, within_days),
+        model=FittedSimilarityThreshold,
+    )
 
 
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
@@ -409,189 +300,6 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     return ledger_files.load_ledger_rows(
         state_dir, LedgerName.VISUAL_PRUNES, model=VisualPruneRow
     )
-
-
-def day_shard_path(
-    state_dir: Path,
-    ledger: LedgerName,
-    *,
-    date: str,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-) -> Path:
-    """Where this writer puts this date's rows. Nobody else writes this path.
-
-    `state/<tree>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
-    date supplies the three directory segments, the way every sibling helper in
-    this module takes one; the four identity elements are what make the file
-    this writer's own. Two jobs of one run cannot collide, and neither can two
-    attempts - which is the difference between a lost push race costing a merge
-    and costing the rows.
-
-    The day comes off the row rather than off the clock, so rows a run left
-    behind three days ago land under that day rather than under today.
-    """
-    _refuse_outside_day_trees(ledger)
-    name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return paths.path(state_dir, ledger, date) / name
-
-
-def day_shard_relpath(
-    ledger: LedgerName,
-    *,
-    date: str,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-) -> str:
-    """The POSIX form of `day_shard_path`, for a log line (CLAUDE.md section 2)."""
-    _refuse_outside_day_trees(ledger)
-    name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return f"{paths.relpath(ledger, date)}/{name}"
-
-
-def _dated_rows(
-    ledger: LedgerName, rows: Sequence[CsvRecord], date: str | None
-) -> dict[str, list[dict[str, str]]]:
-    """This writer's rows, grouped by the day each one belongs under.
-
-    `date` is for the one tree whose rows carry no date cell. The score index is
-    a stamp and a digest - the record of what the rows beside it are - so it is
-    filed beside them rather than dated itself, and its writer already knows the
-    day because it is the first ten characters of the run id. Every other tree
-    routes each row by its own `date` cell, so a writer holding two days' rows
-    writes two files.
-    """
-    columns = _TREE_SHAPES[ledger].model.csv_columns()
-    grouped: dict[str, list[dict[str, str]]] = {}
-    for row in rows:
-        cells = row.csv_row()
-        day = date if date is not None else cells[DATE_CELL]
-        grouped.setdefault(day, []).append({name: cells.get(name, "") for name in columns})
-    return grouped
-
-
-def write_segment(
-    state_dir: Path,
-    ledger: LedgerName,
-    rows: Sequence[CsvRecord],
-    *,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-    date: str | None = None,
-) -> int:
-    """This writer's slice of one ledger, written whole. Nobody else writes these paths.
-
-    Whole rather than appended, because each file is this writer's alone: there
-    is no earlier row in it to keep and no header to agree with. That is what the
-    day directory buys - two jobs of one run, and two attempts at one job, never
-    open one file, so a lost push race costs a merge rather than the rows.
-
-    One file a day. The rows carry the tree's own columns and the tree's own
-    contract; a writer file gets no shape of its own, because a second shape for
-    the same rows is the thing that drifts.
-
-    Written through a temp file and a rename, so a writer killed mid-write leaves
-    nothing rather than half a row for a reader to refuse. The temp file sits at
-    the tree's own top rather than inside the day directory, which every reader
-    walks and refuses a name it cannot place.
-
-    Returns how many rows it wrote, so a caller can log the count.
-    """
-    _refuse_outside_day_trees(ledger)
-    if not rows:
-        return 0
-    if not lifecycle.accepts_new_rows(ledger, len(rows)):
-        return 0
-    columns = _TREE_SHAPES[ledger].model.csv_columns()
-    written = 0
-    for day, cells in _dated_rows(ledger, rows, date).items():
-        path = day_shard_path(
-            state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        scratch = paths.tree_root(state_dir, ledger) / f"{path.stem}.{day}.{os.getpid()}.tmp"
-        scratch.write_text(render_file(columns, cells), encoding="utf-8", newline="")
-        scratch.replace(path)
-        written += len(cells)
-    return written
-
-
-def extend_segment(
-    state_dir: Path,
-    ledger: LedgerName,
-    rows: Sequence[CsvRecord],
-    *,
-    run_id: str,
-    attempt: int,
-    job: ServerJob,
-    shard: int,
-    date: str | None = None,
-) -> int:
-    """Add rows to this writer's own files, keeping the ones it wrote earlier.
-
-    `write_segment` is for a step that has everything its job will ever say. This
-    is for a job that learns something later: the machine probe runs before the
-    heaviest step because the bandwidth reading wants an idle host, and the job's
-    own clock is only known once the job is over. Two steps, one writer, one file
-    a day - the grammar in `day_shard_path` names the job and not the step, so a
-    second file is not something this tree can express.
-
-    The earlier rows are read and written back unchanged. Nothing is edited and
-    nothing is settled here: the arriving row carries the cells it has, the
-    earlier row keeps the cells it had, and `day_shards.settled_rows` is the one
-    place that decides what two rows of one key mean.
-
-    Returns how many rows it added, so a caller can log the count.
-    """
-    _refuse_outside_day_trees(ledger)
-    if not rows:
-        return 0
-    if not lifecycle.accepts_new_rows(ledger, len(rows)):
-        return 0
-    columns = _TREE_SHAPES[ledger].model.csv_columns()
-    added = 0
-    for day, cells in _dated_rows(ledger, rows, date).items():
-        path = day_shard_path(
-            state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
-        scratch = paths.tree_root(state_dir, ledger) / f"{path.stem}.{day}.{os.getpid()}.tmp"
-        scratch.write_text(render_file(columns, held + cells), encoding="utf-8", newline="")
-        scratch.replace(path)
-        added += len(cells)
-    return added
-
-
-def write_item_health_summary(path: Path, rows: list[ItemHealthSummaryRow]) -> int:
-    """Write one month's folded summary whole, replacing whatever was there.
-
-    The only writer here that rewrites rather than appends, and the reason is
-    that this file is derived: every row is a function of the shard it was folded
-    from, so writing it twice writes the same bytes twice. Appending would double
-    a month whenever the fold ran again over a shard a lost race had restored.
-
-    Returns how many rows landed, so a caller can log the count.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = ItemHealthSummaryRow.csv_columns()
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row.csv_row())
-    return len(rows)
-
-
-def load_item_health_summary(path: Path) -> list[ItemHealthSummaryRow]:
-    """Every folded row of one month. Empty for a month never folded."""
-    return [ItemHealthSummaryRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:

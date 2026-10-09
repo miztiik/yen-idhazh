@@ -4,9 +4,9 @@
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "owns": [
-    "state/pipeline-tests-production-settings",
-    "state/pipeline-tests-no-visual-plan",
-    "state/pipeline-tests-parallel-summarization"
+    "state/trial-traces/pipeline-tests/production-settings",
+    "state/trial-traces/pipeline-tests/no-visual-plan",
+    "state/trial-traces/pipeline-tests/parallel-summarization"
   ],
   "window": {
     "unit": "days",

@@ -6,6 +6,8 @@
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { countDays } from '$lib/console/span-words';
+	import type { PanelState } from '$lib/console/waiting';
 	import BandDistance from './BandDistance.svelte';
 	import FailureList from './FailureList.svelte';
 	import FailurePanels from './FailurePanels.svelte';
@@ -19,6 +21,7 @@
 	let {
 		rows,
 		window: viewport,
+		panelState,
 		config,
 		bands,
 		tickDensity,
@@ -29,6 +32,7 @@
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
+		panelState: PanelState;
 		config: {
 			pan_days: number;
 			chart_height: number;
@@ -56,6 +60,12 @@
 	let selectedCode = $state<string | null>(null);
 	const visibleRows = $derived(rowsInWindow(rows, viewport));
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
+	/** The days in view, and the dates they run between. One day has no range, so at one day it is one date. */
+	const spanText = $derived(
+		windowDays === 1
+			? `${countDays(windowDays)}, ${viewport.end}.`
+			: `${countDays(windowDays)}, ${viewport.start} to ${viewport.end}.`
+	);
 	// The columns read the rows on the page rather than a list of their own. A
 	// month the operator pans to is fetched once and both surfaces gain it
 	// together, so the split and the failure panels can never describe different
@@ -86,7 +96,7 @@
 		class="rounded-md border border-rule p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 		role="region"
 		tabindex="0"
-		aria-label="Item telemetry viewport, showing {windowDays} days. Use left and right arrows to pan. Use plus and minus to change the window."
+		aria-label="Item telemetry viewport, showing {countDays(windowDays)}. Use left and right arrows to pan. Use plus and minus to change the window."
 		onkeydown={keydown}
 		data-windowed="telemetry-viewport"
 		data-viewport-control
@@ -98,7 +108,7 @@
 			<div>
 				<h2 class="text-[1.0625rem] font-semibold text-text">Item telemetry viewport</h2>
 				<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-					{windowDays} days, {viewport.start} to {viewport.end}. {visibleRows.length}
+					{spanText} {visibleRows.length}
 					{visibleRows.length === 1 ? ' row' : ' rows'} in view.
 				</p>
 			</div>
@@ -138,6 +148,7 @@
 			<FailurePanels
 				{rows}
 				window={viewport}
+				{panelState}
 				minAttempts={config.min_attempts_for_rate}
 				height={config.chart_height}
 				width={config.chart_width}

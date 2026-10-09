@@ -1,0 +1,30 @@
+{
+  "compact_after_days": 1,
+  "daily_keep_days": 31,
+  "dry_run": false,
+  "kind": "compaction",
+  "ledger": "host-fingerprint",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "max_periods_per_run": 8,
+  "max_raw_files_per_period": 2000,
+  "monthly_keep_days": null,
+  "monthly_window": {
+    "unit": "months",
+    "value": 3
+  },
+  "month_deletes_dry_run": true,
+  "owns": [
+    "state/raw/pipeline-tests/host-fingerprint",
+    "state/compact/pipeline-tests/host-fingerprint"
+  ],
+  "prune_refusal": "Trial host-fingerprint data is not a production prune target.",
+  "state_roots": [
+    "state/pipeline-tests"
+  ],
+  "window": {
+    "unit": "forever"
+  },
+  "yearly_keep_months": null,
+  "yearly_prune_enable": false
+}

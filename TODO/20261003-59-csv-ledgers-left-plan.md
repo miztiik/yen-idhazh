@@ -1,10 +1,10 @@
 # Plan 59 - The ledgers left on CSV move to the door, and the CSV ledger code goes
 
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-08
 
 **Level**: 5 (CLAUDE.md section 6): the plan teaches the door a folder of any depth, moves five committed ledgers onto it, renames a persisted field on two row contracts and moves committed data. Each row carries its own level below.
 
-**Status**: written 2026-10-05 by Fowler under the owner's directive of 2026-10-05: "no CSV ledger producer, consumer, test or doc is left; only Parquet ones, each with its lifecycle, retention and gardener onboarding". The owner was not reachable, so every ruling the draft of 2026-10-03 left open is made here and recorded as "Fowler, 2026-10-05". Each is a construction choice the owner may reverse before the row that applies it is dispatched. The owner ruled later on 2026-10-05 that a door ledger may sit any number of folders deep, so the judge ledgers keep their names and folders (Table D, row 11). Checked against `main` at c076a221f. The owner authorized execution on 2026-10-05.
+**Status**: written 2026-10-05 by Fowler under the owner's directive of 2026-10-05: "no CSV ledger producer, consumer, test or doc is left; only Parquet ones, each with its lifecycle, retention and gardener onboarding". The owner was not reachable, so every ruling the draft of 2026-10-03 left open is made here and recorded as "Fowler, 2026-10-05". Each is a construction choice the owner may reverse before the row that applies it is dispatched. The owner ruled later on 2026-10-05 that a door ledger may sit any number of folders deep, so the judge ledgers keep their names and folders (Table D, row 11). Checked against `main` at c076a221f. The owner authorized execution on 2026-10-05. On 2026-10-08 Fowler brought Table E and row 9 into line with two later changes: the owner's retention approval of 2026-10-07 (#1382), and the copy-while-writers-continue procedure the council's move introduced (#1378).
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
@@ -14,12 +14,12 @@ Table A - operating contract
 
 | # | Field | Value |
 | --- | --- | --- |
-| A1 | Why this plan exists | Ten ledgers write through the ledger door: Parquet files under `state/raw/`, packed under `state/compact/` by the gardener. Seven still write CSV files under `state/`, and the shared CSV ledger code stays alive for them. [ledger-registry.md](../docs/architecture/contracts/ledger-registry.md#ledgers-outside-raw-and-compact) maps each one and what blocks it. The council's own ledger, `llm-council/shard-outcomes`, moves under Plan 61 (`TODO/20261004-61-council-run-records-plan.md`). This plan moves the other six and then deletes every piece of CSV ledger code, its tests and its pages |
+| A1 | Why this plan exists | Ten ledgers write through the ledger door: Parquet files under `state/raw/`, packed under `state/compact/` by the gardener. Seven still write CSV files under `state/`, and the shared CSV ledger code stays alive for them. [ledger-registry.md](../docs/architecture/contracts/ledger-registry.md#ledgers-outside-raw-and-compact) maps each one and what blocks it. The council's own ledger is `council-run-records`; the [registry](../docs/architecture/contracts/ledger-registry.md#a-ledger-under-the-two-roots) records its current address, and the [migration runbook](../docs/how-to/move-a-ledger-to-parquet.md) no longer lists it among supported CSV layouts. This plan moves the other six and then deletes every piece of CSV ledger code, its tests and its pages |
 | A2 | Hard scope - in | - The parquet column mapper reads a fixed-choice (`Literal`) field.<br>- The CSV code no ledger uses deleted now, with the four orphan `span-rollup` files under `state/span-rollup/`.<br>- The door files a ledger under its registry folder, however many folders deep (row 11).<br>- Five judge ledgers moved to the door under their family's folder, `content-similarity-judge/<ledger>`, with no name changed (Table D), each with its compaction, staging row, frontend names and migrator entry.<br>- `item-health-summary` written through the door; it has no committed file.<br>- Every committed judge CSV row moved onto the door in one data commit, with no cell lost except the cells Table G drops.<br>- The CSV ledger machinery, the migrator, their tests, fixtures and pages deleted once nothing needs them |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
-| A5 | Chosen strategy | One writer at a time, readers in the same change, data last, deletion after the data. Each move is the procedure in [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md): the code row first, then the owner's data commit in a quiet window. The four judge moves share one data commit (row 9), so the quiet window is taken once; it may be the same window as Plan 61's data commit |
-| A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 1, 2, 3 and 11 start together; rows 4 to 7 are one chain because each reads what the one before writes; row 8 runs beside that chain. Rows 1 and 9 are carried by the plan's owner and never delegated. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
+| A5 | Chosen strategy | One writer at a time, readers in the same change, data last, deletion after the data. Each move follows [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md). The code row comes first. The plan's owner then copies that ledger's committed rows while writers continue. Last, one retirement commit deletes the CSV files of all five judge ledgers, once their old writers have stopped (row 9) |
+| A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Rows 1, 2, 3 and 11 start together. Rows 4 and 5 are one chain, and rows 6 and 7 are another, because in each pair the second edits what the first changed: `set_merge_line.py` and `applied.py`, then `score_merge_line_holdout.py` and `similarity-holdout.ts`. The two chains, row 3 and row 8 share only list files such as `keys.py`, `staging.py` and `config/ledgers.json`, so they run side by side, and the one that merges later keeps both entries. Rows 1 and 9 are carried by the plan's owner and never delegated. Merge with `gh pr merge <n> --squash --delete-branch`; GitHub refuses auto-merge on this repository |
 
 ### Hard scope - out
 
@@ -27,11 +27,10 @@ Table B - what is out
 
 | # | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- | --- |
-| B1 | `llm-council/shard-outcomes` | Nothing here: Plan 61 moves it. Row 10 waits for that plan's last row | - |
+| B1 | `council-run-records` | Nothing here: it is already on the door and has no CSV compatibility. Row 10 only retires CSV code used by the remaining ledgers | - |
 | B2 | The CSV files a job ships to the next job of the same workflow: the council's per-part metrics and verdict files under `backend/var/council/`, and the draw sheet `backend/var/council/<date>/selection/*.csv` | They are scratch, never committed and never read by a later run, so they are not ledgers (CLAUDE.md Guardrail #3 names a persisted payload a later run reads). The `csv_row` and `from_csv_row` codec on the judge row contracts stays for them. Ruled by Fowler, 2026-10-05, reading the owner's directive as covering ledgers | A ruling that the shipping format is Parquet too; then one row that ships each part's rows as a raw door file and lets the save job read them with `ledger.load` |
 | B3 | The browser copies under `frontend/public/`: `machine/YYYY-MM.csv`, `run-timeline/YYYY-MM.csv` and `telemetry/YYYY-MM.csv`, eight files at c076a221f | They are derived published files, rebuilt from door ledgers, not ledgers. The site keeps a CSV reader (`readCsv` in `frontend/src/lib/server/payload.ts`) for them | A plan that publishes those copies in the format `state/compact/` already uses, with the frontend reading them through `ledger-disk.ts` |
-| B4 | The four orphan `span-rollup` files in the two trial roots | They stay until the pipeline-tests plan's row "Committed trial files move to the nested roots, and the orphan span summaries are deleted" (`TODO/20261004-pipeline-tests-migration-plan.md`) lands. Row 10 waits for it, so the end state still holds no CSV | - |
-| B5 | Renaming the judge job's matrix cell, `Tenant.run_shard(shard, shards)` and `--shard` | None: matrix cell k is shard k of the judge job, which is what the door means by `shard` (Plan 61, Table D, D14) | A change to what one matrix cell is |
+| B5 | Renaming the judge job's matrix cell, `Tenant.run_shard(shard, shards)` and `--shard` | None: matrix cell k is shard k of the judge job, which is what the door means by `shard` ([judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)) | A change to what one matrix cell is |
 | B6 | The test fixtures that are CSV because the thing they test reads CSV that is not a ledger: `tests/fixtures/resolver/*.csv` while `commit_and_push.py` still resolves a CSV conflict, and `tests/fixtures/evals/scores-reband.csv` | None while their reader stands. Row 10 deletes each one whose reader it deletes | Their reader's removal |
 
 ### ESCALATE triggers
@@ -43,25 +42,24 @@ Table C - when to stop and ask
 | C1 | A committed judge CSV row the migrator cannot read with the declarations in Tables F and G | Row 9 stops. No row is dropped, edited or mapped by hand |
 | C2 | A change to a name in Table D, or a persisted shape section 2 does not declare | Stop and surface ([handle-scope-change.md](../docs/how-to/handle-scope-change.md)). The nested folders are the owner's choice of 2026-10-05 |
 | C3 | The door cannot settle one ledger's key as Table E declares it, for example the holdout marks' "newest mark wins" | Stop the row; surface the two options: a preference the door table already offers, or a key the reader settles itself |
-| C4 | A workflow writes a judge CSV row after its code row merged and before row 9 | Not a stop: row 9 moves that row too, under the run id the procedure names |
-| C5 | Plan 61 row "The council saves its run records through the ledger door" changes `Tenant.settle`, `metrics_sink` or the migrator in a way rows 4 to 7 cannot build on | Stop and re-read that row's merged change before dispatching row 4 |
+| C4 | A workflow writes a judge CSV row after its code row merged and before row 9 | Not a stop. Row 9 copies that ledger again under the same run id, as the procedure says, and the retirement proves every row again |
 | C6 | Two personas still disagree after one debate | Stop and surface |
 
 ## 1. Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The first upkeep run after feed health moved is read | - | A | PENDING | - | - | - |
-| 2 | The parquet column mapper reads a fixed-choice field | - | A | PENDING | - | - | - |
-| 3 | The CSV code no ledger uses any more is deleted | Plan 61 "The council saves its run records through the ledger door"; pipeline-tests "Readers understand nested trial roots" | A | PENDING | - | - | - |
-| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 3, 11 | B | PENDING | - | - | - |
-| 5 | The fitted merge line is saved through the door | 4 | C | PENDING | - | - | - |
-| 6 | The merge line's holdout score is saved through the door | 5 | D | PENDING | - | - | - |
-| 7 | The holdout marks are saved through the door | 6 | E | PENDING | - | - | - |
-| 8 | The item health summary is saved through the door | 2, 3 | B | PENDING | - | - | - |
-| 9 | The committed judge rows move onto the door, and the old CSV files go | 7 | F | PENDING | - | - | - |
-| 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; Plan 61 "The old-row reader and the migrator's council entry are deleted"; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
-| 11 | The door files a ledger under a folder of any depth | - | A | PENDING | - | - | - |
+| 1 | The first upkeep run after feed health moved is read | - | A | DONE | p59-main-read | - | Fowler |
+| 2 | The parquet column mapper reads a fixed-choice field | - | A | DONE | p59-row-2 | - | Fowler |
+| 3 | The CSV code no ledger uses any more is deleted | pipeline-tests "Readers understand nested trial roots" | A | DONE | p59-row-3 | - | Fowler |
+| 4 | The judge's scored pairs and its metrics are saved through the door | 2, 11 | B | DONE | p59-row-4 | - | Fowler |
+| 5 | The fitted merge line is saved through the door | 4 | C | DONE | p59-row-5 | - | Fowler |
+| 6 | The merge line's holdout score is saved through the door | 2, 11 | B | DONE | p59-row-6 | - | Fowler |
+| 7 | The holdout marks are saved through the door | 6 | C | DONE | p59-row-7 | - | Fowler |
+| 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
+| 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | DONE | p59-row-9 | - | Fowler |
+| 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | DONE | p59-row-10 | - | Fowler |
+| 11 | The door files a ledger under a folder of any depth | - | A | DONE | p59-row-11 | - | Fowler |
 
 Cross-plan dependencies name the other plan's row by title. Re-check each title at dispatch.
 
@@ -97,7 +95,7 @@ Table D, continued - the folder rule row 11 declares. The owner, 2026-10-05.
 
 ### 2.2 What each move declares
 
-Table E - per ledger. Every compaction is `config/gardener/compact-candidate-models.json` as `main` holds it at dispatch, with `ledger` and `owns` changed, listed in `task_names` of `config/idhazh_gardener.json`. Its windows stay `forever`, because no judge ledger or summary has a retention declaration today and their rows are kept for ever.
+Table E - per ledger. Every compaction is `config/gardener/compact-candidate-models.json` as `main` holds it at dispatch, with `ledger` and `owns` changed, listed in `task_names` of `config/idhazh_gardener.json`. So each one carries the retention the owner approved for every ledger on 2026-10-07 (#1382): packing is live, and a year's file expires 36 calendar months after that year ends in UTC. Each new task joins `MOVED_LEDGER_TASKS` in `backend/tests/contracts/test_gardener_config.py`. The named decision there cites that approval and the owner's directive of 2026-10-05 (Fowler, 2026-10-08). Every reader's reach stays inside that window; E5's reach of 730 days is 24 months.
 
 | # | Ledger | Key, in `backend/idhazh/ledger/keys.py` `_DOOR_SHAPES` | Writer, and its identity | Readers moved in the same row |
 | --- | --- | --- | --- | --- |
@@ -110,11 +108,11 @@ Table E - per ledger. Every compaction is `config/gardener/compact-candidate-mod
 
 ### 2.3 What changes on a row contract
 
-Table F - contract changes. Each ships its changelog entry and read-side migration in the row that moves the ledger (CLAUDE.md section 11; Plan 61 Table H, H6).
+Table F - contract changes. Each ships its changelog entry and read-side migration in the row that moves the ledger (CLAUDE.md section 11; [the judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)).
 
 | # | Contract | Change | How an old row is read |
 | --- | --- | --- | --- |
-| F1 | `StorySimilarityPair` | `shard` renamed `work_part_index` (Plan 61 Table H, H2) | The migrator's `old_headings` `{"shard": "work_part_index"}` |
+| F1 | `StorySimilarityPair` | `shard` renamed `work_part_index` ([judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)) | The migrator's `old_headings` `{"shard": "work_part_index"}` |
 | F2 | `ContentSimilarityJudgeMetrics` | `shard` renamed `work_part_index` | as F1 |
 | F3 | `SimilarityHoldoutPair` | none | - |
 | F4 | `FittedSimilarityThreshold`, `MergeLineHoldoutScore`, `ItemHealthSummaryRow` | none | - |
@@ -122,7 +120,7 @@ Table F - contract changes. Each ships its changelog entry and read-side migrati
 
 ### 2.4 The cells the contracts already dropped
 
-Table G - Fowler, 2026-10-05. Plan 61 Table B, B2 handed this ruling on. At 9165a9f75 the committed judge CSV files held 500 filled cells under headings each contract's `DROPPED_CELLS` names: 492 in scored pairs (`decode_digest`, `key_point`, `key_point_weight`), 7 in the fitted line (`key_point_weight`) and 1 in the holdout score (`key_point_weight`).
+Table G - Fowler, 2026-10-05. At 9165a9f75 the committed judge CSV files held 500 filled cells under headings each contract's `DROPPED_CELLS` names: 492 in scored pairs (`decode_digest`, `key_point`, `key_point_weight`), 7 in the fitted line (`key_point_weight`) and 1 in the holdout score (`key_point_weight`).
 
 | # | Ruling | Why |
 | --- | --- | --- |
@@ -158,6 +156,9 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 - **Files touched:** none, unless a late CSV file is found; then that file and `frontend/public/publication.json`.
 - **Acceptance gates:** the two readings above, quoted in the row's report.
 - **Oracle:** the gardener ledger's record for that run. It cannot settle a later run; Plan 60 owns the gardener's health.
+- **Readings, 2026-10-06:**
+  1. The first scheduled run after the merge, 37182327138 on 2026-10-04, failed in every compaction task, feed health's included, with the month fault "a month is not absorbed" that Plan 60 fixed. Nothing in it is particular to feed health. The next scheduled run, 37271019053 on 2026-10-05, filed this `compact-feed-health` record in the `gardener` ledger: `dry_run` false, `stopped_because` `exhausted`, no failure, and the month window 2025-06-01 to 2025-08-31 only reported, because `month_deletes_dry_run` is true. A dispatched run the same morning, 37286849600, packed 5 raw files live and freed 108463 bytes.
+  2. `migrate_to_parquet.py --check --ledger feed-health` over `state` and the three trial roots, months 2025-06 to 2026-10, printed `0 CSV file(s) left` and exited 0. No late CSV file was found, so nothing was migrated.
 
 **Decisions**
 
@@ -178,7 +179,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Teach the mapper, rather than convert the three aliases to `StrEnum` as Plan 61 did for its new step field | Fowler, 2026-10-05: one rule in one place, and the three aliases are already persisted with `Literal` schemas |
+| 1 | Teach the mapper, rather than convert the three persisted aliases to `StrEnum` | Fowler, 2026-10-05: one rule in one place, and the three aliases already have `Literal` schemas |
 
 **Rejected alternatives**
 
@@ -206,12 +207,14 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Run after Plan 61's row "The council saves its run records through the ledger door": both edit `rows.py`, `keys.py`, `ledger_name.py` and `ledger-registry.md` (Plan 61 decision 12) | Fowler, 2026-10-04 |
 | 2 | `DAY_TREES` goes only after the pipeline-tests plan's row "Readers understand nested trial roots" lands, because that row deletes the day-tree branch of the utility that still names it | Fowler, 2026-10-04 |
+| 3 | The private helpers that served only the named writers go with them: `day_shard_path`, `_dated_rows`, `_TreeShape`, `_refuse_outside_day_trees`, `segment_contract`, `segment_key` and `segment_carried`. Each refused every ledger once `DAY_TREES` was empty | Fowler, 2026-10-08 |
+| 4 | The fold's switch goes with the fold: `FoldPolicy`, the `fold` block of a retention declaration, its period windows in `gardener/period_inputs.py`, its month rule in the gardener CLI, `FoldSettled`, `TaskFinished.fold` and the run summary's fold line. A knob nothing obeys is a number somebody believes (Guardrail #6), so a declaration that still carries `fold` is refused by name, and `run.settled_fold_after_days` now says nothing replaces it | Fowler, 2026-10-08 |
+| 5 | `CollectionPruneRow` keeps `fold_dry_run`, `folded_days`, `folded_files` and `folded_months`, empty on every new row. Removing a persisted field needs a read-side migration (CLAUDE.md section 11) that this Level 2 deletion does not carry, and committed gardener rows still carry the cells | Fowler, 2026-10-08 |
 
 ### Row #4 - The judge's scored pairs and its metrics are saved through the door
 
-- **Scope:** D1 and D2 by section 2.6, with F1, F2 and Table G. `Tenant.settle` gains the council's writer identity and hands it to `count_verdicts` (Plan 61 Table H, H4). `Tenant.committed_paths` names `state/raw/content-similarity-judge/scored-pairs` and `state/raw/content-similarity-judge/metrics` and loses the two CSV folders. The two ledgers move together because one stage writes both. Level 3.
+- **Scope:** D1 and D2 by section 2.6, with F1, F2 and Table G. `Tenant.settle` gains the council's writer identity and hands it to `count_verdicts` ([judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)). `Tenant.committed_paths` names `state/raw/content-similarity-judge/scored-pairs` and `state/raw/content-similarity-judge/metrics` and loses the two CSV folders. The two ledgers move together because one stage writes both. Level 3.
 - **Files touched** (from the inventory; search at dispatch for `CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS`, `CONTENT_SIMILARITY_JUDGE_METRICS`, `scored-pairs`, `append_story_similarity_pairs`, `load_story_similarity_pairs`, `ContentSimilarityJudgeMetrics`, `StorySimilarityPair`, `shard`):
   - `backend/idhazh/contracts/ledger_name.py`, `backend/idhazh/contracts/story_similarity_pair.py`, `backend/idhazh/contracts/content_similarity_judge_metrics.py`
   - `backend/idhazh/stages/count_verdicts.py`, `backend/idhazh/stages/set_merge_line.py`, `backend/idhazh/similarity/applied.py`, `backend/idhazh/similarity/tenant.py`, `backend/idhazh/council/metrics_sink.py`, `backend/idhazh/council/session.py` (identity hand-off)
@@ -230,7 +233,16 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Two commits: (1) behavioural: declare, write and read through the door; (2) structural, Remove Dead Code: the CSV writer, loader and settlement entries | Fowler, 2026-10-05 |
-| 2 | The rename of `shard` ships here, not earlier (Plan 61 Table H, H6) | The owner, 2026-10-04 |
+| 2 | The rename of `shard` ships here, not earlier ([judge-ledger rule](../docs/architecture/contracts/ledger-registry.md#the-rule-a-judge-ledger-follows-when-it-moves)) | The owner, 2026-10-04 |
+| 3 | Does not wait for row 3. Both edit `rows.py`, `keys.py` and `ledger-registry.md`, but neither reads what the other writes, so whichever is ready first merges first and the other merges `main` | Fowler, 2026-10-06 |
+| 4 | The CSV settlement entries in `keyed_paths`, the two `_TARGET_LEDGERS` and `UNION_SAFE` entries and the tests that built a CSV path for these ledgers leave in the behaviour commit. The registry switch makes every CSV path builder refuse a door ledger by name, so code left asking would raise. The dead-code commit removes what nothing calls after the switch: `append_story_similarity_pairs` and `STORY_SIMILARITY_PAIR_CARRIED`. The widener's tests, which re-filed scored-pairs days, re-file fitted-line days instead | Fowler, 2026-10-08 |
+| 5 | `Tenant.settle` takes the council's state root as well as its writer identity, so the count, the fit and the council's own record write and read under one root. A trial configuration's root now holds the judge's rows too, where they used to land in production `state/` | Fowler, 2026-10-08 |
+| 6 | `Tenant.committed_paths` is read off the registry, one staged path for each ledger the judge writes, instead of the one `state/content-similarity-judge` prefix. A moved ledger is staged under `state/raw/`, and its old CSV folder is not staged at all. A raw folder holds files only between a save and the compaction that packs it, so the workflow check that every tenant path exists in a fresh checkout now accepts exactly the raw folders the registry builds for door ledgers; the commit helper already skips a named path with nothing on disk or tracked | Fowler, 2026-10-08 |
+| 7 | `similarity/applied.py` reads no scored pair and no metrics row, so no reader moved there. `set_merge_line` is the one reader of the scored pairs, and nothing reads the metrics | Fowler, 2026-10-08 |
+| 8 | The door table in `ledger/keys.py` imports the scored-pair and metrics contracts only when one of their ledgers is asked about, as it imports the holdout score's since row 6. So the council's import closure keeps exactly the three judge contracts the owner allowed on 2026-09-21. An earlier draft of this row widened that list to five; an agent may not widen an owner's ruling, so the draft was reverted | Fowler, 2026-10-08, on the plan owner's instruction |
+| 9 | A compaction is named for its ledger's door folder, `compact-<folder>` with `/` written `-` (D9), and every name is built by `config.compaction_task`, the one helper `main` has had since row 6. This row's own helper for the same name was dropped, so one rule has one spelling | Fowler, 2026-10-08, on the plan owner's instruction |
+| 10 | With no `--ledger`, the migrator takes the door ledgers of the registry beside the declarations it packs with, as `main` does since row 6, so a test that packs with recorded declarations never takes a ledger those declarations cannot move | Fowler, 2026-10-08 |
+| 11 | The migrator entries declare `ForeverWindow`, the window these CSV days were kept under. A 36-month yearly expiry does not reach it, so each entry also names the owner's decision to let a ledger be kept for less than its CSV was, `shorter_by=EVERY_LEDGER_EXPIRES`, as the holdout score's entry does. With it, `migrate_to_parquet.py --plan` accepts both ledgers | Fowler, 2026-10-08, on the plan owner's instruction |
 
 **Rejected alternatives**
 
@@ -242,6 +254,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 ### Row #5 - The fitted merge line is saved through the door
 
 - **Scope:** D3 by section 2.6. `set_merge_line` persists with E3's identity; `applied.applied_line` reads through `ledger.load_days` over its lookback; `frontend/src/lib/server/similarity-ledger.ts` reads through `sliceFromDisk`. Level 3.
+- **Closes plan 62's L44, a fault on the console's Judgement page.** That page's fitted-line read, `readDayShards` in `frontend/src/lib/server/payload.ts`, takes its list of days from `frontend/public/publication.json`. The council never commits that file, so the page shows no fitted day after 2026-10-02, and it falls one more day behind after each council night. `sliceFromDisk` reads the compact index the gardener publishes and never reads that file, so moving the read removes the fault. The page shows the full history once row 9's copy of this ledger is packed. Plan 62 marks L44 COLLAPSED when this row merges, and re-reads its row L45's third fault after that pack.
 - **Files touched** (search at dispatch for `CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS`, `fitted-thresholds`, `append_fitted_thresholds`, `load_fitted_thresholds`, `readDayShards`): the shared files of row 4's list that name this ledger; `backend/idhazh/contracts/fitted_similarity_threshold.py` (`DROPPED_CELLS` stays for the migrator until row 10); `backend/idhazh/stages/set_merge_line.py`; `backend/idhazh/similarity/applied.py`; `config/gardener/compact-content-similarity-judge-fitted-thresholds.json` (new); `frontend/src/lib/server/similarity-ledger.ts`; its spec under `frontend/tests/`; the console panel's spec that reads the fitted line.
 - **Acceptance gates:** local: the backend tests that name the ledger, `npm --prefix frontend run test:changed` selection; the browser smoke of the console page that shows the fitted line, with and without a compact file; ruff; mypy; `doc_load.py`. CI: the full suite.
 - **Oracle:** a fixture night writes a fitted line through the door, compacts it into `tmp_path`, and the frontend reader returns the same values. It fails today. It cannot settle the days between a write and the gardener's next pack; decision 1 prices that.
@@ -251,6 +264,11 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The frontend reads packed days only (`sliceFromDisk`), as every door ledger does, so a line is shown from the gardener's next pack, at most one day after it is written | Fowler, 2026-10-05: one read path for every ledger; the line moves once a night |
+| 2 | Merges right after a `digest.yml` run ends, and the plan's owner lands this ledger's copy before the next digest or council run (row 9, decision 2) | Fowler, 2026-10-08 |
+| 3 | `set_merge_line` no longer registers its file in `frontend/public/publication.json`. The council never commits that file, which is the fault L44 names, and the Judgement page now reads the compact index instead. The canary inventory stops naming fitted files for the same reason | Fowler, 2026-10-08 |
+| 4 | The CSV code this row leaves with no ledger stays for row 10, with its lists emptied: `ledger.keyed_paths` and `backend/utilities/widen_ledger_header.py`, `UNION_SAFE`, and the prune verb's CSV branch with `_TARGET_LEDGERS` and `day_partition.day_files`. Each still has callers or tests, and row 10 deletes them with the rest. The tests that built a fitted CSV path go or are rebuilt: `retention/test_union_safe_repeats.py` and the widener's re-file tests are deleted, because standing in for `keyed_paths` would be a mock, and the prune verb's CSV tests now run over a word list they build. Row 10's search adds `keyed_paths` and `widen_ledger_header` | Fowler, 2026-10-08 |
+| 5 | The dead-code commit deletes what nothing calls once the fitted line moves: `append_fitted_thresholds` and `FITTED_SIMILARITY_THRESHOLD_CARRIED`; `drop_repeated_rows` and `extend_ledger_file`, whose last caller was that append; and `readDayShards`, `dayShardFiles` and `DayShard`, whose last caller was `fittedLines`. `stateFiles` in `publication.ts` stays: the inventory's state entries are still written, and its own tests are now its only reader | Fowler, 2026-10-08 |
+| 6 | The frontend oracle runs the backend from a `logic` spec: it files the night before through the door, runs the stage and its re-run, packs both days with the shipped compaction under the test's own folder, and compares `fittedLines` with what the backend reads back. CI's site job installs the backend before `test:logic`, and the launcher names the Python. Which Python runs is now one helper, `frontend/tests/support/backend-python.ts`, shared with `malformed-day.spec.ts` | Fowler, 2026-10-08 |
 
 ### Row #6 - The merge line's holdout score is saved through the door
 
@@ -264,6 +282,7 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | `operator` joins `ServerJob` with a docstring line, as `migrate` did: the door names every file's writer from that set, and a person's command has no workflow job | Fowler, 2026-10-05 |
+| 2 | Runs beside rows 4 and 5, not after them. The stage reads the fitted line through `applied.effective_same_story` and the marks through `holdout.marked_pairs`, and this row changes only its writer, so it shares no read or write with rows 4 and 5. Row 7 still follows it, because both edit `score_merge_line_holdout.py` and `similarity-holdout.ts` | Fowler, 2026-10-06 |
 
 **Rejected alternatives**
 
@@ -284,6 +303,14 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | The marks move: a program writes them, and the owner's directive leaves no CSV ledger | Fowler, 2026-10-05, under the owner's directive of 2026-10-05 |
 | 2 | A reach of 730 days, not "for ever": a read that grows with the archive is refused (Guardrail #12). A mark older than the reach stops counting until a person re-marks it or widens the knob | Fowler, 2026-10-05 |
+| 3 | C3 does not trigger. The door's preference table holds "the newest `marked_on` wins" for the pair key, the later row winning a tie. `load_days` settles each day on its own, so both readers fold the days they read by the same rule | Fowler, 2026-10-08 |
+| 4 | The query door places a row by its `date` cell, and a mark has none, so a ledger with no `date` column is placed by `covers`, the day the door filed it under | Fowler, 2026-10-08 |
+| 5 | The reach is a reader floor on the marks' compaction, as `collect.published_window_days` is on the published addresses, so no declaration can delete a mark the readers still reach | Fowler, 2026-10-08 |
+| 6 | `--harvest` becomes a switch, `--state-root` names the state folder, and `--labelled-on`, `--run-id` and `--commit` are checked when parsed. The producer is `utilities.sample_sheet`. A row's `version` is the contract's stamp, no longer the labelled-on day | Fowler, 2026-10-08 |
+| 7 | The scoring command's reach ends on the date it scores; the console's ends on the site's newest published day, the day its other panels read to | Fowler, 2026-10-08 |
+| 8 | The canary files its four marks through the door and packs them. Its unscorable mark names two addresses of its own, because under the pair key it would otherwise replace a scored mark | Fowler, 2026-10-08 |
+| 9 | The one-file layout deletes its file only once every month the file holds is named, since a file holding many months cannot lose one | Fowler, 2026-10-08 |
+| 10 | `check_seeded_ledgers.py` and its test are deleted: the marks were the last ledger it checked, and no workflow or page runs it | Fowler, 2026-10-08 |
 
 **Rejected alternatives**
 
@@ -304,17 +331,29 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The summary moves with no month layout in the migrator: it has no committed file | Fowler, 2026-10-05 |
+| 2 | Runs before row 3: the dependency was a shared-file merge order, and row 3 waits on work outside this plan | Fowler, 2026-10-06 |
 
 ### Row #9 - The committed judge rows move onto the door, and the old CSV files go
 
-- **Scope:** the owner's data commit, by [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md#move-the-committed-files), for D1 to D5 together, in a quiet window: no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml`, `measure.yml` or `llm-council.yml` queued or running. `migrate_to_parquet.py --plan`, `--write`, `--verify` and `--retire` per ledger, then `--check` over `state` and the three trial roots prints `0 CSV file(s) left` for each. The `content-similarity-judge` folder keeps only D7's two JSON ledgers. If Plan 61's data commit is ready, it may share the window. Level 4.
-- **Files touched:** `state/content-similarity-judge/` (39 CSV files at c076a221f, removed); `state/raw/content-similarity-judge/<ledger>/` for D1 to D5 (added); `state/content-similarity-judge/` keeps D7's two JSON ledgers; `frontend/public/publication.json` if it names a removed path.
-- **Acceptance gates:** the five commands' output quoted in the commit message, with Table G's drop counts; CI: the full suite on the commit.
-- **Oracle:** `--verify` reads every migrated row back equal to its CSV row under Tables F and G. It cannot settle a row a run writes during the window; the quiet-window check does.
+- **Scope:** the plan's owner moves the committed judge rows in two phases, by [move-a-ledger-to-parquet.md](../docs/how-to/move-a-ledger-to-parquet.md). Level 4.
+  1. **Copy, one ledger at a time, while writers continue** ([the copy](../docs/how-to/move-a-ledger-to-parquet.md#copy-while-writers-continue)). When a ledger's code row merges, `migrate_to_parquet.py --plan` and then `--write --raw-only` copy that ledger's committed CSV months into raw door files. The run id is the copy's UTC date followed by `-1`, and the SHA is the merged code's. Each copy is a pull request of its own. The gardener's next wake packs the copied days, and `--verify` then proves them. No quiet window is needed, because the CSV files and the old writer both stay.
+  2. **Retire, all five together** ([the retirement](../docs/how-to/move-a-ledger-to-parquet.md#retire-csv-after-the-old-writer-is-retired)). Retirement waits until four things are true. Rows 4 to 7 have merged. Every copy is proved. No `llm-council.yml` run that started on older code is still running. The pipeline-tests plan's trial-file row is not moving data at the same time. Then `--retire`, and after it `--check` over `state`, prints `0 CSV file(s) left` for each of D1 to D5, in one data commit. The `content-similarity-judge` folder then keeps only D7's two JSON ledgers.
+- **Files touched:** the copies add `state/raw/content-similarity-judge/<ledger>/` for D1 to D5, which the gardener packs into `state/compact/content-similarity-judge/<ledger>/`. The retirement removes the CSV files under `state/content-similarity-judge/`: 47 files at f804d8713, which are 20 scored-pairs days, 6 metrics days, 19 fitted-line days, 1 holdout-score day and the marks file. It also changes `frontend/public/publication.json` if that file names a removed path.
+- **Acceptance gates:** each copy's pull request quotes its `--plan` and `--write --raw-only` output. Its `--verify` output after the gardener packs is quoted in this row's report. The retirement commit quotes `--retire` and `--check`, with Table G's drop counts (G2). CI runs on each.
+- **Oracle:** `--verify` reads every copied row back equal to its CSV row under Tables F and G. It cannot see a CSV row that an older-code run writes after the copy; `--retire` re-proves every source in one process, and that catches it.
+
+**Decisions**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Copy first, retire later, as the council's move did, replacing the draft's single data commit in a quiet window. A copy that waits for the last row would leave each moved reader without the history it had | Fowler, 2026-10-08, following [the current procedure](../docs/how-to/move-a-ledger-to-parquet.md) |
+| 2 | D3's copy lands before the next `digest.yml` or `llm-council.yml` run after row 5 merges, so row 5 merges right after a digest run ends. Until the copy lands, `applied.applied_line` finds no fitted line in its lookback, a build falls back to the committed floor, and `set_merge_line` measures its next fit from that floor. D1 and D2 have no such gap: `set_merge_line` reads only the scored pairs of the date it judges, and the same night writes those through the door | Fowler, 2026-10-08 |
+| 3 | D4 and D5 are written by a person's command, so their old writer is the old code on a person's machine. Their retirement assumes that the person runs the command from `main` at or after the row that moved it | Fowler, 2026-10-08 |
+| 4 | The copy packs each judge ledger under the 36-month yearly expiry. On CSV these ledgers were kept for ever only because no task pruned them, and the migrator refuses a compaction that keeps less than the CSV did unless a named decision allows it. Each judge `CsvLedger` entry therefore names, as `shorter_by`, the owner's approval of 2026-10-07: 36-month yearly expiry for every ledger, superseding forever retention. The earliest a judge year can expire is 2030-01-01. Until then the owner can keep these ledgers for ever by setting `yearly_prune_enable` to false in each judge compaction | Fowler, 2026-10-08, applying the owner's approval of 2026-10-07 (#1382) |
 
 ### Row #10 - The CSV ledger code, the migrator and their pages are deleted
 
-- **Scope:** delete what has no user once rows 3 to 9, Plan 61 and the pipeline-tests plan's trial-file row have landed: `ledger.extend_ledger_file` and the CSV ledger parts of `backend/idhazh/ledger/csv_file.py` (the `csv_row` and `from_csv_row` codec stays for Table B, B2); `backend/idhazh/day_shards.py`; the CSV parts of `backend/idhazh/ledger/settle.py`; `_TARGET_LEDGERS` in `telemetry/prune.py`; `UNION_SAFE` and the CSV path classes in `path_classes.py`; the CSV walks of `gardener/named_trees.py` and `gardener/retention_files.py` that no task calls; the grain `day` and `month` and the four builders' CSV branches in `ledger/paths.py` and `contracts/ledgers.py`; `backend/utilities/ledger_migration/`, `backend/utilities/migrate_to_parquet.py`, `backend/tests/ledger_migration/` and `tests/fixtures/day-shard-migration/`; `readDayShards` and `frontend/tests/day-shards.spec.ts` with `frontend/tests/fixtures/day-shards/`; every `DROPPED_CELLS` and `old_headings` entry only the migrator read; each CSV fixture whose only reader goes (Table B, B6); `docs/how-to/move-a-ledger-to-parquet.md`, with every link to it repointed to `persistence.md`; the "Ledgers outside raw and compact" section of `ledger-registry.md`; and the CSV sentences of `persistence.md`, `state-ledgers.md`, `partitions.md`, `telemetry.md`, `telemetry-intent.md` (N1, N6 and N11 met) and `host-metrics.md`. Level 3.
+- **Scope:** delete what has no user once rows 3 to 9 and the pipeline-tests plan's trial-file row have landed: `ledger.extend_ledger_file` and the CSV ledger parts of `backend/idhazh/ledger/csv_file.py` (the `csv_row` and `from_csv_row` codec stays for Table B, B2); `backend/idhazh/day_shards.py`; the CSV parts of `backend/idhazh/ledger/settle.py`; `_TARGET_LEDGERS` in `telemetry/prune.py`; `UNION_SAFE` and the CSV path classes in `path_classes.py`; the CSV walks of `gardener/named_trees.py` and `gardener/retention_files.py` that no task calls; the grain `day` and `month` and the four builders' CSV branches in `ledger/paths.py` and `contracts/ledgers.py`; `backend/utilities/ledger_migration/`, `backend/utilities/migrate_to_parquet.py`, `backend/tests/ledger_migration/` and `tests/fixtures/day-shard-migration/`; `readDayShards` and `frontend/tests/day-shards.spec.ts` with `frontend/tests/fixtures/day-shards/`; every `DROPPED_CELLS` and `old_headings` entry only the migrator read; each CSV fixture whose only reader goes (Table B, B6); `docs/how-to/move-a-ledger-to-parquet.md`, with every link to it repointed to `persistence.md`; the "Ledgers outside raw and compact" section of `ledger-registry.md`; and the CSV sentences of `persistence.md`, `state-ledgers.md`, `partitions.md`, `telemetry.md`, `telemetry-intent.md` (N1, N6 and N11 met) and `host-metrics.md`. Level 3.
 - **Files touched:** the list above; search at dispatch for `extend_ledger_file`, `day_shards`, `readDayShards`, `UNION_SAFE`, `_TARGET_LEDGERS`, `ledger_migration`, `migrate_to_parquet`, `Grain.DAY_FILE`, `Grain.MONTH_FILE`, `merge=union`, `old_headings`, `DROPPED_CELLS` and `.csv`.
 - **Acceptance gates:** local: `python -m pytest -n 0` on every test directory the row edits; `npm --prefix frontend run test:changed` selection; ruff; mypy; `doc_load.py` on each changed page. CI: the full suite.
 - **Oracle:** a new contract test, `backend/tests/contracts/test_no_csv_ledger_is_left.py`: every ledger in `config/ledgers.json` has grain `raw-and-compact`, `flat` or `stamp`, and none has suffix `.csv`; `.gitattributes` holds no `merge=union` line; `git ls-files "state/*.csv"` is empty in the merge candidate (a named-command read, fixed by the registry, not a walk). It fails today on seven ledgers. It cannot settle Table B's out-of-scope files, which it does not read.
@@ -325,12 +364,22 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | The how-to for moving a ledger goes with the migrator: a procedure nobody can run is a page that misleads | Fowler, 2026-10-05 |
 | 2 | Two commits: (1) backend and frontend code with tests; (2) docs | Fowler, 2026-10-05 |
+| 3 | Grain `month` goes, and grains `day` and `tree` stay. `day-metrics` files one JSON file a day, and `traces` and `digest-fragments` file a JSON day folder. None is CSV, and no row of this plan moves them. So `config/ledgers.json` keeps those two grains beside `raw-and-compact`, `flat` and `stamp`, and the oracle names these three ledgers as the only ones filed by day outside the door. It holds every entry to no `.csv` suffix | Fowler, 2026-10-08 |
+| 4 | No `DROPPED_CELLS`, `RETIRED_CELLS` or `RENAMED_CELLS` entry was read by the migrator alone. Each row's before-validator reads its maps, and the public telemetry copy and the empty-column census read `RETIRED_CELLS` too, so every map stays. `old_headings` went with the migrator | Fowler, 2026-10-08 |
+| 5 | The canary builder reads the CSV that `build-canary.mjs` stages beside its state tree through each contract's `from_csv_row`, and files each run through the door. It refuses a key filed twice on one day, because the door settles repeats only when a reader asks. The staged files are Table B's B2 kind of scratch: never committed and never read by a later run | Fowler, 2026-10-08 |
+| 6 | A CSV fixture whose reader stays is kept (B6), and leaves the day-tree folders it used to sit in: `measure-ledgers/item-health.csv`, `measure-ledgers/host-fingerprint.csv`, `measure-ledgers/scores.csv` and `prefill-oracle/item-health.csv` | Fowler, 2026-10-08 |
+| 7 | `ledger.segment_name` and `parse_segment_name` take the file suffix from their caller and have no default. No production writer used the `.csv` default: traces pass `.jsonl`, and the commit-race test harness names its own CSV scratch | Fowler, 2026-10-08 |
+| 8 | `ServerJob` keeps `migrate`. Raw files that the one-shot copies wrote name it, and a reader names their writer from it | Fowler, 2026-10-08 |
+| 9 | The judge-ledger rule in `ledger-registry.md` stays, as "The rule a judge ledger follows", because it says how the five judge ledgers file now. Only its CSV sentences and the shared-CSV-code table go | Fowler, 2026-10-08 |
+| 10 | Not moved: `state/labels.csv`, the human faithfulness labels that `evals/labels.py` and `backend/utilities/label_queue.py` append to. The registry does not list it and nothing has committed it. A move onto the door needs the owner's retention ruling first: `adaptive-pruning.md` keeps the labels for ever, and every door ledger takes the 36-month yearly expiry. The oracle's `git ls-files` check fails on the file's first commit, which is where that ruling is forced | Fowler, 2026-10-08 |
+| 11 | Plans 55 and 60 and the pipeline-tests plan still name `docs/how-to/move-a-ledger-to-parquet.md` in their own records. Each plan's record belongs to its owner, so this row leaves them as they are | Fowler, 2026-10-08 |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the migrator for a future ledger | No ledger is left to move, and every new ledger is born on the door | A package, a CLI and a test directory nobody runs | Fowler, 2026-10-05 |
+| 2 | Move `day-metrics`, `traces` and `digest-fragments` onto the door in this row, so only `raw-and-compact`, `flat` and `stamp` are left | None of the three is CSV, so the owner's directive does not reach them, and each is a persisted-address move with readers outside this plan | Door contracts for three ledgers, a copy of their committed JSON, and new readers in the console, the assemble stage and two gardener tasks: a plan of its own at Level 5 | Fowler, 2026-10-08 |
 
 ### Row #11 - The door files a ledger under a folder of any depth
 

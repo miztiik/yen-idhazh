@@ -55,8 +55,8 @@ dependencies = [
     # can break that claim without breaking anything an API test would notice.
     # A range here means two runners may disagree about the same day.
     "onnxruntime==1.29.0",
-    # 0.23 is the first release with a `py.typed` marker; below it mypy refuses the import.
-    "tokenizers>=0.23",
+    # Current Transformers 5 requires the typed tokenizer interface.
+    "tokenizers>=0.23.2",
     # One reading of robots.txt on every interpreter we support. The standard
     # library's `urllib.robotparser` disagrees with itself across the declared
     # range: 3.12 takes the first matching group and the first matching rule,
@@ -141,18 +141,21 @@ dev = [
     # installed 1,097,117 bytes.
     "duckdb>=1.5.5",
     "ruff>=0.9",
+    # Offline saved-vector evaluation and its real numeric tests. sklearn owns
+    # AP/AUC and tie-safe precision/recall; scipy owns article components.
+    # Dev-only: compiled numeric wheels add install bytes, not model weights.
+    "scikit-learn>=1.7",
+    # Already required by sklearn; explicit because the evaluator imports it.
+    "scipy>=1.16",
 ]
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
 # hundreds of megabytes, so it stays out of the default install and out of the
 # test path - the model-free counterweights are what run everywhere.
 faithfulness = [
     "torch>=2.5",
-    # Capped below 5. The HHEM checkpoint ships its own modelling code, which
-    # defines `_tied_weights_keys`; transformers 5 expects
-    # `all_tied_weights_keys` and raises AttributeError while loading it. An
-    # unpinned ceiling meant CI resolved to a version the model predates, and
-    # every worker died before summarizing a single article.
-    "transformers>=4.46,<5",
+    # Keep this open-ended so the extra receives current model-loading fixes.
+    # HHEM is loaded from its immutable revision in evals/hhem.py.
+    "transformers>=5.17",
 ]
 
 [project.scripts]
@@ -190,8 +193,6 @@ select = [
 # not with the rule).
 "idhazh.ledger.filenames._SEGMENT_NAME".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
 "idhazh.ledger.filenames._SEGMENT_SUFFIX".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
-"idhazh.ledger.filenames._REPAIR_NAME".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
-"idhazh.ledger.filenames._REPAIR_STAMP".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
 # The parquet engine behind the ledger door. idhazh.ledger.parquet is the one
 # module allowed to import it (per-file-ignores below); anywhere else, this
 # rule fails the build in place of a hand-written AST walk over backend/idhazh
@@ -221,7 +222,16 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*"]
+module = [
+    "feedparser.*",
+    "onnxruntime.*",
+    "sentence_transformers.*",
+    "sklearn.*",
+    "scipy.*",
+    "torch.*",
+    "trafilatura.*",
+    "transformers.*",
+]
 ignore_missing_imports = true
 
 # The parquet engine ships no type stubs and no py.typed marker. Its values are

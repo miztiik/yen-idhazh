@@ -33,6 +33,7 @@ from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
+    RENAMED_CELLS,
     JudgeModelId,
     SameStoryVerdict,
     ScorerModelId,
@@ -68,11 +69,13 @@ def _narrow_file() -> list[list[str]]:
 def narrow_header() -> tuple[str, ...]:
     """The columns this ledger carried before the judge-call stamp was appended.
 
-    Minus the two the row has since stopped naming. `ledger.migrate_header`
-    re-files a committed day under the contract's own columns and drops what it
-    carries, so the head of today's header is the narrow header WITHOUT them.
+    Minus the ones the row has since stopped naming, and under the names it has
+    since given the rest, so the head of today's header is the narrow header
+    without the dropped columns and with the renamed one under its new name.
     """
-    return tuple(name for name in _narrow_file()[0] if name not in DROPPED_CELLS)
+    return tuple(
+        RENAMED_CELLS.get(name, name) for name in _narrow_file()[0] if name not in DROPPED_CELLS
+    )
 
 
 def a_narrow_row() -> dict[str, str]:
@@ -87,7 +90,7 @@ def a_pair(**overrides: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "date": DATE,
         "run_id": RUN,
-        "shard": 0,
+        "work_part_index": 0,
         "pair_key": key,
         "left_url_key": low,
         "right_url_key": high,
@@ -286,6 +289,23 @@ def test_the_judge_call_stamp_sits_at_the_tail_of_the_pair_header() -> None:
         "thinking_spans",
         "judged_by_run_id",
     )
+
+
+def test_a_row_written_before_the_part_was_renamed_reads_its_part_under_the_new_name() -> None:
+    """`shard` became `work_part_index`, and a row an earlier run wrote still reads.
+
+    Both readers of the row: a CSV row through `from_csv_row`, and a JSON
+    payload through the before-validator. The part number moves across
+    unchanged.
+    """
+    old_row = a_narrow_row()
+    old_payload = {name: value for name, value in a_pair().items() if name != "work_part_index"}
+    old_payload["shard"] = 3
+
+    assert "shard" in old_row and "work_part_index" not in old_row
+    assert StorySimilarityPair.from_csv_row(old_row).work_part_index == int(old_row["shard"])
+    assert StorySimilarityPair.model_validate(old_payload).work_part_index == 3
+    assert "shard" not in StorySimilarityPair.model_fields
 
 
 def test_a_row_written_before_the_stamp_reads_back_with_its_own_version() -> None:

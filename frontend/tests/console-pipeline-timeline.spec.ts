@@ -1,68 +1,28 @@
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * The run timeline draws at both grains, and it draws no column that is empty
- * everywhere.
+ * The run timeline draws at both grains, and every step it draws carries a value.
  *
- * **The empty-column gate is one half of this file.** Three console panels
+ * **The empty-column gate is held at the contract.** Three console panels
  * already apologise for a column nothing fills, and the rule this panel obeys is
- * that a panel may not: every column the panel declares it reads has to carry a
- * value on at least one row of the canary day, or the panel does not ship. The
- * canary is the right fixture for it - fixed in size, so the check costs the same
- * however far the archive grows (`CLAUDE.md` Guardrail #12), and built rather than
- * collected, so it can carry a case the archive has never produced. Every
- * committed census row is in exactly that state today: not one of them records an
- * item clock, so nothing but a built day can place an item on one.
+ * that a panel may not: every column the panel reads off every row has to be one
+ * the published row is required to carry. That is a question about two
+ * declarations, the panel's list and the row's contract, so it is answered
+ * where both are read with no site at all:
+ * `test_the_run_timeline_reads_only_columns_every_row_carries` in
+ * `backend/tests/contracts/test_frontend_console_lists.py`. It used to be read
+ * off the canary's rows here, which asked what the canary holds rather than what
+ * the code declares.
  *
- * **The grain oracle is the other half.** The panel offers a shard grain beside
+ * **The grain oracle is this file.** The panel offers a shard grain beside
  * its item grain, and a grain switch is only honest where one fold built both:
  * two folds over two ledgers can name different runs and disagree about a step's
  * seconds, which is what the two panels this one replaced actually did. The
  * oracle holds the two arrays against each other, per shard and per step, rather
  * than against any pixel.
- *
- * The declared list is read off the module the panel imports, so a column added
- * to the panel and to nothing else fails here rather than drawing an empty slice.
  */
-
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
-const TIMELINE_DIR = resolve(CANARY, 'run-timeline');
-
-/** The columns the panel reads, taken from the module it takes them from.
- *
- * Parsed rather than imported: this spec runs in plain Node, where no Vite alias
- * resolves and a `$lib/server/` import cannot load. Parsing the same declaration
- * keeps one list rather than two, which is the whole point of declaring it.
- */
-function declaredColumns(): string[] {
-	const source = readFileSync(
-		resolve(process.cwd(), 'src', 'lib', 'server', 'run-timeline.ts'),
-		'utf8'
-	);
-	const block = /export const TIMELINE_COLUMNS = \[([^\]]*)\]/.exec(source);
-	expect(block, 'run-timeline.ts declares no TIMELINE_COLUMNS').not.toBeNull();
-	return [...(block as RegExpExecArray)[1].matchAll(/'([a-z_]+)'/g)].map((match) => match[1]);
-}
-
-/** Every published run-timeline row the canary holds, newest shard last. */
-function canaryRows(): Record<string, string>[] {
-	expect(
-		existsSync(TIMELINE_DIR),
-		'the canary published no run-timeline. Build it: python backend/utilities/build_canary_day.py, then node frontend/scripts/build-canary.mjs'
-	).toBe(true);
-	const rows: Record<string, string>[] = [];
-	for (const name of readdirSync(TIMELINE_DIR).filter((file) => file.endsWith('.csv')).sort()) {
-		const lines = readFileSync(resolve(TIMELINE_DIR, name), 'utf8').trim().split('\n');
-		const header = lines[0].split(',');
-		for (const line of lines.slice(1)) {
-			const cells = line.split(',');
-			rows.push(Object.fromEntries(header.map((column, at) => [column, cells[at] ?? ''])));
-		}
-	}
-	return rows;
-}
 
 const panel = (page: Page) => page.locator('[data-run-timeline]');
 
@@ -101,15 +61,6 @@ async function chooseGrain(page: Page, grain: string): Promise<void> {
 	await page.locator(`[data-shape-switch="timeline-grain"] [data-shape-option="${grain}"]`).click();
 	await expect(panel(page)).toHaveAttribute('data-timeline-grain', grain);
 }
-
-test('every column the panel reads carries a value on at least one canary row', () => {
-	const rows = canaryRows();
-	expect(rows.length, 'the canary published no timeline rows at all').toBeGreaterThan(0);
-	for (const column of declaredColumns()) {
-		const filled = rows.filter((row) => (row[column] ?? '') !== '').length;
-		expect(filled, `${column} is empty on all ${rows.length} canary rows`).toBeGreaterThan(0);
-	}
-});
 
 test('the retired span summary is absent from the built site', () => {
 	expect(existsSync(resolve(process.cwd(), 'build', 'span-rollup'))).toBe(false);

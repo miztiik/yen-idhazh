@@ -8,10 +8,11 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import REPO_ROOT, SEED_COMMIT
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from utilities import (
     backfill_report,
     build_reference_dataset,
@@ -78,9 +79,14 @@ def test_backfill_report_reads_only_requested_days(
 
 def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> None:
     digests = tmp_path / "digest"
-    a_digest(digests, "2026-09-01")
+    named = a_digest(digests, "2026-09-01")
     a_digest(digests, "2026-09-02").write_bytes(b"\xff")
+    # A second article on the named day, so the drawn pair is two articles.
+    payload = json.loads(named.read_text(encoding="ascii"))
+    payload["items"].append({"source_url": "https://example.org/tunnel", "title": "A tunnel"})
+    named.write_text(json.dumps(payload), encoding="ascii", newline="\n")
     key = derive_url_key("https://example.org/bridge")
+    other = derive_url_key("https://example.org/tunnel")
     draw = tmp_path / "draw.csv"
     with draw.open("w", encoding="ascii", newline="") as handle:
         writer = csv.DictWriter(
@@ -93,7 +99,7 @@ def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> No
                 "date": "2026-09-01",
                 "pair_key": "pair",
                 "left_url_key": key,
-                "right_url_key": key,
+                "right_url_key": other,
                 "composite_score": "0.95",
             }
         )
@@ -108,11 +114,13 @@ def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> No
     assert (
         sample_sheet.harvest(
             tmp_path,
-            tmp_path / "holdout.csv",
+            tmp_path / "state",
             pairs,
             labeller="fixture",
             labelled_on="2026-09-03",
             batches=["labels.json"],
+            run_id="2026-09-03-1",
+            commit_sha=SEED_COMMIT,
         )
         == 1
     )
@@ -165,17 +173,26 @@ def test_prompt_loop_ignores_unnamed_articles(tmp_path: Path, article_ok: Articl
 
 def test_trial_gather_copies_only_named_days(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    root = "pipeline-tests-fixture"
+    root = "fixture"
+    # `gather` reads raw ledger files tier-first, from `state/raw/pipeline-tests/<root>/<ledger>/`
+    # (`ledger.overlay_registry`), and traces from their own sibling root at
+    # `state/trial-traces/pipeline-tests/<root>/` (module docstring). Written-to and
+    # artifact-shaped paths differ for both cases, so both sides are tracked.
+    written = (
+        f"raw/{TRIAL_STATE_PREFIX}/{root}/feed-health/2026/09/01/a.parquet",
+        f"trial-traces/{TRIAL_STATE_PREFIX}/{root}/2026/09/01/a.jsonl",
+        f"raw/{TRIAL_STATE_PREFIX}/{root}/published/2026/09/01/a.parquet",
+    )
     wanted = (
         f"{root}/raw/feed-health/2026/09/01/a.parquet",
         f"{root}/traces/2026/09/01/a.jsonl",
         f"{root}/raw/published/2026/09/01/a.parquet",
     )
-    for name in wanted:
+    for name in written:
         path = state / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("one day", encoding="ascii")
-    other = state / root / "raw/feed-health/2026/09/02/a.parquet"
+    other = state / "raw" / TRIAL_STATE_PREFIX / root / "feed-health/2026/09/02/a.parquet"
     other.parent.mkdir(parents=True)
     other.write_bytes(b"\xff")
     tree = tmp_path / "artifact"

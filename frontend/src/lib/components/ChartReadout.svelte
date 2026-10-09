@@ -23,6 +23,14 @@
 	 * Nothing here needs a script. The resting column is prerendered, so a reader
 	 * with JavaScript off still gets one column's numbers in words - which is
 	 * what makes the hover an addition rather than the only way to read a value.
+	 *
+	 * **A strip of one column names no resting column and no keys**, at any
+	 * window. There is no other column to rest beside, step to or return to, so
+	 * `the newest day` and `Left and Right step through the days` would each need
+	 * a second one. The heading is the column alone, and the hint line says
+	 * `hintOne` where the strip still has a key or an action, or keeps its room
+	 * blank, so no strip changes height with the window. Reader chose the words
+	 * and Jony the room, on 2026-10-07.
 	 */
 	import {
 		readoutCapStyle,
@@ -39,6 +47,7 @@
 		resting = false,
 		restingNote = '',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
+		hintOne = '',
 		eventRoom = false
 	}: {
 		/** What `readoutOf` or `factsOf` built. Null draws nothing at all. */
@@ -59,6 +68,9 @@
 		 * for a strip whose page says it once for several - eleven cards in one
 		 * grid would otherwise print one sentence eleven times. */
 		hint?: string;
+		/** What the hint line says when the strip holds one column. Empty keeps
+		 * the line's room blank, where `hint` prints one at all. */
+		hintOne?: string;
 		/** Keep room on every column for as many event lines as the busiest
 		 * column prints, so stepping onto the one day that has a line does not
 		 * grow the strip and push everything under it down. */
@@ -76,20 +88,38 @@
 		held?: boolean;
 	}
 
-	/** The widest of a series' readings, so the strip keeps room for it. */
-	function widest(values: readonly (string | null)[], missing: string): number {
-		return values.reduce((most, value) => Math.max(most, (value ?? missing).length), 0);
+	/** The widest reading a series prints, so the strip keeps room for it. A
+	 * missing reading prints the not-measured word only on a column another
+	 * series measured: a column nothing measured prints the word once, in place
+	 * of every entry, so it holds no room in any of them. */
+	function widest(
+		values: readonly (string | null)[],
+		missing: string,
+		counted: readonly boolean[]
+	): number {
+		return values.reduce(
+			(most, value, column) => Math.max(most, (value ?? (counted[column] ? missing : '')).length),
+			0
+		);
 	}
 
-	/** What the strip prints: a heading and its entries, in either shape. */
+	/** What the strip prints: a heading and its entries, in either shape. `one`
+	 * is a strip of one column, which names no resting column and no keys. */
 	const view = $derived.by(
-		(): { shape: 'columns' | 'record'; heading: string; resting: boolean; entries: Entry[] } | null => {
+		(): {
+			shape: 'columns' | 'record';
+			heading: string;
+			resting: boolean;
+			one: boolean;
+			entries: Entry[];
+		} | null => {
 			if (readout === null) return null;
 			if ('subject' in readout) {
 				return {
 					shape: 'record',
 					heading: readout.subject,
 					resting,
+					one: false,
 					entries: readout.facts.map((fact) => ({
 						label: fact.label,
 						value: fact.value ?? readout.notMeasured,
@@ -100,15 +130,25 @@
 			}
 			if (readout.columns.length === 0) return null;
 			const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
-			const measured = readout.series.some((one) => one.values[column] !== null);
+			const counted = readout.columns.map((_, index) =>
+				readout.series.some((one) => one.values[index] !== null)
+			);
+			const measured = counted[column] ?? false;
 			const series: Entry[] = measured
 				? readout.series.map((one) => ({
 						label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
 						value: one.values[column] ?? readout.notMeasured,
 						swatch: one.swatch,
-						reserve: widest(one.values, readout.notMeasured)
+						reserve: widest(one.values, readout.notMeasured, counted)
 					}))
-				: [{ label: readout.notMeasured, value: '', swatch: null, reserve: 0 }];
+				: [
+						{
+							label: readout.notMeasuredAt[column] ?? readout.notMeasured,
+							value: '',
+							swatch: null,
+							reserve: 0
+						}
+					];
 			const events = readout.events[column] ?? [];
 			// A column nothing measured already says so in one sentence, so it does
 			// not say "nothing" a second time in the events' own words. An event
@@ -146,10 +186,13 @@
 				shape: 'columns',
 				heading: readout.columns[column],
 				resting: at === null,
+				one: readout.columns.length === 1,
 				entries: [...series, ...events.map((line) => ({ ...line, reserve: 0 })), ...none, ...held]
 			};
 		}
 	);
+	/** The hint line's words: the keys, what one column still offers, or none. */
+	const said = $derived(view?.one ? hintOne : hint);
 </script>
 
 {#if view}
@@ -170,7 +213,7 @@
 			data-readout-day={view.shape === 'columns' ? '' : undefined}
 			data-readout-subject={view.shape === 'record' ? '' : undefined}
 		>
-			{view.heading}{view.resting ? restingNote : ''}
+			{view.heading}{view.resting && !view.one ? restingNote : ''}
 		</dt>
 		{#each view.entries as entry, index (`${index}:${entry.label}`)}
 			<div
@@ -193,8 +236,18 @@
 			</div>
 		{/each}
 	</dl>
-	{#if hint !== ''}
-		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{hint}</p>
+	{#if said !== ''}
+		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{said}</p>
+	{:else if view.one && hint !== ''}
+		<!-- The room the keys took, kept blank and unread, so the panel is the
+		     same height at one column as at seven. -->
+		<p
+			class="held mt-2 text-[0.75rem] text-text-tertiary"
+			aria-hidden="true"
+			data-readout-hint-held={name}
+		>
+			{'\u00a0'}
+		</p>
 	{/if}
 {/if}
 

@@ -18,6 +18,9 @@ import {
 	clampNote,
 	corridorOf,
 	countedDays,
+	describeEarlierRow,
+	describeUnclear,
+	findNewestRow,
 	gateNeeds,
 	heldInWords,
 	heldNote,
@@ -28,6 +31,7 @@ import {
 	mergeTotals,
 	rateWithDenominator,
 	silentTail,
+	wholePercent,
 	type JudgeDay,
 	type LineDay,
 	type MergeDay,
@@ -227,20 +231,22 @@ test.describe('where the merge line sits', () => {
 	test('the clamp sentence counts the days a clamp fired and no others', () => {
 		// Two of the four: the daily step and the guard. The day that took its
 		// proposal whole and the day nothing was fitted are not clamps.
-		expect(clampNote(LINE, 30)).toBe('The clamp held the line back on 2 of the last 30 days.');
+		expect(clampNote(LINE, 30)).toBe('The clamp held the line back on 2 of 30 days.');
 	});
 
 	test('a window where the clamp never fired says so rather than printing a zero', () => {
-		expect(clampNote(LINE.slice(0, 1), 7)).toBe(
-			'The clamp has not held the line back on any of the last 7 days.'
-		);
+		expect(clampNote(LINE.slice(0, 1), 7)).toBe('The clamp has not held the line back in these 7 days.');
 	});
 
 	test('a held day is counted and a window with none says nothing at all', () => {
 		// Null rather than "0 days were held": a sentence a reader has to parse to
 		// learn that nothing happened is a sentence that should not be there.
-		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of these 30 days.');
+		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 recorded day in this 30-day window.');
 		expect(heldNote(LINE.slice(0, 3), 30)).toBeNull();
+		expect(heldNote([LINE[3], { ...LINE[3], date: '2026-09-20' }], 7)).toBe(
+			'Nothing was fitted on 2 recorded days in this 7-day window.'
+		);
+		expect(heldNote([], 7)).toBeNull();
 	});
 });
 
@@ -251,6 +257,7 @@ test.describe('the judge, and what the record still needs', () => {
 			disagreementRate: 0.05,
 			unclearRate: 0.1,
 			pairsJudged: 20,
+			pairsUsable: 19,
 			negativesOnRecord: 40,
 			aboveLineOnRecord: 6,
 			daysOnRecord: 3,
@@ -259,13 +266,28 @@ test.describe('the judge, and what the record still needs', () => {
 		};
 	}
 
-	test('the agreement axis is zero to the looser of the two limits', () => {
-		// Not 0 to 1: neither rate can reach 1 without the run holding first, so
-		// half the plot would be a region the data cannot enter. Not fitted to the
-		// data either - a healthy two percent drawn full height says the judge is
-		// in trouble when it is not.
-		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.35]);
+	test('the agreement axis holds both marks, niced outward to a whole step', () => {
+		// Niced rather than exact, like every other console axis: 0.35 itself is
+		// not a round step at four ticks, so the looser mark ends up with 24px of
+		// headroom above it on a 190px plot instead of sitting on the plot's edge.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.4]);
 		expect(agreementCorridor({ disagreementMax: 0.4, unclearMax: 0.35 })).toEqual([0, 0.4]);
+	});
+
+	test('a share past both marks widens the axis rather than drawing pinned to one', () => {
+		// A share past its own mark is the one reading this panel exists to show,
+		// so the axis grows to hold it instead of clipping it onto the mark's own
+		// line (Jony, 2026-10-09, row L55).
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.4])).toEqual([
+			0, 0.4
+		]);
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.97])).toEqual([
+			0, 1
+		]);
+		// A share under both marks never narrows the axis below them.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 }, [0.02])).toEqual([
+			0, 0.4
+		]);
 	});
 
 	test('a record with nothing in it still draws three bars at zero', () => {
@@ -283,6 +305,47 @@ test.describe('the judge, and what the record still needs', () => {
 		for (const need of needs) {
 			expect(need.targetText, 'a bar was drawn with no words under its marker').not.toBe('');
 		}
+	});
+
+	test('the bars read the newest row on or before the last day, inside the window or before it', () => {
+		// The record changes only when a run writes a row, so a window with no row
+		// leaves it as its newest earlier row counted it, never at zero.
+		const rows = [
+			judgeDay('2030-06-12'),
+			judgeDay('2030-06-14', { negativesOnRecord: 120, daysOnRecord: 6, aboveLineOnRecord: 12 }),
+			judgeDay('2030-06-20')
+		];
+		const gates = { minimumNegatives: 200, minimumDays: 10, minimumAboveLine: 30 };
+
+		expect(findNewestRow(rows, '2030-06-15')?.date).toBe('2030-06-14');
+		expect(findNewestRow(rows, '2030-06-14')?.date).toBe('2030-06-14');
+		expect(findNewestRow([...rows].reverse(), '2030-06-15')?.date).toBe('2030-06-14');
+		expect(gateNeeds(findNewestRow(rows, '2030-06-15'), gates).map((need) => need.value)).toEqual([
+			120, 6, 12
+		]);
+		// No row by then is a record that never held one, which keeps its three zeros.
+		expect(findNewestRow(rows, '2030-06-11')).toBeNull();
+		expect(findNewestRow([], '2030-06-15')).toBeNull();
+	});
+
+	test('the note names the day the bars stand on, and says started again only where that row does', () => {
+		const zeros = { negativesOnRecord: 0, daysOnRecord: 0, aboveLineOnRecord: 0 };
+
+		expect(describeEarlierRow(judgeDay('2030-06-14'), 1)).toBe(
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+		);
+		expect(describeEarlierRow(judgeDay('2030-06-01'), 7)).toBe(
+			'The bars show what the record held on 1 Jun 2030, before these 7 days. No run has recorded anything since.'
+		);
+		expect(
+			describeEarlierRow(judgeDay('2030-06-14', { ...zeros, heldReason: 'inputs_changed' }), 1)
+		).toBe(
+			'The record was started again on 14 Jun 2030, before this one day. No run has recorded anything since.'
+		);
+		// Zeros alone do not prove the record was started again.
+		expect(describeEarlierRow(judgeDay('2030-06-14', zeros), 1)).toBe(
+			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+		);
 	});
 
 	test('a held day while the gates are unfilled is not a warning', () => {
@@ -336,6 +399,50 @@ test.describe('the judge, and what the record still needs', () => {
 		// decision the evidence cannot carry. The counts still print elsewhere.
 		expect(rateWithDenominator(1, 4, 5)).toBeNull();
 		expect(rateWithDenominator(1, 20, 5)).toBe('5% of 20 pairs');
+	});
+
+	test('a disagreed share that rounds away prints under one, and a zero stays a zero', () => {
+		// 1 of 300 is a third of a percent. A 0 would say no pair disagreed, and one did.
+		expect(rateWithDenominator(1, 300, 5)).toBe('<1% of 300 pairs');
+		expect(rateWithDenominator(0, 300, 5)).toBe('0% of 300 pairs');
+		// 2 of 300 is two thirds of a percent, which rounds to a whole one.
+		expect(rateWithDenominator(2, 300, 5)).toBe('1% of 300 pairs');
+	});
+
+	test('"could not tell" is a share of the pairs that agreed, and their counts under the floor', () => {
+		// Its share is taken over the pairs whose two readings agreed, so the count
+		// beside it is theirs and the floor counts them. The words are Reader's.
+		expect(describeUnclear(1, 41, 5)).toBe('2% of the 41 that agreed');
+		expect(describeUnclear(0, 38, 5)).toBe('0% of the 38 that agreed');
+		expect(describeUnclear(1, 5, 5)).toBe('20% of the 5 that agreed');
+		expect(describeUnclear(1, 3, 5)).toBe('1 of the 3 that agreed');
+		// A real share that rounds away prints under one: a 0 would say every pair
+		// that agreed could tell, and one could not.
+		expect(describeUnclear(1, 467, 5)).toBe('<1% of the 467 that agreed');
+		// No pair agreed, so nothing was counted and no count prints.
+		expect(describeUnclear(0, 0, 5)).toBe('not counted, no pair agreed');
+	});
+
+	test('agreement counts use the same thousands separator as the merge count', () => {
+		expect(rateWithDenominator(272, 1390, 5)).toBe('20% of 1,390 pairs');
+		expect(describeUnclear(56, 1118, 5)).toBe('5% of the 1,118 that agreed');
+		expect(rateWithDenominator(1, 1000, 5)).toBe('<1% of 1,000 pairs');
+		expect(describeUnclear(1, 1000, 5)).toBe('<1% of the 1,000 that agreed');
+		expect(describeUnclear(1, 1000, 1001)).toBe('1 of the 1,000 that agreed');
+	});
+
+	test('rounding cannot hide which side of an agreement mark a share is on', () => {
+		expect(rateWithDenominator(7, 46, 5, 0.15)).toBe('just above 15% of 46 pairs');
+		expect(describeUnclear(13, 37, 5, 0.35)).toBe('just above 35% of the 37 that agreed');
+		expect(rateWithDenominator(7, 47, 5, 0.15)).toBe('just below 15% of 47 pairs');
+		expect(describeUnclear(13, 38, 5, 0.35)).toBe('34% of the 38 that agreed');
+		expect(wholePercent(150001, 1000000, 0.15)).toBe('just above 15');
+		expect(wholePercent(149999, 1000000, 0.15)).toBe('just below 15');
+		expect(wholePercent(15, 100, 0.15)).toBe('15');
+		expect(wholePercent(35, 100, 0.35)).toBe('35');
+		expect(wholePercent(20.1, 100, 0.2)).toBe('just above 20');
+		expect(rateWithDenominator(1, 4, 5, 0.25)).toBeNull();
+		expect(describeUnclear(1, 3, 5, 0.35)).toBe('1 of the 3 that agreed');
 	});
 });
 

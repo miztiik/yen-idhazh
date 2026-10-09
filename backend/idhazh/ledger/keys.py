@@ -1,14 +1,14 @@
 """What makes two rows of one ledger the same record, and which contract reads one.
 
 A key is a fact about a ledger, so it is written once and read by every pass that
-settles one: the append that runs from the commit step, the fold a reader takes
-over a day directory, and the compaction. A second copy of a key is how two
-readers start disagreeing about what one file holds.
+settles one: the compaction, and the reader that settles a ledger's rows when a
+caller asks for them. A second copy of a key is how two readers start
+disagreeing about what one file holds.
 
-Two tables pair a key with the contract that reads a row: one for the CSV day
-trees, and one for the ledgers the door in `ledger/persist.py` files under
-`state/raw/` and `state/compact/`. The second also holds each ledger still on
-CSV that is ready to move, so moving one is a switch of its registry grain.
+One table pairs a key with the contract that reads a row: the ledgers the door
+in `ledger/persist.py` files under `state/raw/` and `state/compact/`. A judge's
+ledgers sit in a second part of the table, whose contracts are imported on
+first use, for the reason beside `_JUDGE_DOOR_SHAPES`.
 
 Where a ledger's file lives is a different question with its own home, which is
 why `paths` imports nothing from here and this module imports nothing from it.
@@ -17,37 +17,27 @@ why `paths` imports nothing from here and this module imports nothing from it.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final, NamedTuple
+from typing import Final, NamedTuple
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
+from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.fitted_similarity_threshold import (
-    DROPPED_CELLS as DROPPED_FIT_CELLS,
-)
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import (
-    DROPPED_CELLS as DROPPED_PAIR_CELLS,
-)
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
-if TYPE_CHECKING:
-    # The row protocol is a typing fact here and never a value, so it is read at
-    # check time only. It keeps this module's runtime imports to the contracts.
-    from idhazh.ledger.csv_file import CsvContract
-
-
-#: The column every day tree except the score index routes a row by. Named once
-#: here because the router reads it out of a contract's own cells, and a second
-#: spelling of it would file a row under a day nobody can find it in.
+#: The column the door files a dated row under, read out of the row's own cells.
+#: Named once here because a second spelling of it would file a row under a day
+#: nobody can find it in.
 DATE_CELL: Final = "date"
 
 
@@ -69,6 +59,11 @@ FEED_HEALTH_KEY: Final = ("run_id", "feed_id")
 #: assemble writes the whole day's census afterwards, so both see the same item
 #: under the same run and the second one has nothing new to say.
 ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
+
+
+#: What makes two item-health summary rows the same record. One folded month
+#: keeps one total for one UTC day and one pipeline stage.
+ITEM_HEALTH_SUMMARY_KEY: Final = ("date", "stage")
 
 
 #: One machine a job, so four cells identify the host a job drew.
@@ -99,21 +94,37 @@ COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 #: execution rather than a second answer. Both attempts read the same score
 #: record and walk the same counts, so the first row wins and there is nothing
 #: for a preference rule to choose between.
+#:
+#: The shape these two cells name is
+#: `idhazh.contracts.fitted_similarity_threshold`, and the door table below
+#: imports it only when its ledger is asked about, for the reason the holdout
+#: score's key gives.
 STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
 
 #: What makes two merge-line holdout rows the same record. One run scores one
-#: line against one marked file on one date, so a second row under those two
+#: line against the marks it reads on one date, so a second row under those two
 #: cells is a second attempt at one execution rather than a second answer. The
 #: marks are hand-written and the day payloads are committed, so two attempts
 #: count the same cells and the first row wins.
 #:
-#: Spelled here as four strings and nothing else. The shape they name is
-#: `idhazh.contracts.merge_line_holdout_score`, and this module may not import
-#: it: a council verb reaches this module for its own row types, and a judge
-#: contract arriving through it would put a judge in the council's import
-#: closure (`backend/tests/council/test_council_runs_without_a_judge.py`).
+#: The shape these two cells name is `idhazh.contracts.merge_line_holdout_score`,
+#: and the door table below imports it only when its ledger is asked about: a
+#: council verb reaches this module for its own row types, and a judge contract
+#: imported here as the module loads would sit in the council's import closure
+#: (`backend/tests/council/test_council_runs_without_a_judge.py`).
 MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
+
+
+#: What makes two hand marks the same record: one pair of addresses, in the
+#: order the mark names them. The day is not in the key, because a pair a person
+#: marks again is the same pair with a newer mark, and a key that held the day
+#: would count it twice. `HOLDOUT_PAIR_RULE` decides which of two marks stays.
+#:
+#: The shape these two cells name is `idhazh.contracts.similarity_holdout_pair`,
+#: and the door table below imports it only when its ledger is asked about, for
+#: the reason given beside `MERGE_LINE_HOLDOUT_SCORE_KEY`.
+HOLDOUT_PAIR_KEY: Final = ("left_url", "right_url")
 
 
 #: What makes two judged-pair rows the same record. `run_id` is in the key
@@ -123,13 +134,33 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #: the fold picks the newest run itself, over the whole day, rather than letting
 #: a line-by-line rewrite decide.
 #:
+#: `work_part_index` follows `run_id`, because a judge row about one part of the
+#: split is keyed on its part: two parts of one run never settle into one record.
+#:
 #: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
 #: published the day, so two judging runs over one date write the identical
 #: string there. Without this cell the settlement would keep the row already in
 #: the checked-out file and discard every fresh verdict, while the record
 #: counted the fresh ones - two descriptions of one day with nothing able to
 #: tell them apart.
-STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
+#:
+#: The shape these cells name is `idhazh.contracts.story_similarity_pair`, and
+#: the door table below imports it only when its ledger is asked about, for the
+#: reason the holdout score's key gives.
+STORY_SIMILARITY_PAIR_KEY: Final = (
+    "date",
+    "run_id",
+    "work_part_index",
+    "pair_key",
+    "judged_by_run_id",
+)
+
+
+#: What makes two metrics rows the same record: one part of one council run's
+#: night, for one judged date. The door table below imports the row contract,
+#: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
+#: asked about, for the reason the holdout score's key gives.
+CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
 
 
 #: What makes two retirement rows the same record. The address and nothing else:
@@ -147,14 +178,16 @@ FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 
 
-#: What makes two council rows the same record. `judge_id` is in the key and a
-#: night running two tenants is why: one council run has one run id, so tenant
-#: A's unit 0 and tenant B's unit 0 on one judged date carry the same date, the
-#: same run and the same unit number. Without the slug the settlement would
-#: delete the second as a repeat, and the night would read as half of what it
-#: was. A repeat under all four cells is a second attempt at one unit, which did
-#: the same work under the same clock, so the first row wins.
-COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
+# What makes two rows of one council step the same record. A once-a-date step
+# has an empty part index; a repeated attempt at the same key is settled by the
+# door's writer identity, which keeps the highest attempt.
+COUNCIL_RUN_RECORD_KEY: Final = (
+    "date",
+    "run_id",
+    "judge_id",
+    "evaluation_step",
+    "work_part_index",
+)
 
 
 # One plan is the settled planning answer for one execution of one UTC day.
@@ -197,8 +230,8 @@ PUBLISHED_KEY: Final = ("url_key", "published_on", "item_id")
 
 #: Which of two rows holding one key survives the settlement. `True` means the
 #: later row replaces the one already kept. A key with no rule keeps the first
-#: row it saw, which is what every ledger but one wants: there a repeat is the
-#: same attempt written twice and the two rows agree.
+#: row it saw, which is what most ledgers want: there a repeat is the same
+#: attempt written twice and the two rows agree.
 Preference = Callable[[dict[str, str], dict[str, str]], bool]
 
 
@@ -209,7 +242,7 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     in the contract that owns what a feed result means. A row that no longer
     parses keeps whatever is already on record - the same choice `load_health`
     makes, and for the same reason: this ledger is diagnostic, and refusing
-    would cost a run the whole commit step this pass was called from.
+    would cost a run the whole read or compaction this pass was called from.
     """
     try:
         return supersedes(FeedHealthRow.from_csv_row(later), FeedHealthRow.from_csv_row(kept))
@@ -241,6 +274,17 @@ def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     return bool(later.get("machine_job")) and not kept.get("machine_job")
 
 
+def _holdout_pair_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
+    """The newer mark wins: a later `marked_on`, or the same day filed later.
+
+    A person marks a pair again to correct the first mark, so the mark taken last
+    is the one the merge line is scored against. A later row with the same
+    `marked_on` is the same day's harvest run again, and it wins for the same
+    reason. Both cells are `YYYY-MM-DD` UTC days, so text order is day order.
+    """
+    return later.get("marked_on", "") >= kept.get("marked_on", "")
+
+
 #: The keys whose repeats can disagree, and how each one picks a winner.
 FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 
@@ -248,85 +292,24 @@ FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 ITEM_HEALTH_RULE: Final[Preference] = _item_health_rule
 
 
+HOLDOUT_PAIR_RULE: Final[Preference] = _holdout_pair_rule
+
+
 _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
     FEED_HEALTH_KEY: FEED_HEALTH_RULE,
     ITEM_HEALTH_KEY: ITEM_HEALTH_RULE,
+    HOLDOUT_PAIR_KEY: HOLDOUT_PAIR_RULE,
 }
 
 
 def preference_for(key: tuple[str, ...]) -> Preference | None:
     """How two rows holding one key settle, where the key declares it.
 
-    One vocabulary for the question, not two: the post-merge settlement reads
-    this table and so does the compaction, so a key whose repeats can disagree
-    gives the same answer whichever pass reaches it first.
+    One vocabulary for the question, not two: the compaction reads this table and
+    so does the reader that settles a ledger's rows, so a key whose repeats can
+    disagree gives the same answer whichever pass reaches it first.
     """
     return _PREFERENCES.get(key)
-
-
-#: The headings a day file an earlier run wrote still carries that the current
-#: judged-pair row no longer names. A dropped heading has no replacement - the
-#: file still re-files, and the cell goes, which is the point of dropping it. One
-#: column has left this row and none has moved, so there is no retired half:
-#: `from_csv_row` reads a day file by the names the contract holds now and the
-#: dropped heading simply goes.
-STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
-
-
-#: The same again, for the fitted line's day files.
-FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
-
-
-class _TreeShape(NamedTuple):
-    """One day tree's answer to "what settles two of its rows, and who reads one"."""
-
-    key: tuple[str, ...]
-    model: type[CsvContract]
-    carried: frozenset[str] = frozenset()
-
-
-#: What settles two rows of one day tree, and the contract that reads one. A
-#: declared table rather than a rule a reader re-derives: the key is a fact about
-#: the ledger and a second copy of it is how two readers start disagreeing.
-_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
-}
-
-
-def _refuse_outside_day_trees(ledger: LedgerName) -> None:
-    """Refuse a ledger no writer files a segment into, naming it.
-
-    `LedgerName` spans every ledger under `state/`, and only a day tree holds one
-    file per writer under a day directory. So a caller can now name a ledger that
-    is the wrong shape for a segment - `scored-pairs` is a day file where this
-    would mint a directory - and a wrong call has to be answered at the call
-    rather than by writing a path no reader walks.
-    """
-    if ledger not in DAY_TREES:
-        raise ValueError(f"{ledger.value} is not a day tree, so it holds no writer's segment")
-
-
-def segment_contract(ledger: LedgerName) -> type[CsvContract]:
-    """The model that reads one of this ledger's rows.
-
-    Asked before a file is named, because a file is named for the writer and a
-    row is routed by its own date cell - and a date cell is only a date once the
-    contract has read it. Naming a file from an unread cell is how a path is
-    built out of something nobody validated.
-    """
-    _refuse_outside_day_trees(ledger)
-    return _TREE_SHAPES[ledger].model
-
-
-def segment_key(ledger: LedgerName) -> tuple[str, ...]:
-    """What makes two of this ledger's rows the same record."""
-    _refuse_outside_day_trees(ledger)
-    return _TREE_SHAPES[ledger].key
-
-
-def segment_carried(ledger: LedgerName) -> frozenset[str]:
-    """The retired headings this ledger's reader can still place."""
-    _refuse_outside_day_trees(ledger)
-    return _TREE_SHAPES[ledger].carried
 
 
 class _DoorShape(NamedTuple):
@@ -339,17 +322,14 @@ class _DoorShape(NamedTuple):
 #: What settles two rows of each ledger the door files under the two roots, and
 #: the contract that reads one. The compaction settles a period by it and the
 #: reader in `ledger/ledger_files.py` settles a whole ledger by it, so the two
-#: cannot disagree about which row of a key survives.
-#:
-#: A ledger still on CSV has its row here before it moves. Nothing asks the door
-#: about a ledger before the registry files it under the two roots, so a row here
-#: changes nothing until then, and the change that moves the ledger switches its
-#: registry grain rather than writing its key a second time.
+#: cannot disagree about which row of a key survives. A new door ledger gets its
+#: row here in the change that registers it.
 _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
     LedgerName.ITEM_HEALTH: _DoorShape(ITEM_HEALTH_KEY, ItemHealthRow),
+    LedgerName.ITEM_HEALTH_SUMMARY: _DoorShape(ITEM_HEALTH_SUMMARY_KEY, ItemHealthSummaryRow),
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),
@@ -358,12 +338,93 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),
     LedgerName.RUN_PLAN: _DoorShape(RUN_PLAN_KEY, RunPlan),
+    LedgerName.COUNCIL_RUN_RECORDS: _DoorShape(
+        COUNCIL_RUN_RECORD_KEY, CouncilRunRecord
+    ),
 }
+
+
+def _merge_line_holdout_score() -> type[Contract]:
+    """The holdout score's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
+
+    return MergeLineHoldoutScore
+
+
+def _similarity_holdout_pair() -> type[Contract]:
+    """The hand mark's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
+
+    return SimilarityHoldoutPair
+
+
+def _story_similarity_pair() -> type[Contract]:
+    """The judged pair's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    return StorySimilarityPair
+
+
+def _content_similarity_judge_metrics() -> type[Contract]:
+    """The judge's per-part reading, imported when its ledger is first asked about."""
+    from idhazh.contracts.content_similarity_judge_metrics import (
+        ContentSimilarityJudgeMetrics,
+    )
+
+    return ContentSimilarityJudgeMetrics
+
+
+def _fitted_similarity_threshold() -> type[Contract]:
+    """The fitted line's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
+
+    return FittedSimilarityThreshold
+
+
+#: The door ledgers a judge writes, each with its key and the function that
+#: imports the contract one of its rows is read by. The rest of the door table
+#: imports its contracts as this module loads. A judge's waits for the first
+#: question about its ledger, because the council imports this module for its
+#: own row types, and the owner ruled on 2026-09-21 that no further judge
+#: contract may join a council verb's imports: a judge deleted from the tree has
+#: to leave every council verb running.
+_JUDGE_DOOR_SHAPES: Final[
+    dict[LedgerName, tuple[tuple[str, ...], Callable[[], type[Contract]]]]
+] = {
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
+        MERGE_LINE_HOLDOUT_SCORE_KEY,
+        _merge_line_holdout_score,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: (
+        HOLDOUT_PAIR_KEY,
+        _similarity_holdout_pair,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
+        STORY_SIMILARITY_PAIR_KEY,
+        _story_similarity_pair,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
+        CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
+        _content_similarity_judge_metrics,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: (
+        STORY_SIMILARITY_THRESHOLD_KEY,
+        _fitted_similarity_threshold,
+    ),
+}
+
+
+def door_table_ledgers() -> frozenset[LedgerName]:
+    """Every ledger the door table holds a key and a row contract for."""
+    return frozenset(_DOOR_SHAPES) | frozenset(_JUDGE_DOOR_SHAPES)
 
 
 def _door_shape(ledger: LedgerName) -> _DoorShape:
     """This ledger's row of the door table, or a refusal naming it."""
     held = _DOOR_SHAPES.get(ledger)
+    if held is None and ledger in _JUDGE_DOOR_SHAPES:
+        key, contract = _JUDGE_DOOR_SHAPES[ledger]
+        held = _DoorShape(key, contract())
     if held is None:
         raise ValueError(
             f"{ledger.value} has no key and no row contract in the door table in "

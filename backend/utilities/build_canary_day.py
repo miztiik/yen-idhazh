@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
 import hashlib
 import json
 import math
@@ -38,7 +39,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, ledger
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -68,7 +69,6 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.knobs.models import ModelRef
@@ -106,6 +106,7 @@ from idhazh.telemetry.publish import (
     machine,
     run_days,
     run_timeline,
+    series,
     source_health,
 )
 
@@ -126,17 +127,23 @@ PRODUCER: Final = "utilities.build_canary_day"
 
 type FixtureRow = ItemHealthRow | HostFingerprintRow
 
-#: The two ledgers `build-canary.mjs` writes rows for, and what settles a day of
-#: each. That script writes them as CSV, one file a run, under its own folder
-#: beside the state tree, and `--file-fixture-rows` files them through the door.
+#: The two ledgers `build-canary.mjs` writes rows for, and the key each fixture
+#: record is written under once. That script writes them as CSV, one file a run,
+#: under its own folder beside the state tree, and `--file-fixture-rows` files
+#: them through the door.
 FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, ...]]]] = {
     LedgerName.ITEM_HEALTH: (ItemHealthRow, ledger.ITEM_HEALTH_KEY),
     LedgerName.HOST_FINGERPRINT: (HostFingerprintRow, ledger.HOST_FINGERPRINT_KEY),
 }
 
 #: The ledgers the console reads from packed files, so the fixture packs them.
-#: Feed health is read at build time and never published, so it is added by name.
-PACKED_LEDGERS: Final = (*config.load().app.ledger.published, LedgerName.FEED_HEALTH)
+#: Feed health and the hand marks are read at build time and never published, so
+#: they are added by name.
+PACKED_LEDGERS: Final = (
+    *config.load().app.ledger.published,
+    LedgerName.FEED_HEALTH,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
+)
 
 #: The UTC day the fixture's packing pass runs on: two days after the attack
 #: day, the first day the declared rule admits it. A fixed day rather than the
@@ -1130,11 +1137,12 @@ def health(state: Path) -> int:
 
 
 def holdout(state: Path, day: DigestDay) -> int:
-    """The hand-marked holdout pairs, as a fixture for the panel's shapes.
+    """The hand-marked holdout pairs, filed through the ledger door as a fixture for the panel.
 
-    Four rows, for four of the things the panel has to do: draw the closest
+    Four marks, for four of the things the panel has to do: draw the closest
     marked-apart pair, draw one that is nowhere near the line, draw a pair marked
-    as one story, and count a mark whose day the tree cannot answer for.
+    as one story, and count a mark whose day the tree cannot answer for. The
+    Judgement page reads packed days only, so `pack_fixture_ledgers` packs them.
 
     **It does not reach the panel's worst state, and it cannot.** That state is a
     line that has fallen below a pair somebody read as two different stories.
@@ -1198,42 +1206,36 @@ def holdout(state: Path, day: DigestDay) -> int:
     if len(scored) > 2:
         rows.append(pair(scored[1][1], scored[1][2], same=True, why="fixture: one story"))
     # A mark whose day the tree cannot answer for. The panel counts the skip and
-    # its reason rather than drawing a dot that would say the margin is fine.
+    # its reason rather than drawing a dot that would say the margin is fine. Its
+    # two addresses are its own: the ledger keeps one mark a pair, so a pair the
+    # marks above name would read as that pair marked again.
     rows.append(
         SimilarityHoldoutPair(
             version=SimilarityHoldoutPair.schema_version(),
-            left_url=scored[0][1].source_url,
-            right_url=scored[0][2].source_url,
+            left_url="https://canary.example.com/holdout/unpublished-left",
+            right_url="https://canary.example.com/holdout/unpublished-right",
             left_date="2020-01-01",
             right_date="2020-01-01",
-            left_title=scored[0][1].title,
-            right_title=scored[0][2].title,
+            left_title="Canary story from a day the tree does not hold",
+            right_title="Another canary story from that day",
             same_story=False,
             marked_on=DATE,
             note="fixture: a day the tree does not hold",
         )
     )
 
-    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = SimilarityHoldoutPair.csv_columns()
-    lines = [",".join(columns)]
-    for row in rows:
-        cells = row.csv_row()
-        lines.append(",".join(_csv_cell(cells[name]) for name in columns))
-    write_atomic(path, "\n".join(lines) + "\n")
+    ledger.persist(
+        state,
+        rows,
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
+        covers=DATE,
+        identity=_fixture_writer(SCORE_RUN_ID),
+    )
     return len(rows)
 
 
 def _vector_norm(vector: array[int]) -> float:
     return math.sqrt(sum(value * value for value in vector)) or 1.0
-
-
-def _csv_cell(value: str) -> str:
-    """One cell, quoted where a headline carries a comma or a quotation mark."""
-    if any(mark in value for mark in ',"\n'):
-        return '"' + value.replace('"', '""') + '"'
-    return value
 
 
 def _fixture_digest(*parts: str) -> str:
@@ -1575,25 +1577,21 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
     """File the rows `build-canary.mjs` wrote as CSV through the door, then delete the CSV.
 
     That script writes one file a run under `<staged>/<ledger>/<YYYY>/<MM>/<DD>/`.
-    Each day is settled the way a CSV day was read and filed as one raw file a
-    run, under the run's own id, so a run the fixture names is a writer the
-    door names too.
+    Those files are scratch the two build steps hand each other, never committed
+    and never read by a later run, so each row is read with its contract's own
+    `from_csv_row` and filed as one raw file a run, under the run's own id: a
+    run the fixture names is a writer the door names too.
     """
     filed: dict[LedgerName, int] = {}
     for which, (model, key) in FIXTURE_ROW_LEDGERS.items():
         root = staged / which.value
         if not root.is_dir():
             continue
-        days = sorted(
-            day
-            for dates in day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW).values()
-            for day in dates
-        )
         count = 0
-        for day in days:
+        for day, files in _staged_days(root).items():
             by_run: dict[str, list[FixtureRow]] = {}
-            for cells in day_shards.settled_day(root, day, key, model):
-                by_run.setdefault(cells["run_id"], []).append(model.from_csv_row(cells))
+            for row in _staged_rows(files, model, key):
+                by_run.setdefault(row.run_id, []).append(row)
             for run_id, rows in by_run.items():
                 ledger.persist(
                     state, rows, ledger=which, covers=day, identity=_fixture_writer(run_id)
@@ -1602,6 +1600,61 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
         shutil.rmtree(root)
         filed[which] = count
     return filed
+
+
+def _staged_days(root: Path) -> dict[str, list[Path]]:
+    """Each day a staged ledger folder holds, and its files, oldest day first.
+
+    `root` is a folder `build-canary.mjs` made a moment ago, so walking it costs
+    what the fixture wrote and never what the repository holds (Guardrail #12).
+    A file anywhere but `<YYYY>/<MM>/<DD>/<name>.csv` is refused by name, so a
+    row the script put somewhere else is never deleted unfiled.
+    """
+    days: dict[str, list[Path]] = {}
+    for path in sorted(found for found in root.rglob("*") if found.is_file()):
+        parts = path.relative_to(root).parts
+        day = "-".join(parts[:3])
+        if len(parts) != 4 or path.suffix != ".csv" or not _names_a_day(day):
+            raise ValueError(
+                f"{root.name}/{path.relative_to(root).as_posix()} is not a "
+                "<YYYY>/<MM>/<DD>/<run>.csv file, which is the only shape build-canary.mjs writes"
+            )
+        days.setdefault(day, []).append(path)
+    return days
+
+
+def _names_a_day(day: str) -> bool:
+    """Whether `YYYY-MM-DD` is a real UTC day spelled the one way an ISO day is spelled."""
+    try:
+        return calendar_date.fromisoformat(day).isoformat() == day
+    except ValueError:
+        return False
+
+
+def _staged_rows(
+    files: Sequence[Path], model: type[FixtureRow], key: tuple[str, ...]
+) -> list[FixtureRow]:
+    """Every row of one staged day, read through its contract, each key once.
+
+    A key filed twice is refused rather than settled here: the door settles two
+    rows of one key by its own rule when a reader asks, and a fixture that meant
+    one record should not depend on which rule picks it.
+    """
+    rows: list[FixtureRow] = []
+    held: set[tuple[str, ...]] = set()
+    for path in files:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for cells in csv.DictReader(handle):
+                row = model.from_csv_row(cells)
+                record = tuple(str(getattr(row, name)) for name in key)
+                if record in held:
+                    raise ValueError(
+                        f"{path.name} files {dict(zip(key, record, strict=True))} a second "
+                        "time on its day. Each fixture record is one row"
+                    )
+                held.add(record)
+                rows.append(row)
+    return rows
 
 
 def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
@@ -1689,11 +1742,13 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
     own compaction task, under the ledger's own declaration made live, so the
     fixture is packed by the code that packs production.
     """
-    declared = config.load_gardener().tasks
+    settings = config.load_gardener()
+    declared = settings.tasks
     for which in PACKED_LEDGERS:
-        policy = declared.get(f"compact-{which.value}")
+        task = config.compaction_task(which)
+        policy = declared.get(task)
         if not isinstance(policy, CompactionPolicy):
-            raise SystemExit(f"config/gardener/compact-{which.value}.json declares no compaction")
+            raise SystemExit(f"config/gardener/{task}.json declares no compaction")
         outcome = compaction.run(
             TaskContext(
                 state_dir=state,
@@ -1707,7 +1762,9 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
                 job=ServerJob.RUN_TASKS,
                 shard=SCORE_SHARD,
                 git_sha=FIXTURE_SHA,
-                owned_folders=tuple(policy.owns),
+                owned_folders=tuple(
+                    folder for folder in policy.owns if (state.parent / folder).is_dir()
+                ),
                 # The declaration names `state/...` folders, and the canary's
                 # `state/` sits in its own tree rather than at the repository
                 # root, so the listing is read from the folder that holds it.
@@ -1716,6 +1773,7 @@ def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
                     policy.owns,
                     paths=(state.parent / folder for folder in policy.owns),
                 ),
+                first_ledger_year=settings.config.first_ledger_year,
             )
         )
         if outcome.resume_from is not None:
@@ -1749,6 +1807,40 @@ def file_unpacked_fixture_day(state: Path) -> int:
         identity=_fixture_writer(row.run_id),
     )
     return 1
+
+
+def search_index_root(digest_root: Path) -> Path:
+    """Where the month search index goes: beside the digest root, as the pipeline puts it."""
+    return digest_root.parent / "assist" / "index"
+
+
+def clear_output(digest_root: Path, state_root: Path) -> None:
+    """Delete every folder a canary build writes, so the build starts from an empty tree.
+
+    That makes the canary a function of this file, never of what an earlier
+    build left. Each folder is named, never found by a walk (Guardrail #12): the
+    days and their drawings, the month search index, the console payloads that
+    `--console-payloads-only` writes later in the same build, and the state
+    tree. A file this builder never writes is left where it is.
+
+    What a file from an earlier build did. The ledgers under `state/` are
+    append-only, so a second local run stacked another copy of every row on the
+    first: `canary-gone` is written once, one permanent failure well under the
+    quarantine count, and by the fifth run the console marked it rested. A day
+    written under another `DATE` stayed the newest day in the digest tree, and
+    `build-canary.mjs` dates its fixture rows from that day. The packing pass
+    runs from `DATE`, so it packed no day of item-health or host-fingerprint,
+    and the site build refused both. CI saw neither, because its `backend/var/`
+    is empty every time.
+    """
+    for folder in (
+        digest_root,
+        search_index_root(digest_root),
+        *(series.series_root(digest_root, name) for name in series.PUBLISHED_ROOTS),
+        state_root,
+    ):
+        if folder.exists():
+            shutil.rmtree(folder)
 
 
 def main() -> int:
@@ -1798,16 +1890,7 @@ def main() -> int:
         written = console_payloads(state_root=args.state, digest_root=args.out)
         print(f"wrote {written} console payload file(s) the browser suite fetches")
         return 0
-    # The ledgers under `--state` are append-only, so a second local run stacks
-    # another copy of every row on the first. `canary-gone` is written once on
-    # purpose - one permanent failure, well under the quarantine count - and by
-    # the fifth run it has five and the console marks it rested. The browser
-    # suite then fails against a fixture nobody edited, on a developer machine,
-    # while CI stays green because its `backend/var/` is empty every time.
-    # Clearing here makes the canary day a function of this file rather than of
-    # how many times somebody has run it.
-    if args.state.exists():
-        shutil.rmtree(args.state)
+    clear_output(args.out, args.state)
 
     evaluation = config.load().app.evaluation
     visuals = config.load().app.visuals
@@ -1845,7 +1928,7 @@ def main() -> int:
     # (docs/architecture/publishing/layout.md). The archive browses this tree in
     # the browser suite, so without the rebuild it would show days and no
     # stories - and the suite would pass on a page a reader cannot use.
-    index_root = args.out.parent / "assist" / "index"
+    index_root = search_index_root(args.out)
     months = sorted({month_of(date) for date in [*quiet, DATE]})
     indexed = [
         rebuild_search_index(digest_root=args.out, index_root=index_root, month=month)
@@ -1861,8 +1944,10 @@ def main() -> int:
         f"filed {checks} feed results into {LedgerName.FEED_HEALTH.value} "
         "through the ledger door"
     )
-    marked = ledger.path(args.state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
-    print(f"wrote {marked.as_posix()}: {marks} hand-marked pairs")
+    print(
+        f"filed {marks} hand-marked pairs into "
+        f"{LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS.value} through the ledger door"
+    )
     print(
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"

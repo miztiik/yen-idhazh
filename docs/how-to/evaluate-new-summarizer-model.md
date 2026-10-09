@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-09
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -72,6 +72,8 @@ first dispatch, so every runner pays its own download: the same fetch in
 Which test cases run is `enabled` in `config/pipeline-tests.json`, and nothing
 else. `parallel-summarization` is off by default, because its two slots each
 hold a full window; switch it on for a model small enough to fit twice.
+Each case keeps its trial ledgers in a separate nested root, as described in the
+[workflow reference](../reference/github-actions.md#pipeline-tests).
 
 **What it settles.** Whether the weights load, whether the server serves the
 alias the config names, whether both calls come back inside the schema, and what
@@ -366,7 +368,7 @@ summary. It says how fast, not how good.
 
 **One thing a bench dispatch does commit, from 2026-09-17: the machine it drew.**
 One row lands on `main` as one parquet file under
-`state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/`, and nothing else
+`state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/`, and nothing else
 from the dispatch is written back. A dispatch whose probe wrote no row stages
 nothing, and its commit step prints `no machine recorded`. A bench reading is
 about a machine, and until that date the processor it ran on expired with the

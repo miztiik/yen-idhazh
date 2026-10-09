@@ -1,8 +1,8 @@
 """Score the merge line in force against the hand-marked holdout, and record it.
 
 One stage, one module. A person types the verb; nothing in the daily pipeline
-calls it, because the marked file changes when somebody labels more pairs rather
-than when a day publishes.
+calls it, because the marks change when somebody labels more pairs rather than
+when a day publishes.
 
 It calls no model and opens no socket. The arithmetic is in
 `idhazh.similarity.holdout`; this module reads the line, asks for the cells,
@@ -19,6 +19,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from idhazh import config, ledger, publication
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.placement import HOLDOUT_TWO_STORY_MAX
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -34,30 +36,31 @@ from idhazh.stages.common import LOG
 _MAX_DRIFT_TOLERANCE = 0.00005
 
 
-def _append(state_dir: Path, date: str, row: MergeLineHoldoutScore) -> int:
-    """Put the row in its day file, and settle the file after the write.
+def _append(
+    state_dir: Path, date: str, row: MergeLineHoldoutScore, *, commit_sha: str
+) -> list[Path]:
+    """Put the row through the ledger door and return the raw files it wrote.
 
-    The writer lives here rather than in `idhazh.ledger` because the ledger may
-    not import a judge's contract: a council verb reaches that module for its own
-    row types, and a judge contract arriving through it would put a judge in the
-    council's import closure. The path and the settlement key are the ledger's,
-    which is where a path belongs.
-
-    **The day file is created even when nothing was scored**, the way every
-    ledger beside it is: the commit step names this directory, `git add` runs
-    under `set -euo pipefail`, and a path missing from the working tree aborts
-    the step and costs the ledgers staged with it.
+    A person runs this verb, so the file's writer is `operator`, at attempt 1
+    and shard 0: no workflow job, retry or matrix cell ran it. The run is the
+    one `--run-id` names, and the commit is the code that took the reading. The
+    path and the settlement key are the ledger's, which is where a path belongs.
     """
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
-    if not ledger.accepts_new_rows(which, 1):
-        return 0
-    path = ledger.path(state_dir, which, date)
-    columns = MergeLineHoldoutScore.csv_columns()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = ledger.extend_ledger_file(path, columns, [row])
-    return landed - ledger.drop_repeated_rows(path, ledger.MERGE_LINE_HOLDOUT_SCORE_KEY)
+    return ledger.persist(
+        state_dir,
+        [row],
+        ledger=which,
+        covers=date,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.OPERATOR,
+            shard=0,
+            producer="stages.score_merge_line_holdout",
+            git_sha=commit_sha,
+        ),
+    )
 
 
 def _warn_on_a_stale_maximum(reading: holdout.Reading) -> None:
@@ -85,14 +88,14 @@ def _warn_on_an_unseen_labeller(marks: list[SimilarityHoldoutPair], labeller: st
 
     The column is free text because the committed labels name a model from
     outside this repository's registry, so nothing can refuse a wrong name. What
-    this catches is the typo: a reading filed under a labeller the file has never
+    this catches is the typo: a reading filed under a labeller the marks have never
     heard of is a reading nobody can argue with later.
     """
     if any(labeller in mark.note for mark in marks):
         return
     LOG.warning(
         "labeller=%s appears in none of the %d marks' notes, so this row will "
-        "name somebody the marked file does not",
+        "name somebody the marks do not",
         labeller,
         len(marks),
     )
@@ -103,15 +106,17 @@ def stage_score_merge_line_holdout(
     *,
     run_id: str,
     labeller: str,
+    commit_sha: str,
     settings: config.Settings,
     state_dir: Path | None = None,
     digest_root: Path = common.PUBLIC_ROOT,
 ) -> MergeLineHoldoutScore | None:
     """Count the four cells at the line in force, and write the day's row.
 
-    **Every read is bounded** (Guardrail #12). The hand-marked file, then one
-    published day payload for each distinct date its rows name. Nothing walks a
-    collection a run appends to, and another year of archive adds no read.
+    **Every read is bounded** (Guardrail #12). The marks filed inside
+    `similarity.holdout_reach_days` of `date`, then one published day payload
+    for each distinct date those marks name. Nothing walks a collection a run
+    appends to, and another year of archive adds no read.
 
     **The line is the one the build would apply on this date**, which is the
     fitted line where a fit has run inside the lookback and the committed floor
@@ -119,18 +124,21 @@ def stage_score_merge_line_holdout(
     line the day was not grouped at.
 
     Returns the row it wrote, or `None` where there was nothing worth writing -
-    an absent marked file, or a reading that resolved too few pairs to mean
+    no mark inside the reach, or a reading that resolved too few pairs to mean
     anything. Both print what they found.
     """
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
     same_story = settings.app.assemble.same_story
+    reach_days = settings.app.similarity.holdout_reach_days
 
-    marks = holdout.marked_pairs(state)
+    marks = holdout.marked_pairs(state, today=date, reach_days=reach_days)
     if not marks:
         LOG.warning(
-            "score-merge-line-holdout found no marked pairs in %s, so there is "
-            "nothing to score the line against",
-            ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS),
+            "score-merge-line-holdout found no marked pairs in the %s ledger within %d "
+            "days of %s, so there is nothing to score the line against",
+            LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS.value,
+            reach_days,
+            date,
         )
         return None
     _warn_on_an_unseen_labeller(marks, labeller)
@@ -174,16 +182,13 @@ def stage_score_merge_line_holdout(
         scorer_model=scorer.scorer_model,
         cosine_weight=scorer.cosine_weight,
     )
-    _append(state, date, row)
-    publication.record_state_files(
-        digest_root.parent,
-        state,
-        paths=[
-            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date)
-            .relative_to(state)
-            .as_posix()
-        ],
-    )
+    written = _append(state, date, row, commit_sha=commit_sha)
+    if written:
+        publication.record_state_files(
+            digest_root.parent,
+            state,
+            paths=[path.relative_to(state).as_posix() for path in written],
+        )
     LOG.info(
         "score-merge-line-holdout date=%s run=%s line=%s merged_one=%d merged_two=%d "
         "apart_one=%d apart_two=%d unresolved=%d marked=%d two_story_marks=%d days=%d",

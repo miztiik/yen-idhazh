@@ -2,19 +2,19 @@
 
 Task declarations own stable roots. The task's window chooses the periods below
 those roots, so neither a publisher nor a local run discovers older siblings.
+A compaction has no window: it is handed its ledger's marks alone, and each of
+its steps names the periods it chooses as it runs.
 """
 
 from __future__ import annotations
 
 import calendar
-from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from datetime import date, timedelta
+from pathlib import Path, PurePosixPath
 
 from idhazh import ledger, month_partition
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.knobs.gardener import (
-    DEFAULT_DAY_LOOKBACK_PERIODS,
-    DEFAULT_MONTH_LOOKBACK_PERIODS,
     CompactionPolicy,
     DaysWindow,
     MonthsWindow,
@@ -22,25 +22,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import ledger_marks, schedule
-
-_TRIAL_ROOT_PREFIX = "state/pipeline-tests-"
-
-
-def _month_shift(month: str, count: int) -> str:
-    """Move a real month stem by a signed number of calendar months."""
-    year, number = map(int, month.split("-"))
-    total = year * 12 + number - 1 + count
-    return f"{total // 12:04d}-{total % 12 + 1:02d}"
-
-
-def _newest_eligible_month(today: date, after_days: int) -> str:
-    """The newest closed month old enough at 00:00 UTC on this day."""
-    now = datetime.combine(today, datetime.min.time(), tzinfo=UTC)
-    cursor = _month_shift(today.strftime("%Y-%m"), -1)
-    while not schedule.is_month_eligible(cursor, now=now, after_days=after_days):
-        cursor = _month_shift(cursor, -1)
-    return cursor
+from idhazh.gardener import ledger_marks
 
 
 def _day_window(name: str, policy: RetentionPolicy, today: date) -> tuple[str, str]:
@@ -66,58 +48,21 @@ def _month_window(policy: RetentionPolicy, today: date) -> tuple[str, str]:
     return first[0], first[-1]
 
 
-def _fold_day_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None:
-    """The closed day periods a task's independent fold may settle."""
-    if policy.fold is None:
-        return None
-    lookback = policy.lookback or DEFAULT_DAY_LOOKBACK_PERIODS
-    newest_day = schedule.newest_eligible(
-        now=datetime.combine(today, datetime.min.time(), tzinfo=UTC),
-        after_days=policy.fold.after_days,
-    )
-    first_day = newest_day - timedelta(days=lookback)
-    return first_day.isoformat(), newest_day.isoformat()
-
-
-def _fold_month_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None:
-    """The closed month periods a task's independent fold may settle."""
-    if policy.fold is None or not policy.fold.settles_months:
-        return None
-    lookback = policy.lookback or DEFAULT_MONTH_LOOKBACK_PERIODS
-    newest = _newest_eligible_month(today, policy.fold.after_days)
-    first_month = _month_shift(newest, -lookback)
-    months = month_partition.months_between(first_month, newest)
-    return months[0], months[-1]
-
-
-def _fold_window(policy: RetentionPolicy, today: date) -> tuple[str, str] | None:
-    """The main fixed period range for a task's independent fold."""
-    if policy.fold is None:
-        return None
-    return _fold_month_window(policy, today) or _fold_day_window(policy, today)
-
-
 def scheduled_range(
     name: str, policy: TaskPolicy, today: date
 ) -> tuple[str, str] | None:
-    """The fixed period range this scheduled task may read, or none for a collection."""
-    if isinstance(policy, CompactionPolicy):
-        if isinstance(policy.monthly_window, MonthsWindow):
-            kept_from = month_partition.oldest_month_kept(today, policy.monthly_window.value)
-            months = month_partition.months_before(kept_from, policy.lookback_periods + 1)
-        else:
-            newest = _newest_eligible_month(today, policy.daily_keep_days)
-            months = month_partition.months_between(
-                _month_shift(newest, -policy.lookback_periods), newest
-            )
-        return months[0], months[-1]
+    """The fixed period range this scheduled retention task may read, or None for any other kind.
+
+    A compaction has none: each of its steps chooses its own periods from its
+    ledger's marks.
+    """
     if not isinstance(policy, RetentionPolicy):
         return None
     if isinstance(policy.window, DaysWindow):
         return _day_window(name, policy, today)
     if isinstance(policy.window, MonthsWindow):
         return _month_window(policy, today)
-    return _fold_window(policy, today)
+    return None
 
 
 def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], tuple[str, ...]]:
@@ -142,8 +87,7 @@ def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], t
     ):
         raise ValueError("day range endpoints must be ordered YYYY-MM-DD dates")
     days = tuple(
-        start_day + timedelta(days=offset)
-        for offset in range((end_day - start_day).days + 1)
+        start_day + timedelta(days=offset) for offset in range((end_day - start_day).days + 1)
     )
     months = tuple(sorted({day.strftime("%Y-%m") for day in days}))
     return days, months
@@ -152,7 +96,7 @@ def periods_in_range(period_range: tuple[str, str]) -> tuple[tuple[date, ...], t
 def _dated_paths(
     root: Path, days: tuple[date, ...], months: tuple[str, ...], *, monthly: bool
 ) -> set[Path]:
-    """Named day and month paths in the common dated-tree layouts."""
+    """Named day and month paths in the dated-tree layouts a retention task walks."""
     paths: set[Path] = set()
     if monthly:
         for month in months:
@@ -164,9 +108,7 @@ def _dated_paths(
                     root / f"{month}.csv",
                     root / f"{month}.json",
                     root / f"{month}.parquet",
-                    folder.with_suffix(".csv"),
                     folder.with_suffix(".parquet"),
-                    folder / "settled.csv",
                 }
             )
     else:
@@ -175,37 +117,11 @@ def _dated_paths(
             paths.update(
                 {
                     folder,
-                    folder.with_suffix(".csv"),
                     folder.with_suffix(".json"),
                     folder.with_suffix(".jsonl"),
                     folder.with_suffix(".parquet"),
                 }
             )
-    return paths
-
-
-def _trial_paths(
-    root: Path, days: tuple[date, ...], months: tuple[str, ...], *, monthly: bool
-) -> set[Path]:
-    """Named period paths for one pipeline-test root and its declared ledgers."""
-    paths: set[Path] = set()
-    if monthly:
-        for month in months:
-            year, number = month.split("-")
-            for which in LedgerName:
-                paths.add(root / which.value / year / number)
-                paths.add(root / which.value / f"{month}.csv")
-        return paths
-    for day in days:
-        suffix = Path(f"{day:%Y}/{day:%m}/{day:%d}")
-        paths.add(root / "traces" / suffix)
-        for which in LedgerName:
-            paths.add(root / which.value / suffix)
-            paths.add(root / "raw" / which.value / suffix)
-            paths.add(root / which.value / f"{day:%Y-%m}.csv")
-            for extension in (".csv", ".json", ".parquet"):
-                paths.add(root / which.value / suffix.with_suffix(extension))
-                paths.add(root / "raw" / which.value / suffix.with_suffix(extension))
     return paths
 
 
@@ -218,17 +134,22 @@ def _ledger_paths(
     *,
     monthly: bool,
 ) -> set[Path]:
-    """Named ledger periods plus compact indexes and watermarks."""
+    """Named ledger periods plus compact indexes."""
     paths: set[Path] = set()
-    state_dir = repo_root / ledger.STATE_DIRNAME
+    parts = PurePosixPath(folder).parts
+    tier_index = next(
+        (index for index, part in enumerate(parts) if part in {"raw", "compact"}), None
+    )
+    if tier_index is None:
+        raise ValueError(f"{folder} is not a raw or compact ledger folder")
+    state_dir = repo_root.joinpath(*parts[:tier_index])
     root = repo_root / folder
-    if folder.startswith("state/raw/"):
+    if parts[tier_index] == "raw":
         if monthly:
             for month in months:
                 paths.add(root / month[:4] / month[5:7])
         else:
             for day in days:
-                stamp = day.isoformat()
                 paths.add(root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}")
         return paths
 
@@ -257,17 +178,27 @@ def paths_for_task(
     *,
     today: date,
 ) -> tuple[Path, ...]:
-    """The exact period roots this task may list, each one file or one named period."""
+    """The exact period roots this task may list, each one file or one named period.
+
+    A compaction lists its ledger's marks and nothing else, whatever the range:
+    each of its steps names the periods it chooses as it runs.
+    """
+    if isinstance(policy, CompactionPolicy):
+        paths: set[Path] = set()
+        for state_root in policy.state_roots:
+            segments = PurePosixPath(state_root).relative_to("state").parts
+            with ledger.use_registry(ledger.overlay_registry(segments)):
+                paths.update(
+                    ledger_marks.name_marks(repo_root / ledger.STATE_DIRNAME, policy.ledger)
+                )
+        return tuple(sorted(paths))
     if period_range is None:
         return ()
     days, months = periods_in_range(period_range)
     monthly = month_partition.is_month_stem(period_range[0])
-    paths: set[Path] = set()
+    paths = set[Path]()
     for folder in (*policy.claims(), *policy.reads):
         root = repo_root / folder
-        if name == "trials" and folder.startswith(_TRIAL_ROOT_PREFIX):
-            paths.update(_trial_paths(root, days, months, monthly=monthly))
-            continue
         if (
             name == "visual-prune"
             and isinstance(policy, RetentionPolicy)
@@ -282,42 +213,17 @@ def paths_for_task(
                     monthly=False,
                 )
             )
-        if isinstance(policy, CompactionPolicy):
-            paths.update(
-                _ledger_paths(
-                    folder, repo_root, policy.ledger, days, months, monthly=monthly
-                )
-            )
-            continue
-        if folder.startswith("state/raw/") or folder.startswith("state/compact/"):
-            try:
-                which = LedgerName(folder.removeprefix("state/raw/").removeprefix("state/compact/"))
-            except ValueError:
+        parts = PurePosixPath(folder).parts
+        tier_index = next(
+            (index for index, part in enumerate(parts) if part in {"raw", "compact"}), None
+        )
+        if tier_index is not None and parts[tier_index] in {"raw", "compact"}:
+            suffix = parts[tier_index + 1 :]
+            which = ledger.door_ledger_at(tuple(suffix))
+            if which is None:
                 paths.update(_dated_paths(root, days, months, monthly=monthly))
             else:
-                paths.update(
-                    _ledger_paths(
-                        folder, repo_root, which, days, months, monthly=monthly
-                    )
-                )
+                paths.update(_ledger_paths(folder, repo_root, which, days, months, monthly=monthly))
             continue
         paths.update(_dated_paths(root, days, months, monthly=monthly))
-    if isinstance(policy, RetentionPolicy) and policy.fold is not None:
-        fold_ranges = (
-            (_fold_month_window(policy, today), True),
-            (_fold_day_window(policy, today), False),
-        )
-        for fold_range, fold_monthly in fold_ranges:
-            if fold_range is None or fold_range == period_range:
-                continue
-            fold_days, fold_months = periods_in_range(fold_range)
-            for folder in policy.owns or ():
-                paths.update(
-                    _dated_paths(
-                        repo_root / folder,
-                        fold_days,
-                        fold_months,
-                        monthly=fold_monthly,
-                    )
-                )
     return tuple(sorted(paths))

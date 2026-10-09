@@ -1,15 +1,14 @@
-"""Does this judge's own reading survive a day file, and does its funnel close?
+"""Does this judge's own reading survive the trip to its ledger, and does its funnel close?
 
-Three questions, and they are separate. The row has to make the trip to a CSV day
-file and back with every cell intact; the four endings a pair can have must add
-up to what the shard was dealt; and the day file has to sit where the
-instrument's own reader looks - a ledger one directory too deep is invisible to
-that reader and the miss is silent.
+Three questions, and they are separate. The row has to make the trip through
+the CSV file a unit ships and back with every cell intact; the four endings a
+pair can have must add up to what the shard was dealt; and the ledger door has
+to file the row under the judge's own folder, where its reader looks.
 
-What none of this can settle is whether the figures are true. Nothing writes this
-row yet; the step that fills it is what proves the numbers.
+What none of this can settle is whether the figures are true. The step that
+fills the row, `stages.count_verdicts`, is what proves the numbers.
 
-Nothing here reads a committed file. The day tree is built under `tmp_path`, so
+Nothing here reads a committed file. The ledger is built under `tmp_path`, so
 what this costs does not move as the archive grows (CLAUDE.md Guardrail #12).
 """
 
@@ -21,14 +20,16 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 from pydantic import ValidationError
 
-from idhazh import day_partition, ledger
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import inventory
+from idhazh.contracts.ledgers import Grain
 
 pytestmark = pytest.mark.contract
 
@@ -134,51 +135,62 @@ def test_the_shared_stamp_is_carried_and_narrowed_to_this_judge() -> None:
         )
 
 
-def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
-    """A third level is invisible to the day inventory and the miss is silent."""
-    relpath = ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, A_NIGHT)
+def test_a_row_written_before_the_part_was_renamed_reads_its_part_under_the_new_name() -> None:
+    """`shard` became `work_part_index`, and a row an earlier run wrote still reads.
 
-    assert relpath == "state/content-similarity-judge/metrics/2026/09/19.csv"
-    assert (
-        ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, A_NIGHT).as_posix() == relpath
-    )
-
-    segments = relpath.removeprefix(f"{ledger.STATE_DIRNAME}/").split("/")
-    assert segments[:2] == list(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix)
-    assert segments[2:] == ["2026", "09", "19.csv"], "the day tree gained a directory level"
-
-
-def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) -> None:
-    """A ledger this row creates is visible rather than silently absent.
-
-    The inventory globs one directory level and two, so a nested ledger is found
-    and a ledger nested deeper would not be. Asked through the public report,
-    because that is what an operator reads.
+    Both sides: a CSV row under the old heading, and a JSON payload carrying the
+    old key. The part number moves across unchanged.
     """
-    state_root = tmp_path / ledger.STATE_DIRNAME
-    for night in (A_NIGHT, ANOTHER_NIGHT):
-        path = ledger.path(state_root, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, night)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            ledger.render_file(
-                ContentSimilarityJudgeMetrics.csv_columns(),
-                [a_shard("a-shard-that-was-dealt-nothing").csv_row()],
-            ),
-            encoding="utf-8",
-            newline="",
-        )
+    row = a_shard("a-shard-that-read-its-pairs")
+    cells = row.csv_row()
+    old_cells = {name: cell for name, cell in cells.items() if name != "work_part_index"}
+    old_cells["shard"] = cells["work_part_index"]
+    payload = row.model_dump(mode="json")
+    old_payload = {name: value for name, value in payload.items() if name != "work_part_index"}
+    old_payload["shard"] = row.work_part_index
 
-    report = inventory.files(state_root, date=A_NIGHT)
+    assert ContentSimilarityJudgeMetrics.from_csv_row(old_cells) == row
+    assert ContentSimilarityJudgeMetrics.model_validate(old_payload) == row
+    assert "shard" not in ContentSimilarityJudgeMetrics.model_fields
 
-    assert any(
-        "content-similarity-judge/metrics/2026/09/19.csv" in line for line in report
-    ), report
-    assert not any(ANOTHER_NIGHT.replace("-", "/") in line for line in report), (
-        "the inventory reported a day it was not asked about"
+
+def test_the_door_files_the_ledger_under_the_judges_own_folder() -> None:
+    """The ledger keeps its family nest, and moves only under raw and compact."""
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+    entry = ledger.entry(which)
+
+    assert entry.grain is Grain.RAW_AND_COMPACT
+    assert entry.prefix == ("content-similarity-judge", "metrics")
+    assert ledger.raw_root(Path(ledger.STATE_DIRNAME), which).as_posix() == (
+        "state/raw/content-similarity-judge/metrics"
     )
 
-    root = ledger.tree_root(state_root, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS)
-    assert [day_partition.date_of(found) for found in day_partition.day_files(root)] == [
-        A_NIGHT,
-        ANOTHER_NIGHT,
+
+def test_the_door_reader_finds_the_day_the_door_filed(tmp_path: Path) -> None:
+    """A row filed through the door is read back for its own night and no other."""
+    state_root = tmp_path / ledger.STATE_DIRNAME
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
+    rows = [
+        a_shard("a-shard-that-was-dealt-nothing").model_copy(update={"date": night})
+        for night in (A_NIGHT, ANOTHER_NIGHT)
     ]
+    written = ledger.persist(
+        state_root,
+        rows,
+        ledger=which,
+        covers=A_NIGHT,
+        identity=WriterIdentity(
+            run_id=rows[0].run_id,
+            attempt=1,
+            job=ServerJob.SAVE_COUNCIL_RESULTS,
+            shard=0,
+            producer="tests.contracts.test_content_similarity_judge_metrics",
+            git_sha=SEED_COMMIT,
+        ),
+    )
+
+    assert len(written) == 2, "one raw file for each night the rows name"
+    assert ledger.load_days(state_root, which, [A_NIGHT], model=ContentSimilarityJudgeMetrics) == [
+        rows[0]
+    ]
+    assert list(ledger.raw_days(state_root, which)) == [A_NIGHT, ANOTHER_NIGHT]

@@ -69,38 +69,34 @@ def test_each_family_prints_its_status_its_day_and_what_it_holds(tmp_path: Path)
 def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> None:
     """A folder counts every file below it; a one-file ledger counts that file alone.
 
-    The judge's holdout file sits in the same folder as the judge's day
-    directories, so a count that walked the folder for it would take theirs too.
-    A dot file is a placeholder and holds no rows.
+    The judge's score distribution sits in the same folder as the CSV files its
+    fitted line and its hand marks filed before they moved to the door, so a count
+    that walked the folder for the score distribution would take those too. Both
+    now count their files under the door's roots, and the CSV files left behind
+    belong to no ledger. A dot file is a placeholder and holds no rows.
     """
-    state = a_state_tree(
-        tmp_path / "state",
-        (
-            "day-metrics/2026/09/18.json",
-            "day-metrics/2026/09/19.json",
-            "content-similarity-judge/holdout-pairs.csv",
-            "content-similarity-judge/scored-pairs/2026/09/18.csv",
-            "traces/.gitkeep",
-        ),
+    named = (
+        "day-metrics/2026/09/18.json",
+        "day-metrics/2026/09/19.json",
+        "content-similarity-judge/score-distribution.json",
+        "content-similarity-judge/holdout-pairs.csv",
+        "content-similarity-judge/fitted-thresholds/2026/09/18.csv",
+        "raw/content-similarity-judge/fitted-thresholds/2026/09/19/"
+        "01a0d03c-2e00-8461-98e0-a67898e9a804.parquet",
+        "traces/.gitkeep",
     )
+    state = a_state_tree(tmp_path / "state", named)
 
-    lines = ledger_families.listing(
-        a_registry(tmp_path / "config"),
-        state,
-        [
-            "day-metrics/2026/09/18.json",
-            "day-metrics/2026/09/19.json",
-            "content-similarity-judge/holdout-pairs.csv",
-            "content-similarity-judge/scored-pairs/2026/09/18.csv",
-            "traces/.gitkeep",
-        ],
-    )
+    lines = ledger_families.listing(a_registry(tmp_path / "config"), state, list(named))
 
     assert "  - day-metrics: 2 files" in lines
-    assert "  - holdout-pairs: 1 file" in lines
-    assert "  - scored-pairs: 1 file" in lines
+    assert "  - score-distribution: 1 file" in lines
+    assert "  - holdout-pairs under raw/: 0 files" in lines
+    assert "  - fitted-thresholds under raw/: 1 file" in lines
+    assert "  - fitted-thresholds under compact/: 0 files" in lines
     assert "  - traces: 0 files" in lines
-    assert "  - item-health-summary: 0 files" in lines
+    assert "  - item-health-summary under raw/: 0 files" in lines
+    assert "  - item-health-summary under compact/: 0 files" in lines
 
 
 def test_a_ledger_under_the_two_roots_counts_each_root_on_its_own_line(tmp_path: Path) -> None:

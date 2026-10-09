@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -32,7 +32,7 @@ Install the package, and the faithfulness extra if you want scores:
 
 ```
 python -m pip install -e ".[dev]"
-python -m pip install -e ".[faithfulness]" # transformers + torch, hundreds of MB
+python -m pip install -e ".[faithfulness]" # current Transformers 5 + torch, hundreds of MB
 ```
 
 Get the runtime and the weights per
@@ -90,14 +90,14 @@ the link, the title and our own summary.
 ## Turning state cleanup on
 
 Each retention pass is a gardener task, and each task's declaration under
-`config/gardener/` ships with `dry_run: true`. **A pass prints every file a live
-pass would take and takes none of them.** That is on purpose:
+`config/gardener/` ships with `dry_run: true`. **A pass names every file a live
+pass would take, in its log, and takes none of them.** That is on purpose:
 The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule
 ([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file a task deletes wrongly
 stops being recoverable once that prune passes over the range. `git revert` is
 not a recovery path here. Until the gardener's own workflow runs the tasks on a
 schedule, `python -m idhazh gardener run-task NAME --run-id RUN_ID --attempt N
---git-sha SHA` runs one in a checkout and prints what it would take.
+--git-sha SHA` runs one in a checkout and logs what it would take.
 
 Turning one task's deletion on is a change of its own to that task's
 declaration, and this is the order:
@@ -107,8 +107,9 @@ declaration, and this is the order:
  below their windows. Before then the list is empty every day and the switch
  proves nothing.
 2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
- --log`, and grep it for `would delete`. Each task prints one line a pass and
- then one line a file it would take.
+ --log`. Each task logs one `task-finished` line of JSON
+ ([the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-shard-logs)):
+ `outcome` says `dry-run`, and `taken` lists every file a live pass would take.
 3. Check the list against what you expect. On 2027-10-01 the retention tasks
  name one tree - `frontend/public/telemetry/2026-08.csv`. A second name, or a
  month that is not the oldest, means a boundary is wrong and the switch waits.
@@ -161,8 +162,9 @@ python -m idhazh telemetry census --date 2026-09-15  # how that day's items ende
 python -m idhazh telemetry item ai-01 --date 2026-09-15
 ```
 
-`show` lists a CSV day tree's files for the date, a door ledger's raw files for
-that day, and the packed day or month file once a compaction has taken it.
+`show` lists a door ledger's raw files for the date, the packed day or month
+file once a compaction has taken it, and the files a day folder outside the
+door holds for that day - a trace, a run's block of the day, the day record.
 
 `census` is the fastest way in: it counts the day's items by stage, outcome and
 failure code, which is the same answer as filtering the census shard by hand.

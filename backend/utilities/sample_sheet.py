@@ -6,9 +6,11 @@ one story. This builds the place to answer that, one pair at a time, with both
 headlines and both summaries side by side.
 
 It calls no model, opens no socket and decides nothing. Nothing in the pipeline
-reads what it writes. The labels a reader produces from it are pasted back into
-`state/content-similarity-judge/holdout-pairs.csv`, which the console's holdout panel
-draws and which nothing else consumes.
+reads what it writes. The labels a reader produces from it are harvested back
+into the holdout marks, `holdout-pairs`, a ledger saved through the ledger door
+under `state/raw/content-similarity-judge/holdout-pairs/`. The console's holdout
+panel draws the marks, and `idhazh score-merge-line-holdout` scores the merge
+line against them.
 
 **It samples across the line, not across the four judged cells.** The sheet the
 plan first described sorted pairs by where the judge and the line disagreed,
@@ -34,14 +36,25 @@ import argparse
 import csv
 import json
 import logging
+import re
 from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date as calendar_date
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.base import derive_url_key
+from idhazh import ledger
+from idhazh.contracts.base import (
+    COMMIT_SHA_PATTERN,
+    RUN_ID_PATTERN,
+    ServerJob,
+    derive_url_key,
+)
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 LOG: Final = logging.getLogger("idhazh")
@@ -49,6 +62,10 @@ LOG: Final = logging.getLogger("idhazh")
 DEFAULT_OUT: Final = Path("test-results/similarity-pairs-to-label")
 DEFAULT_DIGEST_ROOT: Final = Path("frontend/public/digest")
 PUBLISHED_TREES: Final = (Path("frontend/public"), Path("frontend/build"))
+
+#: The module a harvest's file names as its writer, so two writers of the marks
+#: stay apart in the file's work unit.
+PRODUCER: Final = "utilities.sample_sheet"
 
 #: How wide either side of the line counts as "just". A pair inside this corridor
 #: is one a small move in the line would reclassify, which is what makes it worth
@@ -403,8 +420,8 @@ def as_holdout_rows(
     *,
     labelled_on: str,
     labeller: str,
-) -> list[dict[str, str]]:
-    """Every labelled pair, as rows of `SimilarityHoldoutPair`.
+) -> list[SimilarityHoldoutPair]:
+    """Every labelled pair, as a `SimilarityHoldoutPair` marked on `labelled_on`.
 
     **Joined on `pair_key` against the whole drawn population, not against the
     current sheet.** A mark belongs to a pair, not to a slot in a sheet. Harvesting
@@ -413,26 +430,26 @@ def as_holdout_rows(
     change here turned 200 labelled pairs into 129. The benchmark accumulates.
 
     `note` carries who labelled it. A mark is worth what its labeller is worth,
-    and a file that does not say cannot be audited later.
+    and a row that does not say cannot be audited later.
     """
-    rows: list[dict[str, str]] = []
+    rows: list[SimilarityHoldoutPair] = []
     for pair in sorted(pairs, key=lambda item: item.pair_key):
         mark = labels.get(pair.pair_key)
         if mark is None:
             continue
         rows.append(
-            {
-                "version": labelled_on,
-                "left_url": pair.left.url,
-                "right_url": pair.right.url,
-                "left_date": pair.left.date,
-                "right_date": pair.right.date,
-                "left_title": pair.left.title,
-                "right_title": pair.right.title,
-                "same_story": "true" if mark else "false",
-                "marked_on": labelled_on,
-                "note": f"{labeller} at score {pair.score:.4f}",
-            }
+            SimilarityHoldoutPair(
+                version=SimilarityHoldoutPair.schema_version(),
+                left_url=pair.left.url,
+                right_url=pair.right.url,
+                left_date=pair.left.date,
+                right_date=pair.right.date,
+                left_title=pair.left.title,
+                right_title=pair.right.title,
+                same_story=mark,
+                marked_on=labelled_on,
+                note=f"{labeller} at score {pair.score:.4f}",
+            )
         )
     return rows
 
@@ -472,35 +489,84 @@ def write(
 
 def harvest(
     sheet_root: Path,
-    out_csv: Path,
+    state_dir: Path,
     pairs: Sequence[Pair],
     *,
     labeller: str,
     labelled_on: str,
     batches: Sequence[str],
+    run_id: str,
+    commit_sha: str,
 ) -> int:
-    """Turn every label made so far into the holdout file the console panel reads."""
+    """Save the marks the named batches hold, as one harvest, through the ledger door.
+
+    The marks are filed under `labelled_on`, in a file of their own, and nothing
+    another harvest filed is rewritten: a harvest adds marks, so one that found no
+    label writes nothing at all. A pair marked again is read with its newest mark,
+    by the preference the door declares for this ledger's key.
+
+    A person runs this, so the file's writer is `operator`, at attempt 1 and
+    shard 0: no workflow job, retry or matrix cell ran it. The run is the one
+    `run_id` names, and the commit is the code that saved the marks. Returns how
+    many marks were filed.
+    """
     labels: dict[str, bool] = {}
     from utilities.named_inputs import named_files
 
     for batch in named_files(sheet_root, batches):
         loaded = json.loads(batch.read_text(encoding="utf-8"))
         labels.update(loaded["by_pair_key"])
-    rows = as_holdout_rows(pairs, labels, labelled_on=labelled_on, labeller=labeller)
-    missing = len(labels) - len(rows)
-    columns = list(rows[0]) if rows else []
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    with out_csv.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
+    marks = as_holdout_rows(pairs, labels, labelled_on=labelled_on, labeller=labeller)
+    missing = len(labels) - len(marks)
+    written = ledger.persist(
+        state_dir,
+        marks,
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
+        covers=labelled_on,
+        identity=WriterIdentity(
+            run_id=run_id,
+            attempt=1,
+            job=ServerJob.OPERATOR,
+            shard=0,
+            producer=PRODUCER,
+            git_sha=commit_sha,
+        ),
+    )
+    filed = len(marks) if written else 0
     LOG.info(
-        "sample_sheet harvested %d labelled pairs to %s, %d labels matched no drawn pair",
-        len(rows),
-        out_csv.as_posix(),
+        "sample_sheet harvested %d labelled pairs into %s, %d labels matched no drawn pair",
+        filed,
+        ", ".join(path.relative_to(state_dir).as_posix() for path in written) or "no file",
         missing,
     )
-    return len(rows)
+    return filed
+
+
+def _utc_day(text: str) -> str:
+    """A `YYYY-MM-DD` UTC day, refused by name before anything is read."""
+    try:
+        parsed = calendar_date.fromisoformat(text)
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.isoformat() != text:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a UTC day written YYYY-MM-DD")
+    return text
+
+
+def _run_id(text: str) -> str:
+    """A run id, `<YYYY-MM-DD>-<number>`, refused by name before anything is read."""
+    if re.fullmatch(RUN_ID_PATTERN, text) is None:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a run id written <YYYY-MM-DD>-<number>")
+    return text
+
+
+def _commit(text: str) -> str:
+    """A full commit id, as `git rev-parse HEAD` prints it, refused by name otherwise."""
+    if re.fullmatch(COMMIT_SHA_PATTERN, text) is None:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not a full commit id: pass what git rev-parse HEAD prints"
+        )
+    return text
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -520,18 +586,48 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--labels", action="append", help="Named JSON batch relative to --out.")
     parser.add_argument(
         "--harvest",
+        action="store_true",
+        help="read the labels beside --out and save them as holdout marks through the ledger door",
+    )
+    parser.add_argument(
+        "--state-root",
         type=Path,
-        help="read the labels beside --out and write holdout rows to this path",
+        default=REPO_ROOT / ledger.STATE_DIRNAME,
+        help="the state root a harvest saves the marks under",
     )
     parser.add_argument("--labeller", default="")
-    parser.add_argument("--labelled-on", default="")
+    parser.add_argument(
+        "--labelled-on", type=_utc_day, default=None, help="The UTC day the marks were made."
+    )
+    parser.add_argument(
+        "--run-id",
+        type=_run_id,
+        default=None,
+        help="The run a harvest's file names as its writer: <YYYY-MM-DD>-<number>.",
+    )
+    parser.add_argument(
+        "--commit",
+        type=_commit,
+        default=None,
+        help="The full commit id of the code a harvest ran from, as git rev-parse HEAD prints.",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
     if args.draw_root is None or args.line is None:
         parser.error("--draw-root and --line are always required")
-    if args.harvest is not None:
-        if not args.labeller or not args.labelled_on or not args.labels:
+    if args.harvest:
+        if not args.labeller or args.labelled_on is None or not args.labels:
             parser.error("--harvest needs --labeller, --labelled-on and --labels")
+        if args.run_id is None:
+            parser.error(
+                "--harvest needs --run-id: the file it writes names the run that saved the "
+                "marks, written <YYYY-MM-DD>-<number>"
+            )
+        if args.commit is None:
+            parser.error(
+                "--harvest needs --commit: the file it writes names the commit of the code "
+                "that saved the marks. Pass what git rev-parse HEAD prints"
+            )
         pairs, _ = resolve(
             args.draw_root,
             args.digest_root,
@@ -542,11 +638,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         harvest(
             args.out,
-            args.harvest,
+            args.state_root,
             pairs,
             labeller=args.labeller,
             labelled_on=args.labelled_on,
             batches=args.labels,
+            run_id=args.run_id,
+            commit_sha=args.commit,
         )
         return 0
     write(

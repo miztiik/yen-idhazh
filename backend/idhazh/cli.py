@@ -41,6 +41,7 @@ the router does not contain.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import sys
 import time
@@ -51,6 +52,7 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    ledger,
     path_classes,
 )
 from idhazh.contracts.base import WORK_JOB, ServerJob
@@ -71,6 +73,7 @@ from idhazh.fingerprint import (
     runtime_build,
 )
 from idhazh.gardener import cli as gardener_cli
+from idhazh.ledger import published_columns
 from idhazh.publication_checks import PublicationCheckError
 from idhazh.publication_checks import runner as publication_runner
 from idhazh.stages import (
@@ -105,6 +108,11 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+#: The commit a verb is handed when it is not told one: a workflow always names
+#: the real one, and a test or a local run takes this stand-in.
+_STAND_IN_COMMIT: Final = "0" * 40
+
+
 def _positive_int(text: str) -> int:
     """A whole number of at least 1, refused by name before any feed is read."""
     try:
@@ -133,6 +141,36 @@ def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None)
     return given
 
 
+def _machine_run(
+    parser: argparse.ArgumentParser,
+    *,
+    date: str,
+    given: str | None,
+    execution: int | None,
+) -> str:
+    """The run a machine row is filed under: the one it was handed, or this execution's.
+
+    A workflow that mints its own name hands it over with `--run-id`, so that a
+    night's rows cannot arrive under two addresses (`_council_run` above). A
+    digest run names an execution instead, and the address is computed from it
+    exactly as the plan stage computes it, so the probe and the plan agree by
+    construction rather than by lookup.
+
+    Both, naming different runs, is a step that was handed one of them by
+    mistake. Filing under either would put a machine on a run that never drew
+    it, which is the one reading this ledger exists to make, so it is refused
+    here instead.
+    """
+    if given is None:
+        return plan_stage._run_id(date, execution)
+    if execution is not None and given != plan_stage._run_id(date, execution):
+        parser.error(
+            f"--run-id {given} and --execution {execution} name different runs, so "
+            "the machine row would claim a run that never drew it"
+        )
+    return given
+
+
 #: Every verb this router accepts, and the whole of what `--help` lists. Named
 #: here rather than inline so that the workflows can be held against it: a
 #: workflow step spelling a verb this tuple does not carry is a run that dies
@@ -156,6 +194,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "derived-paths",
     "site-weight",
+    "published-columns",
     "check-publication",
     "score-merge-line-holdout",
     "council-prepare",
@@ -323,7 +362,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
-    parser.add_argument("--commit", default="0" * 40)
+    parser.add_argument("--commit", default=_STAND_IN_COMMIT)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
     parser.add_argument(
@@ -344,10 +383,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--run-id",
         default=None,
         help=(
-            "Which run this is, for the council's verbs. The council mints its own "
-            "name once in its planning job and hands it to every verb that writes a "
-            "row, so a night's rows cannot arrive under two addresses. A digest run "
-            "computes its own from --execution instead."
+            "Which run this is, for the council's verbs and for the two that record "
+            "a machine. A workflow that mints its own name hands it to every verb "
+            "that writes a row, so a night's rows cannot arrive under two addresses. "
+            "A digest run computes its own from --execution instead."
         ),
     )
     parser.add_argument(
@@ -468,8 +507,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help=(
             "The built bundle `site-weight` measures - the directory the Pages deploy "
-            "uploads. Required, and deliberately without a default: a default is how "
-            "this came to measure the committed payloads instead of the site."
+            "uploads, and the tree `published-columns` checks. Required, and "
+            "deliberately without a default: a default is how this came to measure "
+            "the committed payloads instead of the site."
         ),
     )
     parser.add_argument(
@@ -543,14 +583,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
-    # the only way to guarantee that for every ledger at once is to move the
-    # root they all hang off (Guardrail #6).
-    if settings.app.run.trial_state_dirname:
-        common.STATE_ROOT = common.state_root_of(settings, base=common.STATE_ROOT)
-        logging.getLogger(__name__).warning(
-            "trial run: every ledger goes to %s and no published series reads it",
-            common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
+    # the only way to guarantee that for every ledger at once is to overlay
+    # the registry every door file resolves through (Guardrail #6). This
+    # leaves `common.STATE_ROOT` meaning `state/` for every stage; the
+    # overlay rewrites the tier-first path a door file resolves to, so a
+    # stage that writes `state/raw/<ledger>/...` ends up at
+    # `state/raw/<trial-segments>/<ledger>/...` without reading its own root
+    # differently.
+    trial_segments = tuple(
+        part
+        for part in (
+            settings.app.run.trial_state_dirname,
+            settings.app.run.trial_case_dirname,
         )
+        if part is not None
+    )
+    with contextlib.ExitStack() as trial_registry:
+        if trial_segments:
+            trial_registry.enter_context(
+                ledger.use_registry(ledger.overlay_registry(trial_segments))
+            )
+            logging.getLogger(__name__).warning(
+                "trial run: every ledger goes to state/<tier>/%s and no published "
+                "series reads it",
+                Path(*trial_segments).as_posix(),
+            )
+        return _dispatch(parser, args, settings)
+
+
+def _dispatch(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
+) -> int:
     if args.stage == "derived-paths":
         # Above everything, including the config-dependent verbs: it reads one
         # tuple and prints one line, and the commit step that consumes it runs
@@ -575,6 +638,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             items_per_day=settings.app.run.safety_ceiling_per_run,
         )
 
+    if args.stage == "published-columns":
+        # Beside site-weight for the same reason: the answer is a fact about the
+        # built tree, not about the open web.
+        if args.site_tree is None:
+            parser.error("published-columns needs --site-tree: the built bundle to check")
+        return published_columns.check(args.site_tree, settings.app.ledger.published)
+
     if args.stage == "check-publication":
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
@@ -597,11 +667,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "score-merge-line-holdout":
         # Above the fetcher for the reason check-publication is: it reads the
-        # marked file and the published days that file names, and starting a
+        # marks and the published days they name, and starting a
         # fetcher to do it would read every host's robots.txt for nothing.
         #
-        # A person types this verb. Nothing schedules it, because the marked file
-        # changes when somebody labels more pairs and not when a day publishes.
+        # A person types this verb. Nothing schedules it, because the marks
+        # change when somebody labels more pairs and not when a day publishes.
         if args.labeller is None:
             parser.error(
                 "score-merge-line-holdout needs --labeller: the row records who marked "
@@ -614,10 +684,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "the reading, and a digest run's id would claim a machine and a clock "
                 "that scored nothing"
             )
+        if args.commit == _STAND_IN_COMMIT:
+            parser.error(
+                "score-merge-line-holdout needs --commit: the file it writes names the "
+                "commit of the code that took the reading, and the stand-in of zeros "
+                "names none. Pass what git rev-parse HEAD prints"
+            )
         scored = score_merge_line_holdout.stage_score_merge_line_holdout(
             args.date or _today(),
             run_id=args.run_id,
             labeller=args.labeller,
+            commit_sha=args.commit,
             settings=settings,
             state_dir=None if args.state_root is None else args.state_root,
             digest_root=args.digest_root,
@@ -644,6 +721,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
             state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
+            commit_sha=args.commit,
         )
         return 0
 
@@ -779,9 +857,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
+    # The two telemetry verbs take the run address rather than the run's plan:
+    # a machine reading is about the job and not about the work, so a job that
+    # plans nothing can still take one (`idhazh.telemetry.silicon`).
     if args.stage == "fingerprint":
         silicon.stage_fingerprint(
-            _planned(date, args.execution),
+            date=date,
+            run_id=_machine_run(
+                parser, date=date, given=args.run_id, execution=args.execution
+            ),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
@@ -792,7 +876,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "job-clock":
         silicon.stage_job_clock(
-            _planned(date, args.execution),
+            date=date,
+            run_id=_machine_run(
+                parser, date=date, given=args.run_id, execution=args.execution
+            ),
             settings=settings,
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,

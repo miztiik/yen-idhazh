@@ -209,7 +209,9 @@ test('the window control narrows the bars, and the panel names its own grain', a
 	const note = ((await panel.locator(':scope > header > p').textContent()) ?? '')
 		.replace(/\s+/g, ' ')
 		.trim();
-	expect(note, 'the subtitle does not name the span it was drawn at').toMatch(/last \d+ days\.$/);
+	expect(note, 'the subtitle does not name the span it was drawn at').toMatch(
+		/(?:these \d+ days|this one day)\.$/
+	);
 
 	const wide = await panel.locator('[data-memory-bar]').count();
 	// The canary puts one reading day ten days back, so the narrowest preset
@@ -221,5 +223,5 @@ test('the window control narrows the bars, and the panel names its own grain', a
 	const narrowNote = ((await panel.locator(':scope > header > p').textContent()) ?? '')
 		.replace(/\s+/g, ' ')
 		.trim();
-	expect(narrowNote, 'the subtitle kept the span the page opened at').toContain('last 7 days');
+	expect(narrowNote, 'the subtitle kept the span the page opened at').toContain('over these 7 days');
 });

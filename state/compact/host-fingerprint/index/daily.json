@@ -32,9 +32,13 @@
     {"bytes": 16109,"covers": "2026-09-30","lost_days": [],"rows": 30,"set_aside": 0,"state": "packed"},
     {"bytes": 16215,"covers": "2026-10-01","lost_days": [],"rows": 30,"set_aside": 0,"state": "packed"},
     {"bytes": 16072,"covers": "2026-10-02","lost_days": [],"rows": 29,"set_aside": 0,"state": "packed"},
-    {"bytes": 15517,"covers": "2026-10-03","lost_days": [],"rows": 21,"set_aside": 0,"state": "packed"}
+    {"bytes": 15517,"covers": "2026-10-03","lost_days": [],"rows": 21,"set_aside": 0,"state": "packed"},
+    {"bytes": 15283,"covers": "2026-10-04","lost_days": [],"rows": 18,"set_aside": 0,"state": "packed"},
+    {"bytes": 14862,"covers": "2026-10-05","lost_days": [],"rows": 16,"set_aside": 0,"state": "packed"},
+    {"bytes": 18455,"covers": "2026-10-06","lost_days": [],"rows": 60,"set_aside": 0,"state": "packed"},
+    {"bytes": 17970,"covers": "2026-10-07","lost_days": [],"rows": 54,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "host-fingerprint",
   "period": "daily",
-  "version": "2026-10-04"
+  "version": "2026-10-07"
 }

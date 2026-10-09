@@ -17,8 +17,11 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT
 
-from idhazh import cli
+from idhazh import cli, ledger
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain
 from idhazh.council import session
+from idhazh.ledger import staging
 from utilities import council_matrix, shard_bound
 
 from ._harness import (
@@ -340,7 +343,7 @@ def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     assert _normalize_condition(judge["if"], "the judging job") == (
         "needs.draw.outputs.matrix != '[]'"
     )
-    assert _normalize_condition(_job(_judges(), "collect")["if"], "the collecting job") == "always()"
+    assert _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job") == "always()"
 
 
 def test_the_parallelism_is_the_cell_count_and_never_the_shard_width() -> None:
@@ -398,7 +401,7 @@ def test_one_server_per_unit() -> None:
 def test_a_dead_unit_does_not_cancel_its_siblings() -> None:
     """A unit that runs out of clock costs its own work for that day and nothing else."""
     strategy = _job(_judges(), "judge").get("strategy")
-    collect = _job(_judges(), "collect")
+    collect = _job(_judges(), "save_council_results")
 
     assert isinstance(strategy, dict)
     # The harness reads the file as text, so a YAML boolean arrives as the word
@@ -483,7 +486,7 @@ def test_reading_an_artifact_is_a_scope_the_permissions_block_grants() -> None:
     granted = _judges().get("permissions")
     downloads = [
         step
-        for job in ("judge", "collect")
+        for job in ("judge", "save_council_results")
         for step in _steps(_judges(), job)
         if str(step.get("uses", "")).startswith("actions/download-artifact@")
     ]
@@ -524,10 +527,10 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     """
     calls = [
         _script(step, "a collect step")
-        for step in _steps(_judges(), "collect")
+        for step in _steps(_judges(), "save_council_results")
         if "run" in step and COMMIT_PROGRAM in _script(step, "a collect step")
     ]
-    step = _step(_judges(), "collect", "name", COMMIT_STEP)
+    step = _step(_judges(), "save_council_results", "name", COMMIT_STEP)
     environment = step.get("env")
 
     assert len(calls) == 1, "one collecting job, one push"
@@ -543,15 +546,26 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
 
 
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:
-    """`git add` runs under `set -euo pipefail`, so a missing path aborts the step.
+    """`git add` runs under `set -euo pipefail`, so a path nothing fills commits nothing.
 
-    A path named without a committed file behind it costs every ledger staged
-    beside it, on the runner, hours in. It fails here instead - and it is asked
-    of the tenants, so a tenant registering a path nothing has created fails on
-    the day it registers rather than on the night it runs.
+    A ledger the door files is staged by its raw folder, and that folder holds
+    files only between a save and the compaction that packs them, so a fresh
+    checkout may have none of it: the venue's own record is one such folder, and
+    the commit helper skips one while nothing is on disk or tracked. Such a path
+    must be the raw folder the registry builds for a door ledger. Every other
+    path a tenant names must exist when the tenant registers it. Either way a
+    misspelt path is caught here rather than by a night that stages nothing.
     """
-    staged = council_matrix.committed_paths(CONFIG_DIR)
-    missing = [path for path in staged if not (REPO_ROOT / path).exists()]
+    door_folders = {
+        staging.staged_path(which)
+        for which in LedgerName
+        if ledger.entry(which).grain is Grain.RAW_AND_COMPACT
+    }
+    missing = [
+        path
+        for path in council_matrix.committed_paths(CONFIG_DIR)
+        if path not in door_folders and not (REPO_ROOT / path).exists()
+    ]
 
     assert not missing, f"a tenant names paths a fresh checkout does not have: {missing}"
 
@@ -563,7 +577,7 @@ def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
     one, so the second push would race the first. One job, a loop over the dates
     the planning job named, one push.
     """
-    settle = _step(_judges(), "collect", "name", "Settle each date")
+    settle = _step(_judges(), "save_council_results", "name", "Settle each date")
     environment = settle.get("env")
     script = _script(settle, "the settle step")
 
@@ -571,6 +585,7 @@ def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
     assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
     assert "while read" in script, "the dates are looped rather than taken one at a time"
     assert "idhazh council-settle" in script
+    assert '--commit "${{ github.sha }}"' in script
 
 
 def test_the_one_commit_message_names_every_date_the_night_settled() -> None:
@@ -579,7 +594,7 @@ def test_the_one_commit_message_names_every_date_the_night_settled() -> None:
     One job, one push, one message - so the message carries the whole list the
     planning job named rather than the single date the night opened on.
     """
-    environment = _step(_judges(), "collect", "name", COMMIT_STEP).get("env")
+    environment = _step(_judges(), "save_council_results", "name", COMMIT_STEP).get("env")
 
     assert isinstance(environment, dict)
     assert environment["COMMIT_MESSAGE"] == (
@@ -658,7 +673,7 @@ def test_every_verb_that_writes_a_row_is_handed_the_same_name() -> None:
             "judge",
             f"needs.draw.outputs.{RUN_ID_OUTPUT}",
         ),
-        "Settle each date": ("collect", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
+        "Settle each date": ("save_council_results", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
     }
     for step_name, (job_name, expression) in sorted(carried.items()):
         environment = _step(_judges(), job_name, "name", step_name).get("env")

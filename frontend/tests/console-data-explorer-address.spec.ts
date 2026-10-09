@@ -47,6 +47,19 @@ test('a statement at the configured maximum fits a shared link with every ledger
 	expect(parsed.from).toBe(CUSTOM_FROM);
 	expect(parsed.end).toBe(CUSTOM_END);
 	expect(parsed.days).toBe(8);
+
+	const oneMoreCharacter = printableAscii(0x1234abcd, QUERY_MAX_CHARS + 1);
+	const tooLong = await explorerAddress({
+		basePath: BASE_PATH,
+		ledgers: LEDGER_NAMES,
+		days: 90,
+		from: CUSTOM_FROM,
+		end: CUSTOM_END,
+		statement: oneMoreCharacter,
+		maxBytes: REQUEST_TARGET_LIMIT
+	});
+	expect(tooLong.linkedStatement).toBe(false);
+	expect(tooLong.query).not.toContain('q=');
 });
 
 test('a link too long for the byte bound carries ledgers and days only', async () => {
@@ -66,6 +79,15 @@ test('unknown ledgers, unsupported days and unreadable q return their sentences'
 		'The link asked for 365 days, which this page does not offer, so it reads 14 days.',
 		'The question in this link could not be read, so the editor is empty.'
 	]);
+});
+
+test('a span of one day is one day in the notice, never 1 days', async () => {
+	const oneDay = await parseExplorerAddress('days=365', { ...PARSE_OPTIONS, defaultDays: 1 });
+	expect(oneDay.notices).toEqual(['The link asked for 365 days, which this page does not offer, so it reads 1 day.']);
+	const askedForOne = await parseExplorerAddress('days=1', { ...PARSE_OPTIONS, windowPresets: [7, 14] });
+	expect(askedForOne.notices).toEqual(['The link asked for 1 day, which this page does not offer, so it reads 14 days.']);
+	const notADay = await parseExplorerAddress('days=soon', PARSE_OPTIONS);
+	expect(notADay.notices).toEqual(['The link asked for soon days, which this page does not offer, so it reads 14 days.']);
 });
 
 test('custom dates replace days, and invalid custom dates are dropped with a sentence', async () => {

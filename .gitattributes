@@ -6,57 +6,16 @@
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The committed run state still filed as CSV: the eval ledger's ID folder and
-# the judge's and the council's day files. Rows are appended by CI on Linux and
-# read by a developer on Windows; a CRLF rewrite would show every historical row
-# as changed. `*.csv text eol=lf` near the bottom of this file is what pins them,
-# so none of them needs a line of its own for that.
-#
-# Every CSV file under `state/` took `merge=union` until 2026-09-19, and that is
-# what a lost push race used to stack. A job's checkout is pinned to the commit
-# that triggered its run, so a second attempt could not see the rows the first
-# attempt pushed, appended them again, and the union kept both - a key twice in
-# a file every reader of it assumes holds each key once. A tree with more than
-# one writer now gives each writer its own file inside the day directory, named
-# for its run, attempt, job and shard, so there is nothing for a union to settle
-# and nothing to sweep up after one. Only the trees below keep the driver,
-# because two of their writers appending never disagree.
-#
-# The feed-health record took NO union driver from that day on. Two plan jobs of
-# one night each hold a verdict on every feed, and those two verdicts can
-# disagree - so a union there would have kept both and made the conflict quiet
-# rather than removed it. It has since moved under `state/raw/`.
-#
-# `state/feed-retirements.csv` and `state/visual-prunes/` carried a union driver
-# until 2026-09-28, when both moved under `state/raw/`: every file there has one
-# writer, so there is nothing for a union to settle. `state/published/` and
-# `state/seen/` carried one until they moved there too.
+# No ledger under `state/` is CSV, and no path takes a union merge driver. A
+# union settled two appends to one shared file, and a lost push race used to
+# stack them - a job's checkout is pinned to the commit that triggered its run,
+# so a second attempt appended rows the first had already pushed, and the union
+# kept both. Every ledger now gives each writer a file of its own, so there is
+# nothing for a union to settle. `*.csv text eol=lf` near the bottom of this
+# file still pins the CSV files that are left: test fixtures and the published
+# month copies.
 
-# One council shard's outcome. A row is one shard of one run and says nothing
-# about another shard or another run, so two writers appending are independent
-# and a repeat the union brings is dropped by `COUNCIL_SHARD_OUTCOME_KEY`.
-state/llm-council/shard-outcomes/**/*.csv text eol=lf merge=union
-
-# The four judge trees. A row is one measurement of one pair on one day, the
-# reader keys on the pair and takes the newest, so two runs that both judged
-# that day are not in disagreement and a repeat the union brings costs bytes
-# and moves no verdict.
-state/content-similarity-judge/metrics/**/*.csv text eol=lf merge=union
-state/content-similarity-judge/merge-line-holdout-scores/**/*.csv text eol=lf merge=union
-state/content-similarity-judge/scored-pairs/**/*.csv text eol=lf merge=union
-state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
-
-# The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
-# anyway, and it is written down because the reason is worth reading next to the
-# union lines above. A person edits this file, so two edits of it are
-# two people disagreeing about the same rows rather than two runs appending
-# independent ones - and a union driver on a disagreement silently keeps both
-# marks, which is a pair marked same-story and different-story at once. A text
-# merge stops the push and asks, which is the right answer when the writer is a
-# person.
-state/content-similarity-judge/holdout-pairs.csv text eol=lf merge=text
-
-# The training window. Deliberately NOT `merge=union`: it is a rolling window
+# The training window. Deliberately NOT a union merge: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that
 # holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest
 # records what its run saw, so a race is answered by replaying those rows onto
@@ -136,13 +95,12 @@ frontend/public/assist/index/*.bin binary
 *.wasm binary
 
 # The two roots the ledger door files under. Every data file there has one
-# writer and is written once, and every index and watermark is rewritten whole
-# by one writer, so a text merge of any of them could only splice two writers'
+# writer and is written once, and every index is rewritten whole by one
+# writer, so a text merge of any of them could only splice two writers'
 # bytes into a file neither wrote: `-merge` stops the push and asks.
 # Path-anchored, so a generic name elsewhere in the repository cannot match.
 # `*.parquet binary` is last so it wins over `tests/fixtures/** text` above - a
 # parquet fixture converted as text would be a file no reader can open.
 state/**/*.parquet                -merge
-state/compact/*/index/*.json      -merge
-state/compact/*/*/watermark.json  -merge
+state/compact/**/index/*.json      -merge
 *.parquet                         binary

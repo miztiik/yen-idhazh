@@ -6,7 +6,8 @@ a full clone, where every file is on disk, and once in a partial clone whose
 checkout holds only config, where a task learns its members from the commit's
 names and fetches the folders it reads. Each lands on an origin of its own, and
 the two must write the same record rows, apart from what each downloaded and
-how long each took, and change the same paths.
+how long each took, say the same of each task in its finished event, apart from
+how long it took, and change the same paths.
 
 The census summary is also run in a shard of its own, the way a wake can plan
 it apart from the census compaction. It must still find its due months from
@@ -17,7 +18,9 @@ declaration it must fail rather than report a census it never saw.
 from __future__ import annotations
 
 import json
+import logging
 import re
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
@@ -29,11 +32,14 @@ from conftest import CONFIG_DIR
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.gardener_events import TaskFinished
 from idhazh.contracts.knobs.gardener import TaskKind
-from idhazh.gardener import shards
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import event_log, shards
 from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
+from .._events import events
 from .._garden import (
     OriginBlobs,
     a_config,
@@ -51,7 +57,7 @@ WAKE: Final = datetime(2027, 11, 15, 0, 40, tzinfo=UTC)
 
 #: The one task the census summary is, and the folder its summaries land in.
 SUMMARY: Final = "telemetry-aggregate"
-SUMMARIES: Final = "state/item-health-summary/"
+SUMMARIES: Final = "state/raw/item-health-summary/"
 
 #: A name the ledger door mints fresh for every file it writes.
 _FILE_ID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
@@ -61,7 +67,7 @@ _OWN_TO_THE_RUN: Final = {"downloaded_bytes", "duration_ms"}
 
 
 def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
-    """The named committed declarations with their deletions and fold turned on.
+    """The named committed declarations with their deletions turned on.
 
     `changed` replaces fields of one declaration, by its name.
     """
@@ -73,8 +79,6 @@ def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
         source = config_dir / "gardener" / f"{name}.json"
         declared = json.loads(source.read_text(encoding="utf-8"))
         declared["dry_run"] = False
-        if isinstance(declared.get("fold"), dict):
-            declared["fold"]["dry_run"] = False
         declared |= changed.get(source.stem.replace("-", "_"), {})
         (config_dir / "gardener" / source.name).write_text(json.dumps(declared), encoding="utf-8")
     return config.load_gardener(config_dir)
@@ -147,17 +151,54 @@ def landed(
 
 def changed_paths(origin: Path, seed: Path) -> list[str]:
     """What the shard's commit changed on the origin, a freshly named file under its pattern."""
+    return sorted(_FILE_ID.sub("<file_id>", line) for line in raw_changed_paths(origin, seed))
+
+
+def raw_changed_paths(origin: Path, seed: Path) -> list[str]:
+    """What the shard's commit changed on the origin, with the file id intact."""
     before = git(seed, "rev-parse", "HEAD").strip()
     listed = git(origin, "diff", "--name-status", "--no-renames", before, "main")
-    return sorted(_FILE_ID.sub("<file_id>", line) for line in listed.splitlines())
+    return sorted(listed.splitlines())
+
+
+def _by_pattern(origin: Path, seed: Path) -> dict[str, str]:
+    return {_FILE_ID.sub("<file_id>", line): line for line in raw_changed_paths(origin, seed)}
+
+
+def blob(origin: Path, path: str) -> bytes:
+    """One file from origin main, as bytes."""
+    done = subprocess.run(
+        ["git", "show", f"main:{path}"],
+        cwd=origin,
+        capture_output=True,
+        check=True,
+    )
+    return done.stdout
 
 
 def comparable(rows: dict[str, CollectionPruneRow]) -> dict[str, dict[str, Any]]:
     return {task: row.model_dump(exclude=_OWN_TO_THE_RUN) for task, row in rows.items()}
 
 
+def said_of(caplog: pytest.LogCaptureFixture) -> dict[str, str]:
+    """How each task the shard ran ended, as its finished event says it, but how long it took.
+
+    A name the ledger door mints fresh is written as its pattern, as the
+    changed paths are. The records are cleared once read, so the next shard's
+    are its own.
+    """
+    finished = {
+        held.task: _FILE_ID.sub(
+            "<file_id>", held.model_dump_json(exclude={"duration_ms"})
+        )
+        for held in events(caplog.records, TaskFinished)
+    }
+    caplog.clear()
+    return finished
+
+
 def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
     seed, (full_origin, names_origin) = origins(tmp_path, 2)
@@ -167,10 +208,14 @@ def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
     only_code = a_partial_clone(tmp_path, names_origin, "config", name="only-code")
     package = named_task_package(tmp_path, monkeypatch)
 
-    whole, whole_rows, whole_said = landed(names, settings, full, full_origin, package)
-    lean, lean_rows, lean_said = landed(names, settings, only_code, names_origin, package)
+    with caplog.at_level(logging.INFO, logger=event_log.__name__):
+        whole, whole_rows, _ = landed(names, settings, full, full_origin, package)
+        whole_said = said_of(caplog)
+        lean, lean_rows, _ = landed(names, settings, only_code, names_origin, package)
+        lean_said = said_of(caplog)
 
     assert lean.exit_code == whole.exit_code, (whole_said, lean_said)
+    assert lean_said == whole_said, "the two shards said different things of one task"
     assert comparable(lean_rows) == comparable(whole_rows)
     changes = changed_paths(names_origin, seed)
     assert changes == changed_paths(full_origin, seed)
@@ -204,12 +249,22 @@ def test_the_census_summary_in_a_shard_of_its_own_reads_the_census_or_fails(
 
     assert lean_rows[SUMMARY].stopped_because is not StopReason.FAILED, said
     assert comparable(lean_rows) == comparable(whole_rows)
-    written = [line for line in changed_paths(names_origin, seed) if SUMMARIES in line]
+    names_changes = _by_pattern(names_origin, seed)
+    full_changes = _by_pattern(full_origin, seed)
+    written = [line for line in names_changes if SUMMARIES in line]
     assert written, "no month was due, so this shows nothing"
-    assert written == [line for line in changed_paths(full_origin, seed) if SUMMARIES in line]
+    assert written == [line for line in full_changes if SUMMARIES in line]
     for line in written:
-        path = line.split("\t", 1)[1]
-        assert git(names_origin, "show", f"main:{path}") == git(full_origin, "show", f"main:{path}")
+        names_path = names_changes[line].split("\t", 1)[1]
+        full_path = full_changes[line].split("\t", 1)[1]
+        names_file = tmp_path / "names" / names_path
+        full_file = tmp_path / "full" / full_path
+        names_file.parent.mkdir(parents=True, exist_ok=True)
+        full_file.parent.mkdir(parents=True, exist_ok=True)
+        names_file.write_bytes(blob(names_origin, names_path))
+        full_file.write_bytes(blob(full_origin, full_path))
+        model = ledger.door_contract(LedgerName.ITEM_HEALTH_SUMMARY)
+        assert ledger.load([names_file], model=model) == ledger.load([full_file], model=model)
 
     blind = a_live_garden(tmp_path / "blind-garden", telemetry_aggregate={"reads": []})
     shard = a_partial_clone(tmp_path, blind_origin, "config", name="blind")

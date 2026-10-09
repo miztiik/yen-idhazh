@@ -2,6 +2,7 @@ import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
+import { uiConfig } from '../src/lib/server/config';
 
 /**
  * The console is six routes, and this file is why it is routes and not tabs.
@@ -13,14 +14,15 @@ import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
  * every panel it hides still ships inside the one document. Five prerendered
  * routes with real anchors pass.
  *
- * Four things this file protects that a screenshot cannot. The labels are the
+ * Five things this file protects that a screenshot cannot. The labels are the
  * words the owner chose, so a paraphrase fails. The ids and the paths under
  * them did NOT move when two of the labels changed on 2026-08-31, which is what
  * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
- * and a route is a noun. And since 2026-09-12 the strip has to FIT - six tabs
+ * and a route is a noun. Since 2026-09-12 the strip has to FIT - six tabs
  * on one row at 1440 and no more than three at 360 and 320, with no box
- * overlapping another.
+ * overlapping another. And each route's title in the browser names that route,
+ * after a tab click as well as on a page load.
  */
 
 /** The owner's words, and the paths they sit on. Typed out on purpose: this is
@@ -80,8 +82,17 @@ const CITES_A_PLAN = /TODO\/\d|\brows?\s*#?\d|\bplan\s+\d/i;
 /** The three verdict colours, as the tokens a stylesheet would have to name. */
 const HEALTH_RAMP = ['--fill-high', '--fill-medium', '--fill-low', '--band-high', '--band-medium', '--band-low'];
 
+/** The strip's tabs, as drawn. `evaluateAll` reads at once and never waits, and
+ * Data explorer's document has no strip until its script draws one, which can be
+ * after `page.goto` returns. So the read waits for the first tab: the strip draws
+ * every tab in one pass. */
 async function tabs(page: Page) {
-	return page.locator('[data-console-nav] [data-console-tab]').evaluateAll((links) =>
+	const strip = page.locator('[data-console-nav] [data-console-tab]');
+	await expect(
+		strip.first(),
+		`${new URL(page.url()).pathname}: the strip drew no tab`
+	).toBeAttached();
+	return strip.evaluateAll((links) =>
 		links.map((node) => ({
 			id: node.getAttribute('data-console-tab') ?? '',
 			href: (node as HTMLAnchorElement).getAttribute('href') ?? '',
@@ -283,6 +294,83 @@ test.describe('the strip', () => {
 				hex(colour)
 			);
 		}
+	});
+});
+
+/** A route's id, as the strip and its tabs name it. */
+type RouteId = (typeof ROUTES)[number]['id'];
+
+/** Each route's page title, in Reader's words: the label on its tab, then
+ * `Console`. The site's own title follows, read from the config the build reads,
+ * because it is not this file's copy to protect.
+ *
+ * Typed out on purpose, like the labels above: read from the pages it guards, it
+ * would only prove a page agrees with itself. Every route sets its own, because a
+ * tab click moves inside the page, and a route that sets no title keeps the one
+ * the route before it set.
+ */
+const TITLES: Record<RouteId, string> = {
+	pipelines: 'Pipelines \u2014 Console',
+	model: 'Summaries \u2014 Console',
+	machine: 'Hardware \u2014 Console',
+	judgement: 'Judgement \u2014 Console',
+	voices: 'Voices \u2014 Console',
+	'data-explorer': 'Data explorer \u2014 Console'
+};
+
+/** The whole title a route owes: its own words, then the site's title. */
+function titleOf(id: RouteId): string {
+	return `${TITLES[id]} \u2014 ${uiConfig().site_title}`;
+}
+
+/** Wait until a script runs the page, so a tab click is a move inside it rather
+ * than a page load. The strip is marked live, and the days control enabled, on
+ * mount. */
+async function hydrated(page: Page) {
+	await expect(page.locator('[data-console-strip]')).toHaveAttribute(
+		'data-console-strip-live',
+		'yes'
+	);
+	await expect(page.locator('[data-window-preset] input').first()).toBeEnabled();
+}
+
+test.describe('the title names the route on screen', () => {
+	for (const route of ROUTES) {
+		// Every route is reached from Pipelines, where an operator starts, and
+		// Pipelines from the tab after it.
+		const from = route.id === 'pipelines' ? ROUTES[1] : ROUTES[0];
+
+		test(`THE ORACLE: ${route.path} names itself after a tab click from ${from.label} and on a page load`, async ({
+			page
+		}) => {
+			await page.goto(from.path);
+			await hydrated(page);
+			const opened = await page.evaluate(() => performance.timeOrigin);
+
+			await page.locator(`[data-console-nav] [data-console-tab="${route.id}"]`).click();
+			await expect(page, `the ${route.label} tab did not move to ${route.path}`).toHaveURL(
+				new RegExp(`${route.path}(?:[?#].*)?$`)
+			);
+			await expect(page, `${route.path} after a tab click from ${from.path}`).toHaveTitle(
+				titleOf(route.id)
+			);
+			expect(
+				await page.evaluate(() => performance.timeOrigin),
+				'the tab loaded a new page, so this was a page load and not a tab click'
+			).toBe(opened);
+
+			await page.goto(route.path);
+			await expect(page, `${route.path} on a page load`).toHaveTitle(titleOf(route.id));
+		});
+	}
+
+	test('no two routes share a title', () => {
+		// Each route's test above holds its page to its own entry here, so entries
+		// that differ are titles that differ on screen.
+		const titles = ROUTES.map((route) => titleOf(route.id));
+		expect(new Set(titles).size, `two routes share a title: ${titles.join(' | ')}`).toBe(
+			ROUTES.length
+		);
 	});
 });
 

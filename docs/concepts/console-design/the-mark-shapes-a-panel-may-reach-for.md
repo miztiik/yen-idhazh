@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-09
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -71,9 +71,12 @@ Five rules hold every type.
 ## When nobody wrote the panel, the columns choose the shape
 
 The Data explorer page draws an answer whose question was typed by the operator, so no
-panel author can name the right chart in advance. It chooses from the columns,
-in this order, and lets the operator switch only among shapes that still tell a
-true story about those columns.
+panel author can name the right chart in advance. It opens on the shape the columns
+choose, in this order. Every chart type the explorer draws is offered on every
+answer, in one order, and the operator may press any of them and choose the columns
+for each of its roles. A type these columns cannot support draws nothing, and its box
+says what it needs, so the page still never draws a story the columns do not tell
+(Susan, 2026-10-07).
 
 | Order | Columns in the answer | Shape |
 | --- | --- | --- |
@@ -81,7 +84,96 @@ true story about those columns.
 | 2 | one text column and one non-negative number | `rankedList` |
 | 3 | two number columns and at most one text column | `pairedScatter` |
 | 4 | one number column | `distribution` |
-| 5 | anything else | no chart, one neutral sentence |
+| 5 | anything else | no tile checked, and the box says `The page does not pick a chart for these columns. Choose one under Draw it as.` |
+
+The order opens a chart and never closes one: what it picks does not change once the
+operator can choose, and an answer it opens on the date chart whose day column the
+chart cannot use still opens there, with the box saying why. With no number column at
+all and no date with a true/false column, no chart can be filled, and the box says `Nothing here to draw: the answer has no
+number in it.` whichever tile is checked.
+
+**Each chart has roles, and a role lists only the columns its family fits.** The
+operator picks a role's columns from a pill above the drawing, which opens a list of the
+answer's columns in the answer's order, with a filter at its head. Until the operator
+picks, each role holds the columns the order above always drew.
+
+| Chart | Its tile | Roles, and what each takes |
+| --- | --- | --- |
+| `dateSeries` | `Over time` | `Date`: a date or a timestamp. `Lines`: up to four numbers, one for each series colour; by default the numbers whose largest value is at least `console.explorer_series_floor_share` of the largest column's |
+| `rankedList` | `Ranked` | `Name`: any column, a text column first. `Rank by`: a number that is not `Name` |
+| `pairedScatter` | `Paired` | `Across` and `Up`: a number each. `Name`: any column, or `Row number`, which makes each row its own point and is the default where the answer has no text column |
+| `distribution` | `Spread` | `Values`: a number |
+| `partsOfOne` | `Side by side` | `Name`: any column. `Bars`: two to four numbers other than the default name |
+| `tileStrip` | `Which days` | `Date`: a date or timestamp. `Mark if`: a true/false column |
+| `flow` | `Flow` | `Stage`: any column. `Arrived` and `Went on`: a number each. `Dropped`: zero to four numbers |
+
+Side by side reads rows in answer order, up to `console.explorer_rank_max`,
+and names the remaining rows in a tail line. Each bar starts at zero and no
+row prints a total. Checked bars take the explorer's series colours in answer
+order. NULL leaves that bar off its row; it does not become zero.
+
+Which days maps true to filled, false to outlined and NULL to absent. It prints
+`true`, `false` and `null`. It carries no numeric reading or threshold. Its UTC
+days come from the same day selector as Over time, including a selected ledger's
+lost day inside the answer's span. It draws a fact per tile and has no trend
+floor. Its model-rule declaration says that the page does not know which
+settings changed inside the span.
+
+Flow passes the measured plot width against `frame.breakpoints_px[0]` to the
+shared geometry. A narrow chart or counts that do not form one flow return the
+shared stepped list and its own explanation, not a second drawing rule.
+Every chosen count must be present and non-negative; every stage name must be
+distinct, and something must arrive at the first stage.
+
+A choice redraws from the rows in memory and fetches nothing. It holds across runs on
+the page while the new answer still has each column in a family its role takes, and a
+role whose column has gone takes its own default again. Choices are never saved with a
+question and never carried in a link. A chart that cannot fill its roles says what it
+needs in one sentence, the same whichever role is empty, such as `Nothing here to draw:
+Spread needs a number column for Values.`; the empty pill shows which. A ranked list
+refuses a name that is in more than one row, a value below zero, and a column that is 0
+or null on every row, each in a sentence of its own.
+
+A column counts by its type's family
+([../console-design.md](../console-design.md#data-explorer-prints-the-engine-answer-as-written)):
+a number is a whole number or a decimal, a date column is a date or a timestamp
+of any precision, `timestamp_ns` included, and a text column is text, `uuid` and
+`enum` included. A list of numbers is not a number, and a time of day is not a
+date.
+
+**A row's day is the UTC day of the instant its date or timestamp names**, not
+the day its text prints. The engine prints a timestamp with a time zone with an
+offset of its own, so `2026-10-06 00:30:00+01` is 23:30 UTC and falls on 5
+October.
+
+**A day the chart cannot place stops the date chart, and the sentence names it.**
+The date axis holds days from year 1 to year 9999. A date column that holds
+`infinity`, a year past 9999 or a date `(BC)` draws no date chart, and the panel
+says which column holds which value, as the table prints it: `Nothing here to
+draw: the column "day" holds infinity, and the chart can show only days from
+year 1 to year 9999. Keep only those days in the question to draw it over time.`
+The operator can find that text in the table and filter it out (Reader,
+2026-10-06). Several rows on one UTC day stop it too, and the sentence names the
+column, because the operator can now pick another: `Nothing here to draw: the answer
+has several rows a UTC day in "day". Group by day in the question to draw it over
+time.`
+
+**A NULL is no value, never a zero.** The date chart breaks its line on a day
+whose number is NULL, as it does on a lost day, and the ranked, paired and spread
+charts leave that row out. A floor counts the rows that carry a number, so a NULL
+can leave a chart too few to draw, and the too-few sentence names the floor it
+missed and says it counted `in the answer`: readings, or for the paired chart,
+names. The paired chart's main figure counts the points it draws, and the ranked
+list's last line counts every row it did not draw.
+
+**A NULL day is no day, so the date chart leaves its row out and says so.** The
+chart draws every row with a day. Its floor, its main figure and the columns it
+calls too flat to draw count only those rows, and the note under the drawing says
+how many it left out: `1 row holds null in the column "day", so the chart does
+not draw it. It is in the table.` A spread of the same answer needs no day, so it
+still draws those rows. A date column that holds only NULL draws nothing and says
+`Nothing here to draw: the column "day" holds only null. Give "day" a date in the
+question to draw it over time.` (Reader, 2026-10-06).
 
 The rule is strict because a generic query page can only know column types, not
 whether a number is good or bad. It never colours a cell as a verdict, never
@@ -543,6 +635,52 @@ names the floor from the value the panel passed in. `paired` applies its floor
 row by row and side by side, so one thin row draws nothing and says why while the
 rest still draw, and it is null only when every row missed. Authority: Fowler,
 Susan and Carmack, 2026-09-27.
+
+**A NULL is left out of a chart, not drawn as zero.** A zero that was really an
+absence is the one number nobody checks
+([../console-design.md](../console-design.md#a-console-figure-says-what-it-counts-in-words)):
+drawn, it pulls a line to the floor and puts a reading nobody took in a spread's
+lowest bin. A floor and a figure count what the chart draws, so the panel never
+claims more readings than it shows.
+
+## Design rationale
+
+Owner, 2026-10-08: these three charts carry only the shared changes they need,
+through optional props. Existing callers retain their drawing and native
+tooltip defaults. The explorer supplies the existing common readout API and
+suppresses native tooltips, so pointer, keyboard and touch read the same values.
+No new chart library, type classifier or picker behaviour is added.
+
+Flow's optional explorer readout also places the last column's labels toward
+the plot's interior. A label outside the last node would be clipped at the
+panel edge. Callers without this readout keep their label positions.
+Spread's existing static chart/readout has a labelled focus group in the
+explorer. Tab reaches its numbers after Values, with no stop for an empty role
+slot. Its shared component and all other callers stay unchanged.
+
+Jony, 2026-10-09: the existing chart-choice group may scroll horizontally to
+show the checked tile. Its stillness check compares tile positions and word
+starts in that group's content coordinates. All other boxes remain in viewport
+coordinates, and the chosen tile must be wholly visible inside the group's
+client aperture. Scrolling is not a layout change.
+
+Susan, 2026-10-09: when every bar in the drawn prefix is zero/null, but a later
+row has a positive bar, the box names the prefix and directs the reader to the
+remaining table rows. Saying there are no rows would hide real records. This
+does not change the cap, answer order or whole-answer zero/null refusal.
+
+Susan, 2026-10-09: a diagnosed non-flow cannot claim that a count went through
+every stage. Its lede is the last stage's literal Went on reading, such as
+`last: 6 went`. Valid flows, including valid narrow lists, keep the completion
+lede. The shared module exposes its existing count verdict only when the caller
+requests it. One cached geometry supplies both headline and drawing; the module's
+note, comparison and list remain unchanged.
+
+Jony, 2026-10-09: Flow's stage width comes from `--space-3`; its branch gap
+comes from `--space-2`. The existing measure pass resolves inherited tokens to
+CSS pixels, including rem conversion. Theme/config substitution therefore
+changes the geometry without a source edit. Frame margins are not spacing
+tokens, and the old engine drawing's gap belongs to that other drawing.
 
 ## See also
 

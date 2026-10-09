@@ -18,7 +18,7 @@ day of the range a ceiling left.
 1. it deletes the days' raw files;
 2. it rebuilds each daily, monthly and yearly file that holds a row of them,
    once, without their rows - a file whose every row goes stays as an empty
-   file, so no index and no watermark has a hole;
+   file, so no index has a hole;
 3. it rewrites each index that names a rebuilt file, in the bytes the
    compaction writes an index in. The rebuilt file's entry takes the file's
    new row count and size and keeps every other field as it was, so the days
@@ -27,7 +27,7 @@ day of the range a ceiling left.
 Deletes first, so a day the pass has not finished still holds a row in a
 compact file, or its index still says it does, and the same command takes it
 again; then each file before its index, as the compaction orders them. No
-watermark moves: no period was compacted.
+compaction mark moves: every index names the periods it named before.
 
 **No file is ever half-written, and the same command finishes a pass that
 stopped.** Each write is whole, through `atomic_write`, and each delete is one
@@ -35,7 +35,8 @@ stopped.** Each write is whole, through `atomic_write`, and each delete is one
 same command again: a deleted file is no longer listed, a rebuilt file no
 longer holds the days and is rebuilt to the same rows, and each index is
 rewritten from the files as they then stand. A failure part way raises
-`PruneInterruptedError`, carrying what had already changed.
+`PruneInterruptedError`, carrying what had already changed and, in its `fault`,
+what the failure means as `error_cause` reads it.
 
 **A dry run decides everything and changes nothing.** It reads the same files,
 builds every rebuilt file in memory, and reports the paths a live pass would
@@ -45,8 +46,7 @@ the live pass carries out.
 **What it reads (Guardrail #12).** The three compact indexes and the names of
 the ledger's raw day folders, through `ledger.held_days`, to say how many days
 lie outside the range: a names-only read of the whole ledger, the one
-`docs/concepts/growing-reads.md` lists, and the CSV half's walk of a whole day
-tree is the same question. Everything else is bounded by the range: the
+`docs/concepts/growing-reads.md` lists. Everything else is bounded by the range: the
 envelope of each raw file in it, and each compact file that holds a day the pass
 takes.
 
@@ -61,11 +61,12 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from idhazh import atomic_write, day_partition, ledger
-from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import one_at_a_time
+from idhazh.gardener import error_cause, one_at_a_time
 from idhazh.ledger import HeldFile
 
 
@@ -78,11 +79,6 @@ class _Change:
     data: bytes | None
     #: A deleted file's size, or what a rewritten file shrank by.
     freed: int
-
-
-def _shown(state_dir: Path, path: Path) -> str:
-    """`state/...`, POSIX, whatever root a caller handed in (CLAUDE.md section 2)."""
-    return f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
 
 
 def _days(since: str, until: str) -> list[str]:
@@ -114,6 +110,7 @@ def _changes(
         )
     rebuilt: list[_Change] = []
     entries: dict[Period, dict[str, CompactEntry]] = {}
+    expired_through: dict[Period, str | None] = {}
     for found in held:
         days = tuple(day for day in found.days if day in taken)
         if not days or found.period is None:
@@ -125,6 +122,7 @@ def _changes(
         if found.period not in entries:
             index = CompactIndex.read(ledger.compact_index_path(state_dir, name, found.period))
             entries[found.period] = {entry.covers: entry for entry in index.entries}
+            expired_through[found.period] = index.expired_through
         named = entries[found.period]
         named[found.covers] = named[found.covers].model_copy(
             update={"rows": built.rows, "bytes": len(built.data)}
@@ -137,6 +135,7 @@ def _changes(
             ledger=name,
             period=period,
             entries=[named[covers] for covers in sorted(named)],
+            expired_through=expired_through[period],
         )
         data = index.to_json().encode("ascii")
         indexes.append(_Change(path, data, _shrank(path, data)))
@@ -164,8 +163,8 @@ def take_days(
 ) -> one_at_a_time.Pass:
     """Take up to `ceiling` days of the range out of this ledger, oldest first; say what changed.
 
-    The record is the one the CSV half returns: `taken` is every file deleted,
-    or that would be, and `written` every file rewritten. `identity` is the
+    `taken` is every file deleted, or that would be, and `written` every file
+    rewritten. `identity` is the
     writer every rebuilt file's envelope names, on a dry run too, because a dry
     run builds each file it reports.
     """
@@ -179,7 +178,10 @@ def take_days(
     changes = _changes(state_dir, name, held, taken, identity=identity)
 
     def record(
-        done: Sequence[_Change], because: StopReason, resume: str | None
+        done: Sequence[_Change],
+        because: StopReason,
+        resume: str | None,
+        fault: GardenerFault | None = None,
     ) -> one_at_a_time.Pass:
         """The record of the changes made so far, built in one place for every exit."""
         return one_at_a_time.Pass(
@@ -191,14 +193,17 @@ def take_days(
             seen=outside + len(members),
             selected=len(members),
             taken=tuple(
-                _shown(state_dir, change.path) for change in done if change.data is None
+                ledger.paths.shown(state_dir, change.path) for change in done if change.data is None
             ),
             written=tuple(
-                _shown(state_dir, change.path) for change in done if change.data is not None
+                ledger.paths.shown(state_dir, change.path)
+                for change in done
+                if change.data is not None
             ),
             bytes_freed=sum(change.freed for change in done),
             stopped_because=because,
             resume_from=resume,
+            fault=fault,
         )
 
     stopped = StopReason.EXHAUSTED if resume_from is None else StopReason.CEILING
@@ -210,8 +215,9 @@ def take_days(
             _apply(change)
         except OSError as failure:
             first = min(taken) if taken else None
+            fault = error_cause.fault_of(error_cause.classify(failure))
             raise one_at_a_time.PruneInterruptedError(
-                record(done, StopReason.FAILED, first)
+                record(done, stop_for(fault), first, fault)
             ) from failure
         done.append(change)
     return record(done, stopped, resume_from)

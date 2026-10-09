@@ -8,13 +8,15 @@ here imports `idhazh.similarity` or any judge contract.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.deadline import (
     SECONDS_A_MINUTE,
@@ -65,7 +67,14 @@ class StopwatchTenant:
         self.handed.append(deadline)
         return ShardResult(outcome=self.outcome)
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
 

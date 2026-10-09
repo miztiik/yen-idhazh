@@ -55,8 +55,10 @@ class Grain(StrEnum):
 
     Removal condition: `docs/concepts/telemetry-intent.md` requires every tree
     under `state/` to reach one pattern. A member is deleted by the migration
-    that empties it, and the enum with the last of them. Six shapes are recorded
-    because all six are really in use right now, not because six is a design.
+    that empties it, and the enum with the last of them. Five shapes are recorded
+    because all five are really in use right now, not because five is a design.
+    No committed ledger files CSV under any of them: every one that did has
+    moved through the door.
 
     `RAW_AND_COMPACT` is that one pattern. A ledger that files this way goes
     through the door in `ledger/persist.py` and sits under the two roots,
@@ -67,7 +69,6 @@ class Grain(StrEnum):
     FLAT = "flat"
     DAY_FILE = "day"
     DAY_TREE = "tree"
-    MONTH_FILE = "month"
     STAMPED = "stamp"
     RAW_AND_COMPACT = "raw-and-compact"
 
@@ -79,7 +80,6 @@ _NEEDS_A_STEM: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: False,
     Grain.DAY_TREE: False,
-    Grain.MONTH_FILE: False,
     Grain.STAMPED: False,
     Grain.RAW_AND_COMPACT: False,
 }
@@ -87,7 +87,6 @@ _NEEDS_A_SUFFIX: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: True,
     Grain.DAY_TREE: False,
-    Grain.MONTH_FILE: True,
     Grain.STAMPED: True,
     Grain.RAW_AND_COMPACT: False,
 }
@@ -125,13 +124,6 @@ class LedgerEntry(Model):
             raise ValueError(
                 f"{self.name} files by {self.grain.value} and has no prefix, so its files "
                 "would sit loose at the top of state/. Give it a directory"
-            )
-        if self.grain is Grain.RAW_AND_COMPACT and self.prefix != (self.name.value,):
-            raise ValueError(
-                f"{self.name} files by {self.grain.value}, so its prefix is the path "
-                f"inside each of the two roots, and the builders file it under "
-                f"{self.name.value}/. A prefix of {list(self.prefix)} names a folder "
-                f"nothing writes. Set it to [{self.name.value!r}]"
             )
         if _NEEDS_A_STEM[self.grain] != (self.stem is not None):
             raise ValueError(
@@ -205,8 +197,7 @@ class LedgersConfig(Model):
         )
         if split:
             raise ValueError(
-                f"{'; '.join(split)}. A ledger belongs to one family, so its status has "
-                "one answer"
+                f"{'; '.join(split)}. A ledger belongs to one family, so its status has one answer"
             )
         twice = sorted(name.value for name, families in held_in.items() if len(families) > 1)
         if twice:
@@ -237,6 +228,42 @@ class LedgersConfig(Model):
             raise ValueError(
                 f"{'; '.join(sorted(misplaced))}. A family is named for the top-level "
                 "folder under state/ its ledgers sit in"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _every_door_prefix_names_one_safe_folder(self) -> Self:
+        """A door ledger's prefix is its folder inside both door roots.
+
+        It starts with the family, ends with the ledger value, and no door
+        ledger may sit inside another door ledger's folder.
+        """
+        prefixes: list[tuple[LedgerName, tuple[str, ...]]] = []
+        refusals: list[str] = []
+        for family in self.families:
+            for held in family.ledgers:
+                if held.grain is not Grain.RAW_AND_COMPACT:
+                    continue
+                prefixes.append((held.name, held.prefix))
+                if held.prefix[-1] != held.name.value:
+                    refusals.append(
+                        f"{held.name} ends at {'/'.join(held.prefix)}, not {held.name.value}"
+                    )
+                if held.name.value == family.name and held.prefix != (held.name.value,):
+                    refusals.append(
+                        f"{held.name} is its own family, so its door prefix must be "
+                        f"[{held.name.value!r}]"
+                    )
+        for left, left_prefix in prefixes:
+            for right, right_prefix in prefixes:
+                if left is right or len(left_prefix) >= len(right_prefix):
+                    continue
+                if right_prefix[: len(left_prefix)] == left_prefix:
+                    refusals.append(f"{right} sits inside {left} at {'/'.join(right_prefix)}")
+        if refusals:
+            raise ValueError(
+                f"{'; '.join(sorted(refusals))}. A door ledger prefix starts with its "
+                "family, ends with its own value, and no door ledger sits inside another"
             )
         return self
 

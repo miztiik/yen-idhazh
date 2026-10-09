@@ -1,0 +1,307 @@
+name: Encoder comparison
+
+# Which sentence encoder best tells one event's summaries from another's.
+#
+# The search surface's encoder answers a different question - it embeds a
+# reader's query inside a browser tab, and its size is set by what a visitor
+# downloads. The grouping encoder never ships to a browser, so the choice is
+# open and measured here, on the hardware that will run it.
+#
+# Three stages, because a fair comparison needs every encoder to score the
+# identical pairs: build the pair set once, fan out one encoder a shard, then
+# merge the readings and commit them.
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: 'First published day to read (YYYY-MM-DD)'
+        default: '2026-08-23'
+      end:
+        description: 'Last published day to read (YYYY-MM-DD)'
+        default: '2026-10-05'
+      commit_readings:
+        description: 'Commit the readings to the branch'
+        type: boolean
+        default: true
+      selected_encoders:
+        description: 'Comma-separated encoder slugs; blank runs all'
+        default: ''
+      reuse_pairs:
+        description: 'Reuse the committed pair set and retain saved readings'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# One comparison at a time. Every run writes the same readings directory and
+# pushes it, so two overlapping runs race: the one that finishes last wins, and
+# if that is the older one it replaces a newer reading with a staler one. A
+# second dispatch cancels the first rather than queueing behind it, because a
+# comparison is superseded by the next one and not added to.
+concurrency:
+  group: encoder-comparison
+  cancel-in-progress: true
+
+env:
+  SET_DIRECTORY: corpus/encoder-comparison-1
+
+jobs:
+  pairs:
+    name: Build the pair set
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      encoders: ${{ steps.list.outputs.encoders }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Through `env`, never pasted into the program: a dispatch input is text
+      # somebody typed, and the shape check below runs before it reaches disk.
+      - name: Build the pairs
+        env:
+          START: ${{ inputs.start || '2026-08-23' }}
+          END: ${{ inputs.end || '2026-10-05' }}
+          REUSE_PAIRS: ${{ inputs.reuse_pairs }}
+          SELECTED: ${{ inputs.selected_encoders }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$SELECTED" && "$REUSE_PAIRS" != "true" ]]; then
+            echo "a selected run must reuse the committed pair set" >&2
+            exit 1
+          fi
+          if [[ "$REUSE_PAIRS" == "true" ]]; then
+            test -s "$SET_DIRECTORY/pairs.json"
+            sha256sum "$SET_DIRECTORY/pairs.json" | tee pair-build.log
+            exit 0
+          fi
+          for day in "$START" "$END"; do
+            if ! [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "a day is YYYY-MM-DD" >&2
+              exit 1
+            fi
+          done
+          mkdir -p "$SET_DIRECTORY"
+          python3 backend/utilities/compare_summary_encoders.py pairs \
+            --start "$START" --end "$END" \
+            --out "$SET_DIRECTORY/pairs.json" | tee pair-build.log
+
+      - name: Name the encoders
+        id: list
+        env:
+          SELECTED: ${{ inputs.selected_encoders }}
+        run: |
+          set -euo pipefail
+          encoders="$(python3 backend/utilities/compare_summary_encoders.py encoders \
+            --selected "$SELECTED")"
+          echo "encoders=$encoders" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pair-set
+          path: |
+            ${{ env.SET_DIRECTORY }}/pairs.json
+            pair-build.log
+          retention-days: 7
+
+  score:
+    name: Score ${{ matrix.encoder }}
+    needs: pairs
+    runs-on: ubuntu-latest
+    # The job limit GitHub enforces. A shard that reaches it is not a lost run:
+    # the reading on disk says how far it got and how fast it was going, which
+    # is the answer for an encoder too slow to use.
+    timeout-minutes: 360
+    strategy:
+      # One encoder a shard. A model that will not load is a reading of its own,
+      # so a red shard never hides the ones that worked. Ten encoders against
+      # eight shards means two wait their turn, which is a queue and not a
+      # failure.
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        encoder: ${{ fromJSON(needs.pairs.outputs.encoders) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pair-set
+
+      # Which machine this shard drew, before anything heavy runs. Two runs of
+      # one encoder came back 10x apart - 8.4 articles a second and then 0.8 -
+      # while three other encoders repeated to within one percent. A processor
+      # model and its cache size say whether that was the silicon or the model,
+      # and nothing else in the reading could tell them apart.
+      - name: What machine this shard drew
+        run: |
+          set -euo pipefail
+          python -m idhazh fingerprint \
+            --date "$(date -u +%F)" \
+            --execution "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
+            --shard 0 \
+            --job work 2>&1 | tee -a "host.log" || \
+            echo "no fingerprint written; the comparison does not depend on it"
+          {
+            echo "processors: $(nproc)"
+            grep -m1 'model name' /proc/cpuinfo || true
+            lscpu | grep -E 'L3 cache|Model name|CPU max MHz' || true
+          } | tee -a "host.log"
+
+      # The processor-only build. The runner has no graphics card, and the
+      # default wheel drags several gigabytes of card support behind it.
+      - name: Install the encoder runtime
+        run: |
+          set -euo pipefail
+          pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          # Newest first. A recent foundation needs a recent library, and a
+          # A model that will not load leaves a reading with its reason.
+          # The state check below then fails that shard.
+          pip install --quiet --upgrade \
+            'transformers>=5.19' 'sentence-transformers[image]>=6.1' \
+            scikit-learn numpy pydantic
+          python -c 'from PIL import Image; import torchvision; from transformers import EmbeddingGemma2Processor'
+          pip freeze > runtime.txt
+
+      - name: Score it
+        env:
+          ENCODER: ${{ matrix.encoder }}
+          # Every shard reads the same weights, so the cache earns its keep.
+          HF_HOME: ${{ runner.temp }}/huggingface
+          TOKENIZERS_PARALLELISM: 'false'
+          PYTHONUNBUFFERED: '1'
+        run: |
+          set -euo pipefail
+          # The maths libraries under the encoder read these, and they do not
+          # read the thread count the program asks for. Left unset, a library
+          # can pick its own number - often the physical core count rather than
+          # the processors the runner advertises. Taken from the machine, so a
+          # bigger runner is used without anybody editing a number.
+          PROCESSORS="$(nproc)"
+          export OMP_NUM_THREADS="$PROCESSORS"
+          export MKL_NUM_THREADS="$PROCESSORS"
+          export OPENBLAS_NUM_THREADS="$PROCESSORS"
+          echo "processors the runner reports: $PROCESSORS"
+          if ! [[ "$ENCODER" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "an encoder slug is lower-case letters and digits, joined by dashes" >&2
+            exit 1
+          fi
+          mkdir -p readings logs vectors
+          python3 backend/utilities/compare_summary_encoders.py score \
+            --slug "$ENCODER" \
+            --pairs "$SET_DIRECTORY/pairs.json" \
+            --out "readings/$ENCODER.json" \
+            --vectors-out "vectors/$ENCODER.npy" 2>&1 | tee "logs/$ENCODER.log"
+          python3 -c 'import json, os, sys
+          reading = json.load(open("readings/" + os.environ["ENCODER"] + ".json"))
+          if reading["state"] != "measured":
+             sys.exit(reading.get("reason") or reading["state"])'
+
+      # `always()`, so a shard stopped at the deadline still hands over the
+      # part-finished reading and the log that says where it stopped.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reading-${{ matrix.encoder }}
+          path: |
+            readings/${{ matrix.encoder }}.json
+            logs/${{ matrix.encoder }}.log
+            host.log
+            runtime.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+      # Separate, because the vectors are large and only one later job wants
+      # them. Which pairs deserve a person's judgement depends on where the
+      # encoders disagree with each other, and no score can answer that - only
+      # the positions the scores came from.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vectors-${{ matrix.encoder }}
+          path: vectors/${{ matrix.encoder }}.npy
+          retention-days: 90
+          if-no-files-found: warn
+
+  collect:
+    name: Merge the readings
+    needs: [pairs, score]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: reading-*
+          path: downloaded
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pair-set
+
+      - name: Merge them
+        env:
+          SELECTED: ${{ inputs.selected_encoders }}
+          REUSE_PAIRS: ${{ inputs.reuse_pairs }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$SET_DIRECTORY/logs"
+          cp downloaded/logs/*.log "$SET_DIRECTORY/logs/" 2>/dev/null || true
+          cp pair-build.log "$SET_DIRECTORY/logs/" 2>/dev/null || true
+          keep=()
+          if [[ "$REUSE_PAIRS" == "true" ]]; then
+            keep+=(--preserve-existing)
+          fi
+          python3 backend/utilities/compare_summary_encoders.py collect \
+            --pairs "$SET_DIRECTORY/pairs.json" \
+            --readings-from downloaded/readings \
+            --out "$SET_DIRECTORY/readings" \
+            --commit "${{ github.sha }}" \
+            --selected "$SELECTED" "${keep[@]}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Put the table in the run summary
+        if: always()
+        run: cat "$SET_DIRECTORY/readings/encoders.md" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Commit them
+        if: inputs.commit_readings
+        run: |
+          set -euo pipefail
+          git config user.name 'miztiik'
+          git config user.email 'miztiik@users.noreply.github.com'
+          git add "$SET_DIRECTORY"
+          if git diff --cached --quiet; then
+            echo 'the readings did not change'
+            exit 0
+          fi
+          git commit -m 'Encoder readings, taken on the runner'
+          git pull --rebase --quiet
+          git push
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encoder-comparison
+          path: ${{ env.SET_DIRECTORY }}
+          retention-days: 30

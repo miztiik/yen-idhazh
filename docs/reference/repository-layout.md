@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-09
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -35,8 +35,10 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Two of them partition by day - `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/`. A ledger more than one job writes is a day directory holding one file per writer, so two writers never share a path. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<ledger>/` and `state/compact/<ledger>/` instead ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/llm-council/` is the other | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
-| `state/pipeline-tests*/` | A trial run's own copy of the tree above. The bench and `Model validation` write `state/pipeline-tests/`; each pipeline test case writes `state/pipeline-tests-<id>/`. Nothing reads any of it - no published series, no gate, no console band - so the gardener's `trials` task empties it past the window in `config/gardener/trials.json`, and the root goes with its last file. The task finds these roots as everything under `state/` that no other task owns and the registry does not claim, because the knob that names one is null in production and cannot be set there | a dispatch, in CI | **never** |
+| `state/` | The append-only ledgers one run leaves for the next. A ledger that goes through the ledger door - item-health, summary-quality-evals, host-fingerprint, counterfactual-scores, feed-health, seen and published among them - files under `state/raw/<folder>/` and `state/compact/<folder>/`, where `<folder>` is the ledger's own name or, for a ledger inside a family, the family's folder and then that name: the similarity judge's scored pairs, metrics, fitted merge line and hand marks file under `content-similarity-judge/scored-pairs`, `content-similarity-judge/metrics`, `content-similarity-judge/fitted-thresholds` and `content-similarity-judge/holdout-pairs` ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)). A ledger more than one job writes gives each writer its own file inside the day directory, so two writers never share a path. `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, holding that judge's score record and its archive; `state/raw/council-run-records/` holds the council's own step records, later packed under `state/compact/council-run-records/` | a run, in CI | only the compact files of the ledgers `ledger.published` names, which the site build copies unchanged ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
+| `state/raw/<ledger>/set-aside/` | Each file a compaction could not read, moved under its old path below `state/` - a raw file, or a day or month file that could not be read when its period closed - and counted in its period's `set_aside`. No gardener step names the folder, so nothing reads a file there again or deletes it; a person reads it when the console shows a non-zero count ([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md#a-file-that-cannot-be-read)) | the gardener's compaction, in CI | **never**: the site copies only `state/compact/` |
+| `state/trial-traces/pipeline-tests/<id>/` | The bench and `Model validation` write here. A trace file keeps a sibling root beside `state/traces/`, not a child of it: nesting it under production's traces would put it inside production's own 7-day retention window, and a trial trace needs 90 days ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#design-rationale)). The gardener's `trials` task reports files beyond its own window under each declared folder in `config/gardener/trials.json`; its current policy is report-only | a dispatch, in CI | **never** |
+| `state/raw/pipeline-tests/<id>/<ledger>/`, `state/compact/pipeline-tests/<id>/<ledger>/` | A pipeline test case's own ledgers - item-health, host-fingerprint, candidate-models among them - file through the same tier-first `raw`/`compact` builders production ledgers use, with the test case's bench and case name spliced in ahead of the ledger's own folder (`backend/idhazh/ledger/paths.py::overlay_registry`). Compaction declarations in `config/gardener/compact-trial-*.json` own these folders | a dispatch, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
 | `notebooks/` | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2) | a person | no |
@@ -53,7 +55,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |
-| `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches `state/content-similarity-judge/scored-pairs/` once, already judged, and is never edited afterwards |
+| `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches the `content-similarity-judge/scored-pairs` ledger once, through the ledger door, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
 | `frontend/static/state/` | Copied from `state/compact/` at build time: the ledgers `ledger.published` names. A copy is not a source |
@@ -74,7 +76,7 @@ build copies out of it. Each of the other candidates fails on one of those three
 | `config/` | Human-edited. A machine appending to a file a person owns invites a merge conflict every run |
 | `backend/` | Source. A ledger is not code, and a Python package is not a database |
 
-**Two files under `state/` are written by a person, not a machine.**
+**One file under `state/` is written by a person, not a machine.**
 `state/labels.csv` holds human faithfulness labels, appended one keystroke at a
 time by `backend/utilities/label_queue.py`. It sits with the other ledgers
 because it is read the same way - joined to the eval ledger on
@@ -83,14 +85,14 @@ one exception to "written by a machine", and it is deliberate: the point of the
 file is that no machine wrote it. See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
-`state/content-similarity-judge/holdout-pairs.csv` is the second, and it is the same
-exception for the same reason: a labeller reads two articles and marks them one
-story or two, and that mark is the fixed floor the fitted merge line has to stay
-above. No run writes it - an operator harvests the marks into it by hand, and
-`note` says who made each one. `.gitattributes` names it `merge=text` in its own
-line rather than letting it inherit: two people editing it are disagreeing about
-the same rows rather than appending independent ones, and a reason worth reading
-is worth writing down. See
+The similarity holdout marks were the second, until a program took the writing
+over: a labeller still reads two articles and marks them one story or two, and
+that mark is the fixed floor the fitted merge line has to stay above, but
+`backend/utilities/sample_sheet.py --harvest` now saves each labelling through
+the ledger door, under `state/raw/content-similarity-judge/holdout-pairs/`, and
+the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/`.
+No workflow writes the marks - a person runs the harvest, and `note` says who
+made each mark. See
 [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md).
 
 **The text those labels judge lives under `backend/var/evidence/`, not under

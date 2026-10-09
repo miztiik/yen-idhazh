@@ -65,7 +65,9 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import ChartReadout from './ChartReadout.svelte';
+	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
@@ -129,6 +131,12 @@
 	 * reads 30 days puts two spans on one page, and the two cannot be compared -
 	 * which is the question the operator came here to ask. */
 	const calendar = $derived(daysInWindow(span));
+	/** The plot's name. One day has no range and no left side, so at one day it names the day. */
+	const plotLabel = $derived(
+		calendar.length === 1
+			? `Time per item by stage over ${countDays(calendar.length)}, ${shortDate(calendar[0])}, on a ten-times scale`
+			: `Time per item by stage over ${countDays(calendar.length)}, ${shortDate(calendar[0])} to ${shortDate(calendar[calendar.length - 1])}, oldest day on the left, on a ten-times scale`
+	);
 	const ordered = $derived(
 		days
 			.filter((day) => day.date >= span.start && day.date <= span.end)
@@ -305,19 +313,12 @@
 	 * alternate days used to draw nothing at all, because only a one-day window
 	 * got dots. */
 	function runs(key: Stage['key']): Point[][] {
-		const paths: Point[][] = [];
-		let current: Point[] = [];
-		calendar.forEach((date, index) => {
-			const ms = at(date, key);
-			if (ms !== null && ms > 0) {
-				current.push({ x: x(index), y: y(ms) });
-			} else if (current.length > 0) {
-				paths.push(current);
-				current = [];
-			}
-		});
-		if (current.length > 0) paths.push(current);
-		return paths;
+		const values = calendar.map((date) => at(date, key));
+		return indexedRuns(values, (ms) => ms !== null && ms > 0)
+			.map((run) => run.flatMap((index) => {
+				const ms = values[index];
+				return ms === null ? [] : [{ x: x(index), y: y(ms) }];
+			}));
 	}
 
 	/** The days a stage was measured at zero. They sit on the baseline rule,
@@ -345,10 +346,6 @@
 		return ms === 0 ? 'under 1 ms' : duration(ms);
 	}
 
-	function plural(count: number): string {
-		return count === 1 ? 'day' : 'days';
-	}
-
 	/** A decade label crosses from milliseconds to seconds at 1000 ms. Every
 	 * decade is a whole number in one unit or the other, so neither end of the
 	 * axis needs a decimal place to be read. */
@@ -361,12 +358,12 @@
 
 {#if ordered.length === 0}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-timing="empty">
-		We timed nothing in these {calendar.length}
-		{plural(calendar.length)}. Widen the window to look further back.
+		We timed nothing in {nameSpan(calendar.length)}. Widen the window to look further back.
 	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
+		{calendar.length === 1 ? 'Median time per item for this one day.' : 'Median per item, each day.'}
+		Each gridline is ten times the one below, so the same slowdown looks
 		the same at 40 ms and at 100 s.
 		{#if coverageNote}
 			<!-- One sentence for the whole chart, above the plot. It was one note per
@@ -413,7 +410,7 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label={`Time per item by stage over ${calendar.length} ${plural(calendar.length)}, ${shortDate(calendar[0])} to ${shortDate(calendar[calendar.length - 1])}, oldest day on the left, on a ten-times scale`}
+				aria-label={plotLabel}
 				data-timing="plot"
 				data-timing-days={calendar.length}
 				data-timing-series={drawn.length}

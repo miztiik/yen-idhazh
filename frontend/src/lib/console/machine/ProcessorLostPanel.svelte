@@ -22,6 +22,7 @@
 		type ProcessorLostRun,
 		type ProcessorLostSpan
 	} from '$lib/console/machine/processor-lost';
+	import { nameSpan } from '$lib/console/span-words';
 
 	let {
 		span,
@@ -119,18 +120,26 @@
 		heading="h3"
 		id="processor-lost"
 		title="How much of the processor went to somebody else"
-		note="A run that loses a share of its processor to another tenant on the same box takes longer for the same work while every other figure on this page reads as normal - one tile a day over the last {windowDays} days, and one a shard of the newest run."
+		note="A run that loses a share of its processor to another tenant on the same box takes longer for the same work while every other figure on this page reads as normal - {windowDays ===
+		1
+			? `one tile for ${nameSpan(windowDays)}`
+			: `one tile a day over ${nameSpan(windowDays)}`}, and one a shard of the newest run."
 	>
 		<p class="verdict" data-processor-lost-verdict={verdict}>
 			{#if verdict === 'unrecorded'}
-				No article in these {days} days carries the reading, so this panel says nothing about whether
-				the host was shared over them - the split landed on {BUSY_HELD_BOTH_BEFORE} and the first
-				run after it is the first one that can answer.
+				<!-- "Over them" would point at days that are not on screen at one day. -->
+				No article in {nameSpan(days)} carries the reading, so this panel says nothing about whether
+				the host was shared{days === 1 ? '' : ' over them'} - the split landed on
+				{BUSY_HELD_BOTH_BEFORE} and the first run after it is the first one that can answer.
+			{:else if span.named !== null && days === 1}
+				<!-- One day has no worst day, so the sentence names the day it is about. -->
+				On {span.named.label}, one article was kept off the processor for {span.named.says} of an
+				interval, at or past the {namedAt}% this panel names a day for.
 			{:else if span.named !== null}
 				{span.named.label} is the worst day of these {days}: one article was kept off the processor
 				for {span.named.says} of an interval, at or past the {namedAt}% this panel names a day for.
 			{:else}
-				No article in these {days} days lost as much as {markedAt}% of an interval to another
+				No article in {nameSpan(days)} lost as much as {markedAt}% of an interval to another
 				tenant, read over the {grouped(span.daysRecording)}
 				{span.daysRecording === 1 ? 'day' : 'days'} that recorded it.
 			{/if}
@@ -143,7 +152,11 @@
 			class="grains"
 			tabindex="0"
 			role="group"
-			aria-label="The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest."
+			aria-label={windowDays === 1
+				? span.days.length > 0
+					? "The share of the processor lost, one tile for this one day and one per part of the newest run. Arrow keys move between tiles. Escape returns to the day's tile."
+					: 'The share of the processor lost, one tile per part of the newest run. There is no tile for this one day. Arrow keys move between tiles. Escape returns to the first tile.'
+				: 'The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest.'}
 			use:markReadout={{
 				count: tiles.length,
 				walk: span.days.length > 0 ? span.days.length : 'row',
@@ -159,7 +172,9 @@
 			</p>
 			{#if span.days.length === 0}
 				<p class="absent" data-processor-lost-empty="day">
-					No article ran in these {days} days, so there are no days to draw.
+					No article ran in {nameSpan(days)}, so there {days === 1
+						? 'is nothing'
+						: 'are no days'} to draw.
 				</p>
 			{:else}
 				<ul class="tiles">
@@ -227,8 +242,14 @@
 				resting={picked === null}
 				name="processor-lost"
 				maxShare={readoutMaxShare}
-				restingNote={span.named === null ? ', the newest day' : ', the day named above'}
-				hint="Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest."
+				restingNote={windowDays === 1
+					? span.days.length > 0 ? ', this one day' : ', the first tile'
+					: span.named === null ? ', the newest day' : ', the day named above'}
+				hint={windowDays === 1
+					? span.days.length > 0
+						? "Point at a tile to read it. Arrow keys move between tiles. Escape returns to the day's tile."
+						: 'Point at a tile to read it. Arrow keys move between tiles. Escape returns to the first tile.'
+					: 'Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest.'}
 			/>
 		{/if}
 

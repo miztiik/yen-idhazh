@@ -3,8 +3,9 @@
 One row per retired feed endpoint, filed under `state/raw/feed-retirements/`
 through the ledger door by `telemetry.source_health.file_retirements`, the one
 writer. A run writes it; nothing in it edits `config/sources.json`, which stays
-the registry a person curates. The CSV methods below read the file this ledger
-was committed as before it moved there.
+the registry a person curates. `csv_row` below spells a row as text cells,
+which is how the door's settlement names a cell a dropped row held, and
+`from_csv_row` reads those cells back.
 
 Retirement is filed against the endpoint and never against the feed. The key is
 `endpoint_key` - the sha256 of the configured feed URL - so editing that URL is

@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-09
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -27,7 +27,7 @@ set is still operator-only: the console reads it at build time under
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
-| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its compaction; `state/pipeline-tests/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
+| Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
 | Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job files its own row through `ledger.persist`, and nothing else writes the ledger |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
@@ -66,9 +66,43 @@ the step: the run, the attempt, the job, the shard and the producer are the same
 for both steps of one job, so both files belong to one work unit and the later
 one is read.
 
+**`assemble` took the probe from 2026-09-17 and the clock only from 2026-10-08.**
+For those three weeks it wrote the one job that never closed its row: a machine
+with no wall clock, which reads as a job that cost nothing rather than as a job
+nobody timed. It takes no server log and no counters file, because it stands no
+model server up - `model_load_ms` and the two prompt cells stay empty for it, and
+that is the reading rather than a gap. A probing job that never clocks itself now
+fails `backend/tests/workflows/test_worker_ledgers.py` instead of filing half a
+row for three weeks.
+
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
-whole state root with `run.trial_state_dirname`, so its rows land under
-`state/pipeline-tests/`. The reason is in the design rationale below.
+whole state root with `run.trial_state_dirname`, so its rows land tier-first
+under `state/raw/pipeline-tests/` and `state/compact/pipeline-tests/`. The trial
+compaction declaration packs that root
+without changing the production ledger's retention policy. The reason is in
+the design rationale below.
+
+**The probe reads no run plan, from 2026-10-08.** A machine reading is about the
+job rather than about the work the job did, so `idhazh fingerprint` and
+`idhazh job-clock` are handed the day and the run address by the workflow that
+already holds both. They used to read a run plan back to recover those two
+strings, which made a machine reading something only the two workflows that open
+with a plan stage could take - `digest.yml` and `measure.yml`. A gardener wake or
+a council night reached a plan nothing had written and failed the step.
+
+**What a workflow still owes to carry the probe** is a `ServerJob` member for its
+job's own id, and a commit step that stages `state/`, because a row nobody
+commits dies with its runner. `run-tasks`, `history` and `save_council_results`
+are already members, so the gardener's two task jobs and the council's settle job
+need no code change to start recording a machine.
+
+**A workflow that mints its own run name hands it over with `--run-id`.** The
+council names a night once and gives that name to every verb that writes a row,
+so a night's machine rows join its other rows on `run_id`. A workflow that names
+an execution passes `--execution` instead, and the address is computed from it
+the same way the plan stage computes it, so the probe and the plan agree by
+construction rather than by lookup. Both flags, naming different runs, is a step
+handed one of them by mistake and is refused before a row is written.
 
 **It files by day, and that is the shape the read wants.** A host record only
 earns its keep when somebody counts across many days, and a day tree is the
@@ -114,7 +148,7 @@ Neither table repeats the other's cells.
 | `version` | date stamp | The schema generation this row was written under |
 | `date` | `YYYY-MM-DD` | The run's date |
 | `run_id` | run id | The run |
-| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime` | Which workflow job drew this machine |
+| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime`, `decide`, `migrate`, `run-tasks`, `history`, `save_council_results`, `operator` | Which workflow job drew this machine. The enum is the one job vocabulary every ledger shares, so it also names writers that record no machine, such as `decide` and `operator` |
 | `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
 | `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
 
@@ -126,12 +160,13 @@ would count nothing. Two draws of one kind of machine carry one id, which is wha
 lets a query ask "how often do we get this machine" without matching model-name
 strings by hand.
 
-**Every value of `job` is that job's own id in its workflow file, lowercase.** A
-reader goes from a row to the steps that wrote it with nothing in between, and a
-display name would drift from the thing it identifies. `visuals` is the one value
-with no producer left: `digest.yml` ran that job until 2026-09-13, and the member
-stays so the rows it wrote still read back. `runtime` is `measure.yml`'s bench
-job, and its rows are in the other ledger.
+**Every value of `job` is that job's own id in its workflow file, lowercase,
+except `operator`.** A reader goes from a row to the steps that wrote it with
+nothing in between, and a display name would drift from the thing it identifies.
+`operator` names a command a person ran on their own machine, outside a workflow.
+`visuals` is the one workflow value with no producer left: `digest.yml` ran that
+job until 2026-09-13, and the member stays so the rows it wrote still read back.
+`runtime` is `measure.yml`'s bench job, and its rows are in the other ledger.
 
 ## What the processor is
 
@@ -418,7 +453,8 @@ derived from the strings rather than typed by hand, so grouping by it is stable
 even when a vendor changes how it spells a name.
 
 `flags` is the one judgement call. Its vocabulary IS closed - `WATCHED_FLAGS` -
-but it holds a set rather than one value, and a CSV cell holds a scalar. A joined
+but it holds a set rather than one value, and every cell of this row holds one
+scalar. A joined
 string keeps one column; the cost is that a reader of the schema cannot see the
 closed set and has to open the contract.
 
@@ -437,15 +473,16 @@ machine, so it runs before the job's heaviest step - ahead of the model server i
 `work`, ahead of the embeddings and the site build in `assemble` - and after the
 plan file exists in every job, because the row is filed under the run's own id.
 
-**A bench dispatch writes under `state/pipeline-tests/`, not beside the
+**A bench dispatch writes tier-first under `state/raw/pipeline-tests/` and
+`state/compact/pipeline-tests/`, not beside the
 production rows.** A bench is dispatched ad hoc, many times a day, against
 branches nobody merged. Mixing those rows into the ledger the console reads would
 mean every panel filtering by job for ever - a cost paid on every read, by every
 reader, to keep a few dispatches apart. The split pays it once instead. What it
 costs is a join whenever somebody asks what machines GitHub has given us across
 both, and that is a question asked rarely and by an operator. The mechanism is
-the one that already existed: `run.trial_state_dirname` moves the whole state
-root for a run, so one input on the candidate-config action puts every ledger
+the one that already existed: `run.trial_state_dirname` names the trial root a
+run's ledgers splice in ahead of each tier, so one input on the candidate-config action puts every ledger
 that run writes under the trial tree, and no second way of doing the same thing
 was minted. Owner decision, 2026-09-16.
 
@@ -474,33 +511,30 @@ job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job tha
 records a machine and stages nothing fails without an edit
 ([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
 
-**A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
-is the registry that pairs a ledger with what makes two of its rows one record,
-and this ledger was not in it - which
+**A repeated row now settles, and it could not have before.** Until 2026-09-16
+nothing paired this ledger with what makes two of its rows one record, which
 cost nothing while nothing was committed and would have cost a double-counted
 machine the moment something was. A job runs on one machine, so two rows under
 one `(date, run_id, job, shard)` are one machine written down twice, and the
 fleet distribution is the one question this record exists to answer. The first
 row wins; there is nothing to choose between two attempts that read the same
-host. Authority: Fowler, 2026-09-16.
+host. The door settles them by that key, `HOST_FINGERPRINT_KEY` in
+`backend/idhazh/ledger/keys.py`, whenever a reader asks. Authority: Fowler, 2026-09-16.
 
-**Staging the shared path was not enough, and 2026-09-16 is the file that proves
-it.** The day was staged, committed and pushed by ten jobs of one run, and
-`state/host-fingerprint/2026/09/16.csv` is header-only. Each job appended to one
-path in its own checkout, the pushes raced, and a merge driver settling two
-appends could not help: a rebase hands a job the tip, the job replays its own
-append, and the last writer to win a race carries whatever its checkout held.
-**A shared path is the defect; a settlement rule on top of it is a repair.**
+**Staging a shared path was not enough, and 2026-09-16 proved it.** The day was
+staged, committed and pushed by ten jobs of one run, and its shared day file held
+only a header. Each job appended to one path in its own checkout, the pushes
+raced, and a merge driver settling two appends could not help: a rebase hands a
+job the tip, the job replays its own append, and the last writer to win a race
+carries whatever its checkout held. **A shared path is the defect; a settlement
+rule on top of it is a repair.**
 
-So from 2026-09-17 no job opens a shared day file. Each writes
-`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, which names
-the run, the try at it, the job and the shard - four cells that make a filename
-one writer's alone. Since 2026-09-22 that file is the ledger rather than a copy
-waiting to be folded, so a run that died leaves its rows in the day they belong
-to and nothing has to catch up. The ledger has since moved to the ledger door,
-and the rule holds there too: every write is a raw file the door names for its
-writer
-([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#moving-a-ledger-onto-the-door)).
+So no job opens a shared day file. Every write is a raw file under
+`state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` that the ledger door names for its
+writer - the run, the try at it, the job and the shard - so a file is one
+writer's alone, and a run that died leaves its rows in the day they belong to
+with nothing to catch up
+([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#the-ledgers-on-the-door)).
 
 **The attempt is the writer's, and in no column of the contract.** GitHub keeps
 the run id stable across a re-run and increments the attempt. The door files each
@@ -514,7 +548,9 @@ got before. Authority: Fowler, 2026-09-17.
 
 **A bench dispatch writes the same way.** `measure.yml` has no `assemble` job,
 and it needs none: its probe writes its own file under the day and the commit
-stages `state/pipeline-tests/raw/host-fingerprint`. When this was decided it was
+stages `state/raw/pipeline-tests/host-fingerprint`; the gardener packs that
+root under `state/compact/pipeline-tests/host-fingerprint` through
+`compact-trial-host-fingerprint`. When this was decided it was
 the one state writer with
 no concurrency group
 at all, which is why it got its own file rather than being left on the shared

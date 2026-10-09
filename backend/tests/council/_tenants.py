@@ -28,9 +28,11 @@ TENANT_SOURCE: Final = '''
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -68,7 +70,14 @@ class PaperTenant:
         self.ran.append((date, run_id, shard, shards))
         return ShardResult(outcome=ShardOutcome.COMPLETED)
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
         self.settled.append(date)
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
@@ -94,9 +103,11 @@ SCRIPTED_SOURCE: Final = '''
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -137,7 +148,14 @@ class ScriptedTenant:
             raise RuntimeError("this unit died before it reported anything back")
         return ShardResult(outcome=OUTCOME, model_calls=MODEL_CALLS)
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
 
@@ -157,9 +175,11 @@ BEHIND_SOURCE: Final = '''
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.council.tenancy import ShardResult
 
 JUDGE_ID = "{slug}"
@@ -198,7 +218,14 @@ class BelatedTenant:
     ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.COMPLETED)
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
         return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
 
 

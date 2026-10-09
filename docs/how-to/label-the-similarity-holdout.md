@@ -1,11 +1,13 @@
 # Label the Similarity Holdout
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-08
 
 Read pairs of articles the merge line has to decide between, and record whether
-each pair is one news event or two. The marks land in
-`state/content-similarity-judge/holdout-pairs.csv`, which is the fixed floor every fitted
-merge line has to stay above.
+each pair is one news event or two. The marks are saved through the ledger door
+as the `holdout-pairs` ledger, under
+`state/raw/content-similarity-judge/holdout-pairs/`, and the gardener packs them
+under `state/compact/content-similarity-judge/holdout-pairs/`. They are the
+fixed floor every fitted merge line has to stay above.
 
 The rule the floor guards is in
 [../architecture/publishing/autotune-content-similarity.md](../architecture/publishing/autotune-content-similarity.md).
@@ -26,7 +28,10 @@ sits above the line is a story the reader never gets to see.
 **What it holds today.** 200 pairs, marked by `claude-opus-4.6` on 2026-09-19:
 196 one story, 4 two stories. All four two-story marks are one news cluster - a
 lake being renamed, carried by two different companies - so the floor currently
-rests on one story rather than on a spread of news.
+rests on one story rather than on a spread of news. They sit on the ledger door
+under `content-similarity-judge/holdout-pairs`, copied there from the one CSV
+file they were kept in before, which is gone
+([persistence.md](../architecture/contracts/persistence.md)).
 
 ## Get a draw
 
@@ -52,7 +57,7 @@ day drawn so far. It reads the selection slot and nothing else because a night
 leaves its verdicts and its instrument rows in the same tree, and those carry no
 score. Name the draw CSVs and every published UTC day needed to resolve their
 two sides. The harvest joins on that named population, and a mark whose pair is not in the draw you
-hand it is a mark that does not reach the file.
+hand it is a mark that is not saved.
 
 ## Draw a sheet
 
@@ -76,8 +81,11 @@ python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 
 | `--corridor` | `0.02` | How wide either side of the line counts as "just". |
 | `--total` | `200` | How many pairs the sheet carries. |
 | `--harvest` | unset | Switches to harvest mode; see below. |
+| `--state-root` | `state` | The state root a harvest saves the marks under. |
 | `--labeller` | unset | Required with `--harvest`. |
-| `--labelled-on` | unset | Required with `--harvest`. |
+| `--labelled-on` | unset | Required with `--harvest`: the UTC day the marks were made, `YYYY-MM-DD`. |
+| `--run-id` | unset | Required with `--harvest`: the run the saved file names as its writer, `<YYYY-MM-DD>-<number>`. |
+| `--commit` | unset | Required with `--harvest`: the full commit SHA of the checkout, as `git rev-parse HEAD` prints it. |
 
 It prints what it resolved and what it refused:
 
@@ -167,13 +175,23 @@ with a guess.
 ```powershell
 python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94 `
   --draw <selection.csv> --day 2026-09-01 --labels labels-batch-01.json `
-  --harvest state/content-similarity-judge/holdout-pairs.csv `
-  --labeller claude-opus-4.6 --labelled-on 2026-09-19
+  --harvest --labeller claude-opus-4.6 --labelled-on 2026-09-19 `
+  --run-id 2026-09-19-1 --commit <full-commit-sha>
 ```
 
-`--labelled-on` fills both `version` and `marked_on`. `--labeller` reaches the
-`note` column with the pair's score beside it, because a mark is worth what its
-labeller is worth and a row that does not say cannot be argued with later.
+It saves the marks the named batches hold through the ledger door, as one file
+under `state/raw/content-similarity-judge/holdout-pairs/<YYYY>/<MM>/<DD>/` for
+the `--labelled-on` day. `--labelled-on` fills `marked_on` on every mark it
+saves. `--labeller` reaches the `note` column with the pair's score beside it,
+because a mark is worth what its labeller is worth and a row that does not say
+cannot be argued with later.
+
+`--run-id` and `--commit` name the file's writer, and the harvest refuses to run
+without either. A person runs it, so the file's job is `operator`, at attempt 1
+and shard 0. `--run-id` is `<date>-<a number>`, and `--commit` is the full commit
+SHA of the checkout, which `git rev-parse HEAD` prints, so the file points back
+to the code that saved the marks. `--harvest` takes no path: an older spelling
+that named the CSV file to write is refused rather than read as a folder.
 
 **The join is on `pair_key`, against the named drawn population and never
 against the sheet in hand.** A mark belongs to a pair, not to a slot: harvesting
@@ -181,42 +199,62 @@ from the sheet meant that re-drawing it, or changing how pairs are chosen,
 silently dropped every mark whose pair no longer made the cut - one selection
 change turned 200 labelled pairs into 129. The benchmark accumulates instead.
 
-**The harvest writes the whole file, so check what came out before you keep it.**
-It is a rewrite and not an append, and with no labels at all it writes an empty
-file. Harvest to a scratch path first and diff it against the committed one
-unless the draw you handed it covers every mark already on record.
+**A harvest adds marks, and rewrites none.** Name the batches labelled since
+the last harvest. A batch named again saves its marks again under the new day,
+which is harmless: a pair is read once, with the mark it was given last, so a
+corrected mark replaces the one it corrects. A harvest that finds no label saves
+nothing.
+
+**A mark counts for `similarity.holdout_reach_days` after the day it was filed
+under** - 730 days in `config/idhazh.json`. Both readers, the scoring verb below
+and the console's holdout panel, read that many days back and no more, so the
+read stays the same size however long the ledger grows. A mark filed before that
+stops counting until somebody harvests it again or widens the knob.
 
 It prints what landed, and what did not:
 
 ```text
-INFO:idhazh:sample_sheet harvested 200 labelled pairs to
-state/content-similarity-judge/holdout-pairs.csv, 0 labels matched no drawn pair
+INFO:idhazh:sample_sheet harvested 200 labelled pairs into
+raw/content-similarity-judge/holdout-pairs/2026/09/19/<file>.parquet, 0 labels
+matched no drawn pair
 ```
 
 A non-zero tail count means a `pair_key` in a batch file is not in this draw.
 Widen `--draw-root` rather than editing the batch.
 
+**Nothing schedules it.** A person labels when they choose rather than when a day
+publishes, so no workflow runs the harvest and no job stages what it writes.
+Commit the raw file yourself. The console reads the marks once the gardener has
+packed their day, within about two days of the day they are filed under.
+
 ## Score the line against them
 
 ```powershell
 python -m idhazh score-merge-line-holdout --date 2026-09-21 `
-  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6
+  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6 `
+  --commit <full-commit-sha>
 ```
 
-It counts what the merge line in force does to every marked pair and writes one
-row into
-`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`:
+It counts what the merge line in force does to every marked pair filed inside the
+reach of its `--date`, and writes one row into
+`state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`,
+which the gardener packs under
+`state/compact/content-similarity-judge/merge-line-holdout-scores/`:
 the line, the four cells, how many pairs it could not score, and how many marks
-say two stories. `--labeller` is the same name the harvest was given, and
+say two stories. It reads each day of its reach from whichever file holds it, so
+it sees a mark as soon as a harvest saves it. `--labeller` is the same name the harvest was given, and
 `--run-id` is `<date>-<a number>` - the row has to say which run took the
-reading.
+reading. `--commit` is the full commit SHA of the checkout that took it, which
+`git rev-parse HEAD` prints, so the door file's envelope points back to the code
+that wrote it. The verb refuses to run without it.
 
-**Nothing schedules it.** The marked file changes when somebody labels more
-pairs rather than when a day publishes, so no workflow runs this verb and no job
-stages what it writes. Commit the row yourself, the way you commit the marks.
+**Nothing schedules it.** The marks change when somebody labels more pairs
+rather than when a day publishes, so no workflow runs this verb and no job
+stages what it writes. Commit the raw file yourself, the way you commit the
+marks.
 
 **It writes nothing when fewer than half the marks can be scored.** Retention
-deletes published days the marked file still names, and four cells counted over
+deletes published days the marks still name, and four cells counted over
 a handful of surviving pairs read as a line that got almost everything right.
 The verb exits 1 and prints how many it resolved.
 
@@ -226,28 +264,25 @@ The verb exits 1 and prints how many it resolved.
 | `labeller=X appears in none of the N marks' notes` | The name does not match what the harvest wrote. Check `--labeller`. |
 | `the highest pair marked as two stories now scores A and HOLDOUT_TWO_STORY_MAX declares B` | New marks, or new weights, have moved the hardest pair. Retake the constant in `backend/idhazh/contracts/knobs/placement.py`. |
 
-`/console/judgement/` prints the newest row under the holdout panel, and says
-the line has not been scored where there is none.
+`/console/judgement/` prints the newest row under the holdout panel once the
+gardener has packed its day, within about two days of the date it is filed
+under, and says the line has not been scored where there is none.
 
 ## The mark spelling
 
-The harvest writes `true` and `false`. The reader accepts any case and any
-surrounding space, and **refuses any other spelling rather than reading it as
-false** - comparing against one spelling would read every other spelling as
-`false`, which is the load-bearing mark, and a file read that way becomes all
-two-story pairs and a floor that refuses every merge without erroring.
+A mark is saved as a true or false flag, never as text. The batch file is where
+a spelling can go wrong: its values are JSON booleans.
 
 | What you see | What happened |
 | --- | --- |
-| `same_story is 'yes', and a mark has to be one of ['false', 'true']` | A hand edit used a spelling the reader does not know. Write `true` or `false`. |
 | A row you marked `false` arrives as `true` | The batch file quoted the value. JSON booleans, not strings. |
 | Fewer rows than marks | The draw did not carry that pair. Widen `--draw-root` and harvest again. |
-| An empty file | The harvest found no labels. It writes the whole file, so restore it from git. |
+| `harvested 0 labelled pairs into no file` | The harvest found no label in the batches named. Nothing was saved, and the marks already on record are untouched. |
 
 ## Two things a mark is not
 
-**It is not a verdict the fit reads.** Nothing that moves the line consumes this
-file. One verb reads it - `score-merge-line-holdout`, above, which reports how
+**It is not a verdict the fit reads.** Nothing that moves the line consumes the
+marks. One verb reads them - `score-merge-line-holdout`, above, which reports how
 the line stands against the marks and changes nothing. The console's holdout
 panel draws the marks, scores each one against the published days it names, and
 reports the gap between the highest two-story mark and the line in force
@@ -263,5 +298,5 @@ weighted back to that day's own band populations.
 - [../architecture/publishing/autotune-content-similarity.md](../architecture/publishing/autotune-content-similarity.md) - what the line decides, how it moves, and what the current marks say about it.
 - [label-the-faithfulness-queue.md](label-the-faithfulness-queue.md) - the other labelling loop, over summaries rather than pairs.
 - [run-the-pipeline.md](run-the-pipeline.md) - producing a day, and the `council-prepare` verb that writes the draw.
-- [../reference/repository-layout.md](../reference/repository-layout.md) - why the holdout file is one of two committed `state/` files nothing generated.
+- [../reference/repository-layout.md](../reference/repository-layout.md) - where the marks sit under `state/`, and who writes them.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - `SimilarityHoldoutPair`, the shape of one row.

@@ -18,12 +18,14 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
 from idhazh.council import metrics_sink, session
 from idhazh.council.tenancy import ShardResult
+from idhazh.ledger import staging
 from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
 from idhazh.stages import (
     common,
@@ -40,11 +42,21 @@ from idhazh.stages.common import LOG
 #: second thing to keep in step with the ledger's directory name.
 JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
 
-#: Everything this judge's own work commits, as one prefix. Every ledger it fills
-#: hangs off its slug, so naming the prefix stages the pairs, the record, the
-#: fitted line and the instrument rows in one go - and a ledger it gains later is
-#: staged the day it is written rather than the day somebody remembers this list.
-COMMITTED_PATHS: Final = (f"{ledger.STATE_DIRNAME}/{JUDGE_ID}",)
+#: Every ledger this judge's own work writes: the pairs, the record and its
+#: archive, the fitted line and the instrument rows.
+WRITTEN_LEDGERS: Final = (
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+)
+
+#: Where each of those ledgers sits, as the collecting job stages it. Read off
+#: the registry rather than spelled, so a ledger that moves onto the ledger door
+#: is staged under `state/raw/` in the change that moves it, and no path a
+#: ledger left behind is staged for ever after.
+COMMITTED_PATHS: Final = tuple(staging.staged_path(which) for which in WRITTEN_LEDGERS)
 
 #: The slot this judge's units leave their verdicts in, beside the slots the
 #: venue names for itself. A slot of its own rather than the venue's selection
@@ -169,7 +181,7 @@ class ContentSimilarityJudge:
             deadline=deadline,
         )
         shipped = metrics_sink.ship_judge_metrics(
-            report.metrics, judge_id=JUDGE_ID, shard=shard, out_dir=_shipping_dir(date)
+            report.metrics, judge_id=JUDGE_ID, name=str(shard), out_dir=_shipping_dir(date)
         )
         LOG.info(
             "content-similarity-judge shipped its reading of shard=%s date=%s to %s",
@@ -185,12 +197,25 @@ class ContentSimilarityJudge:
             model_seconds=report.model_seconds,
         )
 
-    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+    def settle(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        state_dir: Path,
+        identity: WriterIdentity,
+    ) -> ShardResult:
         """Count what the units judged, collect what they measured, fit the line.
 
         The fit runs on a counted day and on a held one. A line that moves itself
         has to leave a row on the days it stayed put, or a reader cannot tell a
         day the evidence refused from a day nothing ran.
+
+        Both stages write under the state root the council handed over, and both
+        file their rows through the ledger door under the council's writer
+        identity, each naming itself as the producer. The fit reads the day's pairs
+        back from that same root, so the two cannot part company on where tonight's
+        rows went.
         """
         settings = config.load()
         counted = count_verdicts.stage_count_verdicts(
@@ -200,8 +225,17 @@ class ContentSimilarityJudge:
             shipped_root=_shipping_dir(date),
             verdicts_dir=_verdicts_dir(date),
             settings=settings,
+            identity=identity,
+            state_dir=state_dir,
         )
-        set_merge_line.stage_set_merge_line(date, run_id=run_id, settings=settings)
+        set_merge_line.stage_set_merge_line(
+            date,
+            run_id=run_id,
+            settings=settings,
+            identity=identity,
+            state_dir=state_dir,
+            digest_root=common.PUBLIC_ROOT,
+        )
         return ShardResult(
             outcome=ShardOutcome.COMPLETED if counted.counted else ShardOutcome.NOTHING_TO_DO
         )

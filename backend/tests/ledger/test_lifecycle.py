@@ -1,4 +1,4 @@
-"""Does a paused family take no new rows, while maintenance and the compact tier still write?
+"""Does a paused family take no new rows, while the compact tier still repacks?
 
 A family's `lifecycle_status` says whether new rows are written into its
 ledgers. Every route that writes new rows asks `ledger.accepts_new_rows` first,
@@ -20,21 +20,18 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR, SEED_COMMIT, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
+from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
 from idhazh.ledger import paths
@@ -117,18 +114,19 @@ def _collect_metrics(state: Path) -> bool:
     metrics_sink.ship_judge_metrics(
         _first(ContentSimilarityJudgeMetrics),
         judge_id="content-similarity-judge",
-        shard=0,
+        name="0",
         out_dir=shipped,
     )
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
     return _wrote(
         state,
         lambda: metrics_sink.collect_judge_metrics(
             shipped,
             judge_id="content-similarity-judge",
             contract=ContentSimilarityJudgeMetrics,
-            which=which,
-            into=ledger.path(state, which, A_DAY),
+            which=LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+            state_dir=state,
+            covers=A_DAY,
+            identity=_identity(ServerJob.SAVE_COUNCIL_RESULTS),
         ),
     )
 
@@ -172,35 +170,14 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             ),
         ),
     ),
-    "append_story_similarity_pairs": (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_story_similarity_pairs(s, A_DAY, [_first(StorySimilarityPair)]),
-        ),
-    ),
-    "append_fitted_thresholds": (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_fitted_thresholds(s, A_DAY, [_first(FittedSimilarityThreshold)]),
-        ),
-    ),
-    "append_council_shard_outcomes": (
-        LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: ledger.append_council_shard_outcomes(s, A_DAY, [_first(CouncilShardOutcome)]),
-        ),
-    ),
     "score_merge_line_holdout": (
         LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
         1,
         lambda s: _wrote(
-            s, lambda: score_merge_line_holdout._append(s, A_DAY, _first(MergeLineHoldoutScore))
+            s,
+            lambda: score_merge_line_holdout._append(
+                s, A_DAY, _first(MergeLineHoldoutScore), commit_sha=SEED_COMMIT
+            ),
         ),
     ),
     "collect_judge_metrics": (LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, 1, _collect_metrics),
@@ -280,29 +257,54 @@ def test_the_plan_stage_with_seen_paused_still_lands_feed_health_and_counterfact
     assert skipped[0].startswith(f"{SKIPPED} ledger=seen family=seen status=paused rows=")
 
 
-# --- maintenance and the compact tier are never skipped ------------------------------
+# --- a new row is gated whatever job writes it; the compact tier is not ---------------
 
 
 @pytest.mark.parametrize(
-    ("job", "tier"),
-    [
-        (ServerJob.RUN_TASKS, Tier.RAW),
-        (ServerJob.MIGRATE, Tier.RAW),
-        (ServerJob.ASSEMBLE, Tier.COMPACT),
-    ],
-    ids=["run-tasks-raw", "migrate-raw", "assemble-compact"],
+    "job",
+    [ServerJob.RUN_TASKS, ServerJob.MIGRATE],
+    ids=["run-tasks", "migrate"],
 )
-def test_the_door_writes_into_a_paused_family_for_maintenance_and_the_compact_tier(
+def test_a_raw_write_is_skipped_whatever_job_carries_it(
     job: ServerJob,
-    tier: Tier,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """The oracle's third case: each of these files rows again that were already recorded.
+    """A row nothing recorded before is a new row, even from a job that maintains rows.
 
-    Skipping one after its source was deleted would lose rows while the run
-    reported success, so a status never stops them.
+    Until 2026-10-08 these two jobs were exempted here, on the reading that a
+    maintenance job only files rows that were already recorded. No live caller
+    ever matched that reading: the one write the exemption reached is the
+    gardener filing its own record of a wake, which is a new row. The exemption
+    meant a paused family silently took rows anyway, and it would have taken a
+    machine row from a gardener wake the moment one was wired up.
+    """
+    _pause(monkeypatch, _family_of(LedgerName.VISUAL_PRUNES))
+
+    with caplog.at_level(logging.WARNING, logger="idhazh"):
+        written = ledger.persist(
+            tmp_path / "state",
+            [_first(VisualPruneRow)],
+            ledger=LedgerName.VISUAL_PRUNES,
+            covers=A_DAY,
+            identity=_identity(job),
+        )
+
+    assert written == [], f"a paused family took a new row because {job.value} wrote it"
+    assert [r.getMessage() for r in caplog.records if SKIPPED in r.getMessage()] == [
+        f"{SKIPPED} ledger=visual-prunes family=visual-prunes status=paused rows=1"
+    ]
+
+
+def test_the_compact_tier_repacks_a_paused_family(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The one exemption that survives, and it is about the tier rather than the job.
+
+    Repacking a day that is already recorded records nothing new, so a status
+    never stops it. Skipping it after the raw files it packs were aged out would
+    lose rows while the run reported success.
     """
     row = _first(VisualPruneRow)
     _pause(monkeypatch, _family_of(LedgerName.VISUAL_PRUNES))
@@ -328,27 +330,16 @@ def test_the_door_writes_into_a_paused_family_for_maintenance_and_the_compact_ti
     )
 
     with caplog.at_level(logging.WARNING, logger="idhazh"):
-        if tier is Tier.RAW:
-            written = ledger.persist(
-                tmp_path / "state",
-                [row],
-                ledger=LedgerName.VISUAL_PRUNES,
-                covers=row.date,
-                identity=_identity(job),
-            )
-        else:
-            written = [
-                ledger.persist_period(
-                    tmp_path / "state",
-                    [filed],
-                    model=VisualPruneRow,
-                    ledger=LedgerName.VISUAL_PRUNES,
-                    period=Period.DAILY,
-                    covers=row.date,
-                    identity=_identity(job),
-                    built_from=1,
-                )
-            ]
+        written = ledger.persist_period(
+            tmp_path / "state",
+            [filed],
+            model=VisualPruneRow,
+            ledger=LedgerName.VISUAL_PRUNES,
+            period=Period.DAILY,
+            covers=row.date,
+            identity=_identity(ServerJob.ASSEMBLE),
+            built_from=1,
+        )
 
-    assert [path.is_file() for path in written] == [True]
+    assert written.is_file()
     assert not [r for r in caplog.records if SKIPPED in r.getMessage()]

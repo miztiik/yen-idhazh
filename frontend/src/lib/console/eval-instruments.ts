@@ -32,6 +32,7 @@ import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
 import type { StackRule, StackSeries } from '../charts/stacked';
 import { dayMonth, shortDate } from '../format';
+import { countDays, nameSpan, openWithSpan } from './span-words';
 
 /** One surface on the console that answers for at least one ledger column.
  *
@@ -50,13 +51,20 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 	{ id: 'daily-figures', title: 'What the model did', route: '/console/model/' },
 	{
 		id: 'faithfulness',
-		title: 'Summary faithfulness, day by day',
+		title: matchTitle(),
 		route: '/console/model/'
 	},
 	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
 	{ id: 'summary-length', title: 'How long the summaries came out', route: '/console/model/' },
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
+
+/** Name the faithfulness panel for the days its window can show. */
+export function matchTitle(windowDays?: number): string {
+	return windowDays === 1
+		? 'Summary faithfulness for this one day'
+		: 'Summary faithfulness, day by day';
+}
 
 /** Which panel answers for which ledger column.
  *
@@ -117,7 +125,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 		'Which try wrote the summary. Measured 2026-09-06 over 6,966 rows: every one of them is the first try.'
 };
 
-/** The ledger rows this module reads, as the CSV reader hands them over. */
+/** The ledger rows this module reads, every cell as text. */
 export type EvalInput = Readonly<Record<string, string | undefined>>;
 
 /** An instrument the pipeline records and nothing acts on. */
@@ -603,7 +611,35 @@ export function matchHeadline(days: readonly EvalDay[], windowDays: number): str
 	const low = middleDay(drawn.map((day) => day.matchLow));
 	if (mid === null || low === null) return null;
 	const totals = evalTotals(days);
-	return `Over these ${windowDays} days the middle day put half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched)} summaries checked.`;
+	// One day has no middle day, so at one day the sentence names the day itself.
+	const lead =
+		windowDays === 1
+			? `${openWithSpan(windowDays)} put`
+			: `Over ${nameSpan(windowDays)} the middle day put`;
+	return `${lead} half its summaries above ${mid} percent, and a quarter of them under ${low} percent, on ${grouped(totals.matched)} summaries checked.`;
+}
+
+/** Which day the faithfulness plot's points are, as its intro says it. A
+ * window of one day draws one point a line, so the two are that day. */
+export function matchPoints(windowDays: number): string {
+	return windowDays === 1
+		? `Both points are ${nameSpan(windowDays)}.`
+		: `One point is one day over ${nameSpan(windowDays)}.`;
+}
+
+/** The faithfulness plot in words, for a reader who cannot see it. `rulesAt`
+ * are the scores of the rules the plot drew. A line needs a second day, so a
+ * window of one day names its two points instead. */
+export function matchLabel(windowDays: number, rulesAt: readonly number[]): string {
+	const drawn =
+		windowDays === 1
+			? `Summary faithfulness in ${nameSpan(windowDays)}, as a percentage. One point is the day's middle summary and the other is the summary a quarter of the way up from the bottom.`
+			: `Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.`;
+	const rules =
+		rulesAt.length === 0
+			? ''
+			: ` A line crosses the plot at ${rulesAt.join(' and ')} percent, the scores a published story is banded on.`;
+	return `${drawn}${rules}`;
 }
 
 /** What the second faithfulness column says, in words.

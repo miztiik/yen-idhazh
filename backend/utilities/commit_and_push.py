@@ -415,8 +415,8 @@ def _resolve_what_this_job_owns(
 
     A path the tip has deleted is left unmerged on purpose. Git exits 0 and
     changes nothing when the side it is asked for is the deleted one, and staging
-    the file instead would settle a deletion this job never made: retention and
-    the closed-day fold are what remove a file named for a job. So the index is
+    the file instead would settle a deletion this job never made: retention is
+    what removes a file named for a job. So the index is
     read again at the end, and a path still unmerged there stops the push rather
     than reaching `git rebase --continue`.
 
@@ -598,7 +598,7 @@ def main(argv: Sequence[str]) -> int:
     # The identity this job's own files carry. `ledger.segment_name` names a
     # writer's file `<run_id>-<attempt>-<job>-<shard>`, and this project's run id
     # is itself `<date>-<execution>` - so a committed name reads
-    # `2026-09-22-35743751882-1-work-03.csv`. That leading date is why the match
+    # `2026-09-22-35743751882-1-work-03.jsonl`. That leading date is why the match
     # is not anchored to the first character: the runner hands this program the
     # execution number, and the date is the plan job's to choose. The execution
     # number is allocated by GitHub and is eleven digits, so finding it with the
@@ -733,13 +733,13 @@ def main(argv: Sequence[str]) -> int:
         # `merge.directoryRenames=false` on both spellings below. Git guesses
         # that a directory whose files all moved away was RENAMED to wherever
         # they went, and it applies that guess to a file the other side added
-        # into the emptied directory. The closed-day fold replaces a day's writer
-        # files with one settled file, so a sibling adding a new writer file into
-        # that day is read as adding into a directory that no longer exists, and
-        # the rebase stops with `CONFLICT (file location)` over a tree that was
-        # correct. Proved in a scratch repository on 2026-09-22: the same replay
-        # conflicts with the guess on and reports `Successfully rebased` with it
-        # off, losing nothing.
+        # into the emptied directory. The closed-day fold, while it ran, replaced
+        # a day's writer files with one settled file, so a sibling adding a new
+        # writer file into that day was read as adding into a directory that no
+        # longer existed, and the rebase stopped with `CONFLICT (file location)`
+        # over a tree that was correct. Proved in a scratch repository on
+        # 2026-09-22: the same replay conflicts with the guess on and reports
+        # `Successfully rebased` with it off, losing nothing.
         replayed = _git("-c", "merge.directoryRenames=false", "rebase", "FETCH_HEAD")
         if replayed.returncode != 0:
             settled = _resolve_what_this_job_owns(
