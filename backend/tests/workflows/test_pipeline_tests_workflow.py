@@ -925,7 +925,9 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
 
     assert len(staged) == 2 * len(test_cases), "a traces root and a raw root for every case"
     for test_case in test_cases:
-        assert (state / ledger.paths.TRIAL_TRACES_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
+        assert (
+            state / ledger.paths.RAW_DIRNAME / "traces" / TRIAL_STATE / test_case.id
+        ).is_dir()
         assert (state / ledger.paths.RAW_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
     with ledger.use_registry(
         ledger.overlay_registry((TRIAL_STATE_PREFIX, test_cases[0].id))

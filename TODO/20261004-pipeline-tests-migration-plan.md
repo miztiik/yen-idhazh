@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-09
 **Level**: 5 for the approved root design; 2 for the first tooling phase.
-**Status**: DONE. Rows 1 to 5 shipped a layout this plan approved and row 5 committed, but it put `raw`/`compact` inside each trial root (`state/pipeline-tests/<case>/raw/...`) instead of tier first like every other ledger (`state/raw/<ledger>/...`). The user caught this 2026-10-09 and ordered a correction: tier stays the top segment, and the trial's own bench/case names splice in after it (`state/raw/pipeline-tests/<case>/...`). Section 7 carries the corrected design; rows 6 to 8 (#1443, #1438, #1465) replaced rows 2 to 5's root shape for raw/compact ledgers in code, config and committed data. The user then asked for one more pass: row 9 moves the four trace files off their remaining row-5 address, to a new sibling root `state/trial-traces/pipeline-tests/<case>/`, so `state/pipeline-tests/` holds nothing at all. Every pipeline-tests path builder, registry overlay, compactor, reader and committed trial file now resolves tier-first (or sibling-tier-first for traces); no root-first address remains.
+**Status**: DONE. Rows 1 to 5 shipped a layout this plan approved and row 5 committed, but it put `raw`/`compact` inside each trial root (`state/pipeline-tests/<case>/raw/...`) instead of tier first like every other ledger (`state/raw/<ledger>/...`). The user caught this 2026-10-09 and ordered a correction: tier stays the top segment, and the trial's own bench/case names splice in after it (`state/raw/pipeline-tests/<case>/...`). Section 7 carries the corrected design; rows 6 to 8 (#1443, #1438, #1465) replaced rows 2 to 5's root shape for raw/compact ledgers in code, config and committed data. Row 9 (#1478) moved the four traces to `state/trial-traces/pipeline-tests/<case>/`. The user then ordered row 10 to move those same JSONL files under `state/raw/traces/pipeline-tests/<case>/`; that is the current address. The pipeline-test raw/compact ledgers and traces are tier-first, while the trace files remain JSONL rather than ledger-door files.
 
 ## 0. Operating contract
 
@@ -67,6 +67,7 @@ Table D - PR phases
 | D7 | 7 | Compaction and config move to tier-first `owns`; the gardener swaps the registry, not the state root | 6 | G | DONE #1438 | pipeline-tests-tier-roots-fix | #1438 | Fowler |
 | D8 | 8 | Committed trial files move again, byte for byte, from root-first to tier-first | 7 | H | DONE #1465 | pipeline-tests-phase3-data-relocation | #1465 | Fowler |
 | D9 | 9 | Traces move off the root-first address, to a sibling tier root | 8 | I | DONE #1478 | pipeline-tests-row9-traces-tier-first | #1478 | Fowler |
+| D10 | 10 | Trial traces move under the raw tier, beside production traces | 9 | J | DONE (local) | pipeline-tests-migration-rows-2-to-5 | - | - |
 
 ## 2. Row #1 - Reusable migration operations ship
 
@@ -406,6 +407,16 @@ A trace file was the one thing rows 6 to 8 left at its row-5, root-first address
 - **Acceptance gates:** Local, in order: (1) confirm no run of `digest.yml`, `idhazh-gardener.yml`, `idhazh-pipeline-tests.yaml`, `validate.yml` or `measure.yml` is queued or running, or pause and name the run; (2) `git mv` each trace file, confirmed by git's own `R100` rename detection against `origin/main`; (3) the full test suite green, including a concurrent-writer isolation regression on the registry override; (4) doc gates (`backend/utilities/doc_load.py` on every changed page). CI: full merge-candidate checks.
 - **Oracle:** `git ls-tree -r --name-only origin/main state/pipeline-tests` returns nothing; the four trace files are byte-identical at `state/trial-traces/pipeline-tests/<case>/<YYYY>/<MM>/<DD>/`; `claimed_roots()` includes `trial-traces` beside `traces`, `raw` and `compact`; a read through the corrected builders at the new trace address returns the same rows a reader got at the old one; `_refuse_overlapping_claims` is unchanged and still passes.
 - **Status:** DONE, pull request #1478 (squash SHA `827547190ecccdd69efe28ea036b4dc74eae128b`), merged into `main` at 2026-10-09T02:04:35Z. The four trace files are `git mv`'d (SHA-256 confirmed identical pre/post against `origin/main`); gate (1) cleared (all five named workflows confirmed not queued/running before the data commit); CI (scope/gates/robots/site/browser) green. `git ls-tree -r --name-only origin/main state/pipeline-tests` is empty. The two `.github/workflows/*.yml` comment fixes named above remain deferred to a follow-up comment-only PR from a token with the `workflow` scope.
+
+### Row #10 - Trial traces move under the raw tier, beside production traces
+
+The user corrected row 9's destination: trial traces belong at `state/raw/traces/pipeline-tests/<case>/`, not `state/trial-traces/`. The production tree remains `state/traces/`, so the two retention claims stay separate. The files remain JSONL spans; `raw/traces` is a path tier here, not a conversion to raw ledger-door files.
+
+- **Scope:** Update the trace registry overlay and trial trace gather/place paths to use `state/raw/traces/<segments>`; update the trial retention roots, tests, workflow comment and owning docs; move the four committed trace files from `state/trial-traces/pipeline-tests/<case>/<YYYY>/<MM>/<DD>/` without changing their bytes. Do not change production trace paths or retention, and do not convert the trace format.
+- **Files touched:** `backend/idhazh/ledger/paths.py`; `backend/utilities/pipeline_test_ledgers.py`; `config/gardener/trials.json`; the trial trace path, gardener, workflow, and contract tests listed in this change; `.github/workflows/idhazh-pipeline-tests.yaml`; `docs/architecture/contracts/persistence.md`; `docs/concepts/growing-reads.md`; `docs/reference/github-actions.md`; `docs/reference/repository-layout.md`; the four moved `.jsonl` files.
+- **Acceptance gates:** The full backend suite, `ruff`, `mypy`, and `doc_load` pass. All four destination files have the same Git blob as their original committed source, and no file or empty directory remains under `state/trial-traces/`. The broad browser check is not a required site smoke because this row changes no frontend code or published page; its unrelated console suite timed out locally after 580 tests passed.
+- **Oracle:** The registry resolves each trial trace to `state/raw/traces/pipeline-tests/<case>/`; the trial retention config owns those case roots; production still owns `state/traces/`; the four JSONL blobs are unchanged; no active code, config or docs declaration uses `state/trial-traces/`. Earlier plan sections keep that address only to record row 9's now-replaced result.
+- **Status:** DONE locally on branch `pipeline-tests-migration-rows-2-to-5`; no commit or pull request was requested.
 
 ## See also
 

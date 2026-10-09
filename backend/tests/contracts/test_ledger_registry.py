@@ -471,7 +471,6 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "item-health-summary",
         "summary-quality-evals",
         "traces",
-        "trial-traces",
         "day-metrics",
         "digest-fragments",
         "gardener",

@@ -91,12 +91,12 @@ VISUAL_DAYS: Final = {
 #: past the window is old, an undated name is kept, and a day ahead of `TODAY`
 #: stays.
 TRIAL_FILES: Final = (
-    "trial-traces/pipeline-tests/production-settings/2027/08/17/old.jsonl",
-    "trial-traces/pipeline-tests/production-settings/2027/08/18/kept.jsonl",
-    "trial-traces/pipeline-tests/production-settings/2027/11/10/outside-range.jsonl",
-    "trial-traces/pipeline-tests/production-settings/notes.txt",
-    "trial-traces/pipeline-tests/production-settings/2027/12/01/future.jsonl",
-    "trial-traces/pipeline-tests/no-visual-plan/2026/01/01/old.jsonl",
+    "raw/traces/pipeline-tests/production-settings/2027/08/17/old.jsonl",
+    "raw/traces/pipeline-tests/production-settings/2027/08/18/kept.jsonl",
+    "raw/traces/pipeline-tests/production-settings/2027/11/10/outside-range.jsonl",
+    "raw/traces/pipeline-tests/production-settings/notes.txt",
+    "raw/traces/pipeline-tests/production-settings/2027/12/01/future.jsonl",
+    "raw/traces/pipeline-tests/no-visual-plan/2026/01/01/old.jsonl",
 )
 
 #: The browser's copies of the item-health months, and one whose source month is
