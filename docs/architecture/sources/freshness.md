@@ -129,8 +129,9 @@ row, recorded in [../../reference/pipeline-cost.md](../../reference/pipeline-cos
 `load_published` reads one held month at a time, so what it holds while it reads
 is one month's rows and the answer, however long the history grows - at the
 structural ceiling of 1,000 rows a day, a month is about 31,000 rows.
-`backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file`
-doubles the months held and checks that the peak stays flat.
+`backend/tests/test_ledger.py::test_the_unbounded_cover_reads_one_held_month_at_a_time`
+checks that the unbounded read asks for each held month. It does not measure peak
+memory.
 
 **`canonical_url` was 48.6 percent of the row, and it is gone.**
 `load_published` reads `url_key` and `published_on` by name, and nothing else
