@@ -52,6 +52,12 @@ package versions are uploaded with the shard log. Vectors are retained for 90
 days, not three. The Jina weights are CC-BY-NC-4.0; this comparison is not approval
 for commercial deployment.
 
+The text-only load still constructs a vision-aware processor. The comparison
+runtime therefore installs the supported image extra, including Pillow. Torch
+and Torchvision come from the same CPU wheel index; mixing a CPU tensor runtime
+with a CUDA vision wheel would fail before any summaries are encoded. Processor
+imports are checked before the shard downloads model weights.
+
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TD

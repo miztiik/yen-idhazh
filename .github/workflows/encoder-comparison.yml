@@ -167,13 +167,14 @@ jobs:
       - name: Install the encoder runtime
         run: |
           set -euo pipefail
-          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
           # Newest first. A recent foundation needs a recent library, and a
-          # model that still will not load is recorded as unavailable with the
-          # reason rather than taking the shard down.
+          # A model that will not load leaves a reading with its reason.
+          # The state check below then fails that shard.
           pip install --quiet --upgrade \
-            'transformers>=5.19' 'sentence-transformers>=6.1' \
+            'transformers>=5.19' 'sentence-transformers[image]>=6.1' \
             scikit-learn numpy pydantic
+          python -c 'from PIL import Image; import torchvision; from transformers import EmbeddingGemma2Processor'
           pip freeze > runtime.txt
 
       - name: Score it

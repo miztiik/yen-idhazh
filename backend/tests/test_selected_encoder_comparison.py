@@ -8,10 +8,24 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml  # type: ignore[import-untyped]
 
 from utilities.compare_summary_encoders import read_config, select_encoders, stage_collect
 
 CONFIG = Path(__file__).resolve().parents[2] / "config" / "encoder-comparison.json"
+WORKFLOW = CONFIG.parent.parent / ".github" / "workflows" / "encoder-comparison.yml"
+
+
+def test_runtime_installs_cpu_image_dependencies_before_loading_the_model() -> None:
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    install = next(
+        step["run"] for step in workflow["jobs"]["score"]["steps"]
+        if step.get("name") == "Install the encoder runtime"
+    )
+    assert "torch torchvision --index-url https://download.pytorch.org/whl/cpu" in install
+    assert "sentence-transformers[image]>=6.1" in install
+    assert "from PIL import Image" in install
+    assert "from transformers import EmbeddingGemma2Processor" in install
 
 
 def test_only_the_two_requested_shards_are_selected() -> None:
