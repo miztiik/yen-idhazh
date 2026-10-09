@@ -1,44 +1,46 @@
 {
  "version": "2026-10-08",
- "taken_at": "2026-10-08T17:31:37Z",
- "commit": "c295be7a7cf665cf11328f04252b2eb353d14ce6",
- "workflow_run": "https://github.com/miztiik/yen-idhazh/actions/runs/37805567973",
+ "taken_at": "2026-10-09T02:47:55Z",
+ "commit": "92223be70b667ba946bd2d1baf97e716aa520ade",
+ "workflow_run": "https://github.com/miztiik/yen-idhazh/actions/runs/37850950040",
  "runner": {
   "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
   "python": "3.12.15",
-  "processor_threads": 4
+  "processor_threads": 0
  },
  "input": {
   "first_day": "2026-08-23",
   "last_day": "2026-10-05",
   "days_named": 44,
   "articles_read": 15115,
-  "articles_encoded": 10553,
+  "articles_encoded": 10675,
   "same_pairs": 5517,
   "different_pairs": 5517,
   "ambiguous_pairs": 4000,
   "pair_build": {
    "title_overlap_floor": 0.3,
+   "sensitivity_floors": [
+    0.25,
+    0.3,
+    0.35,
+    0.4
+   ],
    "ambiguous_floor": 0.1,
    "seed": 20261008,
    "next_day_window": 1,
    "min_title_words": 3,
    "max_pairs_a_side": 8000,
-   "max_ambiguous_pairs": 4000
+   "max_ambiguous_pairs": 4000,
+   "max_related_pairs": 2000
   }
  },
  "encode": {
   "batch_size": 32,
   "max_sequence_length": 256,
-  "threads": 4,
+  "threads": 0,
   "checkpoint_every_articles": 512
  },
- "encoders_asked": 8,
- "encoders_measured": 4,
- "encoders_unavailable": [
-  "bge-large",
-  "mxbai-large",
-  "bge-m3",
-  "qwen3-embedding-0.6b"
- ]
+ "encoders_asked": 5,
+ "encoders_measured": 5,
+ "encoders_unavailable": []
 }
