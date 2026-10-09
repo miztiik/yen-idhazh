@@ -8,6 +8,8 @@
  * **The canary build has judged nothing**, so the baseline here is the empty
  * state, and that is the state worth testing. A panel that waits for data
  * before it draws anything teaches an operator the measurement does not exist.
+ * One generated full route also checks the recorded build line against a
+ * different fitted-history value, through the real loader and private build.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -15,11 +17,51 @@ import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { judgementRoute } from './support/judgement-route';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const ROUTE = '/console/judgement/';
 const SPLIT = '[data-verdict-split]';
+
+test('THE ORACLE: the hydrated route binds all three panels to the newest build record', async ({ browser }) => {
+	test.setTimeout(180_000);
+	const server = await judgementRoute(test.info().outputPath('recorded-route'));
+	try {
+		const context = await browser.newContext({ serviceWorkers: 'block' });
+		try {
+			await context.route('**/*', (route) =>
+				new URL(route.request().url()).origin === new URL(server.origin).origin
+					? route.continue()
+					: route.abort('blockedbyclient'));
+			const page = await context.newPage();
+			const errors: string[] = [];
+			page.on('pageerror', (error) => errors.push(error.message));
+			page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+			page.on('response', (response) => { if (response.status() === 404) errors.push(`404 ${response.url()}`); });
+			await page.goto(`${server.origin}console/judgement/`, { timeout: 60_000 });
+			const oneDay = page.locator('[data-window-preset="1"]');
+			await expect(oneDay.locator('input')).toBeEnabled();
+			await page.locator('[data-window-preset="14"]').click();
+			const merge = page.locator('[data-windowed="merge-line"]');
+			await expect(merge.locator('[data-line-day="2030-06-14"]')).toHaveAttribute('data-line-applied', '0.952');
+			await oneDay.click();
+			await expect(merge).toHaveAttribute('data-line-days', '0');
+			await chartsReady(page);
+			await expect(merge.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', '0.937');
+			await expect(merge.locator('[data-line-rule]')).toHaveAttribute('stroke-dasharray', /.+/);
+			await expect(merge.locator('[data-line-rule-label]')).toHaveText('The line this one day was built with');
+			await expect(page.locator(SPLIT)).toHaveAttribute('data-verdict-line', '0.937');
+			await expect(page.locator(`${SPLIT} [data-verdict-rule]`)).toHaveAttribute('data-verdict-rule', '0.937');
+			await expect(page.locator('[data-holdout-rule]')).toHaveAttribute('data-holdout-rule', '0.9370');
+			expect(errors, 'the generated full route must hydrate without browser errors or missing assets').toEqual([]);
+		} finally {
+			await context.close();
+		}
+	} finally {
+		await server.close();
+	}
+});
 
 function appearance(): { console: { precision_axis_multiple: number } } {
 	// Read inside the test, never at module scope: a fixture opened while the

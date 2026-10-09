@@ -88,7 +88,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L31 | The record's bars say when a window holds no row | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | I | DONE | probable-journey | #1414 | Plan 62 row l31 |
 | L32 | Judgement's agreement strip prints no share below five pairs | L27, L26 (holds `frontend/tests/console-window.spec.ts`) | J | DONE | cuddly-sniffle | #1409 | Plan 62 row l32 |
 | L33 | Every sentence for a record the door answers missing says it is not packed yet | L25 | H | DONE | ubiquitous-system | #1482 | Plan 62 row l33 |
-| L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `frontend/tests/console-window.spec.ts`), L52 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | PENDING | - | - | - |
+| L34 | The rest of the console reads right at the one-day window | L26, L30 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`), L31 (holds `frontend/tests/console-window.spec.ts`), L32 (holds `frontend/tests/console-window.spec.ts`), L52 (holds `MergeLinePlot.svelte` as well as `frontend/tests/console-window.spec.ts`) | K | DONE | ideal-bassoon | #1488 | Make one-day console wording accurate |
 | L35 | Pipelines' failure and time-split panels follow the window or say why not | L26, L30, L31, L32 (each holds `frontend/tests/console-window.spec.ts`) | L | DONE | urban-winner | #1447 | Plan 62 row l35 |
 | L36 | Hardware's one-sided line leaves out a day whose only run was refused | L28, L29 | M | DONE | psychic-goggles | #1421 | Plan 62 row l36 |
 | L37 | Article cost names a refused shard's processor time or leaves it out | L29 | N | DONE | jubilant-doodle | #1431 | Plan 62 row l37 |
@@ -99,7 +99,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L42 | The days control shows the window the panels draw after moving between console routes | L31 (holds `frontend/tests/console-window.spec.ts` as well as `which-console-surfaces-follow-the-window-and-which-say-why-not.md`) | O | DONE | animated-pancake | #1464 | Plan 62 row l42 |
 | L43 | Every console route sets its own page title | - | N | DONE | upgraded-telegram | #1429 | Plan 62 row l43 |
 | L44 | The publication inventory names every fitted-line and holdout day the council commits | L41, plan 59's row "The fitted merge line is saved through the door" (it closes this row) | O | COLLAPSED #1454 | - | - | - |
-| L45 | Judgement's sentences agree with the days and counts it draws | L41 | P | PENDING | - | - | - |
+| L45 | Judgement's sentences agree with the days and counts it draws | L41, L57 (holds `frontend/src/lib/console/merge-line.ts`, `frontend/tests/merge-line.spec.ts` and `frontend/tests/console-window.spec.ts`) | P | DONE | congenial-telegram | #1492 | Match judgement words to its data |
 | L46 | The site build bakes the raw days the data explorer may read | - | Q | DONE | automatic-garbanzo | #1427 | Plan 62 row l46 |
 | L47 | Hardware's started line counts a day whose only run is machine records alone | L36 | O | DONE | super-couscous | #1441 | Plan 62 row l47 |
 | L48 | The Data explorer's line under an answer ends on the last day it read | L12, L46, plan 55's row "The reader chooses the chart and the columns it draws" (holds `frontend/src/routes/console/data-explorer/+page.svelte` as well as `frontend/tests/console-data-explorer.spec.ts`) | R | DONE | glowing-doodle | #1468 | Plan 62 row l48 |
@@ -110,14 +110,14 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L53 | Hardware reads a machine record with no job the same way everywhere | - | W | DONE | fuzzy-doodle | #1459 | Plan 62 row l53 |
 | L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | #1479 | Plan 62 row l54 |
 | L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | DONE | fictional-disco | #1483 | Plan 62 row l55 |
-| L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
-| L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | PENDING | - | - | - |
+| L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | DONE | stunning-bassoon | #1499 | Share console line-gap rule |
+| L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | DONE | bookish-telegram | #1491 | Make agreement numbers match verdicts |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
-| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
-| L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
-| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | PENDING | - | - | - |
-| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | PENDING | - | - | - |
+| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
+| L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | DONE | legendary-telegram | #1500 | Check recorded line across judgement |
+| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
+| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | #1497 | Rest voices on newest source day |
 
 ## 2. Shared declarations
 
@@ -1576,7 +1576,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   2. Hardware's processor-lost strip, in `frontend/src/lib/console/machine/ProcessorLostPanel.svelte`, is also handed one record at a time. It rests on ", the newest day" when its verdict names no day, its hint says "Up and Down move between days and shards", and the tiles' label says "one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest."
   3. The stage timings chart on Pipelines, in `frontend/src/lib/components/StageTimings.svelte`, says "Median per item, each day."
   4. Two titles and a control say "day by day": "Which machines ran our jobs, day by day" (`frontend/src/lib/console/machine/PlatformMixPanel.svelte`); "Summary faithfulness, day by day" (the heading in `frontend/src/routes/console/model/+page.svelte`, and `EVAL_PANELS` in `frontend/src/lib/console/eval-instruments.ts`); and the cost switch's "Day by day" (`COST_SHAPES` in `frontend/src/lib/charts/cost.ts`, drawn on Hardware by `frontend/src/lib/console/machine/CounterfactualCostPanel.svelte`). Row L26 held that a title names the panel, not the days on screen; Reader rules whether that holds.
-  5. The merge line's note speaks of lines where one day draws a point: "The solid line is ... The dotted line is ..." (`frontend/src/routes/console/judgement/MergeLinePlot.svelte`). The agreement panel's note, "One line is how often the two readings differed. The other is how often the reading could not tell." (`frontend/src/routes/console/judgement/JudgeAgreement.svelte`), left this sentence: row L51 (#1463) gave it Reader's words, which hold at the 1-day window (row L51's report, Follow-up 2; decision 5).
+  5. The merge line's note speaks of lines at the one-day window: "The solid line is ... The dotted line is ..." (`frontend/src/routes/console/judgement/MergeLinePlot.svelte`). Read again at dispatch, the plot has no standalone one-day point; this row names readings and leaves the drawing unchanged. The agreement panel's note, "One line is how often the two readings differed. The other is how often the reading could not tell." (`frontend/src/routes/console/judgement/JudgeAgreement.svelte`), left this sentence: row L51 (#1463) gave it Reader's words, which hold at the 1-day window (row L51's report, Follow-up 2; decision 5).
 - **Files touched** (from a search on `main` at 7ba988fc2 for the words above and the tests that pin them; `frontend/src/routes/console/judgement/JudgeAgreement.svelte` left the list with sentence 5's agreement note, from row L51's report, after a search on `origin/main` at 6cbc07926 found no other sentence of this row in it; search again at dispatch):
   - `frontend/src/routes/console/voices/+page.svelte` (sentence 1)
   - `frontend/src/lib/components/ChartReadout.svelte` (sentences 1 and 2, only if a strip handed one record at a time joins its one-column rule)
@@ -1587,6 +1587,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/console-window.spec.ts` (row L26's built cases, one of which pins the merge line's note; held by L30, L31, L32 and L52 while each runs)
   - `frontend/tests/span-sentences.spec.ts` (row L26's logic cases, for a sentence a function writes)
   - `frontend/tests/console-machine-panels.spec.ts` (pins "Which machines ran our jobs, day by day")
+  - `frontend/src/lib/console/machine/CounterfactualCostPanel.svelte` (found during execution: passes the window to the cost switch's option labels)
   - `docs/concepts/console-design.md` (the one-day rule, where Reader's ruling adds to it)
   - Left as they are, unless Reader rules otherwise: the data explorer's example "Summaries scored, day by day" (`config/appearance.json`, with its default copies in `backend/idhazh/contracts/knobs/console.py` and `frontend/src/lib/server/config.ts`), which opens at its own 14 days; `frontend/src/lib/charts/glance.ts`, whose "day by day" already drops at one measured day
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the specs it selects for the changed files; `npm --prefix frontend run check`; `doc_load.py` on the page if it changes; the browser smoke of Voices, Hardware, Pipelines, Summaries and Judgement at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
@@ -1596,18 +1597,52 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the words, and rules whether a title or the cost switch that says "day by day" keeps it at one day (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | Feed records at one day name "this one day" and keep arrow keys between feeds. The source retirement record keeps its own span; only its own one-date record says "its one recorded day" and names keys between sources. Processor tiles name the day's tile, or the first run-part tile when no day tile exists. Stage timings name the median over items within the day. Platform and faithfulness titles say "for this one day"; the daily cost choice says "This one day". The merge note names applied and proposed readings, without promising a standalone point or changing their meaning. Seven-day words stay unchanged | Reader, 2026-10-09 |
 | 2 | The surfaces are row L26's follow-ups, each found on its smoke at the 1-day window | Row L26's report; plan owner, 2026-10-07 |
 | 3 | L34 waits for L26 (#1400), which set the one-day rule and the one-column rule in `ChartReadout.svelte`, and for L30, L31, L32 and L52, which hold files it touches (the Depends-on cell names each) | Plan owner, 2026-10-07; L51 added 2026-10-08, because it changed `JudgeAgreement.svelte`, and taken out the same day with that file (row L51's report: decision 5); L52 added 2026-10-08, because it changes `MergeLinePlot.svelte` |
 | 4 | Level 1: words on panels, one surface at a time; a wrong version is obvious and local | Plan owner, 2026-10-07 |
 | 5 | Sentence 5 keeps only the merge line's note. Row L51 (#1463) gave the agreement panel's note Reader's words, and they hold at the 1-day window, where each rate is one dot or none, so this row has nothing left to rule on that note | Reader, 2026-10-08 (row L51's report, Follow-up 2); plan owner, 2026-10-08 |
+| 6 | Susan ships the wording and controls after reviewing the diff and the five routes at 390 px in both themes. There is no in-scope sufficiency defect; merge-point geometry and the agreement chart's geometry stay with their own rows | Susan, 2026-10-09 |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | As today | At the 1-day window these surfaces still name a newest day, keys that need a second day, or lines where one day draws a point | Nothing to build, and readings at one day that need a second day | Row L26's report; plan owner, 2026-10-07 |
+| 1 | As today | At the 1-day window these surfaces still name a newest day, keys that need a second day, or lines rather than the day's readings | Nothing to build, and readings at one day that need a second day | Row L26's report; plan owner, 2026-10-07; Reader, 2026-10-09 |
 | 2 | A row for each surface | Each row would ask Reader to apply one rule again, and five rulings on one rule can disagree | Five smaller reviews | Plan owner, 2026-10-07 |
+
+**Follow-up found during execution**
+
+- When the source retirement record has no judged row but has unjudged rows,
+  `retiringResting` in `frontend/src/routes/console/voices/+page.svelte` selects
+  index 0. On a generated seven-date record from 9 Jun 2030 to 15 Jun 2030,
+  with `rows: []` and `unjudged: [{ sourceId: 'source-a', squares }]`, the
+  strip rests on `source-a, 9 Jun 2030, its newest day`. The newest date is
+  15 Jun 2030, at index 6. The smallest behavior assertion is that
+  `[data-readout="source-yield"] [data-readout-subject]` says
+  `source-a, 15 Jun 2030, its newest day` after mounting that input, before
+  any key or pointer selection. Put the generated case beside the source
+  record cases in `frontend/tests/console-window.spec.ts`. This row leaves
+  the resting-selection rule unchanged. The plan coordinator will place a
+  separate Voices row after this section lands; L45 changes Judgement, not
+  this source record.
+
+  This generated input uses the helpers in `frontend/tests/console-window.spec.ts`:
+
+  ```typescript
+  const data = voiceData(7, windowDates(7));
+  data.retiring.rows = [];
+  data.retiring.unjudged = [{
+    ...data.retiring.unjudged[0], sourceId: 'source-a', title: 'source-a'
+  }];
+  await drawRecord(page, 'Voices', { data });
+  await expect(page.locator('[data-readout="source-yield"] [data-readout-subject]'))
+    .toHaveText('source-a, 15 Jun 2030, its newest day');
+  ```
+
+  `windowDates(7)` supplies exactly 2030-06-09 through 2030-06-15 in ascending
+  order. This assertion fails because the current resting index is 0, not 6.
+  It is the separate row's test, not a failing test added to L34.
 
 ### Row #L35 - Pipelines' failure and time-split panels follow the window or say why not
 
@@ -2006,6 +2041,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/tests/span-sentences.spec.ts` (`heldNote` at 1 and 7 days)
   - `frontend/tests/console-window.spec.ts` (the Oracle, beside the built `record-gates` cases, which pin the `filling` sentence, and the `merge-line` cases; held by L34, L35, L39, L40 and L42 while each runs)
   - `frontend/tests/console-judgement-line.spec.ts` ("the resting heading separates the date from the note" holds the merge line's heading to end ", the newest day")
+  - `docs/concepts/console-design.md` (found during execution: owns what recorded-day and minimum-count sentences may claim)
   - Read, no change unless Reader's words reach them: `frontend/src/lib/components/ChartReadout.svelte`, which joins the newest column's date to the resting note; `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-judgement-agreement.spec.ts`, whose strip also rests on ", the newest day"
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts --spec merge-line.spec.ts --spec span-sentences.spec.ts --spec console-judgement-line.spec.ts`; `npm --prefix frontend run check`; the browser smoke of the Judgement route at the 1-, 7-, 14- and 30-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** in `console-window.spec.ts`, on days each case builds (Table D, D3), with Reader's sentences written out whole: a 7-day window whose one row was held and whose other days hold no row, where the merge line's note and the record's line agree; a record whose pairs above the line passed their mark while its readings have not, where the sentence while it fills prints no count past its mark as a share; and, at the 14- and 30-day presets, a window whose newest fitted day is before its last day, where the merge line strip's resting heading does not call that day the window's newest. On `origin/main` each case prints the sentence quoted under The faults, which is what lets this check fail. It cannot settle the words, which Reader chooses (decision 2).
@@ -2015,10 +2051,11 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The faults are row L41's Follow-ups, from its smoke on the committed data | Row L41's report; plan owner, 2026-10-08 |
-| 2 | Reader chooses the words of the three sentences (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 2 | The held note says "Nothing was fitted on {held} recorded {day/days} in this {windowDays}-day window." The filling sentence states actual counts, then "it needs at least" the three minimum counts. The resting heading says ", the newest recorded day shown", for a fitted or held row; one column keeps its date alone. Counts keep the shared thousands separator and day grammar | Reader, 2026-10-09; CLAUDE.md section 14 |
 | 3 | The first two faults do not depend on the inventory, so they wait for nothing. For the third, plan 59's owner confirmed all 19 fitted-line days were packed in successful wake 37862656235 and the old CSVs were removed in #1471 (7e5bfd9df). A Playwright read of the published page then confirmed the fault at 14 and 30 days: the merge-line heading says "7 Oct, the newest day" while the latest published day is 8 Oct. The fault survives #1454, #1462 and #1471, so L45 must still fix it. L60 waits for L45 because they share `MergeLinePlot.svelte` and `console-window.spec.ts` | Plan owner, 2026-10-09 |
 | 4 | The third fault is this row's, not row L34's (rejected alternative 2); row L41's Follow-up had left that choice to Reader | Plan owner, 2026-10-08 |
 | 5 | Level 1: three sentences on one route; a wrong version is obvious and local | Plan owner, 2026-10-08 |
+| 6 | L57 released its frozen writing at 4df5a46c527cf7ffa5e658b3a0640ffab1a6843c. L45 fetched and normally merged that exact commit before shared-file edits, preserving its number formatting, tests and own row. This is file-safety ordering under `docs/how-to/execute-a-plan.md`, not a personal user ruling | Plan coordinator, 2026-10-09 |
 
 **Rejected alternatives**
 
@@ -2408,7 +2445,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - `frontend/src/lib/components/StageTimings.svelte` (`runs`; held by L34 while it runs)
   - `frontend/src/routes/console/judgement/MergeLinePlot.svelte` (`proposedRuns`; held by L34, L45 and L52 while each runs)
   - `frontend/src/routes/console/judgement/JudgeAgreement.svelte` (`runsOf`; held by L51, L55 and L57 while each runs)
-  - the shared function's own module and its logic case, if Fowler rules one: where they live is his ruling (decision 1), and a new spec joins the `logic` list in `frontend/scripts/test-groups.ts`
+  - `frontend/src/lib/charts/indexed-runs.ts` and `frontend/tests/indexed-runs.spec.ts`: Fowler's shared original-index runs and bounded logic cases; the spec joins `logic` in `frontend/scripts/test-groups.ts`
+  - Found during execution: `frontend/tests/console-failure.spec.ts` and `frontend/tests/console-judgement-line.spec.ts` add generated-data cases that read actual polyline coordinates across two gaps and an unjoined singleton. Existing cases remain unchanged.
   - `docs/architecture/publishing/console-charts.md` (its section "A share under the floor gets no mark" says a share's line breaks at its column and never joins across it; changed only if the ruling names the shared function there)
   - Read, no change, each chart's existing break cases: `frontend/tests/console-failure.spec.ts` ("a day too thin to divide breaks the line rather than drawing a share", which checks that the rate is null, not the drawn line); `frontend/tests/run-yield.spec.ts` ("the line breaks at a day with no share rather than crossing it" and "a lone day is a dot and not a one-point line"); `frontend/tests/console.spec.ts` ("a stage with no number draws a gap, never a plunge to the axis floor"); `frontend/tests/console-judgement-line.spec.ts` ("a held day breaks the proposed series and keeps the applied one"); `frontend/tests/console-window.spec.ts` (row L40's `DOT_CASES`)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the specs it selects for the changed files, at least the five specs above and the shared function's; `npm --prefix frontend run check`; the browser smoke of Pipelines and Judgement at the 1- and 7-day presets. CI: the pull request runs the console specs; every group runs on the merge push.
@@ -2418,7 +2456,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Fowler rules whether one shared function replaces the five loops, and where it lives: a file whose first sentence states the one question it answers (CLAUDE.md section 1a). What the search found: four loops break at a missing value and keep runs of two or more; `StageTimings.svelte`'s also breaks at a measured zero, and keeps a run of one that it does not draw as a line; and `dateSeries` breaks its lines through d3's `line().defined()`, a rule the library already holds (Guardrail #8) | To be ruled at dispatch (Fowler) |
+| 1 | `indexedRuns<T>(items, isDefined)` in `frontend/src/lib/charts/indexed-runs.ts` returns maximal nonempty runs of original indices, including singletons, without mutation. Callers own predicates, geometry and minimum drawn length. Four retain runs of two or more; stage timings also break at measured zero and keep singletons without drawing a line. The d3 `line().defined()` rule stays unchanged. The owning chart page names the rule once | Fowler, 2026-10-09 |
 | 2 | The fault is row L40's Follow-up 4, where Jony named one shared rule as Fowler's call | Row L40's report; plan owner, 2026-10-08 |
 | 3 | The row moves no break: each chart's existing break cases pass unchanged. Where a chart should break its line is Jony's to rule, in a row of its own | Plan owner, 2026-10-08 |
 | 4 | L56 waits for L34, L45, L51, L52, L54, L55 and L57, which hold the five charts' files (the Depends-on cell names each) | Plan owner, 2026-10-08; L34 no longer holds `JudgeAgreement.svelte` (row L51's report), and L57 added 2026-10-08, because it changes `JudgeAgreement.svelte` |
@@ -2445,16 +2483,20 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
   - Read, no change unless Reader's words reach it: `frontend/tests/console-judgement-agreement.spec.ts`, whose "every share prints its denominator in the same sentence" reads every whole percent on the panel and looks for its count beside it
   - Read, no change: `frontend/src/lib/charts/series.ts`, whose `grouped` separates thousands by hand, because `toLocaleString` reads the machine's locale and two builds have to agree; `frontend/src/lib/format.ts`, whose `plural` prints a count as it is, and which the panel calls only for a count under `console.min_attempts_for_rate`
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --spec console-window.spec.ts --spec merge-line.spec.ts`, then the specs it selects for the changed files; `npm --prefix frontend run check`; `doc_load.py` on `console-design.md` if it changes; the browser smoke of the Judgement route at the 1-, 7- and 30-day presets, on a build with fitted rows planted for the smoke, as row L40's smoke did, with a share just above its mark and a window of 1,000 pairs or more. CI: the pull request runs the console specs; every group runs on the merge push.
-- **Oracle:** in `console-window.spec.ts`, beside `STRIP_CASES` and the `judge-agreement` cases of `SPAN_CASES`, on days the test builds (Table D, D3), with Reader's sentences written out whole: at 7 days, 7 of 46 pairs disagreed under the 15% mark that the spec's `LIMITS` sets, and the window sentence prints Reader's verdict, never "The 15% that disagreed is past its mark."; at 7 days, the same share in a window with a day held because of the judge, and the held-day sentence prints Reader's words; and at 1 day, a day that read 1,390 pairs, 1,118 of which agreed, where the strip, the dots' name and the sentence print "1,390 pairs" and "the 1,118 that agreed". A logic case in `merge-line.spec.ts` holds `rateWithDenominator` and `describeUnclear` to the same separator. On `origin/main` the first case prints "The 15% that disagreed is past its mark.", the second prints "15% of 46 pairs" beside "a rate was past its mark", and the third prints "1390 pairs" and "the 1118 that agreed", which is what lets this check fail. It cannot settle the words for a share that rounds to its mark's figure, which Reader chooses (decision 1).
+- **Oracle:** in `console-window.spec.ts`, beside `STRIP_CASES` and the `judge-agreement` cases of `SPAN_CASES`, on days the test builds (Table D, D3), the strip and dot names use the same number words as these full sentences:
+  - At 7 days, 7 of 46 pairs disagreed, 39 agreed and none could not tell: `In these 7 days, just above 15% of 46 pairs disagreed with their own second reading, and 0% of the 39 that agreed could not tell. The share that disagreed is just above its 15% mark.`
+  - At 7 days, the same reading with one day held because of the judge: `The two readings disagreed on just above 15% of 46 pairs in these 7 days. No line was fitted on 1 of 7 days, because a rate was past its mark on that day.`
+  - At 1 day, 1,390 judged pairs, 1,118 agreed and 56 could not tell: `In this one day, 20% of 1,390 pairs disagreed with their own second reading, and 5% of the 1,118 that agreed could not tell. The 20% that disagreed is past its mark.`
+  - A fourth rendered case checks the close-above wording against the "could not tell" mark and its agreed denominator. Logic cases hold the separator, both sides of a mark, exact equality, a difference smaller than one decimal, a changed mark and the counts-only floor. An archived actual base renders `The 15% that disagreed is past its mark.`, the held sentence's `15% of 46 pairs`, and the unseparated `1390 pairs` and `the 1118 that agreed`. Each required case fails there and passes on the branch.
 
 **Decisions**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Reader chooses the words for a share that rounds to its mark's own figure, in the verdict sentences and in the sentence for days held because of the judge, and rules whether the plot labels change with them (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
+| 1 | A share that rounds to its mark's printed figure but is not equal prints `just above 15%` or `just below 15%`, with that mark's own figure, in the window sentence, daily readout and dot's name. At exact equality the whole percent stays. A close verdict says `The share that disagreed is just above its 15% mark.` or `The share that could not tell is just above its 35% mark.`; inside uses `just below`. Both-past keeps its existing verdict. The held-day sentence uses the same share words and still names that day's hold. Dashed mark labels do not change. See the number rules in `docs/concepts/console-design.md` | Reader, 2026-10-09 |
 | 2 | The faults are row L51's Follow-ups 1 and 3. Follow-up 1 is Reader's, and L51's smoke at the 30-day window found Follow-up 3. They are one row because both change how one panel prints its numbers, in the same two source files | Row L51's report; plan owner, 2026-10-08 |
 | 3 | A count of 1,000 or more prints through `grouped`, as the merge share, the record panel and the verdict split on the same route already print theirs | Plan owner, 2026-10-08 (the row's title); plan author, 2026-10-08 (the search) |
-| 4 | L57 follows L55's changes to `JudgeAgreement.svelte`, landed in #1483, and waits for L34, which is running and shares `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`. This is file-safety ordering under `docs/how-to/execute-a-plan.md`, not a user ruling | Plan owner, 2026-10-08 (L55 dependency); plan coordinator, 2026-10-09 (L34 file overlap) |
+| 4 | L57 follows L55's changes to `JudgeAgreement.svelte`, landed in #1483, and L34's changes to `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`, landed in #1488. L34's first pushed commit was merged normally before the shared edits, and its one-day assertions are preserved. This is file-safety ordering under `docs/how-to/execute-a-plan.md`, not a user ruling | Plan owner, 2026-10-08 (L55 dependency); plan coordinator, 2026-10-09 (L34 file overlap) |
 | 5 | Level 1: how one panel prints its shares and counts; a wrong version is obvious and local | Plan owner, 2026-10-08 |
 
 **Rejected alternatives**
@@ -2521,6 +2563,9 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **Files touched** (searched on current `origin/main` for the solid series, note, recorded-line reader and route loader):
   - `frontend/src/routes/console/judgement/MergeLinePlot.svelte` (the solid series and its note)
   - `frontend/tests/console-judgement-line.spec.ts` (the rendered chart and note)
+  - `frontend/tests/console-window.spec.ts` (found during execution: three L34 merge-note and accessible-name cases assert the old build-used meaning; preserve their one-day structure and L45's held/count cases)
+  - `docs/concepts/console-design.md` (calculated-history meaning and its reason)
+  - `docs/architecture/publishing/autotune-content-similarity.md` (found during execution: distinguish the solid fit series from the empty recorded-build rule; ownership cleared by the plan coordinator)
   - If the ruling says the solid mark means the line a build used: `frontend/src/lib/server/recorded-line.ts` (the bounded `run.json` reader) and `frontend/src/routes/console/judgement/+page.server.ts` (the Judgement loader), with a real-data test for the added reads
   - Read, no change unless the ruling calls for a persisted-shape change: `backend/idhazh/contracts/run_manifest.py` (`RunRecord.same_story_floor_applied`). Table C, C1 stops any persisted contract change.
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then `console-judgement-line.spec.ts` and `console-window.spec.ts`, plus `recorded-line.spec.ts` if the loader or recorded-line reader changes; `npm --prefix frontend run check`; browser smoke of the Judgement route at 14- and 30-day windows containing fitted rows whose values disagree with recorded run lines, with the switch off. CI: the pull request runs the console specs; every group runs on the merge push.
@@ -2530,7 +2575,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Decide whether the solid mark represents the fitted row or the line the build used, and choose words that say exactly that | To be ruled at dispatch (Fowler and Reader) |
+| 1 | The solid mark keeps each fitted row's final value; its proposal, step band and held counts remain one fitting process. Notes, readout and accessible names say that a build may have used another line. Tint crossing is conditional, not a recorded merge. Keep the generic panel title and L52's newest recorded-build comparisons. No new reads or persisted meanings | Fowler and Reader, before implementation, 2026-10-09; reason in docs/concepts/console-design.md |
 | 2 | L60 is row L52's Reader Follow-up 2, on a different mark from L52's three recorded-line rules | Plan owner, 2026-10-09 |
 | 3 | L60 waits for L34 and L45, which hold `MergeLinePlot.svelte` and the shared window spec while their work runs | Plan owner, 2026-10-09 |
 | 4 | The existing `same_story_floor_applied` field is available. If the ruling requires a new or changed persisted shape, Table C, C1 stops the row for contract review | Plan owner, 2026-10-09 |
@@ -2548,6 +2593,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 - **The fault** (row L52's Fowler Follow-up 3, 2026-10-08): the existing logic and panel tests do not render the full page, so they cannot catch the page binding one of its panels to a different line.
 - **Files touched** (existing browser harnesses searched on current `origin/main`):
   - `frontend/tests/console-judgement-verdict.spec.ts` (the existing browser test opens and renders the Judgement route; extend it only if it can serve the generated case)
+  - `frontend/tests/support/judgement-route.ts` (found during execution: compiles a fixed named inventory of real route modules on generated JSON, producer-written console band and packed Parquet; serves private preview output)
   - Read, no change unless Fowler rules a fixture helper necessary: `frontend/tests/recorded-line.spec.ts` (the recorded-line boundary cases) and `frontend/src/routes/console/judgement/+page.server.ts` (the page loader)
 - **Acceptance gates:** local: `npm --prefix frontend run test:changed -- --list`, then the selected Judgement route spec; `npm --prefix frontend run check`. Use real generated data and the recorded-data boundary, not mocks. If the existing harness cannot render that case, stop for Fowler's ruling on a feasible harness; do not add a stub. CI: the pull request runs the console specs; every group runs on the merge push.
 - **Oracle:** Render one page from a built case whose recorded line differs from the fitted-row rule, and assert the same recorded value in all three panels on that page. On current `origin/main`, component tests can pass without proving the page's three bindings agree.
@@ -2559,6 +2605,8 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 1 | L61 waits for L59 and L60 so the page test checks their settled wording and mark meaning; the earlier window-control slot L42 is merged as #1464 and no longer blocks this test | Plan owner, 2026-10-09 |
 | 2 | The route test uses the existing browser harness and real built fixtures. If that boundary cannot support the case, Fowler rules the next step; no mock or stub substitutes for it | Plan owner, 2026-10-09 |
 | 3 | Level 1: this adds an integration check for three existing page bindings and changes no production behavior | Plan owner, 2026-10-09 |
+| 4 | Use a private compiled SvelteKit build and preview with unchanged production configuration. Copy a fixed named module inventory, including the two real Data explorer entries required by the engine-asset plugin and the shared indexed-runs module from L56. Do not discover imports: a new module must be named before compilation can use it. Keep cache and output private. The development-server trial failed initialization even after cache isolation, not a binding assertion. Generated data passes through the real readers and console-band producer; no loader stub or production change substitutes for that boundary | Fowler; plan coordinator approved the feasible harness and corrected its input-growth boundary, 2026-10-09 |
+| 5 | Preserve the solid fitted-history meaning from L60. Check each panel's recorded-build rule separately against a distinct written value. Outside-repository evidence changes one actual compiled getter at a time in private output, proves its original assertion fails on the fitted value while the other two remain correct, then restores exact bytes. The committed test checks only the unchanged real page and does not depend on emitted identifiers | Plan coordinator, 2026-10-09 |
 
 **Rejected alternatives**
 
@@ -2584,9 +2632,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- |
 | 1 | This is the unfinished near-top collision L55 discovered, not a new claim that L55's ordinary mark-label clearance failed or that its advisor resolved the corner. L55's existing row and section stay unchanged in this upkeep change | Plan coordinator, 2026-10-09; L55's Follow-ups and decision 8 |
 | 2 | L62 waits for L55's landed implementation and L57's edits to the same chart and window spec, and for L34 and L45's edits to the shared window spec. At dispatch compare every named Files touched list against all active rows, including L56's chart and owning-page edits; hold and record any further file dependency before starting | Plan coordinator, 2026-10-09 |
-| 3 | Jony selects the smallest local placement that retains the date's link to its day and the dashed mark's meaning. No position, axis change or hidden label is prescribed here. Susan reviews whether the result is sufficient to ship in both themes and widths | To be ruled at execution (Jony and Susan) |
+| 3 | Keep the date centred on its day's column. Clear mark-label boxes upward where the whole date fits inside the plot; otherwise place it below its topmost dot and clear boxes downward. Neither mark nor its label moves. Susan ruled this label-only change sufficient to ship at 390px and 1280px in both themes, including the generated near-top, ordinary, empty and all-unread cases | Jony and Susan, 2026-10-09 |
 | 4 | Reuse the shared geometry and the chart's existing label-box calculations. If consultation finds that a new surface or shared contract scope is necessary, stop for human scope approval; do not duplicate machinery or take an owner waiver | Plan coordinator, 2026-10-09; section 0 and CLAUDE.md section 6 |
 | 5 | Level 1: one chart's local label placement changes; a wrong version is visible and local. No persisted shape moves. The executing change records any durable placement rule in the owning page, and no production code cites this plan | Plan coordinator, 2026-10-09 |
+| 6 | The corrected Oracle fails for actual label intersection in all four width/theme cases on a separate copy of exact landed L55 `ec23a13aff483f1fede2639f32c87829b742c73e`. The first attempt failed its measuring instrument, not the chart: Playwright serialized a direct SVG `getBBox()` return as an empty object. Both the ordinary-clearance check and the new near-top checks now return explicit coordinates and require finite values and positive dimensions before comparing boxes | Found and fixed during execution, 2026-10-09 |
+
+**Follow-ups**
+
+- The owned ordinary-clearance check's empty-object serialization could report separation without measuring it. Fixed here with explicit, finite coordinates; no remaining work.
+- No new chart defect or scope expansion was found. Shared frame geometry and all thresholds, formatting, series and missing states stay unchanged.
 
 **Rejected alternatives**
 
@@ -2628,3 +2682,11 @@ Table J - alternatives to correcting the observed selection
 | J1 | Treat L34's wording review or its seven-day judged-row case as closure | Neither tests an unjudged-only resting selection; the oldest date can still claim to be newest | Nothing to build, and a false date remains on the untouched readout | L34's recorded finding; plan coordinator, 2026-10-09 |
 | J2 | Fold the correction into L34 or L45 | L34 keeps the selection rule unchanged, and L45 owns Judgement; changing either would mix a separate discovered capability defect into its assigned work | Reopen another row's scope and checks, delaying its merge and increasing shared-file conflict risk | Plan coordinator, 2026-10-09 |
 | J3 | Select the globally newest square or rewrite shared readout selection before reading the existing intent | Either can replace first-source precedence or alter other panels without settling what the heading promises | A broader design and named dependent checks; inspect the mixed-date case and seek human scope approval to price it before taking it | Plan coordinator, 2026-10-09; Reader resolves meaning, not scope permission |
+
+**Extras found during execution**
+
+The owning record-readout page also needed the unchanged first-source rule
+written beside its record-strip rule. The coordinator reserved
+`docs/concepts/console-design/the-rules-every-console-chart-obeys.md` for that
+small explanation. The mixed-date case keeps the first judged source even
+when an unjudged source has a newer day. Shared readout code is unchanged.

@@ -43,10 +43,12 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
+	import { grouped } from '$lib/charts/series';
 	import { daysBetween, daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { dayMonth, plural } from '$lib/format';
+	import { dayMonth } from '$lib/format';
 	import {
 		agreementCorridor,
 		describeUnclear,
@@ -159,12 +161,13 @@
 		const date = dayMonth(day.date);
 		const disagreedCount = day.disagreementRate * day.pairsJudged;
 		const disagreed =
-			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor) ??
-			`${Math.round(disagreedCount)} of ${plural(day.pairsJudged, 'pair', 'pairs')}`;
+			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor, limits.disagreementMax) ??
+			`${grouped(Math.round(disagreedCount))} of ${formatPairs(day.pairsJudged)}`;
 		const unclear = describeUnclear(
 			day.unclearRate * day.pairsUsable,
 			day.pairsUsable,
-			attemptsFloor
+			attemptsFloor,
+			limits.unclearMax
 		);
 		return {
 			disagreed,
@@ -275,9 +278,8 @@
 	 * Raised clear of either dashed mark's own label where the two would
 	 * otherwise overlap - a stranded day can sit at a mark's own height, and
 	 * near the plot's right edge the two labels compete for the same corner
-	 * (Jony, 2026-10-09). Left open: a mark within about `AXIS_LABEL_PX * 2`
-	 * of the plot's own top, where this clearance and the top clamp below
-	 * could still collide; narrow enough to leave until it is hit.
+	 * Where that position cannot fit inside the plot, place the date below
+	 * the dot and clear of the mark labels, keeping it centred on its day.
 	 */
 	const strandedLabels = $derived(
 		marks.flatMap((mark, index) => {
@@ -297,14 +299,22 @@
 						: Math.min(disagreeY, unclearY);
 			if (topY === null) return [];
 			const width = labelWidth(dayMonth(mark.date));
-			let y = topY - 8;
-			for (const markBox of markLabelBoxes) {
-				const box_ = { top: y - AXIS_LABEL_PX, bottom: y, left: mark.x - width / 2, right: mark.x + width / 2 };
-				if (boxesOverlap(box_, markBox)) y = Math.min(y, markBox.top - 2);
+			const labelBox = (y: number) => ({
+				top: y - AXIS_LABEL_PX, bottom: y,
+				left: mark.x - width / 2, right: mark.x + width / 2
+			});
+			const boxes = [...markLabelBoxes].sort((a, b) => a.top - b.top);
+			let y = Math.max(topY - 8, box.top + AXIS_LABEL_PX);
+			for (const markBox of boxes.toReversed()) {
+				if (boxesOverlap(labelBox(y), markBox)) y = markBox.top - 2;
 			}
-			// Clamped so the label's own ascender never climbs past the plot's top
-			// margin, where an isolated dot sits close enough to the axis top.
-			return [{ date: mark.date, x: mark.x, y: Math.max(y, box.top + 2) }];
+			if (labelBox(y).top < box.top) {
+				y = topY + 8 + AXIS_LABEL_PX;
+				for (const markBox of boxes) {
+					if (boxesOverlap(labelBox(y), markBox)) y = markBox.bottom + 2 + AXIS_LABEL_PX;
+				}
+			}
+			return [{ date: mark.date, x: mark.x, y }];
 		})
 	);
 
@@ -312,12 +322,9 @@
 	 * neighbouring dots is one polyline, and a dot with no neighbour stands alone.
 	 * Joined across such a day, the line would draw a value there. */
 	function runsOf(points: readonly { x: number; y: number | null }[]): string[] {
-		const runs: string[][] = [[]];
-		for (const { x, y } of points) {
-			if (y === null) runs.push([]);
-			else runs[runs.length - 1].push(`${x},${y}`);
-		}
-		return runs.filter((run) => run.length > 1).map((run) => run.join(' '));
+		return indexedRuns(points, (point) => point.y !== null)
+			.filter((run) => run.length > 1)
+			.map((run) => run.map((index) => `${points[index].x},${points[index].y}`).join(' '));
 	}
 	const disagreeRuns = $derived(
 		runsOf(marks.map((mark) => ({ x: mark.x, y: mark.reading?.disagreeY ?? null })))
@@ -338,8 +345,10 @@
 	const unclear = $derived(
 		read.reduce((total, day) => total + day.unclearRate * day.pairsUsable, 0)
 	);
-	const disagreeShare = $derived(rateWithDenominator(disagreed, judged, attemptsFloor));
-	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor));
+	const disagreeShare = $derived(
+		rateWithDenominator(disagreed, judged, attemptsFloor, limits.disagreementMax)
+	);
+	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor, limits.unclearMax));
 	/** Each share against its own mark, read off the share itself and never off
 	 * why a day was held: the run first checks whether the record holds enough
 	 * to fit on, so a day held for that can carry a share past its mark. A share
@@ -348,8 +357,20 @@
 	const unclearPast = $derived(agreed > 0 && unclear / agreed > limits.unclearMax);
 	/** The disagreed share against its mark, for the sentences that judge that
 	 * share alone. The words are Reader's. */
+	function describeVerdict(
+		numerator: number,
+		denominator: number,
+		mark: number,
+		reading: string
+	): string {
+		const shown = wholePercent(numerator, denominator, mark);
+		if (shown !== wholePercent(numerator, denominator)) {
+			return `The share that ${reading} is just ${numerator / denominator > mark ? 'above' : 'below'} its ${percent(mark)} mark`;
+		}
+		return `The ${shown}% that ${reading} is ${numerator / denominator > mark ? 'past' : 'inside'} its mark`;
+	}
 	const disagreedVerdict = $derived(
-		`The ${wholePercent(disagreed, judged)}% that disagreed is ${disagreedPast ? 'past' : 'inside'} its mark`
+		describeVerdict(disagreed, judged, limits.disagreementMax, 'disagreed')
 	);
 	/** Where the sentence prints both shares, the verdict on the two: the state
 	 * it names and the words that close the sentence. The words are Reader's. */
@@ -360,7 +381,7 @@
 		if (unclearPast)
 			return {
 				state: 'unclear-past',
-				said: `The ${wholePercent(unclear, agreed)}% that could not tell is past its mark.`
+				said: `${describeVerdict(unclear, agreed, limits.unclearMax, 'could not tell')}.`
 			};
 		return { state: 'inside', said: 'Both rates are inside the marks.' };
 	});
@@ -368,6 +389,10 @@
 		drawn.filter((day) => day.heldReason === 'judge_unstable' || day.heldReason === 'judge_uncertain')
 			.length
 	);
+
+	function formatPairs(count: number): string {
+		return `${grouped(count)} ${count === 1 ? 'pair' : 'pairs'}`;
+	}
 
 	/** Why a dot is missing, as a caption under the window sentence wherever the
 	 * chart left one out. Not while the whole window is too few for a share: that
@@ -379,7 +404,7 @@
 		const readings = drawnMarks.map((mark) => mark.reading);
 		const leftOut = readings.some((one) => one.disagreeY === null || one.unclearY === null);
 		if (!leftOut || disagreeShare === null) return null;
-		const fewer = `fewer than ${plural(attemptsFloor, 'pair', 'pairs')}`;
+		const fewer = `fewer than ${formatPairs(attemptsFloor)}`;
 		const rule = `A day has no "disagreed" dot if ${fewer} were read twice, and no "could not tell" dot if ${fewer} agreed.`;
 		if (readings.length === 1) return rule;
 		return readings.some((one) => one.disagreeY !== null || one.unclearY !== null)
@@ -578,7 +603,7 @@
 				>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
-					>{plural(judged, 'pair', 'pairs')}
+					>{formatPairs(judged)}
 					{judged === 1 ? 'was' : 'were'} read twice in {nameSpan(windowDays)}. That is too few
 					to report a share, so the counts are above.</span
 				>
@@ -596,7 +621,7 @@
 			{:else if agreed < attemptsFloor}
 				<span data-agreement-state="few-agreed"
 					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearSaid} could not tell. {disagreedVerdict}, and {agreed} is too few to report a
+					{unclearSaid} could not tell. {disagreedVerdict}, and {grouped(agreed)} is too few to report a
 					share.</span
 				>
 			{:else}

@@ -44,6 +44,13 @@ export const COST_SHAPES: { value: CostShape; text: string }[] = [
 	{ value: 'running', text: 'Running total' }
 ];
 
+/** Name the daily shape for the window without changing either choice. */
+export function costShapeOptions(windowDays: number): typeof COST_SHAPES {
+	return windowDays === 1
+		? COST_SHAPES.map((option) => option.value === 'daily' ? { ...option, text: 'This one day' } : option)
+		: COST_SHAPES;
+}
+
 /** Reading, at the bottom of the stack. The same colour the read-against-written
  * panel gives it, so one quantity keeps one colour down the route. */
 const READ_TOKEN: ChartToken = '--chart-1';

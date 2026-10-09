@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -39,7 +39,11 @@ Five rules hold for every number the console prints:
 
 - **A count of that day's items, not a score.** No value between zero and one
  reaches the screen, and no cell prints a decimal. A share prints as whole
- percent.
+ percent. Counts of 1,000 or more use the shared thousands separator, never
+ the machine's locale. Where an agreement share rounds to its mark's printed
+ figure but is not equal to the mark, it prints `just above 15%` or
+ `just below 15%`, using that mark's own figure. This applies to the sentence,
+ the daily readout and the dot's name. At exact equality it prints `15%`.
 - **No ledger column name on screen.** `hhem`, `hedge_dropped` and
  `truncation_flagged` are how the file spells it. The page spells what it
  means.
@@ -69,6 +73,21 @@ Otherwise it names the share that is past,
 `The 20% that disagreed is past its mark.` or
 `The 39% that could not tell is past its mark.`, or it ends
 `Both rates are past their marks.` (Reader, 2026-10-08, plan 62's row L39.)
+When rounding would hide the side of the mark, the verdict instead says
+`The share that disagreed is just above its 15% mark.` or
+`The share that could not tell is just above its 35% mark.`, with `just below`
+for the corresponding inside share. The dashed mark labels keep their
+existing figures. Extra decimal places cannot settle this: a smaller
+difference would still round away.
+
+**Recorded days are not every day in the window.** Judgement's merge-line
+note names how many recorded days fitted nothing, without implying a fit on
+days with no row. Its resting heading says `the newest recorded day shown`,
+not the window's newest day; a strip with one column keeps the date alone.
+While the record fills, its sentence states the actual counts, then the
+minimum counts needed. A count that has passed its minimum is not a share:
+`49 pairs above the line; it needs at least ... 30 pairs above the line`,
+never `49 of 30 pairs`.
 
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, a run whose rows cannot be made into one run is left out of the
@@ -349,6 +368,19 @@ Every windowed sentence takes its day words from one helper,
 A sentence that counts something other than the window's days - runs, a rule's
 own span, the days a record read - keeps its own count.
 
+A record strip can have several selectable records on one date. Keep the
+keys that move between feeds, sources or tiles, but do not describe them as
+stepping through dates. A source retirement strip follows its own recorded
+dates, not the window control: only a record with one date says `its one
+recorded day`. The processor strip keeps the newest run's parts selectable
+beside the day's tile, or names the first tile when the day has none.
+
+At the one-day preset, panel titles say `for this one day` rather than `day
+by day`, and the cost switch's daily choice says `This one day`. The stage
+timing note says `Median time per item for this one day`: the median is over
+items, not days. A merge chart's one-day note names the applied and proposed
+readings rather than promising lines or a standalone point it does not draw.
+
 ## A section keeps the sentence that decides and loses the sentence that narrates
 
 Every panel writes its own heading, intro, readout and empty state, and many
@@ -384,6 +416,19 @@ facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
+
+**The calculated line is not a history of builds.** Judgement's solid merge
+series shows each nightly calculation's final value. Its proposal, daily step
+band and held counts describe that same calculation. A build can use another
+line, including while adaptive grouping is off. The note, readout and mark
+names must state the calculated meaning. Keep the panel's generic title.
+The tinted strip compares marked-apart scores with the calculated line:
+crossing it would clear a pair's score threshold if that line were used,
+not prove that a build grouped the pair. With no calculated row shown,
+the dashed rule and its note instead name the newest published day's
+build-used line. The verdict split and holdout margin keep that build-used
+comparison. Replacing only the solid values with build records would make
+the proposal and step band describe a different process from the line.
 
 **Two names for a window's days, not one.** One name everywhere was the fewest
 words to keep, and it breaks a count: `on 1 of this one day`. The bare count is

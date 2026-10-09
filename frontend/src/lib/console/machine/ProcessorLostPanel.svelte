@@ -152,7 +152,11 @@
 			class="grains"
 			tabindex="0"
 			role="group"
-			aria-label="The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest."
+			aria-label={windowDays === 1
+				? span.days.length > 0
+					? "The share of the processor lost, one tile for this one day and one per part of the newest run. Arrow keys move between tiles. Escape returns to the day's tile."
+					: 'The share of the processor lost, one tile per part of the newest run. There is no tile for this one day. Arrow keys move between tiles. Escape returns to the first tile.'
+				: 'The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest.'}
 			use:markReadout={{
 				count: tiles.length,
 				walk: span.days.length > 0 ? span.days.length : 'row',
@@ -238,8 +242,14 @@
 				resting={picked === null}
 				name="processor-lost"
 				maxShare={readoutMaxShare}
-				restingNote={span.named === null ? ', the newest day' : ', the day named above'}
-				hint="Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest."
+				restingNote={windowDays === 1
+					? span.days.length > 0 ? ', this one day' : ', the first tile'
+					: span.named === null ? ', the newest day' : ', the day named above'}
+				hint={windowDays === 1
+					? span.days.length > 0
+						? "Point at a tile to read it. Arrow keys move between tiles. Escape returns to the day's tile."
+						: 'Point at a tile to read it. Arrow keys move between tiles. Escape returns to the first tile.'
+					: 'Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest.'}
 			/>
 		{/if}
 

@@ -39,7 +39,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-stage-timing-days',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
-		'one-pass-reductions',
+		'indexed-runs', 'one-pass-reductions',
 		'payload-ceilings',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',

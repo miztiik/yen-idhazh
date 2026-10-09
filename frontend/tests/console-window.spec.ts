@@ -5,6 +5,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
+import { build } from 'esbuild';
+import { compile, preprocess } from 'svelte/compiler';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import svelteConfig from '../svelte.config.js';
 import {
 	daysInWindow,
 	monthsInWindow,
@@ -30,6 +34,12 @@ import { memoryHeld } from '../src/lib/console/machine/memory-held';
 import type { JudgeDay, LineDay } from '../src/lib/console/merge-line';
 import { shortDate } from '../src/lib/format';
 import { telemetryRow } from './support/telemetry-row';
+
+declare global {
+	interface Window {
+		oneDayWords: { draw: (name: string, props: Record<string, unknown>) => void };
+	}
+}
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -949,7 +959,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record is still filling and no line was fitted',
 		days: [judgeDay('2030-06-12', { ...FILLING, negativesOnRecord: 100 }), judgeDay('2030-06-15', FILLING)],
 		words:
-			'The record has 120 of the 200 readings it needs, 6 of 10 days, and 12 of 30 pairs above the line. No line was fitted in these 7 days.'
+			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in these 7 days.'
 	},
 	{
 		surface: 'record-gates',
@@ -957,7 +967,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record is still filling and no line was fitted',
 		days: [judgeDay('2030-06-15', FILLING)],
 		words:
-			'The record has 120 of the 200 readings it needs, 6 of 10 days, and 12 of 30 pairs above the line. No line was fitted in this one day.'
+			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in this one day.'
 	},
 	{
 		surface: 'record-gates',
@@ -1080,6 +1090,93 @@ const STRIP_CASES: {
 	dots: Record<string, string>;
 	words: string;
 }[] = [
+	{
+		preset: 7,
+		state: 'a share just above its mark must not print as the mark itself',
+		days: [
+			judgeDay('2030-06-15', { pairsJudged: 46, pairsUsable: 39, disagreementRate: 7 / 46 })
+		],
+		heading: '15 Jun, the newest day with numbers',
+		entries: [
+			'Disagreed with the second reading just above 15% of 46 pairs',
+			'Could not tell 0% of the 39 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: just above 15% of 46 pairs disagreed with the second reading, and 0% of the 39 that agreed could not tell.'
+		},
+		words:
+			'In these 7 days, just above 15% of 46 pairs disagreed with their own second reading, and 0% of the 39 that agreed could not tell. The share that disagreed is just above its 15% mark.'
+	},
+	{
+		preset: 7,
+		state: 'a held day prints a share just above its mark without rounding it onto the mark',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 46,
+				pairsUsable: 39,
+				disagreementRate: 7 / 46,
+				heldReason: 'judge_unstable'
+			})
+		],
+		heading: '15 Jun, the newest day with numbers',
+		entries: [
+			'Disagreed with the second reading just above 15% of 46 pairs',
+			'Could not tell 0% of the 39 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: just above 15% of 46 pairs disagreed with the second reading, and 0% of the 39 that agreed could not tell.'
+		},
+		words:
+			'The two readings disagreed on just above 15% of 46 pairs in these 7 days. No line was fitted on 1 of 7 days, because a rate was past its mark on that day.'
+	},
+	{
+		preset: 1,
+		state: 'agreement counts of a thousand or more print with separators',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 1390,
+				pairsUsable: 1118,
+				disagreementRate: 272 / 1390,
+				unclearRate: 56 / 1118
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 20% of 1,390 pairs',
+			'Could not tell 5% of the 1,118 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 20% of 1,390 pairs disagreed with the second reading, and 5% of the 1,118 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 20% of 1,390 pairs disagreed with their own second reading, and 5% of the 1,118 that agreed could not tell. The 20% that disagreed is past its mark.'
+	},
+	{
+		preset: 1,
+		state: 'could not tell just above its own mark keeps the agreed denominator',
+		days: [
+			judgeDay('2030-06-15', {
+				pairsJudged: 40,
+				pairsUsable: 37,
+				disagreementRate: 3 / 40,
+				unclearRate: 13 / 37
+			})
+		],
+		heading: '15 Jun',
+		entries: [
+			'Disagreed with the second reading 8% of 40 pairs',
+			'Could not tell just above 35% of the 37 that agreed'
+		],
+		dots: {
+			'2030-06-15':
+				'15 Jun: 8% of 40 pairs disagreed with the second reading, and just above 35% of the 37 that agreed could not tell.'
+		},
+		words:
+			'In this one day, 8% of 40 pairs disagreed with their own second reading, and just above 35% of the 37 that agreed could not tell. The share that could not tell is just above its 35% mark.'
+	},
 	{
 		preset: 1,
 		state: 'its day read 4 pairs, too few for a share',
@@ -1890,8 +1987,19 @@ test.describe('the Judgement panels name their span in every state, on days the 
 		await expect(stranded).toHaveCount(1);
 		const markLabel = page.locator('[data-agreement-marker-label="disagreement"]');
 		await expect(markLabel).toHaveCount(1);
-		const strandedBox = await stranded.evaluate((node) => (node as SVGTextElement).getBBox());
-		const markBox = await markLabel.evaluate((node) => (node as SVGTextElement).getBBox());
+		const strandedBox = await stranded.evaluate((node) => {
+			const { x, y, width, height } = (node as SVGTextElement).getBBox();
+			return { x, y, width, height };
+		});
+		const markBox = await markLabel.evaluate((node) => {
+			const { x, y, width, height } = (node as SVGTextElement).getBBox();
+			return { x, y, width, height };
+		});
+		for (const box of [strandedBox, markBox]) {
+			expect(Object.values(box).every(Number.isFinite), 'label coordinates must be finite').toBe(true);
+			expect(box.width).toBeGreaterThan(0);
+			expect(box.height).toBeGreaterThan(0);
+		}
 		const overlap =
 			strandedBox.x < markBox.x + markBox.width &&
 			strandedBox.x + strandedBox.width > markBox.x &&
@@ -1899,6 +2007,71 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			strandedBox.y + strandedBox.height > markBox.y;
 		expect(overlap, 'the stranded label sits on top of the mark label at the right edge').toBe(false);
 	});
+
+	for (const width of [390, 1280]) {
+		for (const theme of ['light', 'dark']) {
+			test(`THE ORACLE: near-top date and mark labels stay separate at ${width}px in ${theme}`, async ({
+				page
+			}) => {
+				await page.setViewportSize({ width, height: 800 });
+				const days = [
+					judgeDay('2030-06-02', { pairsJudged: 100, pairsUsable: 90, disagreementRate: 0.1 }),
+					judgeDay('2030-06-14', {
+						pairsJudged: 100, pairsUsable: 90, disagreementRate: 0.1, unclearRate: 0.39
+					})
+				];
+				await page.setContent(
+					`<html data-theme="${theme}"><body><main>${drawn['judge-agreement']({
+						...propsOf({ surface: 'judge-agreement', preset: 14, state: '', days, words: '' }),
+						width: width - 32,
+						limits: { disagreementMax: 0.15, unclearMax: 0.39 }
+					})}</main></body></html>`
+				);
+				const date = page.locator('[data-agreement-stranded-label="2030-06-14"]');
+				await expect(date).toHaveText('14 Jun');
+				await expect(date).toHaveAttribute('aria-hidden', 'true');
+				const dateBox = await date.evaluate((node) => {
+					const { x, y, width, height } = (node as SVGTextElement).getBBox();
+					return { x, y, width, height };
+				});
+				const markBoxes = await page.locator('[data-agreement-marker-label]').evaluateAll(
+					(nodes) => nodes.map((node) => {
+						const { x, y, width, height } = (node as SVGTextElement).getBBox();
+						return { x, y, width, height };
+					})
+				);
+				for (const markBox of markBoxes) {
+					for (const box of [dateBox, markBox]) {
+						expect(Object.values(box).every(Number.isFinite), 'label coordinates must be finite').toBe(true);
+						expect(box.width).toBeGreaterThan(0);
+						expect(box.height).toBeGreaterThan(0);
+					}
+					expect(
+						dateBox.x < markBox.x + markBox.width &&
+						dateBox.x + dateBox.width > markBox.x &&
+						dateBox.y < markBox.y + markBox.height &&
+						dateBox.y + dateBox.height > markBox.y,
+						'the top clamp pulls the date back into a mark label'
+					).toBe(false);
+				}
+				const plot = await page.locator('[data-windowed="judge-agreement"] svg > line').first()
+					.evaluate((node) => ({
+						left: Number(node.getAttribute('x1')),
+						right: Number(node.getAttribute('x2')),
+						bottom: Number(node.getAttribute('y1'))
+					}));
+				const top = await page.locator('[data-windowed="judge-agreement"] svg > line').nth(1)
+					.getAttribute('y1');
+				expect(dateBox.x).toBeGreaterThanOrEqual(plot.left);
+				expect(dateBox.x + dateBox.width).toBeLessThanOrEqual(plot.right);
+				expect(dateBox.y).toBeGreaterThanOrEqual(Number(top));
+				expect(dateBox.y + dateBox.height).toBeLessThanOrEqual(plot.bottom);
+				const dotX = await page.locator('[data-agreement-day="2030-06-14"] circle').first()
+					.getAttribute('cx');
+				expect(Number(await date.getAttribute('x')), 'the date stays over its own day').toBe(Number(dotX));
+			});
+		}
+	}
 
 	for (const preset of [1, 7]) {
 		test(`THE ORACLE: judge-agreement's note and plot labels call each dashed line a mark, and keep "line" for the merge line, at the ${preset}-day window`, async ({
@@ -2337,6 +2510,8 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	}) => {
 		// Reading 0.50 and writing 0.30: the smaller half is 37.5 percent of the column.
 		await draw(page, 'CounterfactualCostPanel', costProps(1, [runWork(JUDGED_THROUGH, 1_000_000, 200_000)]));
+		await expect(page.locator('[data-shape-option="daily"]')).toHaveText('This one day');
+		await expect(page.locator('[data-shape-option="running"]')).toHaveText('Running total');
 		expect(await said(page, '[data-cost-measured]')).toBe(
 			'The smaller half measures 37.5 percent of the column, so both halves draw as bands rather than as a printed figure.'
 		);
@@ -2364,6 +2539,8 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			'CounterfactualCostPanel',
 			costProps(7, [runWork('2030-06-10', 1_000_000, 200_000), runWork(JUDGED_THROUGH, 2_000_000, 500_000)])
 		);
+		await expect(page.locator('[data-shape-option="daily"]')).toHaveText('Day by day');
+		await expect(page.locator('[data-shape-option="running"]')).toHaveText('Running total');
 		expect(await said(page, '[data-cost-measured]')).toBe(
 			'The smaller half of the busiest day measures 17.1 percent of the tallest column, so both halves draw as bands rather than as a printed figure.'
 		);
@@ -2570,34 +2747,392 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	}
 
 	const LINE_NOTE =
-		'The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for.';
+		"The solid line is the nightly calculation's final score for grouping two stories as one, after limits on its change. The dotted line is the proposed score before those limits. The shaded band shows how far the calculated line was allowed to fall each day. A build may have used a different line.";
+	const ONE_LINE_NOTE =
+		"The applied reading is the nightly calculation's final score for grouping two stories as one, after limits on its change. The proposed reading is the score before those limits. The shaded band shows how far the calculated line was allowed to fall that day. A build may have used a different line.";
 
 	test('THE ORACLE: the merge line is for this one day, its band is that day, and its strip heads the day alone', async ({
 		page
 	}) => {
 		await draw(page, 'MergeLinePlot', lineProps(1, [JUDGED_THROUGH]));
 		expect(await labelOf(page, '[data-windowed="merge-line"] svg[aria-label]')).toBe(
-			'The merge line for this one day, on the whole range a fitted line may take'
+			'Nightly calculated merge readings for this one day, on the full allowed score range. A build may have used a different line.'
 		);
 		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
-			`${LINE_NOTE} The shaded band is as far as the line was allowed to fall that day.`
+			ONE_LINE_NOTE
 		);
 		expect(await stripOf(page, 'merge-line')).toEqual({ heading: '15 Jun', hint: null });
+	});
+
+	test('THE ORACLE: the merge note names a reading inside the tinted strip at one day, without changing seven-day words', async ({ page }) => {
+		for (const preset of [1, 7]) {
+			await draw(page, 'MergeLinePlot', {
+				...lineProps(preset, [JUDGED_THROUGH]),
+				markedApart: { low: 0.94, high: 0.95, count: 3 }
+			});
+			expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
+				(preset === 1 ? ONE_LINE_NOTE : LINE_NOTE) +
+				(preset === 1
+					? ' The tinted strip shows the part of the score range inside this plot for 3 pairs a person marked as two stories. Their scores run from 0.9400 to 0.9500. If used to group stories, an applied reading inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.'
+					: ' The tinted strip shows the part of the score range inside this plot for 3 pairs a person marked as two stories. Their scores run from 0.9400 to 0.9500. If used to group stories, a calculated line inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.')
+			);
+		}
 	});
 
 	test('the merge line is a day over seven days, with a band at each day', async ({ page }) => {
 		await draw(page, 'MergeLinePlot', lineProps(7, ['2030-06-10', JUDGED_THROUGH]));
 		expect(await labelOf(page, '[data-windowed="merge-line"] svg[aria-label]')).toBe(
-			'The merge line a day, on the whole range a fitted line may take'
+			'Nightly calculated merge lines, on the full allowed score range. Builds may have used different lines.'
 		);
 		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
-			`${LINE_NOTE} The shaded band at each day is as far as the line was allowed to fall in one day.`
+			LINE_NOTE
 		);
 		expect(await stripOf(page, 'merge-line')).toEqual({
-			heading: '15 Jun, the newest day',
+			heading: '15 Jun, the newest recorded day shown',
 			hint: DEFAULT_KEYS
 		});
 	});
+
+	test('THE ORACLE L45: a held row and six unrecorded days imply no fit', async ({ page }) => {
+		await draw(page, 'MergeLinePlot', {
+			...lineProps(7, []),
+			days: [{ ...lineDay('2030-06-14'), proposed: null, heldReason: 'sheet_too_small' }]
+		});
+		expect(await said(page, '[data-line-held-note]')).toBe(
+			'Nothing was fitted on 1 recorded day in this 7-day window.'
+		);
+		await draw(page, 'RecordGates', propsOf({
+			surface: 'record-gates', preset: 7, state: 'one held row and six silent days',
+			days: [judgeDay('2030-06-14', FILLING)], words: ''
+		}));
+		expect(await said(page, '[data-counted-fitted]')).toBe('No line was fitted in these 7 days.');
+		await expect(page.locator('[data-counted-state="silent"]')).toHaveCount(6);
+	});
+
+	test('THE ORACLE L45: filling counts may exceed their requirements without becoming shares', async ({ page }) => {
+		for (const [counts, words] of [
+			[{ ...FILLING, aboveLineOnRecord: 49 },
+				'The record has 120 readings, 6 days, and 49 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line.'],
+			[{ ...FILLING, negativesOnRecord: 1234, daysOnRecord: 14 },
+				'The record has 1,234 readings, 14 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line.'],
+			[{ ...FILLING, daysOnRecord: 1 },
+				'The record has 120 readings, 1 day, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line.']
+		] as const) {
+			await draw(page, 'RecordGates', propsOf({
+				surface: 'record-gates', preset: 7, state: 'counts fill independently',
+				days: [judgeDay(JUDGED_THROUGH, counts)], words: ''
+			}));
+			expect(await said(page, '[data-gates-state="filling"]')).toBe(words);
+		}
+	});
+
+	for (const preset of [14, 30]) {
+		test(`THE ORACLE L45: the ${preset}-day strip names its newest recorded day, not the window end`, async ({ page }) => {
+			for (const heldReason of ['none', 'sheet_too_small']) {
+				await draw(page, 'MergeLinePlot', {
+					...lineProps(preset, []),
+					days: [
+						lineDay('2030-06-12'),
+						{ ...lineDay('2030-06-14'), heldReason, proposed: heldReason === 'none' ? 0.95 : null }
+					]
+				});
+				expect(await said(page, '[data-readout="merge-line"] [data-readout-day]')).toBe(
+					'14 Jun, the newest recorded day shown'
+				);
+				await expect(page.locator('[data-windowed="merge-line"]')).toHaveAttribute('data-window-days', String(preset));
+			}
+		});
+	}
+
+		/** Mount the real record surfaces on generated inputs, with their real keyboard actions. */
+		test.describe('remaining one-day words and keys on generated records', () => {
+			let browserCode: string;
+
+			test.beforeAll(async () => {
+				const kit: {
+					paths: { base: string; assets?: string; relative?: boolean };
+					appDir?: string;
+				} = svelteConfig.kit;
+				const result = await build({
+					stdin: {
+						contents: `
+							import { mount } from 'svelte';
+							import Voices from './src/routes/console/voices/+page.svelte';
+							import ProcessorLost from './src/lib/console/machine/ProcessorLostPanel.svelte';
+							import StageTimings from './src/lib/components/StageTimings.svelte';
+							const components = { Voices, ProcessorLost, StageTimings };
+							export function draw(name, props) {
+								mount(components[name], { target: document.querySelector('main'), props });
+							}`,
+						resolveDir: process.cwd()
+					},
+					bundle: true,
+					write: false,
+					format: 'iife',
+					globalName: 'oneDayWords',
+					conditions: ['browser'],
+					define: {
+						__SVELTEKIT_PATHS_BASE__: JSON.stringify(kit.paths?.base ?? ''),
+						__SVELTEKIT_PATHS_ASSETS__: JSON.stringify(kit.paths?.assets ?? ''),
+						__SVELTEKIT_APP_DIR__: JSON.stringify(kit.appDir ?? '_app'),
+						__SVELTEKIT_PATHS_RELATIVE__: JSON.stringify(kit.paths?.relative ?? true)
+					},
+					alias: {
+						$lib: resolve('src/lib'),
+						'$app/paths': resolve('node_modules/@sveltejs/kit/src/runtime/app/paths/internal/server.js')
+					},
+					plugins: [{
+						name: 'real-svelte-components',
+						setup(bundler) {
+							bundler.onLoad({ filter: /\.svelte$/ }, async ({ path }) => {
+								const pre = await preprocess(readFileSync(path, 'utf8'), vitePreprocess(), { filename: path });
+								return {
+									contents: compile(pre.code, { filename: path, generate: 'client', css: 'injected' }).js.code,
+									resolveDir: resolve(path, '..')
+								};
+							});
+						}
+					}]
+				});
+				browserCode = result.outputFiles[0].text;
+			});
+
+			async function drawRecord(page: Page, name: string, props: Record<string, unknown>) {
+				await page.route('**/l34-generated-records', (route) => route.fulfill({
+					contentType: 'text/html',
+					body: '<!doctype html><html><body><main></main></body></html>'
+				}));
+				await page.goto('/l34-generated-records');
+				await page.addScriptTag({ content: browserCode });
+				await page.evaluate(({ name, props }) => window.oneDayWords.draw(name, props), { name, props });
+			}
+
+			function voiceData(preset: number, recordedDates: string[]) {
+				const feedDates = windowDates(preset);
+				const squares = recordedDates.map((date) => ({ date, state: 'nothing', label: `${shortDate(date)}: it decided nothing that day.` }));
+				return {
+					ui: { site_title: 'Generated records' },
+					console: { default_window_days: preset, window_presets: [1, 7], today_anchor: 'right', min_attempts_for_rate: 5, source_rows: 10 },
+					windowDay: JUDGED_THROUGH,
+					chart: CHART,
+					carries: { voices: '' },
+					recordNotes: {},
+					standing: null,
+					sourceHealth: null,
+					sourceCutsByWindow: [{ days: preset, articles: 0, measured: false, cost: null }],
+					feedDates,
+					feedRecord: { runs: 0 },
+					quarantineAfter: 5,
+					feedsHidden: 0,
+					feeds: ['feed-a', 'feed-b'].map((feedId) => ({
+						feedId, resting: false, streak: 0, failures: 0,
+						marks: { empty: true, track: 1, band: 'unknown' },
+						days: feedDates.map((date) => ({ date, outcome: 'answered', label: `${shortDate(date)}: answered.` }))
+					})),
+					retiring: {
+						dates: recordedDates, dwellDays: 14, autoRetire: false,
+						alarmPoint: 0.5, clear: 0, hidden: 0,
+						rows: [{
+							sourceId: 'source-a', title: 'source-a', squares, share: 0.5,
+							daysUnder: 0, daysLeft: null, retiresOn: null, retired: false,
+							marks: { empty: true, track: 1, band: 'unknown' }, readout: 'Nothing was decided.'
+						}],
+						completeDates: recordedDates.length, minCompleteDays: 14, minDecisions: 10,
+						unjudgedHidden: 0,
+						unjudged: ['source-b'].map((sourceId) => ({
+							sourceId, title: sourceId, squares, readout: 'Nothing was decided.'
+						}))
+					}
+				};
+			}
+
+			for (const preset of [1, 7]) {
+				test(`THE ORACLE: feed words at ${preset} day(s) preserve real feed navigation`, async ({ page }) => {
+					await drawRecord(page, 'Voices', { data: voiceData(preset, windowDates(7)) });
+					const group = page.locator('[data-windowed="feed-outcomes"]');
+					const strip = page.locator('[data-readout="feed-outcomes"] [data-readout-subject]');
+					await expect(group).toHaveAttribute('aria-label', preset === 1
+						? "Every feed's reading for this one day, one square per feed. Arrow keys move between feeds. Escape returns to the first feed."
+						: "Every feed's days, one square a day. Arrow keys read a square, Escape returns to the first feed's newest day.");
+					await expect(strip).toHaveText(preset === 1 ? 'feed-a, 15 Jun 2030, this one day' : 'feed-a, 15 Jun 2030, its newest day');
+					await expect(page.locator('[data-readout-hint="feed-outcomes"]')).toHaveText(preset === 1
+						? 'Point at a square to read it. Arrow keys move between feeds. Escape returns to the first feed.'
+						: "Point at a square to read it. Left and Right step through a feed's days, Up and Down move between feeds, Escape returns to rest.");
+					await group.focus();
+					await group.press('ArrowDown');
+					await group.press('ArrowDown');
+					await expect(strip).toHaveText(preset === 1 ? 'feed-b, 15 Jun 2030' : 'feed-b, 9 Jun 2030');
+					await group.press('Escape');
+					await expect(strip).toContainText(preset === 1 ? ', this one day' : ', its newest day');
+					if (preset === 1) {
+						await group.press('ArrowRight');
+						await group.press('ArrowRight');
+						await expect(strip).toHaveText('feed-b, 15 Jun 2030');
+					}
+				});
+
+				for (const recordDays of [1, 7]) {
+					test(`THE ORACLE: source words use their own ${recordDays}-day record at the ${preset}-day window`, async ({ page }) => {
+						await drawRecord(page, 'Voices', { data: voiceData(preset, windowDates(recordDays)) });
+						const group = page.locator('[data-retiring="table"]');
+						const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+						await expect(group).toHaveAttribute('aria-label', recordDays === 1
+							? "Every source's reading for the one recorded day, one square per source. Arrow keys move between sources. Escape returns to the first source."
+							: "Every source's days, one square a day. Arrow keys read a square, Escape returns to the first source's newest day.");
+						await expect(strip).toHaveText(recordDays === 1 ? 'source-a, 15 Jun 2030, its one recorded day' : 'source-a, 15 Jun 2030, its newest day');
+						await expect(page.locator('[data-readout-hint="source-yield"]')).toHaveText(recordDays === 1
+							? 'Point at a square to read it. Arrow keys move between sources. Escape returns to the first source.'
+							: "Point at a square to read it. Left and Right step through a source's days, Up and Down move between sources, Escape returns to rest.");
+						await group.focus();
+						await group.press('ArrowDown');
+						await group.press('ArrowDown');
+						await expect(strip).toHaveText(recordDays === 1 ? 'source-b, 15 Jun 2030' : 'source-b, 9 Jun 2030');
+						await group.press('Escape');
+						await expect(strip).toContainText(recordDays === 1 ? ', its one recorded day' : ', its newest day');
+					});
+				}
+			}
+
+			test('THE ORACLE: an unjudged-only source rests on its newest recorded day before interaction', async ({ page }) => {
+				const data = voiceData(7, windowDates(7));
+				data.retiring.rows = [];
+				data.retiring.unjudged = [{ ...data.retiring.unjudged[0], sourceId: 'source-a', title: 'source-a' }];
+				await drawRecord(page, 'Voices', { data });
+				const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+				await expect(strip).toHaveText('source-a, 15 Jun 2030, its newest day');
+				await page.locator('[data-retiring="table"]').focus();
+				await page.locator('[data-retiring="table"]').press('ArrowLeft');
+				await expect(strip).toHaveText('source-a, 9 Jun 2030');
+				await page.locator('[data-retiring="table"]').press('Escape');
+				await expect(strip).toHaveText('source-a, 15 Jun 2030, its newest day');
+			});
+
+			for (const preset of [1, 7]) {
+				for (const recordDays of [1, 7]) {
+					test(`unjudged sources keep pointer and keyboard selection for a ${recordDays}-day record at the ${preset}-day window`, async ({ page }) => {
+						const data = voiceData(preset, windowDates(recordDays));
+						data.retiring.rows = [];
+						data.retiring.unjudged = [
+							{ ...data.retiring.unjudged[0], sourceId: 'source-a', title: 'source-a' },
+							data.retiring.unjudged[0]
+						];
+						await drawRecord(page, 'Voices', { data });
+						const group = page.locator('[data-retiring="table"]');
+						const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+						const resting = recordDays === 1
+							? 'source-a, 15 Jun 2030, its one recorded day'
+							: 'source-a, 15 Jun 2030, its newest day';
+						await expect(strip).toHaveText(resting);
+						await group.focus();
+						await group.press('ArrowDown');
+						await group.press('ArrowDown');
+						await expect(strip).toHaveText(recordDays === 1 ? 'source-b, 15 Jun 2030' : 'source-b, 9 Jun 2030');
+						await group.press('Escape');
+						await expect(strip).toHaveText(resting);
+						const square = page.locator('[data-retiring-unjudged-row="source-b"] [data-readout-at]').last();
+						await square.hover();
+						await expect(strip).toHaveText('source-b, 15 Jun 2030');
+						await square.click();
+						await expect(strip).toHaveText('source-b, 15 Jun 2030');
+						await page.mouse.move(0, 0);
+						await expect(strip).toHaveText(resting);
+						await group.focus();
+						await group.press('Escape');
+						await expect(strip).toHaveText(resting);
+					});
+				}
+			}
+
+			test('the first judged source keeps precedence over a newer unjudged source', async ({ page }) => {
+				const data = voiceData(7, windowDates(7));
+				data.retiring.rows[0].squares = data.retiring.rows[0].squares.slice(0, 6);
+				await drawRecord(page, 'Voices', { data });
+				const group = page.locator('[data-retiring="table"]');
+				const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+				await expect(strip).toHaveText('source-a, 14 Jun 2030, its newest day');
+				await page.locator('[data-retiring-unjudged-row="source-b"] [data-readout-at]').last().hover();
+				await expect(strip).toHaveText('source-b, 15 Jun 2030');
+				await group.focus();
+				await group.press('Escape');
+				await expect(strip).toHaveText('source-a, 14 Jun 2030, its newest day');
+			});
+
+			for (const state of ['absent', 'empty', 'no-squares'] as const) {
+				test(`a source record offers no square readout when ${state}`, async ({ page }) => {
+					const generated = voiceData(7, []);
+					if (state === 'empty') {
+						generated.retiring.rows = [];
+						generated.retiring.unjudged = [];
+					}
+					const data: Omit<ReturnType<typeof voiceData>, 'retiring'> & {
+						retiring: ReturnType<typeof voiceData>['retiring'] | null;
+					} = { ...generated, retiring: state === 'absent' ? null : generated.retiring };
+					await drawRecord(page, 'Voices', { data });
+					await expect(page.locator('[data-readout="source-yield"]')).toHaveCount(0);
+					if (state === 'absent') await expect(page.locator('[data-retiring="table"]')).toHaveCount(0);
+					else {
+						await expect(page.locator('[data-retiring="table"]')).toHaveAttribute('data-readout-none', 'no source has a day on record, so there is no square to read; agreed with Susan');
+						await expect(page.locator(state === 'empty' ? '[data-retiring-empty]' : '[data-retiring-no-strip]')).toBeVisible();
+					}
+				});
+			}
+
+			for (const state of ['quiet', 'named', 'no-day'] as const) {
+				test(`THE ORACLE: one-day processor tiles say where keys go when ${state}`, async ({ page }) => {
+					const tile = { key: JUDGED_THROUGH, label: '15 Jun 2030', short: '15', state: 'quiet', worstPct: 0, says: 'under 1%', from: 2, outOf: 2 };
+					const days = state === 'no-day' ? [] : [tile];
+					await drawRecord(page, 'ProcessorLost', {
+						span: { days, from: days.length * 2, outOf: days.length * 2, named: state === 'named' ? tile : null, daysRecording: days.length },
+						run: { runId: '2030-06-14-1', date: '2030-06-14', from: 4, outOf: 4,
+							shards: [0, 1].map((shard) => ({ ...tile, key: String(shard), label: `Part ${shard}`, short: String(shard) })) },
+						days: 1, windowDays: 1, markedAt: 1, namedAt: 5, readoutMaxShare: 1
+					});
+					const group = page.locator('.grains');
+					const strip = page.locator('[data-readout="processor-lost"] [data-readout-subject]');
+					await expect(group).toHaveAttribute('aria-label', state === 'no-day'
+						? 'The share of the processor lost, one tile per part of the newest run. There is no tile for this one day. Arrow keys move between tiles. Escape returns to the first tile.'
+						: "The share of the processor lost, one tile for this one day and one per part of the newest run. Arrow keys move between tiles. Escape returns to the day's tile.");
+					await expect(strip).toHaveText(state === 'no-day' ? 'Part 0, the first tile' : '15 Jun 2030, this one day');
+					await expect(page.locator('[data-readout-hint="processor-lost"]')).toHaveText(state === 'no-day'
+						? 'Point at a tile to read it. Arrow keys move between tiles. Escape returns to the first tile.'
+						: "Point at a tile to read it. Arrow keys move between tiles. Escape returns to the day's tile.");
+					await group.focus();
+					await group.press('End');
+					await expect(strip).toHaveText('Part 1');
+					await group.press('ArrowLeft');
+					await expect(strip).toHaveText('Part 0');
+					await group.press('Escape');
+					await expect(strip).toHaveText(state === 'no-day' ? 'Part 0, the first tile' : '15 Jun 2030, this one day');
+				});
+			}
+
+			test('THE ORACLE: seven-day processor words remain unchanged', async ({ page }) => {
+				const tile = { key: JUDGED_THROUGH, label: '15 Jun 2030', short: '15', state: 'quiet', worstPct: 0, says: 'under 1%', from: 2, outOf: 2 };
+				await drawRecord(page, 'ProcessorLost', {
+					span: { days: [tile], from: 2, outOf: 2, named: null, daysRecording: 1 },
+					run: { runId: null, date: null, from: 0, outOf: 0, shards: [] },
+					days: 7, windowDays: 7, markedAt: 1, namedAt: 5, readoutMaxShare: 1
+				});
+				await expect(page.locator('.grains')).toHaveAttribute('aria-label', 'The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest.');
+				await expect(page.locator('[data-readout="processor-lost"] [data-readout-subject]')).toHaveText('15 Jun 2030, the newest day');
+				await expect(page.locator('[data-readout-hint="processor-lost"]')).toHaveText('Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest.');
+			});
+
+			test('THE ORACLE: the stage note names the items within one day and keeps seven-day words', async ({ page }) => {
+				for (const preset of [1, 7]) {
+					const timing = { ms: 100, timed: 2 };
+					await drawRecord(page, 'StageTimings', {
+						days: windowDates(preset).map((date) => ({ date, items: 2, fetch: timing, extract: timing, summarize: timing })),
+						span: windowOfDays(JUDGED_THROUGH, preset, 'right'), ...DRAWN_AT
+					});
+					await expect(page.locator('h2 + p')).toHaveText(
+						(preset === 1 ? 'Median time per item for this one day.' : 'Median per item, each day.') +
+						' Each gridline is ten times the one below, so the same slowdown looks the same at 40 ms and at 100 s.' +
+						(preset === 1 ? ' Nothing changed about how the summaries are written inside this one day.' : ' Nothing changed about how the summaries are written inside these 7 days.')
+					);
+				}
+			});
+		});
 
 	/** The record panel's props around the days a case builds, at one window. */
 	function gatesProps(preset: number, days: JudgeDay[]): Record<string, unknown> {
@@ -2676,7 +3211,7 @@ const BARS_CASES: BarsCase[] = [
 		days: [judgeDay('2030-06-14', FILLING), judgeDay(JUDGED_THROUGH, { heldReason: 'inputs_changed' })],
 		bars: ['0', '0', '0'],
 		words:
-			'The record has 0 of the 200 readings it needs, 0 of 10 days, and 0 of 30 pairs above the line. No line was fitted in this one day.'
+			'The record has 0 readings, 0 days, and 0 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in this one day.'
 	}
 ];
 
