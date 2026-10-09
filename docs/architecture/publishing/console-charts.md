@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 **Known noncompliance:** Existing prerendered charts do not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -87,6 +87,27 @@ whose two readings agreed. Reader chose its note: `A day has no "disagreed" dot
 if fewer than 5 pairs were read twice, and no "could not tell" dot if fewer than
 5 pairs agreed.`, with the floor read from config, and on a chart of two or more
 columns a second sentence that says the counts are in the strip above.
+
+## A share above the axis top is not clipped to a mark
+
+A fixed axis over a limit joins the values the limit is measured against, so a
+share past it still draws past it. Jony ruled that the judge's agreement chart
+nices its axis from both dashed marks and from every share it draws a dot for,
+so a share above a mark widens the axis rather than drawing pinned to the
+mark's own line. Pinning a reading to a mark would show a value the chart does
+not hold, and the whole point of the mark is to say whether a reading is past
+it. A share under the floor still draws nothing: this rule only ever widens
+the axis, never narrows it below the two marks.
+
+## Every day of the window is a column, read or not
+
+Jony ruled that a day the window spans but no run judged keeps its place as an
+empty column: it draws no dot, carries no accessible name of its own, and
+breaks each rate's line the same way a day under the floor does. Spacing
+columns by the days that happen to hold a reading would join two read days
+with a straight line across a day nobody measured, which draws a value there.
+The column still answers a pointer, a tap or an arrow key, and the readout
+strip says why it holds no reading instead of a measurement.
 
 ## Every chart with a shared column carries a pointer readout
 
@@ -209,6 +230,7 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - Shared coordinates and readouts make charts comparable without relearning each panel.
 - Counts and coverage distinguish sparse measurements from reliable rates. A missing sample is never evidence of zero work.
 - A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
+- A fixed axis that stops at a mark hides exactly the reading a mark exists to show: how far past it a day went. Niceing the axis from the data as well as the marks keeps every share visible without ever pinning one to a line it does not sit on.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
 

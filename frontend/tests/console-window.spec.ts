@@ -1188,7 +1188,7 @@ const STRIP_CASES: {
 			judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 }),
 			judgeDay('2030-06-15', { pairsJudged: 4, pairsUsable: 3, disagreementRate: 0.25 })
 		],
-		heading: '15 Jun, the newest day',
+		heading: '15 Jun, the newest day with numbers',
 		entries: [
 			'Disagreed with the second reading 1 of 4 pairs',
 			'Could not tell 0 of the 3 that agreed'
@@ -1209,7 +1209,7 @@ const STRIP_CASES: {
 			judgeDay('2030-06-12', { pairsJudged: 2, pairsUsable: 2 }),
 			judgeDay('2030-06-15', { pairsJudged: 1, pairsUsable: 1 })
 		],
-		heading: '15 Jun, the newest day',
+		heading: '15 Jun, the newest day with numbers',
 		entries: [
 			'Disagreed with the second reading 0 of 1 pair',
 			'Could not tell 0 of the 1 that agreed'
@@ -1265,7 +1265,7 @@ const STRIP_CASES: {
 				heldReason: 'sheet_too_small'
 			})
 		],
-		heading: '15 Jun, the newest day',
+		heading: '15 Jun, the newest day with numbers',
 		entries: [
 			'Disagreed with the second reading 1 of 4 pairs',
 			'Could not tell 1 of the 3 that agreed'
@@ -1321,7 +1321,7 @@ const STRIP_CASES: {
 				heldReason: 'sheet_too_small'
 			})
 		],
-		heading: '15 Jun, the newest day',
+		heading: '15 Jun, the newest day with numbers',
 		entries: [
 			'Disagreed with the second reading 1 of 4 pairs',
 			'Could not tell 0 of the 3 that agreed'
@@ -1405,7 +1405,7 @@ const STRIP_CASES: {
 				heldReason: 'sheet_too_small'
 			})
 		],
-		heading: '15 Jun, the newest day',
+		heading: '15 Jun, the newest day with numbers',
 		entries: [
 			'Disagreed with the second reading 20% of 5 pairs',
 			'Could not tell 0 of the 4 that agreed'
@@ -1462,7 +1462,7 @@ const STRIP_CASES: {
 				heldReason: 'sheet_too_small'
 			})
 		],
-		heading: '15 Jun, the newest day',
+		heading: '15 Jun, the newest day with numbers',
 		entries: [
 			'Disagreed with the second reading 20% of 20 pairs',
 			'Could not tell 50% of the 16 that agreed'
@@ -1521,6 +1521,9 @@ const DOT_CASES: {
 	lines: Record<keyof typeof DOT_FILL, string[][]>;
 	/** The note after the sentence, or null where none prints. */
 	note: string | null;
+	/** The readout's total column count, checked only where a case names one:
+	 * every day of the window, including a day with no reading. */
+	columns?: number;
 }[] = [
 	{
 		preset: 7,
@@ -1566,10 +1569,10 @@ const DOT_CASES: {
 	},
 	{
 		preset: 7,
-		state: 'every day read 5 pairs or more, and 5 or more agreed',
+		state: 'two adjacent days each read 5 pairs or more, and 5 or more agreed',
 		days: [
-			judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 36, disagreementRate: 0.1 }),
-			judgeDay('2030-06-13', {
+			judgeDay('2030-06-14', { pairsJudged: 40, pairsUsable: 36, disagreementRate: 0.1 }),
+			judgeDay('2030-06-15', {
 				pairsJudged: 50,
 				pairsUsable: 45,
 				disagreementRate: 0.1,
@@ -1577,12 +1580,12 @@ const DOT_CASES: {
 			})
 		],
 		dots: {
-			'2030-06-10': { disagreement: '10%', unclear: '0%' },
-			'2030-06-13': { disagreement: '10%', unclear: '20%' }
+			'2030-06-14': { disagreement: '10%', unclear: '0%' },
+			'2030-06-15': { disagreement: '10%', unclear: '20%' }
 		},
 		lines: {
-			disagreement: [['2030-06-10', '2030-06-13']],
-			unclear: [['2030-06-10', '2030-06-13']]
+			disagreement: [['2030-06-14', '2030-06-15']],
+			unclear: [['2030-06-14', '2030-06-15']]
 		},
 		note: null
 	},
@@ -1608,6 +1611,63 @@ const DOT_CASES: {
 		dots: { '2030-06-15': {} },
 		lines: { disagreement: [], unclear: [] },
 		note: null
+	}
+];
+
+/** What the agreement chart draws for a share above the axis's old fixed top,
+ * and for a day that holds no reading between two that do. Jony's ruling
+ * (row L55): the axis nices from every drawn share as well as the two marks,
+ * so a share past the old top widens it rather than drawing pinned to a mark;
+ * and every day of the window is a column, so a day with no row at all and a
+ * day whose row read no pair both keep their place, drawing no dot and
+ * joining no line across them. */
+const AXIS_AND_GAP_CASES: {
+	preset: number;
+	state: string;
+	days: JudgeDay[];
+	dots: Record<string, Partial<Record<keyof typeof DOT_FILL, string>>>;
+	lines: Record<keyof typeof DOT_FILL, string[][]>;
+	/** The readout's total column count: every day of the window, a day with no
+	 * reading included. */
+	columns: number;
+}[] = [
+	{
+		preset: 1,
+		state: 'its day disagreed on 40%, past the old fixed 35% top',
+		days: [judgeDay('2030-06-15', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.4 })],
+		dots: { '2030-06-15': { disagreement: '40%', unclear: '0%' } },
+		lines: { disagreement: [], unclear: [] },
+		columns: 1
+	},
+	{
+		preset: 1,
+		state: 'every pair that agreed could not tell, widening the axis to 100%',
+		days: [judgeDay('2030-06-15', { pairsJudged: 40, pairsUsable: 38, unclearRate: 1 })],
+		dots: { '2030-06-15': { disagreement: '0%', unclear: '100%' } },
+		lines: { disagreement: [], unclear: [] },
+		columns: 1
+	},
+	{
+		preset: 7,
+		state: 'a day with no row and a day that read no pair sit between two measured days',
+		days: [
+			judgeDay('2030-06-09', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 }),
+			// 10 Jun carries no row at all. 11 Jun carries a row that read no pair.
+			judgeDay('2030-06-11', { pairsJudged: 0, pairsUsable: 0 }),
+			// 12 to 14 Jun carry no row at all.
+			judgeDay('2030-06-15', {
+				pairsJudged: 45,
+				pairsUsable: 40,
+				disagreementRate: 0.2,
+				unclearRate: 0.1
+			})
+		],
+		dots: {
+			'2030-06-09': { disagreement: '10%', unclear: '0%' },
+			'2030-06-15': { disagreement: '20%', unclear: '10%' }
+		},
+		lines: { disagreement: [], unclear: [] },
+		columns: 7
 	}
 ];
 
@@ -1773,6 +1833,26 @@ test.describe('the Judgement panels name their span in every state, on days the 
 			} else {
 				expect(await said(page, '[data-agreement-floor-note]')).toBe(one.note);
 			}
+		});
+	}
+
+	for (const one of AXIS_AND_GAP_CASES) {
+		test(`THE ORACLE: judge-agreement's axis and columns, at the ${one.preset}-day window, when ${one.state}`, async ({
+			page
+		}) => {
+			await page.setContent(
+				`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', words: '', ...one }))}</main>`
+			);
+
+			await expect(
+				page.locator('[data-windowed="judge-agreement"]'),
+				'the readout holds a different column than the window'
+			).toHaveAttribute('data-readout-columns', String(one.columns));
+			const marks = await agreementMarks(page);
+			expect(marks.dots, 'a share draws pinned to a mark instead of its true height').toEqual(
+				one.dots
+			);
+			expect(marks.lines, 'a line joins across a day with no reading').toEqual(one.lines);
 		});
 	}
 
@@ -2428,7 +2508,7 @@ test.describe('at one day no sentence needs a second day, on days the test build
 			'How often the judge disagreed with its own second reading, a day'
 		);
 		expect(await stripOf(page, 'judge-agreement')).toEqual({
-			heading: '15 Jun, the newest day',
+			heading: '15 Jun, the newest day with numbers',
 			hint: DEFAULT_KEYS
 		});
 	});
