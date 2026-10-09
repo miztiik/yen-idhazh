@@ -117,7 +117,6 @@ from idhazh.gardener.file_listing import (
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
-    EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
     MEANS,
     Outcome,
