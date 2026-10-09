@@ -100,7 +100,7 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
         {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2},
     ]
     assert emitted["committed_paths"].split() == [
-        council_matrix.COUNCIL_LEDGER,
+        *council_matrix.VENUE_LEDGERS,
         "state/paper",
     ], "the venue's own record is staged beside whatever the tenant named"
 
@@ -202,7 +202,7 @@ def test_the_staged_paths_are_every_tenants_and_each_one_once(
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
     assert emitted["committed_paths"].split() == [
-        council_matrix.COUNCIL_LEDGER,
+        *council_matrix.VENUE_LEDGERS,
         "state/paper",
         "state/shared",
         "state/other",

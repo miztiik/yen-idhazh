@@ -345,6 +345,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Stamp the collecting job clock
+        run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -381,7 +384,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
-            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}"
+            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" --job-started-at "$JOB_STARTED_AT"
           done
 
       # One call and one push, over every path the night's tenants named. The

@@ -31,6 +31,26 @@ def opened_today() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
+#: How many characters of a run id are the day it opened on. The name is
+#: `<YYYY-MM-DD>-<platform run id>`, and the date is fixed width.
+_DAY_WIDTH: Final = len("YYYY-MM-DD")
+
+
+def opened_on(run_id: str) -> str:
+    """The UTC day this run opened on, read back off its own name.
+
+    The other direction of `council_run_id`, and here beside it because the two
+    have to agree about where the day ends - a second place that counted the
+    characters would be a second thing to fix the day the name changes.
+
+    What it is for: a row about the night rather than about a date the night
+    judged. A council judges two dates on one night and settles each one, so a
+    reading taken per night is filed under the day the night opened, which is
+    the same ten characters a reader already takes a lag from.
+    """
+    return str(_A_RUN_ID.validate_python(run_id))[:_DAY_WIDTH]
+
+
 def council_run_id(*, opened_on: str, platform_run_id: str) -> str:
     """The name this council run files every row it writes under.
 
