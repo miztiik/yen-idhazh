@@ -2993,6 +2993,90 @@ test.describe('at one day no sentence needs a second day, on days the test build
 				}
 			}
 
+			test('THE ORACLE: an unjudged-only source rests on its newest recorded day before interaction', async ({ page }) => {
+				const data = voiceData(7, windowDates(7));
+				data.retiring.rows = [];
+				data.retiring.unjudged = [{ ...data.retiring.unjudged[0], sourceId: 'source-a', title: 'source-a' }];
+				await drawRecord(page, 'Voices', { data });
+				const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+				await expect(strip).toHaveText('source-a, 15 Jun 2030, its newest day');
+				await page.locator('[data-retiring="table"]').focus();
+				await page.locator('[data-retiring="table"]').press('ArrowLeft');
+				await expect(strip).toHaveText('source-a, 9 Jun 2030');
+				await page.locator('[data-retiring="table"]').press('Escape');
+				await expect(strip).toHaveText('source-a, 15 Jun 2030, its newest day');
+			});
+
+			for (const preset of [1, 7]) {
+				for (const recordDays of [1, 7]) {
+					test(`unjudged sources keep pointer and keyboard selection for a ${recordDays}-day record at the ${preset}-day window`, async ({ page }) => {
+						const data = voiceData(preset, windowDates(recordDays));
+						data.retiring.rows = [];
+						data.retiring.unjudged = [
+							{ ...data.retiring.unjudged[0], sourceId: 'source-a', title: 'source-a' },
+							data.retiring.unjudged[0]
+						];
+						await drawRecord(page, 'Voices', { data });
+						const group = page.locator('[data-retiring="table"]');
+						const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+						const resting = recordDays === 1
+							? 'source-a, 15 Jun 2030, its one recorded day'
+							: 'source-a, 15 Jun 2030, its newest day';
+						await expect(strip).toHaveText(resting);
+						await group.focus();
+						await group.press('ArrowDown');
+						await group.press('ArrowDown');
+						await expect(strip).toHaveText(recordDays === 1 ? 'source-b, 15 Jun 2030' : 'source-b, 9 Jun 2030');
+						await group.press('Escape');
+						await expect(strip).toHaveText(resting);
+						const square = page.locator('[data-retiring-unjudged-row="source-b"] [data-readout-at]').last();
+						await square.hover();
+						await expect(strip).toHaveText('source-b, 15 Jun 2030');
+						await square.click();
+						await expect(strip).toHaveText('source-b, 15 Jun 2030');
+						await page.mouse.move(0, 0);
+						await expect(strip).toHaveText(resting);
+						await group.focus();
+						await group.press('Escape');
+						await expect(strip).toHaveText(resting);
+					});
+				}
+			}
+
+			test('the first judged source keeps precedence over a newer unjudged source', async ({ page }) => {
+				const data = voiceData(7, windowDates(7));
+				data.retiring.rows[0].squares = data.retiring.rows[0].squares.slice(0, 6);
+				await drawRecord(page, 'Voices', { data });
+				const group = page.locator('[data-retiring="table"]');
+				const strip = page.locator('[data-readout="source-yield"] [data-readout-subject]');
+				await expect(strip).toHaveText('source-a, 14 Jun 2030, its newest day');
+				await page.locator('[data-retiring-unjudged-row="source-b"] [data-readout-at]').last().hover();
+				await expect(strip).toHaveText('source-b, 15 Jun 2030');
+				await group.focus();
+				await group.press('Escape');
+				await expect(strip).toHaveText('source-a, 14 Jun 2030, its newest day');
+			});
+
+			for (const state of ['absent', 'empty', 'no-squares'] as const) {
+				test(`a source record offers no square readout when ${state}`, async ({ page }) => {
+					const generated = voiceData(7, []);
+					if (state === 'empty') {
+						generated.retiring.rows = [];
+						generated.retiring.unjudged = [];
+					}
+					const data: Omit<ReturnType<typeof voiceData>, 'retiring'> & {
+						retiring: ReturnType<typeof voiceData>['retiring'] | null;
+					} = { ...generated, retiring: state === 'absent' ? null : generated.retiring };
+					await drawRecord(page, 'Voices', { data });
+					await expect(page.locator('[data-readout="source-yield"]')).toHaveCount(0);
+					if (state === 'absent') await expect(page.locator('[data-retiring="table"]')).toHaveCount(0);
+					else {
+						await expect(page.locator('[data-retiring="table"]')).toHaveAttribute('data-readout-none', 'no source has a day on record, so there is no square to read; agreed with Susan');
+						await expect(page.locator(state === 'empty' ? '[data-retiring-empty]' : '[data-retiring-no-strip]')).toBeVisible();
+					}
+				});
+			}
+
 			for (const state of ['quiet', 'named', 'no-day'] as const) {
 				test(`THE ORACLE: one-day processor tiles say where keys go when ${state}`, async ({ page }) => {
 					const tile = { key: JUDGED_THROUGH, label: '15 Jun 2030', short: '15', state: 'quiet', worstPct: 0, says: 'under 1%', from: 2, outOf: 2 };
