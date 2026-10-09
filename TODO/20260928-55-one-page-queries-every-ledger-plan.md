@@ -79,6 +79,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 24 | The page reads each index once before a run, and the ledger list raises no accessibility warning | 10 | Q | DONE | p55fix1 | #1435 | executing owner |
 | 25 | The panel pictures open the tab that holds each Data explorer panel | 10 | Q | DONE | p55fix2 | #1453 | executing owner |
 | 27 | Ctrl+Enter runs a question only when Run could, and History keeps the question each run asked | 4 | Q | DONE | p55fix3 | #1461 | executing owner |
+| 28 | A day tile marks only its preset ending today, and saved questions and runs keep dates only for custom spans | 6 | Q | DONE | upgraded-lamp | #1472 | executing owner |
 
 **One pull request a row.** Row 1 runs first and alone. Rows 2 and 3 start together once it has merged. Row 7 waits for both, row 4 waits for row 7, and rows 5 and 6 follow one at a time. **Row 7 was added on 2026-10-02 and runs between rows 3 and 4**: its number is the order it was written in, not the order it runs in, and the group letters give the running order. **Row 11 was added on 2026-10-05, on the owner's ruling that day, and runs between rows 9 and 10**, because row 10 finishes the same two rails. **Row 12 was added the same day, on the owner's request that day, and runs between rows 11 and 10**, because row 10's density pass works inside the regions row 12 sizes. **Row 13 was added on 2026-10-05, from row 11's S7**: one type classification for the table, the chart and the colours, and a NULL that is no value in any chart. **Rows 19 and 20 were added on 2026-10-07 on the owner's A1+A2 ruling, specified by Susan and Jony.** **Rows 21 to 23 were added on 2026-10-07 at plan 62's request, designed by Fowler.** Rows 19 and 21 share no file and may run together. Row 20 is BLOCKED on the owner deciding whether this plan carries the small slice of plan 52 row 2 that its charts need. **Rows 22 and 23 were descoped on 2026-10-07 by the owner**, who kept the column list as it is: each ledger's columns are read from its newest file through the query engine. Row 21 stays, because it proves at each deploy that every published file carries the columns its contract declares.
 
@@ -1857,6 +1858,41 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 2 | **A run reads its question, ledgers and span once, as it starts.** The request, the address and History all use that reading, so an answer and its History line always belong to the same question | Executing owner, 2026-10-08 |
 
 - **Not in this row:** a way to stop a run in flight. No row asks for one.
+
+---
+
+### Row #28 - A day tile marks only its preset ending today
+
+- **Scope:** Plan 62 row L48's smoke found that a preset run reopened on the
+  next UTC day with old dates and its tile checked. Pressing that tile did
+  nothing. Section 2.8 and row 6 decision 9 already require preset shortcuts
+  ending today, with exact dates kept only for custom spans.
+- **Contract:** `matchPresetSpan` returns the preset length only when the
+  span ends today, otherwise null. The explorer's tiles, links, Saved and
+  History read that one decision. `WindowControl` accepts null to mark no
+  tile; the console layout still passes its number for the window ending
+  on the site's newest published day. No other route changes.
+- **Files touched:** `frontend/src/lib/console/explorer/preset-span.ts`,
+  `frontend/src/routes/console/data-explorer/+page.svelte`,
+  `frontend/src/lib/components/WindowControl.svelte`,
+  `frontend/tests/console-data-explorer-window.spec.ts`,
+  `frontend/tests/console-data-explorer-keep.spec.ts`,
+  `docs/how-to/query-a-ledger-from-the-console.md`, and this plan.
+- **Checks:** preset runs and saves omit exact dates; custom ones keep them.
+  A preset reopens ending on the next UTC day. A past custom span matching
+  a preset length marks no tile, and pressing that tile reaches today.
+  Older entries with dates keep them and leave the matching tile pressable.
+  `console-window.spec.ts` keeps the other routes' page-load and tab-change
+  window checks unchanged. The pure function covers a UTC month boundary.
+- **Acceptance gates:** the shared selector, selected logic and console
+  tests, `svelte-check`, and browser smoke at 390, 768 and 1440 px in both
+  themes, including a cross-page visit and missing data.
+- **Decisions:** The function reads validated dates and the configured
+  presets. Existing entries with dates are not rewritten: they do not say
+  whether a tile or the date inputs produced those dates. A run snapshots
+  its custom-span decision with its question. Executing owner, 2026-10-09.
+- **Not in this row:** changing dates when UTC midnight passes while the
+  page remains open.
 
 ---
 

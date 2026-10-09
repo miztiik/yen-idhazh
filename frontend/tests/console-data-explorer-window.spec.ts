@@ -14,6 +14,91 @@ import { everyDay } from './support/ledger-lifecycle';
 /** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
 const PINNED = '2030-06-15';
 
+async function saveWindowQuestion(page: Page, name: string) {
+	await page.getByRole('button', { name: /^Save$/ }).click();
+	await page.getByLabel('Name', { exact: true }).fill(name);
+	await page.getByRole('button', { name: /^Keep$/ }).click();
+}
+
+async function storedWindows(page: Page) {
+	return page.evaluate(() => {
+		type WindowEntry = { days: number; from?: string; end?: string };
+		return {
+			saved: JSON.parse(localStorage.getItem('yen-idhazh:data-explorer:saved') ?? '[]') as WindowEntry[],
+			history: JSON.parse(localStorage.getItem('yen-idhazh:data-explorer:history') ?? '[]') as WindowEntry[]
+		};
+	});
+}
+
+test('a preset run and saved question keep no dates, and reopen on the next UTC day', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(6, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+	await page.locator('[data-window-preset="7"]').click();
+	await saveWindowQuestion(page, 'Seven days');
+	await runExplorer(page);
+	const kept = await storedWindows(page);
+	for (const entry of [kept.saved[0], kept.history[0]]) {
+		expect(entry.days).toBe(7);
+		expect(entry).not.toHaveProperty('from');
+		expect(entry).not.toHaveProperty('end');
+	}
+
+	await openExplorer(page, '2030-06-16');
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-10');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-16');
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+	await page.locator('.saved-chip .example').filter({ hasText: 'Seven days' }).click();
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-16');
+});
+
+test('a custom span keeps its dates without marking a tile, and pressing its length ends today', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(7, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+	await page.getByLabel('From (UTC)', { exact: true }).fill('2030-06-08');
+	await page.getByLabel('To (UTC)', { exact: true }).fill('2030-06-14');
+	await expect(page.locator('[data-window-control] input:checked')).toHaveCount(0);
+	await saveWindowQuestion(page, 'Exact dates');
+	await runExplorer(page);
+	const kept = await storedWindows(page);
+	for (const entry of [kept.saved[0], kept.history[0]]) {
+		expect(entry).toMatchObject({ days: 7, from: '2030-06-08', end: '2030-06-14' });
+	}
+	const address = new URL(page.url());
+	expect(address.searchParams.get('from')).toBe('2030-06-08');
+	expect(address.searchParams.get('end')).toBe('2030-06-14');
+	expect(address.searchParams.has('days')).toBe(false);
+
+	await openExplorer(page, '2030-06-16');
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-08');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-14');
+	await expect(page.locator('[data-window-control] input:checked')).toHaveCount(0);
+	await page.locator('[data-window-preset="7"]').click();
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-10');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-16');
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+});
+
+test('an older kept run with exact dates preserves them and leaves the matching preset pressable', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(7, 0) });
+	await openExplorer(page, PINNED);
+	await page.evaluate(() => {
+		localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify([{
+			id: '2030-06-14T12:00:00Z', askedAt: '2030-06-14T12:00:00Z',
+			statement: 'SELECT count(*) AS rows FROM "published"', ledgers: ['published'],
+			days: 7, from: '2030-06-08', end: '2030-06-14', rows: 1, ms: 1
+		}]));
+	});
+	await openExplorer(page, PINNED);
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-14');
+	await expect(page.locator('[data-window-control] input:checked')).toHaveCount(0);
+	await page.locator('[data-window-preset="7"]').click();
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-09');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue(PINNED);
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+});
+
 type Box = { left: number; top: number; right: number; bottom: number };
 
 /** The window's own edges and the boxes of the named regions, in one frame. */

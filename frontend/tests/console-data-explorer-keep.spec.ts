@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { keepRecentRun, keepSavedQuestion, suggestedSaveName, type KeptQuestion, type RecentRun } from '../src/lib/console/explorer/keep';
+import { matchPresetSpan } from '../src/lib/console/explorer/preset-span';
 
 function saved(id: string, name = id): KeptQuestion {
 	return { id, name, statement: `select '${id}'`, ledgers: ['seen'], days: 14, updatedAt: `2026-10-0${id.length}T00:00:00Z` };
@@ -9,6 +10,16 @@ function saved(id: string, name = id): KeptQuestion {
 function run(id: string): RecentRun {
 	return { id, statement: `select '${id}'`, ledgers: ['seen'], days: 14, rows: id.length, ms: id.length * 10, askedAt: `2026-10-0${id.length}T00:00:00Z` };
 }
+
+test('a preset matches its length only when its span ends today, including a UTC month boundary', () => {
+	const presets = [1, 7, 14, 30, 90];
+	expect(matchPresetSpan('2030-06-09', '2030-06-15', '2030-06-15', presets)).toBe(7);
+	expect(matchPresetSpan('2030-06-08', '2030-06-14', '2030-06-15', presets)).toBeNull();
+	expect(matchPresetSpan('2030-06-08', '2030-06-15', '2030-06-15', presets)).toBeNull();
+	expect(matchPresetSpan('2030-05-26', '2030-06-01', '2030-06-01', presets)).toBe(7);
+	expect(matchPresetSpan('2030-06-15', '2030-06-15', '2030-06-15', presets)).toBe(1);
+	expect(matchPresetSpan('2030-06-16', '2030-06-15', '2030-06-15', presets)).toBeNull();
+});
 
 test('the saved list keeps exactly the saved maximum and names the dropped question', () => {
 	const result = keepSavedQuestion([saved('newer', 'Newer'), saved('middle', 'Middle'), saved('oldest', 'Oldest')], saved('fresh', 'Fresh'), 3);

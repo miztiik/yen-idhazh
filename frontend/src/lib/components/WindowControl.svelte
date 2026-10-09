@@ -1,5 +1,6 @@
 <script lang="ts">
 	/** How many days the console is showing.
+	 * Null leaves every tile unchecked for a caller's custom span.
 	 *
 	 * One control for the whole page. Six controls would invite six windows, and
 	 * two charts on different windows cannot be compared - which is the question
@@ -35,7 +36,7 @@
 		ready = false,
 		onChange
 	}: {
-		days: number;
+		days: number | null;
 		presets: readonly number[];
 		busy?: boolean;
 		/** False until a browser has run. The control does nothing before that,
@@ -56,7 +57,7 @@
 <fieldset
 	class="window-control"
 	data-window-control
-	data-window-days={days}
+	data-window-days={days ?? undefined}
 	data-window-busy={busy ? 'true' : 'false'}
 	aria-busy={busy}
 	aria-describedby="window-control-status"
