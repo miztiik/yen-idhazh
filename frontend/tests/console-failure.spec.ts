@@ -161,6 +161,24 @@ test('a day too thin to divide breaks the line rather than drawing a share', () 
 	expect(fetch.points[1]).toMatchObject({ rate: 1 / 9, reached: 9 });
 });
 
+test('drawn rate lines stop at gaps, keep measured zero and leave singleton dots unjoined', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '7'));
+	await openServed(page, (window) => [6, 5, 3, 2, 0].flatMap((ago) =>
+		items(dayBefore(window.end, ago), `day-${ago}`, 'publish', 'ok', 8)
+	));
+	for (const stage of STAGES) {
+		const marks = await page.locator(`[data-rate-mark="${stage}"]`).evaluateAll((nodes) =>
+			nodes.map((node) => `${node.getAttribute('cx')},${node.getAttribute('cy')}`)
+		);
+		expect(marks).toHaveLength(5);
+		const lines = await page.locator(`[data-rate-line="${stage}"]`).evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('points'))
+		);
+		expect(lines).toEqual([marks.slice(0, 2).join(' '), marks.slice(2, 4).join(' ')]);
+		expect(new Set(marks.map((point) => point.split(',')[1])).size).toBe(1);
+	}
+});
+
 test('every rate the chart prints carries its denominator in the same sentence', async ({
 	page
 }) => {
