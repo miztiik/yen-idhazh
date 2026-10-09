@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
-**Thirty-eight defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-nine defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -135,6 +135,36 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
 | 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
 | 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
+| 69 | A re-run of a day that predates fragments may record a line it did not use | 5 | **OPEN - reasoned, not measured; measure the preserved day and its run record before any contract decision** |
+
+## 69 - A re-run of a day that predates fragments may record a line it did not use (OPEN)
+
+**`stage_assemble` keeps the published day unchanged when its previous
+`digest.json` predates run fragments, but still writes the selected floor to
+the new `run.json`.** The branch is in
+`backend/idhazh/stages/assemble.py`: it assigns `day = previous_day` and skips
+`assemble_day`, then builds the new manifest with
+`same_story_floor_applied=same_story.floor_min`. The field description in
+`backend/idhazh/contracts/run_manifest.py` says it is the line the run grouped
+the day at. Reasoned from the code, not measured. No such day is the newest
+published day.
+
+**The smallest measurement is one generated two-run case.** First build a day
+with a known `same_story_floor_applied` value and its matching digest. Then
+make the next run take the `predates_fragments` branch with the adaptive switch
+enabled and a different selected line. Compare the digest before and after,
+then compare the new run record's `same_story_floor_applied` with the value
+that built the preserved digest. This establishes whether the new persisted
+record names a line the day did not use.
+
+**The possible consequence is persisted meaning, not a missing field.** If the
+measurement confirms the mismatch, the existing `RunRecord` value would say
+that a preserved day was grouped at a floor it never used. Any correction to
+that persisted meaning must stop at Table C, C1 for contract review; this entry
+does not choose a fix, change backend code or change a shape.
+
+Found in plan 62's row L52 follow-up 4, while recording #1469's findings, and
+filed on 2026-10-09.
 
 ## 68 - The merge line's hold has no floor on its pair count, so one pair can hold a run (OPEN)
 
