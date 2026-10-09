@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-09
 
-**Thirty-nine defects are open.** Five of them need evidence or a ruling before any code
+**Forty defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -136,6 +136,42 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
 | 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
 | 69 | A re-run of a day that predates fragments may record a line it did not use | 5 | **OPEN - reasoned, not measured; measure the preserved day and its run record before any contract decision** |
+| 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
+
+## 70 - The raw-listing test does not check the value included in the built site (OPEN)
+
+**The test's title promises a build check, but its assertions read only staged
+files.** In `frontend/tests/published-ledgers.spec.ts`, the test
+`raw-day listings are complete, bounded and become the baked listed-through value`
+calls `rawListedThrough(STATIC)` and compares it with days found by reading the
+staged listings again. It does not read `__RAW_LISTED_THROUGH__` from the built
+page. The production binding in `frontend/vite.config.ts` instead calls
+`rawListedThrough()` with no argument.
+
+**The production path is fixed; the integration check is still missing.**
+PR #1427 made the default path relative to the script and added generated-tree
+tests of that default. Those tests do not prove that the build passes the
+result to the page. A future edit that supplies another folder or an empty
+object in `vite.config.ts` can leave the published-listing test green while
+the page reads no raw day. This is a test gap, not evidence of a current
+incorrect build. Confirmed by reading the named test, script and build binding;
+no application test was rerun for this documentation change.
+
+**The receiving work is one bounded integration check.** Build a generated
+state root with two selected ledgers and two named raw days per ledger. Assert
+written-out newest days from the value the real build supplies to the browser,
+not from another listing read. Include a raw-day query with written-out rows.
+Keep the existing default-path unit cases. No test reads the committed archive
+or reaches the network.
+
+**Acceptance:** the generated case passes with the production binding and
+fails when that binding supplies `{}` or the wrong staged folder. It must
+exercise the actual built page, including its raw-day selection. Do not merely
+rename the existing test or compare two readers of the same files.
+
+This receives the unfinished test finding from PR #1427, reported in plan 62
+row L46 and deferred by its Table B, B7. The finding is preserved here before
+that completed plan is deleted; it is not claimed fixed.
 
 ## 69 - A re-run of a day that predates fragments may record a line it did not use (OPEN)
 
