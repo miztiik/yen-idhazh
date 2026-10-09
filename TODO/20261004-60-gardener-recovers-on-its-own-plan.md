@@ -81,7 +81,7 @@ Table A - what is out
 | 39 | The job summary says plainly when nothing is left and what a dry run holds back | 38 | I | DONE | fuzzy-barnacle | #1440 | Plan 60 row 39 |
 | 40 | The monthly-window words match the live retention policy | 24 | J | DONE | plan-60-row-24-month-close | #1516 | - |
 | 41 | An exhausted 403 is API unavailable | 20 | K | DONE | fluffy-tribble | #1519 | Plan 60 row 41 exhausted 403 |
-| 42 | A refusal only a person can settle says manual action | 41 | L | PENDING | - | - | - |
+| 42 | A refusal only a person can settle says manual action | 41 | L | DONE | plan-60-row-42-manual-action | #1521 | Plan 60 row 42 manual action |
 | 43 | Every idhazh crash prints where it broke, never the error's text | 42 | M | PENDING | - | - | - |
 | 44 | The ledger test ignores arbitrary same-millisecond file order | 43 | N | PENDING | - | - | - |
 | 45 | A named retention range reports outside-range when it finds nothing | 44 | O | PENDING | - | - | - |
