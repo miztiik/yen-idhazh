@@ -114,9 +114,9 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | DONE | bookish-telegram | #1491 | Make agreement numbers match verdicts |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
-| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | - | Align merge chart meaning |
+| L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
-| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | PENDING | - | - | - |
+| L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
 | L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | PENDING | - | - | - |
 
 ## 2. Shared declarations
@@ -2628,9 +2628,15 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | --- | --- | --- |
 | 1 | This is the unfinished near-top collision L55 discovered, not a new claim that L55's ordinary mark-label clearance failed or that its advisor resolved the corner. L55's existing row and section stay unchanged in this upkeep change | Plan coordinator, 2026-10-09; L55's Follow-ups and decision 8 |
 | 2 | L62 waits for L55's landed implementation and L57's edits to the same chart and window spec, and for L34 and L45's edits to the shared window spec. At dispatch compare every named Files touched list against all active rows, including L56's chart and owning-page edits; hold and record any further file dependency before starting | Plan coordinator, 2026-10-09 |
-| 3 | Jony selects the smallest local placement that retains the date's link to its day and the dashed mark's meaning. No position, axis change or hidden label is prescribed here. Susan reviews whether the result is sufficient to ship in both themes and widths | To be ruled at execution (Jony and Susan) |
+| 3 | Keep the date centred on its day's column. Clear mark-label boxes upward where the whole date fits inside the plot; otherwise place it below its topmost dot and clear boxes downward. Neither mark nor its label moves. Susan ruled this label-only change sufficient to ship at 390px and 1280px in both themes, including the generated near-top, ordinary, empty and all-unread cases | Jony and Susan, 2026-10-09 |
 | 4 | Reuse the shared geometry and the chart's existing label-box calculations. If consultation finds that a new surface or shared contract scope is necessary, stop for human scope approval; do not duplicate machinery or take an owner waiver | Plan coordinator, 2026-10-09; section 0 and CLAUDE.md section 6 |
 | 5 | Level 1: one chart's local label placement changes; a wrong version is visible and local. No persisted shape moves. The executing change records any durable placement rule in the owning page, and no production code cites this plan | Plan coordinator, 2026-10-09 |
+| 6 | The corrected Oracle fails for actual label intersection in all four width/theme cases on a separate copy of exact landed L55 `ec23a13aff483f1fede2639f32c87829b742c73e`. The first attempt failed its measuring instrument, not the chart: Playwright serialized a direct SVG `getBBox()` return as an empty object. Both the ordinary-clearance check and the new near-top checks now return explicit coordinates and require finite values and positive dimensions before comparing boxes | Found and fixed during execution, 2026-10-09 |
+
+**Follow-ups**
+
+- The owned ordinary-clearance check's empty-object serialization could report separation without measuring it. Fixed here with explicit, finite coordinates; no remaining work.
+- No new chart defect or scope expansion was found. Shared frame geometry and all thresholds, formatting, series and missing states stay unchanged.
 
 **Rejected alternatives**
 
