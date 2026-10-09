@@ -142,6 +142,7 @@ export type NoShapeCode =
 	| 'repeated-name'
 	| 'below-zero'
 	| 'all-zero'
+	| 'all-zero-at-cap'
 	| 'too-few-bars'
 	| 'marks-all-null'
 	| 'null-count'
@@ -510,6 +511,10 @@ function partsShape(roles: readonly RoleState[], columns: readonly Column[], row
 	if (refusal !== null) return refusal;
 	if (rows.every((row) => barColumns.every((column) => (numericValue(row, column) ?? 0) === 0))) return { kind: 'none', code: 'all-zero', reason: 'Nothing here to draw: every bar you checked is 0 or null on every row.' };
 	const drawn = rows.slice(0, bounds.rankMax);
+	if (drawn.every((row) => barColumns.every((column) => (numericValue(row, column) ?? 0) === 0))) {
+		const prefix = drawn.length === 1 ? 'the first row' : `the first ${drawn.length} rows`;
+		return { kind: 'none', code: 'all-zero-at-cap', reason: `Nothing here to draw: every bar you checked is 0 or null in ${prefix}. The remaining rows are in the table.` };
+	}
 	let mainFigure = { label: '', value: 0, column: barColumns[0] };
 	for (const row of drawn) for (const column of barColumns) {
 		const value = numericValue(row, column);

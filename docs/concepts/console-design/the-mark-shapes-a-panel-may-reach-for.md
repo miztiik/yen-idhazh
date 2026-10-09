@@ -125,31 +125,6 @@ shared stepped list and its own explanation, not a second drawing rule.
 Every chosen count must be present and non-negative; every stage name must be
 distinct, and something must arrive at the first stage.
 
-### Design rationale: shared chart additions
-
-Owner, 2026-10-08: these three charts carry only the shared changes they need,
-through optional props. Existing callers retain their drawing and native
-tooltip defaults. The explorer supplies the existing common readout API and
-suppresses native tooltips, so pointer, keyboard and touch read the same values.
-No new chart library, type classifier or picker behaviour is added.
-Flow's optional explorer readout also places the last column's labels toward
-the plot's interior. A label outside the last node would be clipped at the
-panel edge. Callers without this readout keep their label positions.
-Spread's existing static chart/readout has a labelled focus group in the
-explorer. Tab reaches its numbers after Values, with no stop for an empty role
-slot. Its shared component and all other callers stay unchanged.
-Jony, 2026-10-09: the existing chart-choice group may scroll horizontally to
-show the checked tile. Its stillness check compares tile positions and word
-starts in that group's content coordinates. All other boxes remain in viewport
-coordinates, and the chosen tile must be wholly visible inside the group's
-client aperture. Scrolling is not a layout change.
-
-Jony, 2026-10-09: Flow's stage width comes from `--space-3`; its branch gap
-comes from `--space-2`. The existing measure pass resolves inherited tokens to
-CSS pixels, including rem conversion. Theme/config substitution therefore
-changes the geometry without a source edit. Frame margins are not spacing
-tokens, and the old engine drawing's gap belongs to that other drawing.
-
 A choice redraws from the rows in memory and fetches nothing. It holds across runs on
 the page while the new answer still has each column in a family its role takes, and a
 role whose column has gone takes its own default again. Choices are never saved with a
@@ -667,6 +642,38 @@ absence is the one number nobody checks
 drawn, it pulls a line to the floor and puts a reading nobody took in a spread's
 lowest bin. A floor and a figure count what the chart draws, so the panel never
 claims more readings than it shows.
+
+## Design rationale
+
+Owner, 2026-10-08: these three charts carry only the shared changes they need,
+through optional props. Existing callers retain their drawing and native
+tooltip defaults. The explorer supplies the existing common readout API and
+suppresses native tooltips, so pointer, keyboard and touch read the same values.
+No new chart library, type classifier or picker behaviour is added.
+
+Flow's optional explorer readout also places the last column's labels toward
+the plot's interior. A label outside the last node would be clipped at the
+panel edge. Callers without this readout keep their label positions.
+Spread's existing static chart/readout has a labelled focus group in the
+explorer. Tab reaches its numbers after Values, with no stop for an empty role
+slot. Its shared component and all other callers stay unchanged.
+
+Jony, 2026-10-09: the existing chart-choice group may scroll horizontally to
+show the checked tile. Its stillness check compares tile positions and word
+starts in that group's content coordinates. All other boxes remain in viewport
+coordinates, and the chosen tile must be wholly visible inside the group's
+client aperture. Scrolling is not a layout change.
+
+Susan, 2026-10-09: when every bar in the drawn prefix is zero/null, but a later
+row has a positive bar, the box names the prefix and directs the reader to the
+remaining table rows. Saying there are no rows would hide real records. This
+does not change the cap, answer order or whole-answer zero/null refusal.
+
+Jony, 2026-10-09: Flow's stage width comes from `--space-3`; its branch gap
+comes from `--space-2`. The existing measure pass resolves inherited tokens to
+CSS pixels, including rem conversion. Theme/config substitution therefore
+changes the geometry without a source edit. Frame margins are not spacing
+tokens, and the old engine drawing's gap belongs to that other drawing.
 
 ## See also
 

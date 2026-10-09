@@ -540,6 +540,17 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		expect(bars).toContain('null');
 	});
 
+	test('a zero-only drawn prefix names its cap, without claiming later positive rows are zero', () => {
+		const columns: Column[] = [{ name: 'name', type: 'VARCHAR' }, { name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }];
+		const rows: Row[] = Array.from({ length: 4 }, (_, index) => ({ name: `row ${index}`, a: index === 3 ? '8' : '0', b: null }));
+		const body = draw(columns, rows, 'partsOfOne');
+		expect(body).toContain('Nothing here to draw: every bar you checked is 0 or null in the first 3 rows. The remaining rows are in the table.');
+		expect(body).not.toContain('data-chart-type=');
+		expect(body).not.toContain('data-lede=');
+		expect(chooseChart(columns, rows, { ...bounds, rankMax: 1 }, 'partsOfOne').shape).toMatchObject({ reason: 'Nothing here to draw: every bar you checked is 0 or null in the first row. The remaining rows are in the table.' });
+		expect(chooseChart(columns, rows.map((row) => ({ ...row, a: '0' })), bounds, 'partsOfOne').shape).toMatchObject({ reason: 'Nothing here to draw: every bar you checked is 0 or null on every row.' });
+	});
+
 	test('the paired chart draws no point for a row with a NULL', () => {
 		const body = draw([{ name: 'host', type: 'VARCHAR' }, { name: 'ms', type: 'DOUBLE' }, { name: 'tokens', type: 'DOUBLE' }], [
 			{ host: 'a', ms: '10', tokens: '100' },

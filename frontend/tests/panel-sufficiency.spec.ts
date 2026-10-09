@@ -35,6 +35,7 @@ import {
 	type Verdict
 } from './support/panel-gates';
 import { serverCompiler } from './support/server-render';
+import { explorerConfig } from '../src/lib/server/config';
 import { showPanel } from './support/panel-tab';
 
 const PINNED = '2026-08-20';
@@ -532,6 +533,11 @@ for (const width of [390, 768, 1024, 1440]) for (const theme of THEMES) {
 			expect(labelBox.x).toBeGreaterThanOrEqual(plotBox.x);
 			expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(plotBox.x + plotBox.width);
 		}
+		const cap = explorerConfig().rank_max;
+		await chooseExplorerQuestion(page, ['published'], `SELECT i::VARCHAR AS stage, CASE WHEN i < ${cap} THEN 0 ELSE 10 END AS arrived, 0 AS went FROM range(0, ${cap + 1}) AS t(i)`);
+		await runExplorer(page);
+		await page.locator('[data-shape-choice="partsOfOne"]').click();
+		await expect(panel.locator('[data-shape-none]')).toHaveText(`Nothing here to draw: every bar you checked is 0 or null in the first ${cap} rows. The remaining rows are in the table.`);
 		await page.goto('/console/');
 		await expect(page.locator('main')).toBeVisible();
 		expect(failures).toEqual([]);

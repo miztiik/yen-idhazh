@@ -235,6 +235,7 @@
 						{:else}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 							<div tabindex="0" role="group" aria-label={`Spread readout: ${active.valueColumn}`} data-chart-readout-focus>
 								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
 							</div>
