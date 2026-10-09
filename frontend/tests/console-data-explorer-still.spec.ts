@@ -737,9 +737,81 @@ test('M17: keyboard order follows the visual order at desktop and phone widths',
  *  role of every chart has a column to pick and another to change to. Two date columns pick no
  *  chart of their own, so the tiles start with none checked. */
 const CHART_SQL = "SELECT DATE '2026-01-01' + i::INTEGER AS day, TIMESTAMP '2026-01-01 06:00:00' + INTERVAL (i) DAY AS stamp, 'n' || i::VARCHAR AS name, i AS across, 200 - i AS up, 2 * i AS other, 0 AS tiny FROM range(0, 170) AS t(i)";
-const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution'] as const;
-/** The lines the role row takes, by the four widths in `VIEWS`, when the chart with the most roles has three. */
-const ROLE_LINES: Record<number, number> = { 1440: 1, 1024: 1, 768: 2, 390: 3 };
+const CHART_TYPES = ['dateSeries', 'rankedList', 'pairedScatter', 'distribution', 'partsOfOne', 'tileStrip', 'flow'] as const;
+/** The lines the role row reserves, with Flow's four roles, even when another chart is drawn. */
+const ROLE_LINES: Record<number, number> = { 1440: 1, 1024: 2, 768: 2, 390: 4 };
+
+for (const view of VIEWS) {
+	test.describe(`row20 role band ${view.width}`, () => {
+	test.use({ hasTouch: view.width < 1024 });
+	test(`row20 I1: Flow uses four roles without moving Spread's boxes at ${view.width}px`, async ({ page, context }) => {
+		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+		await page.setViewportSize(view);
+		await openExplorer(page, PINNED);
+		await openChart(page, "SELECT 's' || i AS stage, 170-i AS arrived, 169-i AS went, 1 AS dropped FROM range(0, 170) AS t(i)");
+		await page.locator('[data-shape-choice="flow"]').click();
+		await settle(page);
+		const read = () => page.locator('[data-chart-roles]').evaluate((node) => ({
+			height: node.getBoundingClientRect().height,
+			tops: [...node.querySelectorAll('summary')].map((pill) => Math.round(pill.getBoundingClientRect().top))
+		}));
+		const flowRow = await read();
+		expect(new Set(flowRow.tops).size).toBe(ROLE_LINES[view.width]);
+		expect(flowRow.height).toBe({ 390: 196, 768: 100, 1024: 76, 1440: 40 }[view.width]);
+		const sizes = await tokens(page);
+		expect(flowRow.height).toBeCloseTo(ROLE_LINES[view.width] * sizes.control + (ROLE_LINES[view.width] - 1) * sizes.space1 + 2 * sizes.space1, 0);
+		await page.locator('[data-shape-choice="distribution"]').click();
+		await settle(page);
+		expect(Math.abs((await read()).height - flowRow.height)).toBeLessThanOrEqual(0.5);
+	});
+	});
+}
+
+test('row20 I7, I9 and I10: Flow keeps long names, its floating Dropped list and one readout tab stop', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
+	await openExplorer(page, PINNED);
+	await openChart(page, "SELECT 's' || i AS stage, 170-i AS summary_prefill_tokens_per_s, 169-i AS went, 1 AS dropped FROM range(0, 170) AS t(i)");
+	await page.locator('[data-shape-choice="flow"]').click();
+	for (const width of [390, 768, 1024, 1399, 1400, 1440]) {
+		await page.setViewportSize({ width, height: 900 });
+		await settle(page);
+		await expect(pill(page, 'arrived').locator('summary')).toHaveAttribute('aria-label', 'Arrived: summary_prefill_tokens_per_s');
+		const name = await pill(page, 'arrived').locator('[data-pill-name]').evaluate((node) => ({ width: node.clientWidth, content: node.scrollWidth }));
+		if (width !== 1399) expect(name.content).toBeLessThanOrEqual(name.width);
+		if (width === 1399 || width === 1400) {
+			const tops = await page.locator('[data-chart-roles] summary').evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().top)));
+			expect(new Set(tops).size).toBe(width === 1399 ? 2 : 1);
+		}
+	}
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.locator('[data-workbench-region="answer"]').evaluate((node) => node.scrollIntoView({ block: 'start' }));
+	const before = await page.evaluate(() => window.scrollY);
+	await pill(page, 'dropped').locator('summary').click();
+	const list = await pill(page, 'dropped').locator('[data-pill-list]').boundingBox();
+	expect(list!.y).toBeGreaterThanOrEqual(0);
+	expect(list!.y + list!.height).toBeLessThanOrEqual(844);
+	expect(await page.evaluate(() => window.scrollY)).toBe(before);
+	await page.keyboard.press('Escape');
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.getByRole('tab', { name: 'Chart' }).focus();
+	for (const next of [
+		page.locator('[data-shape-choice="flow"] input'),
+		pill(page, 'stage').locator('summary'),
+		pill(page, 'arrived').locator('summary'),
+		pill(page, 'wentOn').locator('summary'),
+		pill(page, 'dropped').locator('summary'),
+		page.locator('[data-chart-type="flow"][tabindex], [data-chart-type="flow"] ol[tabindex]')
+	]) {
+		await page.keyboard.press('Tab');
+		await expect(next).toBeFocused();
+	}
+	await page.locator('[data-shape-choice="distribution"]').click();
+	await page.getByRole('tab', { name: 'Chart' }).focus();
+	for (const next of [page.locator('[data-shape-choice="distribution"] input'), pill(page, 'values').locator('summary'), page.locator('[data-chart-type="distribution"][tabindex]')]) {
+		await page.keyboard.press('Tab');
+		await expect(next).toBeFocused();
+	}
+});
 
 /** Wait two frames, so a layout shift the last action caused has been reported. */
 async function settle(page: Page) {
@@ -888,7 +960,7 @@ for (const view of VIEWS) {
 		closeBox(tableStrip, await strip());
 		await page.getByRole('tab', { name: 'Table' }).click();
 		await openChart(page);
-		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(4);
+		await expect(page.locator('.result-tabs [data-shape-choice]')).toHaveCount(7);
 		await expect(page.locator('.result-tabs').getByRole('button', { name: /^Copy as/ })).toHaveCount(0);
 		await page.locator('[data-shape-choice="pairedScatter"]').click();
 		await settle(page);
@@ -911,7 +983,7 @@ for (const view of VIEWS) {
 		expect(Math.abs(placed.top - placed.panelTop), 'the role row is not the panel\'s first row').toBeLessThanOrEqual(0.5);
 		expect(Math.abs(placed.top - placed.stripBottom), 'the role row does not start at the strip\'s foot').toBeLessThanOrEqual(0.5);
 		expect(Math.abs(placed.bottom - placed.drawingTop), 'the role row does not end at the drawing\'s top').toBeLessThanOrEqual(0.5);
-		expect(new Set(placed.pillTops).size, 'the pills stand on the wrong number of lines').toBe(ROLE_LINES[view.width]);
+		expect(new Set(placed.pillTops).size, 'the pills stand on the wrong number of lines').toBe(Math.ceil(3 / (view.width >= 1400 ? 4 : view.width >= 1024 ? 3 : view.width >= 640 ? 2 : 1)));
 		const rows = ROLE_LINES[view.width];
 		expect(placed.height).toBeCloseTo(rows * sizes.control + (rows - 1) * sizes.space1 + 2 * sizes.space1, 0);
 		// I15: the role row takes height, not width, so the plot still covers the panel's width.

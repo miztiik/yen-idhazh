@@ -12,6 +12,11 @@ import { iconsConfig } from '../src/lib/server/config';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
 import { inZone } from './support/in-zone';
 import { serverCompiler } from './support/server-render';
+import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
+import { tileStrip } from '../src/lib/charts/d3/tileStrip';
+import { flow } from '../src/lib/charts/d3/flow';
+import { frame } from '../src/lib/charts/frame';
+import { truthValue } from '../src/lib/console/explorer/shape';
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -425,7 +430,7 @@ test('a NULL is no reading: the spread and paired floors, the paired figure and 
 });
 
 test.describe('the chart panel draws a NULL as no value, never as zero', () => {
-	let draw: (columns: readonly Column[], rows: readonly Row[], selectedType: ExplorerChartType | null, roles?: ChosenRoles, capped?: boolean) => string;
+	let draw: (columns: readonly Column[], rows: readonly Row[], selectedType: ExplorerChartType | null, roles?: ChosenRoles, capped?: boolean, lostDays?: readonly string[]) => string;
 	let pick: (props: Record<string, unknown>) => string;
 
 	/** The path of the date chart's first series: one `M` for each run of days it joins. */
@@ -451,7 +456,7 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		await compiled('src/lib/components/Reserved.svelte', 'Reserved', []);
 		await compiled('src/lib/charts/d3/EmptyState.svelte', 'EmptyState', [['$lib/components/Reserved.svelte', './Reserved.server.mjs']]);
 		await compiled('src/lib/components/ChartReadout.svelte', 'ChartReadout', []);
-		for (const chart of ['DateSeries', 'Distribution', 'PairedScatter']) {
+		for (const chart of ['DateSeries', 'Distribution', 'PairedScatter', 'PartsOfOne', 'TileStrip', 'Flow']) {
 			await compiled(`src/lib/charts/d3/${chart}.svelte`, chart, [
 				['./EmptyState.svelte', './EmptyState.server.mjs'],
 				['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs']
@@ -468,14 +473,17 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 			['$lib/charts/d3/DateSeries.svelte', './DateSeries.server.mjs'],
 			['$lib/charts/d3/Distribution.svelte', './Distribution.server.mjs'],
 			['$lib/charts/d3/PairedScatter.svelte', './PairedScatter.server.mjs'],
+			['$lib/charts/d3/PartsOfOne.svelte', './PartsOfOne.server.mjs'],
+			['$lib/charts/d3/TileStrip.svelte', './TileStrip.server.mjs'],
+			['$lib/charts/d3/Flow.svelte', './Flow.server.mjs'],
 			['$lib/components/RankedList.svelte', './RankedList.server.mjs'],
 			['$lib/console/explorer/ColumnPicker.svelte', './ColumnPicker.server.mjs'],
 			['./shape', '$lib/console/explorer/shape'],
 			['./answer', '$lib/console/explorer/answer']
 		]);
 		const component = (await import(pathToFileURL(panel).href)).default;
-		draw = (columns, rows, selectedType, roles = {}, capped = false) => render(component, {
-			props: { chart: chooseChart(columns, rows, bounds, selectedType, roles), columns, rows, lostDays: [], bounds, floorHeight: 200, capped, maxRows: 1000, onRoles: () => {} }
+		draw = (columns, rows, selectedType, roles = {}, capped = false, lostDays = []) => render(component, {
+			props: { chart: chooseChart(columns, rows, bounds, selectedType, roles), columns, rows, lostDays, bounds, floorHeight: 200, capped, maxRows: 1000, onRoles: () => {} }
 		}).body;
 		const pickerComponent = (await import(pathToFileURL(picker).href)).default;
 		pick = (props) => render(pickerComponent, { props: { onChange: () => {}, ...props } }).body;
@@ -489,6 +497,47 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		], 'rankedList');
 		expect(body.match(/data-ranked-row="[^"]*"/g)).toEqual(['data-ranked-row="a"', 'data-ranked-row="c"']);
 		expect(body).toContain('1 more row is in the table.');
+	});
+
+	test('the three added charts draw shared geometry, carry readouts and no native tooltip', () => {
+		const columns: Column[] = [{ name: 'stage', type: 'VARCHAR' }, ...['arrived', 'went', 'lost'].map((name) => ({ name, type: 'INTEGER' }))];
+		const rows: Row[] = [{ stage: 'first', arrived: '10', went: '8', lost: '2' }, { stage: 'last', arrived: '8', went: '6', lost: '2' }];
+		const bars = draw(columns, rows, 'partsOfOne');
+		const geometry = partsOfOne(rows.map((row) => ({ label: String(row.stage), parts: ['arrived', 'went', 'lost'].map((label) => ({ label, value: Number(row[label]) })) })), { order: ['arrived', 'went', 'lost'], overlapping: true, tokens: SERIES_TOKENS });
+		expect(bars).toContain('data-parts-overlapping="yes"');
+		expect(bars).not.toContain('class="parts-total"');
+		for (const row of geometry!.rows) for (const segment of row.segments) expect(bars).toContain(`inline-size: ${segment.size}`);
+		expect(bars).toContain('first: 10 arrived');
+		const listed = draw(columns, rows, 'flow');
+		const shared = flow(rows.map((row) => ({ label: String(row.stage), arrived: Number(row.arrived), left: Number(row.went), drops: [{ label: 'lost', count: Number(row.lost) }] })), { frame: frame(760, 200), narrow: true, nodeWidth: 12, nodeGap: 8 });
+		expect(shared?.kind).toBe('stepped');
+		expect(listed).toContain('data-flow-shape="stepped"');
+		expect(listed).toContain('6 of 10 went through every stage');
+		const unbalanced = draw(columns, [{ ...rows[0], went: '9' }, rows[1]], 'flow');
+		expect(unbalanced).toContain('first counts 10 arriving and 11 leaving, so the counts are not one flow and the stages are listed rather than drawn.');
+		const dates: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'ok', type: 'BOOLEAN' }];
+		const days: Row[] = [{ day: '2026-10-01', ok: 'true' }, { day: '2026-10-02', ok: 'false' }, { day: '2026-10-03', ok: null }];
+		const tiles = draw(dates, days, 'tileStrip');
+		const strip = tileStrip(days.map((row) => ({ date: String(row.day), state: truthValue(row, 'ok') === null ? 'absent' : truthValue(row, 'ok') ? 'fired' : 'quiet' })));
+		for (const tile of strip!.tiles) expect(tiles).toContain(`data-tile-state="${tile.state}"`);
+		expect(tiles).toContain('"ok" was true on 1 of 3 UTC days');
+		for (const body of [bars, listed, tiles]) {
+			expect(body).toContain('data-readout="data-explorer-shape"');
+			expect(body).not.toMatch(/\stitle=|<title>/);
+		}
+	});
+
+	test('Which days keeps a lost day and NULL absent, and side-by-side NULL omits only its bar', () => {
+		const columns: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'ok', type: 'BOOLEAN' }];
+		const tiles = draw(columns, [{ day: '2026-10-01', ok: 'true' }, { day: '2026-10-03', ok: null }, { day: '2026-10-04', ok: 'false' }], 'tileStrip', {}, false, ['2026-10-02']);
+		expect(tiles.match(/data-tile-state="absent"/g)).toHaveLength(2);
+		expect(tiles.match(/data-tile-state="quiet"/g)).toHaveLength(1);
+		expect(tiles).toContain('"ok" was true on 1 of 4 UTC days');
+		const bars = draw([{ name: 'name', type: 'VARCHAR' }, { name: 'a', type: 'INTEGER' }, { name: 'b', type: 'INTEGER' }], [{ name: 'first', a: '8', b: null }, { name: 'last', a: '4', b: '2' }], 'partsOfOne');
+		expect(bars.match(/class="parts-segment /g)).toHaveLength(3);
+		expect(bars.match(/class="parts-row /g)).toHaveLength(2);
+		expect(bars).toContain('data-readout-row="b"');
+		expect(bars).toContain('null');
 	});
 
 	test('the paired chart draws no point for a row with a NULL', () => {
@@ -782,11 +831,11 @@ test('the foot keeps room for each note the answer can give, counted from the an
 	expect(countChartNotes(twoDates, shifted, bounds, false), 'the flat column under the second date column was not counted').toBe(2);
 });
 
-test('every role word fits the eight characters a pill gives it, and the role table holds three roles at most', () => {
+test('every role word fits the eight characters a pill gives it, and the role table holds four roles at most', () => {
 	const words = CHART_KINDS.flatMap((kind) => kind.roles.map((role) => role.word));
 	expect(words.filter((word) => word.length > 8)).toEqual([]);
-	expect(CHART_KINDS.map((kind) => kind.option)).toEqual(['Over time', 'Ranked', 'Paired', 'Spread']);
-	expect(MOST_ROLES).toBe(3);
+	expect(CHART_KINDS.map((kind) => kind.option)).toEqual(['Over time', 'Ranked', 'Paired', 'Spread', 'Side by side', 'Which days', 'Flow']);
+	expect(MOST_ROLES).toBe(4);
 	expect(openingType([{ name: 'x', type: 'DOUBLE' }], [{ x: '1' }])).toBe('distribution');
 });
 
@@ -803,4 +852,34 @@ test('T5: no file under the explorer\'s folder imports a d3 package, so d3 does 
 	expect(files.length, 'the explorer folder was not read').toBeGreaterThan(10);
 	const importing = files.filter((name) => /from\s+['"]d3(-[a-z-]+)?['"]/.test(readFileSync(path.join(folder, name), 'utf8')));
 	expect(importing).toEqual([]);
+});
+
+test('the three new role defaults and refusals match Tables F, G and M', () => {
+	const cols: Column[] = [{ name: 'name', type: 'VARCHAR' }, ...['a', 'b', 'c', 'd', 'e', 'f'].map((name) => ({ name, type: 'INTEGER' }))];
+	const rows: Row[] = [{ name: 'first', a: '10', b: '8', c: '2', d: '0', e: '0', f: '0' }];
+	expect(opened(cols, rows, 'partsOfOne').roles).toEqual({ Name: ['name'], Bars: ['a', 'b', 'c', 'd'] });
+	expect(opened(cols, rows, 'flow').roles).toEqual({ Stage: ['name'], Arrived: ['a'], 'Went on': ['b'], Dropped: ['c', 'd', 'e', 'f'] });
+	const picked = (type: ExplorerChartType, data: readonly Row[], roles: ChosenRoles = {}) => chooseChart(cols, data, bounds, type, roles).shape;
+	expect(picked('partsOfOne', rows, { partsOfOne: { bars: ['a'] } })).toMatchObject({ reason: 'Nothing here to draw: Side by side needs two columns checked under Bars.' });
+	expect(picked('partsOfOne', [{ name: 'first', a: '0', b: null, c: '0', d: '0' }])).toMatchObject({ reason: 'Nothing here to draw: every bar you checked is 0 or null on every row.' });
+	for (const type of ['partsOfOne', 'flow'] as const) {
+		expect(picked(type, [rows[0], rows[0]])).toMatchObject({ reason: 'Nothing here to draw: "first" is in more than one row of "name", and each row here needs its own name. Group by "name" in the question to draw it.' });
+		expect(picked(type, [{ ...rows[0], b: '-2' }])).toMatchObject({ reason: 'Nothing here to draw: "b" holds -2, below zero, and this chart measures from zero.' });
+	}
+	expect(picked('flow', [{ ...rows[0], b: null }])).toMatchObject({ reason: 'Nothing here to draw: "b" is null at the stage "first", and a flow needs every count.' });
+	expect(picked('flow', [{ ...rows[0], a: '0' }])).toMatchObject({ reason: 'Nothing here to draw: nothing arrived at the first stage, "first".' });
+	const dates: Column[] = [{ name: 'day', type: 'DATE' }, { name: 'ok', type: 'BOOLEAN' }];
+	const days = (data: Row[]) => chooseChart(dates, data, bounds, 'tileStrip').shape;
+	expect(opened(dates, [{ day: '2026-10-01', ok: 'true' }], 'tileStrip').roles).toEqual({ Date: ['day'], 'Mark if': ['ok'] });
+	expect(days([{ day: '2026-10-01', ok: null }])).toMatchObject({ reason: 'Nothing here to draw: "ok" is null on every day.' });
+	expect(days([{ day: null, ok: 'true' }])).toMatchObject({ reason: 'Nothing here to draw: the column "day" holds only null. Give "day" a date in the question to mark it day by day.' });
+	expect(days([{ day: 'infinity', ok: 'true' }])).toMatchObject({ reason: 'Nothing here to draw: the column "day" holds infinity, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to mark it day by day.' });
+	expect(days([{ day: '2026-10-01', ok: 'true' }, { day: '2026-10-01', ok: 'false' }])).toMatchObject({ reason: 'Nothing here to draw: the answer has several rows a UTC day in "day". Group by day in the question to mark it day by day.' });
+	const incomplete = [{ name: 'name', type: 'VARCHAR' }, { name: 'a', type: 'INTEGER' }];
+	for (const [type, reason] of [
+		['partsOfOne', 'Nothing here to draw: Side by side needs two number columns for Bars, and one more column for Name.'],
+		['flow', 'Nothing here to draw: Flow needs two number columns, one for Arrived and one for Went on, and one more column for Stage.'],
+		['tileStrip', 'Nothing here to draw: Which days needs a date or timestamp column for Date, and a true/false column to mark the days. The ledgers keep their dates as text: CAST(date AS DATE) in the question makes a date column.']
+	] as const) expect(chooseChart(incomplete, [{ name: 'first', a: '1' }], bounds, type).shape).toMatchObject({ reason });
+	expect(() => tileStrip([{ date: '2026-10-01', state: 'fired', reading: 1 }])).toThrow('A tile with a reading needs fill and naming thresholds.');
 });

@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -89,7 +89,7 @@ says what it needs, so the page still never draws a story the columns do not tel
 The order opens a chart and never closes one: what it picks does not change once the
 operator can choose, and an answer it opens on the date chart whose day column the
 chart cannot use still opens there, with the box saying why. With no number column at
-all, no chart can be filled, and the box says `Nothing here to draw: the answer has no
+all and no date with a true/false column, no chart can be filled, and the box says `Nothing here to draw: the answer has no
 number in it.` whichever tile is checked.
 
 **Each chart has roles, and a role lists only the columns its family fits.** The
@@ -103,6 +103,44 @@ picks, each role holds the columns the order above always drew.
 | `rankedList` | `Ranked` | `Name`: any column, a text column first. `Rank by`: a number that is not `Name` |
 | `pairedScatter` | `Paired` | `Across` and `Up`: a number each. `Name`: any column, or `Row number`, which makes each row its own point and is the default where the answer has no text column |
 | `distribution` | `Spread` | `Values`: a number |
+| `partsOfOne` | `Side by side` | `Name`: any column. `Bars`: two to four numbers other than the default name |
+| `tileStrip` | `Which days` | `Date`: a date or timestamp. `Mark if`: a true/false column |
+| `flow` | `Flow` | `Stage`: any column. `Arrived` and `Went on`: a number each. `Dropped`: zero to four numbers |
+
+Side by side reads rows in answer order, up to `console.explorer_rank_max`,
+and names the remaining rows in a tail line. Each bar starts at zero and no
+row prints a total. Checked bars take the explorer's series colours in answer
+order. NULL leaves that bar off its row; it does not become zero.
+
+Which days maps true to filled, false to outlined and NULL to absent. It prints
+`true`, `false` and `null`. It carries no numeric reading or threshold. Its UTC
+days come from the same day selector as Over time, including a selected ledger's
+lost day inside the answer's span. It draws a fact per tile and has no trend
+floor. Its model-rule declaration says that the page does not know which
+settings changed inside the span.
+
+Flow passes the measured plot width against `frame.breakpoints_px[0]` to the
+shared geometry. A narrow chart or counts that do not form one flow return the
+shared stepped list and its own explanation, not a second drawing rule.
+Every chosen count must be present and non-negative; every stage name must be
+distinct, and something must arrive at the first stage.
+
+### Design rationale: shared chart additions
+
+Owner, 2026-10-08: these three charts carry only the shared changes they need,
+through optional props. Existing callers retain their drawing and native
+tooltip defaults. The explorer supplies the existing common readout API and
+suppresses native tooltips, so pointer, keyboard and touch read the same values.
+No new chart library, type classifier or picker behaviour is added.
+Flow's optional explorer readout also places the last column's labels toward
+the plot's interior. A label outside the last node would be clipped at the
+panel edge. Callers without this readout keep their label positions.
+
+Jony, 2026-10-09: Flow's stage width comes from `--space-3`; its branch gap
+comes from `--space-2`. The existing measure pass resolves inherited tokens to
+CSS pixels, including rem conversion. Theme/config substitution therefore
+changes the geometry without a source edit. Frame margins are not spacing
+tokens, and the old engine drawing's gap belongs to that other drawing.
 
 A choice redraws from the rows in memory and fetches nothing. It holds across runs on
 the page while the new answer still has each column in a family its role takes, and a

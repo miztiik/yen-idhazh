@@ -698,6 +698,7 @@
 			slotsPerLine={roleSlots}
 			capped={drawnAnswer?.capped ?? false}
 			maxRows={config.max_rows}
+			narrowBelow={data.frame.breakpoints_px[0]}
 			onRoles={chooseRole}
 			placeholder={drawnAnswer === null ? chartState : null}
 		/>
@@ -712,7 +713,7 @@
 		{#if running}
 			<div class="answer-state shimmer" data-state="loading"></div>
 		{:else if result === null}
-			<div class="answer-state" data-explorer-idle>If the answer holds a number, it is drawn here.</div>
+			<div class="answer-state" data-explorer-idle>Run a question, and its answer can be drawn here.</div>
 		{:else if result.state === 'quiet'}
 			<div class="answer-state" data-state="quiet">No rows, so nothing to draw.</div>
 		{:else if result.state === 'refused'}

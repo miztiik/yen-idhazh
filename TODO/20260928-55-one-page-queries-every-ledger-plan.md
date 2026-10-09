@@ -523,7 +523,7 @@ Guardrail #11. A ledger carries text that came off the open web - an article tit
 
 | # | When | The answer panel | The chart panel (row 5) |
 | --- | --- | --- | --- |
-| 1 | Nothing has run yet | A neutral box `console.chart_height` tall: `Press Run and the answer appears here, as a table.` | The same box: `If the answer holds a number, it is drawn here.` |
+| 1 | Nothing has run yet | A neutral box `console.chart_height` tall: `Press Run and the answer appears here, as a table.` | The same box: `Run a question, and its answer can be drawn here.` |
 | 2 | `loading`, and while a run is running | The shimmer box, no words | The shimmer box, no words |
 | 3 | `quiet` | `Your question ran and matched no rows.` | `No rows, so nothing to draw.` |
 | 4 | `missing`: not published | `{ledger} is not on this site yet, so nothing was asked of it.` | `Nothing was asked, so nothing to draw.` |
@@ -619,6 +619,9 @@ The owner's reference is a query workbench screenshot and its HTML: `code.html`,
 | 12 | `shape-distribution` | `chart-column` | the `Spread` option | 5 |
 | 13 | `shape-scatter` | `chart-scatter` | the `Paired` option | 5 |
 | 14 | `docs` | `book-open` | the how-to link in the question panel's note | 6 |
+| 15 | `shape-side-by-side` | `align-start-vertical` | the `Side by side` option | 20 |
+| 16 | `shape-days` | `calendar-check` | the `Which days` option | 20 |
+| 17 | `shape-flow` | `split` | the `Flow` option | 20 |
 
 `search` (the ledger filter) and `external` (after the how-to link) are reused. The fourteen files add about 5.5 KB to today's 6,567 bytes, well under the 40 KB budget, with one provenance file and no third-party request. **Each is written as a literal `<Icon id="...">`**, with `{#if}` choosing between the two sort marks and among the four shape marks, because `icons.spec.ts` finds a computed id only when it starts with `band-`, `topic-` or `theme-`.
 
@@ -1691,15 +1694,7 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   - plan 55 sections 2.12 (the idle sentence) and 2.15 (the icons)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected frontend checks named above; `python backend/utilities/doc_load.py docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` before and after; CLAUDE.md section 12 browser check for `/console/data-explorer/` at 390, 768 and 1440 px, light and dark, with zero new console errors and zero new 404s. CI runs the full suite.
 - **Checks:** `console-data-explorer-shape.spec.ts` asserts Susan's Tables F, G and M5 to M7 word for word. `Which days` maps true, false and null to its three states, treats a lost day inside the span as not recorded, and never draws null as false. `Side by side` always draws `data-parts-overlapping="yes"` and prints no total. An answer whose counts are not one flow returns the module's own list and sentence. One derivation asserts each drawing's numbers equal the shared module output for the same chosen columns. `chart-vocabulary.spec.ts` stays green unchanged; no chart type and no module is added. `panel-sufficiency.spec.ts` asserts gates 1, 3, 4, 5 and 9 pass on each new chart, and gate 6 passes on `Which days`, at 390, 768 and 1440 px in both themes. The explorer's panel pictures gain the three charts. `icons.spec.ts` asserts all three icon ids resolve to unmodified Lucide sources recorded in `PROVENANCE.md`. Jony's L3 holds: adding each type changes no layout box from row 19. Jony's Flow checks add four literal expectations. `I1 with Flow`: I1 placement, with Flow chosen, has pill tops at 4, 2, 2 and 1 different values at 390 x 844, 768 x 1024, 1024 x 768 and 1440 x 900; the row's height is 196, 100, 76 and 40 px from the page's `--workbench-control`; with Spread chosen, the row's box equals Flow's within 0.5 px at each window; at 1399 x 900 the row has 2 lines, and at 1400 x 900 it has 1. `I7 with Flow`: I7 at 390 x 844 touch, with the region's top at the window's top, opens Flow's `Dropped` list wholly inside the window and leaves `scrollY` unchanged. `I9 with Flow`: I9, `Arrived` holding `summary_prefill_tokens_per_s` is whole at 390, 768, 1024, 1400 and 1440 px; at 1400 x 900, `Lines` with four checked and `summary_prefill_tokens_per_s` first, the face ends `, 3 more`, whole, and only the name ends in an ellipsis. `I10 with Flow`: I10, Flow tabs through the selected tab, checked tile, `Stage`, `Arrived`, `Went on`, `Dropped` and readout; Spread tabs through selected tab, checked tile, `Values` and readout; an empty slot is never a Tab stop.
-- **Waits for the owner:** Situation: the three charts need plan 52 row 2's shared changes: the readout each type carries for sufficiency gate 9, removing `title=` from `PartsOfOne` and `TileStrip` for gate 4, and Susan's K1 to K4. Problem: plan 52 has not started, every row is PENDING on 2026-10-07, and its row 2 depends on its row 1. Impact: row 20 stays blocked if it must wait for a row of about 40 files nobody is running, so the new chart work cannot ship. Options:
-
-  | # | Option | Benefit | Cost, and what it gives up |
-  | --- | --- | --- | --- |
-  | 1 | Wait for plan 52 rows 1 and 2 | No shared chart slice moves here | A2 waits for an unstarted dependency chain |
-  | 2 | **Recommended**: row 20 carries only the slice of plan 52 row 2 its three charts need, as optional props so no other route moves a pixel, and plan 52 row 2 keeps the rest | A2 ships without waiting, and nothing is built twice | Row 20 touches a small slice of shared chart code |
-  | 3 | Ship with gates 4 and 9 failing under a design rationale | Fastest merge | Susan refused it, so the page is known not good enough |
-
-  Recommendation: 2, because it ships the owner's A2 ruling without waiting for a broad row, keeps plan 52 row 2's own decision 3 rule, and duplicates nothing.
+- **The owner's ruling:** option 2, 2026-10-08. The row carries only the slice of plan 52 row 2 its three charts need, as optional props.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -1715,6 +1710,10 @@ Runs between rows 3 and 4 (section 1): its number is the order it was written in
   | 9 | From 1400 px up, height stays the same, but each pill is about 120 px narrower; a name past about 32 characters ends in an ellipsis on the closed pill | Jony, 2026-10-07 |
   | 10 | Refused: three slots at most because the drawing at 1440 x 900 falls under its floor; `Dropped` outside a slot because it makes a second arrangement for one type; lines by chosen type because a type change moves the drawing and fails I3; a sideways-scrolling role row because it hides a control; Flow waiting because the reader loses where the items left | Jony, 2026-10-07 |
   | 11 | Flow's role order stays `Stage`, `Arrived`, `Went on`, `Dropped`, so from 1024 to 1399 px the pill alone on the second line is `Dropped`, the one role Flow draws without, and the row keeps the diagram's order | Susan, 2026-10-07 |
+  | 12 | **Row 20 carries the slice of plan 52 row 2 its three charts need**, as optional props that leave every other route unchanged: the readouts, no title= on PartsOfOne and TileStrip, and Table K's K2 to K4 | Owner, 2026-10-08 |
+  | 13 | Flow reads node width from `--space-3` and node gap from `--space-2`, resolved to CSS pixels in the existing measure pass; no frame-margin or old engine gap is reused | Jony, 2026-10-09 |
+  | 14 | The explorer disables Flow's ribbon titles through an optional prop, and anchors the final column's labels inward when it carries a readout, so values remain readable without changing other callers | Row 20 worker, 2026-10-09 |
+  | 15 | The three charts and Flow's shared list pass visual sufficiency in light and dark; no further craft change is needed | Susan, 2026-10-09 |
 
 - **Not in this row:** Plan 52 row 2's unrelated shared chart work, `paired`, `overlapTimeline`, saved chart choices, a new chart type, and any layout code or layout knob edit.
 
