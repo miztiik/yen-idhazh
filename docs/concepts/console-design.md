@@ -417,6 +417,19 @@ pan, or a date span printed under the heading that already printed it.
 
 ## Design rationale
 
+**The calculated line is not a history of builds.** Judgement's solid merge
+series shows each nightly calculation's final value. Its proposal, daily step
+band and held counts describe that same calculation. A build can use another
+line, including while adaptive grouping is off. The note, readout and mark
+names must state the calculated meaning. Keep the panel's generic title.
+The tinted strip compares marked-apart scores with the calculated line:
+crossing it would clear a pair's score threshold if that line were used,
+not prove that a build grouped the pair. With no calculated row shown,
+the dashed rule and its note instead name the newest published day's
+build-used line. The verdict split and holdout margin keep that build-used
+comparison. Replacing only the solid values with build records would make
+the proposal and step band describe a different process from the line.
+
 **Two names for a window's days, not one.** One name everywhere was the fewest
 words to keep, and it breaks a count: `on 1 of this one day`. The bare count is
 the days control's own words, so the second name adds no new kind of words to the
