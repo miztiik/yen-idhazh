@@ -30,9 +30,9 @@ bound each list. If storage fails, the page says so and does not present Save or
 History as working.
 
 Examples come from `console.explorer_examples`. An example whose ledgers are not
-published is not offered. Choosing one fills the SQL, ledger selection and span
-without running it. Choosing an example or saved question does not yet provide
-a verified undo operation.
+published is not offered. Choosing an example or saved question replaces the
+SQL, ledger selection and span without running it. You can clear the loaded SQL
+in the editor, but that does not restore the previous question or its settings.
 
 The [date and reopening rules](../../how-to/query-a-ledger-from-the-console.md#share-or-keep-a-question)
 apply equally to saved questions and History. Chart and column choices stay in
