@@ -51,7 +51,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |
 | **scratch config** | A copy of `config/` with the model pointer moved, so a candidate can be measured without editing the committed tree. Two keys may differ and no third | `backend/utilities/candidate_pointer.py` |
 | **seen ledger** | The ledger that answers "how old is this?" for an article whose feed carried no date | [pipeline-loop.md](pipeline-loop.md) |
-| **segment** | The rows one writer commits, at `state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. Two writers never share a filename there, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger/filenames.py`, `backend/idhazh/day_shards.py` |
+| **segment** | The rows one writer commits into the day they record, in a file of its own: a raw file the ledger door names for its writer under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`, or a trace named `<run_id>-<attempt>-<job>-<shard>.jsonl`. Two writers never share a filename, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger/filenames.py` |
 | **shard** | The batch of items handed to one worker, so a day's work runs in parallel. `run.shard_size` is URLs per worker | `backend/idhazh/contracts/knobs/run.py` |
 | **span** | One timed operation in the telemetry tree | [telemetry.md](telemetry.md) |
 | **span rollup** | A month of spans folded to one row per date, run, shard and span name | [telemetry.md](telemetry.md) |

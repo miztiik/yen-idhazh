@@ -1,6 +1,6 @@
 # Atomic deletes
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-08
 
 What does "atomic" mean for a delete in this project, and why is a range not one?
 
@@ -27,7 +27,11 @@ collection's members one at a time, safely, resumably, under a ceiling. A
 collection reaches it as three callables - a listing that yields members, a
 describe that reads one into an id, a day and a size, and a delete that acts on
 exactly one. Nothing else about a collection is known to it, which is why the
-same code prunes a ledger's day files and GitHub's workflow artifacts.
+same code prunes a retention task's dated files and GitHub's workflow
+artifacts. `idhazh telemetry prune` keeps the same three properties for a ledger
+on the ledger door, where a day is a file to delete or a packed file to rebuild
+without it: each change is whole, a ceiling bounds a pass, and the record names
+the day the next pass starts at.
 
 ## Why a range is not atomic, whatever it does internally
 
@@ -84,14 +88,13 @@ codebase, which is the thing a reusable core exists to prevent.
 
 **What the change cost, named.** One test property was replaced rather than
 extended: `test_a_move_that_fails_part_way_leaves_the_tree_as_it_was` asserted
-the all-or-nothing rollback, which is exactly the shape the ruling removed. It
-is now `test_a_delete_that_fails_part_way_keeps_what_it_already_removed` and
-asserts the property that replaced it. Every other test on that module stayed as
-it was.
+the all-or-nothing rollback, which is exactly the shape the ruling removed. The
+property that replaced it is held for a ledger on the door by
+`test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_again`.
 
 ## See also
 
-- [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each committed tree, and the named prune over a ledger's day files.
+- [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each committed tree, and the named prune over a ledger's days.
 - [../how-to/prune-a-collection.md](../how-to/prune-a-collection.md) - the steps for running one.
 - [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [config/retention-ages.md](config/retention-ages.md) - where the `prune` knobs live.

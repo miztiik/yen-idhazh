@@ -747,6 +747,7 @@ TEST_CASE_WRITER: str = ledger.segment_name(
     attempt=TEST_CASE_ATTEMPT,
     job=TEST_CASE_JOB_KIND,
     shard=TEST_CASE_SHARD,
+    suffix=".parquet",
 )
 TEST_CASE_TRACE: str = ledger.segment_name(
     run_id=TEST_CASE_RUN_ID,

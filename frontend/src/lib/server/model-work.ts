@@ -2,7 +2,7 @@
  *
  * Every figure is a count of that day's items. Nothing here is a score: a value
  * between zero and one names nothing an operator can pull, so the scorer's own
- * numbers stay in `state/scores.csv` and only their consequences reach the
+ * numbers stay in the `summary-quality-evals` ledger and only their consequences reach the
  * screen. `copiedPct` is the one share on the page and it leaves here already
  * multiplied out, so a raw ratio has no route to the markup.
  *

@@ -1,6 +1,6 @@
 # Telemetry Intent
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-08
 
 What must be true about telemetry once this workstream is done - how a measurement is written, where it sits, how it reaches a browser, and how it is drawn. A thing that contradicts one of the eleven below is not a trade-off, it is a defect.
 
@@ -10,7 +10,7 @@ What must be true about telemetry once this workstream is done - how a measureme
 
 | # | Intent | What it replaces |
 | --- | --- | --- |
-| N1 | **Parquet is the telemetry format at rest. CSV is retired.** PyArrow writes it. | Every `.csv` under `state/`, and the `migrate_header` complex that exists only because a column moved |
+| N1 | **Parquet is the telemetry format at rest. CSV is retired.** PyArrow writes it. | Every `.csv` under `state/`, and the `migrate_header` complex that existed only because a column moved |
 | N2 | **DuckDB-Wasm parses it in the browser**, and a panel queries the collection for the columns and days it draws rather than downloading it. **Every collection, at every size, with no carve-out.** The engine is fetched once and cached; a collection would be fetched on every view by every reader. One module owns the reader. | Node reading CSV at build time |
 | N3 | **The browser fetches its own data.** Every chart pulls the bytes it needs, at view time, over HTTP. | Data baked into HTML by the build |
 | N4 | **Prerendering is an anti-pattern here.** No new prerendered data page, and the existing ones come off it. | `export const prerender = true` on every console route |
@@ -22,6 +22,8 @@ What must be true about telemetry once this workstream is done - how a measureme
 | N10 | **`state/` splits into `state/raw/` and `state/compact/`.** Writers only ever append to `raw`; `compact` is derived and may be rebuilt from it. | One `state/` tree where a writer's file and a folded file sit together |
 | N11 | **Every tree under `state/` is sharded to one pattern, with no exceptions:** `state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet`, where the date is `covers` - the day the rows describe, never the day the job woke - and `<file_id>` is N9. One file per writer per unit of work. A tree where two writers still share a path is a tree not yet migrated. | `merge=union` on nine trees, the flat `feed-retirements.csv`, and every remaining shared-path append |
 
+**Three of the eleven are met for what each replaces.** N1 is met: no ledger under `state/` is CSV, and nothing re-files a CSV header. N6 and N11 are met for every ledger the door files, which is every ledger that was CSV: no `merge=union` driver and no shared-path append is left. Three trees still sit outside the one pattern, and none of them is CSV: `state/day-metrics/` rewrites one JSON file a day in place, and `state/traces/` and `state/digest-fragments/` file a day folder of writer files outside `state/raw/`. [ledger-registry.md](../architecture/contracts/ledger-registry.md) lists where each ledger sits.
+
 ## When one of these meets a limitation
 
 A guardrail, a budget, a schema, a dependency or a design already shipped is a cost to price, never an answer on its own. Three moves are legitimate and "we cannot, because X" is not one of them: do it and say what it moved; price it and recommend; or name the measurement that would settle it and the smallest step that makes progress meanwhile. [`CLAUDE.md`](../../CLAUDE.md) section 0d is canonical.
@@ -30,7 +32,7 @@ Two things do not bend to this page. The 6 h job cap and the 1 GB published site
 
 ## What this page is not
 
-It is not a queue. It carries no row status, no owner and no order of work - a plan-doc under [`TODO/`](../../TODO/) carries those, in its own Status Reckoner, and a second list somebody retypes is a list that rots ([`AGENTS.md`](../../AGENTS.md)). This page says what has to be true; a plan says who does what next.
+It is not a queue. It carries no row status beyond which intents are met, no owner and no order of work - a plan-doc under [`TODO/`](../../TODO/) carries those, in its own Status Reckoner, and a second list somebody retypes is a list that rots ([`AGENTS.md`](../../AGENTS.md)). This page says what has to be true; a plan says who does what next.
 
 It is not a measurement either. Every figure that prices one of these - what a Parquet shard weighs, what DuckDB-Wasm costs a reader, what a prerendered route costs today - belongs in the reference tier with its hardware and its date ([`CLAUDE.md`](../../CLAUDE.md) Guardrail #10).
 

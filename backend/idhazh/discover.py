@@ -278,7 +278,8 @@ def settled(history: Iterable[FeedHealthRow]) -> list[FeedHealthRow]:
     A feed is read once in a run, so two rows under one `(run_id, feed_id)` are
     two accounts of one event and counting both counts a run twice. They exist
     because a second attempt at a run cannot see what the first attempt pushed
-    after its checkout, and the union merge keeps both lines.
+    after its checkout, so both attempts file a verdict, and a reader handed both
+    must still count the run once.
 
     `contracts.feed_health.supersedes` picks the winner, and `settled` in
     `frontend/src/lib/feed-health.ts` is the same reduction over the same rows.

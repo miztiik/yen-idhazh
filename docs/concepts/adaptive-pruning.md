@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-08
 
 One question, asked of every file this project writes:
 
@@ -345,12 +345,11 @@ a raster family would move every row of the arithmetic above at once.
 
 **The module keeps the name `retention.py` and the concept is documented as
 adaptive pruning.** "Intelligent" claims a property that code reading a date does
-not have. "Compaction" is this repository's own word for merging segments into a
-day's settled file and day files into a month file - the gardener's closed-day
-fold, and `retention.compact_month` one level up, and the gardener's `compaction`
-tasks, which merge a door ledger's raw files into day files and day files into
-month files - so taking it for deletion by age would be one word for two
-operations (O9, `CLAUDE.md` section 0b).
+not have. "Compaction" is this repository's own word for merging files into
+fewer - the gardener's `compaction` tasks, which merge a door ledger's raw files
+into day files and day files into month files, and `retention.compact_month`,
+which folds a month of item health into its summary - so taking it for deletion
+by age would be one word for two operations (O9, `CLAUDE.md` section 0b).
 
 **The register carries no test, and that is a decision rather than an omission.**
 Three shapes were available. A walk of `state/`, `corpus/` and

@@ -212,8 +212,8 @@ def _committed_day(origin: Path, env: dict[str, str], relpath: str) -> list[dict
     """Every writer's rows for one committed day, in the order a settlement reads them.
 
     A day is a directory of writer-owned files now, so one `git show` answers
-    with a listing rather than with rows. The files are read in name order,
-    which is the order `day_shards` reads them in.
+    with a listing rather than with rows. The files are read in name order, so
+    the rows come back in one fixed order whichever push landed first.
     """
     listed = _git(origin, env, "ls-tree", "--name-only", f"main:{relpath}").split()
     return [

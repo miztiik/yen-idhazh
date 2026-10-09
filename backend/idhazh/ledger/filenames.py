@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Final, NamedTuple
 
@@ -55,7 +54,7 @@ class SegmentName(NamedTuple):
     shard: int
 
 
-#: `<run_id>-<attempt>-<job>-<shard>.csv`. The run id is spelled from the
+#: `<run_id>-<attempt>-<job>-<shard>`, before the suffix. The run id is spelled from the
 #: contract's own pattern and the jobs from the enum, so neither is a second
 #: list to keep in step. `re.ASCII` because a `\\d` in a `str` pattern otherwise
 #: takes another script's numerals, and `int` takes them too - the name would
@@ -75,18 +74,6 @@ _SEGMENT_NAME: Final = re.compile(
 )
 
 
-_SEGMENT_SUFFIX: Final = ".csv"
-
-
-#: What the migration calls the bytes a committed head already held. A head is
-#: many runs already merged, so it carries no writer identity to stamp and a
-#: synthetic one would claim a run that never wrote it.
-#:
-#: **Removal condition: it goes when the oldest committed day is newer than the
-#: migration date**, because after that no committed day predates identity.
-BEFORE_PARTITION_NAME: Final = "before-partition.csv"
-
-
 #: What a committed trace was called before writes carried identity:
 #: `<ordinal>-<shard>.jsonl`, where the ordinal is the run id's last segment
 #: alone. A trace line carries `attributes, duration_ms, kind, name, parent_id,
@@ -101,51 +88,19 @@ BEFORE_PARTITION_NAME: Final = "before-partition.csv"
 PRE_IDENTITY_TRACE: Final = re.compile(r"[0-9]+-[0-9]{2}", re.ASCII)
 
 
-#: What an operator's repair is called: `repair-<YYYYMMDDTHHMMSSZ>.csv`. A
-#: repair is one add by a person at one instant, so it carries no run and no
-#: job to spell, and the instant is what keeps two repairs apart.
-#:
-#: **Removal condition: it goes when no operator command adds rows to a day a
-#: run already wrote.** `evals.writer.rebuild_index` is the only one today.
-#: Private, same reason as `_SEGMENT_NAME` above.
-_REPAIR_NAME: Final = re.compile(r"repair-[0-9]{8}T[0-9]{6}Z", re.ASCII)
-
-
-#: The stamp format `_REPAIR_NAME` spells, for the caller that mints one. Private,
-#: same reason as `_SEGMENT_NAME` above.
-_REPAIR_STAMP: Final = "%Y%m%dT%H%M%SZ"
-
-
-def repair_name(minted_at: datetime) -> str:
-    """What an operator's one add into a committed day directory is called."""
-    return f"repair-{minted_at.strftime(_REPAIR_STAMP)}{_SEGMENT_SUFFIX}"
-
-
-def is_repair(name: str) -> bool:
-    """Whether this filename is an operator's one add rather than a writer's file.
-
-    Asked by the reader that orders a day's files and by the one that asks
-    whether a committed path has a single writer, so it is spelled here once.
-    """
-    stem, _, suffix = name.rpartition(".")
-    return suffix == _SEGMENT_SUFFIX[1:] and _REPAIR_NAME.fullmatch(stem) is not None
-
-
-def segment_name(
-    *, run_id: str, attempt: int, job: ServerJob, shard: int, suffix: str = _SEGMENT_SUFFIX
-) -> str:
+def segment_name(*, run_id: str, attempt: int, job: ServerJob, shard: int, suffix: str) -> str:
     """The identity grammar, spelled once, so two trees cannot spell it two ways.
 
-    `suffix` is here because one tree's writer files are not CSV. A committed
-    trace is JSON lines, and one spelling of identity across every tree is worth
-    more than a signature nothing ever passes a second argument to: a second
-    speller is a second grammar, and a reader that knew only one would walk past
-    the other tree's files without saying so.
+    `suffix` is the tree's own format, and the caller names it: a committed
+    trace is JSON lines. One spelling of identity across every tree is worth
+    more than one grammar per format: a second speller is a second grammar, and
+    a reader that knew only one would walk past the other tree's files without
+    saying so.
     """
     return f"{run_id}-{attempt}-{job.value}-{shard:02d}{suffix}"
 
 
-def parse_segment_name(path: Path, *, suffix: str = _SEGMENT_SUFFIX) -> SegmentName:
+def parse_segment_name(path: Path, *, suffix: str) -> SegmentName:
     """A writer's filename read back, or a refusal naming the file.
 
     A name this cannot place is not skipped. A day directory holds one kind of

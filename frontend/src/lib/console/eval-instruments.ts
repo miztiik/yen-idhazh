@@ -118,7 +118,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 		'Which try wrote the summary. Measured 2026-09-06 over 6,966 rows: every one of them is the first try.'
 };
 
-/** The ledger rows this module reads, as the CSV reader hands them over. */
+/** The ledger rows this module reads, every cell as text. */
 export type EvalInput = Readonly<Record<string, string | undefined>>;
 
 /** An instrument the pipeline records and nothing acts on. */

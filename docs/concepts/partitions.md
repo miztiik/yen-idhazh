@@ -81,32 +81,29 @@ holds the one reader left to it.
 
 Authority: Guardrail #5 - a structural fix rather than a third copy of the rule.
 
-## What counts as a day file
+## What counts as a day folder
 
-**Three segments of ASCII digits that spell a real date, and a `.csv` below them.**
-`idhazh.day_partition.day_files` is the one walk, and `day_partition.days_in_window`
+**Three folders of ASCII digits that spell a real date: `<YYYY>/<MM>/<DD>/`.**
+`idhazh.day_partition.is_segment` decides what one of those folder names may be,
+and every reader of a day folder asks it - the ledger door's raw day folders
+(`ledger/raw_files.py`), the gardener's names-only walk of them
+(`gardener/named_trees.py`) and the trial-ledger check. `day_partition.days_in_window`
 names the days a cover of `n` days asks for - both ends, so a cover of `n` returns
 `n + 1` dates.
 
-**Here a name the walk cannot place stops the read**, which is the one place the day
-rule is stricter than the month rule above. A month directory is the top of its own
-tree and may hold something that is not the collection at all. Below a year
-directory, every name is written by one `append_*` and by nothing else, so a name
-the walk cannot read means something else is writing there - and a walk that passed
-over it would leave rows unread and unmentioned.
-
-The ASCII clause is the same clause for the same reason, and it was not always
-written out: `\d` in a Python pattern matches another script's numerals, so the walk
-this replaced accepted a day stem in Arabic-Indic digits and left the refusal to
-`date.fromisoformat` one level further down. An empty directory never reaches that
-level, so an empty month directory named in another script's digits survived every
-read. `backend/tests/test_day_partition.py` holds every day-tree reader to the rule,
-as `test_a_file_that_is_not_a_month_shard_is_never_a_candidate` does one grain over.
+The ASCII clause is the same clause for the same reason as the month rule above,
+and it was not always written out: `\d` in a Python pattern matches another
+script's numerals, so a walk that used it accepted a day stem in Arabic-Indic
+digits and left the refusal to `date.fromisoformat` one level further down. An
+empty directory never reaches that level, so an empty month directory named in
+another script's digits survived every read. `backend/tests/test_day_partition.py`
+holds the rule, as `test_a_file_that_is_not_a_month_shard_is_never_a_candidate`
+does one grain over.
 
 Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
 
-## Every committed path is one of three classes, and no path is in two
+## Every committed path is one of two classes, and no path is in both
 
 A partition says which period a file holds. **A class says who may write it, and
 how two runs writing at once end.** Both are properties of the layout, so both
@@ -119,102 +116,52 @@ copy of.
 | --- | --- | --- |
 | **written-once** | the filename carries `<run_id>-<attempt>-<job>-<shard>`, or is a `file_id` the ledger door mints for one writer, so it names exactly one writer. Nothing rewrites it or deletes it except retention and a compaction | two writers cannot name one file, so there is no race to settle |
 | **derived** | the content is a function of other jobs' output. It is handed back to the tip before the rebase and rebuilt against it | the rebuild wins. It is never text-merged and never settled by who wrote it |
-| **union-safe** | append-only rows, `merge=union`, **and a named read-side property that makes a repeat change no answer** | both sides land whole, and the reader settles them |
 
-**A union-safe path with no such property is a derived path written badly**, so
-the property is named rather than assumed. A council or judge row qualifies
-because one row is one measurement of one thing on one day, and says nothing
-about any other row. `state/seen` and `state/published` qualified too, because
-their readers keep the earliest stamp and the earliest publication date per
-address, until they moved under `state/raw/`, where every file is written once.
-The merge driver concatenates whatever it is handed, so a
-path that cannot name the sentence does not get the driver.
+**No committed path takes a union merge.** A union settled two appends to one
+shared file, and no writer appends to a shared file any more: the ledger door
+gives each write a file of its own.
 
-**The three classes are closed, and that is what makes the layout survive the
+**The two classes are closed, and that is what makes the layout survive the
 repository growing.** A path that appears after this page was written gets a
-class, not a redesign: it either names its writer, or it is rebuilt from the tip,
-or its repeat changes no answer. There is no fourth thing a committed file can
-be, so a new path is one line in `idhazh.path_classes` and at most one migration.
+class, not a redesign: it either names its writer, or it is rebuilt from the tip.
+There is no third thing a committed file can be, so a new path is one line in
+`idhazh.path_classes` and at most one migration.
 
 **A derived path may never be declared owned**, and that rule is what keeps the
-other two honest. Settling one in favour of a single writer deletes the other
+other class honest. Settling one in favour of a single writer deletes the other
 writer's rows and exits 0 - three written-once inputs all land intact while the
 file derived from them quietly loses half its content, and no gate can see it.
 What the push does with each class is
 [in committing.md](../architecture/publishing/committing.md#a-conflicted-path-is-settled-by-who-wrote-it-never-by-which-side-it-came-from).
 
-`backend/tests/contracts/test_path_classes.py` holds the three sets pairwise
-disjoint and covering every path a production stage writes. It enumerates the
-writers from `idhazh.path_classes` itself and never from the tree, so its cost does not
-rise with what the pipeline has piled up (`CLAUDE.md` Guardrail #12).
+`backend/tests/contracts/test_path_classes.py` holds the two classes disjoint and
+covering every path a production stage writes. It enumerates the writers from
+`idhazh.path_classes` itself and never from the tree, so its cost does not rise
+with what the pipeline has piled up (`CLAUDE.md` Guardrail #12).
 
 Authority: Fowler and Carmack, converged, 2026-09-22.
 
-## The day directory is the ledger, and the settlement moves to the reader
+## A day folder holds one file per write, and the reader settles
 
-**Every ledger more than one job writes files its rows in a day directory, and
-every file in it carries its writer's name.** `state/<ledger>/<YYYY>/<MM>/<DD>/`
-holds one `<run_id>-<attempt>-<job>-<shard>.csv` per writer, spelled once in
-`ledger.segment_name`. Two writers cannot name one file, so two runs pushing at
-once cannot collide on it - which is the whole reason the shape exists.
-
-A ledger that goes through the ledger door has the same property one level down:
-`state/raw/<ledger>/<YYYY>/<MM>/<DD>/` holds one file per write, the door mints
-its name, and the writer's identity is inside the file
+**Every ledger more than one job writes files its rows in a day folder, and
+every file in it carries its writer's name.** A door ledger's day folder is
+`state/raw/<prefix>/<YYYY>/<MM>/<DD>/`. It holds one file per write, the ledger
+door mints its name, and the writer's identity - run, attempt, job, shard and
+producer - is inside the file
 ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md)).
-The item-health, summary-quality-evals and host-fingerprint ledgers moved there; what follows on
-this page is about the CSV day trees.
+Two writers cannot name one file, so two runs pushing at once cannot collide on
+it - which is the whole reason the shape exists.
 
-**Since 2026-09-22 there is no head above it.** A producer writes the final day
-path directly, and `state/segments/` is gone. The shape used to be a staging
-directory a later fold read into a `<DD>.csv` head, which meant every ledger had
-one path that two runs of one day both computed bytes for. Now the day directory
-*is* the ledger: the only thing that changed at the cutover was the parent.
+**There is no head above it.** A producer writes the final day path directly,
+and nothing folds a day's files into one shared file that two runs would both
+compute bytes for. The gardener's compaction packs a finished day into one file
+under `state/compact/` and writes that file whole, with one writer.
 
-`idhazh.day_shards` is the walk, and a day is a `<DD>/` directory and nothing
-else. `day_shards.shard_files(root, days=...)` yields every file of the newest
-`days` recorded days, and **the cover counts days rather than files**, so a day
-of five writers is still one day. `day_shards.date_of` reads the date off the
-three directory names above the file and opens nothing. A `<DD>.csv` beside a
-month's day directories is a name no writer spells, so the walk refuses it with
-every other stray.
-
-**The settlement is a read, not a write.** `day_shards.settled_rows` runs the
-three cases a compaction ran into a head - join, supersede, repeat - and every
-reader of a CSV day calls it, so there is one settlement rather than one per
-ledger. Ascending attempt is the order, so a correction always arrives after
-what it corrects, and the tie-break is the path relative to the ledger root:
-`settled.csv` has the same basename in every day directory, and a reader
-spanning two days would otherwise have no total order at all.
-
-**`settled.csv` is the one name in a day directory that is not a writer's.** It
-is what the gardener's closed-day fold left behind while it ran, and it reads
-at attempt 0 - a writer's attempt is the run's own `GITHUB_RUN_ATTEMPT`, which
-starts at 1, so 0 is a place no writer can take. It is also the right place:
-its rows have already won a settlement, and a straggler beside it is later. The
-fold stopped one file per writer per day becoming unbounded growth, the rule
-[CLAUDE.md](../../CLAUDE.md) Guardrail #12 sets. It is retired: no ledger files
-a writer's CSV file into a day directory now, so there is nothing left to fold.
-A tree whose task settled months holds one more: a closed month's `settled.csv`
-in the month's own folder, the one file a month folder may hold. It reads at
-attempt 0 too, so a file a re-run added to that month later is settled after it.
-
-**`before-partition.csv` is the other.** It is what the 2026-09-22 migration
-wrote, one per day, because a committed head is many runs already merged and so
-has no writer identity to stamp. It reads at attempt 0 beside `settled.csv` and
-it sorts first. Removal condition: it goes when the oldest committed day is
-newer than the migration date.
-
-**A day directory holding no readable file stops the read.** That is the same
-rule as the stray above and not a new one: a day nothing wrote has no directory,
-so an empty one is a writer that made the directory and lost its rows. Reading
-it as a day that recorded nothing would draw an empty panel on a passing build.
-
-**`day_partition.day_files` is not taught the directory shape, on purpose.** It
-keeps its callers over the one union-safe ledger left - the judge's fitted
-line - which stays one file a day, and its loud refusal of
-a directory is the tripwire that catches a ledger arriving in the new shape
-without a plan.
+**The settlement is a read, not a write.** `raw_files.settle_rows` keeps the
+highest attempt at each work unit and settles two rows of one key by the
+ledger's own rule from `ledger/keys.py`. Every reader of a door ledger calls it,
+and so does the compaction before it packs a day, so there is one settlement
+rather than one per ledger.
 
 Authority: Fowler, 2026-09-22.
 
@@ -340,11 +287,8 @@ rather than "never".
 Two constraints make a correction a deliberate act rather than an ordinary write.
 A commit that removes rows from a shard, rebased onto a tip that added some, is a
 rebase git cannot apply - so the removal stops the push rather than landing
-half-done. Until 2026-09-19 `.gitattributes` set a union merge driver on
-`state/**/*.csv` and the same rebase resolved by keeping both sides, which was
-worse: the removal silently did not happen. And a shard's header is checked
-against the contract
-before any append, so a rewrite that changes the shape has to move every month at once.
+half-done. And no committed path takes a union merge driver, so the same rebase
+never resolves by keeping both sides and silently undoing the removal.
 A correction therefore ships as a committed one-shot utility under
 `backend/utilities/`, not as an ad-hoc script. It takes named input files.
 A utility whose input layout no longer exists is deleted with the layout.

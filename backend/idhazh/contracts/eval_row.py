@@ -64,7 +64,7 @@ DROPPED_CELLS: Final[frozenset[str]] = frozenset({"coverage", "new_fact_rate"})
 #:
 #: **Both sides of the row read this one map**, for the reason `DROPPED_CELLS`
 #: gives: a sealed `.eval.json` reaches it through the before-validator below,
-#: and a committed CSV heading through `from_csv_row`.
+#: and a CSV row through `from_csv_row`.
 RENAMED_CELLS: Final = MappingProxyType(
     {
         "attempt": "summary_attempt",
@@ -415,7 +415,7 @@ class EvalRow(Contract):
         refuses, so the run that wrote the payload loses its whole day.
 
         The keys come from `DROPPED_CELLS` rather than from a list of their own,
-        so the CSV side and the JSON side cannot name different sets. A key this
+        so every reader of the row drops the same set. A key this
         row renamed is read under its new name, from `RENAMED_CELLS`, and only
         when the new name is absent, so a payload carrying both keeps its own.
         """

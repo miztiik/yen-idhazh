@@ -55,11 +55,11 @@ from idhazh.contracts.story_similarity_pair import ScorerModelId
 #: reader that takes a day file a line at a time.
 Labeller = Annotated[str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=64)]
 
-#: Headings a committed day file still carries that this row no longer names and
-#: that nothing replaced. `key_point_weight` went with the key points
-#: themselves: the term shipped at a weight of 0.0, so it never moved a line.
-#: `from_csv_row` hands this model every cell the file carries, so without this
-#: set `extra="forbid"` would refuse the whole committed day.
+#: Headings an earlier row carried that this row no longer names and that
+#: nothing replaced. `key_point_weight` went with the key points themselves: the
+#: term shipped at a weight of 0.0, so it never moved a line. The
+#: before-validator on the row reads this set, so a payload an earlier build
+#: wrote under that heading still reads rather than `extra="forbid"` refusing it.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset({"key_point_weight"})
 
 

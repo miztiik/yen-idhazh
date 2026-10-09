@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-08
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -144,7 +144,7 @@ it. One function files it, `source_health.file_retirements`, which both the
 plan job and the assemble job call. It writes one file per day of retirements
 through the ledger door, under the day the addresses were retired, and it drops
 an address the ledger already holds, so a retry files nothing twice
-([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
+([../contracts/persistence.md](../contracts/persistence.md#the-ledgers-on-the-door)).
 `ledger.load_retirements` reads every file and keeps the first row of each
 address.
 
@@ -619,7 +619,7 @@ The record came before the quarantine, and that order was the point: you cannot 
 
 Making a zero-item `200` a failure is the finding that justifies the whole ledger. Every other failure mode is visible in a log line at the moment it happens. A feed that quietly stops carrying entries looks healthy in every single run and is only visible as a shape across runs, which is exactly what a ledger is for.
 
-The self-lifting rest is there because the alternative was tested by imagination and failed: a quarantine that only a human can lift is a deletion with extra steps, and the human who has to lift it will not be reading a CSV on a Sunday.
+The self-lifting rest is there because the alternative was tested by imagination and failed: a quarantine that only a human can lift is a deletion with extra steps, and the human who has to lift it will not be reading a ledger file on a Sunday.
 
 **`telemetry.source_health.reliability` was drawn nowhere until 2026-09-14.** It is the per-feed multiplier the ranker applies to authority, recalculated every run over the trailing `collect.reliability_window_days`, clamped to `[collect.reliability_floor, 1.0]`, and 1.0 for a feed with no evidence in the window. It writes nothing to `config/` and it lives for the length of one run, which is why it went so long without a surface: nothing persisted it, so nothing could draw it. It is on `/console/voices/` now, one bar a feed, and the page reads the factor the run applied off the published view rather than reducing the shards a second time. Two derivations of one ranking factor is two verdicts, and the day they disagreed neither would be worth drawing. Placement plan row #13, decisions 4 and 7; that row reads the factor and changes no feed score.
 
@@ -630,7 +630,7 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Option | Why rejected |
 | --- | --- |
 | A run that edits `config/sources.json` | A robot deleting sources a person curated, in a commit nobody reviewed. |
-| A quarantine only a human can lift | A deletion with extra steps. A source that recovers stays dead until someone reads a CSV. |
+| A quarantine only a human can lift | A deletion with extra steps. A source that recovers stays dead until someone reads the ledger. |
 | Counting a robots refusal as a failure | Punishing a site for saying no, and quarantining a source that is behaving correctly. |
 | Letting a robots result clear the streak | A dead address behind a site that says no would launder its record on the run after every failure, and could never reach a rest. It is not evidence either way. |
 | Decrementing the streak one success at a time | A feed that recovered on the fifth day would still be resting on the ninth, for failures it has already answered. The streak asks whether the endpoint is broken now. |

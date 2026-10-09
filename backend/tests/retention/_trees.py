@@ -12,7 +12,7 @@ from typing import Final
 
 from conftest import seed_host_fingerprint, seed_item_health
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     TERMINAL_STAGES,
@@ -180,17 +180,6 @@ def item_health_months(state_dir: Path) -> list[str]:
     what a pass kept asks in months.
     """
     return ledger.held_months(state_dir, LedgerName.ITEM_HEALTH)
-
-
-def month_holding(shard: Path) -> str:
-    """The `<YYYY-MM>` a file is filed under, read off its own path.
-
-    A day is a directory, so a file sits one level deeper than the day file
-    `day_partition.month_of` reads. A writer's CSV file and a raw file of the
-    ledger door both sit in a `<YYYY>/<MM>/<DD>` folder, so one helper reads
-    either, and a tree that changes shape again moves one line.
-    """
-    return day_shards.date_of(shard)[:7]
 
 
 def census_of(state_dir: Path, date: str) -> list[ItemHealthRow]:

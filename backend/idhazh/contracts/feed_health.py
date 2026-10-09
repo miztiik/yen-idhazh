@@ -251,11 +251,8 @@ class FeedHealthRow(Contract):
     def from_csv_row(cls, row: dict[str, str]) -> Self:
         """The inverse. An empty cell is an absent value, never the empty string.
 
-        A missing cell is absent too, so a shard written before a column existed
-        reads with that column empty rather than raising. The guard that forces
-        the migration is `ledger.require_matching_header`, and it sits on the
-        write path where an unmigrated file would put cells under the wrong
-        names.
+        A missing cell is absent too, so a row written before a column existed
+        reads with that column empty rather than raising.
         """
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
         for name in cls._absent_when_blank():
@@ -281,8 +278,7 @@ def supersedes(later: FeedHealthRow, kept: FeedHealthRow) -> bool:
     `(run_id, feed_id)` are two accounts of the same event and one of them has
     to win. On the ledger door a re-run's file replaces its first try's whole,
     so two accounts meet here only when two writers that are not attempts at one
-    work unit file one run's verdict, or when a late CSV file is folded onto the
-    rows the door already holds.
+    work unit file one run's verdict.
 
     A read that carried entries wins, whichever row is newer. The attempt that
     got articles is the attempt that happened, and a later empty retry against

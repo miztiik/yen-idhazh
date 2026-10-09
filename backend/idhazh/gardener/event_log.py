@@ -23,8 +23,8 @@ from the open web (Guardrail #11). Its type and the deepest line of this
 package's own code it passed through are code, and say where to look.
 
 **The record's message is the event's JSON too.** `one_at_a_time.take` and the
-compaction also run under commands that write their records as text -
-`idhazh telemetry prune`, the ledger migrator - and those print the message.
+compaction also run under a command that writes its records as text -
+`idhazh telemetry prune` - and it prints the message.
 
 **`install` puts one handler on the root logger.** The gardener's two command
 lines call it from `cli.settings_or_none`, at the level `config/` names. It is

@@ -5,13 +5,11 @@
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
 
-Two routes, one core. `idhazh telemetry prune` takes a range of days out of a
-ledger under `state/`: the day files of a CSV ledger, or the rows of a ledger
-the door files. The gardener's two collection tasks take members out of a
-collection GitHub holds for us. A CSV ledger and a GitHub collection lose one
-member at a time; a ledger the door files changes one file at a time, each
-written whole. Every route stops at a ceiling and says where the next pass
-resumes. What "atomic" means here and why a range is not one is in
+Two routes. `idhazh telemetry prune` takes a range of days out of a ledger
+the door files under `state/`. The gardener's two collection tasks take members
+out of a collection GitHub holds for us. A GitHub collection loses one member at
+a time; a ledger changes one file at a time, each written whole. Every route
+stops at a ceiling and says where the next pass resumes. What "atomic" means here and why a range is not one is in
 [../concepts/atomic-deletes.md](../concepts/atomic-deletes.md).
 
 ## Before you start

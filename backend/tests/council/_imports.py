@@ -82,7 +82,6 @@ MODULE_NAMES = (
     "idhazh.ledger.csv_file",
     "idhazh.ledger.day_removal",
     "idhazh.ledger.filenames",
-    "idhazh.ledger.headers",
     "idhazh.ledger.json_lines",
     "idhazh.ledger.keys",
     "idhazh.ledger.ledger_files",
@@ -92,7 +91,6 @@ MODULE_NAMES = (
     "idhazh.ledger.raw_files",
     "idhazh.ledger.rows",
     "idhazh.run_context",
-    "idhazh.ledger.settle",
     "idhazh.llm.server",
     "idhazh.sanitize",
 )

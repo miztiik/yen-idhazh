@@ -99,7 +99,6 @@ def test_a_task_that_reads_a_ledger_names_its_day_and_the_ledger_s_marks_and_not
 
     assert _named(tmp_path, paths) == [
         "frontend/public/telemetry/2026/09/20",
-        "frontend/public/telemetry/2026/09/20.csv",
         "frontend/public/telemetry/2026/09/20.json",
         "frontend/public/telemetry/2026/09/20.jsonl",
         "frontend/public/telemetry/2026/09/20.parquet",

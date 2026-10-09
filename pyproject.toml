@@ -187,8 +187,6 @@ select = [
 # not with the rule).
 "idhazh.ledger.filenames._SEGMENT_NAME".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
 "idhazh.ledger.filenames._SEGMENT_SUFFIX".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
-"idhazh.ledger.filenames._REPAIR_NAME".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
-"idhazh.ledger.filenames._REPAIR_STAMP".msg = "Only idhazh.path_classes reads this writer-name pattern directly."
 # The parquet engine behind the ledger door. idhazh.ledger.parquet is the one
 # module allowed to import it (per-file-ignores below); anywhere else, this
 # rule fails the build in place of a hand-written AST walk over backend/idhazh

@@ -74,7 +74,7 @@ SUBCOMMANDS: Final[tuple[Subcommand, ...]] = (
     Subcommand("publish", "Write one day's projections again from the day already on disk."),
     Subcommand(
         "prune",
-        "Delete one ledger's day files over a range of days. Reports and removes "
+        "Delete one ledger's rows over a range of days. Reports and removes "
         "nothing without --no-dry-run.",
         prune.add_arguments,
     ),

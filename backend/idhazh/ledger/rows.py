@@ -7,11 +7,9 @@ cell reaches a committed file without a model having read it.
 Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
 and writes nothing into a paused or retired family; `append_seen` and
 `append_published` ask through `persist`, which asks for every pipeline write.
-`write_item_health_summary` does not ask: it folds rows already recorded, and the
-ageing step reads that fold back before it deletes anything.
 
 Nine readers here read a ledger that lives under `state/raw/` and
-`state/compact/` rather than in a CSV tree - `load_seen`, `load_published`,
+`state/compact/` - `load_seen`, `load_published`,
 `load_health`, `load_retirements`, `load_visual_prunes`, the two item-health
 readers `load_settled_failures` and `load_source_counts`, and the judge's
 `load_story_similarity_pairs` and `load_fitted_thresholds` - and all nine read it
@@ -24,7 +22,6 @@ its rows to `persist` itself.
 
 from __future__ import annotations
 
-import csv
 from collections.abc import Collection, Iterable
 from pathlib import Path
 from typing import Final
@@ -35,14 +32,12 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
-from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files
-from idhazh.ledger.csv_file import _read_rows
 from idhazh.ledger.persist import persist
 
 #: How far back a health read looks, in days the ledger holds. Not a policy - just
@@ -305,31 +300,6 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     return ledger_files.load_ledger_rows(
         state_dir, LedgerName.VISUAL_PRUNES, model=VisualPruneRow
     )
-
-
-def write_item_health_summary(path: Path, rows: list[ItemHealthSummaryRow]) -> int:
-    """Write one month's folded summary whole, replacing whatever was there.
-
-    The only writer here that rewrites rather than appends, and the reason is
-    that this file is derived: every row is a function of the shard it was folded
-    from, so writing it twice writes the same bytes twice. Appending would double
-    a month whenever the fold ran again over a shard a lost race had restored.
-
-    Returns how many rows landed, so a caller can log the count.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = ItemHealthSummaryRow.csv_columns()
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row.csv_row())
-    return len(rows)
-
-
-def load_item_health_summary(path: Path) -> list[ItemHealthSummaryRow]:
-    """Every folded row of one month. Empty for a month never folded."""
-    return [ItemHealthSummaryRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:

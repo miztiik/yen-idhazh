@@ -43,25 +43,16 @@ from idhazh.contracts.base import (
     without_retired_keys,
 )
 
-#: Headings a committed day file still carries that this row no longer names and
-#: that nothing replaced. `decode_digest` went on 2026-09-21: it proved two runs
+#: Headings an earlier row carried that this row no longer names and that
+#: nothing replaced. `decode_digest` went on 2026-09-21: it proved two runs
 #: asked the decoder for the same thing, and this project does not claim
 #: determinism, so the value answered no question a person asks
 #: (`docs/architecture/contracts/determinism.md`). `key_point` and
 #: `key_point_weight` went with the key points themselves: the term shipped at a
 #: weight of 0.0, so it never moved a score, and the cosine is now the whole one.
 #:
-#: **This is a contract, not a courtesy.** The migrator refuses a filled cell
-#: under a heading that is neither a current column nor one its `old_headings`
-#: names, and its entry for this ledger is built from this set, so a column
-#: deleted above without an entry here leaves every committed day file that
-#: still carries it unmovable.
-#:
-#: **Both sides of the row read this one set.** A committed CSV day an earlier
-#: run wrote reaches it through the migrator's `old_headings`, which maps each of
-#: these headings to nothing; a JSON payload reaches it through the
-#: before-validator on the row. A removal declared once is therefore honoured
-#: wherever the row is read.
+#: The before-validator on the row reads this one set, so a payload an earlier
+#: build wrote under any of these headings still reads, whatever carried it.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset(
     {"decode_digest", "key_point", "key_point_weight"}
 )
@@ -72,9 +63,8 @@ DROPPED_CELLS: Final[frozenset[str]] = frozenset(
 #: files, naming the job that filed it, and a row field of that name would take
 #: that cell's place.
 #:
-#: Both sides of the row read this one map, as they read `DROPPED_CELLS`: a CSV
-#: row an earlier run wrote through `from_csv_row`, and a JSON payload through
-#: the before-validator.
+#: `from_csv_row` and the before-validator both read this one map, so the two
+#: readers of the row cannot rename a heading two ways.
 RENAMED_CELLS: Final[Mapping[str, str]] = MappingProxyType({"shard": "work_part_index"})
 
 #: How far a recomputed composite may sit from the one on the row before the row
@@ -408,8 +398,8 @@ class StorySimilarityPair(Contract):
         exactly what its author meant to write.
 
         The keys come from `DROPPED_CELLS` rather than from a list of their own,
-        so the CSV side and the JSON side cannot name different sets. A key this
-        row renamed is read under its new name, from `RENAMED_CELLS`.
+        so every reader of the row drops the same set. A key this row renamed is
+        read under its new name, from `RENAMED_CELLS`.
         """
         return renamed_keys(without_retired_keys(data, *DROPPED_CELLS), RENAMED_CELLS)
 

@@ -535,7 +535,7 @@ that action runs is a commit call all the same.
 
 **It is not about a merge conflict.** The council used to argue this as many
 writers racing into one union-merged day file. That premise died on 2026-09-19
-when `merge=union` left the judged-pairs ledger, and quoting it today invites a
+when the union merge driver left the judged-pairs ledger, and quoting it today invites a
 reader to retire the guard along with it. The conflict that segments exist to
 solve - more than one job committing into one ledger file - is priced in
 [its own rationale below](#design-rationale-the-councils-own-path-not-a-segment-per-writer),
@@ -609,9 +609,9 @@ the only memory risk in the design. Carmack, 2026-09-21.
 
 ## Design rationale: the council's own path, not a segment per writer
 
-The digest pipeline gives every writer its own segment inside the day, at
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
-council does not, and one reason survives.
+The digest pipeline gives every writer its own file inside the day, a raw file
+the ledger door names under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`. The council
+does not need one per unit, and one reason survives.
 
 **A segment solves a conflict this workflow does not have.** It exists for the
 case where more than one job commits into one ledger file - the digest pipeline

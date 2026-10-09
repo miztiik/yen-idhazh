@@ -135,10 +135,9 @@ holdout's hand marks above `similarity.holdout_reach_days`; the last two are 730
 days, or two years. All sixteen ledgers follow the
 [yearly policy](idhazh-gardener.md#the-compaction-declarations-that-ship).
 A forever reader is refused while finite yearly pruning is enabled.
-Each floor belongs to the ledger and is held against
-whichever declaration governs it - its retention task while it is on CSV, its
-compaction once it moves - and a ledger no declaration governs is deleted by
-nothing, so it meets every floor.
+Each floor belongs to the ledger and is held against the compaction that
+governs it, and a ledger no declaration governs is deleted by nothing, so it
+meets every floor.
 
 **Two are kept a short, fixed time because nothing sums them.** `state/traces/`
 keeps 7 days, the window of `config/gardener/traces.json`. A trace is the

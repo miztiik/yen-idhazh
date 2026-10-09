@@ -28,11 +28,10 @@ sits above the line is a story the reader never gets to see.
 **What it holds today.** 200 pairs, marked by `claude-opus-4.6` on 2026-09-19:
 196 one story, 4 two stories. All four two-story marks are one news cluster - a
 lake being renamed, carried by two different companies - so the floor currently
-rests on one story rather than on a spread of news. They sit in
-`state/content-similarity-judge/holdout-pairs.csv`, the one CSV file the marks
-were kept in before they moved onto the ledger door, until they are copied onto
-the door and that file is retired ([move-a-ledger-to-parquet.md](move-a-ledger-to-parquet.md)).
-Until then neither reader below sees them.
+rests on one story rather than on a spread of news. They sit on the ledger door
+under `content-similarity-judge/holdout-pairs`, copied there from the one CSV
+file they were kept in before, which is gone
+([persistence.md](../architecture/contracts/persistence.md)).
 
 ## Get a draw
 
@@ -274,17 +273,8 @@ under, and says the line has not been scored where there is none.
 A mark is saved as a true or false flag, never as text. The batch file is where
 a spelling can go wrong: its values are JSON booleans.
 
-The one CSV file the marks were kept in before they moved spelled them `true`
-and `false`. Its reader, which the copy onto the door still uses, accepts any
-case and any surrounding space, and **refuses any other spelling rather than
-reading it as false** - comparing against one spelling would read every other
-spelling as `false`, which is the load-bearing mark, and a file read that way
-becomes all two-story pairs and a floor that refuses every merge without
-erroring.
-
 | What you see | What happened |
 | --- | --- |
-| `same_story is 'yes', and a mark has to be one of ['false', 'true']` | A hand edit of the old CSV file used a spelling the reader does not know. Write `true` or `false`. |
 | A row you marked `false` arrives as `true` | The batch file quoted the value. JSON booleans, not strings. |
 | Fewer rows than marks | The draw did not carry that pair. Widen `--draw-root` and harvest again. |
 | `harvested 0 labelled pairs into no file` | The harvest found no label in the batches named. Nothing was saved, and the marks already on record are untouched. |

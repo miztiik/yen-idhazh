@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-08
 
 What the app may delete, what must survive, and the safeguards before deletion.
 [layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
@@ -87,7 +87,8 @@ when a chart draws it
 ## A named prune: one ledger, one range of days
 
 `idhazh telemetry prune` removes an explicitly selected range of days from one
-ledger: the day files of a CSV ledger, or the rows of a ledger the door files.
+ledger the door files: the days' raw files, and their rows out of every packed
+file that holds them.
 The current supported targets are listed by `idhazh telemetry prune --help`; the
 target is a ledger name, never a path. This command does not unpublish a day or
 rebuild the site's derived payloads.

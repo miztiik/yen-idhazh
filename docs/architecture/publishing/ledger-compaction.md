@@ -113,9 +113,6 @@ flowchart TB
   class GARDEN sysOps;
 ```
 
-**The CSV day trees are not on this path.** A compaction never reads or writes
-them.
-
 ## One pass, in order
 
 | Step | What it does |
@@ -271,8 +268,8 @@ names; with nothing indexed, it takes nothing. It takes consecutive months, each
 mark has reached, at most `max_periods_per_run` of them, and the month after
 the last one is where the next wake starts. It reads nothing the planner named
 for the other steps, so it is never offered a month from before its ledger
-began. An operator range (`--from` and `--to` on one named task, or the months a
-migration names) limits the choice, and never makes the step skip a month: a
+began. An operator range (`--from` and `--to` on one named task) limits the
+choice, and never makes the step skip a month: a
 range that starts after a month ready to close is refused at that month, and the
 pass ends `deferred` with the fault `range-starts-late`, so the person widens
 the range. The step names what it reads of its months - each
@@ -358,16 +355,6 @@ deleted, and the pass notes `reopened-month` with the month. A late day
 leaves the month's `lost_days`, because it now has a record. No mark moves. An
 `empty` month has no file, so its rows are the late rows alone. The re-open is
 `backend/idhazh/gardener/tasks/_reopened_month.py`.
-
-An online CSV import can write raw rows without starting compaction by using
-`--write --raw-only`. The migrator files only rows from that CSV and earlier
-rows written by the same migration work unit. It does not copy native writer
-rows into the migration identity. A native retry therefore keeps its own work
-unit and attempt, which the reader settles before it applies the ledger key.
-Raw-only success leaves CSV and compact files unchanged; packing and parity
-proof remain outstanding. If a compact index already covers the day, the
-normal reader may continue to serve the compact file until a later compaction
-includes the raw arrival.
 
 An explicit `--from` and `--to` month range includes historical raw arrivals
 behind the daily mark, even when they are outside the normal 30-day rerun
@@ -538,14 +525,6 @@ Do not use this onboarding path after expiry ran; restore that yearly index
 instead. The canary builder reports only folders that actually exist, so new
 fixture ledgers initialize normally without bypassing the established-tree
 refusal.
-
-CSV migration uses the same existing-folder check as the runner and the
-canary builder. It does not relax retention checks: a current finite policy
-cannot perform a lossless migration from a forever CSV reader. Historical
-migration tests use the recorded pre-expiry config, not the current policy,
-with retired ledger families removed from the fixture registry. Its old
-retention declarations stay unchanged. A separate test proves that the current
-policy refuses that reader.
 
 An operator range may expire only whole years and cannot skip an older indexed
 year. Otherwise its progress mark could hide retained entries. A range that
@@ -755,8 +734,8 @@ would not be rerun ("it wont be run just do your job deliver") and waived the
 rerun-window wait for council CSV retirement. Old branch and open-PR writers
 are information, not blockers under that ruling. The council converter and CSV
 family are removed; historical schema stamps and native writer identities
-remain readable. The command sequence is
-[the migration runbook](../../how-to/move-a-ledger-to-parquet.md#retire-csv-after-the-old-writer-is-retired).
+remain readable. What files through the door now is in
+[persistence.md](../contracts/persistence.md#the-ledgers-on-the-door).
 
 **2026-09-28: a compaction pass drops, then absorbs months, then takes days.**
 The first design took the days and then the months. A shard refuses a path it

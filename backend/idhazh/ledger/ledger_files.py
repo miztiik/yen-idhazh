@@ -499,9 +499,9 @@ def load_days[C: Contract](
     its raw files first filed under that day. A day in a packed year opens the
     whole year's file once, whatever else is asked of that year.
 
-    Each day is settled on its own, as `day_shards.settled_day` settled a CSV
-    day: a key that carries no date - the eval ledger's - is one measurement
-    within a day, so the same words filed on two days are kept under each.
+    Each day is settled on its own: a key that carries no date - the eval
+    ledger's - is one measurement within a day, so the same words filed on two
+    days are kept under each.
     `load_ledger_rows` settles once across every day and keeps the first.
     """
     if key is None:

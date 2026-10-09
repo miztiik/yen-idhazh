@@ -32,7 +32,6 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.extract import TOKENS_PER_WORD
-from idhazh.ledger import BEFORE_PARTITION_NAME
 from utilities.measure_ledgers import (
     UPPER_PERCENTILE,
     Residual,
@@ -48,10 +47,10 @@ from utilities.measure_ledgers import (
 )
 
 FIXTURE: Final = FIXTURES_DIR / "state" / "measure-ledgers"
-#: The item rows, in the file layout the retired writers used.
-ITEMS: Final = FIXTURE / "item-health" / "2026" / "01" / "01" / BEFORE_PARTITION_NAME
-#: The job clocks, in the same layout.
-CLOCKS: Final = FIXTURE / "host-fingerprint" / "2026" / "01" / "01" / BEFORE_PARTITION_NAME
+#: The item rows, one file for the ledger.
+ITEMS: Final = FIXTURE / "item-health.csv"
+#: The job clocks, the same way.
+CLOCKS: Final = FIXTURE / "host-fingerprint.csv"
 #: The day every fixture row is filed under.
 DAY: Final = "2026-01-01"
 #: The cap the fixture rows were written under. It is the fixture's own, not
@@ -148,7 +147,7 @@ def test_the_fixture_only_names_columns_the_real_ledgers_have() -> None:
     pairs = (
         (ITEMS, {*ItemHealthRow.csv_columns(), *RETIRED_CELLS}),
         (CLOCKS, set(HostFingerprintRow.csv_columns())),
-        (FIXTURE / "scores" / "2026-01.csv", set(EvalRow.csv_columns())),
+        (FIXTURE / "scores.csv", set(EvalRow.csv_columns())),
     )
     for path, columns in pairs:
         with path.open(encoding="utf-8", newline="") as handle:

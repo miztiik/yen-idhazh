@@ -58,7 +58,7 @@ Table C - when to stop and ask
 | 7 | The holdout marks are saved through the door | 6 | C | DONE | p59-row-7 | - | Fowler |
 | 8 | The item health summary is saved through the door | 2 | B | DONE | p59-row-8 | - | Fowler |
 | 9 | The committed judge rows move onto the door, and the old CSV files go | 5, 7 | F | DONE | p59-row-9 | - | Fowler |
-| 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | PENDING | - | - | - |
+| 10 | The CSV ledger code, the migrator and their pages are deleted | 8, 9; pipeline-tests "Committed trial files move to the nested roots, and the orphan span summaries are deleted" | G | DONE | p59-row-10 | - | Fowler |
 | 11 | The door files a ledger under a folder of any depth | - | A | DONE | p59-row-11 | - | Fowler |
 
 Cross-plan dependencies name the other plan's row by title. Re-check each title at dispatch.
@@ -364,12 +364,22 @@ Each of rows 4 to 8 does all of these for its ledger, so no row lists them again
 | --- | --- | --- |
 | 1 | The how-to for moving a ledger goes with the migrator: a procedure nobody can run is a page that misleads | Fowler, 2026-10-05 |
 | 2 | Two commits: (1) backend and frontend code with tests; (2) docs | Fowler, 2026-10-05 |
+| 3 | Grain `month` goes, and grains `day` and `tree` stay. `day-metrics` files one JSON file a day, and `traces` and `digest-fragments` file a JSON day folder. None is CSV, and no row of this plan moves them. So `config/ledgers.json` keeps those two grains beside `raw-and-compact`, `flat` and `stamp`, and the oracle names these three ledgers as the only ones filed by day outside the door. It holds every entry to no `.csv` suffix | Fowler, 2026-10-08 |
+| 4 | No `DROPPED_CELLS`, `RETIRED_CELLS` or `RENAMED_CELLS` entry was read by the migrator alone. Each row's before-validator reads its maps, and the public telemetry copy and the empty-column census read `RETIRED_CELLS` too, so every map stays. `old_headings` went with the migrator | Fowler, 2026-10-08 |
+| 5 | The canary builder reads the CSV that `build-canary.mjs` stages beside its state tree through each contract's `from_csv_row`, and files each run through the door. It refuses a key filed twice on one day, because the door settles repeats only when a reader asks. The staged files are Table B's B2 kind of scratch: never committed and never read by a later run | Fowler, 2026-10-08 |
+| 6 | A CSV fixture whose reader stays is kept (B6), and leaves the day-tree folders it used to sit in: `measure-ledgers/item-health.csv`, `measure-ledgers/host-fingerprint.csv`, `measure-ledgers/scores.csv` and `prefill-oracle/item-health.csv` | Fowler, 2026-10-08 |
+| 7 | `ledger.segment_name` and `parse_segment_name` take the file suffix from their caller and have no default. No production writer used the `.csv` default: traces pass `.jsonl`, and the commit-race test harness names its own CSV scratch | Fowler, 2026-10-08 |
+| 8 | `ServerJob` keeps `migrate`. Raw files that the one-shot copies wrote name it, and a reader names their writer from it | Fowler, 2026-10-08 |
+| 9 | The judge-ledger rule in `ledger-registry.md` stays, as "The rule a judge ledger follows", because it says how the five judge ledgers file now. Only its CSV sentences and the shared-CSV-code table go | Fowler, 2026-10-08 |
+| 10 | Not moved: `state/labels.csv`, the human faithfulness labels that `evals/labels.py` and `backend/utilities/label_queue.py` append to. The registry does not list it and nothing has committed it. A move onto the door needs the owner's retention ruling first: `adaptive-pruning.md` keeps the labels for ever, and every door ledger takes the 36-month yearly expiry. The oracle's `git ls-files` check fails on the file's first commit, which is where that ruling is forced | Fowler, 2026-10-08 |
+| 11 | Plans 55 and 60 and the pipeline-tests plan still name `docs/how-to/move-a-ledger-to-parquet.md` in their own records. Each plan's record belongs to its owner, so this row leaves them as they are | Fowler, 2026-10-08 |
 
 **Rejected alternatives**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the migrator for a future ledger | No ledger is left to move, and every new ledger is born on the door | A package, a CLI and a test directory nobody runs | Fowler, 2026-10-05 |
+| 2 | Move `day-metrics`, `traces` and `digest-fragments` onto the door in this row, so only `raw-and-compact`, `flat` and `stamp` are left | None of the three is CSV, so the owner's directive does not reach them, and each is a persisted-address move with readers outside this plan | Door contracts for three ledgers, a copy of their committed JSON, and new readers in the console, the assemble stage and two gardener tasks: a plan of its own at Level 5 | Fowler, 2026-10-08 |
 
 ### Row #11 - The door files a ledger under a folder of any depth
 

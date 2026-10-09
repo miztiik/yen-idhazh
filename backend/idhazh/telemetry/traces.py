@@ -17,8 +17,8 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
 
-#: A trace is JSON lines rather than CSV, and that is the whole of what this
-#: tree does differently from a ledger day tree.
+#: A trace is JSON lines, one file a writer inside a day folder, named for that
+#: writer rather than minted by the ledger door.
 TRACE_SUFFIX: Final = ".jsonl"
 
 
@@ -42,10 +42,9 @@ def committed_trace_relpath(
 
     `state/traces/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.jsonl`
     (section 2: relative, POSIX, minimal). The day is a directory and the file
-    carries the four elements that make it this writer's own, which is the
-    grammar every day tree under `state/` uses - `ledger.segment_name` spells
-    it, so a trace and a ledger row cannot name one writer two ways. The day
-    directory is the registry's `traces` entry.
+    carries the four elements that make it this writer's own -
+    `ledger.segment_name` spells them, so every name written this way names
+    one writer one way. The day directory is the registry's `traces` entry.
     """
     name = ledger.segment_name(
         run_id=run_id, attempt=attempt, job=job, shard=shard, suffix=TRACE_SUFFIX
