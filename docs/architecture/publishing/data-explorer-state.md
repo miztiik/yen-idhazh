@@ -11,6 +11,11 @@ The route reads the ledger registry from `config/ledgers.json`. Its panel ids ar
 [The workbench layout](../../concepts/console-design/how-the-data-explorer-shares-the-window.md)
 owns their visible arrangement.
 
+The route renders only in the browser. It uses the common `404.html` fallback,
+with `prerender = false` and `ssr = false`; it has no separate generated HTML
+file. Build-time configuration supplies knobs and the published-ledger list,
+not ledger rows. The browser fetches the registry, indexes and chosen files.
+
 The page queries only the selected ledgers and UTC days. Refresh releases the
 page's cached indexes and files through `startAfresh()`, then fetches the registry
 again. It does not run the question. The
@@ -26,7 +31,8 @@ History as working.
 
 Examples come from `console.explorer_examples`. An example whose ledgers are not
 published is not offered. Choosing one fills the SQL, ledger selection and span
-without running it. It does not yet provide a verified undo operation.
+without running it. Choosing an example or saved question does not yet provide
+a verified undo operation.
 
 The [date and reopening rules](../../how-to/query-a-ledger-from-the-console.md#share-or-keep-a-question)
 apply equally to saved questions and History. Chart and column choices stay in
@@ -52,6 +58,17 @@ text cells; Copy as table puts each cell in a Markdown code span. There is no
 spreadsheet download that could execute a cell as a formula. The answer table's
 types, formatting and sorting belong to
 [the console design](../../concepts/console-design.md#data-explorer-prints-the-engine-answer-as-written).
+
+## Design rationale
+
+**Search-engine behavior is not a delivery requirement.** The page exists to
+answer an operator's questions over recorded data, not to serve a crawler.
+Its raw fallback response need not carry a `noindex` tag. Do not generate a
+separate route document or change the common fallback to satisfy that check.
+Dated reader addresses use the same fallback, so changing it would affect
+pages outside the console. Existing search hints do not guarantee exclusion
+from search results and are not access controls. Owner ruling:
+kumarsnaveen, 2026-10-09.
 
 ## See also
 
