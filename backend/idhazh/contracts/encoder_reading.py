@@ -15,12 +15,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, JsonValue, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
     Contract,
     Model,
+    Sha256,
     Slug,
     Timestamp,
 )
@@ -68,6 +69,11 @@ class EncoderReading(Contract):
     __schema_stem__: ClassVar[str] = "encoder-reading"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-09",
+            change="Record model-loading options, encode options and the exact pair-set hash.",
+            why="A task adapter, prompt or text-only load changes what the vectors mean.",
+        ),
+        ChangelogEntry(
             version="2026-10-08",
             change="Initial shape: the encoder, its progress, its readings and its cost.",
             why=(
@@ -77,7 +83,7 @@ class EncoderReading(Contract):
         ),
     )
 
-    version: str = "2026-10-08"
+    version: str = "2026-10-09"
 
     #: The short name this comparison files the encoder under.
     slug: Slug
@@ -90,6 +96,10 @@ class EncoderReading(Contract):
 
     #: The text this encoder wants in front of its input. Empty for most.
     prefix: str = ""
+
+    model_options: dict[str, JsonValue] = Field(default_factory=dict)
+    encode_options: dict[str, JsonValue] = Field(default_factory=dict)
+    pair_set_sha256: Sha256 | None = None
 
     #: Why this encoder is in the comparison at all.
     why: str

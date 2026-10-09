@@ -24,6 +24,13 @@ on:
         description: 'Commit the readings to the branch'
         type: boolean
         default: true
+      selected_encoders:
+        description: 'Comma-separated encoder slugs; blank runs all'
+        default: ''
+      reuse_pairs:
+        description: 'Reuse the committed pair set and retain saved readings'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -62,8 +69,19 @@ jobs:
         env:
           START: ${{ inputs.start || '2026-08-23' }}
           END: ${{ inputs.end || '2026-10-05' }}
+          REUSE_PAIRS: ${{ inputs.reuse_pairs }}
+          SELECTED: ${{ inputs.selected_encoders }}
         run: |
           set -euo pipefail
+          if [[ -n "$SELECTED" && "$REUSE_PAIRS" != "true" ]]; then
+            echo "a selected run must reuse the committed pair set" >&2
+            exit 1
+          fi
+          if [[ "$REUSE_PAIRS" == "true" ]]; then
+            test -s "$SET_DIRECTORY/pairs.json"
+            sha256sum "$SET_DIRECTORY/pairs.json" | tee pair-build.log
+            exit 0
+          fi
           for day in "$START" "$END"; do
             if ! [[ "$day" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
               echo "a day is YYYY-MM-DD" >&2
@@ -77,13 +95,13 @@ jobs:
 
       - name: Name the encoders
         id: list
+        env:
+          SELECTED: ${{ inputs.selected_encoders }}
         run: |
           set -euo pipefail
-          echo "encoders=$(python3 -c "
-          import json
-          print(json.dumps([e['slug'] for e in json.load(
-              open('config/encoder-comparison.json'))['encoders']]))
-          ")" >> "$GITHUB_OUTPUT"
+          encoders="$(python3 backend/utilities/compare_summary_encoders.py encoders \
+            --selected "$SELECTED")"
+          echo "encoders=$encoders" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -149,12 +167,15 @@ jobs:
       - name: Install the encoder runtime
         run: |
           set -euo pipefail
-          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --quiet torch torchvision --index-url https://download.pytorch.org/whl/cpu
           # Newest first. A recent foundation needs a recent library, and a
-          # model that still will not load is recorded as unavailable with the
-          # reason rather than taking the shard down.
+          # A model that will not load leaves a reading with its reason.
+          # The state check below then fails that shard.
           pip install --quiet --upgrade \
-            'transformers>=4.48' sentence-transformers scikit-learn numpy pydantic
+            'transformers>=5.19' 'sentence-transformers[image]>=6.1' \
+            scikit-learn numpy pydantic
+          python -c 'from PIL import Image; import torchvision; from transformers import EmbeddingGemma2Processor'
+          pip freeze > runtime.txt
 
       - name: Score it
         env:
@@ -185,6 +206,10 @@ jobs:
             --pairs "$SET_DIRECTORY/pairs.json" \
             --out "readings/$ENCODER.json" \
             --vectors-out "vectors/$ENCODER.npy" 2>&1 | tee "logs/$ENCODER.log"
+          python3 -c 'import json, os, sys
+          reading = json.load(open("readings/" + os.environ["ENCODER"] + ".json"))
+          if reading["state"] != "measured":
+             sys.exit(reading.get("reason") or reading["state"])'
 
       # `always()`, so a shard stopped at the deadline still hands over the
       # part-finished reading and the log that says where it stopped.
@@ -196,6 +221,7 @@ jobs:
             readings/${{ matrix.encoder }}.json
             logs/${{ matrix.encoder }}.log
             host.log
+            runtime.txt
           retention-days: 7
           if-no-files-found: warn
 
@@ -208,7 +234,7 @@ jobs:
         with:
           name: vectors-${{ matrix.encoder }}
           path: vectors/${{ matrix.encoder }}.npy
-          retention-days: 3
+          retention-days: 90
           if-no-files-found: warn
 
   collect:
@@ -235,16 +261,24 @@ jobs:
           name: pair-set
 
       - name: Merge them
+        env:
+          SELECTED: ${{ inputs.selected_encoders }}
+          REUSE_PAIRS: ${{ inputs.reuse_pairs }}
         run: |
           set -euo pipefail
           mkdir -p "$SET_DIRECTORY/logs"
           cp downloaded/logs/*.log "$SET_DIRECTORY/logs/" 2>/dev/null || true
           cp pair-build.log "$SET_DIRECTORY/logs/" 2>/dev/null || true
+          keep=()
+          if [[ "$REUSE_PAIRS" == "true" ]]; then
+            keep+=(--preserve-existing)
+          fi
           python3 backend/utilities/compare_summary_encoders.py collect \
             --pairs "$SET_DIRECTORY/pairs.json" \
             --readings-from downloaded/readings \
             --out "$SET_DIRECTORY/readings" \
             --commit "${{ github.sha }}" \
+            --selected "$SELECTED" "${keep[@]}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Put the table in the run summary
@@ -255,8 +289,8 @@ jobs:
         if: inputs.commit_readings
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'miztiik'
+          git config user.email 'miztiik@users.noreply.github.com'
           git add "$SET_DIRECTORY"
           if git diff --cached --quiet; then
             echo 'the readings did not change'

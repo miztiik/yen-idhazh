@@ -27,6 +27,7 @@ Three stages, because every encoder has to score the identical pairs:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -54,6 +55,28 @@ def read_config(path: Path) -> dict[str, Any]:
         if key not in settings:
             raise SystemExit(f"{path}: no {key}")
     return settings
+
+
+def select_encoders(settings: dict[str, Any], selected: str) -> list[dict[str, Any]]:
+    """Select named shards without spending time on the saved controls."""
+    encoders: list[dict[str, Any]] = settings["encoders"]
+    if not selected:
+        return encoders
+    names = [name.strip() for name in selected.split(",")]
+    if len(set(names)) != len(names):
+        raise ValueError("an encoder may be selected only once")
+    by_slug = {encoder["slug"]: encoder for encoder in encoders}
+    unknown = [name for name in names if name not in by_slug]
+    if unknown:
+        raise ValueError(f"unknown encoder selection: {', '.join(unknown)}")
+    return [by_slug[name] for name in names]
+
+
+def stage_encoders(args: argparse.Namespace) -> None:
+    print(json.dumps([
+        encoder["slug"]
+        for encoder in select_encoders(read_config(args.config), args.selected)
+    ]))
 
 
 def content_words(text: str) -> set[str]:
@@ -288,6 +311,9 @@ def stage_score(args: argparse.Namespace) -> None:
         model_id=chosen["model_id"],
         parameters_millions=chosen["parameters_millions"],
         prefix=chosen["prefix"],
+        model_options=chosen.get("model_options", {}),
+        encode_options=chosen.get("encode_options", {}),
+        pair_set_sha256=hashlib.sha256(args.pairs.read_bytes()).hexdigest(),
         why=chosen["why"],
         state=ReadingState.LOADING,
         written_at=now(),
@@ -345,7 +371,9 @@ def stage_score(args: argparse.Namespace) -> None:
         from sentence_transformers import SentenceTransformer
 
         loading = time.monotonic()
-        model = SentenceTransformer(chosen["model_id"], device="cpu")
+        model = SentenceTransformer(
+            chosen["model_id"], device="cpu", **chosen.get("model_options", {})
+        )
         model.max_seq_length = settings["encode"]["max_sequence_length"]
         reading.load_seconds = round(time.monotonic() - loading, 1)
     except Exception as failure:  # a model that will not load is a reading
@@ -376,8 +404,11 @@ def stage_score(args: argparse.Namespace) -> None:
                     convert_to_numpy=True,
                     normalize_embeddings=True,
                     show_progress_bar=False,
+                    **chosen.get("encode_options", {}),
                 ).astype(np.float32)
             )
+            if not np.isfinite(encoded[-1]).all():
+                raise ValueError("the encoder returned non-finite vectors")
             reading.articles_done = min(start + batch, len(texts))
             reading.encode_seconds = round(time.monotonic() - started, 1)
             reading.numbers_an_article = int(encoded[0].shape[1])
@@ -476,6 +507,7 @@ def stage_collect(args: argparse.Namespace) -> None:
     """
     settings = read_config(args.config)
     pairs = json.loads(args.pairs.read_text(encoding="utf-8"))
+    selected = select_encoders(settings, args.selected)
 
     def find_reading(slug: str) -> Path | None:
         """Where this shard's reading landed, however the download nested it.
@@ -495,7 +527,7 @@ def stage_collect(args: argparse.Namespace) -> None:
         return None
 
     readings = []
-    for encoder in settings["encoders"]:
+    for encoder in selected:
         found = find_reading(encoder["slug"])
         if found is not None:
             readings.append(json.loads(found.read_text(encoding="utf-8")))
@@ -504,6 +536,20 @@ def stage_collect(args: argparse.Namespace) -> None:
                 {"slug": encoder["slug"], "model_id": encoder["model_id"],
                  "state": "did not report", "why": encoder["why"]}
             )
+
+    newly_measured = [r for r in readings if r.get("state") == "measured"]
+    if args.preserve_existing:
+        existing = args.out / "encoders.json"
+        if not existing.is_file():
+            raise ValueError(f"cannot preserve missing readings: {existing}")
+        previous = json.loads(existing.read_text(encoding="utf-8"))["encoders"]
+        replaced = {reading["slug"] for reading in readings}
+        pair_hash = hashlib.sha256(args.pairs.read_bytes()).hexdigest()
+        for reading in previous:
+            if reading["slug"] not in replaced:
+                if reading.get("pair_set_sha256") != pair_hash:
+                    raise ValueError(f"{reading['slug']}: the saved pair set differs")
+                readings.append(reading)
 
     measured = [r for r in readings if r.get("state") == "measured"]
     measured.sort(key=lambda r: -r["separation"])
@@ -521,6 +567,9 @@ def stage_collect(args: argparse.Namespace) -> None:
         "",
         f"Taken {time.strftime('%Y-%m-%d', time.gmtime())} on a GitHub "
         "`ubuntu-latest` runner: 4 processor threads, 16 GB, no graphics card.",
+        "",
+        "Saved rows are not re-encoded. Each row's date, model options and task "
+        "settings remain in `encoders.json`.",
         "",
         "**Separation** is the chance this encoder scores a likely-same pair above "
         "a likely-different one. 1.0 is perfect, 0.5 is a coin toss. No difference "
@@ -602,18 +651,22 @@ def stage_collect(args: argparse.Namespace) -> None:
             "pair_build": pairs["pair_build"],
         },
         "encode": settings["encode"],
-        "encoders_asked": len(settings["encoders"]),
-        "encoders_measured": len(measured),
+        "pair_set_sha256": hashlib.sha256(args.pairs.read_bytes()).hexdigest(),
+        "encoders_selected": [encoder["slug"] for encoder in selected],
+        "encoders_asked": len(selected),
+        "encoders_measured": len(newly_measured),
         "encoders_unavailable": [
-            r["slug"] for r in readings if r.get("state") != "measured"
+            r["slug"] for r in readings
+            if r["slug"] in {encoder["slug"] for encoder in selected}
+            and r.get("state") != "measured"
         ],
     }
     (args.out.parent / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
     )
 
-    print(f"measured {len(measured)} of {len(settings['encoders'])} encoders")
-    for reading in measured:
+    print(f"measured {len(newly_measured)} of {len(selected)} selected encoders")
+    for reading in newly_measured:
         print(f"  {reading['slug']:22} {reading['separation']:.4f}")
 
 
@@ -621,6 +674,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config/encoder-comparison.json"))
     stages = parser.add_subparsers(dest="stage", required=True)
+
+    listing = stages.add_parser("encoders", help="list selected encoder shards")
+    listing.add_argument("--selected", default="")
+    listing.set_defaults(run=stage_encoders)
 
     build = stages.add_parser("pairs", help="build the pair set once")
     build.add_argument("--digest-root", type=Path, default=Path("frontend/public/digest"))
@@ -646,6 +703,8 @@ def main() -> None:
     merge.add_argument("--out", type=Path, required=True)
     merge.add_argument("--commit", default="")
     merge.add_argument("--run-url", default="")
+    merge.add_argument("--selected", default="")
+    merge.add_argument("--preserve-existing", action="store_true")
     merge.set_defaults(run=stage_collect)
 
     args = parser.parse_args()
