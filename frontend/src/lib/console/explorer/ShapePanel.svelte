@@ -3,11 +3,14 @@
 	 * of the chart shows the column it holds; the drawing; and the foot, which says what the drawing
 	 * leaves out.
 	 *
-	 * Room is set by the width band and the pointer, never by the chart or its columns: the role row
-	 * holds a slot for each role of the chart with the most roles, empty slots included, and the foot
-	 * reserves the status bar's lines, so a change of chart or column redraws inside boxes that do
-	 * not move. The plot is drawn at the drawing's measured width and height, and never shorter than
-	 * `console.chart_height`; a shorter box scrolls. Jony's layout of 2026-10-07.
+	 * Room is set by the width band, the pointer and the answer, never by the chart or its columns:
+	 * the role row holds a slot for each role of the chart with the most roles, empty slots included,
+	 * and the foot reserves room for each note the answer can give, so a change of chart or column
+	 * redraws inside boxes that do not move. The plot is drawn at the drawing's measured width and
+	 * height, and the plot and the foot together are never shorter than `console.chart_height`; the
+	 * page never gives the drawing less room than its figure, that plot, its readout and its
+	 * comparison need, so a short window scrolls the page and never the plot. Jony's layout of
+	 * 2026-10-07 and his rulings of 2026-10-08.
 	 */
 	import { untrack, type Snippet } from 'svelte';
 	import type { Column, DateStamp, Row } from '$lib/data/ledger';
@@ -35,6 +38,7 @@
 		lostDays,
 		bounds,
 		floorHeight,
+		noteCount = 0,
 		slotsPerLine = MOST_ROLES,
 		capped = false,
 		maxRows,
@@ -46,8 +50,11 @@
 		rows: readonly Row[];
 		lostDays: readonly DateStamp[];
 		bounds: ExplorerShapeBounds;
-		/** The fewest pixels a plot is drawn tall, `console.chart_height`. */
+		/** The height the plot and the foot share, `console.chart_height`: the plot is never shorter
+		 *  than this less the foot. */
 		floorHeight: number;
+		/** The notes the answer can give, which the foot reserves room for: `countChartNotes`. */
+		noteCount?: number;
 		/** The role row's slots on one line at this width, the band's `explorer_role_slots_per_line`. */
 		slotsPerLine?: number;
 		capped?: boolean;
@@ -60,6 +67,7 @@
 	let box = $state<HTMLDivElement | null>(null);
 	let stack = $state<HTMLDivElement | null>(null);
 	let drawing = $state<HTMLDivElement | null>(null);
+	let foot = $state<HTMLDivElement | null>(null);
 	let chartWidth = $state(760);
 	let chartHeight = $state(untrack(() => floorHeight));
 
@@ -104,20 +112,27 @@
 	}
 
 	/** The plot's width is the drawing's, and its height whatever the drawing has left once the main
-	 *  figure, the readout and the comparison have theirs, never under the floor. Each reading is
-	 *  floored to a whole pixel, so a drawing does not resize itself again and again. */
+	 *  figure, the readout and the comparison have theirs. Its box, edge included, is never under
+	 *  `console.chart_height` less the foot's height, so the plot and the foot share that height; the
+	 *  result region's floor gives the drawing exactly that much, so at the floor the two meet and
+	 *  nothing scrolls. A fit is floored to a whole pixel, so a drawing does not resize itself again
+	 *  and again. */
 	function measure() {
 		if (drawing !== null) chartWidth = Math.max(1, Math.floor(drawing.getBoundingClientRect().width));
 		if (box === null || stack === null) return;
 		const style = getComputedStyle(box);
 		const room = box.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
 		const rest = stack.getBoundingClientRect().height - chartHeight;
-		const next = Math.max(floorHeight, Math.floor(room - rest));
+		// What the plot's box holds beside the height it was drawn at: its edge.
+		const plot = drawing?.querySelector('svg[data-chart-type]') ?? null;
+		const edge = plot === null ? 0 : plot.getBoundingClientRect().height - Number(plot.getAttribute('height') ?? chartHeight);
+		const least = floorHeight - (foot?.getBoundingClientRect().height ?? 0) - edge;
+		const next = Math.max(least, Math.floor(room - rest));
 		if (Math.abs(next - chartHeight) >= 1) chartHeight = next;
 	}
 
 	$effect(() => {
-		const watched = [box, stack, drawing].filter((node): node is HTMLDivElement => node !== null);
+		const watched = [box, stack, drawing, foot].filter((node): node is HTMLDivElement => node !== null);
 		if (watched.length === 0) return;
 		const observer = new ResizeObserver(() => measure());
 		for (const node of watched) observer.observe(node);
@@ -184,7 +199,7 @@
 			{/if}
 		{/key}
 	</div>
-	<div class="chart-foot" data-chart-foot>
+	<div class="chart-foot" class:reserved={noteCount > 0} data-chart-foot bind:this={foot} style={`--chart-notes:${noteCount}`}>
 		{#key drawingKey}
 			{#each notes as note (note)}<p class="shape-foot" data-shape-foot>{note}</p>{/each}
 		{/key}
@@ -203,7 +218,8 @@
 	}
 
 	/* One slot for each role of the chart with the most roles, a fixed number to a line by band,
-	   so the row is the same height whichever chart is chosen. */
+	   so the row is the same height whichever chart is chosen. Its height is the page's
+	   `--role-row-height`, which the result region's floor counts too. */
 	.role-row {
 		--role-gap: var(--space-3);
 		box-sizing: border-box;
@@ -212,7 +228,7 @@
 		grid-auto-rows: var(--workbench-control);
 		column-gap: var(--role-gap);
 		row-gap: var(--space-1);
-		block-size: calc(var(--role-lines) * var(--workbench-control) + (var(--role-lines) - 1) * var(--space-1) + 2 * var(--space-1));
+		block-size: var(--role-row-height);
 		padding: var(--space-1) var(--space-3);
 	}
 
@@ -223,7 +239,9 @@
 		min-inline-size: 0;
 	}
 
-	/* Its own content never sizes the drawing: a chart taller than the box scrolls inside it. */
+	/* Its own content never sizes the drawing. A plot is drawn at the box's height, and the page's
+	   floor gives the box room for its figure, plot, readout and comparison, so a plot never
+	   scrolls here; a ranked list longer than the box, a list and not a plot, still does. */
 	.chart-body {
 		contain: size;
 		min-block-size: 0;
@@ -231,17 +249,24 @@
 		padding: 0 var(--space-3) var(--space-3);
 	}
 
-	/* The foot reserves the status bar's lines in every band; a longer note scrolls inside it. */
+	/* The foot reserves `console.explorer_chart_note_lines` lines for the band, set as `--note-lines`
+	   by the page, for each note the answer can give, and no room at all when it can give none, so
+	   the drawing then reaches the panel's foot. A change of chart or column changes only its text,
+	   and a longer note scrolls inside it. */
 	.chart-foot {
 		box-sizing: border-box;
-		block-size: calc(var(--readout-lines) * var(--leading-sm) + 2 * var(--space-1));
+		block-size: 0;
 		overflow-y: auto;
 		scrollbar-width: thin;
 		scrollbar-color: var(--color-rule-strong) transparent;
-		padding: var(--space-1) var(--space-3);
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
+	}
+
+	.chart-foot.reserved {
+		block-size: calc(var(--chart-notes) * var(--note-lines) * var(--leading-sm) + 2 * var(--space-1));
+		padding: var(--space-1) var(--space-3);
 	}
 
 	.shape-stack {
@@ -261,10 +286,17 @@
 		color: var(--color-text-secondary);
 	}
 
+	/* The figure and the comparison take the page's own line tokens, which the result region's
+	   floor counts, so their lines are known before they are drawn. */
 	.shape-stack .shape-lede {
 		color: var(--color-text);
 		font-size: var(--text-xl);
 		font-weight: 700;
+		line-height: var(--lede-line);
+	}
+
+	.shape-stack [data-comparison] {
+		line-height: var(--comparison-line);
 	}
 
 	.shape-none,
