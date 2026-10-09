@@ -1,13 +1,15 @@
 # Encoder comparison 1
 
-**Built**: 2026-10-08
+**Built**: 2026-10-08. **Judged comparison updated**: 2026-10-09 UTC.
 
 A measurement, not a dataset. It answers one question for plan 63: of the
 encoders that could run on this project's hardware, which one best tells two
 summaries of the same event from two summaries of different events.
 
-`readings/encoders.md` is the answer. Read "What the numbers mean" before
-quoting one.
+The current model-judged answer is
+[`judgments/evaluation.json`](judgments/evaluation.json), summarized below.
+`readings/encoders.md` retains the title-derived proxy and the encoding costs.
+The proxy is a screen, not selection proof.
 
 ## Why this exists
 
@@ -164,35 +166,179 @@ changed sheet cannot silently reuse an old answer. Corrections append a new
 history row; they do not overwrite the prior decision. Every finished batch is
 committed as a delta. Conversation memory is not the label store.
 
-The next comparison uses saved vectors for the same judged pairs, with a
-separate threshold for each encoder. Exclude `cannot_tell` from binary metrics.
-Keep repeated or reversed pairs and pairs sharing articles on the same side of
-any calibration/holdout split. The existing vector frame covers 817 of the 935
-sheet rows; the other 118 need additional embeddings and must remain explicitly
-unscored, not silently dropped from a claim about the whole sheet.
+## Complete model-judged comparison
 
-### Partial model-judged comparison
+This reading replaces the partial 140-row result. It uses all **935 initial
+model judgments**, committed at `1cd139a51ca5528184e6db156e0ee5dc28ad2a84`.
+There are 365 `same`, 547 `different` and 23 `cannot_tell` decisions, with
+**zero human review**. The first 54 have an unrecorded author model; the other
+881 name `gpt-6.1-sol`. No verdict was changed or decided by a majority vote.
+All four encoders score exactly the same eligible unique pairs.
 
-The 2026-10-09 reading uses the 140 judgments at commit
-`126ca3256b5d04adc587096e2973bd63c77fb50e`, with no human review. Four uncertain
-rows, one repeated pair and eleven unique pairs without saved vectors are
-excluded. There are no conflicting repeat verdicts, and each included summary
-matches the text originally encoded. The remaining 124 unique pairs comprise
-60 same-event and 64 different-event decisions.
+An unordered pair of article URLs is one identity. The 935 rows contain **850
+unique identities and 85 repeat groups**, each seen twice. Of the repeat groups,
+83 agree and two disagree: `p0158` says `different` while `p0467` says `same`;
+`p0402` says `same` while `p0540` says `different`. Both conflicting identities
+are excluded in full. There are no reversed repeats in this frame; the utility
+handles them. The report lists every repeat's IDs and verdicts, not just these
+two disagreements.
 
-On that identical sample, average precision is 0.8998 for GTE-small, 0.8669 for
-Jina v5 nano text-matching, and 0.8616 for MiniLM. ROC AUC is respectively
-0.9052, 0.8878 and 0.8820. These are computed with scikit-learn from cosine
-similarities of the saved normalized vectors. The controls come from run
-`37850950040`; Jina comes from `37895396586`.
+Saved inputs cover 817 rows by URL and by exact summary text. **118 rows lack
+vectors; zero rows have changed summaries.** These are overlapping row-level
+audits, not unique-pair exclusion counts. At unique-pair level the exclusions,
+in order, are two conflicts, 23 uncertain decisions and 102 missing-vector
+identities. This leaves **723 eligible unique pairs: 325 same and 398 different**
+(44.95 percent same). Another 71 agreeing copies of eligible pairs are removed.
+All excluded IDs remain in the report. Missing inputs are not re-encoded.
 
-This is a partial, model-written sample, not a held-out or human-validated test.
-No threshold is selected on it and no final winner is declared. It already
-shows why the title-derived proxy is not a selector: Jina leads that proxy but
-does not lead this judged sample.
+Table A. Selection strata, before exclusions and after unique-pair audit.
 
-**Nobody. There are none.** This set has no human judgement in it at all, and
-that changes what every number on it means.
+| ID | Stratum | Judged rows | Eligible unique pairs |
+| --- | --- | ---: | ---: |
+| A1 | `encoders_differ` | 384 | 301 |
+| A2 | `hard_mismatch` | 220 | 196 |
+| A3 | `no_publication_time` | 109 | 86 |
+| A4 | `settled_match` | 107 | 98 |
+| A5 | `settled_mismatch` | 115 | 42 |
+
+There is **no `hard_match` group**. Titles and metadata enriched this frame.
+Its event prevalence is not the production prevalence, and its precision is
+not an estimate of deployed precision.
+
+### Calibration and held-out results
+
+The split is fixed before vectors are opened. A connected component is a set
+of articles joined by any pair in the full reading sheet. This includes
+uncertain, conflicting and uncovered pairs, so known event links are not lost
+when metrics exclude a row. SciPy finds 558 components across 1,386 articles;
+456 components have eligible pairs, and 102 are excluded-only.
+
+Seed `20261009` assigns 137 of the 456 active components to calibration
+(30.04 percent) and 319 to evaluation. Components have different sizes:
+calibration therefore receives 24.62 percent of eligible pairs, not 30 percent.
+There are **zero shared articles** between the two partitions. No split or seed
+was retried. Events without a shared article or known link can still cross it.
+
+Table B. The fixed article-disjoint partitions. Component article counts include
+articles used only by excluded links.
+
+| ID | Partition | Components | Articles (eligible articles) | Pairs | Same | Different | Same prevalence |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| B1 | Calibration | 137 | 318 (314) | 178 | 64 | 114 | 35.96% |
+| B2 | Held-out | 319 | 862 (849) | 545 | 261 | 284 | 47.89% |
+
+Each encoder gets its own threshold from **calibration only**, at the configured
+95 percent precision target. Scikit-learn's precision-recall curve keeps tied
+scores in complete blocks. The utility chooses the greatest recall meeting the
+target, and then the lowest qualifying threshold. It never adjusts a threshold
+on held-out results. An unattainable target produces null operating metrics with
+a reason; no predicted positives produces null precision, not a success claim.
+
+Average precision (AP) is the primary ranking measure; ROC AUC measures how
+often a same-event pair outscores a different-event pair. Cosines are computed
+in float64 from the cached float32 vectors, without loading an encoder.
+The 95 percent AP intervals below resample whole held-out components 1,000
+times with seed `20261010`. Every encoder and the GTE-small reference use the
+**same draws**. All 1,000 draws contain both classes; none are discarded.
+
+Table C. Held-out ranking and paired differences from GTE-small.
+
+| ID | Encoder | AP (95% component interval) | ROC AUC | AP minus GTE (95% paired interval) |
+| --- | --- | --- | ---: | --- |
+| C1 | MiniLM-L6 | 0.8453 (0.7887 to 0.9046) | 0.8639 | -0.0500 (-0.0722 to -0.0275) |
+| C2 | GTE-small | 0.8954 (0.8519 to 0.9396) | 0.9053 | 0.0000 (reference) |
+| C3 | Jina v5 nano text-matching | 0.8639 (0.8106 to 0.9123) | 0.8752 | -0.0315 (-0.0598 to -0.0015) |
+| C4 | EmbeddingGemma-2 text-only | 0.8911 (0.8435 to 0.9357) | 0.8979 | -0.0043 (-0.0249 to 0.0170) |
+
+Table D. The frozen calibrated operating points. Precision is the share of
+predicted matches that are model-labeled same; recall is the share of
+model-labeled same pairs found.
+
+| ID | Encoder | Threshold | Calibration precision / recall | Held-out precision / recall | Held-out TP / FP / FN / TN |
+| --- | --- | ---: | --- | --- | --- |
+| D1 | MiniLM-L6 | 0.910011 | 100.00% / 18.75% | 97.44% / 14.56% | 38 / 1 / 223 / 283 |
+| D2 | GTE-small | 0.965687 | 96.30% / 40.63% | 94.19% / 31.03% | 81 / 5 / 180 / 279 |
+| D3 | Jina v5 nano text-matching | 0.946977 | 95.45% / 32.81% | 98.28% / 21.84% | 57 / 1 / 204 / 283 |
+| D4 | EmbeddingGemma-2 text-only | 0.971336 | 100.00% / 7.81% | 100.00% / 8.81% | 23 / 0 / 238 / 284 |
+
+The report retains full-precision thresholds; the table rounds them for reading.
+GTE-small's held-out precision is **below 95 percent**, despite reaching the
+calibration target. Gemma's perfect observed precision comes with only 23
+predicted matches and low recall, not a guarantee.
+
+Whole-data AP on all 723 eligible unique pairs is **descriptive only**:
+MiniLM 0.8423, GTE-small 0.8840, Jina 0.8516, Gemma 0.8772. It is not held-out
+evidence and was not used to pick a split or threshold.
+
+### Cost and conclusion
+
+Table E. Saved encoding costs for 1,000 articles on separate GitHub
+4-vCPU, 16-GB, no-GPU runs, with whole-process peak memory.
+
+| ID | Encoder | Minutes / 1,000 | Peak GB | Vector run |
+| --- | --- | ---: | ---: | --- |
+| E1 | MiniLM-L6 | 0.58 | 0.87 | `37850950040` |
+| E2 | GTE-small | 0.18 | 1.14 | `37850950040` |
+| E3 | Jina v5 nano text-matching | 4.80 | 1.91 | `37895396586` |
+| E4 | EmbeddingGemma-2 text-only | 5.64 | 3.30 | `37909985697` |
+
+These are not controlled same-silicon trials. One timing per encoder gives no
+confidence estimate, and parameter count alone does not explain speed.
+Jina's merged weights contain about 212M parameters; the advertised 239M is the
+multi-adapter family. Its CC-BY-NC-4.0 license is not commercial-adoption
+approval. Gemma is text-only 270M with vision/audio disabled and Apache-2.0.
+Model IDs, prefixes, recorded revisions, options, vector hashes, run/artifact
+names and saved cost readings are in the report. Baseline revisions were not
+recorded; none are invented.
+
+GTE-small has the highest held-out AP and greatest recall at its frozen cut.
+Its paired AP differences from MiniLM and Jina exclude zero in this conditional,
+unadjusted comparison. **GTE-small and Gemma are not separated by this test**:
+their difference interval includes zero. The intervals measure sampling of
+held-out components, not model-label errors, threshold-estimation error or
+multiple-comparison-adjusted significance.
+
+This frame can compare the four candidates against these model-written event
+decisions. It cannot establish human-validated quality, production precision,
+coverage of missing inputs, or a statistically demonstrated GTE/Gemma winner.
+GTE-small and MiniLM remain the owner's candidates. No production configuration
+changes. A representative sample and human review of label disagreements would
+test the remaining deployment assumptions; neither is claimed here.
+
+### Reproduce without encoding
+
+The instrument is `backend/utilities/evaluate_encoder_judgments.py`, with report
+shape `backend/idhazh/contracts/encoder_evaluation.py`. Its code/config commit is
+`f1ace961b2b8ef57e2bca3b60b5f7d7756aae180`. Config holds the seeds, split fraction,
+precision target, bootstrap rounds and reference. `judgment_vectors` names four
+relative files beneath a local saved-vector root; set `$VectorRoot` to that root
+before running this PowerShell command from the checkout:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+python backend\utilities\evaluate_encoder_judgments.py `
+  --config config\encoder-comparison.json `
+  --corpus corpus\encoder-comparison-1 `
+  --vector-root $VectorRoot `
+  --out corpus\encoder-comparison-1\judgments\evaluation.json
+```
+
+Use an interpreter with the project's development dependencies (scikit-learn,
+SciPy, NumPy and Pydantic). The recorded run used Python 3.14.2, NumPy 2.4.1,
+SciPy 1.17.0 and scikit-learn 1.8.0; the report records all runtime versions.
+The input frame hash is
+`7f0d931c697217431fed88ea84c96cd4fee05b6602e617718661b13fe2066feb`.
+The utility refuses incomplete judgments, changed label provenance, invalid
+vectors, mismatched input hashes and a split without both classes. It requires
+committed, unchanged instrument sources and config. The report is one current
+file; Git retains its history. The saved vectors are local artifacts, not
+committed weights. This reading and its new code remain local pending owner
+review; the 795 unpublished judgment rows are not upload-approved.
+
+## How title-derived proxy labels work
+
+**No human wrote or reviewed these labels.** The original proxy buckets below
+are also not human ground truth.
 
 The run needs to know which pairs of articles report one event. It has no such
 list, so it builds a stand-in from a signal the encoders never see - the
@@ -251,7 +397,7 @@ Two encoders can separate the easy cases equally well and lean very differently.
 That difference is invisible to a two-bucket test and it is the one that decides
 what the reader sees.
 
-### What this set cannot tell you
+### What the title-derived proxy cannot tell you
 
 Both outer buckets contain mistakes. Two outlets can write near-identical titles
 about genuinely different events, and one event can draw two titles with no
