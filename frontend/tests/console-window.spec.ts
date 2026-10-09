@@ -1856,6 +1856,80 @@ test.describe('the Judgement panels name their span in every state, on days the 
 		});
 	}
 
+	test('THE ORACLE: a day with a dot but no axis tick, beside a day with no reading, carries its own date', async ({
+		page
+	}) => {
+		// 7 days at a tick density of 6 always drops one day's axis tick - here
+		// 12 Jun, the 4th of the 7 (Susan and Jony, 2026-10-09). 13 Jun holds no
+		// reading, so 12 Jun has no tick of its own and no neighbouring tick on
+		// that side either, which is the one case a glancing reader has no
+		// nearby date to read off of.
+		const days = [
+			judgeDay('2030-06-09', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 }),
+			judgeDay('2030-06-10', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 }),
+			judgeDay('2030-06-11', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 }),
+			judgeDay('2030-06-12', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.2 }),
+			judgeDay('2030-06-14', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 }),
+			judgeDay(JUDGED_THROUGH, { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 })
+		];
+		await page.setContent(
+			`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', preset: 7, state: '', days, words: '' }))}</main>`
+		);
+
+		const tickedDays = await page
+			.locator('[data-day-tick]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-day-tick')));
+		expect(tickedDays, "the day with no reading's own axis tick is unaffected").toEqual([
+			'2030-06-09',
+			'2030-06-10',
+			'2030-06-11',
+			'2030-06-13',
+			'2030-06-14',
+			'2030-06-15'
+		]);
+		const stranded = await page
+			.locator('[data-agreement-stranded-label]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-agreement-stranded-label')));
+		expect(stranded, 'only the dropped tick beside a day with no reading gets its own label').toEqual([
+			'2030-06-12'
+		]);
+		await expect(
+			page.locator('[data-agreement-stranded-label="2030-06-12"]'),
+			"the label repeats the day's own accessible name, so it carries none of its own"
+		).toHaveAttribute('aria-hidden', 'true');
+		expect(await said(page, '[data-agreement-stranded-label="2030-06-12"]')).toBe('12 Jun');
+	});
+
+	test('THE ORACLE: a stranded label at a mark\'s own height, near the right edge, does not sit on that mark\'s label', async ({
+		page
+	}) => {
+		// 14 days at a tick density of 6 drops index 12 - the day right before
+		// the always-kept newest day. Its reading sits exactly on the
+		// "disagreed" mark, and the newest day holds no row, so this is the
+		// tightest case the two labels can meet in: one stranded day, one
+		// mark, both reaching for the same corner (Jony, 2026-10-09).
+		const days = [
+			judgeDay('2030-06-02', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.1 }),
+			judgeDay('2030-06-14', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.15 })
+		];
+		await page.setContent(
+			`<main>${drawn['judge-agreement'](propsOf({ surface: 'judge-agreement', preset: 14, state: '', days, words: '' }))}</main>`
+		);
+
+		const stranded = page.locator('[data-agreement-stranded-label="2030-06-14"]');
+		await expect(stranded).toHaveCount(1);
+		const markLabel = page.locator('[data-agreement-marker-label="disagreement"]');
+		await expect(markLabel).toHaveCount(1);
+		const strandedBox = await stranded.evaluate((node) => (node as SVGTextElement).getBBox());
+		const markBox = await markLabel.evaluate((node) => (node as SVGTextElement).getBBox());
+		const overlap =
+			strandedBox.x < markBox.x + markBox.width &&
+			strandedBox.x + strandedBox.width > markBox.x &&
+			strandedBox.y < markBox.y + markBox.height &&
+			strandedBox.y + strandedBox.height > markBox.y;
+		expect(overlap, 'the stranded label sits on top of the mark label at the right edge').toBe(false);
+	});
+
 	for (const preset of [1, 7]) {
 		test(`THE ORACLE: judge-agreement's note and plot labels call each dashed line a mark, and keep "line" for the merge line, at the ${preset}-day window`, async ({
 			page

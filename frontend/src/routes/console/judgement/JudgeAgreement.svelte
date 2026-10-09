@@ -33,10 +33,12 @@
 	 * the set the axis nices from.
 	 */
 	import {
+		AXIS_LABEL_PX,
 		chartWidth,
 		dayColumns,
 		dayTicks,
 		frame,
+		labelWidth,
 		linearAxis,
 		observeWidth
 	} from '$lib/charts/frame';
@@ -136,6 +138,14 @@
 		return `${Math.round(share * 100)}%`;
 	}
 
+	/** One dashed mark's own label text, shared between drawing it and keeping
+	 * a stranded date label (below) off it. */
+	function markLabel(name: 'disagreement' | 'unclear', at: number): string {
+		return name === 'disagreement'
+			? `${percent(at)} - the "disagreed" mark`
+			: `${percent(at)} - the "could not tell" mark`;
+	}
+
 	/** One day's two readings in words: what the strip prints at that day, and
 	 * the name its two dots carry, written together so the two never differ.
 	 *
@@ -213,6 +223,89 @@
 		marks.flatMap((mark) =>
 			mark.reading === null ? [] : [{ date: mark.date, x: mark.x, reading: mark.reading }]
 		)
+	);
+
+	/** The dates the shared axis gives a tick to. `dayTicks` samples a fixed
+	 * number of evenly spaced days before it ever looks at which ones hold a
+	 * reading (`chart.tick_density`), so a day can carry a real dot and no
+	 * axis tick at all - never thinned down to a bare mark, simply never
+	 * sampled. */
+	const tickedDates = $derived(new Set(ticks.map((tick) => tick.date)));
+
+	/** The two limits, named, in drawing order: shared between the template's
+	 * own loop and the mark-label boxes below, so the two cannot name the
+	 * limits differently. */
+	const limitRules = $derived([
+		{ at: limits.disagreementMax, name: 'disagreement' as const },
+		{ at: limits.unclearMax, name: 'unclear' as const }
+	]);
+
+	/** Each dashed mark's own label, as the small box it occupies: text-anchor
+	 * `end` at the plot's right edge, so its left edge is its width back from
+	 * there. Read, never drawn from - kept only so a stranded date label
+	 * (below) does not land on top of one. */
+	const markLabelBoxes = $derived(
+		limitRules.map(({ name, at }) => {
+			const baseline = yAxis.scale(at) - 4;
+			const width = labelWidth(markLabel(name, at));
+			return { top: baseline - AXIS_LABEL_PX, bottom: baseline, left: box.right - width, right: box.right };
+		})
+	);
+
+	function boxesOverlap(
+		a: { top: number; bottom: number; left: number; right: number },
+		b: { top: number; bottom: number; left: number; right: number }
+	): boolean {
+		return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+	}
+
+	/** A day's own date, drawn beside its topmost dot, for a day whose axis
+	 * tick the sampling above left out while the day immediately before or
+	 * after it, inside the drawn window, held no reading.
+	 *
+	 * Not every day with a dot and no tick: at a wide preset most days carry a
+	 * reading, and labelling each one the sampling skipped would print dozens
+	 * of dates over the marks the chart is about. A day with an unread
+	 * neighbour on either side has no tick close enough on that side for a
+	 * glancing reader to read its date off of, which this fires on; a window
+	 * with few gaps has few or no such days (Jony and Susan, 2026-10-09). The
+	 * label repeats what the day's own accessible name already says, so it is
+	 * `aria-hidden`.
+	 *
+	 * Raised clear of either dashed mark's own label where the two would
+	 * otherwise overlap - a stranded day can sit at a mark's own height, and
+	 * near the plot's right edge the two labels compete for the same corner
+	 * (Jony, 2026-10-09). Left open: a mark within about `AXIS_LABEL_PX * 2`
+	 * of the plot's own top, where this clearance and the top clamp below
+	 * could still collide; narrow enough to leave until it is hit.
+	 */
+	const strandedLabels = $derived(
+		marks.flatMap((mark, index) => {
+			if (mark.reading === null || tickedDates.has(mark.date)) return [];
+			const before = marks[index - 1];
+			const after = marks[index + 1];
+			const hasUnreadNeighbour =
+				(before !== undefined && before.reading === null) ||
+				(after !== undefined && after.reading === null);
+			if (!hasUnreadNeighbour) return [];
+			const { disagreeY, unclearY } = mark.reading;
+			const topY =
+				disagreeY === null
+					? unclearY
+					: unclearY === null
+						? disagreeY
+						: Math.min(disagreeY, unclearY);
+			if (topY === null) return [];
+			const width = labelWidth(dayMonth(mark.date));
+			let y = topY - 8;
+			for (const markBox of markLabelBoxes) {
+				const box_ = { top: y - AXIS_LABEL_PX, bottom: y, left: mark.x - width / 2, right: mark.x + width / 2 };
+				if (boxesOverlap(box_, markBox)) y = Math.min(y, markBox.top - 2);
+			}
+			// Clamped so the label's own ascender never climbs past the plot's top
+			// margin, where an isolated dot sits close enough to the axis top.
+			return [{ date: mark.date, x: mark.x, y: Math.max(y, box.top + 2) }];
+		})
 	);
 
 	/** One rate's line, broken wherever that rate has no dot: each run of
@@ -377,7 +470,7 @@
 				<!-- The two limits, drawn whether or not a series is. They are what the
 				     panel is about: a reader sees where the run stops rather than
 				     subtracting one number from another. -->
-				{#each [{ at: limits.disagreementMax, name: 'disagreement' }, { at: limits.unclearMax, name: 'unclear' }] as rule (rule.name)}
+				{#each limitRules as rule (rule.name)}
 					<line
 						x1={box.left}
 						x2={box.right}
@@ -396,9 +489,7 @@
 						font-size="10"
 						data-agreement-marker-label={rule.name}
 					>
-						{rule.name === 'disagreement'
-							? `${percent(rule.at)} - the "disagreed" mark`
-							: `${percent(rule.at)} - the "could not tell" mark`}
+						{markLabel(rule.name, rule.at)}
 					</text>
 				{/each}
 
@@ -438,14 +529,35 @@
 				{/each}
 
 				{#each ticks as tick (tick.index)}
+					{#if tick.text}
+						<text
+							x={px(columnsX[tick.index])}
+							y={box.bottom + 16}
+							text-anchor={tick.anchor}
+							fill="var(--color-text-tertiary)"
+							font-size="10"
+							data-day-tick={tick.date}
+						>
+							{tick.text}
+						</text>
+					{/if}
+				{/each}
+
+				<!-- A day whose own axis tick the shared sampling skipped, with an
+				     unread neighbour on at least one side: the one case a glancing
+				     reader has no nearby tick to read its date off of. Repeats the
+				     day's own accessible name, so it carries none of its own. -->
+				{#each strandedLabels as label (label.date)}
 					<text
-						x={px(columnsX[tick.index])}
-						y={box.bottom + 16}
-						text-anchor={tick.anchor}
+						x={label.x}
+						y={label.y}
+						text-anchor="middle"
 						fill="var(--color-text-tertiary)"
 						font-size="10"
+						aria-hidden="true"
+						data-agreement-stranded-label={label.date}
 					>
-						{dayMonth(tick.date)}
+						{dayMonth(label.date)}
 					</text>
 				{/each}
 			</svg>

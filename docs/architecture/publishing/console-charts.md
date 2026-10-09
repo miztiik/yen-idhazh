@@ -109,6 +109,22 @@ with a straight line across a day nobody measured, which draws a value there.
 The column still answers a pointer, a tap or an arrow key, and the readout
 strip says why it holds no reading instead of a measurement.
 
+## A day whose own tick is thinned out still gets its date, beside an unread neighbour
+
+The shared day-tick calculation already thins labels to fit a wide window,
+keeping a bare tick mark for a column whose label it drops. On the judge's
+agreement chart, a day can keep a real dot while losing its own tick this way,
+and where it sits beside a day with no reading at all, a reader who is only
+looking - not stepping through with a keyboard, not holding a pointer still -
+has no date near that dot. Jony ruled that such a day prints its own date
+beside its topmost dot, `aria-hidden` since the day's accessible name already
+carries it, where the thinning dropped its tick and an immediate neighbour
+read nothing. Keep this label clear of a mark's own label: read each dashed
+mark's label as the small box it occupies and raise the date label above any
+box it would otherwise sit on. A mark close enough to the plot's own top can
+still collide with that date label's own clamp; this is left open until a
+real window reaches it.
+
 ## Every chart with a shared column carries a pointer readout
 
 A readout is a visible strip beside the plot, not a tooltip under the pointer.
@@ -231,6 +247,7 @@ chart; they must not preserve a server-rendered picture as the required fallback
 - Counts and coverage distinguish sparse measurements from reliable rates. A missing sample is never evidence of zero work.
 - A mark for a share under the floor would place a value the strip beside it calls too few to report. Leaving the mark out is the only mark that claims no height, and a line joined across that column would draw the same false value.
 - A fixed axis that stops at a mark hides exactly the reading a mark exists to show: how far past it a day went. Niceing the axis from the data as well as the marks keeps every share visible without ever pinning one to a line it does not sit on.
+- A thinned-out tick label is a deliberate trade against a wide window; it is not supposed to take a day's only date with it when that day also lost its neighbour's reading. A floating label kept clear of a mark's own label answers both without widening the shared thinning itself.
 - A visible readout survives touch use and screenshots; a pointer tooltip does not.
 - Named setup changes explain when a comparison is no longer like-for-like without changing the results themselves.
 
