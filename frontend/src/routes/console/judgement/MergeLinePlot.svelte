@@ -39,6 +39,7 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -150,17 +151,9 @@
 	/** The dotted series, BROKEN at every held day. A line drawn through a day
 	 * nothing was fitted on claims a measurement nobody took. */
 	const proposedRuns = $derived(
-		marks.reduce<string[][]>((runs, mark) => {
-			if (mark.proposedY === null) {
-				if (runs.length === 0 || runs[runs.length - 1].length > 0) runs.push([]);
-				return runs;
-			}
-			if (runs.length === 0) runs.push([]);
-			runs[runs.length - 1].push(`${mark.x},${mark.proposedY}`);
-			return runs;
-		}, [])
+		indexedRuns(marks, (mark) => mark.proposedY !== null)
 			.filter((run) => run.length > 1)
-			.map((run) => run.join(' '))
+			.map((run) => run.map((index) => `${marks[index].x},${marks[index].proposedY}`).join(' '))
 	);
 
 	/** What the line did on a day, in the words the strip prints it under. */
