@@ -39,6 +39,16 @@ async function open(page: Page, width = 1440): Promise<void> {
 }
 
 test.describe('what the judge said about the line', () => {
+	test('the note names the newest day whose line every judged pair uses', async ({ page }) => {
+		await open(page);
+
+		await expect(
+			page.locator('[data-console-panel="What the judge said about the line"] .panel-note')
+		).toHaveText(
+			'Every judged pair, split by whether its score cleared the line the newest day was built with and by what the judge said about it.'
+		);
+	});
+
 	test('the panel draws before anything has been judged', async ({ page }) => {
 		await open(page);
 
