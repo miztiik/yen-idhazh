@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 Checks before trusting a browser result. Follow the [browser smoke procedure](../../how-to/run-the-gates.md).
 
@@ -14,6 +14,7 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
 - **A worker content-policy refusal reads absent through `page.on('console')`, but exists in the worker log.** Playwright forwards worker `console.log`-style calls, not worker log entries such as CSP refusals. Open a CDP session, `Target.setAutoAttach`, enable `Log` on worker targets, and read `Target.receivedMessageFromTarget`; Playwright still emits `request` and `requestfailed` for the blocked request, with `failure().errorText === 'csp'`, and no `response`.
 
 - Wait for page readiness and enabled controls with retrying assertions. Assert the intended state positively; an absent element must not pass a state check.
+- Attach the completion observer before triggering an action whose busy state can end immediately. Retain the observed completion until the test consumes it, and release the observer and handle afterward. Waiting for a busy state after a click can miss a fast refusal that already completed.
 - Use fresh browser contexts for cold-load cases. Distinguish full navigation, client-side routing and fragment-only changes.
 - Prove that a failure test reached its target request. Account for service workers, caches and data already in the document; zero interceptions do not exercise a network failure.
 - Register a browser-context route before navigation to serve a dedicated worker's add-on from a local file. In Playwright 1.62.1 with Chromium 151, this also intercepted requests forwarded by a pass-through service worker; such a request has no page frame. Verify the production service worker separately.
