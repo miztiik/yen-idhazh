@@ -777,14 +777,6 @@ sooner could still be reached by one. The 30 is declared once, as
 floor is derived from it (Carmack and Fowler). A raw file that lands in an
 absorbed month anyway re-opens that month ([A late file](#a-late-file)).
 
-**The two ledgers packed live wait 31 days, not 45.** 31 is the
-shortest wait that still catches every re-run GitHub allows, and nothing needs
-the 14 days more that 45 waits. A shorter wait, such as 15 days, would need a
-month file rebuilt when a late re-run lands, which the packing could not do
-when this was decided; a late file now re-opens its month
-([A late file](#a-late-file)). The two
-declarations set 31, and the four that only report set 45.
-
 **A compaction's monthly window has a switch of its own.** Packing deletes only
 files whose rows it has just written into a coarser file; the monthly window
 deletes rows. With one `dry_run` for both, a ledger could not pack live while its
