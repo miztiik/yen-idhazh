@@ -109,9 +109,9 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L52 | Judgement names the line each build recorded | L38, L35 (holds `frontend/tests/console-window.spec.ts`), L40 (holds `frontend/tests/console-window.spec.ts`) | V | DONE | verbose-couscous | #1469 | Plan 62 row l52 |
 | L53 | Hardware reads a machine record with no job the same way everywhere | - | W | DONE | fuzzy-doodle | #1459 | Plan 62 row l53 |
 | L54 | Failure rate against volume says it is waiting, or that its data did not come, before it says nothing was planned | L35 | X | DONE | crispy-happiness | #1479 | Plan 62 row l54 |
-| L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | DONE | fictional-disco | - | Plan 62 row l55 |
+| L55 | The agreement chart shows a share above its top and breaks at a day with no pair | L51 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | Y | DONE | fictional-disco | #1483 | Plan 62 row l55 |
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
-| L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
+| L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`), L34 (holds `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`) | AA | PENDING | - | - | - |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | DONE | fictional-tribble | #1484 | 79f93e3d-1fc7-419a-a79e-94163d651183 |
 | L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | #1476 | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
@@ -2453,7 +2453,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 | 1 | Reader chooses the words for a share that rounds to its mark's own figure, in the verdict sentences and in the sentence for days held because of the judge, and rules whether the plot labels change with them (CLAUDE.md section 14) | To be ruled at dispatch (Reader) |
 | 2 | The faults are row L51's Follow-ups 1 and 3. Follow-up 1 is Reader's, and L51's smoke at the 30-day window found Follow-up 3. They are one row because both change how one panel prints its numbers, in the same two source files | Row L51's report; plan owner, 2026-10-08 |
 | 3 | A count of 1,000 or more prints through `grouped`, as the merge share, the record panel and the verdict split on the same route already print theirs | Plan owner, 2026-10-08 (the row's title); plan author, 2026-10-08 (the search) |
-| 4 | L57 waits for L55, which is running and changes `JudgeAgreement.svelte` | Plan owner, 2026-10-08 |
+| 4 | L57 follows L55's changes to `JudgeAgreement.svelte`, landed in #1483, and waits for L34, which is running and shares `frontend/tests/console-window.spec.ts` and `docs/concepts/console-design.md`. This is file-safety ordering under `docs/how-to/execute-a-plan.md`, not a user ruling | Plan owner, 2026-10-08 (L55 dependency); plan coordinator, 2026-10-09 (L34 file overlap) |
 | 5 | Level 1: how one panel prints its shares and counts; a wrong version is obvious and local | Plan owner, 2026-10-08 |
 
 **Rejected alternatives**
