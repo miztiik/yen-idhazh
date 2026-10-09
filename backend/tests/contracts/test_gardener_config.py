@@ -33,7 +33,6 @@ from idhazh.contracts.knobs.gardener import (
 )
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX, PipelineTestsConfig
-from idhazh.ledger.paths import TRIAL_TRACES_DIRNAME
 
 pytestmark = pytest.mark.contract
 
@@ -516,7 +515,7 @@ def test_trials_owns_only_configured_pipeline_test_trace_roots() -> None:
     )
 
     assert policy.owns == [
-        f"state/{TRIAL_TRACES_DIRNAME}/{TRIAL_STATE_PREFIX}/{test_case.id}"
+        f"state/raw/traces/{TRIAL_STATE_PREFIX}/{test_case.id}"
         for test_case in tests.test_cases
     ]
     assert "state" not in policy.owns

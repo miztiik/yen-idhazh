@@ -63,12 +63,6 @@ COMPACT_DIRNAME: Final = Tier.COMPACT.value
 #: The two roots, and the whole of them. A third is refused, never created.
 _THE_TWO_ROOTS: Final = frozenset(tier.value for tier in Tier)
 
-#: Where a trial's own trace files sit, sibling to `raw/` and `compact/` rather
-#: than nested under production's `traces` claim. See `overlay_registry`'s
-#: docstring for why a trial's traces cannot share or nest inside
-#: `state/traces/`.
-TRIAL_TRACES_DIRNAME: Final = "trial-traces"
-
 #: Where a compact period's listing sits inside a ledger.
 INDEX_DIRNAME: Final = "index"
 
@@ -163,18 +157,13 @@ def overlay_registry(
     prefix - so `segments` goes in front of its prefix, putting the tier first
     and the trial segments right after it: `state/<raw|compact>/<segments>/<ledger>/...`.
 
-    `traces` gets a root of its own, `TRIAL_TRACES_DIRNAME`
-    (`state/trial-traces/`), sibling to `raw/` and `compact/` rather than
-    nested inside production's own `traces` folder. Production's `traces`
-    retention task (`config/gardener/traces.json`) walks all of `state/traces`
-    on a 7-day window; a trial's trace files are JSONL kept for the trial's
-    own, longer window (`config/gardener/trials.json`), and nesting them at
-    `state/traces/<segments>` would put both tasks' claims one inside the
-    other - the refusal `config._refuse_overlapping_claims` exists to catch,
-    and stays untouched. Two folders that keep different retention windows
-    cannot share or nest their claims, so a trial's traces sit at
-    `state/trial-traces/<segments>` instead - a sibling root, never a child of
-    either claim.
+    `traces` gets its own folder under `raw/`: `state/raw/traces/<segments>`.
+    Production traces remain under `state/traces/`, with their own 7-day
+    retention task. Trial traces are JSONL kept for the trial's longer,
+    report-only window (`config/gardener/trials.json`). Keeping the claims at
+    `state/traces` and `state/raw/traces/<segments>` prevents either task from
+    deleting inside the other's tree. The raw-root name changes the location,
+    not the trace format or its registry grain.
 
     Every remaining grain already owns a folder under `state/` at `prefix[0]`
     with nothing else claiming inside it for a different window, so that
@@ -186,7 +175,7 @@ def overlay_registry(
         if held.grain is Grain.RAW_AND_COMPACT:
             new_prefix = (*segments, *held.prefix)
         elif name is LedgerName.TRACES:
-            new_prefix = (TRIAL_TRACES_DIRNAME, *segments)
+            new_prefix = (RAW_DIRNAME, name.value, *segments)
         else:
             new_prefix = (held.prefix[0], *segments, *held.prefix[1:])
         overlaid[name] = held.model_copy(update={"prefix": new_prefix})
@@ -219,13 +208,10 @@ def claimed_roots() -> frozenset[str]:
     as a trial run's trees and delete what the door wrote. Claimed means "not a
     stray", never "not pruned" - a compaction bounds what sits in them.
 
-    `trial-traces` is claimed too, for the same reason: it is where a trial's
-    own trace files sit (`overlay_registry`), not a family and not one of the
-    two ledger-door roots, but still a real child of `state/` a writer owns.
+    Trial traces sit under the already-claimed `raw` root, at
+    `state/raw/traces/<segments>`; they are not a raw-and-compact door ledger.
     """
-    return frozenset(family.name for family in _CONFIG.families) | _THE_TWO_ROOTS | {
-        TRIAL_TRACES_DIRNAME
-    }
+    return frozenset(family.name for family in _CONFIG.families) | _THE_TWO_ROOTS
 
 
 def _no_registry_address(held: LedgerEntry) -> ValueError:

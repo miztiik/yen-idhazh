@@ -49,7 +49,6 @@ def test_the_two_roots_are_claimed_beside_every_family() -> None:
     claimed = ledger.claimed_roots()
 
     assert {"raw", "compact"} <= claimed
-    assert paths.TRIAL_TRACES_DIRNAME in claimed
     assert "trial-runs" not in claimed
 
 

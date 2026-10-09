@@ -25,7 +25,7 @@ from ._task import committed_folders, declared, run_task
 pytestmark = pytest.mark.contract
 
 NAME: Final = "trials"
-TRIAL: Final = "trial-traces/pipeline-tests/production-settings"
+TRIAL: Final = "raw/traces/pipeline-tests/production-settings"
 TODAY: Final = date(2026, 9, 15)
 
 
@@ -69,8 +69,8 @@ def test_a_trial_day_past_the_window_goes_and_a_recent_one_stays(tmp_path: Path)
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert sorted(outcome.taken) == [
-        "state/trial-traces/pipeline-tests/production-settings/2026/06/11/item-health.jsonl",
-        "state/trial-traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/11/item-health.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
     ]
     assert (state / TRIAL / "2026" / "09" / "10" / "seen.jsonl").is_file()
 
@@ -82,7 +82,7 @@ def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
 
     assert outcome.dry_run, "trials ships in dry run"
     assert outcome.taken == (
-        "state/trial-traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
     )
     assert (state / TRIAL / "2026" / "06" / "12" / "seen.jsonl").is_file()
 
@@ -108,14 +108,14 @@ def test_a_trace_a_trial_run_really_writes_is_read(tmp_path: Path) -> None:
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert outcome.taken == (
-        "state/trial-traces/pipeline-tests/production-settings/2026/06/12/40000000001-00.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/40000000001-00.jsonl",
     )
 
 
 def test_a_c1_case_traces_root_dates_files_below_the_traces_folder(tmp_path: Path) -> None:
     """A date-like case slug is outside the folder the task owns, so it cannot date a file."""
     case = "case-2026-09-10"
-    root = tmp_path / ledger.STATE_DIRNAME / "trial-traces" / "pipeline-tests" / case
+    root = tmp_path / ledger.STATE_DIRNAME / "raw" / "traces" / "pipeline-tests" / case
     old = root / "2026" / "06" / "12" / "40000000001-00.jsonl"
     new = root / "2026" / "09" / "10" / "40000000002-00.jsonl"
     old.parent.mkdir(parents=True, exist_ok=True)
@@ -128,10 +128,12 @@ def test_a_c1_case_traces_root_dates_files_below_the_traces_folder(tmp_path: Pat
         tmp_path,
         today=TODAY,
         dry_run=False,
-        owns=[f"state/trial-traces/pipeline-tests/{case}"],
+        owns=[f"state/raw/traces/pipeline-tests/{case}"],
     )
 
-    assert outcome.taken == (f"state/trial-traces/pipeline-tests/{case}/2026/06/12/40000000001-00.jsonl",)
+    assert outcome.taken == (
+        f"state/raw/traces/pipeline-tests/{case}/2026/06/12/40000000001-00.jsonl",
+    )
     assert new.is_file()
 
 
@@ -175,7 +177,7 @@ def test_a_declared_ledger_is_never_a_trial_tree_however_old_its_rows(tmp_path: 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert outcome.taken == (
-        "state/trial-traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
     )
     assert ledger_day.is_file(), "a declared ledger is not a trial trace"
 

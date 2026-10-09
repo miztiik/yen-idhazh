@@ -49,9 +49,8 @@ def test_a_bench_level_door_ledger_takes_one_segment() -> None:
         assert raw_root(STATE, LedgerName.HOST_FINGERPRINT) == STATE / "raw" / "pipeline-tests" / "host-fingerprint"
 
 
-def test_traces_segments_land_under_a_sibling_root_not_nested_inside_production() -> None:
-    """`traces` takes a root of its own, `trial-traces`, sibling to `raw/` and
-    `compact/` rather than nested inside production's own claim.
+def test_traces_segments_land_under_the_raw_root_not_inside_production_traces() -> None:
+    """Trial `traces` sit at `state/raw/traces/<segments>`, apart from production traces.
 
     Production's `state/traces` retention (`config/gardener/traces.json`, a
     7-day window) walks all of `state/traces`. Nesting a trial's traces at
@@ -59,15 +58,19 @@ def test_traces_segments_land_under_a_sibling_root_not_nested_inside_production(
     longer-lived trace retention (`config/gardener/trials.json`) one inside
     the other, which `config._refuse_overlapping_claims` exists to catch. Two
     folders that keep different retention windows cannot share or nest their
-    claims, so a trial's traces sit at `state/trial-traces/<segments>` -
-    a sibling root, never a child of either claim.
+    claims, so a trial's traces sit at `state/raw/traces/<segments>`, while
+    production traces remain at `state/traces`.
     """
     with use_registry(overlay_registry(("pipeline-tests", "no-visual-plan"))):
-        assert tree_root(STATE, LedgerName.TRACES) == STATE / "trial-traces" / "pipeline-tests" / "no-visual-plan"
-        assert relpath(LedgerName.TRACES, "2026-10-08") == (
-            "state/trial-traces/pipeline-tests/no-visual-plan/2026/10/08"
+        assert tree_root(STATE, LedgerName.TRACES) == (
+            STATE / "raw" / "traces" / "pipeline-tests" / "no-visual-plan"
         )
-        assert tree_relpath(LedgerName.TRACES) == "state/trial-traces/pipeline-tests/no-visual-plan"
+        assert relpath(LedgerName.TRACES, "2026-10-08") == (
+            "state/raw/traces/pipeline-tests/no-visual-plan/2026/10/08"
+        )
+        assert tree_relpath(LedgerName.TRACES) == (
+            "state/raw/traces/pipeline-tests/no-visual-plan"
+        )
 
 
 def test_the_overlay_leaves_every_other_field_of_the_entry_alone() -> None:
