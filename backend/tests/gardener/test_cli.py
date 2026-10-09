@@ -58,9 +58,9 @@ def test_list_tasks_prints_one_line_a_task(
     assert len(printed) == len(list((config_dir / "gardener").glob("*.json")))
     assert (
         "trials: active retention, keeps 90 days, reports only, owns "
-        "state/pipeline-tests/production-settings/traces, "
-        "state/pipeline-tests/no-visual-plan/traces, "
-        "state/pipeline-tests/parallel-summarization/traces"
+        "state/trial-traces/pipeline-tests/production-settings, "
+        "state/trial-traces/pipeline-tests/no-visual-plan, "
+        "state/trial-traces/pipeline-tests/parallel-summarization"
         in printed
     )
 
