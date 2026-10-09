@@ -25,6 +25,8 @@ import pytest
 from pydantic import ValidationError
 
 from idhazh.contracts.shard_landing import ShardLanding
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.base import ServerJob
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
@@ -89,7 +91,16 @@ def a_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, P
 def landed(shard: Shard, checkout: Path, *, attempts: int = 6) -> tuple[PushOutcome, list[str]]:
     """What the push loop came to, and every line it printed."""
     said: list[str] = []
-    pushed = gardener_publish.publish(shard, attempts=attempts, repo=checkout, say=said.append)
+    pushed = gardener_publish.publish(
+        shard, attempts=attempts, repo=checkout, say=said.append,
+        identity=WriterIdentity(
+            run_id="2026-09-27-123", attempt=1, job=ServerJob.RUN_TASKS, shard=0,
+            producer="tests.gardener", git_sha=git(checkout, "rev-parse", "HEAD").strip(),
+        ),
+        write_permissions=("state/old", "state/dir", "state/raw/gardener",
+                           "state/compact/council-run-records", "state/new"),
+        delete_permissions=("state/old", "state/dir"),
+    )
     return pushed, said
 
 
@@ -329,8 +340,12 @@ def test_every_group_of_names_is_compared_and_the_warning_counts_the_rest(
     Two hundred long names fill more than one group. Main changes the first of
     them, which sorts into the first group, and `KEPT`, which sorts into the last.
     """
-    origin, checkout = a_checkout(tmp_path, monkeypatch)
     many = sorted(f"state/old/2026-01-01-{'x' * 60}-{n:03}.txt" for n in range(200))
+    quiet_git(tmp_path, monkeypatch)
+    origin, checkout = an_origin(tmp_path, {**SEEDED, **dict.fromkeys(many, "old\n")})
+    write(checkout / RECORD, '{"task": "old"}\n')
+    for path in many:
+        (checkout / path).unlink()
     mover = tmp_path / "mover"
     git(tmp_path, "clone", "--quiet", str(origin), str(mover))
     write(mover / many[0], "made on main\n")
@@ -357,7 +372,7 @@ def test_one_record_with_two_identities_is_exit_2(
     pushed, said = landed(a_shard(), checkout)
 
     assert pushed == PushOutcome(EXIT_INTEGRITY)
-    assert any("two runs claimed one record" in line for line in said)
+    assert any("immutable identity" in line for line in said)
     assert on_origin(origin, RECORD) == '{"task": "old"}\n'
 
 
@@ -387,7 +402,7 @@ def test_a_write_that_did_not_stage_is_exit_2(
     pushed, said = landed(a_shard(written={"state/old/note.skip"}), checkout)
 
     assert pushed == PushOutcome(EXIT_INTEGRITY)
-    assert any("state/old/note.skip was written and did not stage" in line for line in said)
+    assert any("did not stage" in line and "state/old/note.skip" in line for line in said)
     assert on_origin(origin, RECORD) is None
 
 
@@ -403,15 +418,15 @@ def test_a_write_already_on_main_counts_as_landed(
     assert git(origin, "show", "--name-only", "--format=", "main").split() == [RECORD]
 
 
-def test_a_deletion_already_gone_from_main_is_not_an_error(
+def test_a_deletion_never_present_in_the_source_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     origin, checkout = a_checkout(tmp_path, monkeypatch)
 
     pushed, _ = landed(a_shard(deleted={"state/old/never-there.txt"}), checkout)
 
-    assert pushed == PushOutcome(EXIT_OK, ShardLanding.LANDED, 1)
-    assert on_origin(origin, RECORD) is not None
+    assert pushed == PushOutcome(EXIT_INTEGRITY)
+    assert on_origin(origin, RECORD) is None
 
 
 def test_a_deletion_that_staged_nothing_while_main_holds_it_is_exit_2(
@@ -424,7 +439,7 @@ def test_a_deletion_that_staged_nothing_while_main_holds_it_is_exit_2(
     pushed, said = landed(a_shard(deleted={"state/dir"}), checkout)
 
     assert pushed == PushOutcome(EXIT_INTEGRITY)
-    assert any("state/dir was deleted, did not stage" in line for line in said)
+    assert any("plain source" in line for line in said)
     assert on_origin(origin, "state/dir/a.txt") == "a\n"
 
 
