@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -342,6 +342,12 @@ record the panel exists to find, the worst or the newest, so it is never blank
 and the panel never changes size. A tap selects a record and leaves it
 selected, because a thumb cannot hover. Such a chart carries
 `data-readout-records` with the count.
+
+Voices' source strip rests on the first judged source's newest recorded day.
+If no source is judged, it uses the first unjudged source's newest recorded
+day. This is the newest day of that source, not the newest day across all
+sources. Escape and a mouse leaving return to the same record; an empty or
+absent record offers no square readout.
 
 **No chart mark carries a `title` attribute or an SVG `<title>`.** A native
 tooltip needs a mouse held still over the mark: a thumb cannot raise it, a

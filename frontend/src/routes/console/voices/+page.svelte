@@ -194,7 +194,10 @@
 	);
 	/** The newest day of the first source, the one closest to retiring. */
 	const retiringResting = $derived(
-		Math.max(0, (data.retiring?.rows[0]?.squares.length ?? 0) - 1)
+		Math.max(
+			0,
+			((data.retiring?.rows[0] ?? data.retiring?.unjudged[0])?.squares.length ?? 0) - 1
+		)
 	);
 </script>
 
