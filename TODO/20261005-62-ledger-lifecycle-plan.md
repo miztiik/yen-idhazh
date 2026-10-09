@@ -113,7 +113,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L56 | One rule breaks a line at a gap on every console chart | L34 (holds `StageTimings.svelte` as well as `MergeLinePlot.svelte`), L45 (holds `MergeLinePlot.svelte`), L51 (holds `JudgeAgreement.svelte`), L52 (holds `MergeLinePlot.svelte`), L54 (holds `FailurePanels.svelte`), L55 (holds `JudgeAgreement.svelte`), L57 (holds `JudgeAgreement.svelte`) | Z | PENDING | - | - | - |
 | L57 | The agreement panel's numbers print the way the console's other numbers do | L55 (holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte`) | AA | PENDING | - | - | - |
 | L58 | The explorer's first day is one a selected ledger read | L21, L33 | AB | PENDING | - | - | - |
-| L59 | VerdictSplit says which day's line its judged pairs use | - | AC | PENDING | - | - | - |
+| L59 | VerdictSplit says which day's line its judged pairs use | - | AC | DONE | automatic-sniffle | - | Plan 62 row l59 |
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | PENDING | - | - | - |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | PENDING | - | - | - |
 
@@ -2472,6 +2472,7 @@ Every row runs what [run-the-gates.md](../docs/how-to/run-the-gates.md) selects 
 
 ### Row #L59 - VerdictSplit says which day's line its judged pairs use
 
+- **Status:** DONE. The note names the newest day in Reader's settled sentence, and the rendered-page test asserts the whole sentence. No data, configuration or line calculation changed.
 - **Scope:** Replace the note's "the line the day was built with" with Reader's settled words: "Every judged pair, split by whether its score cleared the line the newest day was built with and by what the judge said about it." Level 1.
 - **The fault** (row L52's Reader Follow-up 1, 2026-10-08): the judged pairs can come from several days, but the note's "the day" can read as each pair's own day. The panel compares every pair with the newest published day's recorded line.
 - **Files touched** (searched on current `origin/main` for the note and its rendered-page tests):
