@@ -52,6 +52,7 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    crash_trace,
     ledger,
     path_classes,
 )
@@ -339,6 +340,7 @@ def _planned(date: str, execution: int | None) -> RunPlan:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
         # The one verb whose rest-of-line belongs to somebody else. Its
