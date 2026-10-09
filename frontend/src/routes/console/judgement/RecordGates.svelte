@@ -194,8 +194,9 @@
 			{:else}
 				{#if !met}
 					<span data-gates-state="filling"
-						>The record has {grouped(needs[0].value)} of the {grouped(needs[0].target)} readings
-						it needs, {needs[1].value} of {needs[1].target} days, and {grouped(needs[2].value)} of
+						>The record has {grouped(needs[0].value)} readings, {countDays(needs[1].value)}, and
+						{grouped(needs[2].value)} pairs above the line; it needs at least
+						{grouped(needs[0].target)} readings, {countDays(needs[1].target)}, and
 						{grouped(needs[2].target)} pairs above the line.</span
 					>
 				{:else if silent > 0}

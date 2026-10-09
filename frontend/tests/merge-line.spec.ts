@@ -241,8 +241,12 @@ test.describe('where the merge line sits', () => {
 	test('a held day is counted and a window with none says nothing at all', () => {
 		// Null rather than "0 days were held": a sentence a reader has to parse to
 		// learn that nothing happened is a sentence that should not be there.
-		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of 30 days.');
+		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 recorded day in this 30-day window.');
 		expect(heldNote(LINE.slice(0, 3), 30)).toBeNull();
+		expect(heldNote([LINE[3], { ...LINE[3], date: '2026-09-20' }], 7)).toBe(
+			'Nothing was fitted on 2 recorded days in this 7-day window.'
+		);
+		expect(heldNote([], 7)).toBeNull();
 	});
 });
 
