@@ -2671,17 +2671,19 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	}
 
 	const LINE_NOTE =
-		'The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for.';
+		"The solid line is the nightly calculation's final score for grouping two stories as one, after limits on its change. The dotted line is the proposed score before those limits. The shaded band shows how far the calculated line was allowed to fall each day. A build may have used a different line.";
+	const ONE_LINE_NOTE =
+		"The applied reading is the nightly calculation's final score for grouping two stories as one, after limits on its change. The proposed reading is the score before those limits. The shaded band shows how far the calculated line was allowed to fall that day. A build may have used a different line.";
 
 	test('THE ORACLE: the merge line is for this one day, its band is that day, and its strip heads the day alone', async ({
 		page
 	}) => {
 		await draw(page, 'MergeLinePlot', lineProps(1, [JUDGED_THROUGH]));
 		expect(await labelOf(page, '[data-windowed="merge-line"] svg[aria-label]')).toBe(
-			'The merge line for this one day, on the whole range a fitted line may take'
+			'Nightly calculated merge readings for this one day, on the full allowed score range. A build may have used a different line.'
 		);
 		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
-			'The applied reading is the score two stories had to reach that day to be read as one story. The proposed reading is what the evidence asked for. The shaded band is as far as the applied reading was allowed to fall that day.'
+			ONE_LINE_NOTE
 		);
 		expect(await stripOf(page, 'merge-line')).toEqual({ heading: '15 Jun', hint: null });
 	});
@@ -2693,12 +2695,10 @@ test.describe('at one day no sentence needs a second day, on days the test build
 				markedApart: { low: 0.94, high: 0.95, count: 3 }
 			});
 			expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
+				(preset === 1 ? ONE_LINE_NOTE : LINE_NOTE) +
 				(preset === 1
-					? 'The applied reading is the score two stories had to reach that day to be read as one story. The proposed reading is what the evidence asked for. The shaded band is as far as the applied reading was allowed to fall that day.'
-					: `${LINE_NOTE} The shaded band at each day is as far as the line was allowed to fall in one day.`) +
-				(preset === 1
-					? ' The tinted strip across the plot is where the 3 pairs a person marked as two stories sit: they score 0.9400 to 0.9500, the strip is the part of that inside this plot, and an applied reading inside it merges one of them.'
-					: ' The tinted strip across the plot is where the 3 pairs a person marked as two stories sit: they score 0.9400 to 0.9500, the strip is the part of that inside this plot, and a line inside it merges one of them.')
+					? ' The tinted strip shows the part of the score range inside this plot for 3 pairs a person marked as two stories. Their scores run from 0.9400 to 0.9500. If used to group stories, an applied reading inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.'
+					: ' The tinted strip shows the part of the score range inside this plot for 3 pairs a person marked as two stories. Their scores run from 0.9400 to 0.9500. If used to group stories, a calculated line inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.')
 			);
 		}
 	});
@@ -2706,10 +2706,10 @@ test.describe('at one day no sentence needs a second day, on days the test build
 	test('the merge line is a day over seven days, with a band at each day', async ({ page }) => {
 		await draw(page, 'MergeLinePlot', lineProps(7, ['2030-06-10', JUDGED_THROUGH]));
 		expect(await labelOf(page, '[data-windowed="merge-line"] svg[aria-label]')).toBe(
-			'The merge line a day, on the whole range a fitted line may take'
+			'Nightly calculated merge lines, on the full allowed score range. Builds may have used different lines.'
 		);
 		expect(await said(page, '[data-console-panel="Where the merge line sits"] .panel-note')).toBe(
-			`${LINE_NOTE} The shaded band at each day is as far as the line was allowed to fall in one day.`
+			LINE_NOTE
 		);
 		expect(await stripOf(page, 'merge-line')).toEqual({
 			heading: '15 Jun, the newest recorded day shown',
