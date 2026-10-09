@@ -225,7 +225,8 @@ and this is what each one draws:
 | 4 | `day-missing` | A day between the oldest and the newest packed day that no index names | `unreachable` at that day | Unchanged |
 
 **Each fault prints one console line**, in one shape - the fault, the ledger,
-the committed path, what is wrong and what fixes it:
+the committed path and what is wrong. A remedy follows only when the fault
+identifies one:
 
 ```text
 [ledger] file-missing summary-quality-evals state/compact/summary-quality-evals/daily/2026/09/12.parquet: daily.json names it; it is not there. Reload; if it stays, re-pack that day.
