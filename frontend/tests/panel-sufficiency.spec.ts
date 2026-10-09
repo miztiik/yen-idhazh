@@ -461,8 +461,12 @@ for (const width of [390, 768, 1024, 1440]) for (const theme of THEMES) {
 		page.on('console', (message) => { if (message.type() === 'error') failures.push(message.text()); });
 		page.on('response', (response) => { if (response.status() === 404) failures.push(`404 ${new URL(response.url()).pathname}`); });
 		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
-		for (const { type, sql } of ADDED_CHARTS) {
-			await chooseExplorerQuestion(page, ['published'], sql);
+		await chooseExplorerQuestion(page, ['published'], ADDED_CHARTS[0].sql);
+		for (const [index, { type, sql }] of ADDED_CHARTS.entries()) {
+			if (index > 0) {
+				await page.locator('#explorer-sql').fill(sql);
+				await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
+			}
 			await runExplorer(page);
 			await showPanel(page, 'data-explorer-shape');
 			await page.locator(`[data-shape-choice="${type}"]`).click();

@@ -34,12 +34,10 @@ export async function serveBuilt(context: BrowserContext, root: string, ...ledge
 }
 
 export async function runExplorer(page: Page) {
-	await page.getByRole('button', { name: /^Run$/ }).click();
-	await page.waitForFunction(() => {
-		const panel = document.querySelector('[data-console-panel-id="data-explorer-rows"]');
-		const state = panel?.querySelector('[data-state]')?.getAttribute('data-state');
-		return panel?.querySelector('[data-explorer-answer]') !== null || (state !== null && state !== undefined && state !== 'loading');
-	}, undefined, { timeout: 60_000 });
+	const runButton = page.locator('.run-button');
+	await runButton.click();
+	await page.waitForFunction(() => document.querySelector('.run-button')?.getAttribute('aria-busy') === 'true', undefined, { polling: 'raf', timeout: 60_000 });
+	await page.waitForFunction(() => document.querySelector('.run-button')?.getAttribute('aria-busy') === 'false', undefined, { polling: 'raf', timeout: 60_000 });
 }
 
 /** Fail unless the answer panel shows `state`, so the checks after it read the answer they need. */
