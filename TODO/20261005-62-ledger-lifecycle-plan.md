@@ -117,7 +117,7 @@ Row ids are the phase ids of Fowler's proposal, which the plan 60 owner already 
 | L60 | The merge chart's solid line and note name the same thing | L34, L45 | AD | DONE | align-merge-chart-meaning | #1495 | Align merge chart meaning |
 | L61 | One rendered Judgement page checks the recorded line in all three panels | L59, L60 | AE | DONE | legendary-telegram | - | Check recorded line across judgement |
 | L62 | The agreement chart's date and mark labels stay clear near the plot top | L55, L57 (each holds `frontend/src/routes/console/judgement/JudgeAgreement.svelte` and `frontend/tests/console-window.spec.ts`), L34, L45 (each holds `frontend/tests/console-window.spec.ts`) | AF | DONE | super-spork | #1496 | Clear near-top agreement labels |
-| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | PENDING | - | - | - |
+| L63 | Voices' source record rests on the first source's newest recorded day | L34 (source-record words and generated-case helpers), L57, L45 (each holds `frontend/tests/console-window.spec.ts`) | AG | DONE | legendary-fortnight | - | Rest voices on newest source day |
 
 ## 2. Shared declarations
 
@@ -2682,3 +2682,11 @@ Table J - alternatives to correcting the observed selection
 | J1 | Treat L34's wording review or its seven-day judged-row case as closure | Neither tests an unjudged-only resting selection; the oldest date can still claim to be newest | Nothing to build, and a false date remains on the untouched readout | L34's recorded finding; plan coordinator, 2026-10-09 |
 | J2 | Fold the correction into L34 or L45 | L34 keeps the selection rule unchanged, and L45 owns Judgement; changing either would mix a separate discovered capability defect into its assigned work | Reopen another row's scope and checks, delaying its merge and increasing shared-file conflict risk | Plan coordinator, 2026-10-09 |
 | J3 | Select the globally newest square or rewrite shared readout selection before reading the existing intent | Either can replace first-source precedence or alter other panels without settling what the heading promises | A broader design and named dependent checks; inspect the mixed-date case and seek human scope approval to price it before taking it | Plan coordinator, 2026-10-09; Reader resolves meaning, not scope permission |
+
+**Extras found during execution**
+
+The owning record-readout page also needed the unchanged first-source rule
+written beside its record-strip rule. The coordinator reserved
+`docs/concepts/console-design/the-rules-every-console-chart-obeys.md` for that
+small explanation. The mixed-date case keeps the first judged source even
+when an unjudged source has a newer day. Shared readout code is unchanged.
