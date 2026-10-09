@@ -43,6 +43,7 @@
 		matchPoints,
 		matchRules,
 		matchSeries,
+		matchTitle,
 		recordedReadings,
 		recordedText,
 		widerNote
@@ -835,7 +836,7 @@
 			data-match-floor={matchFloorDrawn}
 		>
 			<div class="flex items-baseline gap-2">
-				<h2 class="console-h2">Summary faithfulness, day by day</h2>
+				<h2 class="console-h2">{matchTitle(windowDays)}</h2>
 				<!-- What the four eval names mean, defined once, where they are
 				     defined for everybody else. A paraphrase beside the chart would
 				     be a second definition, and two of them drift. -->

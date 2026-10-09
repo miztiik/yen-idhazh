@@ -51,13 +51,20 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 	{ id: 'daily-figures', title: 'What the model did', route: '/console/model/' },
 	{
 		id: 'faithfulness',
-		title: 'Summary faithfulness, day by day',
+		title: matchTitle(),
 		route: '/console/model/'
 	},
 	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
 	{ id: 'summary-length', title: 'How long the summaries came out', route: '/console/model/' },
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
+
+/** Name the faithfulness panel for the days its window can show. */
+export function matchTitle(windowDays?: number): string {
+	return windowDays === 1
+		? 'Summary faithfulness for this one day'
+		: 'Summary faithfulness, day by day';
+}
 
 /** Which panel answers for which ledger column.
  *
