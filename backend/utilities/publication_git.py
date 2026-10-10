@@ -14,7 +14,6 @@ from utilities.publication_request import PLAIN_MODE, Entry, IntegrityError, Pub
 
 COMMITTER_NAME = "miztiik"
 COMMITTER_EMAIL = "miztiik@users.noreply.github.com"
-TRAILER = "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 INVOCATION_DEADLINE: ContextVar[float | None] = ContextVar("publication-deadline", default=None)
 
 
@@ -220,9 +219,6 @@ class Repository:
             ) - {""}
             if changed - request.writes.keys() - request.deletions.keys():
                 raise IntegrityError("candidate contains foreign changes", tuple(sorted(changed)))
-            message = request.message
-            if TRAILER not in message:
-                message += "\n\n" + TRAILER
             return self.git(
                 "-c",
                 f"user.name={COMMITTER_NAME}",
@@ -233,7 +229,7 @@ class Repository:
                 "-p",
                 base,
                 "-m",
-                message,
+                request.message,
             ).strip()
         finally:
             index.unlink(missing_ok=True)

@@ -1,6 +1,6 @@
 # 26 - Prerender: the guard retires, the prerendering does not
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-10-10
 **Level**: 4 (a build-time handler is deleted, four documentation surfaces are corrected, and the plan carries a ruling only the owner may overturn)
 
 **Chain**: [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) section 26 and [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) section 18 both name prerender as a gap nobody owns, and both send its removal to "the UI shell plan". **No such plan-doc exists and none is planned.** This plan takes the gap off both of them.
@@ -473,7 +473,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 ## See also
 
-- [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
+- [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - resume unfinished work, check each row against the code, and update its own Reckoner.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **All four rows here are unblocked today and row #2 collides with nothing anywhere in the set**, which makes this the cheapest plan to run and the one that unsticks two other plans' open gaps.
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - its section 26 named prerender as a gap and sent it to a plan that does not exist; this plan takes it, and its row #15 is the console tab the owner's 2026-09-11 ruling re-addressed to `/console/judgement/`. **Its row #P5 also writes into `docs/reference/benchmarks/`**, which row #1 here says it creates - section 0.1.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - its section 0.1 and section 18 carry the same gap and the same 23-page count, and its row #12 builds `/console/judgement/`.

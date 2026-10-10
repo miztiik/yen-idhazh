@@ -499,6 +499,8 @@ def stage_collect(args: argparse.Namespace) -> None:
     artifact named for itself, so the file sits one or two directories down
     depending on whether the artifacts were merged on download.
     """
+    from idhazh.atomic_write import write_atomic
+
     settings = read_config(args.config)
     pairs = json.loads(args.pairs.read_text(encoding="utf-8"))
     selected = select_encoders(settings, args.selected)
@@ -550,10 +552,10 @@ def stage_collect(args: argparse.Namespace) -> None:
     ordered = measured + [r for r in readings if r.get("state") != "measured"]
 
     args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / "encoders.json").write_text(
+    write_atomic(
+        args.out / "encoders.json",
         json.dumps({"version": settings["version"], "encoders": ordered},
                    ensure_ascii=False, indent=1),
-        encoding="utf-8",
     )
 
     write_reading_table(settings, ordered, args.out / "encoders.md")
@@ -590,8 +592,9 @@ def stage_collect(args: argparse.Namespace) -> None:
             and r.get("state") != "measured"
         ],
     }
-    (args.out.parent / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
+    write_atomic(
+        args.out.parent / "manifest.json",
+        json.dumps(manifest, ensure_ascii=False, indent=1),
     )
 
     print(f"measured {len(newly_measured)} of {len(selected)} selected encoders")
@@ -602,14 +605,15 @@ def stage_collect(args: argparse.Namespace) -> None:
 def write_reading_table(
     settings: dict[str, Any], readings: list[dict[str, Any]], output: Path,
 ) -> None:
+    from idhazh.atomic_write import write_atomic
     from utilities.encoder_reading_table import render_readings
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(render_readings(
+    write_atomic(output, render_readings(
         readings,
         archive_articles=settings["corpus"]["published_articles"],
         batch_articles=settings["corpus"]["articles_a_batch"],
-    ), encoding="utf-8", newline="\n")
+    ))
 
 
 def stage_render(args: argparse.Namespace) -> None:

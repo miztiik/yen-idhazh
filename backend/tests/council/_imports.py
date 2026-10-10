@@ -91,6 +91,7 @@ MODULE_NAMES = (
     "idhazh.ledger.persist",
     "idhazh.ledger.raw_files",
     "idhazh.ledger.rows",
+    "idhazh.ledger.staging",
     "idhazh.run_context",
     "idhazh.llm.server",
     "idhazh.sanitize",

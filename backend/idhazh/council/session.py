@@ -38,6 +38,7 @@ from idhazh.council import metrics_sink
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import tenant, tenants
 from idhazh.council.tenancy import ShardResult, Tenant
+from idhazh.ledger import staging
 
 _log: Final = logging.getLogger(__name__)
 
@@ -62,6 +63,28 @@ OUTCOMES_DIRNAME: Final = "outcomes"
 #: How a recorded instant is spelled. The contract pins the shape, and this is
 #: the one place a council row is stamped with it.
 STARTED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+VENUE_LEDGERS: Final = (LedgerName.COUNCIL_RUN_RECORDS, LedgerName.HOST_FINGERPRINT)
+
+
+def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
+    """The venue's and hosted tenants' declarations, never a blanket state claim."""
+    hosted = tenants(council.tenants)
+    if not hosted:
+        return ()
+    if any(
+        path in ("state", "state/raw", "state/compact")
+        for host in hosted
+        for path in host.committed_paths
+    ):
+        raise ValueError("a tenant must declare its own paths, not a blanket state root")
+    return tuple(
+        dict.fromkeys(
+            [
+                *(staging.staged_path(which) for which in VENUE_LEDGERS),
+                *(path for host in hosted for path in host.committed_paths),
+            ]
+        )
+    )
 
 
 def scratch_root(date: DateStamp) -> Path:

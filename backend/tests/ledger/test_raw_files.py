@@ -81,6 +81,24 @@ def test_a_ledger_nothing_wrote_has_no_files(tmp_path: Path) -> None:
     assert ledger.load_current_rows(tmp_path, WHICH, model=VisualPruneRow, key=("date",)) == []
 
 
+@pytest.mark.parametrize("days", [{A_DAY}, set()], ids=["one-day", "no-days"])
+def test_a_named_day_read_does_not_enumerate_the_archive(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, days: set[str]
+) -> None:
+    written = filed(tmp_path, a_pass())
+    root = ledger.raw_root(tmp_path, WHICH)
+    (root / "unrelated-archive-entry").write_text("not a year", encoding="ascii")
+    unreadable = written.parent / "unreadable.json"
+    unreadable.write_text("not an envelope", encoding="ascii")
+
+    with caplog.at_level("WARNING"):
+        found = ledger.list_raw_files(tmp_path, WHICH, days=days)
+
+    assert [held.path for held in found] == ([written] if days else [])
+    assert "unrelated-archive-entry" not in caplog.text
+    assert ("unreadable.json" in caplog.text) == bool(days)
+
+
 def test_files_come_back_by_the_day_they_cover_not_the_order_they_were_written(
     tmp_path: Path,
 ) -> None:

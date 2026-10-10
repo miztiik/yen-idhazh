@@ -48,7 +48,35 @@ def test_url_key_is_rebuilt_not_trusted() -> None:
 
 def test_an_ok_article_must_carry_text() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "article" / "ok.json", text=None)
-    with pytest.raises(ValueError, match="title and text"):
+    with pytest.raises(ValueError, match="carries text"):
+        Article.model_validate(payload)
+
+
+def test_an_ok_article_without_a_source_headline_round_trips() -> None:
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "article" / "ok.json", title=None, title_source=None
+    )
+    article = Article.model_validate(payload)
+    assert Article.from_json(article.to_json()).title is None
+    assert article.text
+
+
+def test_an_absent_source_headline_cannot_name_a_source() -> None:
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "article" / "ok.json", title=None, title_source="page"
+    )
+    with pytest.raises(ValueError, match="names no title_source"):
+        Article.model_validate(payload)
+
+
+def test_a_headless_article_still_requires_body_text() -> None:
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "article" / "ok.json",
+        title=None,
+        title_source=None,
+        text=None,
+    )
+    with pytest.raises(ValueError, match="carries text"):
         Article.model_validate(payload)
 
 
