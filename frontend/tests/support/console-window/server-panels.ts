@@ -2,7 +2,7 @@
 import { serverCompiler, type Rewrite } from '../server-render';
 import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
-export async function serverPanels(directory: string, panels: readonly string[]) {
+export async function serverPanels(directory: string, panels: readonly (readonly [file: string, name: string])[]) {
   const compiled = serverCompiler(directory);
 const rewrite: Rewrite[] = [
 	['$lib/components/ChartReadout.svelte', './ChartReadout.server.mjs'],
@@ -30,14 +30,11 @@ const files = [
 	['src/lib/components/RankedList.svelte', 'RankedList'],
 	['src/lib/components/Sparkline.svelte', 'Sparkline'],
 ] as const;
-  const judgement = new Set(['MergedStoriesPanel', 'JudgeAgreement', 'MergeLinePlot', 'RecordGates']);
-  const machine = new Set(['DiskReadsPanel', 'TailTrendPanel', 'MemoryHeldPanel', 'CounterfactualCostPanel']);
   const modules: [string, string][] = [];
   for (const [file,name] of files) modules.push([name, await compiled(file, name, rewrite)]);
-  for (const name of panels) {
+  for (const [file, name] of panels) {
     if (files.some(([, child]) => child === name)) continue;
-    const home = judgement.has(name) ? 'src/routes/console/judgement' : machine.has(name) ? 'src/lib/console/machine' : 'src/lib/components';
-    modules.push([name, await compiled(`${home}/${name}.svelte`, name, rewrite)]);
+    modules.push([name, await compiled(file, name, rewrite)]);
   }
   const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
   for (const [name,module] of modules) {

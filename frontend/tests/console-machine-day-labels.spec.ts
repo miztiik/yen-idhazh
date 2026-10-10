@@ -89,7 +89,7 @@ test.describe("at one day no sentence needs a second day, on days the test build
 const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
 let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
-  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "DiskReadsPanel-TailTrendPanel-MemoryHeldPanel-CounterfactualCostPanel", String(testInfo.workerIndex)), ["DiskReadsPanel","TailTrendPanel","MemoryHeldPanel","CounterfactualCostPanel"]);
+  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "DiskReadsPanel-TailTrendPanel-MemoryHeldPanel-CounterfactualCostPanel", String(testInfo.workerIndex)), [['src/lib/console/machine/DiskReadsPanel.svelte', 'DiskReadsPanel'], ['src/lib/console/machine/TailTrendPanel.svelte', 'TailTrendPanel'], ['src/lib/console/machine/MemoryHeldPanel.svelte', 'MemoryHeldPanel'], ['src/lib/console/machine/CounterfactualCostPanel.svelte', 'CounterfactualCostPanel']]);
   Object.assign(drawn, panels.drawn);
   stripStyles = panels.stripStyles;
 });

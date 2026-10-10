@@ -20,7 +20,7 @@ test.describe("at one day no sentence needs a second day, on days the test build
 const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
 let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
-  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "MergedStoriesPanel-JudgeAgreement-MergeLinePlot-RecordGates", String(testInfo.workerIndex)), ["MergedStoriesPanel","JudgeAgreement","MergeLinePlot","RecordGates"]);
+  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "MergedStoriesPanel-JudgeAgreement-MergeLinePlot-RecordGates", String(testInfo.workerIndex)), [['src/routes/console/judgement/MergedStoriesPanel.svelte', 'MergedStoriesPanel'], ['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement'], ['src/routes/console/judgement/MergeLinePlot.svelte', 'MergeLinePlot'], ['src/routes/console/judgement/RecordGates.svelte', 'RecordGates']]);
   Object.assign(drawn, panels.drawn);
   stripStyles = panels.stripStyles;
 });

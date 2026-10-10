@@ -37,7 +37,7 @@ test.describe("at one day no sentence needs a second day, on days the test build
 const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
 let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
-  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "ThroughputTrend", String(testInfo.workerIndex)), ["ThroughputTrend"]);
+  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "ThroughputTrend", String(testInfo.workerIndex)), [['src/lib/components/ThroughputTrend.svelte', 'ThroughputTrend']]);
   Object.assign(drawn, panels.drawn);
   stripStyles = panels.stripStyles;
 });

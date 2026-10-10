@@ -500,7 +500,7 @@ test.describe("the Judgement panels name their span in every state, on days the 
 const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
 let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
-  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "JudgeAgreement", String(testInfo.workerIndex)), ["JudgeAgreement"]);
+  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "JudgeAgreement", String(testInfo.workerIndex)), [['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement']]);
   Object.assign(drawn, panels.drawn);
   stripStyles = panels.stripStyles;
 });

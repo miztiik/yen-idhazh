@@ -60,7 +60,7 @@ test.describe("the record's bars stand on its newest row, on days the test build
 const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
 let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
-  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "RecordGates", String(testInfo.workerIndex)), ["RecordGates"]);
+  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "RecordGates", String(testInfo.workerIndex)), [['src/routes/console/judgement/RecordGates.svelte', 'RecordGates']]);
   Object.assign(drawn, panels.drawn);
   stripStyles = panels.stripStyles;
 });

@@ -13,7 +13,7 @@ test.describe("at one day no sentence needs a second day, on days the test build
 const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
 let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
-  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "ChartReadout", String(testInfo.workerIndex)), ["ChartReadout"]);
+  const panels = await serverPanels(resolve(process.cwd(), 'test-results', "ChartReadout", String(testInfo.workerIndex)), [['src/lib/components/ChartReadout.svelte', 'ChartReadout']]);
   Object.assign(drawn, panels.drawn);
   stripStyles = panels.stripStyles;
 });
