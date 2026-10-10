@@ -1,4 +1,6 @@
 import { expect, test, type Page } from './support/browser';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-title';
 
 /**
  * One grammar for every title on the console, and no address moved to get it.
@@ -35,23 +37,21 @@ import { expect, test, type Page } from './support/browser';
  * pull apart. The grammar below binds every title on every route. The floor is
  * a separate guarantee - that the scan found the route's own panels rather than
  * an empty frame - and that number is a fact about the route, not about the
- * rule. A shared floor of three made `/console/judgement/` unassertable when it
+ * rule. A shared floor of three made Judgement unassertable when it
  * drew one heading, and a shared floor of two would quietly stop noticing if
- * `/console/` lost a panel.
+ * Pipelines lost a panel.
  *
- * `/console/judgement/` draws two on 2026-09-17: the `Stories the day merged`
+ * Judgement draws two on 2026-09-17: the `Stories the day merged`
  * panel, and the heading over the absence that names what the model still does
- * not record. `/console/voices/` drew one until 2026-09-14, when four panels
- * moved onto it. `/console/machine/` draws nineteen since 2026-09-21 - four
+ * not record. Voices drew one until 2026-09-14, when four panels
+ * moved onto it. Hardware draws nineteen since 2026-09-21 - four
  * group headings and the fifteen panel titles under them.
  */
-const ROUTES: Record<string, number> = {
-	'/console/': 3,
-	'/console/model/': 3,
-	'/console/machine/': 19,
-	'/console/voices/': 3,
-	'/console/judgement/': 2
-};
+function routeHref(id: RouteId): string {
+	const route = BAND_UNREAD.routes.find((route) => route.id === id);
+	if (!route) throw new Error(`The console names no route ${id}`);
+	return route.href;
+}
 
 /** An opening that turns the rest of the line into a question. */
 const AUXILIARY =
@@ -69,7 +69,11 @@ async function titlesOn(page: Page): Promise<string[]> {
 		);
 }
 
-for (const [route, floor] of Object.entries(ROUTES)) {
+for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+	const expected = BY_ROUTE[id];
+	if (expected === null || expected.minimumHeadings === null) continue;
+	const floor = expected.minimumHeadings;
+	const route = routeHref(id);
 	test(`THE ORACLE: every title on ${route} is a noun phrase`, async ({ page }) => {
 		await page.goto(route);
 		const titles = await titlesOn(page);
@@ -97,7 +101,10 @@ test('the three titles the row was opened for are the ones that changed', async 
 		'Is the tail growing',
 		'Did the model change move anything'
 	];
-	for (const route of Object.keys(ROUTES)) {
+	for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+		const expected = BY_ROUTE[id];
+		if (expected === null || expected.minimumHeadings === null) continue;
+		const route = routeHref(id);
 		await page.goto(route);
 		const text = await page.locator('[data-surface="operator"]').innerText();
 		for (const title of gone) {
@@ -109,33 +116,33 @@ test('the three titles the row was opened for are the ones that changed', async 
 	// reads as a rename and not as four deletions. `Runs that finished` was the
 	// donut's caption; the run-yield chart took the question over, per day, and
 	// now heads `Run health` above the day's runs.
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await expect(page.locator('[data-console-panel="Run health"] h3')).toHaveText(
-		'Articles published against planned'
+		BY_ROUTE.pipelines!.renamedTitles[0]
 	);
 	await expect(
 		page.locator('[data-console-panel="Run health"] svg[data-run-yield-chart]')
 	).toHaveCount(1);
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	const machine = await titlesOn(page);
 	expect(machine, 'the clock check lost its panel').toContain(
-		'Whether the speed numbers can be trusted'
+		BY_ROUTE.machine!.renamedTitles[0]
 	);
 	expect(machine, 'the latency panel lost its panel').toContain(
-		'Whether the slowest articles are getting slower'
+		BY_ROUTE.machine!.renamedTitles[1]
 	);
 
 	// The model-change panel draws only where the ledger holds a swap, and the
 	// canary holds none - so what is asserted is the shape that survives either
 	// state: where the section is drawn it carries the new heading, and where it
 	// is not it is absent rather than headless.
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 	const swap = page.locator('[data-model-swap-section]');
 	if ((await swap.count()) > 0) {
-		await expect(swap.locator('h2')).toHaveText('What the model change moved');
+		await expect(swap.locator('h2')).toHaveText(BY_ROUTE.model!.renamedTitles[0]);
 	} else {
 		expect(await titlesOn(page), 'a headless model-change section is on the page').not.toContain(
-			'What the model change moved'
+			BY_ROUTE.model!.renamedTitles[0]
 		);
 	}
 });
@@ -173,14 +180,14 @@ test('THE ORACLE: no Hardware title borrows a word from how it is built', async 
 	// so `titlesOn` returns `AMD EPYC 7763` beside the panel titles. That is a
 	// value the ledger recorded, not a word anybody chose, and a rule about
 	// chosen words has nothing to say about it.
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	const written = await page
 		.locator('[data-console-group] > h2, [data-console-panel] > header > h3')
 		.evaluateAll((nodes) =>
 			nodes.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
 		);
 	expect(written.length, 'the Hardware route drew no titles to read').toBeGreaterThanOrEqual(
-		ROUTES['/console/machine/']
+		BY_ROUTE.machine!.minimumHeadings!
 	);
 
 	for (const title of written) {
@@ -194,7 +201,7 @@ test('THE ORACLE: no Hardware title borrows a word from how it is built', async 
 });
 
 test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	const drawn = await page
 		.locator('[data-console-nav] [data-console-tab]')
 		.evaluateAll((links) =>
@@ -209,24 +216,29 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 	expect(
 		drawn.map((tab) => tab.label),
 		'the strip does not carry the six labels'
-	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices', 'Data explorer']);
+	).toEqual(
+		['pipelines', 'model', 'machine', 'judgement', 'voices', 'data-explorer'].map(
+			(id) => BY_ROUTE[id as RouteId]!.label
+		)
+	);
 
 	// The ids did not, and neither did what they point at. Typed out in strip
-	// order rather than read off `ROUTES`: that map is keyed for the grammar
-	// rule and nothing holds its keys in the order the strip draws them.
+	// order rather than read off the band, so a strip reorder cannot change
+	// the order this assertion expects.
 	expect(
 		drawn.map((tab) => tab.id),
 		'a tab id moved with a label, which is an address and not a label'
 	).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices', 'data-explorer']);
-	const IN_STRIP_ORDER = [
-		'/console/',
-		'/console/model/',
-		'/console/machine/',
-		'/console/judgement/',
-		'/console/voices/',
-	'/console/data-explorer/'
+	const IN_STRIP_ORDER: readonly RouteId[] = [
+		'pipelines',
+		'model',
+		'machine',
+		'judgement',
+		'voices',
+		'data-explorer'
 	];
-	for (const [index, path] of IN_STRIP_ORDER.entries()) {
+	for (const [index, id] of IN_STRIP_ORDER.entries()) {
+		const path = BY_ROUTE[id]!.href;
 		expect(drawn[index].href, `${drawn[index].id} stopped pointing at ${path}`).toContain(path);
 	}
 });

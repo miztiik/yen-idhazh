@@ -1,9 +1,11 @@
 import { test, expect } from './support/browser';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-voices';
 import { reliabilityPublished, type SourceHealthView } from '../src/lib/server/payload';
 
 /** Every source panel is on exactly one route.
  *
- * Row #13 moved four panels off `/console/` onto `/console/voices/` and the
+ * Row #13 moved four panels off Pipelines onto Voices and the
  * ruling was that Pipelines keeps none of them. A move done by copy is the
  * failure this file exists to catch, and it is the one that looks fine: both
  * pages render, both pass their own assertions, and an operator reads two
@@ -21,16 +23,11 @@ import { reliabilityPublished, type SourceHealthView } from '../src/lib/server/p
  * names (`CLAUDE.md` section 13).
  */
 
-/** Every console route, in strip order. Typed out rather than read from
- * `band.ts`, because a panel that vanished along with a route id would still
- * pass a count taken over a list the same edit shortened. */
-const ROUTES = [
-	'/console/',
-	'/console/model/',
-	'/console/machine/',
-	'/console/judgement/',
-	'/console/voices/'
-] as const;
+function routeHref(id: RouteId): string {
+	const route = BAND_UNREAD.routes.find((route) => route.id === id);
+	if (!route) throw new Error(`The console names no route ${id}`);
+	return route.href;
+}
 
 /** The four panels the row moved, each named by an attribute its own markup
  * carries in every state it can be in.
@@ -41,23 +38,14 @@ const ROUTES = [
  * canary happened to fill it - a selector that only matched the filled state
  * would read a duplicated but empty panel as no panel at all.
  */
-const PANELS = [
-	{
-		name: 'the source census',
-		selector: '[data-source-health-lead], [data-source-health="absent"]'
-	},
-	{
-		name: 'the ranking weight',
-		selector: '[data-voices="reliability"], [data-console-empty="voices"]'
-	},
-	{ name: 'the feed failure record', selector: '[data-window-exempt="feeds"]' },
-	{ name: 'the truncation cap cost', selector: '[data-windowed="source-cuts"]' }
-] as const;
+const PANELS = BY_ROUTE.voices!.panels;
 
 for (const panel of PANELS) {
 	test(`THE ORACLE: ${panel.name} is on exactly one console route`, async ({ page }) => {
 		const found: string[] = [];
-		for (const route of ROUTES) {
+		for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+			if (BY_ROUTE[id] === null) continue;
+			const route = routeHref(id);
 			const answered = await page.goto(route);
 			expect(answered?.status(), `${route} did not answer`).toBe(200);
 			const drawn = await page.locator(panel.selector).count();
@@ -67,9 +55,11 @@ for (const panel of PANELS) {
 		// One route, one copy. The message names both halves, because "x2" on the
 		// right route and "x1" on two routes are different defects with the same
 		// symptom on the page.
-		expect(found, `${panel.name} is not on exactly one route, once`).toEqual([
-			'/console/voices/ x1'
-		]);
+		expect(found, `${panel.name} is not on exactly one route, once`).toEqual(
+			Object.values(BY_ROUTE)
+				.filter((expected) => expected !== null && expected.panelCopies > 0)
+				.map((expected) => `${expected!.href} x${expected!.panelCopies}`)
+		);
 	});
 }
 
@@ -81,29 +71,9 @@ test('THE ORACLE: Pipelines kept no attribute the moved panels own', async ({ pa
 	//
 	// `data-source-domain` is not here and belongs to the chart component rather
 	// than to the route, so it travels with the panel wherever the panel is.
-	const OWNED = [
-		'[data-feed]',
-		'[data-feeds]',
-		'[data-feed-result]',
-		'[data-feed-reliability]',
-		'[data-feed-clean-name]',
-		'[data-feed-ineligible-name]',
-		'[data-feed-strip]',
-		'[data-feed-axis]',
-		'[data-rested]',
-		'[data-source-health]',
-		'[data-source-health-lead]',
-		'[data-source-state]',
-		'[data-source-note]',
-		'[data-source-cut]',
-		'[data-source-cuts-intro]',
-		'[data-windowed="source-cuts"]',
-		'[data-windowed="feed-outcomes"]',
-		'[data-window-exempt="feeds"]',
-		'[data-window-exempt="source-health"]'
-	];
+	const OWNED = BY_ROUTE.voices!.ownedSelectors;
 
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	const left: string[] = [];
 	for (const selector of OWNED) {
 		const drawn = await page.locator(selector).count();
@@ -113,7 +83,7 @@ test('THE ORACLE: Pipelines kept no attribute the moved panels own', async ({ pa
 
 	// And the same sweep on Voices finds them, so a suite that passed because
 	// every selector had been renamed out of existence fails here instead.
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 	const arrived: string[] = [];
 	for (const selector of OWNED) {
 		if ((await page.locator(selector).count()) > 0) arrived.push(selector);

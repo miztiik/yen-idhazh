@@ -55,9 +55,9 @@ import {
 	consoleConfig,
 	inferenceConfig,
 	observabilityConfig,
-	panelGroupsFor,
 	runConfig
 } from '$lib/server/config';
+import { routeConsole } from '$lib/console/route-console';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import { latestDate, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { listManifestDays, pipelineChanges } from '$lib/server/model-work';
@@ -148,12 +148,12 @@ export interface RunSeries {
 	latency: LatencyRun[];
 }
 
-/** Every panel this route draws, as the ids `console.panel_groups` orders.
+/** Every panel this route draws, as the route's console file orders.
  *
  * The list is here rather than in the config because it is a fact about the
  * markup: a panel exists because a snippet in `+page.svelte` draws it. The
- * config decides the order and the headings, and `panelGroupsFor` refuses a
- * config that disagrees with this list either way round.
+ * config decides the order and the headings, and this route refuses a config
+ * that disagrees with this list either way round.
  */
 const DRAWN_PANELS = [
 	'shard-board',
@@ -192,6 +192,17 @@ const DRAWN_PANELS = [
  * or the day it is about instead.
  */
 export async function load() {
+	const panelGroups = routeConsole('machine').panel_groups;
+	const named = panelGroups.flatMap((group) => group.panels);
+	const missing = DRAWN_PANELS.filter((panel) => !named.includes(panel));
+	const unknown = named.filter((panel) => !(DRAWN_PANELS as readonly string[]).includes(panel));
+	if (missing.length > 0 || unknown.length > 0) {
+		throw new Error(
+			`config/console/machine.json panel_groups does not match the route: ` +
+				`${missing.length} panel(s) it draws are unplaced [${missing.join(', ')}], ` +
+				`${unknown.length} named panel(s) it does not draw [${unknown.join(', ')}]`
+		);
+	}
 	const console_ = consoleConfig();
 	// The widest span the control can reach. Nothing older can be drawn whatever
 	// the operator does, so nothing older is read (`CLAUDE.md` Guardrail #12), and the
@@ -578,7 +589,7 @@ export async function load() {
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,
 		contextWindow: inferenceConfig().n_ctx,
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
-		panelGroups: panelGroupsFor('machine', DRAWN_PANELS),
+		panelGroups,
 		// What the page says about the two records every panel here is built on,
 		// before any of them draws, one set for each span the control offers: one
 		// not packed yet, one that did not load, one packed short of the newest

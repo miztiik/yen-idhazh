@@ -1,8 +1,9 @@
 import { expect, test, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BAND_UNREAD, readBand, stripRoutes } from '../src/lib/console/band';
+import { BAND_UNREAD, readBand, stripRoutes, type RouteId } from '../src/lib/console/band';
 import { uiConfig } from '../src/lib/server/config';
+import { BY_ROUTE } from './support/console-expect/console-nav';
 
 /**
  * The console is six routes, and this file is why it is routes and not tabs.
@@ -41,21 +42,20 @@ import { uiConfig } from '../src/lib/server/config';
  * name a place and this one names an act; `Voices` is the owner's word over
  * Susan's `Sources`.
  */
-const ROUTES = [
-	{ id: 'pipelines', label: 'Pipelines', path: '/console/' },
-	{ id: 'model', label: 'Summaries', path: '/console/model/' },
-	{ id: 'machine', label: 'Hardware', path: '/console/machine/' },
-	{ id: 'judgement', label: 'Judgement', path: '/console/judgement/' },
-	{ id: 'voices', label: 'Voices', path: '/console/voices/' },
-	{ id: 'data-explorer', label: 'Data explorer', path: '/console/data-explorer/' }
-] as const;
+const ROUTES = BAND_UNREAD.routes.flatMap((route) => {
+	const expected = BY_ROUTE[route.id];
+	return expected === null ? [] : [{ ...expected, href: route.href }];
+});
+const PIPELINES = BAND_UNREAD.routes.find((route) => route.id === 'pipelines')!;
+const MACHINE_ROUTES = ROUTES.filter((route) => route.machinePanels !== null);
+const FALLBACK_ROUTES = ROUTES.filter((route) => route.fallbackDescription !== null);
 
 /** The routes that still name something they do not draw.
  *
  * A strip that names a page nobody can reach is a strip that lies, so the route
  * answers, names itself, and says in plain words what is still missing.
  *
- * **A route on this list may also draw panels, and `/console/judgement/` does
+ * **A route on this list may also draw panels, and Judgement does
  * since 2026-09-17.** The absence there is not the whole page: `Stories the day
  * merged` counts what a day folded together, and the absence is about the desk
  * and the lenses the model chose, which it still does not record. The two are
@@ -74,7 +74,9 @@ const ROUTES = [
  * still checked - `console-voices-sources.spec.ts` owns the census half and
  * `console-voices.spec.ts` owns the one-route-per-panel half.
  */
-const NAMED_ABSENCES = [{ id: 'judgement', path: '/console/judgement/' }] as const;
+const NAMED_ABSENCES = ROUTES.flatMap((route) =>
+	route.namedAbsence === null ? [] : [{ ...route.namedAbsence, href: route.href }]
+);
 
 /** What an absence may not name: a plan file, or a row inside one. */
 const CITES_A_PLAN = /TODO\/\d|\brows?\s*#?\d|\bplan\s+\d/i;
@@ -115,7 +117,7 @@ test.describe('the strip', () => {
 		const bandByRoute: Record<string, { verdict: string; worst: string; size: string }> = {};
 
 		for (const route of ROUTES) {
-			await page.goto(route.path);
+			await page.goto(route.href);
 
 			const drawn = await tabs(page);
 			expect(
@@ -133,7 +135,7 @@ test.describe('the strip', () => {
 				`${route.path}: exactly one label says which route this is`
 			).toEqual([route.id]);
 
-			if (route.id === 'data-explorer') {
+			if (!route.hasBand) {
 				await expect(page.locator('[data-console-band]')).toHaveCount(0);
 				continue;
 			}
@@ -167,7 +169,7 @@ test.describe('the strip', () => {
 		// Derived once for every route, so they cannot disagree about which route
 		// is worst - which is the failure a per-route band eventually produces.
 		const pipelines = bandByRoute[ROUTES[0].id];
-		for (const route of ROUTES.slice(1).filter((entry) => entry.id !== 'data-explorer')) {
+		for (const route of ROUTES.slice(1).filter((entry) => entry.hasBand)) {
 			expect(bandByRoute[route.id], `the band differs on ${route.path}`).toEqual(pipelines);
 		}
 	});
@@ -177,7 +179,7 @@ test.describe('the strip', () => {
 		// rename row is that a word an operator reads and a word a browser resolves
 		// are the same string somewhere, so this asserts the second set did not
 		// move: the tab ids, the hrefs, and the route markers each page prints.
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 		const drawn = await tabs(page);
 		expect(
 			drawn.map((tab) => tab.id),
@@ -190,22 +192,22 @@ test.describe('the strip', () => {
 			);
 		}
 
-		for (const entry of ROUTES.filter((route) => route.id !== 'data-explorer')) {
-			const answered = await page.request.get(entry.path);
+		for (const entry of ROUTES.filter((route) => route.hasBand)) {
+			const answered = await page.request.get(entry.href);
 			expect(answered.status(), `${entry.path} stopped answering`).toBe(200);
 			expect(
 				await answered.text(),
 				`${entry.path} no longer prints its own route marker`
 			).toContain(`data-console-route="${entry.id}"`);
 		}
-		const fallback = await page.request.get('/console/data-explorer/');
-		expect([200, 404], '/console/data-explorer/ is served by the fallback').toContain(
-			fallback.status()
-		);
+		for (const route of FALLBACK_ROUTES) {
+			const fallback = await page.request.get(route.href);
+			expect([200, 404], `${route.path} is served by the fallback`).toContain(fallback.status());
+		}
 	});
 
 	test('every label carries a description, and the same words as its tooltip', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 		const drawn = await page.locator('[data-console-nav] [data-console-tab]').evaluateAll((links) =>
 			links.map((node) => ({
 				id: node.getAttribute('data-console-tab') ?? '',
@@ -221,7 +223,7 @@ test.describe('the strip', () => {
 	});
 
 	test('every label carries its own worst state', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 		const worst = await page
 			.locator('[data-console-nav] [data-console-tab-worst]')
 			.evaluateAll((nodes) =>
@@ -243,7 +245,7 @@ test.describe('the strip', () => {
 		// was a thing a reader had to work out by comparing sentences. Once the
 		// strip sticks and the band has scrolled away it could not be worked out
 		// at all. One word on one tab says it, and a word is not a verdict colour.
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 		const named = await page.locator('[data-band-worst]').getAttribute('data-band-worst-route');
 		const marks = page.locator('[data-console-nav] [data-console-tab-worst-mark]');
 		if (named === null) {
@@ -259,7 +261,7 @@ test.describe('the strip', () => {
 	});
 
 	test('the health ramp never touches the strip', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 		// The rule under the active label is the categorical ramp, which names a
 		// place and passes no verdict. Read off the computed style rather than the
 		// source, so a token reached through a utility class is caught too.
@@ -297,9 +299,6 @@ test.describe('the strip', () => {
 	});
 });
 
-/** A route's id, as the strip and its tabs name it. */
-type RouteId = (typeof ROUTES)[number]['id'];
-
 /** Each route's page title, in Reader's words: the label on its tab, then
  * `Console`. The site's own title follows, read from the config the build reads,
  * because it is not this file's copy to protect.
@@ -309,18 +308,9 @@ type RouteId = (typeof ROUTES)[number]['id'];
  * tab click moves inside the page, and a route that sets no title keeps the one
  * the route before it set.
  */
-const TITLES: Record<RouteId, string> = {
-	pipelines: 'Pipelines \u2014 Console',
-	model: 'Summaries \u2014 Console',
-	machine: 'Hardware \u2014 Console',
-	judgement: 'Judgement \u2014 Console',
-	voices: 'Voices \u2014 Console',
-	'data-explorer': 'Data explorer \u2014 Console'
-};
-
 /** The whole title a route owes: its own words, then the site's title. */
 function titleOf(id: RouteId): string {
-	return `${TITLES[id]} \u2014 ${uiConfig().site_title}`;
+	return `${BY_ROUTE[id]!.title} \u2014 ${uiConfig().site_title}`;
 }
 
 /** Wait until a script runs the page, so a tab click is a move inside it rather
@@ -343,7 +333,7 @@ test.describe('the title names the route on screen', () => {
 		test(`THE ORACLE: ${route.path} names itself after a tab click from ${from.label} and on a page load`, async ({
 			page
 		}) => {
-			await page.goto(from.path);
+			await page.goto(from.href);
 			await hydrated(page);
 			const opened = await page.evaluate(() => performance.timeOrigin);
 
@@ -359,7 +349,7 @@ test.describe('the title names the route on screen', () => {
 				'the tab loaded a new page, so this was a page load and not a tab click'
 			).toBe(opened);
 
-			await page.goto(route.path);
+			await page.goto(route.href);
 			await expect(page, `${route.path} on a page load`).toHaveTitle(titleOf(route.id));
 		});
 	}
@@ -430,7 +420,7 @@ for (const view of STRIP_WIDTHS) {
 		page
 	}) => {
 		await page.setViewportSize({ width: view.width, height: view.height });
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 
 		const { innerWidth, clientWidth, boxes } = await stripBoxes(page);
 		expect(boxes, `only ${boxes.length} tabs are drawn, so this proves nothing`).toHaveLength(6);
@@ -489,7 +479,7 @@ test.describe('the routes that name something they do not draw', () => {
 			});
 			page.on('pageerror', (error) => errors.push(String(error)));
 
-			const answered = await page.goto(route.path);
+			const answered = await page.goto(route.href);
 			expect(answered?.status(), `${route.path} did not answer`).toBe(200);
 
 			// At least one, not exactly one: the route may have grown a panel, and a
@@ -528,8 +518,8 @@ test.describe('with no script at all', () => {
 		const context = await browser.newContext({ javaScriptEnabled: false });
 		const page = await context.newPage();
 
-		for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
-			const response = await page.goto(route.path);
+		for (const route of ROUTES.filter((entry) => entry.hasBand)) {
+			const response = await page.goto(route.href);
 			expect(response?.status(), `${route.path} did not answer`).toBe(200);
 
 			// The band, the strip and the carry are all in the prerendered document.
@@ -561,9 +551,9 @@ test.describe('with no script at all', () => {
 
 		// Every one of the twenty-five links, followed. A strip whose anchors 404 is
 		// a strip that reads correctly and goes nowhere.
-		for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
-			await page.goto(route.path);
-			for (const entry of ROUTES.filter((one) => one.id !== 'data-explorer')) {
+		for (const route of ROUTES.filter((entry) => entry.hasBand)) {
+			await page.goto(route.href);
+			for (const entry of ROUTES.filter((one) => one.hasBand)) {
 				const href = await page
 					.locator(`[data-console-tab="${entry.id}"]`)
 					.getAttribute('href');
@@ -586,7 +576,7 @@ test.describe('the standing band', () => {
 	// page visits that already check the labels - not a second pass.
 
 	test('the worst thing names the route it is on, and that route exists', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto(PIPELINES.href);
 		const worst = page.locator('[data-band-worst]');
 		const named = await worst.getAttribute('data-band-worst-route');
 		if (named === null) {
@@ -603,89 +593,83 @@ test.describe('the standing band', () => {
 });
 
 test.describe('a route that draws what the server counted', () => {
-	test('Machine renders its panels, and any panel with nothing to draw says so', async ({
-		page
-	}) => {
-		// This route shipped empty on 2026-08-30 and gained its panels on
-		// 2026-08-31. What is asserted is the shape that survives either state: the
-		// panels exist, the span every figure reads is stated in words, and a panel
-		// with no data says which reading is missing rather than drawing a zero.
-		const errors: string[] = [];
-		page.on('console', (message) => {
-			if (message.type() === 'error') errors.push(message.text());
+	for (const MACHINE of MACHINE_ROUTES) {
+		test('Machine renders its panels, and any panel with nothing to draw says so', async ({
+			page
+		}) => {
+			// This route shipped empty on 2026-08-30 and gained its panels on
+			// 2026-08-31. What is asserted is the shape that survives either state: the
+			// panels exist, the span every figure reads is stated in words, and a panel
+			// with no data says which reading is missing rather than drawing a zero.
+			const errors: string[] = [];
+			page.on('console', (message) => {
+				if (message.type() === 'error') errors.push(message.text());
+			});
+			page.on('pageerror', (error) => errors.push(String(error)));
+
+			await page.goto(MACHINE.href);
+			const expected = MACHINE.machinePanels!;
+			const intro = page.locator(expected.intro);
+			await expect(intro).toBeVisible();
+			expect((await intro.innerText()).trim().length).toBeGreaterThan(expected.minimumIntroLength);
+
+			const panels = await page.locator('[data-console-panel]').count();
+			expect(panels, 'the route draws no panels at all').toBeGreaterThan(expected.minimumPanelCount);
+
+			// Absence prints as absence. Every panel that cannot draw names the reading
+			// it is missing; none of them prints a zero in its place.
+			const empties = await page
+				.locator(expected.emptyPanels)
+				.evaluateAll((nodes) =>
+					nodes.map((node) => ({
+						id: node.getAttribute('data-machine-panel-empty') ?? '',
+						text: (node.textContent ?? '').trim()
+					}))
+				);
+			for (const panel of empties) {
+				expect(panel.text.length, `${panel.id} is empty without saying so`).toBeGreaterThan(
+					expected.minimumEmptyLength
+				);
+			}
+			expect(errors, 'the route logged an error').toEqual([]);
 		});
-		page.on('pageerror', (error) => errors.push(String(error)));
 
-		await page.goto('/console/machine/');
-		const intro = page.locator('[data-machine="intro"]');
-		await expect(intro).toBeVisible();
-		expect((await intro.innerText()).trim().length).toBeGreaterThan(40);
-
-		const panels = await page.locator('[data-console-panel]').count();
-		expect(panels, 'the route draws no panels at all').toBeGreaterThan(5);
-
-		// Absence prints as absence. Every panel that cannot draw names the reading
-		// it is missing; none of them prints a zero in its place.
-		const empties = await page
-			.locator('[data-machine-panel-empty]')
-			.evaluateAll((nodes) =>
-				nodes.map((node) => ({
-					id: node.getAttribute('data-machine-panel-empty') ?? '',
-					text: (node.textContent ?? '').trim()
-				}))
-			);
-		for (const panel of empties) {
-			expect(panel.text.length, `${panel.id} is empty without saying so`).toBeGreaterThan(20);
-		}
-		expect(errors, 'the route logged an error').toEqual([]);
-	});
-
-	test('Hardware carries the same window control as the other two', async ({ page }) => {
-		await page.goto('/console/machine/');
-		// It was the one route without one until 2026-08-31, and it printed a
-		// sentence pointing at the two routes that had it. An operator who
-		// narrowed Pipelines to look at a bad afternoon lost the span the moment
-		// he asked what the machine had been doing, and two charts on two spans
-		// cannot be compared - which is the question he came to ask.
-		const control = page.locator('[data-window-control]');
-		await expect(control).toHaveCount(1);
-		await expect(control).toHaveAttribute('data-window-days', /\d+/);
-		await expect(page.locator('[data-band-window="none"]')).toHaveCount(0);
-		// And the panels a span cannot narrow say so where the sentence used to be.
-		// A window is a span; a snapshot of one run is not. Each says it in its own
-		// subtitle since 2026-09-20, and the line above them carries the one fact no
-		// panel can state for itself: which run the newest one is.
-		await expect(page.locator('[data-window-exempt="newest-run"]')).toContainText('newest run');
-		await expect(
-			page.locator('[data-console-panel-id="two-clocks"] > header > p')
-		).toContainText('the newest run');
-	});
+		test('Hardware carries the same window control as the other two', async ({ page }) => {
+			await page.goto(MACHINE.href);
+			const expected = MACHINE.machinePanels!;
+			// It was the one route without one until 2026-08-31, and it printed a
+			// sentence pointing at the two routes that had it. An operator who
+			// narrowed Pipelines to look at a bad afternoon lost the span the moment
+			// he asked what the machine had been doing, and two charts on two spans
+			// cannot be compared - which is the question he came to ask.
+			const control = page.locator('[data-window-control]');
+			await expect(control).toHaveCount(1);
+			await expect(control).toHaveAttribute('data-window-days', /\d+/);
+			await expect(page.locator('[data-band-window="none"]')).toHaveCount(0);
+			// And the panels a span cannot narrow say so where the sentence used to be.
+			// A window is a span; a snapshot of one run is not. Each says it in its own
+			// subtitle since 2026-09-20, and the line above them carries the one fact no
+			// panel can state for itself: which run the newest one is.
+			await expect(page.locator(expected.newestRunExemption)).toContainText(expected.newestRunWords);
+			await expect(
+				page.locator(expected.twoClocksSubtitle)
+			).toContainText(expected.twoClocksWords);
+		});
+	}
 });
 
 test.describe('the cross-boundary carries', () => {
-	const POINTS_AT: Record<string, string> = {
-		pipelines: '/console/model/',
-		model: '/console/machine/',
-		machine: '/console/',
-		// Judgement is still empty and points at the route that holds the nearest
-		// figure it has none of: what the checker doubted is on Summaries. Voices
-		// points back at Pipelines because a broken feed is a question about a run,
-		// and the run record is the one thing Voices does not carry.
-		judgement: '/console/model/',
-		voices: '/console/',
-		'data-explorer': '/console/'
-	};
-
-	for (const route of ROUTES.filter((entry) => entry.id !== 'data-explorer')) {
+	for (const route of ROUTES.filter((entry) => entry.carryTo !== null)) {
 		test(`${route.path} carries one sentence pointing at another route`, async ({ page }) => {
-			await page.goto(route.path);
+			await page.goto(route.href);
 			const carry = page.locator('[data-console-carry]');
 			await expect(carry, `${route.path} carries none`).toHaveCount(1);
 			const text = (await carry.innerText()).trim();
 			// A sentence, not a chart, and not a number without a sentence around it.
 			expect(text.length).toBeGreaterThan(20);
 			const href = await carry.locator('a').getAttribute('href');
-			expect(href, `${route.path} points at the wrong route`).toContain(POINTS_AT[route.id]);
+			const target = ROUTES.find((entry) => entry.id === route.carryTo)!;
+			expect(href, `${route.path} points at the wrong route`).toContain(target.path);
 		});
 	}
 });
@@ -694,19 +678,21 @@ test.describe('the cross-boundary carries', () => {
 const OLD_BAND = resolve(process.cwd(), '..', 'tests', 'fixtures', 'contracts', 'console-band', 'newest-day.json');
 
 test.describe('old bands still draw every route', () => {
-	test('the strip draws Data explorer from the fallback words', () => {
-		const payload = JSON.parse(readFileSync(OLD_BAND, 'utf8')) as { routes: { id: string }[] };
-		expect(payload.routes.map((route) => route.id)).not.toContain('data-explorer');
-		const band = readBand(payload);
-		expect(band.read, 'an old band no longer reads').toBe(true);
-		const drawn = stripRoutes(band.routes);
-		expect(drawn.map((route) => route.id)).toEqual(ROUTES.map((entry) => entry.id));
-		expect(drawn.at(-1)).toMatchObject({
-			id: 'data-explorer',
-			label: 'Data explorer',
-			href: '/console/data-explorer/',
-			description: 'What the ledgers hold, and whatever you ask of them.',
-			worst: null
+	for (const DATA_EXPLORER of FALLBACK_ROUTES) {
+		test('the strip draws Data explorer from the fallback words', () => {
+			const payload = JSON.parse(readFileSync(OLD_BAND, 'utf8')) as { routes: { id: string }[] };
+			expect(payload.routes.map((route) => route.id)).not.toContain('data-explorer');
+			const band = readBand(payload);
+			expect(band.read, 'an old band no longer reads').toBe(true);
+			const drawn = stripRoutes(band.routes);
+			expect(drawn.map((route) => route.id)).toEqual(ROUTES.map((entry) => entry.id));
+			expect(drawn.at(-1)).toMatchObject({
+				id: DATA_EXPLORER.id,
+				label: DATA_EXPLORER.label,
+				href: DATA_EXPLORER.path,
+				description: DATA_EXPLORER.fallbackDescription,
+				worst: null
+			});
 		});
-	});
+	}
 });

@@ -36,7 +36,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'explorer-column-groups', 'explorer-strip-fit', 'explorer-type-colour', 'explorer-type-family',
 		'console-host-spans', 'console-machine-cards', 'console-machine-split', 'console-machine',
 		'console-chart-days', 'console-cuts-by-run', 'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data',
-		'console-stage-timing-days',
+		'console-route-scope', 'console-stage-timing-days',
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'indexed-runs', 'one-pass-reductions',

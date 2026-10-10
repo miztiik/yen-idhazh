@@ -11,9 +11,129 @@ import { expect, test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { assistConfig, consoleConfig, mergeLayers } from '../src/lib/server/config';
+import { assistConfig, consoleConfig, mergeLayers, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
+import ts from 'typescript';
+import { runInNewContext } from 'node:vm';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+function routeFiles(): Record<string, { panel_groups: { id: string; title: string; panels: string[] }[]; judged: string[]; knobs: Record<string, number> }> {
+	return Object.fromEntries(BAND_UNREAD.routes.map(({ id }) => [id, {
+		panel_groups: [{ id, title: '', panels: [`${id}-panel`] }],
+		judged: [`${id}-panel`],
+		knobs: { floor: 2 }
+	}]));
+}
+
+test.describe('route-owned console configuration', () => {
+	test('preserves the committed six routes and their judged panels', () => {
+		const routes = routeConsoles();
+		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
+		expect(routes.machine.judged).toEqual(['platform-mix']);
+		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
+		for (const id of ['model', 'voices', 'judgement'] as const) {
+			expect(routes[id].panel_groups).toEqual([]);
+			expect(routes[id].judged).toEqual([]);
+		}
+		expect(consoleConfig()).not.toHaveProperty('panel_groups');
+		expect(consoleConfig()).not.toHaveProperty('judged_panel_ids');
+	});
+
+	test('parses independently supplied files without changing their values', () => {
+		const files = routeFiles();
+		expect(routeConsolesFrom(files)).toEqual(files);
+	});
+
+	test('refuses a missing route file', () => {
+		const files = routeFiles();
+		delete files.model;
+		expect(() => routeConsolesFrom(files)).toThrow(/config\/console.*model/);
+	});
+
+	test('refuses an unknown route file', () => {
+		expect(() => routeConsolesFrom({ ...routeFiles(), unknown: {} })).toThrow(/config\/console.*unknown/);
+	});
+
+	for (const key of ['panel_groups', 'judged', 'knobs'] as const) {
+		test(`refuses missing ${key}`, () => {
+			const files: Record<string, unknown> = routeFiles();
+			const route = { ...files.machine as Record<string, unknown> };
+			delete route[key];
+			files.machine = route;
+			expect(() => routeConsolesFrom(files)).toThrow(`config/console/machine.json names no ${key}`);
+		});
+	}
+
+	test('refuses an unknown route key', () => {
+		const files = routeFiles();
+		expect(() => routeConsolesFrom({ ...files, machine: { ...files.machine, surprise: 1 } }))
+			.toThrow('config/console/machine.json names unknown surprise');
+	});
+
+	test('refuses partly titled groups', () => {
+		const files = routeFiles();
+		files.machine.panel_groups.push({ id: 'second', title: 'Second', panels: ['second-panel'] });
+		expect(() => routeConsolesFrom(files)).toThrow(/machine.json.*panel_groups.*titles/);
+	});
+
+	test('refuses duplicate group ids', () => {
+		const files = routeFiles();
+		files.machine.panel_groups.push({ id: 'machine', title: '', panels: ['second-panel'] });
+		expect(() => routeConsolesFrom(files)).toThrow(/machine.json.*id.*repeats machine/);
+	});
+
+	test('refuses a panel repeated on one route', () => {
+		const files = routeFiles();
+		files.machine.panel_groups[0].panels.push('machine-panel');
+		expect(() => routeConsolesFrom(files)).toThrow(/machine.json.*panels.*repeats machine-panel/);
+	});
+
+	test('refuses a panel repeated across routes', () => {
+		const files = routeFiles();
+		files.machine.panel_groups[0].panels.push('pipelines-panel');
+		expect(() => routeConsolesFrom(files)).toThrow(/machine.json.*panels.*repeats pipelines-panel/);
+	});
+
+	test('refuses an undrawn judged id', () => {
+		const files = routeFiles();
+		files.machine.judged.push('absent');
+		expect(() => routeConsolesFrom(files)).toThrow(/machine.json.*judged.*undrawn absent/);
+	});
+
+	test('refuses a repeated judged id', () => {
+		const files = routeFiles();
+		files.machine.judged.push('machine-panel');
+		expect(() => routeConsolesFrom(files)).toThrow(/machine.json.*judged.*repeats machine-panel/);
+	});
+
+	for (const value of [NaN, Infinity, -Infinity, '2', null]) {
+		test(`refuses nonfinite or nonnumeric knob ${String(value)}`, () => {
+			const files = routeFiles();
+			files.machine.knobs.floor = value as number;
+			expect(() => routeConsolesFrom(files)).toThrow('config/console/machine.json knobs.floor must be a finite number');
+		});
+	}
+
+	test('accessors name a missing knob without a source default', () => {
+		const source = readFileSync(join(REPO, 'frontend', 'src', 'lib', 'console', 'route-console.ts'), 'utf8');
+		const compiled = ts.transpileModule(source, {
+			compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+		}).outputText;
+		const exports: Record<string, unknown> = {};
+		const defined = { shared: consoleConfig(), routes: routeConsolesFrom(routeFiles()) };
+		runInNewContext(compiled, {
+			exports,
+			require: () => ({ BAND_UNREAD }),
+			['__' + 'CONSOLE__']: defined
+		});
+		const access = exports.routeKnobs as (route: RouteId, keys: readonly string[]) => Record<string, number>;
+		expect(access('machine', ['floor'])).toEqual({ floor: 2 });
+		expect(() => access('machine', ['missing'])).toThrow('config/console/machine.json names no knobs.missing');
+		expect((exports.consoleKnobs as () => unknown)()).toBe(defined.shared);
+		expect((exports.routeConsole as (route: RouteId) => unknown)('machine')).toBe(defined.routes.machine);
+	});
+});
 
 interface Knobs {
 	sections: string[];
@@ -159,13 +279,7 @@ for (const key of pipelineOwned) expect(handed).not.toContain(key);
 });
 });
 
-/** The keys the `console` block carries that no console page is handed.
- *
- * Whatever `consoleConfig()` returns is inlined into all five prerendered
- * console documents. The running order is read by each route for itself, and
- * two knobs are read by the sufficiency specs alone, so none of the three may
- * ride along. Named rather than counted, as the assist block's are.
- */
+/** Route-owned lists leave the shared block; the gate-only floor stays on disk. */
 test.describe('the console block a page is handed', () => {
 	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'plot_min_fill_share'];
 
@@ -177,7 +291,8 @@ test.describe('the console block a page is handed', () => {
 		).console;
 		const handed = Object.keys(consoleConfig());
 		for (const key of NOT_HANDED) {
-			expect(onDisk, `config/appearance.json no longer carries console.${key}`).toHaveProperty(key);
+			if (key === 'plot_min_fill_share') expect(onDisk).toHaveProperty(key);
+			else expect(onDisk).not.toHaveProperty(key);
 			expect(handed, `consoleConfig() hands every console page console.${key}`).not.toContain(key);
 		}
 	});

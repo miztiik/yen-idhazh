@@ -1570,7 +1570,7 @@
 
 	{#snippet extractionPanel()}
 	<h2 class="console-h2">What the extractor found, and what was drawn from it</h2>
-	<div data-windowed="extraction" data-window-days={windowDays}>
+	<div data-windowed="extraction" data-window-days={windowDays} data-eval-panel="extraction">
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 			Every article is read for the quantities and dates it states, before the visual planner sees
 			it. This is what that reading found over {countDays(windowDays)}, so a fall in published charts can

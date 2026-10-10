@@ -26,10 +26,11 @@ const CONSOLE: TestGroup[] = ['logic', 'console', 'panels', 'publishing'];
  * console's own; every other change reaches them on the merge push to `main`,
  * which runs every group. What that costs is stated rather than implied: a
  * shared component or a token edit that breaks the console is found on that
- * push, not at the pull request.
+ * push, not at the pull request. The shared panel frame is an exception: every
+ * console route renders it, so its edits buy the console on the pull request.
  */
 const CONSOLE_OWNED =
-	/^frontend\/(tests\/console[-.]|src\/(routes|lib)\/console\/|src\/lib\/components\/Console[A-Z]|src\/lib\/server\/console-shell\.ts$)/;
+	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|panel-drivers)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
 
 /** What a console panel's picture is drawn from, beyond the console's own files.
  *
@@ -42,7 +43,7 @@ const CONSOLE_OWNED =
  * after the change is already on `main`.
  */
 const PANELS_DRAWN =
-	/^(frontend\/(tests\/(panel-|fixtures\/panels\/|support\/)|src\/(styles|lib\/charts)\/|src\/lib\/components\/(Panel|PanelGroup|ChartReadout|Reserved)\.svelte$)|config\/appearance\.json$)/;
+	/^(frontend\/(tests\/(panel-|fixtures\/panels\/|support\/)|src\/(styles|lib\/charts)\/|src\/lib\/components\/(Panel|PanelGroup|ChartReadout|Reserved)\.svelte$)|config\/(?:appearance\.json$|console\/))/;
 
 /** A document a test reads is that test's input, not documentation.
  *
@@ -188,6 +189,12 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/tests\/fixtures\/panels\//.test(path)) {
 			selected = ['panels'];
 			reason = 'the panel the sufficiency gates are proven against';
+		} else if (/^config\/console\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned console config and panel checks';
+		} else if (/^frontend\/tests\/support\/(?:console-expect|panel-drivers)\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned console expectations and drivers';
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';

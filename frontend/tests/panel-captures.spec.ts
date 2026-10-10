@@ -4,8 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KILL_FILE } from '../src/lib/offline';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
-import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
+import { consolePanels } from './support/console-panels';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT, type ConsoleWidth } from './support/console-widths';
 import { fillShare, readPanel } from './support/panel-gates';
 import { showPanel } from './support/panel-tab';
@@ -16,7 +17,7 @@ import { viewsOf } from './support/views';
  * THE CAPTURE: every console panel, pictured the way a reviewer needs to see
  * it, and written where a run can hand it over.
  *
- * Every panel id in `console.panel_groups` is pictured at every console width
+ * Every panel id in its route's `panel_groups` is pictured at every console width
  * in light and at the narrowest in dark (`viewsOf`), and that dark picture is
  * taken once more with every data request its route made answered 503 - the
  * one way to see a
@@ -57,7 +58,7 @@ type Theme = (typeof THEMES)[number];
 const BROKEN_WIDTH: ConsoleWidth = CONSOLE_WIDTHS[CONSOLE_WIDTHS.length - 1];
 const BROKEN_THEME: Theme = 'dark';
 
-/** The routes `console.panel_groups` orders that draw no panel id yet.
+/** The configured routes that draw no panel id yet.
  *
  * Stated here rather than discovered, so a route that starts drawing ids fails
  * this file until its panels are pictured, instead of staying unpictured with a
@@ -67,7 +68,7 @@ const BROKEN_THEME: Theme = 'dark';
  * be filed by one. Giving each section one framed, addressed panel is a change
  * to the route, not to its pictures.
  */
-const DRAWS_NO_PANEL_ID: ReadonlySet<string> = new Set(['pipelines']);
+const DRAWS_NO_PANEL_ID: ReadonlySet<RouteId> = new Set(['pipelines']);
 
 /** What a page asks for its rows with. A script, a font or a stylesheet is
  * the page itself, and refusing one would picture a broken page rather than a
@@ -143,7 +144,7 @@ async function allRefused(asked: ReadonlySet<string>, refused: ReadonlySet<strin
 async function walked(page: Page, panels: readonly string[]): Promise<void> {
 	for (const id of panels) {
 		const panel = page.locator(selectorOf(id));
-		await expect(panel, `console.panel_groups names ${id}, and the page draws no panel with that id`).toHaveCount(1);
+		await expect(panel, `panel_groups names ${id}, and the page draws no panel with that id`).toHaveCount(1);
 		await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
 	}
 	await page.evaluate(() => {
@@ -250,17 +251,17 @@ async function shot(page: Page, id: string, file: string): Promise<Shot> {
 const line = (one: Shot): string =>
 	`${one.id.padEnd(28)} ${one.state.padEnd(12)} share=${one.share === null ? 'none ' : one.share.toFixed(3)} ${one.file}`;
 
-test('every route console.panel_groups names is one a capture can open', () => {
+test('every configured console route is one a capture can open', () => {
 	const named = consolePanels().routes.map((route) => route.key);
 	expect(named.sort(), 'the capture opens a route the config no longer names').toEqual(
-		Object.keys(CONSOLE_ROUTE_PATHS).sort()
+		BAND_UNREAD.routes.map((route) => route.id).sort()
 	);
 });
 
 for (const route of DRAWS_NO_PANEL_ID) {
 	test(`the ${route} route still draws no panel id, so none of its panels can be pictured`, async ({ page }) => {
 		const listed = consolePanels().routes.find((one) => one.key === route);
-		if (listed === undefined) throw new Error(`console.panel_groups no longer names the ${route} route`);
+		if (listed === undefined) throw new Error(`config/console/${route}.json no longer names the ${route} route`);
 		await opened(page, listed.address, CONSOLE_WIDTHS[0], 'light');
 		test.info().annotations.push({
 			type: 'not pictured',
@@ -278,7 +279,7 @@ test('the broken load refuses every data request the loaded page made, and the p
 	// route does yet - so it is the one place the refusal the broken pictures
 	// depend on can be shown working before a pictured panel fetches. Its own
 	// surface says which nothing it is holding, in `data-telemetry-state`.
-	const address = CONSOLE_ROUTE_PATHS.pipelines;
+	const address = BAND_UNREAD.routes.find((route) => route.id === 'pipelines')!.href;
 	const surface = page.locator('[data-console-panels="pipelines"]');
 	const asked = recorded(page);
 	await opened(page, address, BROKEN_WIDTH, BROKEN_THEME);
@@ -296,15 +297,15 @@ test('the broken load refuses every data request the loaded page made, and the p
 	await expect(surface).toHaveAttribute('data-telemetry-state', 'unreachable', { timeout: 20_000 });
 });
 
-const PICTURED = Object.keys(CONSOLE_ROUTE_PATHS).filter((route) => !DRAWS_NO_PANEL_ID.has(route));
+const PICTURED = BAND_UNREAD.routes.filter((route) => !DRAWS_NO_PANEL_ID.has(route.id));
 
-for (const route of PICTURED) {
+for (const { id: route } of PICTURED) {
 	for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
 		const broken = width === BROKEN_WIDTH && theme === BROKEN_THEME;
 		test(`every ${route} panel, pictured at ${width} in ${theme}`, async ({ page }) => {
-			const started = Date.now();
 			const listed = consolePanels().routes.find((one) => one.key === route);
-			if (listed === undefined) throw new Error(`console.panel_groups no longer names the ${route} route`);
+			if (listed === undefined) throw new Error(`config/console/${route}.json no longer names the ${route} route`);
+			test.skip(listed.panels.length === 0, `config/console/${route}.json draws no panels`);
 			mkdirSync(OUT, { recursive: true });
 			const notes = [`route=${route} address=${listed.address} width=${width} theme=${theme}`];
 
@@ -376,7 +377,6 @@ for (const route of PICTURED) {
 				}
 			}
 
-			notes.push('', `elapsed=${((Date.now() - started) / 1000).toFixed(1)} s`);
 			writeFileSync(path.join(OUT, `_notes--${route}--${width}--${theme}.txt`), `${notes.join('\n')}\n`, 'utf8');
 		});
 	}

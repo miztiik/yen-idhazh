@@ -17,6 +17,8 @@ import {
 } from '../src/lib/server/model-work';
 import { BANDS, pair, renderSwap, swapFixture } from './support/model-swap';
 import { ONE_DAYS, spanSaid } from './support/span-said';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE, type RouteExpect } from './support/console-expect/console-model-panels';
 
 /**
  * The three panels the model route gained on 2026-08-31, and the figure that
@@ -39,14 +41,23 @@ const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
 const NAME_PX = 11;
 const VALUE_PX = 10;
 
+const MODEL_ROUTES = BAND_UNREAD.routes.flatMap((route) => {
+	const expected = BY_ROUTE[route.id]?.modelPanels;
+	return expected ? [{ href: route.href, ...expected }] : [];
+});
+const PIPELINES_ROUTES = BAND_UNREAD.routes.flatMap((route) => {
+	const expected = BY_ROUTE[route.id]?.scoringStage;
+	return expected ? [{ href: route.href, ...expected }] : [];
+});
+
 function timed(date: string, ms: number): Record<string, string> {
 	return { date, summarize_ms: String(ms) };
 }
 
 /** The daily figures sit behind a disclosure, and opening it is an action. */
-async function openDailyFigures(page: Page) {
-	await page.locator('[data-model-table-control] > summary').click();
-	await expect(page.locator('[data-model="table"]')).toBeVisible();
+async function openDailyFigures(page: Page, expected: NonNullable<RouteExpect['modelPanels']>) {
+	await page.locator(expected.dailyControl).click();
+	await expect(page.locator(expected.dailyTable)).toBeVisible();
 }
 
 test.describe('what one summary cost, as a distribution', () => {
@@ -127,94 +138,96 @@ test.describe('what one summary cost, as a distribution', () => {
 		expect(writeTimes([timed('2026-08-20', 0)], WEEK)).toBeNull();
 	});
 
-	test('the chart on the page draws one bar a bin and says what it is out of', async ({ page }) => {
-		await page.goto('/console/model/');
+	for (const MODEL of MODEL_ROUTES) {
+		test('the chart on the page draws one bar a bin and says what it is out of', async ({ page }) => {
+			await page.goto(MODEL.href);
 
-		const chart = page.locator('[data-histogram="write-times"]');
-		await expect(chart, 'the model route draws no per-item cost chart').toHaveCount(1);
+			const chart = page.locator(MODEL.writeTimesChart);
+			await expect(chart, 'the model route draws no per-item cost chart').toHaveCount(1);
 
-		const drawn = await chart.locator('[data-hist-bin]').evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				from: Number(node.getAttribute('data-hist-bin')),
-				n: Number(node.getAttribute('data-hist-bin-n'))
-			}))
-		);
-		expect(drawn.length, 'a distribution of one bar is a number').toBeGreaterThan(1);
-
-		// The bars are the whole population, so they sum to the figure printed
-		// under the chart. A bar chart whose bars do not add up to its own
-		// denominator is two measurements pretending to be one.
-		const total = Number(await chart.getAttribute('data-histogram-n'));
-		expect(drawn.reduce((sum, bin) => sum + bin.n, 0)).toBe(total);
-		await expect(page.locator('[data-write-times="readout"]')).toContainText(
-			`${grouped(total)} summaries`
-		);
-
-		// Every edge doubles, on the page and not only in the module.
-		for (let index = 1; index < drawn.length; index += 1) {
-			expect(drawn[index].from).toBe(drawn[index - 1].from === 0 ? 1 : drawn[index - 1].from * 2);
-		}
-	});
-
-	test('each rule prints its own value, in whole seconds', async ({ page }) => {
-		await page.goto('/console/model/');
-		const chart = page.locator('[data-histogram="write-times"]');
-
-		for (const key of ['median', 'p95']) {
-			const rule = chart.locator(`[data-hist-rule="${key}"]`);
-			await expect(rule, `the ${key} rule is not drawn`).toHaveCount(1);
-			const seconds = Number(await rule.getAttribute('data-hist-rule-seconds'));
-			expect(seconds, `the ${key} rule carries no value`).toBeGreaterThan(0);
-			// The label is the number, so nobody has to read it off the axis.
-			await expect(chart.locator(`[data-hist-rule-label="${key}"]`)).toContainText(`${seconds} s`);
-		}
-
-		// The 95th is at or past the median by definition, and a chart that drew
-		// them the other way round would be drawing the wrong two values.
-		const at = async (key: string) =>
-			Number(await chart.locator(`[data-hist-rule="${key}"]`).getAttribute('x1'));
-		expect(await at('p95')).toBeGreaterThanOrEqual(await at('median'));
-	});
-
-	test('the panels follow the window without claiming to be windowed surfaces', async ({
-		page
-	}) => {
-		// `console-window.spec.ts` holds an exact sorted list of every surface that
-		// declares `data-windowed`, and several panels are in flight against
-		// that one line. These panels honour the control and assert it here
-		// instead, which is the precedent the other panels set.
-		const config = JSON.parse(
-			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-		) as { console?: { window_presets?: number[]; default_window_days?: number } };
-		const presets = config.console?.window_presets ?? [1, 7, 14, 30, 90];
-		const fallback = config.console?.default_window_days ?? 30;
-
-		await page.goto('/console/model/');
-		// Every preset is disabled in the prerendered document and enabled on
-		// mount, so waiting for one is waiting for the control to be able to do
-		// anything at all. Clicking before that just times out.
-		await expect(page.locator(`[data-window-preset="${fallback}"] input`)).toBeEnabled();
-
-		for (const preset of presets) {
-			await page.locator(`[data-window-preset="${preset}"]`).click();
-			await expect(page.locator('[data-window-control]')).toHaveAttribute(
-				'data-window-days',
-				String(preset)
+			const drawn = await chart.locator('[data-hist-bin]').evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					from: Number(node.getAttribute('data-hist-bin')),
+					n: Number(node.getAttribute('data-hist-bin-n'))
+				}))
 			);
-			await expect(
-				page.locator('[data-model-cards-note]'),
-				'the cards stopped following the control'
-			).toHaveAttribute('data-window-days', String(preset));
-			// Every sentence under the new panels names the same span the control
-			// does. Two windows on one page is the defect the oracle exists for.
-			for (const readout of ['[data-write-times="readout"]', '[data-score-cost="readout"]']) {
-				const found = page.locator(readout);
-				if ((await found.count()) === 0) continue;
-				await expect(found, `${readout} names a different span`).toContainText(spanSaid(preset));
-				await expect(found, `${readout} says "1 days"`).not.toContainText(ONE_DAYS);
+			expect(drawn.length, 'a distribution of one bar is a number').toBeGreaterThan(1);
+
+			// The bars are the whole population, so they sum to the figure printed
+			// under the chart. A bar chart whose bars do not add up to its own
+			// denominator is two measurements pretending to be one.
+			const total = Number(await chart.getAttribute('data-histogram-n'));
+			expect(drawn.reduce((sum, bin) => sum + bin.n, 0)).toBe(total);
+			await expect(page.locator(MODEL.writeTimesReadout)).toContainText(
+				`${grouped(total)} summaries`
+			);
+
+			// Every edge doubles, on the page and not only in the module.
+			for (let index = 1; index < drawn.length; index += 1) {
+				expect(drawn[index].from).toBe(drawn[index - 1].from === 0 ? 1 : drawn[index - 1].from * 2);
 			}
-		}
-	});
+		});
+
+		test('each rule prints its own value, in whole seconds', async ({ page }) => {
+			await page.goto(MODEL.href);
+			const chart = page.locator(MODEL.writeTimesChart);
+
+			for (const key of ['median', 'p95']) {
+				const rule = chart.locator(`[data-hist-rule="${key}"]`);
+				await expect(rule, `the ${key} rule is not drawn`).toHaveCount(1);
+				const seconds = Number(await rule.getAttribute('data-hist-rule-seconds'));
+				expect(seconds, `the ${key} rule carries no value`).toBeGreaterThan(0);
+				// The label is the number, so nobody has to read it off the axis.
+				await expect(chart.locator(`[data-hist-rule-label="${key}"]`)).toContainText(`${seconds} s`);
+			}
+
+			// The 95th is at or past the median by definition, and a chart that drew
+			// them the other way round would be drawing the wrong two values.
+			const at = async (key: string) =>
+				Number(await chart.locator(`[data-hist-rule="${key}"]`).getAttribute('x1'));
+			expect(await at('p95')).toBeGreaterThanOrEqual(await at('median'));
+		});
+
+		test('the panels follow the window without claiming to be windowed surfaces', async ({
+			page
+		}) => {
+			// `console-window.spec.ts` holds an exact sorted list of every surface that
+			// declares `data-windowed`, and several panels are in flight against
+			// that one line. These panels honour the control and assert it here
+			// instead, which is the precedent the other panels set.
+			const config = JSON.parse(
+				readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+			) as { console?: { window_presets?: number[]; default_window_days?: number } };
+			const presets = config.console?.window_presets ?? [1, 7, 14, 30, 90];
+			const fallback = config.console?.default_window_days ?? 30;
+
+			await page.goto(MODEL.href);
+			// Every preset is disabled in the prerendered document and enabled on
+			// mount, so waiting for one is waiting for the control to be able to do
+			// anything at all. Clicking before that just times out.
+			await expect(page.locator(`[data-window-preset="${fallback}"] input`)).toBeEnabled();
+
+			for (const preset of presets) {
+				await page.locator(`[data-window-preset="${preset}"]`).click();
+				await expect(page.locator('[data-window-control]')).toHaveAttribute(
+					'data-window-days',
+					String(preset)
+				);
+				await expect(
+					page.locator(MODEL.cardsNote),
+					'the cards stopped following the control'
+				).toHaveAttribute('data-window-days', String(preset));
+				// Every sentence under the new panels names the same span the control
+				// does. Two windows on one page is the defect the oracle exists for.
+				for (const readout of MODEL.windowReadouts) {
+					const found = page.locator(readout);
+					if ((await found.count()) === 0) continue;
+					await expect(found, `${readout} names a different span`).toContainText(spanSaid(preset));
+					await expect(found, `${readout} says "1 days"`).not.toContainText(ONE_DAYS);
+				}
+			}
+		});
+	}
 });
 
 test.describe('what checking a summary cost, off the critical path', () => {
@@ -286,153 +299,158 @@ test.describe('what checking a summary cost, off the critical path', () => {
 		expect(checking.bins.reduce((sum, bin) => sum + bin.n, 0)).toBe(5);
 	});
 
-	test('each drawn rule prints the seconds it marks, and the checking sentence prints the same two', async ({
-		page
-	}) => {
-		await page.goto('/console/model/');
-		// A real measurement that rounds away prints `<1 s` rather than a zero,
-		// which would say it took no time.
-		const spoken = (seconds: number) => (seconds === 0 ? '<1 s' : `${seconds} s`);
-		let drawn = 0;
-		for (const name of ['write-times', 'score-cost']) {
-			const chart = page.locator(`[data-histogram="${name}"]`);
-			if ((await chart.count()) === 0) continue;
-			drawn += 1;
-			for (const key of ['median', 'p95']) {
-				const rule = chart.locator(`[data-hist-rule="${key}"]`);
-				await expect(rule, `${name}: the ${key} rule is not drawn`).toHaveCount(1);
-				const seconds = Number(await rule.getAttribute('data-hist-rule-seconds'));
-				expect(Number.isInteger(seconds), `${name}: the ${key} rule is not whole seconds`).toBe(true);
-				await expect(
-					chart.locator(`[data-hist-rule-label="${key}"]`),
-					`${name}: the ${key} rule is drawn and labelled with another figure`
-				).toContainText(spoken(seconds));
-				if (name === 'score-cost') {
-					await expect(page.locator(`[data-score-cost="${key}"]`)).toHaveText(spoken(seconds));
+	for (const MODEL of MODEL_ROUTES) {
+		test('each drawn rule prints the seconds it marks, and the checking sentence prints the same two', async ({
+			page
+		}) => {
+			await page.goto(MODEL.href);
+			// A real measurement that rounds away prints `<1 s` rather than a zero,
+			// which would say it took no time.
+			const spoken = (seconds: number) => (seconds === 0 ? '<1 s' : `${seconds} s`);
+			let drawn = 0;
+			for (const name of MODEL.histograms) {
+				const chart = page.locator(`[data-histogram="${name}"]`);
+				if ((await chart.count()) === 0) continue;
+				drawn += 1;
+				for (const key of ['median', 'p95']) {
+					const rule = chart.locator(`[data-hist-rule="${key}"]`);
+					await expect(rule, `${name}: the ${key} rule is not drawn`).toHaveCount(1);
+					const seconds = Number(await rule.getAttribute('data-hist-rule-seconds'));
+					expect(Number.isInteger(seconds), `${name}: the ${key} rule is not whole seconds`).toBe(true);
+					await expect(
+						chart.locator(`[data-hist-rule-label="${key}"]`),
+						`${name}: the ${key} rule is drawn and labelled with another figure`
+					).toContainText(spoken(seconds));
+					if (name === 'score-cost') {
+						await expect(page.locator(`[data-score-cost="${key}"]`)).toHaveText(spoken(seconds));
+					}
 				}
 			}
-		}
-		expect(drawn, 'neither distribution drew at all').toBeGreaterThan(0);
-	});
+			expect(drawn, 'neither distribution drew at all').toBeGreaterThan(0);
+		});
 
-	test('THE ORACLE: no two axis labels of a distribution overlap at 390', async ({ page }) => {
-		// Driven against `thinLabels` over the plot the page actually leaves at
-		// 390, because a ledger is not obliged to span eleven doublings and the
-		// committed canary does not: its slowest check is under a second, so every
-		// bar it can draw fits and the drawn page cannot put this rule under load.
-		// An axis the data never stresses is a null result, not a pass.
-		await page.setViewportSize({ width: 390, height: 844 });
-		await page.goto('/console/model/');
+		test('THE ORACLE: no two axis labels of a distribution overlap at 390', async ({ page }) => {
+			// Driven against `thinLabels` over the plot the page actually leaves at
+			// 390, because a ledger is not obliged to span eleven doublings and the
+			// committed canary does not: its slowest check is under a second, so every
+			// bar it can draw fits and the drawn page cannot put this rule under load.
+			// An axis the data never stresses is a null result, not a pass.
+			await page.setViewportSize({ width: 390, height: 844 });
+			await page.goto(MODEL.href);
 
-		const chart = page.locator('[data-histogram="write-times"]');
-		await expect(chart, 'the writing-time chart is not on the page').toHaveCount(1);
+			const chart = page.locator(MODEL.writeTimesChart);
+			await expect(chart, 'the writing-time chart is not on the page').toHaveCount(1);
 
-		// The first and last edge labels are the two ends of the plot, and
-		// `thinLabels` never drops either - so their centres measure the plot the
-		// page gave itself, rather than a number typed in here.
-		const ends = await chart.locator('[data-tick="x"]').evaluateAll((nodes) =>
-			nodes.map((node) => {
-				const box = node.getBoundingClientRect();
-				return box.left + box.width / 2;
-			})
-		);
-		expect(ends.length, 'the chart drew fewer than two edge labels').toBeGreaterThan(1);
-		const plot = Math.max(...ends) - Math.min(...ends);
-		expect(plot, 'the plot measured at nothing').toBeGreaterThan(0);
-
-		// The edge set the real ledger produces: its slowest summary is under
-		// twenty minutes, so the doubling runs to 1024 seconds. Twelve labels, the
-		// same even spacing a log axis gives every doubling.
-		const EDGES = ['<1', '1', '2', '4', '8', '16', '32', '64', '128', '256', '512', '1024'];
-		const laid = EDGES.map((text, index) => ({
-			key: text,
-			text,
-			x: (plot / (EDGES.length - 1)) * index
-		}));
-		// Crowded, not overlapping: two numbers a hair apart read as one longer
-		// number just as surely as two that touch, and the gap is the rule the
-		// component enforces.
-		const half = (text: string) => (text.length * AXIS_LABEL_PX * LABEL_ADVANCE_EM) / 2;
-		const crowded = (labels: { text: string; x: number }[]) => {
-			let pairs = 0;
-			for (let index = 1; index < labels.length; index += 1) {
-				const left = labels[index].x - half(labels[index].text);
-				const right = labels[index - 1].x + half(labels[index - 1].text);
-				if (left < right + AXIS_LABEL_GAP_PX) pairs += 1;
-			}
-			return pairs;
-		};
-		expect(
-			crowded(laid),
-			`twelve doubling edges in ${Math.round(plot)}px are not crowded, so this proves nothing`
-		).toBeGreaterThan(0);
-
-		const kept = thinLabels(laid, AXIS_LABEL_PX, AXIS_LABEL_GAP_PX);
-		expect(crowded(kept), 'two labels the thinning kept are still crowded').toBe(0);
-		expect(kept[0].text, 'the first edge was dropped').toBe(EDGES[0]);
-		expect(kept[kept.length - 1].text, 'the last edge was dropped').toBe(EDGES[EDGES.length - 1]);
-		expect(kept.length, 'the thinning dropped every middle label').toBeGreaterThan(2);
-		expect(kept.length, 'the thinning kept every label, so it did not thin').toBeLessThan(
-			EDGES.length
-		);
-
-		// And then on the page, at the width, over whatever the ledger holds.
-		let checked = 0;
-		for (const name of ['write-times', 'score-cost']) {
-			const drawn = page.locator(`[data-histogram="${name}"]`);
-			if ((await drawn.count()) === 0) continue;
-			const boxes = await drawn.locator('[data-tick="x"]').evaluateAll((nodes) =>
+			// The first and last edge labels are the two ends of the plot, and
+			// `thinLabels` never drops either - so their centres measure the plot the
+			// page gave itself, rather than a number typed in here.
+			const ends = await chart.locator('[data-tick="x"]').evaluateAll((nodes) =>
 				nodes.map((node) => {
 					const box = node.getBoundingClientRect();
-					return { text: node.textContent ?? '', left: box.left, right: box.right };
+					return box.left + box.width / 2;
 				})
 			);
-			expect(boxes.length, `${name} drew no axis labels at all`).toBeGreaterThan(1);
-			const ordered = [...boxes].sort((a, b) => a.left - b.left);
-			for (let index = 1; index < ordered.length; index += 1) {
-				expect(
-					ordered[index].left,
-					`${name}: "${ordered[index - 1].text.trim()}" and "${ordered[index].text.trim()}" overlap at 390`
-				).toBeGreaterThanOrEqual(ordered[index - 1].right);
+			expect(ends.length, 'the chart drew fewer than two edge labels').toBeGreaterThan(1);
+			const plot = Math.max(...ends) - Math.min(...ends);
+			expect(plot, 'the plot measured at nothing').toBeGreaterThan(0);
+
+			// The edge set the real ledger produces: its slowest summary is under
+			// twenty minutes, so the doubling runs to 1024 seconds. Twelve labels, the
+			// same even spacing a log axis gives every doubling.
+			const EDGES = ['<1', '1', '2', '4', '8', '16', '32', '64', '128', '256', '512', '1024'];
+			const laid = EDGES.map((text, index) => ({
+				key: text,
+				text,
+				x: (plot / (EDGES.length - 1)) * index
+			}));
+			// Crowded, not overlapping: two numbers a hair apart read as one longer
+			// number just as surely as two that touch, and the gap is the rule the
+			// component enforces.
+			const half = (text: string) => (text.length * AXIS_LABEL_PX * LABEL_ADVANCE_EM) / 2;
+			const crowded = (labels: { text: string; x: number }[]) => {
+				let pairs = 0;
+				for (let index = 1; index < labels.length; index += 1) {
+					const left = labels[index].x - half(labels[index].text);
+					const right = labels[index - 1].x + half(labels[index - 1].text);
+					if (left < right + AXIS_LABEL_GAP_PX) pairs += 1;
+				}
+				return pairs;
+			};
+			expect(
+				crowded(laid),
+				`twelve doubling edges in ${Math.round(plot)}px are not crowded, so this proves nothing`
+			).toBeGreaterThan(0);
+
+			const kept = thinLabels(laid, AXIS_LABEL_PX, AXIS_LABEL_GAP_PX);
+			expect(crowded(kept), 'two labels the thinning kept are still crowded').toBe(0);
+			expect(kept[0].text, 'the first edge was dropped').toBe(EDGES[0]);
+			expect(kept[kept.length - 1].text, 'the last edge was dropped').toBe(EDGES[EDGES.length - 1]);
+			expect(kept.length, 'the thinning dropped every middle label').toBeGreaterThan(2);
+			expect(kept.length, 'the thinning kept every label, so it did not thin').toBeLessThan(
+				EDGES.length
+			);
+
+			// And then on the page, at the width, over whatever the ledger holds.
+			let checked = 0;
+			for (const name of MODEL.histograms) {
+				const drawn = page.locator(`[data-histogram="${name}"]`);
+				if ((await drawn.count()) === 0) continue;
+				const boxes = await drawn.locator('[data-tick="x"]').evaluateAll((nodes) =>
+					nodes.map((node) => {
+						const box = node.getBoundingClientRect();
+						return { text: node.textContent ?? '', left: box.left, right: box.right };
+					})
+				);
+				expect(boxes.length, `${name} drew no axis labels at all`).toBeGreaterThan(1);
+				const ordered = [...boxes].sort((a, b) => a.left - b.left);
+				for (let index = 1; index < ordered.length; index += 1) {
+					expect(
+						ordered[index].left,
+						`${name}: "${ordered[index - 1].text.trim()}" and "${ordered[index].text.trim()}" overlap at 390`
+					).toBeGreaterThanOrEqual(ordered[index - 1].right);
+				}
+				// The two ends are what the axis is read against, so they are never the
+				// ones dropped.
+				expect(ordered[0].text.trim(), `${name} dropped its first edge`).not.toBe('');
+				checked += 1;
 			}
-			// The two ends are what the axis is read against, so they are never the
-			// ones dropped.
-			expect(ordered[0].text.trim(), `${name} dropped its first edge`).not.toBe('');
-			checked += 1;
-		}
-		expect(checked, 'neither distribution drew at 390').toBeGreaterThan(0);
-	});
+			expect(checked, 'neither distribution drew at 390').toBeGreaterThan(0);
+		});
 
-	test('the model route prints both figures and never the column name', async ({ page }) => {
-		await page.goto('/console/model/');
+		test('the model route prints both figures and never the column name', async ({ page }) => {
+			await page.goto(MODEL.href);
 
-		const readout = page.locator('[data-score-cost="readout"]');
-		await expect(readout, 'the scoring cost is not on the model route').toHaveCount(1);
-		await expect(page.locator('[data-score-cost="median"]')).toHaveText(/^(<1 s|\d+ s)$/);
-		await expect(page.locator('[data-score-cost="p95"]')).toHaveText(/^(<1 s|\d+ s)$/);
+			const readout = page.locator(MODEL.scoreCostReadout);
+			await expect(readout, 'the scoring cost is not on the model route').toHaveCount(1);
+			await expect(page.locator(MODEL.scoreCostMedian)).toHaveText(/^(<1 s|\d+ s)$/);
+			await expect(page.locator(MODEL.scoreCostP95)).toHaveText(/^(<1 s|\d+ s)$/);
 
-		// It is here because nothing waits on it, and the sentence has to say so
-		// or the reader is left with a fourth number and no place to put it.
-		await expect(readout).toContainText('after the model has finished');
-		expect((await readout.innerText()).toLowerCase()).not.toContain('score_ms');
-	});
+			// It is here because nothing waits on it, and the sentence has to say so
+			// or the reader is left with a fourth number and no place to put it.
+			await expect(readout).toContainText(MODEL.scoreCostNote);
+			expect((await readout.innerText()).toLowerCase()).not.toContain(MODEL.scoreColumn);
+		});
 
-	test('it is no longer a stage of the run on the pipelines route', async ({ page }) => {
-		await page.goto('/console/');
+	}
 
-		// The timing chart is titled `Time per item, by stage`, so every line on it
-		// is a thing the run waits on. Scoring is not one.
-		await expect(page.locator('[data-readout="timings"] [data-readout-row="score"]')).toHaveCount(0);
-		await expect(page.locator('[data-stage-mark="score"]')).toHaveCount(0);
-		await expect(page.locator('[data-timing-note="score"]')).toHaveCount(0);
+	for (const PIPELINES of PIPELINES_ROUTES) {
+		test('it is no longer a stage of the run on the pipelines route', async ({ page }) => {
+			await page.goto(PIPELINES.href);
 
-		const series = Number(
-			await page.locator('[data-timing="plot"]').getAttribute('data-timing-series')
-		);
-		expect(series, 'the chart draws more than the three stages an item waits on').toBeLessThanOrEqual(
-			3
-		);
-	});
+			// The timing chart is titled `Time per item, by stage`, so every line on it
+			// is a thing the run waits on. Scoring is not one.
+			for (const selector of PIPELINES.absent) {
+				await expect(page.locator(selector)).toHaveCount(0);
+			}
+
+			const series = Number(
+				await page.locator(PIPELINES.plot).getAttribute(PIPELINES.seriesAttribute)
+			);
+			expect(series, 'the chart draws more than the three stages an item waits on').toBeLessThanOrEqual(
+				PIPELINES.maximumSeries
+			);
+		});
+	}
 });
 
 test.describe('how long the summaries came out', () => {
@@ -484,49 +502,51 @@ test.describe('how long the summaries came out', () => {
 		expect(runs[0].askHigh).toBeNull();
 	});
 
-	test('the chart draws three marks a run and no mark an article', async ({ page }) => {
-		await page.goto('/console/model/');
+	for (const MODEL of MODEL_ROUTES) {
+		test('the chart draws three marks a run and no mark an article', async ({ page }) => {
+			await page.goto(MODEL.href);
 
-		const chart = page.locator('[data-run-lengths="chart"]');
-		await expect(chart, 'the model route draws no per-run length chart').toHaveCount(1);
+			const chart = page.locator(MODEL.runLengthsChart);
+			await expect(chart, 'the model route draws no per-run length chart').toHaveCount(1);
 
-		const runs = Number(await chart.getAttribute('data-run-lengths-runs'));
-		expect(runs, 'no run was drawn').toBeGreaterThan(0);
+			const runs = Number(await chart.getAttribute('data-run-lengths-runs'));
+			expect(runs, 'no run was drawn').toBeGreaterThan(0);
 
-		// The whole ruling: three marks a run. The scatter this replaced drew one
-		// a summary, and its dense middle rendered as a solid block that hid the
-		// only marks anybody acts on.
-		await expect(chart.locator('[data-run-length]')).toHaveCount(runs);
-		await expect(chart.locator('[data-run-cell="range"]')).toHaveCount(runs);
-		await expect(chart.locator('[data-run-cell="median"]')).toHaveCount(runs);
+			// The whole ruling: three marks a run. The scatter this replaced drew one
+			// a summary, and its dense middle rendered as a solid block that hid the
+			// only marks anybody acts on.
+			await expect(chart.locator('[data-run-length]')).toHaveCount(runs);
+			await expect(chart.locator('[data-run-cell="range"]')).toHaveCount(runs);
+			await expect(chart.locator('[data-run-cell="median"]')).toHaveCount(runs);
 
-		const items = await chart
-			.locator('[data-run-length]')
-			.evaluateAll((nodes) =>
-				nodes.reduce((total, node) => total + Number(node.getAttribute('data-run-items')), 0)
-			);
-		expect(items, 'the runs behind the marks hold no summaries').toBeGreaterThan(runs);
-		// A mark an article would put `items` circles on the plot. There are none.
-		await expect(chart.locator('circle')).toHaveCount(0);
-	});
+			const items = await chart
+				.locator('[data-run-length]')
+				.evaluateAll((nodes) =>
+					nodes.reduce((total, node) => total + Number(node.getAttribute('data-run-items')), 0)
+				);
+			expect(items, 'the runs behind the marks hold no summaries').toBeGreaterThan(runs);
+			// A mark an article would put `items` circles on the plot. There are none.
+			await expect(chart.locator('circle')).toHaveCount(0);
+		});
 
-	test('the band prints its two bounds, so the shading can be checked', async ({ page }) => {
-		await page.goto('/console/model/');
+		test('the band prints its two bounds, so the shading can be checked', async ({ page }) => {
+			await page.goto(MODEL.href);
 
-		const ask = page.locator('[data-run-ask]');
-		await expect(ask, 'the band is shaded and says nothing about itself').toHaveCount(1);
-		if ((await ask.getAttribute('data-run-ask')) === 'unmeasured') return;
+			const ask = page.locator('[data-run-ask]');
+			await expect(ask, 'the band is shaded and says nothing about itself').toHaveCount(1);
+			if ((await ask.getAttribute('data-run-ask')) === 'unmeasured') return;
 
-		const low = Number(await page.locator('[data-run-ask-low]').innerText());
-		const high = Number(await page.locator('[data-run-ask-high]').innerText());
-		expect(low).toBeGreaterThan(0);
-		expect(high).toBeGreaterThan(low);
+			const low = Number(await page.locator('[data-run-ask-low]').innerText());
+			const high = Number(await page.locator('[data-run-ask-high]').innerText());
+			expect(low).toBeGreaterThan(0);
+			expect(high).toBeGreaterThan(low);
 
-		// The printed pair is the extent of what was actually drawn, not a
-		// separate reading of the setting.
-		const drawn = await page.locator('[data-run-band]').count();
-		expect(drawn, 'the bounds print for a band nothing drew').toBeGreaterThan(0);
-	});
+			// The printed pair is the extent of what was actually drawn, not a
+			// separate reading of the setting.
+			const drawn = await page.locator('[data-run-band]').count();
+			expect(drawn, 'the bounds print for a band nothing drew').toBeGreaterThan(0);
+		});
+	}
 });
 
 test.describe('did the model change move anything', () => {
@@ -661,69 +681,72 @@ test.describe('did the model change move anything', () => {
 		expect(swapScale([99, 100, 101]).half).toBe(25);
 	});
 
-	test('the panel and the daily table agree about whether the model changed', async ({ page }) => {
-		await page.goto('/console/model/');
-		await openDailyFigures(page);
+	for (const MODEL of MODEL_ROUTES) {
+		test('the panel and the daily table agree about whether the model changed', async ({ page }) => {
+			await page.goto(MODEL.href);
+			await openDailyFigures(page, MODEL);
 
-		// This is the assertion that bites on any fixture. The daily table draws a
-		// divider row per change and the panel draws for the newest one, so a page
-		// carrying one and not the other is a page disagreeing with itself.
-		const dividers = await page.locator('[data-model-swap]').count();
-		const section = page.locator('[data-model-swap-section]');
-		await expect(section).toHaveCount(dividers > 0 ? 1 : 0);
-		if (dividers === 0) return;
+			// This is the assertion that bites on any fixture. The daily table draws a
+			// divider row per change and the panel draws for the newest one, so a page
+			// carrying one and not the other is a page disagreeing with itself.
+			const dividers = await page.locator('[data-model-swap]').count();
+			const section = page.locator('[data-model-swap-section]');
+			await expect(section).toHaveCount(dividers > 0 ? 1 : 0);
+			if (dividers === 0) return;
 
-		// Both counts print above the chart, drawn or not.
-		await expect(page.locator('[data-model-swap-counts]')).toContainText(/\d+ summaries/);
+			// Both counts print above the chart, drawn or not.
+			await expect(page.locator('[data-model-swap-counts]')).toContainText(/\d+ summaries/);
 
-		const plot = page.locator('[data-model-swap-plot]');
-		if ((await plot.count()) === 0) {
-			await expect(page.locator('[data-model-swap="thin"]')).toHaveCount(1);
-			return;
-		}
+			const plot = page.locator('[data-model-swap-plot]');
+			if ((await plot.count()) === 0) {
+				await expect(page.locator('[data-model-swap="thin"]')).toHaveCount(1);
+				return;
+			}
 
-		const rows = await plot.locator('[data-swap-row]').evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				label: node.getAttribute('data-swap-row') ?? '',
-				pct: Number(node.getAttribute('data-swap-pct')),
-				polarity: node.getAttribute('data-polarity') ?? '',
-				values: node.querySelector('[data-swap-cell="values"]')?.textContent ?? '',
-				head: node.querySelector('polygon')?.getAttribute('points') ?? ''
-			}))
-		);
-		expect(rows.length, 'the swap panel drew no measure').toBeGreaterThan(0);
+			const rows = await plot.locator('[data-swap-row]').evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					label: node.getAttribute('data-swap-row') ?? '',
+					pct: Number(node.getAttribute('data-swap-pct')),
+					polarity: node.getAttribute('data-polarity') ?? '',
+					values: node.querySelector('[data-swap-cell="values"]')?.textContent ?? '',
+					head: node.querySelector('polygon')?.getAttribute('points') ?? ''
+				}))
+			);
+			expect(rows.length, 'the swap panel drew no measure').toBeGreaterThan(0);
 
-		const up = rows.filter((entry) => entry.pct > 100);
-		const down = rows.filter((entry) => entry.pct < 100);
-		// Direction is the arrowhead: the tip leads and the base trails, so a row
-		// that rose points right and one that fell points left. The hue became the
-		// measure's own polarity on 2026-08-31 and console-polarity.spec.ts owns
-		// that rule - reading a colour here as well is how two tests come to
-		// disagree about one paint.
-		for (const entry of [...up, ...down]) {
-			const [tip, base] = entry.head.split(' ').map((point) => Number(point.split(',')[0]));
-			expect(
-				entry.pct > 100 ? tip > base : tip < base,
-				`${entry.label} moved to ${entry.pct}% and its arrowhead does not point that way`
-			).toBe(true);
-		}
-		for (const entry of rows) {
-			// A ratio with no magnitude behind it can be a rounding error wearing a
-			// percentage, so both absolute values print on the row.
-			expect(entry.values, `${entry.label} printed no absolute values`).toMatch(/, then /);
-			expect(entry.head, `${entry.label} drew no arrowhead`).not.toBe('');
-			expect(
-				['lower-is-better', 'higher-is-better', 'no-agreed-direction'],
-				`${entry.label} declares no direction, so it would paint neutral by default`
-			).toContain(entry.polarity);
-			// A drawn row is a comparison, so both sides had a value. A row that
-			// only one side recorded belongs in the sentence below the plot.
-			expect(
-				entry.values,
-				`${entry.label} is drawn and one of its two sides recorded nothing`
-			).not.toContain('nothing recorded');
-		}
-	});
+			const up = rows.filter((entry) => entry.pct > 100);
+			const down = rows.filter((entry) => entry.pct < 100);
+			// Direction is the arrowhead: the tip leads and the base trails, so a row
+			// that rose points right and one that fell points left. The hue became the
+			// measure's own polarity on 2026-08-31 and console-polarity.spec.ts owns
+			// that rule - reading a colour here as well is how two tests come to
+			// disagree about one paint.
+			for (const entry of [...up, ...down]) {
+				const [tip, base] = entry.head.split(' ').map((point) => Number(point.split(',')[0]));
+				expect(
+					entry.pct > 100 ? tip > base : tip < base,
+					`${entry.label} moved to ${entry.pct}% and its arrowhead does not point that way`
+				).toBe(true);
+			}
+			for (const entry of rows) {
+				// A ratio with no magnitude behind it can be a rounding error wearing a
+				// percentage, so both absolute values print on the row.
+				expect(entry.values, `${entry.label} printed no absolute values`).toMatch(/, then /);
+				expect(entry.head, `${entry.label} drew no arrowhead`).not.toBe('');
+				expect(
+					['lower-is-better', 'higher-is-better', 'no-agreed-direction'],
+					`${entry.label} declares no direction, so it would paint neutral by default`
+				).toContain(entry.polarity);
+				// A drawn row is a comparison, so both sides had a value. A row that
+				// only one side recorded belongs in the sentence below the plot.
+				expect(
+					entry.values,
+					`${entry.label} is drawn and one of its two sides recorded nothing`
+				).not.toContain('nothing recorded');
+			}
+		});
+
+	}
 
 	test('THE ORACLE: the panel takes the width it is given, and its rows fit it', async ({
 		page

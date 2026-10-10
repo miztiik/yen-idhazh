@@ -3,11 +3,12 @@
  * Nothing in a component is hardcoded that an operator might reasonably want
  * different (Guardrail #6).
  *
- * Two files, and the split is along who edits them and how often.
+ * The split is along who edits each file and how often.
  * `config/appearance.json` owns everything the surface is DRAWN from - the
  * frame, the tokens, the charts, the icons, the digest and console knobs.
  * `config/idhazh.json` owns the pipeline, and this module still reads the two
  * blocks the console needs from it to say whether a run went well.
+ * The six named `config/console/` files own each route's panels and knobs.
  *
  * The appearance blocks moved on 2026-08-29 and the move is backwards
  * compatible: a reader prefers `appearance.json` and falls back to the legacy
@@ -21,7 +22,11 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { routeConsolesFrom, type RouteConsoles } from '../console/route-console';
 import { REPO_ROOT } from './payload';
+
+export { routeConsolesFrom } from '../console/route-console';
+export type { ConsoleDefine } from '../console/route-console';
 
 export interface UiConfig {
 	sections: string[];
@@ -365,24 +370,6 @@ export interface ExplorerConfig {
 	examples: ExplorerExample[];
 }
 
-/** One heading on a console route, and the panels under it, in drawn order.
- *
- * Not a field of `ConsoleConfig`, and the omission is the point: whatever
- * `consoleConfig()` returns is inlined into all five prerendered console
- * documents, and a route has no use for another route's running order. Each
- * route reads its own list through `panelGroupsFor`.
- *
- * `ConsolePanelGroup` in `backend/idhazh/contracts/appearance_config.py`, which
- * is where what each key means is written.
- */
-export interface ConsolePanelGroup {
-	id: string;
-	title: string;
-	panels: string[];
-}
-
-type PanelGroups = Record<string, ConsolePanelGroup[]>;
-
 /** What on-device archive search reads, keeps and shows.
  *
  * **Four fields, and the `assist` block in `config/` holds more.** Whatever
@@ -667,70 +654,6 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	]
 };
 
-/** The running order a fresh clone draws, and the one the committed config
- * repeats. Four headings on Hardware, each naming a decision an operator takes
- * rather than a time grain, because a grain is a fact about one panel and the
- * panel says it; one untitled group on Pipelines, because what that route
- * needed was an order rather than headings. The first panel of the first group
- * is the one that verdicts the rest. */
-const PANEL_GROUP_DEFAULTS: PanelGroups = {
-	pipelines: [
-		{
-			id: 'pipelines',
-			title: '',
-			panels: [
-				'at-a-glance',
-				'run-health',
-				'site-cost-per-item',
-				'failure-mix',
-				'item-time-split',
-				'throughput-viewport',
-				'stage-timings',
-				'item-cost',
-				'run-timeline',
-				'chart-drawing',
-				'extraction'
-			]
-		}
-	],
-	machine: [
-		{
-			id: 'what-the-machine-was-doing',
-			title: 'What the machine was doing',
-			panels: [
-				'two-clocks',
-				'processor-lost',
-				'disk-reads',
-				'machine-cards',
-				'reading-against-writing',
-				'platform-mix'
-			]
-		},
-		{
-			id: 'where-the-time-went',
-			title: 'Where the time went',
-			panels: ['shard-board', 'tail-trend']
-		},
-		{
-			id: 'how-close-to-the-limits',
-			title: 'How close we are to the limits',
-			panels: ['memory-board', 'memory-held', 'context-headroom']
-		},
-		{
-			id: 'what-the-model-spends',
-			title: 'What the model spends',
-			panels: ['article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost']
-		}
-	]
-	,
-	'data-explorer': [
-		{
-			id: 'data-explorer',
-			title: '',
-			panels: ['data-explorer-ask', 'data-explorer-rows', 'data-explorer-shape']
-		}
-	]
-};
 const ASSIST_DEFAULTS: AssistConfig = {
 	similarity_floor: 0.35,
 	result_limit: 10,
@@ -857,12 +780,8 @@ const BUILD_ONLY_KEYS = [
 type DigestBlock = Partial<UiConfig> &
 	Partial<Record<(typeof BUILD_ONLY_KEYS)[number], number>>;
 
-/** The `console` block: everything `ConsoleConfig` holds, plus the running
- * order, which `consoleConfig()` deliberately leaves out of what it inlines.
- * The block also carries `judged_panel_ids` and `plot_min_fill_share`, which
- * only the sufficiency specs read, straight from the file - so no type here
- * names them and `consoleConfig()` leaves them out too. */
-type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups } & Partial<Record<`explorer_${string}`, any>>;
+/** Shared console and explorer knobs. `consoleConfig()` keeps only its declared fields. */
+type ConsoleBlock = Partial<ConsoleConfig> & Partial<Record<`explorer_${string}`, any>>;
 type LedgerBlock = {
 	engine_extension_repository?: string;
 	archive_base_url?: string;
@@ -1170,11 +1089,9 @@ export function summarizeConfig(): SummarizeConfig {
 export function consoleConfig(): ConsoleConfig {
 	const merged = mergeLayers(CONSOLE_DEFAULTS, raw().console, appearance().console);
 	// Whatever this returns is inlined into all five prerendered console
-	// documents, so it keeps the declared interface and nothing else. The block
-	// also holds the running order, which each route reads for itself - see the
-	// note on `ConsolePanelGroup` - and a knob no page reads would otherwise ride
-	// to every one of them. `CONSOLE_DEFAULTS` names every field of the
-	// interface, so there is no second list here to forget to update.
+	// documents, so it keeps the declared interface and nothing else.
+	// `CONSOLE_DEFAULTS` names every field of the interface, so there is no
+	// second list here to forget to update.
 	const kept = {} as Record<keyof ConsoleConfig, unknown>;
 	for (const key of Object.keys(CONSOLE_DEFAULTS) as (keyof ConsoleConfig)[]) {
 		kept[key] = merged[key];
@@ -1212,27 +1129,18 @@ export function explorerConfig(): ExplorerConfig {
 	};
 }
 
-/** The groups one console route draws, in order, refusing a list it cannot draw.
- *
- * `drawn` is the route's own set of panel ids. A config that names a panel the
- * route does not implement, or leaves one out, fails the build here rather than
- * dropping a panel off the page in silence - a missing panel renders as nothing
- * at all, and nothing is exactly what an empty window looks like.
- */
-export function panelGroupsFor(route: string, drawn: readonly string[]): ConsolePanelGroup[] {
-	const configured = appearance().console?.panel_groups ?? raw().console?.panel_groups;
-	const groups = (configured ?? PANEL_GROUP_DEFAULTS)[route] ?? [];
-	const named = groups.flatMap((group) => group.panels);
-	const missing = drawn.filter((panel) => !named.includes(panel));
-	const unknown = named.filter((panel) => !drawn.includes(panel));
-	if (missing.length > 0 || unknown.length > 0) {
-		throw new Error(
-			`console.panel_groups.${route} does not match the route: ` +
-				`${missing.length} panel(s) it draws are unplaced [${missing.join(', ')}], ` +
-				`${unknown.length} named panel(s) it does not draw [${unknown.join(', ')}]`
-		);
+/** The six named console files, validated before Vite defines the browser value. */
+export function routeConsoles(): RouteConsoles {
+	const files: Record<string, unknown> = {};
+	for (const route of ['pipelines', 'model', 'machine', 'judgement', 'voices', 'data-explorer']) {
+		const file = `config/console/${route}.json`;
+		try {
+			files[route] = JSON.parse(readFileSync(join(REPO_ROOT, 'config', 'console', `${route}.json`), 'utf-8'));
+		} catch (error) {
+			throw new Error(`${file} is missing or invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
-	return groups;
+	return routeConsolesFrom(files);
 }
 
 export function assistConfig(): AssistConfig {

@@ -38,6 +38,8 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { buildSwap, pair, renderSwap, swapFixture, timedPair } from './support/model-swap';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE, type Chart } from './support/console-expect/console-mark-parity';
 
 /** Two widths far enough apart that the frame is bound to change and the gutter
  * charts cross from beside to stacked - which moves the layout and must not
@@ -49,72 +51,10 @@ const NARROW = { width: 560, height: 1200 };
  * canary, so the window change costs no fetch and leaves data on every chart. */
 const OTHER_WINDOW = 7;
 
-interface Chart {
-	name: string;
-	/** The element carrying the data-only extent this row publishes, and the
-	 * root the marks are read from. */
-	root: string;
-	domainAttr: string;
-	/** The element whose viewBox says which frame the chart last drew to. */
-	frame: string;
-	/** The drawn marks, and the data attributes a resize must leave alone. */
-	itemSel: string;
-	attrs: string[];
-}
-
-/** A chart the canary draws, and the route it draws on. */
-interface CanaryChart extends Chart {
-	route: string;
-}
-
-const CHARTS: CanaryChart[] = [
-	{
-		name: 'stage timings',
-		route: '/console/',
-		root: '[data-timing="plot"]',
-		domainAttr: 'data-timing-domain',
-		frame: '[data-timing="plot"]',
-		itemSel: 'polyline[data-stage-mark], circle[data-stage-mark], circle[data-stage-zero]',
-		attrs: ['data-stage-mark', 'data-stage-zero']
-	},
-	{
-		name: 'band distance',
-		route: '/console/',
-		root: '[data-band-distance]',
-		domainAttr: 'data-band-domain',
-		frame: '[data-band-distance] svg',
-		itemSel: '[data-band-day]',
-		attrs: ['data-band-day', 'data-band-inside', 'data-band-short', 'data-band-long', 'data-band-items']
-	},
-	{
-		name: 'source cut range',
-		route: '/console/voices/',
-		root: '[data-source-cuts="range"] svg',
-		domainAttr: 'data-source-domain',
-		frame: '[data-source-cuts="range"] svg',
-		itemSel: '[data-source-cut]',
-		attrs: ['data-source-cut', 'data-range-min', 'data-range-median', 'data-range-max', 'data-range-past']
-	},
-	{
-		name: 'run lengths',
-		route: '/console/model/',
-		root: '[data-run-lengths="chart"]',
-		domainAttr: 'data-run-domain',
-		frame: '[data-run-lengths="chart"] svg',
-		itemSel: '[data-run-length]',
-		attrs: ['data-run-length', 'data-run-low', 'data-run-median', 'data-run-high', 'data-run-items']
-	},
-	{
-		name: 'time histogram',
-		route: '/console/model/',
-		// Two histograms draw on this route; the first is enough to hold the split.
-		root: '[data-histogram-n]',
-		domainAttr: 'data-hist-domain',
-		frame: '[data-histogram-n] svg',
-		itemSel: '[data-hist-bin]',
-		attrs: ['data-hist-bin', 'data-hist-bin-n']
-	}
-];
+const CHARTS = BAND_UNREAD.routes.flatMap((route) => {
+	const expected = BY_ROUTE[route.id];
+	return expected === null ? [] : expected.charts.map((chart) => ({ ...chart, route: route.href }));
+});
 
 /** The swap panel, read the way the other five are. It draws only where the
  * ledger recorded a model change, and the canary runs one model start to

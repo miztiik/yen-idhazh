@@ -1,6 +1,6 @@
 # Test Selection
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-09
 
 Why a pull request runs only some of the tests, what that choice gives up, and
 what was rejected on the way to it. The commands, the groups and the current
@@ -65,7 +65,10 @@ console's own, or the harness that chooses. They are most of the browser suite,
 and the console is a page one operator opens rather than anything a reader is
 served. The cost, stated rather than implied: a shared component or a token edit
 that breaks the console is found on the merge push to `main`, not on the pull
-request that caused it.
+request that caused it. `Panel.svelte` is an exception: every console route
+renders this shared frame, so editing it runs both console specs and panel
+sufficiency checks on the pull request. Other shared drawing inputs still follow
+the wider panel selection below.
 
 **Panel sufficiency checks use a wider selection than the console.** They run
 for panel frames, readout strips, chart modules, styles, appearance config and
@@ -73,6 +76,29 @@ their own fixtures and helpers. Bulk review pictures are explicit instead:
 dispatch CI with `panel_captures=true` on the branch being reviewed.
 Routine runs no longer supply those pictures automatically. Browser assertions
 and sufficiency checks still run when selected.
+
+**Route-owned config selects the console, not every group.** Each named file
+under `config/console/` selects `logic`, `console`, `panels` and `publishing`.
+This prefix belongs to both `CONSOLE_OWNED` and `PANELS_DRAWN`, so a pull request
+runs the console and sufficiency checks rather than deferring them. The existing
+config-change flags still apply: contract checks and archive revalidation remain
+selected. Mixed edits keep the union of their groups, and unknown paths still
+select full coverage. Both slash conventions produce the same answer.
+
+The extracted `tests/support/console-expect/` and `tests/support/panel-drivers/`
+files are also console-owned inputs. Editing their literals or drivers alone
+runs console and panel checks on a pull request, just as editing the original
+spec did; other shared test helpers retain their existing selection.
+
+**The route-ownership guard is a logic spec.**
+`frontend/tests/console-route-scope.spec.ts` is registered in the explicit
+inventory in `frontend/scripts/test-groups.ts`. A change confined to this spec
+selects logic checks with no site build or browser. Its inputs are the named
+spec inventory, the seventeen expectation folders, six route driver modules
+and explicit source and helper lists. Adding unrelated files does not enlarge
+its reads. A new consumer must be named in that inventory; a new route must also
+join each typed expectation and driver index. The guard's ownership rules live
+on the [console page](../architecture/publishing/console.md#each-route-owns-its-config-expectations-and-gate-drivers).
 
 **A path filter is not a dependency map.** Shared styles, layouts and frontend
 dependencies reach the console without naming it, and the boundary is crossed in

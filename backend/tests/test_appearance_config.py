@@ -42,7 +42,7 @@ from idhazh.contracts.appearance_config import (
     MotionConfig,
     ThemeConfig,
 )
-from idhazh.contracts.knobs.console import ConsoleConfig, ConsolePanelGroup
+from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.ui import ThemeChoice, UiConfig
 
 pytestmark = pytest.mark.contract
@@ -335,44 +335,20 @@ def test_the_archive_may_not_list_more_than_a_month_of_days_as_rows() -> None:
     assert UiConfig().archive_recent_days == 14
 
 
-def _two_routes(first: list[str], second: list[str]) -> dict[str, list[ConsolePanelGroup]]:
-    """A console of two untitled routes, each one group, named by its panels."""
-    return {
-        "one": [ConsolePanelGroup(id="one", title="", panels=first)],
-        "two": [ConsolePanelGroup(id="two", title="", panels=second)],
-    }
-
-
-def test_the_gates_judge_only_a_panel_the_console_draws_and_each_one_once() -> None:
-    """The judged list is a subset of the running order, and says each panel once.
-
-    A judged id no route places is a panel the gate spec would look for and never
-    find - so the failure would name a page instead of the file that is wrong.
-    Each refusal names the id, because that is the one word a person needs to
-    find the line.
-    """
-    groups = _two_routes(["alpha", "beta"], ["gamma"])
-    with pytest.raises(ValidationError, match="judged_panel_ids names delta, and no route"):
-        ConsoleConfig(panel_groups=groups, judged_panel_ids=["alpha", "delta"])
-    with pytest.raises(ValidationError, match="judged_panel_ids names gamma twice"):
-        ConsoleConfig(panel_groups=groups, judged_panel_ids=["gamma", "gamma"])
-    judged = ConsoleConfig(panel_groups=groups, judged_panel_ids=["gamma", "alpha"])
-    assert judged.judged_panel_ids == ["gamma", "alpha"]
-    assert ConsoleConfig().judged_panel_ids == [], (
-        "nothing is judged until a panel is redrawn to the gates"
-    )
-
-
-def test_one_panel_id_is_one_panel_on_the_whole_console() -> None:
-    """An id is how a panel's pictures are filed and how the gates find it.
-
-    The same id on two routes would be one name for two panels: the second
-    picture would overwrite the first, and a judged id would pick one at random.
-    """
-    with pytest.raises(ValidationError, match="names alpha on one and on two"):
-        ConsoleConfig(panel_groups=_two_routes(["alpha", "beta"], ["alpha"]))
-    apart = ConsoleConfig(panel_groups=_two_routes(["alpha"], ["beta"]))
-    assert apart.panel_groups.keys() == {"one", "two"}
+@pytest.mark.parametrize("field", ["panel_groups", "judged_panel_ids"])
+def test_route_panel_lists_are_not_shared_console_knobs(field: str) -> None:
+    """Route files own these lists; neither shared contract declares a second copy."""
+    assert field not in ConsoleConfig.model_fields
+    for contract in (AppearanceConfig, AppConfig):
+        definitions = contract.json_schema()["$defs"]
+        assert field not in definitions["ConsoleConfig"]["properties"]
+        assert "ConsolePanelGroup" not in definitions
+        with pytest.raises(ValidationError) as refused:
+            contract.model_validate({"console": {field: []}})
+        assert any(
+            error["loc"] == ("console", field) and error["type"] == "extra_forbidden"
+            for error in refused.value.errors()
+        )
 
 
 def test_the_fill_floor_is_a_share_of_the_panel() -> None:

@@ -2,6 +2,8 @@ import { expect, test, type Page } from './support/browser';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
 import { dayReady } from './support/day-ready';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-band';
 
 /**
  * The band's remaining-room figure, and the unit it is allowed to be in.
@@ -75,7 +77,7 @@ test('no rate of runs a day can move the answer', () => {
  * Measured on this tree at bf37eeef, 2026-09-01, node 24.12.0, real build: the
  * band was 340px at 1440x1000 and 586px at 390x844 - 69 percent of a phone
  * viewport - with the window control inside it and the navigation strip 577px
- * down the page, below both. The first drawn chart on `/console/` was at 890px
+ * down the page, below both. The first drawn chart on Pipelines was at 890px
  * and 1,372px, and the band was 99 words.
  *
  * After: the band is 113px and 282px, 50 words, with the strip above it and the
@@ -99,11 +101,6 @@ test('no rate of runs a day can move the answer', () => {
  * (fonts, not code). The new line keeps the 34px of headroom the old one had
  * over its own measurement rather than being picked to clear today's reading.
  */
-const VIEWPORTS = [
-	{ name: 'desktop', width: 1440, height: 1000, band: 130, chart: 800 },
-	{ name: 'phone', width: 390, height: 844, band: 320, chart: 1200 }
-] as const;
-
 /** The top and height of one element, in page coordinates. */
 async function boxOf(page: Page, selector: string) {
 	return page.locator(selector).evaluate((node) => {
@@ -112,12 +109,16 @@ async function boxOf(page: Page, selector: string) {
 	});
 }
 
-for (const view of VIEWPORTS) {
+for (const { id, href, label } of BAND_UNREAD.routes) {
+	const expected = BY_ROUTE[id];
+	if (expected === null) continue;
+	test.describe(label, () => {
+for (const view of expected.viewports) {
 	test(`THE ORACLE: the band is three facts and half the height at ${view.width}`, async ({
 		page
 	}) => {
 		await page.setViewportSize({ width: view.width, height: view.height });
-		await page.goto('/console/');
+		await page.goto(href);
 		await hydrated(page);
 
 		const band = await boxOf(page, '[data-console-band]');
@@ -145,10 +146,11 @@ for (const view of VIEWPORTS) {
 	});
 }
 
+if (expected.chromeOrder) {
 test('THE ORACLE: chrome reads top to bottom - title, strip, completeness, band, days sentence', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(href);
 
 	// Read as an ordering of tops rather than of DOM nodes, because that is what
 	// a reader gets. Until 2026-08-31 the strip sat 337px BELOW the band on a
@@ -200,11 +202,13 @@ test('THE ORACLE: chrome reads top to bottom - title, strip, completeness, band,
 		'the sentence about the span went onto the strip with the control'
 	).toHaveCount(0);
 });
+}
 
+if (expected.worstState) {
 test('the band says what the worst state costs, and the strip keeps the short form', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(href);
 
 	const worst = page.locator('[data-band-worst]');
 	const route = await worst.getAttribute('data-band-worst-route');
@@ -226,11 +230,13 @@ test('the band says what the worst state costs, and the strip keeps the short fo
 	expect(band, 'the band names no consequence').toContain(', so ');
 	expect(band.length, 'the band is not saying more than the strip').toBeGreaterThan(strip.length);
 });
+}
 
+if (expected.runSquares) {
 test('the newest day draws one square a run, on the same ramp as the run strip', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(href);
 
 	// The sentence says the day ran N runs and published M of P. It cannot say
 	// whether one run ate every failure or all of them limped, and that is the
@@ -296,6 +302,9 @@ test('the newest day draws one square a run, on the same ramp as the run strip',
 	}
 	await expect(page.locator('[data-band-fact="verdict"] [data-band-run][title]')).toHaveCount(0);
 });
+}
+	});
+}
 
 test('THE ORACLE: the band is the same three facts on every route, and no window moves it', async ({
 	page
@@ -306,19 +315,19 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 		return (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	};
 
-	// One band, derived once in the shared layout and drawn above all five route
-	// panels. Five routes deriving their own would eventually disagree about which
+	// One band, derived once in the shared layout and drawn above every route's
+	// panels. Routes deriving their own would eventually disagree about which
 	// one of them is worst, which is the whole reason it is derived once.
 	//
-	// Three routes rather than five, because `hydrated` waits for a window control
-	// and this half of the oracle only needs enough routes to prove the derivation
-	// is shared. That the band is word for word identical on all FIVE is asserted
-	// in `console-nav.spec.ts`, which does not wait on hydration; what this test
-	// adds is the half that needs one, below.
-	const pipelines = await bandText('/console/');
-	expect(pipelines.length, 'the band drew nothing on /console/').toBeGreaterThan(0);
-	for (const path of ['/console/model/', '/console/machine/']) {
-		expect(await bandText(path), `the band differs on ${path}`).toBe(pipelines);
+	// The expectations name the routes that share it, independently of the
+	// layout. The comparison needs hydration for the control checks below.
+	const shared = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.sharedBand);
+	expect(shared.length, 'no route expects the standing band').toBeGreaterThan(0);
+	const first = shared[0];
+	const pipelines = await bandText(first.href);
+	expect(pipelines.length, `the band drew nothing on ${first.href}`).toBeGreaterThan(0);
+	for (const route of shared.slice(1)) {
+		expect(await bandText(route.href), `the band differs on ${route.href}`).toBe(pipelines);
 	}
 
 	// The band is deliberately not windowed: a route's control governs the panels
@@ -326,7 +335,9 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	// preset may not move the three facts. This is also the
 	// guardrail on the read change - a band sourced from the newest day cannot have
 	// quietly become a windowed read.
-	await page.goto('/console/model/');
+	for (const { id, href } of BAND_UNREAD.routes) {
+		if (!BY_ROUTE[id]?.windowStable) continue;
+	await page.goto(href);
 	await hydrated(page);
 	const before = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	const current = await page.locator('[data-window-control]').getAttribute('data-window-days');
@@ -342,6 +353,7 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	);
 	const after = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	expect(after, 'moving a route window control moved the standing band').toBe(before);
+	}
 });
 
 /** A request for code, not for an answer. The band is measured against the
@@ -352,9 +364,11 @@ const CODE = /\/_app\/|\.(?:js|mjs|css|map|woff2?|ico|png|jpe?g|svg|webmanifest)
  * loads return. The router fetches it and AWAITS it before it runs a single
  * universal load, so while the console keeps a server load this one file is
  * ahead of the band and there is nothing the band can do about it. */
-const ROUTE_DATA = '/console/__data.json';
-
-test('THE ORACLE: the band is the first payload the console asks for', async ({ page }) => {
+for (const { id, href } of BAND_UNREAD.routes) {
+	const payload = BY_ROUTE[id]?.firstPayload;
+	if (payload === null || payload === undefined) continue;
+	const ROUTE_DATA = payload.routeData;
+test(`THE ORACLE: the band is the first payload the console asks for on ${href}`, async ({ page }) => {
 	const issued: string[] = [];
 	page.on('request', (request) => issued.push(new URL(request.url()).pathname));
 
@@ -381,13 +395,13 @@ test('THE ORACLE: the band is the first payload the console asks for', async ({ 
 		await route.continue();
 	});
 
-	await page.evaluate(() => {
+	await page.evaluate((href) => {
 		const link = document.createElement('a');
-		link.href = '/console/';
+		link.href = href;
 		link.id = 'oracle-console-entry';
 		link.textContent = 'console';
 		document.body.prepend(link);
-	});
+	}, href);
 	await page.click('#oracle-console-entry');
 	await hydrated(page);
 	// Wait for the route to have asked for its panel data as well, so this cannot
@@ -405,7 +419,7 @@ test('THE ORACLE: the band is the first payload the console asks for', async ({ 
 	const order = payloads.join(', ');
 	expect(payloads.length, `the console asked for ${payloads.length} payloads: ${order}`).toBeGreaterThan(1);
 
-	const bandAt = payloads.indexOf('/console/band.json');
+	const bandAt = payloads.indexOf(payload.band);
 	expect(bandAt, `the console never asked for the band: ${order}`).toBeGreaterThanOrEqual(0);
 
 	// Nothing of ours may be ahead of it. Measured 2026-09-09 on this tree, node
@@ -425,7 +439,7 @@ test('THE ORACLE: the band is the first payload the console asks for', async ({ 
 
 	// And it is ahead of every panel the page draws, which is the thing decision 2
 	// bought: the verdict does not wait for the data behind it.
-	const panels = payloads.filter((path) => path.startsWith('/telemetry/'));
+	const panels = payloads.filter((path) => path.startsWith(payload.panels));
 	expect(panels.length, `the route drew no panel data at all: ${order}`).toBeGreaterThan(0);
 	for (const panel of panels) {
 		expect(payloads.indexOf(panel), `${panel} was asked for before the band: ${order}`).toBeGreaterThan(
@@ -433,3 +447,4 @@ test('THE ORACLE: the band is the first payload the console asks for', async ({ 
 		);
 	}
 });
+}

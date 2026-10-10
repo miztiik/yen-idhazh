@@ -14,10 +14,11 @@ import {
 	unreachableSentence,
 	type EmptyDrawing
 } from '../src/lib/charts/d3/empty';
-import { consolePanels, CONSOLE_ROUTE_PATHS } from './support/console-panels';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { consolePanels, type ConsolePanels } from './support/console-panels';
+import { BY_ROUTE, type PanelDrivers, type RouteDrivers } from './support/panel-drivers';
 import { chooseExplorerQuestion, openExplorer, runExplorer } from './support/explorer-answer';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
-import { machineRecordState } from './support/machine-record-state';
 import { viewsOf } from './support/views';
 import {
 	judgeComparison,
@@ -28,6 +29,7 @@ import {
 	NOTHINGS,
 	REFUSED_NOTHINGS,
 	type BasicNothing,
+	type Driver,
 	readPanel,
 	type GateNumber,
 	type Nothing,
@@ -51,7 +53,7 @@ const PINNED = '2026-08-20';
  * tells its four nothings apart - and they are judged by
  * `support/panel-gates.ts`, the same code for a real panel and for the witness.
  *
- * **The gates judge an opt-in list.** `console.judged_panel_ids` names the
+ * **The gates judge an opt-in list.** Each route's console file names the
  * panels held to them, and a panel joins it in the pull request that redraws
  * it: the attributes three of the gates read exist on no panel yet, so judging
  * every panel would make the gates red on the day they landed, and a gate that
@@ -247,33 +249,58 @@ test.describe('the witness panel', () => {
 
 // --- The panels the console has opted in ---------------------------------
 
-type Driver = (page: Page) => Promise<void>;
-
-/** How a judged panel is put into each of its four nothings on its own route.
- *
- * Keyed by panel id, and set up before the route is opened: each one answers
- * the panel's own data requests the way that nothing would. A panel joins
- * `console.judged_panel_ids` with its entry here, in the same pull request -
- * the requests a panel makes are its own, so nothing here can guess them.
- */
-const DRIVERS: Record<string, Record<BasicNothing, Driver>> = {
-	'platform-mix': {
-		loading: (page) => machineRecordState(page, 'loading'),
-		missing: (page) => machineRecordState(page, 'missing'),
-		quiet: (page) => machineRecordState(page, 'quiet'),
-		unreachable: (page) => machineRecordState(page, 'unreachable')
-	}
-};
-
-function driverFor(id: string): Record<BasicNothing, Driver> {
-	const driver = DRIVERS[id];
-	if (driver === undefined) {
+function declarationFor(
+	route: RouteId,
+	id: string,
+	byRoute: Readonly<Record<RouteId, RouteDrivers>> = BY_ROUTE
+): PanelDrivers | null {
+	const { DRIVERS, BUILD_TIME } = byRoute[route];
+	const driven = Object.hasOwn(DRIVERS, id);
+	const built = BUILD_TIME.includes(id);
+	if (driven === built) {
 		throw new Error(
-			`console.judged_panel_ids names ${id}, and nothing here can put it into its four nothings - ` +
-				`add its entry to DRIVERS in frontend/tests/panel-sufficiency.spec.ts in the pull request that judges it`
+			`config/console/${route}.json judges ${id}, and panel-drivers/${route}.ts declares it in ` +
+				`${driven ? 'both DRIVERS and BUILD_TIME' : 'neither DRIVERS nor BUILD_TIME'}`
 		);
 	}
-	return driver;
+	return driven ? DRIVERS[id] : null;
+}
+
+/** Every judged id has one owner and one complete declaration before any gate runs. */
+function validateDrivers(
+	panels: ConsolePanels,
+	byRoute: Readonly<Record<RouteId, RouteDrivers>> = BY_ROUTE
+): void {
+	const drivenOn = new Map<string, RouteId>();
+	for (const { id: route } of BAND_UNREAD.routes) {
+		for (const id of Object.keys(byRoute[route].DRIVERS)) {
+			const other = drivenOn.get(id);
+			if (other !== undefined) {
+				throw new Error(`${id} is driven twice, by panel-drivers/${other}.ts and panel-drivers/${route}.ts`);
+			}
+			drivenOn.set(id, route);
+		}
+	}
+	for (const { key: route, judged } of panels.routes) {
+		const { DRIVERS, BUILD_TIME } = byRoute[route];
+		if (new Set(BUILD_TIME).size !== BUILD_TIME.length) {
+			throw new Error(`panel-drivers/${route}.ts repeats an id in BUILD_TIME`);
+		}
+		for (const id of [...Object.keys(DRIVERS), ...BUILD_TIME]) {
+			if (!judged.includes(id)) {
+				throw new Error(`panel-drivers/${route}.ts declares ${id}, which config/console/${route}.json does not judge`);
+			}
+		}
+		for (const id of judged) {
+			const driver = declarationFor(route, id, byRoute);
+			if (driver === null) continue;
+			for (const state of NOTHINGS) {
+				if (typeof driver[state] !== 'function') {
+					throw new Error(`panel-drivers/${route}.ts names ${id} but has no ${state} driver`);
+				}
+			}
+		}
+	}
 }
 
 async function opened(page: Page, address: string, width: number, theme: Theme): Promise<void> {
@@ -295,108 +322,107 @@ async function settled(page: Page, id: string) {
 	return panel;
 }
 
-async function settledExplorer(page: Page, id: string, width: number, theme: Theme): Promise<PanelReading> {
+async function settledExplorer(page: Page, width: number, theme: Theme): Promise<void> {
 	await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
 	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
 	await openExplorer(page, PINNED);
+	await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
 	await runExplorer(page);
-	if (id === 'data-explorer-shape') await showPanel(page, id);
-	return readPanel(await settled(page, id));
-}
-
-async function explorerNothing(page: Page, id: string, state: Nothing, theme: Theme): Promise<PanelReading> {
-	await page.unrouteAll({ behavior: 'ignoreErrors' });
-	await page.setViewportSize({ width: NOTHING_WIDTH, height: CONSOLE_WINDOW_HEIGHT });
-	await page.addInitScript((chosen) => localStorage.setItem('idhazh:theme', chosen), theme);
-	if (state === 'unreachable') await page.route('**/state/**/*.parquet*', (route) => route.abort());
-	await openExplorer(page, PINNED);
-	if (state === 'loading') {
-		await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"', false);
-		let release!: () => void;
-		const held = new Promise<void>((resolve) => { release = resolve; });
-		await page.route('**/state/**/*.parquet*', async (route) => {
-			await held;
-			await route.continue();
-		}, { times: 1 });
-		if (id === 'data-explorer-shape') await showPanel(page, id);
-		await page.getByRole('button', { name: /^Run$/ }).click();
-		const panel = page.locator(`[data-console-panel-id="${id}"]`);
-		await expect(panel.locator('.shimmer, [data-state="loading"]')).toHaveCount(1);
-		const reading = await readPanel(panel);
-		release();
-		return reading;
-	}
-	const sql =
-		state === 'quiet' ? 'SELECT * FROM "published" WHERE false' :
-		state === 'missing' ? 'SELECT count(*) AS rows FROM "feed-health"' :
-		state === 'refused' ? 'SELECT 1; SELECT 2' :
-		'SELECT count(*) AS rows FROM "published"';
-	const ledgers = state === 'missing' ? (['feed-health'] as const) : (['published'] as const);
-	await chooseExplorerQuestion(page, ledgers, sql, false);
-	await runExplorer(page);
-	if (id === 'data-explorer-shape') await showPanel(page, id);
-	const panel = page.locator(`[data-console-panel-id="${id}"]`);
-	await expect(panel.locator(state === 'refused' ? '[data-state="refused"]' : `[data-state="${state}"]`)).toHaveCount(1);
-	return readPanel(panel);
 }
 
 test.describe('the judged panels', () => {
-	test('every judged panel clears gates 1, 2, 3, 5 and 6 at every view', async ({ page }) => {
-		const { judged, routeOf, fillFloor } = consolePanels();
-		test.info().annotations.push({ type: 'judged panels', description: `${judged.length}: ${judged.join(', ') || 'none yet'}` });
-		for (const id of judged) {
-			const address = CONSOLE_ROUTE_PATHS[routeOf.get(id) ?? ''];
-			for (const { width, theme } of viewsOf(CONSOLE_WIDTHS, THEMES)) {
-				const reading = id.startsWith('data-explorer-')
-					? await settledExplorer(page, id, width, theme)
-					: (await opened(page, address, width, theme), await readPanel(await settled(page, id)));
-				const verdicts = judgeSettled(reading, fillFloor).filter((verdict) =>
-					!(id.startsWith('data-explorer-') && (verdict.gate === 3 || verdict.gate === 5))
-				);
-				for (const verdict of verdicts) {
-					console.log(`${width} ${theme} gate ${verdict.gate}: ${verdict.says}`);
-					expect.soft(verdict.pass, `${width} ${theme} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
-				}
-			}
-		}
+	test('every judged panel has exactly one complete state declaration on its own route', () => {
+		validateDrivers(consolePanels());
 	});
 
-	test('every judged panel draws its four nothings as four different pictures', async ({ page }) => {
-		const { judged, routeOf } = consolePanels();
-		for (const id of judged) {
-			const address = CONSOLE_ROUTE_PATHS[routeOf.get(id) ?? ''];
-			for (const theme of THEMES) {
-				const readings = {} as Record<Nothing, PanelReading>;
-				const states = id.startsWith('data-explorer-') ? REFUSED_NOTHINGS : NOTHINGS;
-				if (id.startsWith('data-explorer-')) {
-					for (const state of states) readings[state] = await explorerNothing(page, id, state, theme);
-				} else {
-					const driver = driverFor(id);
-					for (const state of NOTHINGS) {
-						await page.unrouteAll({ behavior: 'ignoreErrors' });
-						await driver[state](page);
-						await opened(page, address, NOTHING_WIDTH, theme);
-						const panel = page.locator(`[data-console-panel-id="${id}"]`);
-						await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
-						await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-						await expect(panel.locator(state === 'loading'
-							? '[data-panel-state="loading"]'
-							: `[data-empty-state="${state}"]`)).toHaveCount(1);
-						readings[state] = await readPanel(panel);
+	for (const { id: route, href: address } of BAND_UNREAD.routes) {
+		for (const { width, theme } of CONSOLE_WIDTHS.flatMap((width) => THEMES.map((theme) => ({ width, theme })))) {
+			test(`every ${route} judged panel clears gates 1, 2, 3, 5 and 6 at ${width} in ${theme}`, async ({ page }) => {
+				const panels = consolePanels();
+				validateDrivers(panels);
+				const { judged } = panels.routes.find((one) => one.key === route)!;
+				test.info().annotations.push({ type: 'judged panels', description: `${judged.length}: ${judged.join(', ') || 'none yet'}` });
+				test.skip(judged.length === 0, `config/console/${route}.json judges no panels`);
+				if (route === 'data-explorer') await settledExplorer(page, width, theme);
+				else await opened(page, address, width, theme);
+				for (const id of judged) {
+					await showPanel(page, id);
+					const reading = await readPanel(await settled(page, id));
+					const verdicts = judgeSettled(reading, panels.fillFloor).filter((verdict) =>
+						!(id.startsWith('data-explorer-') && (verdict.gate === 3 || verdict.gate === 5))
+					);
+					for (const verdict of verdicts) {
+						console.log(`${width} ${theme} gate ${verdict.gate}: ${verdict.says}`);
+						expect.soft(verdict.pass, `${width} ${theme} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
 					}
 				}
-				const verdict = judgeNothings(id, readings, states);
-				console.log(`${theme} gate 8: ${verdict.says}`);
-				expect.soft(verdict.pass, `${theme} gate 8: ${verdict.says}`).toBe(true);
-			}
+			});
 		}
-	});
+
+		if (Object.keys(BY_ROUTE[route].DRIVERS).length === 0) continue;
+		for (const theme of THEMES) {
+			test(`every ${route} driven panel draws distinct nothings in ${theme}`, async ({ page }) => {
+				const panels = consolePanels();
+				validateDrivers(panels);
+				const { judged } = panels.routes.find((one) => one.key === route)!;
+				const driven = judged.filter((id) => declarationFor(route, id) !== null);
+				test.skip(driven.length === 0, `config/console/${route}.json judges no driven panels`);
+				const readings = new Map(driven.map((id) => [id, {} as Record<Nothing, PanelReading>]));
+				// Keep the explorer's fifth state on the last load: a refused question is not a failed fetch.
+				const states = route === 'data-explorer' ? REFUSED_NOTHINGS : NOTHINGS;
+				for (const state of states) {
+					const prepared: Awaited<ReturnType<Driver>>[] = [];
+					try {
+						await page.unrouteAll({ behavior: 'ignoreErrors' });
+						const drivers = new Set<Driver>();
+						for (const id of driven) {
+							const driver = declarationFor(route, id)![state];
+							if (typeof driver !== 'function') throw new Error(`panel-drivers/${route}.ts names ${id} but has no ${state} driver`);
+							drivers.add(driver);
+						}
+						for (const driver of drivers) prepared.push(await driver(page));
+						if (state !== 'refused') await opened(page, address, NOTHING_WIDTH, theme);
+						for (const driver of prepared) await driver?.afterOpen?.();
+						for (const id of driven) {
+							const panel = page.locator(`[data-console-panel-id="${id}"]`);
+							await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
+							await showPanel(page, id);
+							await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+							const selector = route === 'data-explorer'
+								? state === 'loading' ? '.shimmer, [data-state="loading"]' : `[data-state="${state}"]`
+								: state === 'loading' ? '[data-panel-state="loading"]' : `[data-empty-state="${state}"]`;
+							await expect(panel.locator(selector)).toHaveCount(1);
+							readings.get(id)![state] = await readPanel(panel);
+						}
+					} finally {
+						for (const driver of prepared) await driver?.afterRead?.();
+					}
+				}
+				for (const id of driven) {
+					const verdict = judgeNothings(id, readings.get(id)!, states);
+					console.log(`${theme} gate 8: ${verdict.says}`);
+					expect.soft(verdict.pass, `${theme} gate 8: ${verdict.says}`).toBe(true);
+				}
+			});
+		}
+	}
 
 	test('a judged panel nothing here can put into its four nothings is refused by name', () => {
-		// The list is empty until a panel is redrawn to the gates, so the refusal
-		// above runs on nothing; this is the case that proves it would refuse.
-		expect(() => driverFor('a-panel-nobody-drew')).toThrow(/a-panel-nobody-drew/);
+		expect(() => declarationFor('pipelines', 'a-panel-nobody-drew')).toThrow(/a-panel-nobody-drew/);
+	});
+
+	test('a judged panel declared as both driven and build-time is refused by name', () => {
+		const byRoute = { ...BY_ROUTE, machine: { ...BY_ROUTE.machine, BUILD_TIME: ['platform-mix'] } };
+		expect(() => declarationFor('machine', 'platform-mix', byRoute)).toThrow(/platform-mix.*both DRIVERS and BUILD_TIME/);
+	});
+
+	test('a panel two route modules drive is refused by name', () => {
+		const byRoute = {
+			...BY_ROUTE,
+			voices: { ...BY_ROUTE.voices, DRIVERS: { 'platform-mix': BY_ROUTE.machine.DRIVERS['platform-mix'] } }
+		};
+		expect(() => validateDrivers(consolePanels(), byRoute)).toThrow(/platform-mix is driven twice/);
 	});
 });
 

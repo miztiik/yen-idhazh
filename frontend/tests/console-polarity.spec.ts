@@ -6,6 +6,8 @@ import { compile, preprocess } from 'svelte/compiler';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { render } from 'svelte/server';
 import { movementVerdict, type MovementPolarity } from '../src/lib/charts/theme';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-polarity';
 
 /**
  * Row #4's oracle: movement colour reads the polarity of the MEASURE, not the
@@ -30,13 +32,12 @@ import { movementVerdict, type MovementPolarity } from '../src/lib/charts/theme'
  * which also means this file never parses a colour.
  */
 
-const ROUTES = [
-	'/console/',
-	'/console/model/',
-	'/console/machine/',
-	'/console/judgement/',
-	'/console/voices/'
-] as const;
+const ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id] !== null).map(
+	(route) => route.href
+);
+const TOKEN_ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.movementTokens).map(
+	(route) => route.href
+);
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
@@ -198,29 +199,31 @@ for (const theme of THEMES) {
 	});
 }
 
-test('the movement pair is not the confidence ramp, in either theme', async ({ page }) => {
-	// Decision #2, made mechanical. Green on the confidence ramp means "it
-	// worked"; a summary that got 3 percent slower is not broken, and a pair
-	// that resolves to the same bytes as --band-* IS the confidence ramp under
-	// a second name.
-	for (const theme of THEMES) {
-		await openAt(page, '/console/', theme);
-		const [good, bad, ...ramp] = await resolve(page, [
-			'var(--movement-good)',
-			'var(--movement-bad)',
-			'var(--band-high)',
-			'var(--band-medium)',
-			'var(--band-low)',
-			'var(--fill-high)',
-			'var(--fill-medium)',
-			'var(--fill-low)'
-		]);
-		for (const value of ramp) {
-			expect(good, `--movement-good is a confidence-ramp value on ${theme}`).not.toBe(value);
-			expect(bad, `--movement-bad is a confidence-ramp value on ${theme}`).not.toBe(value);
+for (const TOKEN_ROUTE of TOKEN_ROUTES) {
+	test('the movement pair is not the confidence ramp, in either theme', async ({ page }) => {
+		// Decision #2, made mechanical. Green on the confidence ramp means "it
+		// worked"; a summary that got 3 percent slower is not broken, and a pair
+		// that resolves to the same bytes as --band-* IS the confidence ramp under
+		// a second name.
+		for (const theme of THEMES) {
+			await openAt(page, TOKEN_ROUTE, theme);
+			const [good, bad, ...ramp] = await resolve(page, [
+				'var(--movement-good)',
+				'var(--movement-bad)',
+				'var(--band-high)',
+				'var(--band-medium)',
+				'var(--band-low)',
+				'var(--fill-high)',
+				'var(--fill-medium)',
+				'var(--fill-low)'
+			]);
+			for (const value of ramp) {
+				expect(good, `--movement-good is a confidence-ramp value on ${theme}`).not.toBe(value);
+				expect(bad, `--movement-bad is a confidence-ramp value on ${theme}`).not.toBe(value);
+			}
 		}
-	}
-});
+	});
+}
 
 /** WCAG 2.2 relative luminance, written out rather than imported - audit
  * tooling is a project non-goal (CLAUDE.md section 0a) and this is one row's
@@ -244,26 +247,28 @@ function contrast(a: string, b: string): number {
 	return Math.round(((high + 0.05) / (low + 0.05)) * 1000) / 1000;
 }
 
-test('both movement colours are readable as text, in both themes', async ({ page }) => {
-	// They are printed as a percentage in a card foot, so they are type and
-	// carry the 4.5:1 that WCAG 2.2 SC 1.4.3 sets for normal text. This is the
-	// bound that stops "quieter than the confidence ramp" turning into "grey".
-	for (const theme of THEMES) {
-		await openAt(page, '/console/', theme);
-		const [good, bad, surface] = await resolve(page, [
-			'var(--movement-good)',
-			'var(--movement-bad)',
-			'var(--color-surface)'
-		]);
-		for (const [name, value] of Object.entries({ good, bad })) {
-			const ratio = contrast(value, surface);
-			expect(
-				ratio,
-				`--movement-${name} is ${ratio}:1 on ${theme}, under the 4.5:1 that makes a colour readable as text`
-			).toBeGreaterThanOrEqual(4.5);
+for (const TOKEN_ROUTE of TOKEN_ROUTES) {
+	test('both movement colours are readable as text, in both themes', async ({ page }) => {
+		// They are printed as a percentage in a card foot, so they are type and
+		// carry the 4.5:1 that WCAG 2.2 SC 1.4.3 sets for normal text. This is the
+		// bound that stops "quieter than the confidence ramp" turning into "grey".
+		for (const theme of THEMES) {
+			await openAt(page, TOKEN_ROUTE, theme);
+			const [good, bad, surface] = await resolve(page, [
+				'var(--movement-good)',
+				'var(--movement-bad)',
+				'var(--color-surface)'
+			]);
+			for (const [name, value] of Object.entries({ good, bad })) {
+				const ratio = contrast(value, surface);
+				expect(
+					ratio,
+					`--movement-${name} is ${ratio}:1 on ${theme}, under the 4.5:1 that makes a colour readable as text`
+				).toBeGreaterThanOrEqual(4.5);
+			}
 		}
-	}
-});
+	});
+}
 
 // --- The two cases the committed data cannot be relied on to hold at once ---
 

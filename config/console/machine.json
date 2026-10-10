@@ -1,0 +1,47 @@
+{
+  "panel_groups": [
+    {
+      "id": "what-the-machine-was-doing",
+      "panels": [
+        "two-clocks",
+        "processor-lost",
+        "disk-reads",
+        "machine-cards",
+        "reading-against-writing",
+        "platform-mix"
+      ],
+      "title": "What the machine was doing"
+    },
+    {
+      "id": "where-the-time-went",
+      "panels": [
+        "shard-board",
+        "tail-trend"
+      ],
+      "title": "Where the time went"
+    },
+    {
+      "id": "how-close-to-the-limits",
+      "panels": [
+        "memory-board",
+        "memory-held",
+        "context-headroom"
+      ],
+      "title": "How close we are to the limits"
+    },
+    {
+      "id": "what-the-model-spends",
+      "panels": [
+        "article-cost",
+        "prompt-reuse",
+        "read-against-written",
+        "counterfactual-cost"
+      ],
+      "title": "What the model spends"
+    }
+  ],
+  "judged": [
+    "platform-mix"
+  ],
+  "knobs": {}
+}

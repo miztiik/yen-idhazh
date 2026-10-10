@@ -1,4 +1,6 @@
 import { expect, test, type Page } from './support/browser';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-window';
 import { ONE_DAYS, spanSaid } from './support/span-said';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { readFileSync } from 'node:fs';
@@ -79,6 +81,12 @@ const TELEMETRY = JSON.parse(
 
 const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 14;
+
+function routeHref(id: RouteId): string {
+	const route = BAND_UNREAD.routes.find((route) => route.id === id);
+	if (!route) throw new Error(`The console names no route ${id}`);
+	return route.href;
+}
 
 /** N days earlier, in UTC, so the suite cannot drift west. */
 function minus(date: string, days: number): string {
@@ -231,7 +239,7 @@ test('the widest window this control offers never names a shard the cleanup age 
 test('THE ORACLE: every windowed surface reports the day count the control does', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 
 	// Four presets and at least four surfaces, or the loop below is a formality.
@@ -242,18 +250,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual([
-		'band-distance',
-		'chart-drawing',
-		'extraction',
-		'failure-mix',
-		'failure-rate',
-		'item-cost',
-		'run-health',
-		'site-cost-per-item',
-		'telemetry-viewport',
-		'time-split'
-	]);
+	).toEqual(BY_ROUTE.pipelines!.windowed);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -344,66 +341,10 @@ const SERVED_DAYS = {
 /** Each panel at the 1-day and the 7-day window: the number of columns it
  * draws, or the sentence in its chart's place. The sentences are Reader's,
  * written out whole. */
-const WINDOW_PANEL_CASES: {
-	state: keyof typeof SERVED_DAYS;
-	mix: Record<1 | 7, number | string>;
-	split: Record<1 | 7, number | string>;
-}[] = [
-	{ state: 'two items failed and one was timed', mix: { 1: 1, 7: 7 }, split: { 1: 1, 7: 7 } },
-	{
-		state: 'three items were timed and none failed',
-		mix: {
-			1: 'Nothing failed in this one day, out of 3 items planned.',
-			7: 'Nothing failed in these 7 days, out of 21 items planned.'
-		},
-		split: { 1: 1, 7: 7 }
-	},
-	{
-		state: 'one item failed and two had no end-to-end clock',
-		mix: { 1: 1, 7: 7 },
-		split: {
-			1: 'No item was timed from start to finish in this one day, so there is no time to split.',
-			7: 'No item was timed from start to finish in these 7 days, so there is no time to split.'
-		}
-	},
-	{
-		state: 'no item was planned',
-		mix: {
-			1: 'No item was planned in this one day, so nothing could fail.',
-			7: 'No item was planned in these 7 days, so nothing could fail.'
-		},
-		split: {
-			1: 'No item was planned in this one day, so there is no time to split.',
-			7: 'No item was planned in these 7 days, so there is no time to split.'
-		}
-	}
-];
+const WINDOW_PANEL_CASES = BY_ROUTE.pipelines!.panelCases!;
 
 /** Each panel's own label, at each window. Reader's words, written out whole. */
-const WINDOW_PANEL_WORDS = {
-	'failure-mix': {
-		section: {
-			1: 'What is failing, by stage, over 1 day',
-			7: 'What is failing, by stage, over 7 days'
-		},
-		chart: {
-			1: "Failures by stage in this one day. The column's height is the day's failures, and the bands are the stages they stopped at. Drawn as lines instead, each stage is its own count and the total is not shown.",
-			7: "Failures per day by stage, over 7 days. One column is one day, its height is that day's failures, and the bands are the stages they stopped at. A day with no column is a day on which nothing was planned or nothing failed, and the numbers below the chart say which. Drawn as lines instead, each stage is its own count a day and the total is not shown."
-		},
-		empty: '[data-mix-empty]'
-	},
-	'time-split': {
-		section: {
-			1: "Where an item's time went, over 1 day",
-			7: "Where an item's time went, over 7 days"
-		},
-		chart: {
-			1: "Mean milliseconds an item spent in each step, in this one day. The column's height is the mean item's whole clock. The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed. Drawn as lines instead, each step is its own milliseconds and the whole clock is not shown.",
-			7: "Mean milliseconds an item spent in each step, per day, over 7 days. One column is one day and its height is the mean item's whole clock. A day with no column is a day on which no item was timed from start to finish. The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed. Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown."
-		},
-		empty: '[data-time-split-empty]'
-	}
-} as const;
+const WINDOW_PANEL_WORDS = BY_ROUTE.pipelines!.panelWords!;
 
 test.describe("Pipelines' failure mix and time split draw the window's days, on telemetry the test builds", () => {
 	for (const one of WINDOW_PANEL_CASES) {
@@ -419,7 +360,7 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
 				const rows = daysServed(month).flatMap((date) => SERVED_DAYS[one.state](date));
 				return route.fulfill({ status: 200, contentType: 'text/csv', body: telemetryCsv(rows) });
 			});
-			await page.goto('/console/');
+			await page.goto(routeHref('pipelines'));
 			await hydrated(page);
 
 			for (const preset of [1, 7] as const) {
@@ -469,7 +410,7 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
 	}) => {
 		// The document as served, before any script has fetched a month. A sentence
 		// about the window's days would be false here: no row has been read.
-		const document = await (await page.request.get('/console/')).text();
+		const document = await (await page.request.get(routeHref('pipelines'))).text();
 		for (const name of ['failure-mix', 'time-split']) {
 			expect(document, `${name} has no waiting box before its rows are read`).toContain(
 				`data-reserved="${name}"`
@@ -583,14 +524,14 @@ test('THE ORACLE: the Model route obeys the same control over its own surfaces',
 	// The measure cards left /console/ for /console/model/ on 2026-08-30, and a
 	// windowed surface on a route with its own copy of the control is exactly
 	// where two windows start to disagree. Same oracle, same loop, other route.
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 	await hydrated(page);
 
 	const found = await windowed(page);
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the model route publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual(['daily-figures', 'model-cards']);
+	).toEqual(BY_ROUTE.model!.windowed);
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
 		for (const surface of await windowed(page)) {
@@ -609,25 +550,14 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 	// It was the one console route with no control at all, so an operator who
 	// picked 7 days on Pipelines lost it the moment he asked what the machine
 	// was doing. Same oracle, same loop, third route.
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 
 	const found = await windowed(page);
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the machine route publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual([
-		'machine-article-cost',
-		'machine-context',
-		'machine-cost',
-		'machine-disk-reads',
-		'machine-fleet',
-		'machine-latency',
-		'machine-processor-lost',
-		'machine-prompt-reuse',
-		'machine-runs',
-		'machine-tokens'
-	]);
+	).toEqual(BY_ROUTE.machine!.windowed);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -651,14 +581,14 @@ test('THE ORACLE: the Voices route obeys the same control over its own surfaces'
 	// that had none, so this is the pair the move could most easily have stranded:
 	// a surface that still declares a day count while nothing on the page can
 	// change it. Same oracle, same loop, fourth route.
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 	await hydrated(page);
 
 	const found = await windowed(page);
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the voices route publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual(['feed-outcomes', 'source-cuts']);
+	).toEqual(BY_ROUTE.voices!.windowed);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -683,14 +613,14 @@ test('THE ORACLE: the Judgement route obeys the same control over its own surfac
 	// window. Same oracle, same loop, fifth route. It reaches only the states the
 	// canary draws; the cases below draw each of the three in the states that
 	// named no span, from days the test builds.
-	await page.goto('/console/judgement/');
+	await page.goto(routeHref('judgement'));
 	await hydrated(page);
 
 	const found = await windowed(page);
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the judgement route publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual(['judge-agreement', 'merge-line', 'merged-stories', 'record-gates']);
+	).toEqual(BY_ROUTE.judgement!.windowed);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -3277,7 +3207,7 @@ test('the Machine route draws the narrower span, not only the narrower label', a
 	// days back, so only the widest preset reaches it: the counts are read off
 	// the page rather than typed here, because a number written in a test goes
 	// stale the day the fixture grows a row, and it goes stale silently.
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 
 	await setWindow(page, 90);
@@ -3301,7 +3231,7 @@ test('the panels about one run say so, and hold still while the window moves', a
 	// it in its own subtitle instead of in a paragraph above all of them: the
 	// groups name a decision now, so one group holds a snapshot beside a reading
 	// over the span and no heading can carry the grain for its panels.
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 
 	const exempt = page.locator('[data-window-exempt="newest-run"]');
@@ -3327,12 +3257,12 @@ test('THE ORACLE: the span picked on one console route is the span the next one 
 	// Hardware cannot do it if the two are on different spans. Bite-proofed both
 	// ways round, because a route that only writes the key and never reads it
 	// passes a one-way check.
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	await setWindow(page, 7);
 	expect(await page.evaluate(() => localStorage.getItem('idhazh:console-window'))).toBe('7');
 
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	await expect(page.locator('[data-window-preset="7"]')).toHaveAttribute('data-selected', 'true');
@@ -3347,7 +3277,7 @@ test('THE ORACLE: the span picked on one console route is the span the next one 
 
 	// Back the other way: Hardware writes the key and Pipelines reads it.
 	await setWindow(page, 14);
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '14');
 	for (const surface of await windowed(page)) {
@@ -3385,7 +3315,7 @@ test('THE ORACLE: after a tab click, the control holds the span the next route d
 	// control used to stay on 14 days there while every Judgement panel drew 1.
 	// So the control is compared with what the page draws, never with a number
 	// the data holds, and every check retries until the route has settled.
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	await setWindow(page, 1);
 
@@ -3422,7 +3352,7 @@ async function cutFacts(page: Page) {
 }
 
 test('the source table follows the window, and drops what falls outside it', async ({ page }) => {
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 	await hydrated(page);
 
 	// The canary writes one cut ten days back, under a source with a single cut.
@@ -3453,7 +3383,7 @@ test('the source table follows the window, and drops what falls outside it', asy
 });
 
 test('a rule stated over 14 days prints no median in a 7-day window', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 
 	const section = page.locator('[data-windowed="chart-drawing"]');
@@ -3475,7 +3405,7 @@ test('three surfaces do not follow the window, and each says so', async ({ page 
 	// every console route and a figure that moved with a control on one of them
 	// would read as five different sites. So the whole sentence holds at every
 	// preset, not only the number in it.
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 
 	const size = page.locator('[data-band-size]');
@@ -3488,7 +3418,7 @@ test('three surfaces do not follow the window, and each says so', async ({ page 
 	// on 2026-09-14. They arrived on a route with no control and left with one
 	// above them, so the sentence that says they ignore it is load-bearing now in
 	// a way it was not before the move.
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 	await hydrated(page);
 
 	// A windowed quarantine count would disagree with the resting the pipeline
@@ -3531,7 +3461,10 @@ test('a daily table drawn under the control stays inside the control span', asyn
 	// The reducer tests own which dates have rows. This browser check keeps only
 	// the route contract: the open control names the span, the disclosure says
 	// the same span, and every row the table does draw fits inside it.
-	for (const route of ['/console/', '/console/model/'] as const) {
+	for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+		const expected = BY_ROUTE[id];
+		if (expected === null || !expected.dailyTable) continue;
+		const route = routeHref(id);
 		await page.goto(route);
 		await hydrated(page);
 
@@ -3582,7 +3515,10 @@ test('a shut daily table is a line of prose, not a card', async ({ page }) => {
 	// which is what made it read as something hanging off the page. An eye cannot
 	// check a box-shadow, so this reads the computed values against the prose
 	// beside it rather than against a hard-coded string.
-	for (const route of ['/console/', '/console/model/']) {
+	for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+		const expected = BY_ROUTE[id];
+		if (expected === null || !expected.dailyTable) continue;
+		const route = routeHref(id);
 		await page.goto(route);
 		const shut = await page.locator('[data-daily-figures]').evaluate((node) => {
 			const details = node as HTMLDetailsElement;
@@ -3619,13 +3555,13 @@ test('a shut daily table is a line of prose, not a card', async ({ page }) => {
 test('the prerendered page opens on the configured window, whatever was stored', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	await setWindow(page, PRESETS.at(-1) as number);
 
 	// Read on mount and never during prerender: the document a browser is handed
 	// is always the window the server drew, so first paint cannot flicker.
-	const document = await (await page.request.get('/console/')).text();
+	const document = await (await page.request.get(routeHref('pipelines'))).text();
 	expect(document).toContain('data-window-control');
 	expect(document).toContain(`data-window-days="${DEFAULT_DAYS}"`);
 
@@ -3640,7 +3576,7 @@ test('the prerendered page opens on the configured window, whatever was stored',
 test('the control names the window it is holding, and is inert before a script runs', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	const status = page.locator('[data-window-status]');
 	await hydrated(page);
@@ -3659,7 +3595,7 @@ test('the control names the window it is holding, and is inert before a script r
 	// because the rows they draw arrive by fetch. The sentence names the control
 	// it means, because since 2026-09-27 the control is on the strip above and
 	// the sentence is under the band.
-	const document = await (await page.request.get('/console/')).text();
+	const document = await (await page.request.get(routeHref('pipelines'))).text();
 	expect(document).toContain('The days control above needs JavaScript');
 	expect(document).toContain('they draw rows a browser fetches');
 	expect(
@@ -3674,7 +3610,7 @@ test('one day is one day, in the sentence and to a screen reader', async ({ page
 	// band. The tile shows `1D` now, and still says its unit to a screen reader,
 	// in the singular - and the `D` is hidden from that reader, so it is never
 	// heard as "1D day".
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	const narrowest = Math.min(...PRESETS);
 	expect(narrowest, 'the presets no longer offer a single day, so this proves nothing').toBe(1);
@@ -3717,7 +3653,7 @@ for (const width of [390, 768, 1440]) {
 		// breakpoint the control starts its own row under the tabs; from it, the
 		// control ends the one-row strip.
 		await page.setViewportSize({ width, height: 900 });
-		await page.goto('/console/');
+		await page.goto(routeHref('pipelines'));
 		await hydrated(page);
 		const at = await controlBox(page);
 		console.log(
@@ -3769,7 +3705,7 @@ for (const width of [390, 768, 1440]) {
 		// reaches the canary's older month is priced.
 		await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '1'));
 		await page.setViewportSize({ width, height: 900 });
-		await page.goto('/console/');
+		await page.goto(routeHref('pipelines'));
 		await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
 		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '1');
 		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');

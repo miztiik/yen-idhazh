@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
-import { assistConfig, consoleConfig, engineExtensionRepository, explorerConfig, frameConfig, iconsConfig, ledgerArchiveBaseUrl, uiConfig } from './src/lib/server/config';
+import { assistConfig, consoleConfig, engineExtensionRepository, explorerConfig, frameConfig, iconsConfig, ledgerArchiveBaseUrl, routeConsoles, uiConfig } from './src/lib/server/config';
 import { queryEngineAssetModule } from './scripts/query-engine-assets';
 import { rawListedThrough } from './scripts/raw-listed-through.mjs';
 import { publishedLedgers, publishedWindowDays } from './scripts/published-ledgers.mjs';
@@ -62,7 +62,7 @@ export default defineConfig({
 		__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository()),
 		// Where Records reads older packed ledgers; the page fetches whole files and hands buffers to the engine.
 		__ARCHIVE_BASE_URL__: JSON.stringify(ledgerArchiveBaseUrl()),
-		__CONSOLE_CONFIG__: JSON.stringify(consoleConfig()),
+		__CONSOLE__: JSON.stringify({ shared: consoleConfig(), routes: routeConsoles() }),
 		__EXPLORER_CONFIG__: JSON.stringify(explorerConfig()),
 		__FRAME_CONFIG__: JSON.stringify(frameConfig()),
 		__PUBLISHED_LEDGERS__: JSON.stringify(publishedLedgers()),

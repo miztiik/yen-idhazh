@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-09
 
 **Known noncompliance:** Existing console prerendering does not meet [Telemetry Intent](../../concepts/telemetry-intent.md) and will be migrated to browser rendering. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -80,6 +80,48 @@ legible, tables must fit their container, and titles must use plain words.
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.
 Shared navigation and window behavior follow their owning pages above.
+
+### Each route owns its config, expectations and gate drivers
+
+`config/console/<route>.json` owns that route's panel groups, judged ids and
+route-only numeric knobs. Shared knobs remain in `config/appearance.json`.
+The [appearance config page](../../concepts/config/appearance.md#console-surface)
+defines the keys, validation and the single `__CONSOLE__` build-time value.
+Only route files and the server config loader import its reader; shared panels
+take config as props. The layout reads the active route's groups for jump links,
+even when the route has no server load.
+
+A cross-route spec keeps its typed-out expectations under
+`frontend/tests/support/console-expect/<spec>/<route>.ts`. Each file exports
+`EXPECT`, or `null` when that route has nothing to check. The spec skips null
+entries. Its `index.ts` declares `BY_ROUTE` as a record keyed by `RouteId`, so a
+new route requires an entry at type check. An expectation file reads no values
+from config or the band: it records what the page must show, not what the page
+already uses. A chart-lifetime or chart-pending expectation is null when the
+route draws no legacy `Chart.svelte`.
+
+Each `frontend/tests/support/panel-drivers/<route>.ts` exports `DRIVERS` and
+`BUILD_TIME`. Drivers put fetched panels into the states declared by
+`Nothing` in `panel-gates.ts`. `BUILD_TIME` names judged panels that make no
+fetch; their route's component specs check empty and absent inputs through
+`judgeNothings` for `quiet` and `missing`. The sufficiency spec refuses an id
+in both lists, in neither list, or driven by two routes. The driver index joins
+the route records without owning an address.
+
+The capture and sufficiency route lists come from `RouteId`, with addresses
+from `BAND_UNREAD.routes`. Empty panel groups have nothing to capture. The
+sufficiency tests cover the declared widths and both themes, with one page
+load for static gates and separate state-driving tests. They read inputs
+inside tests, not at module load.
+
+`frontend/tests/console-route-scope.spec.ts` checks explicit named files, not a
+repository walk. A quoted literal equal to one of the six band hrefs names that
+route. A route expectation or driver may name only its own route. Their indexes
+and the seventeen cross-route spec bodies name no addresses. Other named specs
+may name at most one route, except `console-machine-page.spec.ts`, whose built
+page checks belong to Hardware. The same guard refuses define use outside its
+three owners and direct reader imports outside the loader or route files.
+New consumers must join its named input inventory.
 
 ### A label is not an address
 

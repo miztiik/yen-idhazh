@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-09
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -76,7 +76,44 @@ Two knobs in that block decide what a chart's axis and its readout look like, an
 
 ## Console surface
 
-The console knobs are:
+Shared console knobs stay in `config/appearance.json`. Each route owns its panel
+order, judged ids and route-only numeric knobs in `config/console/<route>.json`.
+The six route ids are `pipelines`, `model`, `machine`, `voices`, `judgement` and
+`data-explorer`. The route id is a file name, not the label an operator sees.
+
+Each route file has exactly these three keys:
+
+| Key | What it declares |
+| --- | --- |
+| `panel_groups` | Groups in page order, each with `id`, `title` and `panels`. Group ids are unique within the route. A panel id occurs only once across all routes. Titles are either all empty or all nonempty on one route. |
+| `judged` | Unique ids of panels this route draws and the sufficiency gates judge. An empty list opts in no panels. |
+| `knobs` | Route-only finite numbers. A missing requested key fails by file and key name; code supplies no fallback. |
+
+The frontend config loader refuses unknown route names, missing route files,
+missing or extra top-level keys, repeated ids and judged ids the route does not
+draw. These are repository-authored config files, not persisted telemetry, so
+their parser owns the validation; no second Pydantic model restates it.
+`console.panel_groups` and `console.judged_panel_ids` are removed from the shared
+appearance block. Pipelines and Hardware retain their panel lists. The other
+routes start with empty groups, judged ids and knobs until their panels opt in.
+
+`frontend/src/lib/server/config.ts` reads the named route files through
+`routeConsolesFrom` and exposes `routeConsoles()`. Vite supplies one build-time
+value, `__CONSOLE__`, with `{ shared: consoleConfig(), routes: routeConsoles() }`.
+`frontend/src/app.d.ts` declares its `ConsoleDefine` type. Only
+`frontend/src/lib/console/route-console.ts` reads that value in function bodies;
+its relative imports also let Vite load the parser before the value exists.
+
+Console route files use `consoleKnobs()` for shared values, `routeConsole(route)`
+for panel order and judged ids, and `routeKnobs(route, keys)` for required
+route-only numbers. Only the server config loader and files under
+`frontend/src/routes/console/` import that module. Shared components receive
+values as props instead. Parser tests import the server config loader, not
+`route-console` directly. The shared layout uses the active route's groups for
+jump links, including routes with no server load. Existing page loads lose their
+config payloads as those pages move to the build-time value.
+
+The shared console knobs are:
 
 - `console.default_window_days`
 - `console.window_presets`
@@ -107,7 +144,6 @@ The console knobs are:
 - `console.explorer_bar_spread_share`
 - `console.explorer_counter_from_share`
 - `console.explorer_examples`
-- `console.judged_panel_ids`
 - `console.plot_min_fill_share`
 - `console.machine_colour_stops`
 - `console.machine_colour_floor_share`
@@ -172,12 +208,10 @@ count is said, never what it counts - the count is the whole days between the
 record's day and today, so zero is refused
 ([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#the-sentence-under-the-strip-dates-the-record)).
 
-`judged_panel_ids` (empty) and `plot_min_fill_share` (0.85) are read by no page.
-The sufficiency specs read them: the first is the list of panels the gates judge,
-and gate 1 fails a judged panel whose plots cover less of its width than the
-second. Neither is in what `consoleConfig()` inlines into the five console
-documents, because a page has no use for a number only its tests read. The
-contract refuses a judged id that no console route draws, and one named twice
+`plot_min_fill_share` (0.85) is read by no page. Gate 1 fails a judged panel whose
+plots cover less of its width than this value. `consoleConfig()` does not expose
+this test-only knob to pages. Judged ids now live in the owning route's `judged`
+list, whose parser refuses an id the route does not draw or an id listed twice
 ([../design-system.md](../design-system.md#sufficiency-is-a-gate-not-a-taste)).
 
 Four knobs decide how the Hardware route colours a machine. A machine's colour

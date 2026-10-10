@@ -212,10 +212,6 @@
     "fleet_dot_max_px": 6,
     "fleet_min_rows": 80,
     "fleet_top_kinds": 2,
-    "judged_panel_ids": [
-      "platform-mix",
-      "run-health"
-    ],
     "machine_colour_floor_share": 0.5,
     "machine_colour_stops": 4,
     "max_window_days": 180,
@@ -224,59 +220,6 @@
     "model_disk_reads_marked": 3,
     "model_disk_reads_named": 9,
     "pan_days": 3,
-    "panel_groups": {
-      "data-explorer": [
-        {
-          "id": "data-explorer",
-          "panels": [
-            "data-explorer-ask",
-            "data-explorer-rows",
-            "data-explorer-shape"
-          ],
-          "title": ""
-        }
-      ],
-      "machine": [
-        {
-          "id": "tuned-machine",
-          "panels": [
-            "counterfactual-cost",
-            "read-against-written",
-            "tail-trend",
-            "outside-the-model-call",
-            "context-headroom",
-            "prompt-cache",
-            "platform-mix",
-            "reading-against-writing",
-            "machine-cards",
-            "newest-run-tail",
-            "memory-board",
-            "shard-board",
-            "two-clocks"
-          ],
-          "title": ""
-        }
-      ],
-      "pipelines": [
-        {
-          "id": "tuned-pipelines",
-          "panels": [
-            "extraction",
-            "chart-drawing",
-            "run-timeline",
-            "item-cost",
-            "stage-timings",
-            "throughput-viewport",
-            "item-time-split",
-            "failure-mix",
-            "site-cost-per-item",
-            "at-a-glance",
-            "run-health"
-          ],
-          "title": ""
-        }
-      ]
-    },
     "plot_min_fill_share": 0.9,
     "precision_axis_multiple": 10.0,
     "processor_lost_pct_marked": 2.0,

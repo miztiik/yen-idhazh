@@ -1,0 +1,18 @@
+{
+  "panel_groups": [
+    {
+      "id": "data-explorer",
+      "panels": [
+        "data-explorer-ask",
+        "data-explorer-rows",
+        "data-explorer-shape"
+      ],
+      "title": ""
+    }
+  ],
+  "judged": [
+    "data-explorer-rows",
+    "data-explorer-shape"
+  ],
+  "knobs": {}
+}

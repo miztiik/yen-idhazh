@@ -6,10 +6,9 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import {
-	appendFileSync, copyFileSync, mkdirSync, mkdtempSync,
+	appendFileSync, copyFileSync, mkdirSync,
 	realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publishedSite } from './published-site';
@@ -114,6 +113,7 @@ const INPUTS = [
 	'src/lib/console/holdout.ts',
 	'src/lib/console/merge-line.ts',
 	'src/lib/console/recording.ts',
+	'src/lib/console/route-console.ts',
 	'src/lib/console/span-words.ts',
 	'src/lib/console/strip.ts',
 	'src/lib/console/verdict-split.ts',
@@ -189,11 +189,11 @@ function stageModules(frontend: string): void {
 export async function judgementRoute(report: string): Promise<{
 	origin: string;
 	inputs: string[];
-	buildMs: number;
 	close: () => Promise<void>;
 }> {
 	mkdirSync(report, { recursive: true });
-	const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'idhazh-judgement-')));
+	const root = join(realpathSync.native(report), 'isolated-route');
+	mkdirSync(root, { recursive: true });
 	const links: string[] = [];
 	let child: ReturnType<typeof spawn> | undefined;
 	const close = async () => {
@@ -273,9 +273,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 		const runner = join(frontend, 'judgement-preview.mjs');
 		writeFileSync(runner, `
 			import { build, preview } from 'vite';
-			const started = performance.now();
 			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))} });
-			console.log('JUDGEMENT_BUILD_MS=' + Math.round(performance.now() - started));
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 			console.log('JUDGEMENT_ORIGIN=' + server.resolvedUrls.local[0]);
 			process.stdin.resume();
@@ -295,7 +293,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 		child.stdout?.on('data', record);
 		child.stderr?.on('data', record);
 		const running = child;
-		const ready = await new Promise<{ origin: string; buildMs: number }>((done, fail) => {
+		const ready = await new Promise<{ origin: string }>((done, fail) => {
 			const timer = setTimeout(() => fail(new Error(`Private Judgement compilation did not finish:\n${output}`)), 150_000);
 			const exited = (code: number | null) => {
 				clearTimeout(timer);
@@ -305,11 +303,10 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			running.once('error', (error) => { clearTimeout(timer); fail(error); });
 			running.stdout?.on('data', () => {
 				const origin = output.match(/JUDGEMENT_ORIGIN=(http:\/\/[^\s]+)/)?.[1];
-				const duration = output.match(/JUDGEMENT_BUILD_MS=(\d+)/)?.[1];
-				if (origin === undefined || duration === undefined) return;
+				if (origin === undefined) return;
 				clearTimeout(timer);
 				running.off('exit', exited);
-				done({ origin, buildMs: Number(duration) });
+				done({ origin });
 			});
 		});
 		writeFileSync(join(report, 'build.json'), `${JSON.stringify(ready)}\n`);

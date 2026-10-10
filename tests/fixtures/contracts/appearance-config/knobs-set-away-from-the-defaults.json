@@ -141,9 +141,6 @@
     "fleet_dot_max_px": 6,
     "fleet_min_rows": 160,
     "fleet_top_kinds": 4,
-    "judged_panel_ids": [
-      "platform-mix"
-    ],
     "machine_colour_floor_share": 0.5,
     "machine_colour_stops": 7,
     "max_window_days": 366,
@@ -152,79 +149,6 @@
     "model_disk_reads_marked": 1,
     "model_disk_reads_named": 1,
     "pan_days": 7,
-    "panel_groups": {
-      "data-explorer": [
-        {
-          "id": "data-explorer",
-          "panels": [
-            "data-explorer-ask",
-            "data-explorer-rows",
-            "data-explorer-shape"
-          ],
-          "title": ""
-        }
-      ],
-      "machine": [
-        {
-          "id": "what-the-machine-was-doing",
-          "panels": [
-            "two-clocks",
-            "processor-lost",
-            "disk-reads",
-            "machine-cards",
-            "reading-against-writing",
-            "platform-mix"
-          ],
-          "title": "What the machine was doing"
-        },
-        {
-          "id": "where-the-time-went",
-          "panels": [
-            "shard-board",
-            "tail-trend"
-          ],
-          "title": "Where the time went"
-        },
-        {
-          "id": "how-close-to-the-limits",
-          "panels": [
-            "memory-board",
-            "memory-held",
-            "context-headroom"
-          ],
-          "title": "How close we are to the limits"
-        },
-        {
-          "id": "what-the-model-spends",
-          "panels": [
-            "article-cost",
-            "prompt-reuse",
-            "read-against-written",
-            "counterfactual-cost"
-          ],
-          "title": "What the model spends"
-        }
-      ],
-      "pipelines": [
-        {
-          "id": "pipelines",
-          "panels": [
-            "at-a-glance",
-            "run-health",
-            "site-cost-per-item",
-            "failure-mix",
-            "item-time-split",
-            "throughput-viewport",
-            "stage-timings",
-            "item-cost",
-            "run-timeline",
-            "chart-drawing",
-            "extraction"
-          ],
-          "title": ""
-        }
-      ]
-    },
     "plot_min_fill_share": 0.8,
     "precision_axis_multiple": 10.0,
     "processor_lost_pct_marked": 1.0,
