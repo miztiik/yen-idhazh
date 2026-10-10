@@ -41,7 +41,7 @@
 	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
-		days,
+		days: inputDays,
 		viewport,
 		height,
 		width,
@@ -49,7 +49,7 @@
 		readoutMaxShare
 	}: {
 		/** Every published day the build read, oldest first. */
-		days: MergeDay[];
+		days: MergeDay[] | null;
 		viewport: TimeWindow;
 		/** `console.chart_height`. The plot is this tall in all three states. */
 		height: number;
@@ -80,6 +80,7 @@
 	let selected = $state<number | null>(null);
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
+	const days = $derived(inputDays ?? []);
 	const drawn = $derived(
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
@@ -180,20 +181,38 @@
 </script>
 
 <Panel
+	id="merged-stories"
 	title="Stories the day merged"
 	note="One column is one day: the stories that day folded behind another because we read them as the same story. The dot is the biggest group that day, counting the one we kept."
 >
 	<div
 		data-windowed="merged-stories"
+		data-panel-question="How many published stories were merged?"
+		data-model-rule="no"
+		data-model-rule-name="merged-stories"
+		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
-		data-merge-state={panelState}
+		data-merge-state={inputDays === null ? 'missing' : panelState}
 		data-merge-days={drawn.length}
 		data-readout-columns={count > 0 ? count : undefined}
-		data-readout-none={count > 0 ? undefined : `${NO_COLUMN}; agreed with Susan`}
+		data-readout-none={inputDays === null
+			? 'the published story counts are unavailable, so there is no column to read; agreed with Susan'
+			: count > 0 ? undefined : `${NO_COLUMN}; agreed with Susan`}
 	>
+		<p class="comparison" data-comparison="Stories merged against stories kept apart.">
+			Stories merged against stories kept apart.
+		</p>
+		{#if inputDays === null}
+			<p class="lede" data-lede data-empty="missing">The published story counts are unavailable.</p>
+		{:else}
+		<p class="lede" data-lede>
+			{drawn.length === 0 ? 'No published story counts were returned for this window.' : plural(totals.merges, 'story merged', 'stories merged')}
+		</p>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
+				data-chart-type="dateSeries"
+				data-chart-name="Stories merged"
 				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
@@ -345,15 +364,27 @@
 		{/if}
 
 		<p class="merge-note" data-merge-note={panelState}>
-			{note}
+			{drawn.length === 0 ? 'No published day counts are available in this window.' : note}
 			{#if rate}
 				<span data-merge-rate>{rate}</span>
 			{/if}
 		</p>
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.lede {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		color: var(--color-text);
+	}
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	/* The strip slot keeps its height whether or not there is a column to print.
 	   A strip that is there at one window span and gone at another moves the
 	   panel box, which is the one thing the box below is for. The reserved height

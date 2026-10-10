@@ -1,5 +1,25 @@
 {
-  "panel_groups": [],
-  "judged": [],
+  "panel_groups": [
+    {
+      "id": "judgement",
+      "title": "",
+      "panels": [
+        "merged-stories",
+        "merge-line",
+        "judge-agreement",
+        "record-gates",
+        "verdict-split",
+        "holdout-margin"
+      ]
+    }
+  ],
+  "judged": [
+    "merged-stories",
+    "merge-line",
+    "judge-agreement",
+    "record-gates",
+    "verdict-split",
+    "holdout-margin"
+  ],
   "knobs": {}
 }

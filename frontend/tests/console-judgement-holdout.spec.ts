@@ -41,7 +41,7 @@ function knobs(): { applied: number; maxDownStep: number; bandLow: number; bandH
 		.same_story;
 	const threshold = block.adaptive_dedup_threshold;
 	// The committed config leaves `bin_width` unset, so the contract's own default
-	// stands in for it - the same fallback `similarity-ledger.ts` uses.
+	// stands in for it - the same fallback `content-similarity-judge.ts` uses.
 	return {
 		applied: block.floor_min,
 		maxDownStep: threshold.max_down_bins * (threshold.bin_width ?? 0.001),
@@ -232,7 +232,7 @@ test.describe('the pairs a person marked apart', () => {
 		const said = (await agreed.textContent()) ?? '';
 
 		if (count === 0) {
-			expect(said).toContain('No pair has been read as one story yet');
+			expect(said).toContain('No scored pair marked as one story was returned');
 			return;
 		}
 		expect(said).toContain('below the line');
@@ -316,7 +316,7 @@ test.describe('the pairs a person marked apart', () => {
 		const scored = page.locator(`${PANEL} [data-holdout-scored]`);
 		await expect(scored).toHaveAttribute('data-holdout-scored', 'none');
 		const said = (await scored.textContent()) ?? '';
-		expect(said).toContain('has not been scored');
+		expect(said).toBe('No committed holdout score was returned in the loaded window. Run idhazh score-merge-line-holdout to write that reading down.');
 		expect(said).toContain('score-merge-line-holdout');
 		expect(said).not.toContain('0 of the');
 		// A reader is not shown markdown.

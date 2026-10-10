@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './support/browser';
+import { expect, test as browserTest, type Page } from './support/browser';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -38,6 +38,19 @@ import {
 } from './support/panel-gates';
 import { serverCompiler } from './support/server-render';
 import { explorerConfig } from '../src/lib/server/config';
+import { judgementRoute } from './support/judgement-route';
+
+const judgementTest = browserTest.extend<object, { judgement: Awaited<ReturnType<typeof judgementRoute>> }>({
+	judgement: [async ({}, use, info) => {
+		const recorded = await judgementRoute(
+			path.join(info.project.outputDir, 'judgement-sufficiency', String(info.workerIndex)),
+			{ scoreRecord: 'populated' }
+		);
+		try { await use(recorded); }
+		finally { await recorded.close(); }
+	}, { scope: 'worker', timeout: 150_000 }]
+});
+const test = browserTest;
 import { showPanel } from './support/panel-tab';
 
 const PINNED = '2026-08-20';
@@ -339,14 +352,14 @@ test.describe('the judged panels', () => {
 
 	for (const { id: route, href: address } of BAND_UNREAD.routes) {
 		for (const { width, theme } of CONSOLE_WIDTHS.flatMap((width) => THEMES.map((theme) => ({ width, theme })))) {
-			test(`every ${route} judged panel clears gates 1, 2, 3, 5 and 6 at ${width} in ${theme}`, async ({ page }) => {
+			async function checkJudged(page: Page, origin = '') {
 				const panels = consolePanels();
 				validateDrivers(panels);
 				const { judged } = panels.routes.find((one) => one.key === route)!;
 				test.info().annotations.push({ type: 'judged panels', description: `${judged.length}: ${judged.join(', ') || 'none yet'}` });
 				test.skip(judged.length === 0, `config/console/${route}.json judges no panels`);
 				if (route === 'data-explorer') await settledExplorer(page, width, theme);
-				else await opened(page, address, width, theme);
+				else await opened(page, origin ? `${origin}${address.slice(1)}` : address, width, theme);
 				for (const id of judged) {
 					await showPanel(page, id);
 					const reading = await readPanel(await settled(page, id));
@@ -358,7 +371,10 @@ test.describe('the judged panels', () => {
 						expect.soft(verdict.pass, `${width} ${theme} gate ${verdict.gate}: ${verdict.says}`).toBe(true);
 					}
 				}
-			});
+			}
+			const title = `every ${route} judged panel clears gates 1, 2, 3, 5 and 6 at ${width} in ${theme}`;
+			if (route === 'judgement') judgementTest(title, async ({ page, judgement }) => { await checkJudged(page, judgement.origin); });
+			else test(title, async ({ page }) => { await checkJudged(page); });
 		}
 
 		if (Object.keys(BY_ROUTE[route].DRIVERS).length === 0) continue;

@@ -115,7 +115,7 @@ test.describe('the merge panel says one thing, in whichever state it is in', () 
 		// empty state's words. `no-days` means the record cannot answer and
 		// `no-merges` means it answered no, and reading one as the other is
 		// reading a null as a zero.
-		const cannotCount = note.includes('nothing here can be counted');
+		const cannotCount = note.includes('No published day counts are available');
 		const answeredNone = note.includes('Every one ran on its own');
 		expect(cannotCount && answeredNone, 'the panel printed both empty states at once').toBe(false);
 	});
@@ -161,13 +161,11 @@ test.describe('the merge panel says one thing, in whichever state it is in', () 
 		}
 	});
 
-	test('the route still names what it does not draw', async ({ page }) => {
+	test('the obsolete classification heading and named absence are removed', async ({ page }) => {
 		await open(page);
 
-		// The panel counts what a day folded. The absence is about the desk and the
-		// lenses the model chose, which it still does not record. A figure landing
-		// on the route does not answer a different question, so the absence stays.
-		await expect(page.locator('[data-console-empty="judgement"]')).toHaveCount(1);
+		await expect(page.locator('[data-console-empty="judgement"]')).toHaveCount(0);
+		await expect(page.getByRole('heading', { name: 'What the model made of each article' })).toHaveCount(0);
 		await expect(page.locator(`[data-console-panel="${PANEL}"]`)).toHaveCount(1);
 	});
 });

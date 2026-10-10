@@ -25,7 +25,7 @@ import { datedFirst, evalRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } 
 import { machineCounters } from '../src/lib/server/machine-counters';
 import { listManifestDays } from '../src/lib/server/model-work';
 import { describeServerCounters } from '../src/lib/server/server-counter-notes';
-import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/similarity-holdout';
+import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/content-similarity-holdout';
 import { windowDay } from '../src/lib/server/window-day';
 import { buildLedger, buildRows, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
 import { publishedSite } from './support/published-site';
@@ -318,7 +318,8 @@ test.describe('a record filed inside its family folder', () => {
 
 		const scored = await mergeLineHoldoutScore(days('2030-06-01', PINNED), state);
 
-		expect(scored).toEqual({
+		expect(scored.read.state).toBe('read');
+		expect(scored.score).toEqual({
 			date: '2030-06-14',
 			runId: '2030-06-14-1',
 			appliedLine: 0.94,
@@ -335,7 +336,7 @@ test.describe('a record filed inside its family folder', () => {
 	test('a holdout score with no packed file is no reading, rather than an error', async () => {
 		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unscored-'));
 		try {
-			expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), root)).toBeNull();
+			expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), root)).toEqual({ score: null, read: { state: 'not-packed' } });
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -351,7 +352,9 @@ test.describe('a record filed inside its family folder', () => {
 			columns: READING
 		});
 
-		expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), state)).toBeNull();
+		const empty = await mergeLineHoldoutScore(days('2030-06-01', PINNED), state);
+		expect(empty.score).toBeNull();
+		expect(empty.read.state).toBe('read');
 	});
 });
 
@@ -382,7 +385,9 @@ test.describe('the hand marks, once a pair over their reach', () => {
 			{ covers: '2030-06-12', rows: [mark('corrected', false, '2030-06-12')] }
 		]);
 
-		expect(read(await markedPairs(markReach(PINNED, 730), state))).toEqual([
+		const marks = await markedPairs(markReach(PINNED, 730), state);
+		expect(marks.read.state).toBe('read');
+		expect(read(marks.rows)).toEqual([
 			['https://left.test/corrected', 'False', '2030-06-12'],
 			['https://left.test/kept', 'True', '2030-06-10']
 		]);
@@ -398,7 +403,7 @@ test.describe('the hand marks, once a pair over their reach', () => {
 		]);
 
 		expect(markReach(PINNED, 30)).toEqual({ start: daysBefore(PINNED, 30), end: PINNED });
-		expect(read(await markedPairs(markReach(PINNED, 30), state))).toEqual([
+		expect(read((await markedPairs(markReach(PINNED, 30), state)).rows)).toEqual([
 			['https://left.test/another-pair', 'False', daysBefore(PINNED, 30)]
 		]);
 	});
@@ -406,7 +411,7 @@ test.describe('the hand marks, once a pair over their reach', () => {
 	test('no packed mark reads as none, rather than an error', async () => {
 		const root = mkdtempSync(path.join(tmpdir(), 'idhazh-unmarked-'));
 		try {
-			expect(await markedPairs(markReach(PINNED, 730), root)).toEqual([]);
+			expect(await markedPairs(markReach(PINNED, 730), root)).toEqual({ rows: [], read: { state: 'not-packed' } });
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

@@ -31,7 +31,7 @@ const CONSOLE: TestGroup[] = ['logic', 'console', 'panels', 'publishing'];
  * console route renders it, so its edits buy the console on the pull request.
  */
 const CONSOLE_OWNED =
-	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|panel-drivers)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
+	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|console-window|panel-drivers)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
 
 /** What a console panel's picture is drawn from, beyond the console's own files.
  *
@@ -221,6 +221,9 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/tests\/support\/(?:console-expect|panel-drivers)\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'route-owned console expectations and drivers';
+		} else if (/^frontend\/tests\/support\/console-window\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'shared window controls and focused route window consumers';
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';

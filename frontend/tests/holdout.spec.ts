@@ -93,8 +93,8 @@ test('the four states say four different things', () => {
 	];
 
 	expect(new Set(said).size).toBe(4);
-	expect(said[0]).toContain('nothing to hold the line against');
-	expect(said[1]).toContain('No day has fitted a line yet');
+	expect(said[0]).toBe('No scored pair marked as two stories was returned, so there is no measured margin.');
+	expect(said[1]).toContain('No fitted line was returned in the loaded window');
 	expect(said[2]).toContain('No hand-marked pair is on the wrong side');
 	expect(said[3]).toContain('would merge them');
 });
@@ -163,7 +163,7 @@ test('a tree nobody has scored says so, and never prints four zeros', () => {
 	// merged nothing rather than as a reading nobody took.
 	const said = scoredNote(null);
 
-	expect(said).toContain('has not been scored');
+	expect(said).toBe('No committed holdout score was returned in the loaded window. Run idhazh score-merge-line-holdout to write that reading down.');
 	expect(said).toContain('score-merge-line-holdout');
 	expect(said).not.toContain('0 of the');
 });

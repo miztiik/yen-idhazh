@@ -148,17 +148,17 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
 def test_the_holdout_score_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
     """The Judgement page reads part of the holdout score, so its list is a part, in order.
 
-    `similarity-holdout.ts` spells the `MergeLineHoldoutScore` columns the panel
+    `content-similarity-holdout.ts` spells the `MergeLineHoldoutScore` columns the panel
     reads, because the door never offers every column. A column the contract
     renames or drops would reach the panel as an empty reading rather than as an
     error.
     """
-    asked = quoted_strings(read_text(SERVER / "similarity-holdout.ts"), "HOLDOUT_SCORE_COLUMNS")
+    asked = quoted_strings(read_text(SERVER / "content-similarity-holdout.ts"), "HOLDOUT_SCORE_COLUMNS")
     declared = list(MergeLineHoldoutScore.csv_columns())
 
-    assert asked, "HOLDOUT_SCORE_COLUMNS in similarity-holdout.ts names no column"
+    assert asked, "HOLDOUT_SCORE_COLUMNS in content-similarity-holdout.ts names no column"
     assert [name for name in declared if name in asked] == asked, (
-        "HOLDOUT_SCORE_COLUMNS in similarity-holdout.ts is not part of "
+        "HOLDOUT_SCORE_COLUMNS in content-similarity-holdout.ts is not part of "
         "MergeLineHoldoutScore's columns in order. Not declared: "
         f"{[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
@@ -168,17 +168,17 @@ def test_the_holdout_score_asks_only_for_columns_the_contract_declares_in_its_or
 def test_the_fitted_line_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
     """The Judgement page reads part of the fitted line, so its list is a part, in order.
 
-    `similarity-ledger.ts` spells the `FittedSimilarityThreshold` columns the
+    `content-similarity-judge.ts` spells the `FittedSimilarityThreshold` columns the
     merge line, the agreement strip and the record read, because the door never
     offers every column. A column the contract renames or drops would reach a
     panel as an empty reading rather than as an error.
     """
-    asked = quoted_strings(read_text(SERVER / "similarity-ledger.ts"), "FITTED_LINE_COLUMNS")
+    asked = quoted_strings(read_text(SERVER / "content-similarity-judge.ts"), "FITTED_LINE_COLUMNS")
     declared = list(FittedSimilarityThreshold.csv_columns())
 
-    assert asked, "FITTED_LINE_COLUMNS in similarity-ledger.ts names no column"
+    assert asked, "FITTED_LINE_COLUMNS in content-similarity-judge.ts names no column"
     assert [name for name in declared if name in asked] == asked, (
-        "FITTED_LINE_COLUMNS in similarity-ledger.ts is not part of "
+        "FITTED_LINE_COLUMNS in content-similarity-judge.ts is not part of "
         "FittedSimilarityThreshold's columns in order. Not declared: "
         f"{[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
@@ -188,16 +188,16 @@ def test_the_fitted_line_asks_only_for_columns_the_contract_declares_in_its_orde
 def test_the_holdout_marks_ask_for_every_column_but_the_stamp_in_the_contract_order() -> None:
     """The Judgement page reads each hand mark whole but for `version`, in the contract's order.
 
-    `similarity-holdout.ts` spells the `SimilarityHoldoutPair` columns it asks
+    `content-similarity-holdout.ts` spells the `SimilarityHoldoutPair` columns it asks
     the door for, because the door never offers every column. A column the
     contract renames, adds or drops would reach the panel as an empty reading
     rather than as an error.
     """
-    asked = quoted_strings(read_text(SERVER / "similarity-holdout.ts"), "HOLDOUT_PAIR_COLUMNS")
+    asked = quoted_strings(read_text(SERVER / "content-similarity-holdout.ts"), "HOLDOUT_PAIR_COLUMNS")
     declared = [name for name in SimilarityHoldoutPair.csv_columns() if name != "version"]
 
     assert asked == declared, (
-        "HOLDOUT_PAIR_COLUMNS in similarity-holdout.ts is not every SimilarityHoldoutPair "
+        "HOLDOUT_PAIR_COLUMNS in content-similarity-holdout.ts is not every SimilarityHoldoutPair "
         f"column but version, in order. Not declared: {[n for n in asked if n not in declared]}; "
         f"not asked: {[n for n in declared if n not in asked]}."
     )
