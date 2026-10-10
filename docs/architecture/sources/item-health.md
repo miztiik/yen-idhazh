@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-10
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -505,6 +505,10 @@ stage that did the work.
 | `summarize` | `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
+`no_title` remains readable on historical failures. New extractions do not
+reject an acceptable body for an absent source headline; the summarizer
+generates the title.
+
 **A new code is named in five places, and the fifth only fails at runtime.**
 `FailureCode` itself, `FAILURE_CODE_STAGES`, `SOURCE_NEUTRAL_FAILURE_CODES`,
 `CollectConfig.settled_failure_codes`, and - the one that is easy to miss -
@@ -984,9 +988,8 @@ rows live in between: a shard's verdicts leave the runner only inside its
 between the workers and the publish had measured every item and recorded none of
 it - and a bad day is exactly the day worth measuring. The race the old rule
 avoided is answered instead by the two things that already existed for it: a
-union merge driver on `state/**/*.csv` at the time, and the
-rebase loop in `backend/utilities/commit_and_push.py` that the plan job has always
-used for the same reason. The driver went on 2026-09-19 and the writer file took
+union merge driver and a rebase loop at the time. The driver went on
+2026-09-19; publication now uses exact, private-index candidates, and the writer file took
 its place, so the shard and assemble no longer write one path at all. The
 double-write the old rule also avoided is answered
 by the row identity above. Authority: Fowler, over Carmack's original ruling.

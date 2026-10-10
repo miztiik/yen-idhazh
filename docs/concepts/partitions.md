@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -132,7 +132,7 @@ other class honest. Settling one in favour of a single writer deletes the other
 writer's rows and exits 0 - three written-once inputs all land intact while the
 file derived from them quietly loses half its content, and no gate can see it.
 What the push does with each class is
-[in committing.md](../architecture/publishing/committing.md#a-conflicted-path-is-settled-by-who-wrote-it-never-by-which-side-it-came-from).
+[in committing.md](../architecture/publishing/committing.md#the-caller-owns-recovery-policy).
 
 `backend/tests/contracts/test_path_classes.py` holds the two classes disjoint and
 covering every path a production stage writes. It enumerates the writers from
@@ -219,18 +219,6 @@ Authority: owner, 2026-09-06.
 The collection with nothing committed is not aspirational. Its writer ships and is
 tested; it has not fired, because the oldest committed month is `2026-08` and its age
 is fourteen months.
-
-## The last unfrozen partition is frozen now
-
-The telemetry projection `frontend/public/telemetry/<YYYY-MM>.csv` was the one
-place in the tree where the layout existed and the rule did not:
-`public_telemetry.publish` globbed `state/item-health/` and rewrote every month
-it found, on every run, for an answer it already had. Row 19 of the
-[constant-cost-reads plan](../../TODO/20260906-constant-cost-reads-plan.md)
-closed it in #484: the writer now takes the row above, writing only the months a
-caller names as changed and rewriting a named month only when its bytes differ.
-What it writes, and how the two freezes compose, is
-[in the telemetry doc](../architecture/publishing/telemetry-series.md#published-shards).
 
 ## A ledger and its mirror may file at different grains
 

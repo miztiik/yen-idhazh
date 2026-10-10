@@ -32,7 +32,7 @@ The slots are four hours apart and a run takes under three, so two runs normally
 do not overlap. When one does - a late slot, or a dispatch fired during a run -
 both work. Nothing queues a content refresh run behind another, because every
 row each run commits lands under that run's own name and the read settles them
-([../publishing/committing.md](../publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
+([../publishing/committing.md](../publishing/committing.md#the-caller-owns-recovery-policy)).
 
 Five runs share one day. They append to the same dated digest rather than replacing it, so the day grows through the day. That is only safe because an item's identity does not depend on its rank - see below.
 

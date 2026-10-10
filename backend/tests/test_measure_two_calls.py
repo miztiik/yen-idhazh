@@ -319,8 +319,7 @@ def test_the_title_and_the_body_come_back_out_of_a_user_turn() -> None:
 def test_a_turn_whose_first_line_is_not_a_title_keeps_its_first_paragraph() -> None:
     """The guard that stops the parser eating a paragraph it mistook for a title.
 
-    `Article` refuses an ok article with no title, so this turn cannot come off
-    the corpus today. The branch is here because without it the split on the
+    An article may have no source title. Without this guard the split on the
     first blank line would quietly drop the opening paragraph of any turn that
     ever did arrive that way, and a body one paragraph short is a prompt nobody
     would look at twice.

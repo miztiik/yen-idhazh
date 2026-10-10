@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -56,7 +56,7 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 ## What holds the copy in step
 
-Five tests in `backend/tests/contracts/`, each named for what it proves.
+Named tests in `backend/tests/contracts/`, each proving a specific binding.
 
 | File | What it proves |
 | --- | --- |
@@ -65,8 +65,9 @@ Five tests in `backend/tests/contracts/`, each named for what it proves.
 | `test_frontend_console_lists.py` | eight console lists still name what their contracts declare - the eval panel's column map, the census row's and the feed record's column lists in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin, the prompt-reuse column grammar, and the routes the strip draws: `RouteId` and `ROUTE_IDS` in `band.ts` name `RouteId`'s members in the order the band producer's `ROUTES` writes them |
 | `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; `ENTRY_STATES` is `EntryState`; every ledger the door may query is a `LedgerName`; the `RawDayIndex` copy in `raw-day-index.ts` names the contract's fields, requires `bytes`, and carries `RawDayIndex.schema_version()` as `RAW_DAY_INDEX_STAMP`; the cell it filters days on is the ledger's own date cell; and `LEDGER_FAULTS` in `slice-shapes.ts` names `LedgerFault`'s members in order |
 | `test_frontend_recorded_line.py` | the two keys `RECORD_KEYS` in `recorded-line.ts` reads from each record of a day's `run.json` - the line a build grouped the day at, and when it finished - are keys `RunRecord` writes, holding a number and text. A renamed key would otherwise send the Judgement page back to the worked-out line with no error |
+| `test_chart_evidence_binding.py` | `ChartEvidence` in `frontend/src/lib/chart-evidence.ts` has the shared model's exact fields and numeric/null types; the visual decision, run manifest and public run-day embed the same model, and the existing manifest reader exposes it |
 
-A sixth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
+`test_no_generated_layer.py` refuses the generated trees coming back one file at a time.
 
 ## What is still hand-written elsewhere
 
@@ -146,7 +147,14 @@ The shapes, and where each one lives once written:
 
 ### A new row ledger ships with its header, not with its first run
 
-`backend/utilities/commit_and_push.py` stages every path a job owns in one `git add`. A path that is not in the checkout makes that call fail, and the program then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. A CSV ledger with no first row therefore shipped as a header-only file. No state ledger needs one now: the feed retirements and the similarity holdout marks were the last two, and both moved under `state/raw/`, where each writer creates its own file and the step that commits it stages `state` whole.
+The shared publisher stages only confirmed completed files, never a directory.
+An absent raw folder is not an operation or an error. A failed producer's
+completed output is kept separately from its failure status, so one missing
+ledger cannot suppress another completed ledger. No header-only state ledger
+is needed. `PublicationReceipt`, version `2026-10-09`, is the simple invocation
+evidence contract: existing `WriterIdentity` and `writes: relative-path -> SHA256`.
+Its fixture roundtrips canonically with LF. It grants no permissions and is not
+a committed publication/audit ledger.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 

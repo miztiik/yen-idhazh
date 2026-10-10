@@ -5,9 +5,8 @@ allowed to do with it when two runs arrive together.
 
 A **derived** path's content is a function of other jobs' output, so two runs
 that start from different bases compute different bytes for it and git has no
-way to choose between them. The answer is never a merge: before it rebases, a
-job hands every path in `DERIVED` back to the tip it is pushing at, and then
-runs its own producer again against that tip.
+way to choose between them. The answer is never a merge: a job rebuilds the
+paths in `DERIVED` from fresh named inputs in an isolated preparation tree.
 
 A **written-once** path carries the name of the one writer that can have written
 it, so two runs never arrive at one path and there is nothing to settle.
@@ -40,8 +39,8 @@ DAY_DIR: Final = "{day_dir}"
 #:
 #: The day's own directory is deliberately absent and the two payload files in it
 #: are named one at a time. The directory also holds the day's charts, and a
-#: chart is never handed back: this run's copy of one the tip already publishes
-#: is dropped before the rebase instead (`render.write.drop_raced_assets`).
+#: chart keeps the tip's published bytes; completed incoming charts fill absent
+#: paths during the caller's preparation (`utilities.digest_assemble`).
 #:
 #: **Eight `state/` trees left this list on 2026-09-22 and the reason is the
 #: same for all of them.** Each one now names its file for the single writer

@@ -57,6 +57,59 @@ def a_probe() -> config.Settings:
     return settings
 
 
+def test_only_the_jobs_config_names_take_the_bandwidth_reading(tmp_path: Path) -> None:
+    """Guardrail #6: which jobs read bandwidth moves from config, with no source edit.
+
+    The reading wants a gigabyte and an idle machine, so the bench takes it and a
+    production job does not - a job that allocated twice the cache it drew would
+    time a copy against whatever else it had already started, which measures the
+    run rather than the host.
+
+    Driven over a one-mebibyte floor rather than the committed one, because what
+    is under test is whether the job was asked at all. A row that skipped the
+    reading says so with `memcpy_probe_mib` of zero, which is a different fact
+    from a machine that copied nothing.
+    """
+    settings = config.load()
+    settings.app.observability.host_fingerprint = True
+    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 1
+    settings.app.observability.host_fingerprint_bandwidth_jobs = (ServerJob.RUNTIME,)
+
+    took = silicon.stage_fingerprint(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=settings,
+        state_root=tmp_path / "bench",
+        commit_sha=SEED_COMMIT,
+        job=ServerJob.RUNTIME,
+    )
+    skipped = silicon.stage_fingerprint(
+        date=FINGERPRINT_DAY,
+        run_id=A_RUN_ID,
+        settings=settings,
+        state_root=tmp_path / "wake",
+        commit_sha=SEED_COMMIT,
+        job=ServerJob.RUN_TASKS,
+    )
+
+    assert took is not None and skipped is not None
+    assert took.memcpy_probe_mib and took.memcpy_probe_mib > 0, "the named job read nothing"
+    assert skipped.memcpy_probe_mib == 0, "a job config did not name took the reading anyway"
+    assert skipped.memcpy_gib_s is None, "an untaken reading is absent, never a zero rate"
+    assert skipped.fingerprint == took.fingerprint, (
+        "one machine, two rows: skipping the reading may not change what the host is"
+    )
+
+
+def test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else() -> None:
+    """The default is the bench alone, which is the job whose purpose is to tell
+    one machine from another. Read off the committed file rather than restated
+    here, so moving the knob moves this test with it."""
+    named = config.load().app.observability.host_fingerprint_bandwidth_jobs
+
+    assert named == (ServerJob.RUNTIME,)
+
+
 CPUINFO_XEON = """processor\t: 0
 vendor_id\t: GenuineIntel
 cpu family\t: 6

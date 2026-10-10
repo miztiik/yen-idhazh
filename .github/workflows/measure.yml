@@ -508,8 +508,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 330
     # The one job in this workflow that pushes, and it pushes exactly one thing:
-    # the machine it drew, under `state/pipeline-tests/`. Every other job here
-    # reads the repository and writes nothing back, which is why the permission
+    # the machine it drew, under `state/raw/pipeline-tests/host-fingerprint/`.
+    # Every other job reads the repository and writes nothing back, so permission
     # is raised on this job rather than at workflow level.
     permissions:
       contents: write
@@ -643,8 +643,9 @@ jobs:
       # Why the copy differs in one line and nothing else is written down once,
       # in the action. The second input is the exception and it is not a control
       # on the measurement: a bench is a run that exercises production's code
-      # path and must not be readable as a production day, so `cli` moves this
-      # run's whole state root onto `state/pipeline-tests/`.
+      # path and must not be readable as a production day. The trial registry
+      # puts ledgers under `state/<raw|compact>/pipeline-tests/<ledger>/` and
+      # JSONL traces under `state/raw/traces/pipeline-tests/`.
       - name: Build the candidate config
         uses: ./.github/actions/candidate-config
         with:
@@ -704,8 +705,9 @@ jobs:
       # way, and it is the only row this workflow commits.
       #
       # It goes through the candidate config, which is what puts the row under
-      # `state/pipeline-tests/` rather than beside the production rows. A bench
-      # is dispatched many times a day against unmerged branches; mixing those
+      # `state/raw/pipeline-tests/host-fingerprint/` rather than beside the
+      # production rows. A bench is dispatched many times a day against
+      # unmerged branches; mixing those
       # rows into the ledger the console reads would mean every panel filtering
       # by job for ever.
       #
@@ -715,7 +717,7 @@ jobs:
       - name: What machine this bench drew
         run: |
           set -euo pipefail
-          python -m idhazh fingerprint \
+          python backend/utilities/record_publish.py run measure fingerprint \
             --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
@@ -797,9 +799,10 @@ jobs:
       # the machine this dispatch drew - to `main`.
       #
       # `state/raw/pipeline-tests/host-fingerprint` and nothing wider. The sweep's
-      # own item-health, scores and traces land under the same trial root
-      # because the whole state root moved, but nothing reads them back and
-      # committing them would grow the repository for no reader (Guardrail #12).
+      # own item-health and scores use the trial registry's ledger paths;
+      # JSONL traces go to `state/raw/traces/pipeline-tests/`. Nothing reads
+      # these files back, so committing them would grow the repository for
+      # no reader (Guardrail #12).
       #
       # Staged only when the probe wrote it. No commit holds the folder open -
       # the ledger door files one raw file per write and has no empty file to
@@ -825,7 +828,7 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: |
           if [ -d state/raw/pipeline-tests/host-fingerprint ]; then
-            python backend/utilities/commit_and_push.py state/raw/pipeline-tests/host-fingerprint
+            python backend/utilities/record_publish.py land measure
           else
             echo "$NOTHING_STAGED_MESSAGE"
           fi

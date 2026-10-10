@@ -15,6 +15,8 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 
 from idhazh.council import registry
+from idhazh.council.session import VENUE_LEDGERS
+from idhazh.ledger import staging
 from utilities import council_matrix
 
 from ._config import copy_config
@@ -100,9 +102,19 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
         {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2},
     ]
     assert emitted["committed_paths"].split() == [
-        council_matrix.COUNCIL_LEDGER,
+        *(staging.staged_path(which) for which in VENUE_LEDGERS),
         "state/paper",
     ], "the venue's own record is staged beside whatever the tenant named"
+
+
+@pytest.mark.parametrize("root", ["state", "state/raw", "state/compact"])
+def test_a_tenant_cannot_declare_a_blanket_state_root(
+    venue: Path, capsys: pytest.CaptureFixture[str], root: str
+) -> None:
+    a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, (root,))})
+    config_root = _config_registering(venue, slugs=("a-paper-tenant",))
+    with pytest.raises(ValueError, match="blanket state"):
+        _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
 
 def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
@@ -202,7 +214,7 @@ def test_the_staged_paths_are_every_tenants_and_each_one_once(
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
     assert emitted["committed_paths"].split() == [
-        council_matrix.COUNCIL_LEDGER,
+        *(staging.staged_path(which) for which in VENUE_LEDGERS),
         "state/paper",
         "state/shared",
         "state/other",

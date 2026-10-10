@@ -473,7 +473,7 @@ jobs:
         id: gates
         continue-on-error: true
         run: |
-          python -m idhazh qualify-decide \
+          python backend/utilities/record_publish.py run validate qualify-decide \
             --config backend/var/candidate-config \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
@@ -490,16 +490,8 @@ jobs:
 
       # The trial root, and `state` whole until 2026-09-18 - which staged every
       # production ledger in the checkout, so a dispatch could commit whatever
-      # else happened to be dirty in the tree. This job's whole state root is
-      # redirected here by the config step above, so everything under this path
-      # that is dirty on this runner was written by this runner.
-      #
-      # `state/raw/pipeline-tests` rather than the narrower
-      # `state/raw/pipeline-tests/candidate-models`, for the same reason
-      # digest.yml's `Commit what this shard measured` gives: a dispatch whose
-      # gates wrote no verdict has no candidate-models folder at all, and
-      # `commit_and_push.py` already drops a named path neither on disk nor
-      # tracked rather than failing on it.
+      # else happened to be dirty in the tree. Exact completed-write evidence
+      # is separate from the candidate-models path declaration.
       #
       # What it commits is the raw file the gates filed through the ledger door
       # under the trial root. Its separate compaction runs on a later gardener
@@ -509,7 +501,7 @@ jobs:
           COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "the gates wrote no ledger row"
           PUSH_FAILED_MESSAGE: "could not push the candidate-models ledger"
-        run: python backend/utilities/commit_and_push.py state/raw/pipeline-tests
+        run: python backend/utilities/record_publish.py land validate
 
       - uses: actions/upload-artifact@v7
         with:

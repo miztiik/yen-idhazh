@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -284,14 +284,23 @@ over every path the night's tenants named. Two processes never share a path.
 `fail-fast` is off. **A unit that dies costs its own work and nothing else** -
 the settle runs anyway and keeps everything the surviving units produced.
 
-**The venue spells no ledger path.** A list of one tenant's paths is a list that
-never commits a second tenant's output, so the paths come back from
-`committed_paths` on the protocol and reach the commit step as one job output. A
-night with no tenant registered stages nothing, and the step is skipped: `git
-add` with no path is an error rather than a no-op. A ledger that files through
-the door is named by its folder under `state/raw/`, because the collecting job
-writes only raw files and the gardener packs them later. On a night that files
-nothing there the folder is absent, and the commit step skips the absent path.
+**Writers declare their paths beside themselves.** Tenant paths come back from
+`committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
+`HOST_FINGERPRINT` beside its session; their staging paths come from the ledger
+registry. The collecting utility uses these independent declarations and returns
+without a record or push when no tenant is registered.
+
+**A declared directory is not permission to sweep it.** As the collecting job
+finishes atomic writes, `council_publish.py` records exact paths and byte digests
+per tenant and for the venue. Only those confirmed writes are offered to
+`publish_to_repo.py`; the private candidate excludes unrelated staged and local
+files. Receipts confirm bytes, never permission. Different bytes at an immutable
+UUID are refused, and mutable files require an unchanged baseline.
+
+There is one collecting job for any number of judges or shards. A tenant/date
+failure does not suppress earlier completed bytes or later tenants/dates.
+Sparse input discovery uses each tenant's separately declared named inputs,
+periods and indexes, never the number of judges or an archive checkout.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the

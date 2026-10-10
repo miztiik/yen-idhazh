@@ -25,7 +25,7 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, ledger, run_context
+from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.base import DateStamp, RunId, ServerJob
 from idhazh.contracts.council_run_record import (
     CouncilRunRecord,
@@ -38,6 +38,7 @@ from idhazh.council import metrics_sink
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import tenant, tenants
 from idhazh.council.tenancy import ShardResult, Tenant
+from idhazh.ledger import staging
 
 _log: Final = logging.getLogger(__name__)
 
@@ -62,6 +63,28 @@ OUTCOMES_DIRNAME: Final = "outcomes"
 #: How a recorded instant is spelled. The contract pins the shape, and this is
 #: the one place a council row is stamped with it.
 STARTED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+VENUE_LEDGERS: Final = (LedgerName.COUNCIL_RUN_RECORDS, LedgerName.HOST_FINGERPRINT)
+
+
+def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
+    """The venue's and hosted tenants' declarations, never a blanket state claim."""
+    hosted = tenants(council.tenants)
+    if not hosted:
+        return ()
+    if any(
+        path in ("state", "state/raw", "state/compact")
+        for host in hosted
+        for path in host.committed_paths
+    ):
+        raise ValueError("a tenant must declare its own paths, not a blanket state root")
+    return tuple(
+        dict.fromkeys(
+            [
+                *(staging.staged_path(which) for which in VENUE_LEDGERS),
+                *(path for host in hosted for path in host.committed_paths),
+            ]
+        )
+    )
 
 
 def scratch_root(date: DateStamp) -> Path:
@@ -159,6 +182,7 @@ def settle(
     run_id: RunId,
     state_dir: Path,
     commit_sha: str,
+    completed: Callable[[Tenant | None, dict[Path, str]], None] | None = None,
 ) -> tuple[ShardResult, ...]:
     """Count, fit, or do nothing, once a date after every shard has reported.
 
@@ -173,28 +197,53 @@ def settle(
     """
     identity = _identify_writer(run_id=run_id, commit_sha=commit_sha)
     hosted = _hosted(council, date)
-    try:
-        return tuple(
-            _recorded(
-                host.judge_id,
-                unit="settle",
-                date=date,
-                run_id=run_id,
-                evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
-                work_part_index=None,
-                work_part_count=shard_width(council, host),
-                work=partial(
-                    host.settle,
-                    date=date,
-                    run_id=run_id,
-                    state_dir=state_dir,
-                    identity=identity,
-                ),
-            )
-            for host in hosted
-        )
-    finally:
-        _collect(hosted, date=date, state_dir=state_dir, identity=identity)
+    results: list[ShardResult] = []
+    failures: list[Exception] = []
+    for host in hosted:
+        with completed_writes.collect() as evidence:
+            try:
+                results.append(
+                    _recorded(
+                        host.judge_id,
+                        unit="settle",
+                        date=date,
+                        run_id=run_id,
+                        evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
+                        work_part_index=None,
+                        work_part_count=shard_width(council, host),
+                        work=partial(
+                            host.settle,
+                            date=date,
+                            run_id=run_id,
+                            state_dir=state_dir,
+                            identity=identity,
+                        ),
+                    )
+                )
+            except Exception as error:
+                failures.append(error)
+            finally:
+                if completed is not None:
+                    try:
+                        completed(host, evidence)
+                    except Exception as error:
+                        failures.append(error)
+    with completed_writes.collect() as evidence:
+        try:
+            _collect(hosted, date=date, state_dir=state_dir, identity=identity)
+        except Exception as error:
+            failures.append(error)
+        finally:
+            if completed is not None:
+                try:
+                    completed(None, evidence)
+                except Exception as error:
+                    failures.append(error)
+    if failures:
+        if len(failures) == 1:
+            raise failures[0]
+        raise ExceptionGroup("council settlement failures", failures)
+    return tuple(results)
 
 
 def run_shard(

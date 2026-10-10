@@ -22,13 +22,13 @@ from typing import Any, Final
 import pytest
 
 from idhazh.contracts.corpus import CorpusMeta
-from utilities import commit_and_push, corpus_history
+from utilities import corpus_history, publication_git
 
 from ._garden import SEED_IDENTITY, a_config, quiet_git, write
 
 #: The one identity the repository commits as, read from the commit program so a
 #: squash that drifted to another name is caught on the commits it made.
-THE_REPOSITORY: Final = f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>"
+THE_REPOSITORY: Final = f"{publication_git.COMMITTER_NAME} <{publication_git.COMMITTER_EMAIL}>"
 
 #: The wake every case runs at, and the cut its 60-day window gives: 00:00 UTC on 2026-04-16.
 TODAY: Final = "2026-06-15"
@@ -70,7 +70,8 @@ def dated_git(repo: Path, instant: str, *args: str) -> str:
     done = subprocess.run(
         ["git", *SEED_IDENTITY, *args],
         cwd=repo,
-        env=os.environ | {"GIT_AUTHOR_DATE": _epoch(instant), "GIT_COMMITTER_DATE": _epoch(instant)},
+        env=os.environ
+        | {"GIT_AUTHOR_DATE": _epoch(instant), "GIT_COMMITTER_DATE": _epoch(instant)},
         capture_output=True,
         text=True,
         check=False,
@@ -103,13 +104,18 @@ class History:
         git(root, "clone", "--quiet", str(self.origin), str(self.author))
         declaration = write(root / "declared" / "corpus-squash.json", json.dumps(declared))
         a_config(self.author, declaration)
-        write(self.author / "corpus" / "corpus.meta.json", CorpusMeta(version=CorpusMeta.schema_version()).to_json())
+        write(
+            self.author / "corpus" / "corpus.meta.json",
+            CorpusMeta(version=CorpusMeta.schema_version()).to_json(),
+        )
         write(self.author / "corpus" / "corpus.jsonl", "")
         self.shas: dict[str, str] = {}
 
     def add(self, instant: str, subject: str, files: dict[str, str] | None = None) -> str:
         name = subject.replace(" ", "-")
-        self.shas[subject] = commit(self.author, instant, subject, files or {f"docs/{name}.md": f"{subject}\n"})
+        self.shas[subject] = commit(
+            self.author, instant, subject, files or {f"docs/{name}.md": f"{subject}\n"}
+        )
         return self.shas[subject]
 
     def publish(self) -> Path:
@@ -132,7 +138,9 @@ class History:
 
     def chain(self) -> list[str]:
         """Origin's `main` along first parents, oldest first, as `sha subject`."""
-        return self.on_origin("log", "--first-parent", "--reverse", "--format=%H %s", "main").splitlines()
+        return self.on_origin(
+            "log", "--first-parent", "--reverse", "--format=%H %s", "main"
+        ).splitlines()
 
 
 def squash(checkout: Path, today: str = TODAY) -> int:
@@ -245,7 +253,9 @@ def test_a_second_squash_a_cadence_later_still_finds_history_to_collapse(
     assert squash(history.publish()) == 0
     capsys.readouterr()
     later = history.clone("next-job")
-    commit(later, "2026-06-20T09:00:00Z", "a change after the first squash", {"docs/later.md": "x\n"})
+    commit(
+        later, "2026-06-20T09:00:00Z", "a change after the first squash", {"docs/later.md": "x\n"}
+    )
     git(later, "push", "--quiet", "origin", "HEAD:refs/heads/main")
     job = history.clone("second-job")
 
@@ -295,7 +305,16 @@ def test_a_merge_above_the_boundary_is_replayed_with_the_tip_tree_intact(
     history.add("2026-05-02T09:00:00Z", "a side change")
     git(history.author, "checkout", "--quiet", "main")
     history.add("2026-05-01T09:00:00Z", "a main change")
-    dated_git(history.author, "2026-05-03T09:00:00Z", "merge", "--quiet", "--no-ff", "-m", "a merge", "side")
+    dated_git(
+        history.author,
+        "2026-05-03T09:00:00Z",
+        "merge",
+        "--quiet",
+        "--no-ff",
+        "-m",
+        "a merge",
+        "side",
+    )
     history.add("2026-06-01T09:00:00Z", "the newest change")
     checkout = history.publish()
     tip = git(checkout, "rev-parse", "HEAD").strip()
@@ -318,10 +337,14 @@ def test_a_merge_that_carried_its_own_change_is_refused_before_anything_is_pushe
     history.add("2026-05-02T09:00:00Z", "a side change")
     git(history.author, "checkout", "--quiet", "main")
     history.add("2026-05-01T09:00:00Z", "a main change")
-    dated_git(history.author, "2026-05-03T09:00:00Z", "merge", "--quiet", "--no-ff", "--no-commit", "side")
+    dated_git(
+        history.author, "2026-05-03T09:00:00Z", "merge", "--quiet", "--no-ff", "--no-commit", "side"
+    )
     write(history.author / "docs" / "only-the-merge.md", "made by the merge\n")
     dated_git(history.author, "2026-05-03T09:00:00Z", "add", "--all")
-    dated_git(history.author, "2026-05-03T09:00:00Z", "commit", "--quiet", "-m", "a merge with a change")
+    dated_git(
+        history.author, "2026-05-03T09:00:00Z", "commit", "--quiet", "-m", "a merge with a change"
+    )
     checkout = history.publish()
     before = history.on_origin("rev-parse", "main").strip()
 
@@ -482,9 +505,10 @@ def test_a_run_whose_every_push_is_refused_leaves_main_to_the_other_writer_and_s
     assert err.count(corpus_history.DUE_AGAIN) == 1
     assert err.splitlines()[-1] == corpus_history.DUE_AGAIN
     assert history.on_origin("rev-parse", "main").strip() == git(racer, "rev-parse", "HEAD").strip()
-    assert history.on_origin("log", "--format=%s", f"{published}..main").splitlines() == [
-        "a run pushed meanwhile"
-    ] * 3
+    assert (
+        history.on_origin("log", "--format=%s", f"{published}..main").splitlines()
+        == ["a run pushed meanwhile"] * 3
+    )
     assert last_run_on_origin(history) is None
 
 
@@ -501,7 +525,9 @@ def test_with_one_push_a_tip_that_moved_is_refused_as_it_always_was(
     checkout = history.publish()
     tip = git(checkout, "rev-parse", "HEAD").strip()
     racer = history.clone("racer")
-    raced = commit(racer, "2026-06-15T09:00:00Z", "a run pushed meanwhile", {"docs/raced.md": "x\n"})
+    raced = commit(
+        racer, "2026-06-15T09:00:00Z", "a run pushed meanwhile", {"docs/raced.md": "x\n"}
+    )
     git(racer, "push", "--quiet", "origin", "HEAD:refs/heads/main")
 
     assert squash(checkout) == corpus_history.EXIT_TIP_MOVED
@@ -529,7 +555,9 @@ def test_a_wake_with_nothing_old_enough_that_loses_its_push_records_the_run_on_t
     history.add("2026-06-01T09:00:00Z", "a recent change")
     checkout = history.publish()
     racer = history.clone("racer")
-    raced = commit(racer, "2026-06-15T09:00:00Z", "a run pushed meanwhile", {"docs/raced.md": "x\n"})
+    raced = commit(
+        racer, "2026-06-15T09:00:00Z", "a run pushed meanwhile", {"docs/raced.md": "x\n"}
+    )
     git(racer, "push", "--quiet", "origin", "HEAD:refs/heads/main")
 
     assert squash(checkout) == corpus_history.EXIT_OK
@@ -634,6 +662,6 @@ def test_a_boundary_that_is_not_a_commit_is_refused(history: History) -> None:
 
 def test_it_commits_as_the_one_identity_the_commit_program_sets() -> None:
     assert (corpus_history.COMMITTER_NAME, corpus_history.COMMITTER_EMAIL) == (
-        commit_and_push.COMMITTER_NAME,
-        commit_and_push.COMMITTER_EMAIL,
+        publication_git.COMMITTER_NAME,
+        publication_git.COMMITTER_EMAIL,
     )

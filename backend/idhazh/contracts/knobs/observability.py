@@ -9,7 +9,7 @@ from typing import Any, Final, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import Model, ServerJob
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 
@@ -215,6 +215,24 @@ class ObservabilityConfig(Model):
             "generations in one runner pool: a quarter of runs in which every job "
             "reports the same family, model and flags, which would make the row a "
             "constant and a constant is not a reading."
+        ),
+    )
+    host_fingerprint_bandwidth_jobs: tuple[ServerJob, ...] = Field(
+        default=(ServerJob.RUNTIME,),
+        description=(
+            "Which workflow jobs take the memory-bandwidth reading. A job outside "
+            "this list records every other cell of the fingerprint and leaves "
+            "memcpy_gib_s empty, with memcpy_probe_mib at zero beside it so the row "
+            "says the reading was not taken rather than implying a machine that "
+            "could not copy. "
+            "The bench alone by default, because the reading wants a gigabyte and an "
+            "idle machine: measure.yml takes it between its corpus step and its "
+            "sweep, where nothing else is running, and that is the job whose whole "
+            "purpose is to tell one machine from another. A production job that took "
+            "it would allocate twice the cache it drew and time a copy against "
+            "whatever else it had already started, which measures the run rather "
+            "than the host. Add a job here to read its bandwidth; the cell is "
+            "nullable and nothing refuses a row without it."
         ),
     )
     host_fingerprint_bandwidth_floor_mib: int = Field(

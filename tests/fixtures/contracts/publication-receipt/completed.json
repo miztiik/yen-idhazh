@@ -1,0 +1,14 @@
+{
+  "identity": {
+    "attempt": 1,
+    "git_sha": "905593ef21c3bcda87187fdd9067808dfa8cf4ad",
+    "job": "plan",
+    "producer": "tests.completed",
+    "run_id": "2026-10-09-123",
+    "shard": 0
+  },
+  "version": "2026-10-09",
+  "writes": {
+    "state/raw/seen/2026/10/09/completed.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

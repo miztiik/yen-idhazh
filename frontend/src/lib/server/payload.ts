@@ -14,6 +14,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
+import { readChartEvidence, type ChartEvidence } from '../chart-evidence';
 import { basename, join, resolve } from 'node:path';
 import { publicFiles } from './publication';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
@@ -912,6 +913,7 @@ export interface RunRecord {
 	prefiltered: number;
 	/** Items whose planner reply asked for a chart, whatever the decision became. */
 	chartsDrafted: number;
+	chartEvidence: ChartEvidence | null;
 	/** What the planner spent, or null where the run wrote no time down at all.
 	 *
 	 * Null and zero are different facts: a visuals job that never ran spent no
@@ -975,6 +977,7 @@ export function loadManifests(
 							decided: Number(run.items_routed ?? 0) || 0,
 							prefiltered: Number(run.items_prefiltered ?? 0) || 0,
 							chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
+							chartEvidence: readChartEvidence(run.chart_evidence),
 							// The manifest writes an integer or a literal null. `Number(null)` is 0,
 							// so coercing here would turn "never measured" into "measured zero".
 							decisionMs: typeof run.route_ms === 'number' ? run.route_ms : null,
@@ -997,8 +1000,8 @@ export function loadManifests(
 				models: [...new Set(models)],
 				records
 			});
-		} catch {
-			// A manifest that will not parse costs the console one row, never the page.
+		} catch (cause) {
+			console.warn(`[run-manifest] ${date}: unreadable, day dropped - ${String(cause)}`);
 		}
 	}
 	return found;

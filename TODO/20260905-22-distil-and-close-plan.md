@@ -1,6 +1,6 @@
 # 22 - Close it out
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-10-10
 **Level**: 2 (documentation, and the deletion of two working documents)
 
 **Chain**: previous [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md). **Last plan of the group.**
@@ -34,6 +34,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ---
 
 ## 2. Row #1 - What is durable, and where it already lives
+
+- **Unapproved documentation-check proposal:** The handover proposed a check that a decision in a working document names its owning `docs/` page and that the page links back. No such check has been implemented. The current documentation contract requires the decision to live on its owning page; it does not require a link back to a temporary document. Before this row closes, ask the owner whether a further automated check is wanted and what it must prove. This proposal does not authorize a code or `CLAUDE.md` change.
 
 - **Scope:** Walk both working documents; for every durable finding, check whether the living doc already holds it, and write the ones that do not.
 - **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/pipeline-cost.md`
@@ -114,5 +116,5 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes, and which this plan deletes.
 - [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md) - the previous plan.
-- [`20260905-01-visible-chart-plan.md`](20260905-01-visible-chart-plan.md) - the first plan of the group.
+- [The published frontend](../docs/architecture/publishing/frontend.md) - the delivered chart carrier and day loading.
 - [`../docs/how-to/distill-a-plan.md`](../docs/how-to/distill-a-plan.md) - the closure ritual this plan follows.

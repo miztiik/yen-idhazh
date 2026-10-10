@@ -1,6 +1,6 @@
 # Data Growth Research And Planning Handover
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-10-10
 
 Status: research only. No implementation is authorized by this document. The
 155 findings describe source revision `76c2d27cbfb7ba9d868e0747dea366b2223e408f`.
@@ -10,7 +10,7 @@ Do not execute the numbered findings as a queue.
 
 ## Closed by the Constant-Cost Reads plan
 
-The [Constant-Cost Reads plan](20260906-constant-cost-reads-plan.md) closed 43 of
+The completed Constant-Cost Reads work addressed 43 of
 these findings between 2026-09-06 and 2026-09-08. Each row names the finding, the
 plan row that took it, and the merged PR that closed it. This is recorded
 alongside the research and does not overwrite it (`CLAUDE.md` section 5): the
@@ -54,6 +54,18 @@ half (#500). **Finding 112** is a `Keep` (necessary local presentation work); it
 sits inside the audited 93-113 range but was never in this plan's scope, and
 nothing here closes it.
 
+**Finding 84 remains pending; its page design is a proposal, not shipped
+behaviour or implementation approval.** The proposal uses `ui.archive_page_size`
+stories per page, fetches a deep link's target page directly, and keys page
+navigation and hide-read state by the day's revision. It bounds retained page
+bytes using `ui.offline_bytes_kept`, limits each page with `max_body_bytes`, and
+evicts the oldest page when the retained-byte ceiling is reached. Those existing
+knobs do not currently bound a reading page's whole-day download or memory.
+Preserving instant whole-day substring filtering would require a separate
+revision-owned local index and its download; otherwise filtering would cover only
+loaded pages or wait for more downloads. A later execution plan must settle that
+choice and the byte and navigation contracts before changing the served payload.
+
 **Two plan rows close no finding, but the 43 above rest on them.** Row 1 set
 every tunable the plan needed in one contract and its schema - the 1/7/14/30/90-day
 window presets, the 14-day read-mark and archive windows, and the 20 MB offline
@@ -77,8 +89,8 @@ work exists anywhere. Recheck the register and live PRs before claiming work.
 
 | Rank | Work And Main Packages | Where The Payoff Appears | Size | Status / Existing Plan | First Assignment |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Stop rebuilding dashboard history: Published Projections, Frontend Reductions | Faster publication/builds; less data and repeated work in the console | Small loop fixes; Large final change | No growth plan linked. [Console backfill](20260905-03-console-backfill-plan.md) is complete, but adds visibility rather than eliminating history reads. | Plan one-pass grouping and the run/health join first; design exact precomputed page facts alongside it. |
-| 2 | Reuse unchanged publication and build output: Build Reuse | Shorter CI/build/deploy tail for every new run | Large; job artifact reuse Medium | No growth plan linked. [Site-cap defence](20260905-04-site-cap-defence-plan.md) addresses capacity, not incremental builds. | Define complete build identities, changed outputs and deletion handling before skipping work. |
+| 1 | Stop rebuilding dashboard history: Published Projections, Frontend Reductions | Faster publication/builds; less data and repeated work in the console | Small loop fixes; Large final change | No growth plan linked. [Console measurement ownership](../docs/concepts/evaluation.md) adds visibility rather than eliminating history reads. | Plan one-pass grouping and the run/health join first; design exact precomputed page facts alongside it. |
+| 2 | Reuse unchanged publication and build output: Build Reuse | Shorter CI/build/deploy tail for every new run | Large; job artifact reuse Medium | No growth plan linked. [Site weight](../docs/reference/site-weight.md) addresses capacity, not incremental builds. | Define complete build identities, changed outputs and deletion handling before skipping work. |
 | 3 | Replace lifetime state scans and race repair: Indexed State | Faster planning, small appends and publication retries as history grows | Large | Needs an ownership/storage decision; no plan linked. | Agree exact keys and one writer. Delete global repair only after that replacement works. |
 | 4 | Stop loading and retaining whole days for small views: Date And Day Data, Browser Ownership | Faster dated/topic pages, deeper paging and long sessions on small devices | Medium local fixes; Large payload change | No current growth plan linked; the [payload/search handover](20260825-payload-and-search-handover.md) is prior context, not a claim. | Start ID indexes/read reuse; settle page, byte and navigation bounds before a payload cutover. |
 | 5 | Reuse decoded vectors and select exact top results: Exact Search | Faster repeat search after model startup; cheaper retrieval evaluation | Medium exact changes; Large segmentation | No growth plan linked. Keep exhaustive scoring as the correctness oracle. | Plan decoded-value reuse and exact top-K with unchanged scores, ties and candidate coverage. |
@@ -109,9 +121,9 @@ finding-by-finding record is [above](#closed-by-the-constant-cost-reads-plan).
 | --- | --- | --- | --- |
 | Indexed State | Unclaimed | No plan linked; ownership and storage decision needed | None recorded |
 | Replay Results | Unclaimed | No plan linked; result identity/durability decision needed | None recorded |
-| Published Projections | Unclaimed | No growth plan linked; [console backfill](20260905-03-console-backfill-plan.md) is related completed work | None recorded |
+| Published Projections | Unclaimed | No growth plan linked; [console measurement ownership](../docs/concepts/evaluation.md) is related completed work | None recorded |
 | Date And Day Data | Unclaimed | No current plan linked; [payload/search handover](20260825-payload-and-search-handover.md) is prior context | None recorded |
-| Build Reuse | Unclaimed | No growth plan linked; [site-cap defence](20260905-04-site-cap-defence-plan.md) is related, not coverage | None recorded |
+| Build Reuse | Unclaimed | No growth plan linked; [site weight](../docs/reference/site-weight.md) is related, not coverage | None recorded |
 | Frontend Reductions | Unclaimed | No plan linked; local equivalent-output changes can be planned | None recorded |
 | Browser Ownership | Unclaimed | No plan linked; agree request/cache ownership with day and search work | None recorded |
 | Exact Search | Unclaimed | No current plan linked; [payload/search handover](20260825-payload-and-search-handover.md) is prior context | None recorded |
@@ -120,7 +132,7 @@ finding-by-finding record is [above](#closed-by-the-constant-cost-reads-plan).
 | Regression Fixtures | Overlap | [PR #426](https://github.com/miztiik/yen-idhazh/pull/426); map exact covered findings after merge | No new claim; coordinate `chore/cut-the-o-n-checks` |
 | Test Runner | Overlap | [PR #426](https://github.com/miztiik/yen-idhazh/pull/426); do not duplicate CI/test setup edits | No new claim; coordinate `chore/cut-the-o-n-checks` |
 | Operator Tools | Unclaimed | No growth plan linked; explicit audit/training work is lower priority | None recorded |
-| Retirement | Overlap | [Site-cap defence](20260905-04-site-cap-defence-plan.md) row 4 concerns cleanup reporting, not scan removal. Rows 1-3 have merged PRs #431-#433 despite stale IN-FLIGHT labels there. | No growth claim; worktree branch `state/the-cleanup-says-what-it-skipped` observed; completion unverified |
+| Retirement | Unclaimed | [Site weight](../docs/reference/site-weight.md) and cleanup reporting are delivered; they do not establish scan removal. | No growth claim |
 | Keep Necessary Work | Review only | Confirm the bound or the current contract's human-approved exception; not an optimization backlog | None recorded |
 
 ### Claiming Work
