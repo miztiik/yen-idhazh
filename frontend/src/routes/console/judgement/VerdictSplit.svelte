@@ -33,6 +33,7 @@
 	} from '$lib/console/verdict-split';
 
 	let {
+		evidence = [],
 		record,
 		applied,
 		discardShare,
@@ -49,6 +50,7 @@
 		width: number;
 		/** The day's three counts. Null where the ledger holds no answer. */
 		figures: { inBand: number | null; judged: number | null; usable: number | null };
+		evidence?: string[];
 	} = $props();
 
 	/** The width the table rebins to. One row a fifth of the numbers, at the
@@ -134,6 +136,7 @@
 		<p class="comparison" data-comparison="Pairs judged one story against pairs judged two stories, split at the merge line.">
 			Pairs judged one story against pairs judged two stories, split at the merge line.
 		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
 		{#if record === null}
 			<p class="lede" data-lede data-empty="missing">The judge's score record is unavailable.</p>
 		{:else}

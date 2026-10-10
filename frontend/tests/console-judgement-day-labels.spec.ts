@@ -166,7 +166,7 @@ test('the merge line is a day over seven days, with a band at each day', async (
 	});
 });
 
-test('THE ORACLE L45: a held row and six unrecorded days imply no fit', async ({ page }) => {
+test('THE ORACLE L45: a held row and six missing rows return no fitted line', async ({ page }) => {
 	await draw(page, 'MergeLinePlot', {
 		...lineProps(7, []),
 		days: [{ ...lineDay('2030-06-14'), proposed: null, heldReason: 'sheet_too_small' }]
@@ -178,7 +178,7 @@ test('THE ORACLE L45: a held row and six unrecorded days imply no fit', async ({
 		surface: 'record-gates', preset: 7, state: 'one held row and six silent days',
 		days: [judgeDay('2030-06-14', FILLING)], words: ''
 	}));
-	expect(await said(page, '[data-counted-fitted]')).toBe('No line was fitted in these 7 days.');
+	expect(await said(page, '[data-counted-fitted]')).toBe('No fitted line was returned for these 7 days.');
 	await expect(page.locator('[data-counted-state="silent"]')).toHaveCount(6);
 });
 

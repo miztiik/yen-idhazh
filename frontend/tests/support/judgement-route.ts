@@ -112,6 +112,7 @@ const INPUTS = [
 	'src/lib/console/explorer/type-family.ts',
 	'src/lib/console/explorer/utc-instant.ts',
 	'src/lib/console/holdout.ts',
+	'src/lib/console/judgement-evidence.ts',
 	'src/lib/console/merge-line.ts',
 	'src/lib/console/recording.ts',
 	'src/lib/console/route-console.ts',
@@ -189,10 +190,11 @@ function stageModules(frontend: string): void {
 
 export async function judgementRoute(
 	report: string,
-	options: { scoreRecord?: 'populated'; evidence?: 'absent' } = {}
+	options: { scoreRecord?: 'populated'; evidence?: 'absent' | 'empty' | 'unknown-denominators' | 'missing-gate' } = {}
 ): Promise<{
 	origin: string;
 	inputs: string[];
+	staticRoot: string;
 	close: () => Promise<void>;
 }> {
 	mkdirSync(report, { recursive: true });
@@ -226,7 +228,7 @@ export async function judgementRoute(
 		}));
 		await buildLedger(state, {
 			ledger: 'fitted-thresholds', pinned: '2030-06-15',
-			days: [{ ago: 1, rows: 1 }],
+			days: options.evidence === 'empty' ? [{ ago: 0, state: 'empty' }] : [{ ago: 1, rows: 1 }],
 			columns: {
 				run_id: '2030-06-14-1', previous: 0.95, proposed: 0.952,
 				after_damping: 0.952, applied: 0.952, clamp_kind: 'none',
@@ -234,7 +236,12 @@ export async function judgementRoute(
 				max_up_step: 0.01, pairs_in_band: 10, pairs_judged: 10,
 				pairs_usable: 10, disagreement_rate: 0, unclear_rate: 0,
 				negatives_on_record: 5, above_line_on_record: 5,
-				days_on_record: 1, cosine_weight: 1
+				days_on_record: 1,
+				cosine_weight: options.evidence === 'unknown-denominators' ? null : 1,
+				...(options.evidence === 'unknown-denominators' ? { pairs_judged: null } : {}),
+				...(options.evidence === 'missing-gate' ? {
+					negatives_on_record: null, disagreement_rate: 0.5, held_reason: 'judge_unstable'
+				} : {})
 			}
 		});
 		for (const ledger of ['holdout-pairs', 'merge-line-holdout-scores'] as const) {
@@ -259,7 +266,7 @@ export async function judgementRoute(
 		}
 		writeFileSync(join(report, 'evidence.json'), JSON.stringify({
 			digestDays: absent ? [] : ['2030-06-15'],
-			fittedDays: absent ? [] : ['2030-06-14'],
+			fittedDays: absent || options.evidence === 'empty' ? [] : ['2030-06-14'],
 			scoreRecord: absent ? null : options.scoreRecord ?? null,
 			holdoutPairs: [], holdoutScores: []
 		}));
@@ -346,7 +353,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			});
 		});
 		writeFileSync(join(report, 'build.json'), `${JSON.stringify(ready)}\n`);
-		return { ...ready, inputs, close };
+		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close };
 	} catch (error) {
 		await close();
 		throw error;

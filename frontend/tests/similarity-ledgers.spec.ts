@@ -130,7 +130,9 @@ test('THE ORACLE: the page reads the fitted line the council files and the garde
 	const root = test.info().outputPath('night');
 
 	const filed = aFixtureNight(root);
-	const lines = await fittedLines({ start: BEFORE, end: NIGHT }, path.join(root, 'state'));
+	const reading = await fittedLines({ start: BEFORE, end: NIGHT }, path.join(root, 'state'));
+	const lines = reading.rows;
+	expect(reading.read.state).toBe('read');
 
 	// The backend read back three rows: the night before, and the night's run and re-run.
 	expect(filed.map((row) => `${row.date} ${row.run_id}`).sort()).toEqual([
@@ -161,7 +163,7 @@ function aMovedLine(): Record<string, string | number> {
 test('a record the gardener has not packed reads no line, rather than an error', async () => {
 	const root = test.info().outputPath('nothing-packed');
 
-	expect(await fittedLines({ start: BEFORE, end: NIGHT }, root)).toEqual([]);
+	expect(await fittedLines({ start: BEFORE, end: NIGHT }, root)).toEqual({ rows: [], rates: [], rejected: [], read: { state: 'not-packed' } });
 });
 
 test('a window that starts after the newest packed day reads no line, rather than an old one', async () => {
@@ -174,8 +176,10 @@ test('a window that starts after the newest packed day reads no line, rather tha
 		columns: aMovedLine()
 	});
 
-	expect(await fittedLines({ start: BEFORE, end: NIGHT }, state)).toEqual([]);
-	expect((await fittedLines({ start: '2026-07-01', end: NIGHT }, state)).map((line) => line.date)).toEqual([
+	const empty = await fittedLines({ start: BEFORE, end: NIGHT }, state);
+	expect(empty.rows).toEqual([]);
+	expect(empty.read.state).toBe('read');
+	expect((await fittedLines({ start: '2026-07-01', end: NIGHT }, state)).rows.map((line) => line.date)).toEqual([
 		'2026-07-12'
 	]);
 });

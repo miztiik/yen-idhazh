@@ -23,6 +23,8 @@ import { join } from 'node:path';
 // suite loads this module in plain Node, where no Vite alias resolves.
 import type { TimeWindow } from '../charts/viewport';
 import type { ScoreRecord } from '../console/verdict-split';
+import type { RecordRead } from '../console/recording';
+import type { JudgeDay } from '../console/merge-line';
 import { sliceFromDisk } from './ledger-disk';
 import { datedFirst, windowRows } from './ledger-rows';
 import { STATE_ROOT } from './payload';
@@ -129,7 +131,14 @@ function figure(cell: string | undefined): number | null {
  * **No row is an ordinary state.** A record the gardener has not packed yet,
  * and a window that starts after its newest packed day, both read no row.
  */
-export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT): Promise<FittedLine[]> {
+export interface FittedReading {
+	rows: FittedLine[];
+	read: RecordRead;
+	rates: (Pick<JudgeDay, 'date' | 'disagreementRate' | 'unclearRate' | 'pairsJudged' | 'pairsUsable' | 'heldReason'> & { runId: string })[];
+	rejected: { date: string; rates: boolean }[];
+}
+
+export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT): Promise<FittedReading> {
 	const table = await windowRows(root, 'fitted-thresholds', window, FITTED_LINE_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'fitted-thresholds', {
 			columns: [...datedFirst(FITTED_LINE_COLUMNS)],
@@ -138,14 +147,52 @@ export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT)
 		})
 	);
 	const newest = new Map<string, FittedLine>();
+	const rates: FittedReading['rates'] = [];
+	const rejected: FittedReading['rejected'] = [];
+	const latest = new Map<string, (typeof table.rows)[number]>();
 	for (const row of table.rows) {
 		const date = text(row.date);
 		const runId = text(row.run_id);
+		if (date === null || runId === null) {
+			console.warn('The fitted judge record contains a row without its date or run id.');
+			continue;
+		}
+		const held = latest.get(date);
+		if (held === undefined || runId > (held.run_id ?? '')) latest.set(date, { ...row, run_id: runId });
+	}
+	for (const [date, row] of latest) {
+		const runId = row.run_id;
 		const applied = figure(row.applied);
 		const previous = figure(row.previous);
-		if (date === null || runId === null || applied === null || previous === null) continue;
-		const held = newest.get(date);
-		if (held !== undefined && held.runId >= runId) continue;
+		const disagreementRate = figure(row.disagreement_rate);
+		const unclearRate = figure(row.unclear_rate);
+		if (disagreementRate !== null && unclearRate !== null) {
+			rates.push({
+				date, runId, disagreementRate, unclearRate,
+				pairsJudged: figure(row.pairs_judged),
+				pairsUsable: figure(row.pairs_usable),
+				heldReason: text(row.held_reason) ?? 'none'
+			});
+		} else {
+			rejected.push({ date, rates: true });
+			console.warn(`The fitted judge record has unavailable rate measurements on ${date}.`);
+		}
+		const required = {
+			clampMovement: figure(row.clamp_movement),
+			maxDownStep: figure(row.max_down_step),
+			maxUpStep: figure(row.max_up_step),
+			disagreementRate,
+			unclearRate,
+			negativesOnRecord: figure(row.negatives_on_record),
+			aboveLineOnRecord: figure(row.above_line_on_record),
+			daysOnRecord: figure(row.days_on_record)
+		};
+		// Required measurements cannot be manufactured from blank cells.
+		if (applied === null || previous === null || Object.values(required).some((value) => value === null)) {
+			rejected.push({ date, rates: false });
+			console.warn(`The fitted judge record has unavailable line or gate measurements on ${date}; valid rate readings are retained.`);
+			continue;
+		}
 		newest.set(date, {
 			date,
 			runId,
@@ -154,22 +201,27 @@ export async function fittedLines(window: TimeWindow, root: string = STATE_ROOT)
 			afterDamping: figure(row.after_damping),
 			applied,
 			clampKind: text(row.clamp_kind) ?? 'none',
-			clampMovement: figure(row.clamp_movement) ?? 0,
+			clampMovement: required.clampMovement!,
 			heldReason: text(row.held_reason) ?? 'none',
-			maxDownStep: figure(row.max_down_step) ?? 0,
-			maxUpStep: figure(row.max_up_step) ?? 0,
-			disagreementRate: figure(row.disagreement_rate) ?? 0,
-			unclearRate: figure(row.unclear_rate) ?? 0,
+			maxDownStep: required.maxDownStep!,
+			maxUpStep: required.maxUpStep!,
+			disagreementRate: required.disagreementRate!,
+			unclearRate: required.unclearRate!,
 			pairsInBand: figure(row.pairs_in_band),
 			pairsJudged: figure(row.pairs_judged),
 			pairsUsable: figure(row.pairs_usable),
-			negativesOnRecord: figure(row.negatives_on_record) ?? 0,
-			aboveLineOnRecord: figure(row.above_line_on_record) ?? 0,
-			daysOnRecord: figure(row.days_on_record) ?? 0,
+			negativesOnRecord: required.negativesOnRecord!,
+			aboveLineOnRecord: required.aboveLineOnRecord!,
+			daysOnRecord: required.daysOnRecord!,
 			cosineWeight: figure(row.cosine_weight)
 		});
 	}
-	return [...newest.values()].sort((left, right) => left.date.localeCompare(right.date));
+	return {
+		rows: [...newest.values()].sort((left, right) => left.date.localeCompare(right.date)),
+		read: table.read,
+		rates: rates.sort((left, right) => left.date.localeCompare(right.date)),
+		rejected
+	};
 }
 
 /** The whole score record, or null where no day has been counted into one.

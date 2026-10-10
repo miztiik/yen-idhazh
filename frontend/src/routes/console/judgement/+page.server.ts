@@ -60,7 +60,8 @@ export async function load() {
 	// is under the widest preset, because no row is dated after the newest
 	// published day. The rows come from the packed record, read inside the widest
 	// span, so a fitted day reaches the page once the gardener has packed it.
-	const rows = await fittedLines(readSpan);
+	const fitted = await fittedLines(readSpan);
+	const rows = fitted.rows;
 	const similarity = similarityConfig();
 	// The record is cumulative and the counts are per day, so the newest row is
 	// what both the split and the figures strip are about.
@@ -72,14 +73,15 @@ export async function load() {
 	const committed = committedWeights();
 	const weights: ScoreWeights = {
 		cosineWeight: newest?.cosineWeight ?? committed.cosine_weight,
-		fittedOn: newest === null ? null : newest.date
+		fittedOn: newest?.cosineWeight == null ? null : newest.date
 	};
 	// The packed hand marks inside their own reach, which ends on the same day as
 	// every window here, plus one published day per distinct date they name. The
 	// bound is the reach and not the archive, and the days it opens sit outside
 	// the window preset - so it has an entry of its own in
 	// `docs/concepts/growing-reads.md`.
-	const holdout = await holdoutReading(weights, markReach(day, holdoutReachDays()));
+	const reach = markReach(day, holdoutReachDays());
+	const holdout = await holdoutReading(weights, reach);
 	// How the line stood against the marks, off the committed row rather than
 	// counted again here. Null where nobody has run the verb that writes it, where
 	// its day is not packed yet, or where the newest row is older than the widest
@@ -89,6 +91,10 @@ export async function load() {
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
+		readSpan,
+		fittedRead: fitted.read,
+		judgeRates: fitted.rates,
+		rejectedJudgeRows: fitted.rejected,
 		// Eight numbers and two words a day at the widest preset, so the window
 		// control filters an array that is already here and no preset costs a fetch.
 		lines: rows.map(
@@ -109,8 +115,8 @@ export async function load() {
 				date: row.date,
 				disagreementRate: row.disagreementRate,
 				unclearRate: row.unclearRate,
-				pairsJudged: row.pairsJudged ?? 0,
-				pairsUsable: row.pairsUsable ?? 0,
+				pairsJudged: row.pairsJudged,
+				pairsUsable: row.pairsUsable,
 				negativesOnRecord: row.negativesOnRecord,
 				aboveLineOnRecord: row.aboveLineOnRecord,
 				daysOnRecord: row.daysOnRecord,
@@ -149,6 +155,9 @@ export async function load() {
 		// them - and inlining the rest would put two addresses and two headlines a
 		// row in a prerendered page for marks that set no floor.
 		holdout: {
+			read: holdout.read,
+			reach,
+			scoredRead: scored.read,
 			marks: holdout.marks.filter((mark) => !mark.sameStory),
 			skipped: holdout.skipped,
 			marked: holdout.marked,
@@ -170,7 +179,7 @@ export async function load() {
 			// The committed reading, or null. Ten numbers, so the panel can print what
 			// the line did to every mark on the day somebody scored it -
 			// which is the part a rebuild of this page cannot reconstruct.
-			scored
+			scored: scored.score
 		},
 		// How many date labels the day axis may carry - `chart.tick_density`.
 		chart: chartConfig(),

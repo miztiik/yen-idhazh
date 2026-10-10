@@ -21,14 +21,14 @@ const SPAN_CASES: SpanCase[] = [
 		preset: 7,
 		state: 'no pair was read twice',
 		days: [],
-		words: 'No pair was read twice in these 7 days, so there is nothing to compare.'
+		words: 'No judge readings were returned for these 7 days, so there is nothing to compare.'
 	},
 	{
 		surface: 'judge-agreement',
 		preset: 1,
 		state: 'no pair was read twice in it, though some were the day before',
 		days: [judgeDay('2030-06-14', { pairsJudged: 40, pairsUsable: 38, disagreementRate: 0.05 })],
-		words: 'No pair was read twice in this one day, so there is nothing to compare.'
+		words: 'No judge readings were returned for this one day, so there is nothing to compare.'
 	},
 	{
 		surface: 'judge-agreement',
@@ -160,7 +160,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'nothing was judged',
 		days: [],
 		words:
-			'Nothing was judged in these 7 days. The three bars are what the record needs before a line may be fitted at all.'
+			'No gate counts were returned for these 7 days. The record needs readings, days counted and pairs above the line before a line may be fitted.'
 	},
 	{
 		surface: 'record-gates',
@@ -168,7 +168,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'nothing was judged in it, though the record has a row the day before',
 		days: [judgeDay('2030-06-14', FILLING)],
 		words:
-			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+			'The bars show what the record held on 14 Jun 2030, before this one day. No later judge row was returned for this window.'
 	},
 	{
 		surface: 'record-gates',
@@ -176,7 +176,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'nothing was judged in them, though the record has a row before them',
 		days: [judgeDay('2030-06-01', FILLING)],
 		words:
-			'The bars show what the record held on 1 Jun 2030, before these 7 days. No run has recorded anything since.'
+			'The bars show what the record held on 1 Jun 2030, before these 7 days. No later judge row was returned for this window.'
 	},
 	{
 		surface: 'record-gates',
@@ -184,7 +184,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record is still filling and no line was fitted',
 		days: [judgeDay('2030-06-12', { ...FILLING, negativesOnRecord: 100 }), judgeDay('2030-06-15', FILLING)],
 		words:
-			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in these 7 days.'
+			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No fitted line was returned for these 7 days.'
 	},
 	{
 		surface: 'record-gates',
@@ -192,21 +192,21 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record is still filling and no line was fitted',
 		days: [judgeDay('2030-06-15', FILLING)],
 		words:
-			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in this one day.'
+			'The record has 120 readings, 6 days, and 12 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No fitted line was returned for this one day.'
 	},
 	{
 		surface: 'record-gates',
 		preset: 7,
 		state: 'the newest four days counted nothing and no line was fitted',
 		days: [judgeDay('2030-06-11', { ...FILLED, heldReason: 'judge_unstable' })],
-		words: 'Nothing has been counted for 4 days. No line was fitted in these 7 days.'
+		words: 'No judge row was returned for the latest 4 days. No fitted line was returned for these 7 days.'
 	},
 	{
 		surface: 'record-gates',
 		preset: 7,
 		state: 'the newest day counted nothing and no line was fitted',
 		days: [judgeDay('2030-06-14', { ...FILLED, heldReason: 'judge_uncertain' })],
-		words: 'Nothing has been counted for 1 day. No line was fitted in these 7 days.'
+		words: 'No judge row was returned for the latest 1 day. No fitted line was returned for these 7 days.'
 	},
 	{
 		surface: 'record-gates',
@@ -217,7 +217,7 @@ const SPAN_CASES: SpanCase[] = [
 			judgeDay('2030-06-15', { ...FILLED, heldReason: 'shards_missing' })
 		],
 		words:
-			'The record has what it needs. These three bars stay so a record that empties is visible. No line was fitted in these 7 days.'
+			'The record has what it needs. These three bars stay so a record that empties is visible. No fitted line was returned for these 7 days.'
 	},
 	{
 		surface: 'record-gates',
@@ -225,7 +225,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'the record has what it needs and its day was held',
 		days: [judgeDay('2030-06-15', { ...FILLED, heldReason: 'judge_uncertain' })],
 		words:
-			'The record has what it needs. These three bars stay so a record that empties is visible. No line was fitted in this one day.'
+			'The record has what it needs. These three bars stay so a record that empties is visible. No fitted line was returned for this one day.'
 	},
 	{
 		// The other side of the same choice: a fitted day replaces the sentence
@@ -246,7 +246,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'no line was ever fitted',
 		days: [],
 		words:
-			'No line was fitted in these 7 days. The rule is the line the newest day was built with, and the scale is the whole range a fitted line may take.',
+			'No calculated line was returned for these 7 days. The rule is the line the newest day was built with, and the scale is the whole range a fitted line may take.',
 		label: 'The line the newest day was built with'
 	},
 	{
@@ -255,7 +255,7 @@ const SPAN_CASES: SpanCase[] = [
 		state: 'no line was fitted in it, though one was the day before',
 		days: [lineDay('2030-06-14')],
 		words:
-			'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.',
+			'No calculated line was returned for this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.',
 		label: 'The line this one day was built with'
 	}
 ];
@@ -266,6 +266,9 @@ let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
   const panels = await serverPanels(resolve(process.cwd(), 'test-results', "JudgeAgreement-RecordGates-MergeLinePlot", String(testInfo.workerIndex)), [['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement'], ['src/routes/console/judgement/RecordGates.svelte', 'RecordGates'], ['src/routes/console/judgement/MergeLinePlot.svelte', 'MergeLinePlot']]);
   Object.assign(drawn, panels.drawn);
+  drawn['judge-agreement'] = drawn.JudgeAgreement;
+  drawn['record-gates'] = drawn.RecordGates;
+  drawn['merge-line'] = drawn.MergeLinePlot;
   stripStyles = panels.stripStyles;
 });
 async function draw(page: Page, name: string, props: Record<string, unknown>) {
@@ -311,7 +314,7 @@ test('THE ORACLE: merge-line draws its rule at the line the newest day was built
 	await expect(page.locator('[data-line-rule]')).toHaveAttribute('data-line-rule', '0.940');
 	expect(await said(page, '[data-line-rule-label]')).toBe('The line this one day was built with');
 	expect(await said(page, '[data-line-state]')).toBe(
-		'No line was fitted in this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
+		'No calculated line was returned for this one day. The rule is the line this one day was built with, and the scale is the whole range a fitted line may take.'
 	);
 });
 });

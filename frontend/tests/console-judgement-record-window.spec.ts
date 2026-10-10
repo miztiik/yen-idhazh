@@ -21,8 +21,8 @@ interface BarsCase {
 }
 
 /** The bars stand on the record's newest row on or before the window's last day,
- * so only a record that never held a row, or one that emptied, draws them at
- * zero. Every count and every word is written out. */
+ * so an empty read draws no measured bars, and a real zero-count row draws zero.
+ * Every count and every word is written out. */
 const BARS_CASES: BarsCase[] = [
 	{
 		surface: 'record-gates',
@@ -34,16 +34,16 @@ const BARS_CASES: BarsCase[] = [
 		],
 		bars: ['120', '6', '12'],
 		words:
-			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+			'The bars show what the record held on 14 Jun 2030, before this one day. No later judge row was returned for this window.'
 	},
 	{
 		surface: 'record-gates',
 		preset: 1,
 		state: 'the record never held a row',
 		days: [],
-		bars: ['0', '0', '0'],
+		bars: [],
 		words:
-			'Nothing was judged in this one day. The three bars are what the record needs before a line may be fitted at all.'
+			'No gate counts were returned for this one day. The record needs readings, days counted and pairs above the line before a line may be fitted.'
 	},
 	{
 		surface: 'record-gates',
@@ -52,7 +52,7 @@ const BARS_CASES: BarsCase[] = [
 		days: [judgeDay('2030-06-14', FILLING), judgeDay(JUDGED_THROUGH, { heldReason: 'inputs_changed' })],
 		bars: ['0', '0', '0'],
 		words:
-			'The record has 0 readings, 0 days, and 0 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No line was fitted in this one day.'
+			'The record has 0 readings, 0 days, and 0 pairs above the line; it needs at least 200 readings, 10 days, and 30 pairs above the line. No fitted line was returned for this one day.'
 	}
 ];
 test.describe("the record's bars stand on its newest row, on days the test builds", () => {
@@ -77,7 +77,7 @@ const drawGates = (props: Record<string, unknown>) => drawn.RecordGates(props);
 			const panel = page.locator('[data-windowed="record-gates"]');
 			await expect(panel).toHaveAttribute('data-window-days', String(one.preset));
 			// Three tracks: each bar is drawn at its count, never replaced by a dash.
-			await expect(panel.locator('[data-target-cell="track"]')).toHaveCount(3);
+			await expect(panel.locator('[data-target-cell="track"]')).toHaveCount(one.bars.length);
 			const bars = await panel.locator('[data-target-cell="value"]').allTextContents();
 			expect(bars.map((bar) => bar.trim()), 'the bars stand on a different row').toEqual(one.bars);
 			expect(await said(page, SAID['record-gates'])).toBe(one.words);

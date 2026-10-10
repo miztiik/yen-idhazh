@@ -302,7 +302,11 @@ test('the full route renders in both themes with every source absent', async ({ 
 						await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toBeVisible();
 					}
 					await expect(page.locator('[data-verdict-split] [data-empty="missing"]')).toBeVisible();
-					await expect(page.locator('[data-gates-state="empty"]')).toContainText('No gate counts were returned');
+					await expect(page.locator('[data-console-panel-id="record-gates"] [data-empty="missing"]')).toHaveText("The record's gate counts are unavailable for these 14 days.");
+					await expect(page.locator('[data-console-panel-id="record-gates"] [data-evidence-note]')).toHaveText(
+						'The judge record has not been packed yet. Its readings are unavailable.'
+					);
+					await expect(page.locator('[data-target-cell="track"]')).toHaveCount(0);
 					expect(errors, `${width}, ${theme}, absent source files`).toEqual([]);
 				} finally {
 					await context.close();

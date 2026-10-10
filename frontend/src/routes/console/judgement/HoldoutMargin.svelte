@@ -57,6 +57,7 @@
 
 	let {
 		marks: inputMarks,
+		evidence = [],
 		agreedScores: inputAgreedScores,
 		skipped,
 		marked,
@@ -75,6 +76,7 @@
 		 * them would be weight in a prerendered document for nothing the panel
 		 * draws. */
 		marks: HoldoutMark[] | null;
+		evidence?: string[];
 		/** Every score a person read as one story, and nothing else about them.
 		 * 196 numbers is 1.7 KB; the same rows with their addresses and headlines
 		 * are 88 KB, for a strip that draws three of them. */
@@ -307,6 +309,7 @@
 		<p class="comparison" data-comparison="Each hand-marked pair's score against the merge line.">
 			Each hand-marked pair's score against the merge line.
 		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
 		{#if absent}
 			<p class="headline" data-empty="missing">
 				<span class="figure" data-lede>The hand-marked pairs are unavailable.</span>
@@ -602,13 +605,6 @@
 			{/if}
 		{/each}
 		<p class="under" data-holdout-weights>{weightsNote(weights)}</p>
-		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
-			{scoredNote(scored)}
-		</p>
-		{#if skips !== null}
-			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>
-		{/if}
-
 		{#if apart.length > 0}
 			<details class="detail" data-holdout-table>
 				<summary>Every pair a person marked as two stories</summary>
@@ -638,6 +634,12 @@
 				</p>
 			</details>
 		{/if}
+		{/if}
+		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
+			{scoredNote(scored)}
+		</p>
+		{#if skips !== null}
+			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>
 		{/if}
 	</div>
 </Panel>

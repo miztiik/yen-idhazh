@@ -251,5 +251,5 @@ test('the one-story sentence names the count, the range and the misses', () => {
 });
 
 test('a panel with no one-story marks says so rather than drawing an empty strip', () => {
-	expect(agreedNote([], 0.94)).toContain('No pair has been read as one story yet');
+	expect(agreedNote([], 0.94)).toBe('No scored pair marked as one story was returned, so there is no second population to draw.');
 });

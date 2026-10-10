@@ -1,8 +1,8 @@
 # Plan 52 - The console's panels ask the ledger when they are looked at, ECharts leaves, and six projections go
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
-**Status**: Row 1's implementation is complete on `feat/console-route-ownership` in worktree `p52-route-ownership`; its delivery still requires green PR checks and merge. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED. No other row's implementation status changes.
+**Status**: Row 1 is merged in PR #1529. Rows 3a and 3 are implemented on `feat/console-judgement-panels`, ready for PR checks and merge: route-owned window tests and truthful retained Judgement evidence. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -57,8 +57,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Each route gets its own console file, gate drivers and test expectations | - | A | DONE | p52-route-ownership (`feat/console-route-ownership`) | Read from merge | Owner and file workers |
 | 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | PENDING | - | - | - |
-| 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | IN-FLIGHT: extraction complete; final validation follows evidence repair | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Fowler and sole implementation owner |
-| 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | IN-FLIGHT: owner-approved evidence repair | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Susan, Fowler and owner |
+| 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | READY: implemented; PR checks and merge pending | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Fowler and owner |
+| 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | READY: implemented; PR checks and merge pending | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Susan, Fowler and owner |
 | 4 | Every panel's question is declared before it is drawn, and the door is measured at the console's real volume | 2 | C | PENDING | - | - | - |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | PENDING | - | - | - |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
@@ -817,6 +817,9 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   - `frontend/src/routes/console/+page.svelte` (shared-config access only), `docs/architecture/contracts/ledger-registry.md`, `docs/architecture/contracts/persistence.md`, `docs/concepts/growing-reads.md` (renamed reader references only; owner-authorized repair)
   - `frontend/src/lib/server/content-similarity-judge.ts`, `frontend/src/lib/server/content-similarity-holdout.ts`, `frontend/src/lib/console/merge-line.ts`, `frontend/src/lib/console/holdout.ts`, and a focused Judgement evidence-note helper (reuse the existing `RecordRead` and exported note functions; do not change the shared vocabulary)
   - The direct consumers and independent tests of those internal reader results and nullable denominators, found through a named importer search at dispatch. Record the resulting bounded inventory before editing; these tightly coupled adaptations belong to this approved repair, not another route migration.
+  - **Confirmed dependent inventory:** `ledger-rows.spec.ts`, `similarity-ledgers.spec.ts`, `merge-line.spec.ts`, `holdout.spec.ts`, `holdout-domain.spec.ts`, `console-judgement-holdout.spec.ts`, extracted Judgement window/day/record specs; new `judgement-evidence.spec.ts` and `console-judgement-evidence.spec.ts`; `support/judgement-route.ts` fixed module inputs and named evidence options, and `support/ledger-lifecycle.ts` native SQL null fixture support. Their named registration, selection tests and ownership inventory are adapted with them. No new persisted field or producer is required.
+  - `recording.ts` delegates set-aside folder lookup to the existing family-folder map for the new judge-ledger caller. Its read and record state vocabularies do not change; plain-ledger paths stay the same. The existing absent-route assertion in `console-judgement-verdict.spec.ts` follows the retained unavailable read rather than expecting an empty successful read.
+  - Direct geometry consumers `console-judgement-line.spec.ts`, `console-judgement-agreement.spec.ts` and Judgement's static cases in `panel-sufficiency.spec.ts` use the existing real private route builder for successful empty or populated evidence, while missing-source checks stay separate. Their geometry and timeout assertions are unchanged. No data is seeded into the shared canary.
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/test_console_payloads_producer.py`. The browser smoke on `/console/judgement/` at 390, 768 and 1440 in both themes: zero new `[error]`, zero new `404`, and the page still renders with its data absent. CI runs the full suite.
 - **Oracle:** every Judgement panel is judged and green on gates 1, 2, 3, 5 and 6, and on gate 8's `quiet` and `missing` through its nothings spec; `git grep -n -e similarity-ledger -e similarity-holdout -- frontend docs backend` finds history and nothing else; every console tab strip shows the new Judgement description. It cannot settle whether the Judgement panels answer the owner's question; they keep today's drawing.
 - **Decisions:**

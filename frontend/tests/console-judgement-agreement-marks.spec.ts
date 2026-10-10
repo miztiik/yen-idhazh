@@ -228,6 +228,7 @@ let stripStyles = '';
 test.beforeAll(async ({}, testInfo) => {
   const panels = await serverPanels(resolve(process.cwd(), 'test-results', "JudgeAgreement", String(testInfo.workerIndex)), [['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement']]);
   Object.assign(drawn, panels.drawn);
+  drawn['judge-agreement'] = drawn.JudgeAgreement;
   stripStyles = panels.stripStyles;
 });
 async function draw(page: Page, name: string, props: Record<string, unknown>) {

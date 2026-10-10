@@ -6,25 +6,36 @@
  * as a warning, and a strip that draws the days it has rows for instead of the
  * days the window spans.
  *
- * **The canary build has judged nothing**, so the baseline here is the empty
- * state. A gate without recorded counts draws no zero bar. The populated
+ * The private fixture provides a successful empty judge read. A gate without
+ * recorded counts draws no zero bar. The populated
  * private route in `console-judgement-verdict` checks all three policy bars.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/browser';
 import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { agreementCorridor } from '../src/lib/console/merge-line';
 import { BUILD_TIME } from './support/panel-drivers/judgement';
+import { judgementRoute } from './support/judgement-route';
+
+let emptyOrigin = '';
+let emptyRoute: Awaited<ReturnType<typeof judgementRoute>>;
+test.beforeAll(async ({}, info) => {
+	test.setTimeout(180_000);
+	emptyRoute = await judgementRoute(info.outputPath('empty-agreement-route'), { evidence: 'empty' });
+	emptyOrigin = emptyRoute.origin;
+});
+test.afterAll(async () => { await emptyRoute?.close(); });
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8'));
-const APPEARANCE = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8'));
-
-const TUNING = CONFIG.assemble.same_story.adaptive_dedup_threshold;
-const PRESETS: number[] = APPEARANCE.console.window_presets;
+function tuning() {
+	return JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).assemble.same_story.adaptive_dedup_threshold;
+}
+function presets(): number[] {
+	return JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')).console.window_presets;
+}
 
 const ROUTE = '/console/judgement/';
 const AGREEMENT = '[data-windowed="judge-agreement"]';
@@ -32,7 +43,7 @@ const GATES = '[data-windowed="record-gates"]';
 
 async function open(page: Page, width = 1440): Promise<void> {
 	await page.setViewportSize({ width, height: 1000 });
-	await page.goto(ROUTE);
+	await page.goto(`${emptyOrigin}${ROUTE.slice(1)}`);
 	await chartsReady(page);
 }
 
@@ -45,8 +56,8 @@ test.describe('whether the judge agrees with itself', () => {
 		// test builds in `merge-line.spec.ts`. The canary has judged nothing, so
 		// no share widens the axis further here.
 		const [low, high] = agreementCorridor({
-			disagreementMax: TUNING.disagreement_max,
-			unclearMax: TUNING.unclear_max
+			disagreementMax: tuning().disagreement_max,
+			unclearMax: tuning().unclear_max
 		});
 		expect(await page.locator(AGREEMENT).getAttribute('data-agreement-domain')).toBe(
 			`${low},${high}`
@@ -57,7 +68,7 @@ test.describe('whether the judge agrees with itself', () => {
 		await open(page);
 		const fixed = await page.locator(AGREEMENT).getAttribute('data-agreement-domain');
 
-		for (const preset of PRESETS) {
+		for (const preset of presets()) {
 			await page.locator(`[data-window-preset="${preset}"]`).click();
 			await page.waitForTimeout(200);
 			expect(
@@ -79,7 +90,7 @@ test.describe('whether the judge agrees with itself', () => {
 		// Both, drawn whether or not a series is: they are what the panel is about,
 		// and a reader should see where the run stops rather than subtract.
 		expect(markers.sort((left, right) => left - right)).toEqual(
-			[TUNING.disagreement_max, TUNING.unclear_max].sort((left, right) => left - right)
+			[tuning().disagreement_max, tuning().unclear_max].sort((left, right) => left - right)
 		);
 		for (const label of await page
 			.locator(`${AGREEMENT} [data-agreement-marker-label]`)

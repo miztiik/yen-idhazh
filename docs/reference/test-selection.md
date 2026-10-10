@@ -98,6 +98,12 @@ console-name fallback does not register a spec. Each new spec has an explicit
 registration test. Config and fixture inputs load inside tests or their helpers,
 not when a module is imported.
 
+Judgement evidence tests are explicitly split between logic and browser groups.
+The logic checks run the real packed readers and render actual Svelte components.
+The browser checks stage the existing fixed source inventory and real generated
+ledgers. Static geometry consumers use that same private builder; unavailable and
+empty source states keep independent exact expectations.
+
 **The route-ownership guard is a logic spec.**
 `frontend/tests/console-route-scope.spec.ts` is registered in the explicit
 inventory in `frontend/scripts/test-groups.ts`. A change confined to this spec

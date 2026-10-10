@@ -34,12 +34,14 @@
 
 	let {
 		days: inputDays,
+		evidence = [],
 		dates,
 		gates,
 		viewport,
 		readoutMaxShare
 	}: {
 		days: JudgeDay[] | null;
+		evidence?: string[];
 		/** Every date the window spans, including the ones nothing recorded. */
 		dates: string[];
 		gates: { minimumNegatives: number; minimumDays: number; minimumAboveLine: number };
@@ -104,7 +106,7 @@
 					{ label: 'Square', value: square.state, swatch: fill(square.state) }
 				])
 			},
-			notMeasured: 'no run recorded anything.',
+			notMeasured: 'no judge row was returned for this day.',
 			resting: 'last'
 		})
 	);
@@ -129,8 +131,9 @@
 		<p class="comparison" data-comparison="Each gate's recorded count against the count it needs.">
 			Each gate's recorded count against the count it needs.
 		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
 		{#if inputDays === null}
-			<p class="lede" data-lede data-empty="missing">The record's gate counts are unavailable.</p>
+			<p class="lede" data-lede data-empty="missing">The record's gate counts are unavailable for {nameSpan(windowDays)}.</p>
 		{:else}
 		<p class="lede" data-lede>
 			{standing === null ? 'No gate counts were returned for this window.' : `${needs.filter((need) => need.value >= need.target).length} of ${needs.length} gates passed`}
@@ -220,7 +223,7 @@
 						{grouped(needs[2].target)} pairs above the line.</span
 					>
 				{:else if silent > 0}
-					<span data-gates-state="stale">Nothing has been counted for {countDays(silent)}.</span>
+					<span data-gates-state="stale">No judge row was returned for the latest {countDays(silent)}.</span>
 				{:else}
 					<span data-gates-state="met"
 						>The record has what it needs. These three bars stay so a record that empties is
@@ -232,7 +235,7 @@
 				<span data-counted-fitted={fitted}
 					>{fitted > 0
 						? `A line was fitted on ${fitted} of ${countDays(windowDays)}.`
-						: `No line was fitted in ${nameSpan(windowDays)}.`}</span
+						: `No fitted line was returned for ${nameSpan(windowDays)}.`}</span
 				>
 			{/if}
 		</p>

@@ -29,6 +29,14 @@ test('every extracted window spec is explicitly registered and selected', () => 
 	}
 });
 
+test('real Judgement evidence checks keep their appropriate explicit tiers', () => {
+	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
+	assert.ok(inventory.logic.includes('judgement-evidence.spec.ts'));
+	assert.ok(inventory.console.includes('console-judgement-evidence.spec.ts'));
+	assert.deepEqual(selectPaths(['frontend/tests/judgement-evidence.spec.ts']).groups, ['logic']);
+	assert.deepEqual(selectPaths([String.raw`frontend\tests\console-judgement-evidence.spec.ts`]).groups, ['console']);
+});
+
 test('a window helper edit selects all its console consumers under either path convention', () => {
 	for (const name of ['controls', 'readout', 'judgement-fixtures', 'machine-spans', 'client-render', 'server-panels']) {
 		for (const separator of ['/', '\\']) {

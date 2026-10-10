@@ -189,11 +189,39 @@ are written. All six are judged and listed in the route's `BUILD_TIME`.
 
 The component boundary keeps absent evidence as `null` and supplied empty
 evidence as an empty array or a zero-count record. Missing evidence prints an
-unavailable sentence without measured zeros. The existing readers do not always
-distinguish an absent dataset from an empty query result; those results say no
-rows were returned, not that no run happened. The component-state test renders
-both inputs through the real components and judges their different words,
-without a fabricated fetch.
+unavailable sentence without measured zeros. Fitted rows and hand-mark rows
+retain their existing `RecordRead` alongside the rows. Derived holdout marks keep
+the same mark read; the committed holdout selection keeps `{ score, read }`.
+The page carries each read once with its loaded span or mark reach. Successful
+empty results say no rows were returned, not that no run, fit or scoring happened.
+Required blank measurements are not converted to zero.
+
+Judge-rate readings are retained independently of calculated-line and gate
+measurements. A missing gate count must not discard a valid bad judge reading
+and make the remaining window look healthy. Rejected measurements are named
+by day; unusable rate rows prevent a complete window verdict. The newest run
+is selected before validating its measurements, never replaced by an older
+valid run merely because its newer record is incomplete.
+
+Unavailable windowed panels still name the selected span. Geometry checks use
+the existing private route builder's real populated or successful-empty records;
+missing-source checks remain separate. A missing plot fails a geometry assertion,
+not a reason to skip it. The shared canary is not filled with invented judge data.
+
+Each rate needs its own known denominator. Unknown contributions make that
+window total unknown, not zero; the independent reading and known daily counts
+remain usable. A real zero with an adequate denominator is still a measured zero.
+No denominator means no rate dot. No gate row means no measured bars; a real
+zero-count row still draws all three bars and their targets. Earlier cumulative
+rows retain their dates and do not prove that nothing ran afterwards.
+
+Useful partial rows remain visible. Lost-day notes are narrowed to the displayed
+span. Set-aside counts describe the loaded input, not a newly inferred count for
+the preset. `lastRows` is a packed period, never an exact last execution date.
+Unreadable diagnostics are not rendered as paths, links or markup. Weight
+provenance names the config when the selected fitted row contains no weight.
+Real generated ledger and route tests cover these distinctions without a
+fabricated fetch, another archive read or another state vocabulary.
 
 The old per-article desk and lens heading and its named absence are removed.
 These panels do not promise classification evidence they cannot show.

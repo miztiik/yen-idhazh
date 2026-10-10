@@ -5,6 +5,7 @@
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { consoleKnobs } from '$lib/console/route-console';
 	import { markedApart, scoreRange } from '$lib/console/holdout';
+	import { judgementEvidence } from '$lib/console/judgement-evidence';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
@@ -56,6 +57,15 @@
 	 * this route that has a date axis to draw the line walking into them. */
 	const apartSpan = $derived(markedApart(data.holdout.marks));
 	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
+	const rejectedJudgeRows = $derived(data.rejectedJudgeRows.filter((row) => row.date >= viewport.start && row.date <= viewport.end));
+	const judgeNotes = $derived([
+		...judgementEvidence(data.fittedRead, viewport, data.readSpan, 'judge'),
+		...rejectedJudgeRows.map((row) => row.rates
+			? `The judge's rate readings on ${row.date} are unavailable. They cannot support a complete window verdict.`
+			: `The calculated-line or gate readings on ${row.date} are unavailable. Valid judge-rate readings remain visible.`)
+	]);
+	const markNotes = $derived(judgementEvidence(data.holdout.read, data.holdout.reach, data.holdout.reach, 'marks'));
+	const scoreNotes = $derived(judgementEvidence(data.holdout.scoredRead, data.readSpan, data.readSpan, 'scores'));
 </script>
 
 <svelte:head>
@@ -83,7 +93,8 @@
 	/>
 
 	<MergeLinePlot
-		days={data.lines}
+		days={data.fittedRead.state === 'read' ? data.lines : null}
+		evidence={judgeNotes}
 		knobs={data.similarity}
 		{viewport}
 		height={console.chart_height}
@@ -97,7 +108,9 @@
 	/>
 
 	<JudgeAgreement
-		days={data.judge}
+		days={data.fittedRead.state === 'read' ? data.judgeRates : null}
+		complete={!rejectedJudgeRows.some((row) => row.rates)}
+		evidence={judgeNotes}
 		limits={{
 			disagreementMax: data.similarity.disagreement_max,
 			unclearMax: data.similarity.unclear_max
@@ -111,7 +124,8 @@
 	/>
 
 	<RecordGates
-		days={data.judge}
+		days={data.fittedRead.state === 'read' ? data.judge : null}
+		evidence={judgeNotes}
 		dates={data.span}
 		gates={{
 			minimumNegatives: data.similarity.minimum_negatives,
@@ -123,6 +137,7 @@
 	/>
 
 	<VerdictSplit
+		evidence={judgeNotes}
 		record={data.record}
 		applied={data.builtWith}
 		discardShare={data.similarity.discard_share}
@@ -132,13 +147,14 @@
 	/>
 
 	<HoldoutMargin
-		marks={data.holdout.marks}
-		agreedScores={data.holdout.agreedScores}
+		marks={data.holdout.read.state === 'read' ? data.holdout.marks : null}
+		agreedScores={data.holdout.read.state === 'read' ? data.holdout.agreedScores : null}
+		evidence={[...markNotes, ...scoreNotes]}
 		skipped={data.holdout.skipped}
 		marked={data.holdout.marked}
 		applied={data.builtWith}
 		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
-		fitted={data.lines.length > 0}
+		fitted={data.lines.some((row) => row.heldReason === 'none')}
 		weights={data.holdout.weights}
 		scored={data.holdout.scored}
 		height={console.chart_height}

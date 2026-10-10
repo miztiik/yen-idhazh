@@ -49,6 +49,7 @@
 
 	let {
 		days: inputDays,
+		evidence = [],
 		knobs,
 		viewport,
 		height,
@@ -60,6 +61,7 @@
 	}: {
 		/** Every day the record fitted a row for, oldest first. */
 		days: LineDay[] | null;
+		evidence?: string[];
 		/** The band a fitted line may take, off `config/idhazh.json`. */
 		knobs: { band_low: number; band_high: number };
 		viewport: TimeWindow;
@@ -231,8 +233,9 @@
 		<p class="comparison" data-comparison="Each calculated line against its proposal and the line the newest day used.">
 			Each calculated line against its proposal and the line the newest day used.
 		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
 		{#if inputDays === null}
-			<p class="lede" data-lede data-empty="missing">The calculated merge lines are unavailable.</p>
+			<p class="lede" data-lede data-empty="missing">The calculated merge lines are unavailable for {nameSpan(windowDays)}.</p>
 		{:else}
 		<p class="lede" data-lede>
 			{drawn.length === 0 ? 'No calculated merge lines were returned for this window.' : `${reads(drawn[drawn.length - 1].applied)} was the newest calculated line`}

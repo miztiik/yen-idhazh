@@ -62,7 +62,7 @@ const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console': [
 		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'daily-figures.ts',
 		'doubt-reasons.ts', 'eval-instruments.ts', 'extraction.ts', 'held-part-note.ts',
-		'holdout.ts', 'item-cost.ts', 'merge-line.ts', 'model-cards.ts', 'prompt-cache-subtitle.ts',
+		'holdout.ts', 'item-cost.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts', 'prompt-cache-subtitle.ts',
 		'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts',
 		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
 	],
