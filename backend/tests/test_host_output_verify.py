@@ -508,10 +508,13 @@ def test_plan_and_receipt_cannot_supply_their_own_invocation_authority(
 
 
 def test_partial_completion_is_explicit_and_never_certifies_all_files(tmp_path: Path) -> None:
-    plan, completion, _, _ = evidence(tmp_path)
+    plan, completion, path, _ = evidence(tmp_path)
     payload = completion.model_dump(mode="json")
     payload["receipt"]["writes"] = {}
     partial = HostWriteCompletion.model_validate(payload)
+    with pytest.raises(ValueError, match="missing from receipt"):
+        verify(tmp_path, plan, partial, require_all=False)
+    path.unlink()
     result = verify(tmp_path, plan, partial, require_all=False)
     assert result.files == () and not result.complete and result.planned_files == 1
 
@@ -652,10 +655,14 @@ def test_multi_day_partial_completion_and_file_count_bound(tmp_path: Path) -> No
         }
     )
     plan = HostWritePlan.model_validate(plan.model_dump() | {"files": (*plan.files, second)})
+    with pytest.raises(ValueError, match="missing from receipt"):
+        verify(tmp_path, plan, completion, require_all=False)
+    path.unlink()
     partial = verify(tmp_path, plan, completion, require_all=False)
     assert len(partial.files) == 1 and not partial.complete
     payload = completion.model_dump(mode="json")
     payload["receipt"]["writes"][f"state/{second.relative_path}"] = hashlib.sha256(data).hexdigest()
+    path.write_bytes(data)
     completion = HostWriteCompletion.model_validate(payload)
     assert verify(tmp_path, plan, completion).complete
     with pytest.raises(ValueError, match="file count"):

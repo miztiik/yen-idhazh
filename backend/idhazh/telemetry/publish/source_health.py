@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, day_partition, ledger
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import CollectConfig
@@ -555,8 +556,7 @@ def publish(
         run_id=run_id,
         generated_at=generated_at,
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(view.to_json(), encoding="utf-8", newline="\n")
+    write_atomic(path, view.to_json())
     return view
 
 

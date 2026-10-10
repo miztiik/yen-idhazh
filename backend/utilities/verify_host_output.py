@@ -37,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--git-sha", required=True)
     parser.add_argument("--publication-producer", required=True)
     parser.add_argument("--allow-partial", action="store_true")
+    parser.add_argument(
+        "--receipt-only", action="store_true",
+        help="Print the validated existing PublicationReceipt shape, without writing any file.",
+    )
     for field in fields(VerificationLimits):
         parser.add_argument("--" + field.name.replace("_", "-"), required=True, type=int)
     args = parser.parse_args(argv)
@@ -61,9 +65,10 @@ def main(argv: list[str] | None = None) -> int:
                 "producer": args.publication_producer,
             }
         )
+        completion = HostWriteCompletion.model_validate(load(args.completion))
         result = verify_host_output(
             HostWritePlan.model_validate(load(args.plan)),
-            HostWriteCompletion.model_validate(load(args.completion)),
+            completion,
             workspace_root=root,
             target_root=args.target_root,
             publication_identity=identity,
@@ -75,6 +80,9 @@ def main(argv: list[str] | None = None) -> int:
                 else None
             ),
         )
+        if args.receipt_only:
+            print(completion.receipt.to_json())
+            return 0
         print(
             json.dumps(
                 {

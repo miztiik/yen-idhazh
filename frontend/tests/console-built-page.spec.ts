@@ -106,7 +106,8 @@ function fixtureSnapshot(html: string, expected: RouteExpect): BuiltSnapshot {
 			text: bodies.map(text).join(''),
 			drawnSVG: inside.filter((node) => node.name === 'svg' && attribute(node, 'data-reserved-frame') === null).length,
 			reservedSVG: inside.filter((node) => node.name === 'svg' && attribute(node, 'data-reserved-frame') !== null).length,
-			facts: inside.filter((node) => ['data-chart-type', 'data-chart'].some((name) => attribute(node, name) !== null)).length
+			facts: inside.filter((node) => ['data-chart-type', 'data-chart'].some((name) => attribute(node, name) !== null) ||
+				(attribute(node, 'class') ?? '').split(/\s+/).includes('reserved-bar')).length
 		}];
 	}));
 	return {
@@ -132,6 +133,7 @@ test('built-page oracle refuses a figure, wrong pageData and every incorrect fir
 	for (const changed of [
 		html.replace('<line></line>', '<path data-chart-type="dateSeries"></path>'),
 		html.replace('</svg>', '</svg><svg><path></path></svg>'),
+		html.replace('</svg>', '</svg><span class="loading reserved-bar"></span>'),
 		html.replace(' Count ', ' Count 451 '),
 		html.replace('<p data-console-standing></p>', '<p data-console-standing>Record to 1 Sep</p>'),
 		html.replace('data-route-state="loading"', 'data-route-state="ok"'),
@@ -184,7 +186,7 @@ test.describe('the genuine scriptless built page', () => {
 					text: (await body.allTextContents()).join(''),
 					drawnSVG: await body.locator('svg:not([data-reserved-frame])').count(),
 					reservedSVG: await body.locator('svg[data-reserved-frame]').count(),
-					facts: await body.locator('[data-chart-type], [data-chart]').count()
+					facts: await body.locator('[data-chart-type], [data-chart], .reserved-bar').count()
 				};
 			}
 			const pending = expected.pendingPanel ? page.locator(expected.pendingPanel.selector) : null;
