@@ -51,10 +51,11 @@ class TaskContext:
     #: ledger holds a row. A compaction that rebuilds an absent index looks for
     #: year and month files from it, and never further back.
     first_ledger_year: str
-    #: The inclusive period range this task may read on this run: the range a
-    #: person named, the first and last month a ledger migration packs, or else
+    #: The inclusive range a person named for this run, or None when the run is
+    #: scheduled. This is never the window the runner builds for a scheduled
+    #: wake.
+    operator_range: tuple[str, str] | None = None
+    #: The inclusive range of periods this task may read: the person's range or
     #: the scheduled window the runner built, or None. A compaction has no
-    #: scheduled window, because each of its steps chooses its own periods, so
-    #: for a compaction this is a named range, which only limits that choice,
-    #: or None on a scheduled wake.
+    #: scheduled window because each step chooses its own periods.
     period_range: tuple[str, str] | None = None

@@ -84,7 +84,7 @@ Table A - what is out
 | 42 | A refusal only a person can settle says manual action | 41 | L | DONE | plan-60-row-42-manual-action | #1521 | Plan 60 row 42 manual action |
 | 43 | Every idhazh crash prints where it broke, never the error's text | 42 | M | DONE | plan-60-row-43-crash-output | #1522 | Plan 60 row 43 crash output |
 | 44 | The ledger test ignores arbitrary same-millisecond file order | 43 | N | DONE | plan-60-row-44-ledger-order | #1523 | Plan 60 row 44 ledger order |
-| 45 | A named retention range reports outside-range when it finds nothing | 44 | O | PENDING | - | - | - |
+| 45 | A named retention range reports outside-range when it finds nothing | 44 | O | DONE | plan-60-row-45-operator-range | #1524 | Plan 60 row 45: operator range; session a83345f7-d1cc-4279-b84a-d2fda3a803d0 |
 | 46 | Backend command logs stamp UTC | 45 | P | PENDING | - | - | - |
 | 47 | The drawing helper reveals lazy visuals without waiting on the page clock | 46 | Q | PENDING | - | - | - |
 

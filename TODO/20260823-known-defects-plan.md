@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
-**Forty defects are open.** Five of them need evidence or a ruling before any code
+**Thirty-nine defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -131,7 +131,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
-| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | CLOSED 2026-10-10 (PR #1524) |
 | 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
 | 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
 | 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
@@ -295,31 +295,26 @@ itself.
 Found on 2026-10-08, confirmed on `origin/main` by a direct run of
 `plan_status.py --plan` against plan 62.
 
-## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
+## 65 - A retention task run over a person's range that finds nothing ends not-due (CLOSED 2026-10-10, PR #1524)
 
 **A retention task that a person runs with `--from` and `--to`, and that finds
-nothing, ends `not-due` instead of `outside-range`.** `TaskContext.period_range`
-in `backend/idhazh/gardener/context.py` holds either the range a person named
-or, on a scheduled wake, the window the runner built: `runner.run` fills it
-from `scheduled_range` when no range was named. A retention task reads that one
-field, so it cannot tell the two apart, and its pass keeps the idle word
-`not-due` that `Pass` in `backend/idhazh/gardener/one_at_a_time.py` starts
-with. Only the compaction chooses its own idle word, and it is `outside-range`
-whenever a person named a range. `task-planned` still shows the range a person
-named, because the runner hands that event the range itself, not the field.
-Plan 60's row 21 found it on 2026-10-07.
+nothing, used to end `not-due` instead of `outside-range`.** `TaskContext` now
+keeps `operator_range`, which holds only the range a person named, separate
+from `period_range`, the effective range the task reads. The shared retention
+helper ends an empty named pass as `outside-range` and an empty scheduled pass
+as `not-due`. Compaction reads `operator_range`, and `task-planned` reports it
+only when a person supplied one. Plan 60 row 45 fixes the defect.
 
 **Doing nothing costs a person who named a range the wrong advice about it.**
 `task-finished` says "nothing has reached its line yet", the sentence for a
 scheduled wake. The one that helps is the sentence for `outside-range`:
 "nothing that may be taken is inside the range named; widen it, or run the
-task without one".
+task without one". The code now selects the existing sentence that matches the
+run.
 
-**The next move is a worker's: keep the person's range apart from the scheduled
-window on `TaskContext`, and let a retention pass that finds nothing inside a
-person's range end `outside-range`, as the compaction's does.** Level 1 - the
-idle word of a retention task run by hand; a wrong version shows on the first
-such run.
+**Resolved:** the task context keeps a person's range apart from the effective
+read window, and the shared retention helper chooses the matching idle outcome.
+The persisted words and report text did not change.
 
 Found by plan 60's row 21 (#1387), and filed on 2026-10-07.
 

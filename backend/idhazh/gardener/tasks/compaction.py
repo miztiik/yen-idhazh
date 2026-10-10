@@ -96,8 +96,8 @@ KIND = TaskKind.COMPACTION
 def run(context: TaskContext) -> Pass:
     """Drop, or only name, the oldest months past the keep line; pack years and months; take days.
 
-    `context.period_range` is the range a person named, or the first and last
-    month a migration packs: no step takes anything outside it.
+    `context.operator_range` is the range a person named; no step takes
+    anything outside it.
     """
     from datetime import UTC, datetime, time
     from pathlib import Path
@@ -130,7 +130,7 @@ def run(context: TaskContext) -> Pass:
         producer=__name__.partition(".")[2],
         git_sha=context.git_sha,
     )
-    operator_range = context.period_range
+    operator_range = context.operator_range
     if operator_range is None:
         date_range = None
         until = _compaction_periods.newest_due(policy, now=now)

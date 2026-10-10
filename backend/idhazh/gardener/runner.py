@@ -596,9 +596,10 @@ def run(
     them starts git; None for the last two means nobody could read the commit.
     `listing` is the files under every folder the tasks own or read; None lists
     them off the disk here. What the tasks downloaded is read off it once they
-    have run. `period_range` is a range a person named for one task: the task
-    reads it in place of the window `scheduled_range` builds for a scheduled
-    wake. A compaction has no such window, so a named range only limits the
+    have run. `period_range` is the effective range the task may read: the
+    range a person named, or the window `scheduled_range` builds for a
+    scheduled wake. `operator_range` keeps only the range a person named. A
+    compaction has no scheduled window, so a named range only limits the
     periods its steps choose.
     """
     refused = history_tasks_among(names, settings.tasks)
@@ -611,6 +612,7 @@ def run(
     if period_range is not None and len(names) != 1:
         say("a named period range runs one task, not a shard")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    operator_range = period_range
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
         bound = preflight(settings.tasks, registry.discover(package, settings.tasks))
@@ -678,9 +680,10 @@ def run(
                 owned_folders=resolved[name].walk,
                 listing=listing.within(covered[name]),
                 first_ledger_year=settings.config.first_ledger_year,
+                operator_range=operator_range,
                 period_range=period_ranges[name],
             )
-            event_log.emit(_planned(name, context, resolved[name], period_range))
+            event_log.emit(_planned(name, context, resolved[name], operator_range))
             done = _run_one(name, bound[name], context)
             finished.append(_said_finished(done))
             _refuse_a_path_outside(done, settings.tasks)

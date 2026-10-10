@@ -9,6 +9,7 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
+from idhazh.contracts.gardener_events import TaskOutcome
 from idhazh.contracts.knobs.gardener import DaysWindow
 from idhazh.contracts.ledger_name import LedgerName
 
@@ -66,3 +67,18 @@ def test_a_dry_run_names_every_block_and_leaves_it(tmp_path: Path) -> None:
     assert outcome.dry_run, "digest-fragments ships in dry run"
     assert outcome.taken == (old.relative_to(tmp_path).as_posix(),)
     assert old.exists()
+
+
+def test_empty_named_range_and_empty_scheduled_window_have_distinct_outcomes(
+    tmp_path: Path,
+) -> None:
+    named = run_task(
+        NAME,
+        tmp_path,
+        today=TODAY,
+        period_range=("2024-08-01", "2024-08-02"),
+    )
+    scheduled = run_task(NAME, tmp_path, today=TODAY, wake=True)
+
+    assert named.idle_outcome is TaskOutcome.OUTSIDE_RANGE
+    assert scheduled.idle_outcome is TaskOutcome.NOT_DUE
