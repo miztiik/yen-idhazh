@@ -1,7 +1,8 @@
 """Where each ledger's file lives under `state/`, and never guessed.
 
-Two kinds of address, and ten builders in all. A ledger that files the way the
-CSV trees do is read from `config/ledgers.json`, which is loaded and validated
+Two kinds of address, and ten builders in all. A ledger that files outside the
+two roots - one flat file, a day file, a day folder or a stamped file - is read
+from `config/ledgers.json`, which is loaded and validated
 once, when this module loads, so a config that does not describe every ledger
 stops the build rather than a run four hundred seconds in. A ledger that goes
 through the door in `ledger/persist.py` files under `state/raw/` or
@@ -76,7 +77,6 @@ _JSON_SUFFIX: Final = ".json"
 _PERIOD: Final[dict[Grain, str]] = {
     Grain.DAY_FILE: "the YYYY-MM-DD day its rows describe",
     Grain.DAY_TREE: "the YYYY-MM-DD day its rows describe",
-    Grain.MONTH_FILE: "the YYYY-MM month its rows describe",
     Grain.STAMPED: "the stamp its rows were taken under",
 }
 
@@ -157,17 +157,13 @@ def overlay_registry(
     prefix - so `segments` goes in front of its prefix, putting the tier first
     and the trial segments right after it: `state/<raw|compact>/<segments>/<ledger>/...`.
 
-    `traces` takes the same front placement, even though its grain is `tree`
-    and it owns a folder at `prefix[0]` in production. Production's own
-    `traces` retention task (`config/gardener/traces.json`) walks all of
-    `state/traces` on a 7-day window; a trial's trace files are JSONL kept for
-    the trial's own, longer window
-    (`config/gardener/trials.json`), and nesting them at
-    `state/traces/<segments>` would put both tasks' claims one inside the
-    other - the refusal `config._refuse_overlapping_claims` exists to catch.
-    So a trial's traces go at `state/<segments>/traces`, beside its other
-    ledgers rather than inside production's claim, which is also where they
-    already sat before this registry existed and so costs no data move.
+    `traces` gets its own folder under `raw/`: `state/raw/traces/<segments>`.
+    Production traces remain under `state/traces/`, with their own 7-day
+    retention task. Trial traces are JSONL kept for the trial's longer,
+    report-only window (`config/gardener/trials.json`). Keeping the claims at
+    `state/traces` and `state/raw/traces/<segments>` prevents either task from
+    deleting inside the other's tree. The raw-root name changes the location,
+    not the trace format or its registry grain.
 
     Every remaining grain already owns a folder under `state/` at `prefix[0]`
     with nothing else claiming inside it for a different window, so that
@@ -176,8 +172,10 @@ def overlay_registry(
     base = _registry(registry)
     overlaid: dict[LedgerName, LedgerEntry] = {}
     for name, held in base.items():
-        if held.grain is Grain.RAW_AND_COMPACT or name is LedgerName.TRACES:
+        if held.grain is Grain.RAW_AND_COMPACT:
             new_prefix = (*segments, *held.prefix)
+        elif name is LedgerName.TRACES:
+            new_prefix = (RAW_DIRNAME, name.value, *segments)
         else:
             new_prefix = (held.prefix[0], *segments, *held.prefix[1:])
         overlaid[name] = held.model_copy(update={"prefix": new_prefix})
@@ -209,6 +207,9 @@ def claimed_roots() -> frozenset[str]:
     two roots the ledger door files under. Unclaimed, the sweep would read them
     as a trial run's trees and delete what the door wrote. Claimed means "not a
     stray", never "not pruned" - a compaction bounds what sits in them.
+
+    Trial traces sit under the already-claimed `raw` root, at
+    `state/raw/traces/<segments>`; they are not a raw-and-compact door ledger.
     """
     return frozenset(family.name for family in _CONFIG.families) | _THE_TWO_ROOTS
 
@@ -261,7 +262,7 @@ def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
         return (*held.prefix, covers[:4], covers[5:7], covers[8:10])
     if held.grain is Grain.DAY_FILE:
         return (*held.prefix, covers[:4], covers[5:7], f"{covers[8:10]}{held.suffix}")
-    # A month file and a stamped file both name themselves after the whole period.
+    # A stamped file names itself after the whole stamp.
     return (*held.prefix, f"{covers}{held.suffix}")
 
 
@@ -313,10 +314,10 @@ def tree_root(
 ) -> Path:
     """The folder that holds every file of this ledger and nothing else, under this state root.
 
-    What the `day_shards`, `day_partition` and `month_partition` readers are
-    handed: a walk that starts here meets every day, month or stamp the ledger
-    has filed. It is a builder of its own rather than `path` with no period, so
-    `path` keeps refusing a missing one.
+    What a reader of a day file, a day folder or a stamped file is handed: a walk
+    that starts here meets every day or stamp the ledger has filed. It is a
+    builder of its own rather than `path` with no period, so `path` keeps
+    refusing a missing one.
     """
     return state_dir.joinpath(*_folder(entry(ledger, registry=registry)))
 

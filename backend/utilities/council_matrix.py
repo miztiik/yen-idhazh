@@ -36,8 +36,9 @@ PLATFORM_JOB_CEILING: Final = 20
 #: so a move of the tree moves these with it. The record says which units ran;
 #: the host row says which machine ran them, and neither belongs to a tenant -
 #: a list of one tenant's paths would commit neither.
+COUNCIL_LEDGER: Final = staging.staged_path(LedgerName.COUNCIL_RUN_RECORDS)
 VENUE_LEDGERS: Final = (
-    staging.staged_path(LedgerName.COUNCIL_RUN_RECORDS),
+    COUNCIL_LEDGER,
     staging.staged_path(LedgerName.HOST_FINGERPRINT),
 )
 

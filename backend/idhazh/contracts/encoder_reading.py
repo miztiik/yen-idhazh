@@ -15,12 +15,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, JsonValue, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
     Contract,
     Model,
+    Sha256,
     Slug,
     Timestamp,
 )
@@ -68,6 +69,11 @@ class EncoderReading(Contract):
     __schema_stem__: ClassVar[str] = "encoder-reading"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-09",
+            change="Record model-loading options, encode options and the exact pair-set hash.",
+            why="A task adapter, prompt or text-only load changes what the vectors mean.",
+        ),
+        ChangelogEntry(
             version="2026-10-08",
             change="Initial shape: the encoder, its progress, its readings and its cost.",
             why=(
@@ -77,7 +83,7 @@ class EncoderReading(Contract):
         ),
     )
 
-    version: str = "2026-10-08"
+    version: str = "2026-10-09"
 
     #: The short name this comparison files the encoder under.
     slug: Slug
@@ -90,6 +96,10 @@ class EncoderReading(Contract):
 
     #: The text this encoder wants in front of its input. Empty for most.
     prefix: str = ""
+
+    model_options: dict[str, JsonValue] = Field(default_factory=dict)
+    encode_options: dict[str, JsonValue] = Field(default_factory=dict)
+    pair_set_sha256: Sha256 | None = None
 
     #: Why this encoder is in the comparison at all.
     why: str
@@ -121,31 +131,30 @@ class EncoderReading(Contract):
     #: Pairs of each kind, once the scoring runs.
     pairs: PairCounts | None = None
 
-    #: The chance this encoder scores a matching pair above a mismatching one.
-    #: One is perfect, a half is a coin toss. No similarity scale distorts it.
+    #: Historical key for ROC AUC on title-derived positive/negative proxy pairs.
     separation: Annotated[float, Field(ge=0, le=1)] | None = None
 
-    #: Mean score of the matching pairs.
+    #: Mean cosine similarity of the proxy-positive pairs.
     same_mean: float | None = None
 
-    #: Mean score of the mismatching pairs.
+    #: Mean cosine similarity of the proxy-negative pairs.
     different_mean: float | None = None
 
-    #: Mean score of the uncertain middle. Not right or wrong, only a lean.
+    #: Mean cosine similarity of the unlabeled middle-overlap pairs.
     ambiguous_mean: float | None = None
 
-    #: Share of uncertain pairs scored above halfway between the two means.
-    #: High means this encoder joins too much; low means it fragments.
+    #: Fraction of middle-overlap cosines above the class-mean midpoint.
+    #: Descriptive only; not recall, precision or evidence of a grouping error.
     ambiguous_lean: Annotated[float, Field(ge=0, le=1)] | None = None
 
-    #: Mean score of one outlet's second piece on one subject in one day.
+    #: Mean cosine similarity of unlabeled same-outlet candidate pairs.
     related_mean: float | None = None
 
-    #: Share of those scored above halfway. Near one means this encoder cannot
-    #: tell a follow-up from a new story; lower means it keeps some signal.
+    #: Fraction of same-outlet cosines above the class-mean midpoint.
+    #: Descriptive only; event identity has not been judged in this proxy.
     related_lean: Annotated[float, Field(ge=0, le=1)] | None = None
 
-    #: How far apart the two means sit. A wide spread leaves room for a cut-off.
+    #: Positive mean minus negative mean; not variance or a scale-free quality score.
     spread: float | None = None
 
     #: Articles encoded a second, on the runner's four threads.

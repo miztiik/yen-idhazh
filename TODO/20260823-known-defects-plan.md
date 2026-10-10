@@ -1,8 +1,8 @@
 # Known defects
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
-**Thirty-eight defects are open.** Four of them need evidence or a ruling before any code
+**Thirty-six defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -34,22 +34,26 @@ Fowler's review of plan 60: a page names a test that two pull requests deleted.
 Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
-57 needed evidence too, because one stall is not enough to find its cause,
-until a second stall came in main's own checks on 2026-10-08. Defect 59 was
+57 needed evidence too, until a second stall came in main's own checks on
+2026-10-08. It closed on 2026-10-10 in PR #1526 when the test driver stopped
+waiting on the page animation clock and visited each mounted visual article
+instead. Defect 59 was
 filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
 holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
 explorer fetches each chosen ledger's three indexes twice. Defects 61 and 62
 were filed the same day from plan 62's rows L7 and L20: three backend command
 lines stamp log records in local time, and in a worktree with no `.venv` the
-test launcher hands its inner run a Python it then refuses. Defect 63 was
+test launcher hands its inner run a Python it then refuses. Defect 61 closed
+in PR #1525, which formats the remaining command logs in UTC. Defect 63 was
 filed the same day by plan 62's text update after row L7: the plan status
 utility's docstring shows a usage that does not work and a no-install claim
 that is not true. Defects 64 and 65 were filed the same day by the plan text
 update after plan 60's row 21: the canary's telemetry step refuses a
 repository path spelled with a short name, which plan 62's row L25 met, and a
 retention task run over a person's range that finds nothing ends `not-due`,
-which plan 60's row 21 found. Defect 66 was filed on 2026-10-08 by a plan text
+which plan 60's row 21 found. Defect 65 closed in PR #1524. Defect 66 was
+filed on 2026-10-08 by a plan text
 update (#1437): the plan status utility splits a quoted row title wherever
 "and" appears in it. Defect 67 was filed the same day from the checks of plan
 62's row L37 (#1431): a browser test that failed once and passed when run
@@ -123,18 +127,84 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
 | 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
-| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - two stalls seen in CI; a row to fix it is now due** |
-| 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | **OPEN - one pinned millisecond confirms the cause; then the test changes** |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | CLOSED 2026-10-10 (PR #1526; the test driver visits each visual article without the page animation clock) |
+| 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | CLOSED 2026-10-09 (plan 60 row 44) |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
-| 61 | Three backend command lines stamp log records in local time | 1 | **OPEN - the gardener's is fixed (plan 60 row 21); two command lines need their own fix** |
+| 61 | Three backend command lines stamp log records in local time | 1 | FIXED 2026-10-10 (plan 60 row 46, PR #1525) |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
-| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | **OPEN - keep the person's range apart from the scheduled window** |
+| 65 | A retention task run over a person's range that finds nothing ends not-due | 1 | CLOSED 2026-10-10 (PR #1524) |
 | 66 | The plan status utility splits a quoted row title wherever "and" appears in it | 1 | **OPEN - stop splitting a Depends-on cell inside a quoted title** |
 | 67 | A browser test of a summary with a paragraph break failed once, and passed when run again | 2 | **OPEN - one failure seen; make it come back before changing code** |
 | 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
+| 69 | A re-run of a day that predates fragments may record a line it did not use | 5 | **OPEN - reasoned, not measured; measure the preserved day and its run record before any contract decision** |
+| 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
+
+## 70 - The raw-listing test does not check the value included in the built site (OPEN)
+
+**The test's title promises a build check, but its assertions read only staged
+files.** In `frontend/tests/published-ledgers.spec.ts`, the test
+`raw-day listings are complete, bounded and become the baked listed-through value`
+calls `rawListedThrough(STATIC)` and compares it with days found by reading the
+staged listings again. It does not read `__RAW_LISTED_THROUGH__` from the built
+page. The production binding in `frontend/vite.config.ts` instead calls
+`rawListedThrough()` with no argument.
+
+**The production path is fixed; the integration check is still missing.**
+PR #1427 made the default path relative to the script and added generated-tree
+tests of that default. Those tests do not prove that the build passes the
+result to the page. A future edit that supplies another folder or an empty
+object in `vite.config.ts` can leave the published-listing test green while
+the page reads no raw day. This is a test gap, not evidence of a current
+incorrect build. Confirmed by reading the named test, script and build binding;
+no application test was rerun for this documentation change.
+
+**The receiving work is one bounded integration check.** Build a generated
+state root with two selected ledgers and two named raw days per ledger. Assert
+written-out newest days from the value the real build supplies to the browser,
+not from another listing read. Include a raw-day query with written-out rows.
+Keep the existing default-path unit cases. No test reads the committed archive
+or reaches the network.
+
+**Acceptance:** the generated case passes with the production binding and
+fails when that binding supplies `{}` or the wrong staged folder. It must
+exercise the actual built page, including its raw-day selection. Do not merely
+rename the existing test or compare two readers of the same files.
+
+This receives the unfinished test finding from PR #1427, reported in plan 62
+row L46 and deferred by its Table B, B7. The finding is preserved here before
+that completed plan is deleted; it is not claimed fixed.
+
+## 69 - A re-run of a day that predates fragments may record a line it did not use (OPEN)
+
+**`stage_assemble` keeps the published day unchanged when its previous
+`digest.json` predates run fragments, but still writes the selected floor to
+the new `run.json`.** The branch is in
+`backend/idhazh/stages/assemble.py`: it assigns `day = previous_day` and skips
+`assemble_day`, then builds the new manifest with
+`same_story_floor_applied=same_story.floor_min`. The field description in
+`backend/idhazh/contracts/run_manifest.py` says it is the line the run grouped
+the day at. Reasoned from the code, not measured. No such day is the newest
+published day.
+
+**The smallest measurement is one generated two-run case.** First build a day
+with a known `same_story_floor_applied` value and its matching digest. Then
+make the next run take the `predates_fragments` branch with the adaptive switch
+enabled and a different selected line. Compare the digest before and after,
+then compare the new run record's `same_story_floor_applied` with the value
+that built the preserved digest. This establishes whether the new persisted
+record names a line the day did not use.
+
+**The possible consequence is persisted meaning, not a missing field.** If the
+measurement confirms the mismatch, the existing `RunRecord` value would say
+that a preserved day was grouped at a floor it never used. Any correction to
+that persisted meaning must stop at Table C, C1 for contract review; this entry
+does not choose a fix, change backend code or change a shape.
+
+Found in plan 62's row L52 follow-up 4, while recording #1469's findings, and
+filed on 2026-10-09.
 
 ## 68 - The merge line's hold has no floor on its pair count, so one pair can hold a run (OPEN)
 
@@ -229,31 +299,26 @@ itself.
 Found on 2026-10-08, confirmed on `origin/main` by a direct run of
 `plan_status.py --plan` against plan 62.
 
-## 65 - A retention task run over a person's range that finds nothing ends not-due (OPEN)
+## 65 - A retention task run over a person's range that finds nothing ends not-due (CLOSED 2026-10-10, PR #1524)
 
 **A retention task that a person runs with `--from` and `--to`, and that finds
-nothing, ends `not-due` instead of `outside-range`.** `TaskContext.period_range`
-in `backend/idhazh/gardener/context.py` holds either the range a person named
-or, on a scheduled wake, the window the runner built: `runner.run` fills it
-from `scheduled_range` when no range was named. A retention task reads that one
-field, so it cannot tell the two apart, and its pass keeps the idle word
-`not-due` that `Pass` in `backend/idhazh/gardener/one_at_a_time.py` starts
-with. Only the compaction chooses its own idle word, and it is `outside-range`
-whenever a person named a range. `task-planned` still shows the range a person
-named, because the runner hands that event the range itself, not the field.
-Plan 60's row 21 found it on 2026-10-07.
+nothing, used to end `not-due` instead of `outside-range`.** `TaskContext` now
+keeps `operator_range`, which holds only the range a person named, separate
+from `period_range`, the effective range the task reads. The shared retention
+helper ends an empty named pass as `outside-range` and an empty scheduled pass
+as `not-due`. Compaction reads `operator_range`, and `task-planned` reports it
+only when a person supplied one. Plan 60 row 45 fixes the defect.
 
 **Doing nothing costs a person who named a range the wrong advice about it.**
 `task-finished` says "nothing has reached its line yet", the sentence for a
 scheduled wake. The one that helps is the sentence for `outside-range`:
 "nothing that may be taken is inside the range named; widen it, or run the
-task without one".
+task without one". The code now selects the existing sentence that matches the
+run.
 
-**The next move is a worker's: keep the person's range apart from the scheduled
-window on `TaskContext`, and let a retention pass that finds nothing inside a
-person's range end `outside-range`, as the compaction's does.** Level 1 - the
-idle word of a retention task run by hand; a wrong version shows on the first
-such run.
+**Resolved:** the task context keeps a person's range apart from the effective
+read window, and the shared retention helper chooses the matching idle outcome.
+The persisted words and report text did not change.
 
 Found by plan 60's row 21 (#1387), and filed on 2026-10-07.
 
@@ -288,7 +353,7 @@ Found by plan 62's row L25 (#1384), and filed on 2026-10-07.
 describes.** Its own usage line reads `python backend/utilities/plan_status.py
 --plan 23    # one plan`, but `--plan` is `action="append", required=True,
 help="Named plan path. Repeatable."`: it takes a path, such as
-`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`, not a bare plan
+`TODO/20260930-57-upkeep-tasks-switch-on-plan.md`, not a bare plan
 number, so the docstring's own example fails before it reads a line. The same
 docstring says the utility "imports nothing from idhazh and reads no
 configuration, so it runs from a fresh clone with any supported Python and no
@@ -337,37 +402,20 @@ version stops the first check that uses it.
 
 Found by plan 62's row L20 (#1371), and filed on 2026-10-07.
 
-## 61 - Three backend command lines stamp log records in local time (OPEN)
+## 61 - Three backend command lines stamp log records in local time (CLOSED 2026-10-10, PR #1525)
 
-**Three backend command lines stamp each log record with the machine's local
-time, not UTC** (CLAUDE.md section 2). `backend/idhazh/cli.py` line 541,
-`backend/idhazh/gardener/cli.py` line 87 and `backend/idhazh/telemetry/cli.py`
-line 135 set the format `%(asctime)s %(levelname)s %(name)s %(message)s` and
-keep the clock `logging` uses by default, which is local time. The stamp names
-no zone, so nothing on the line says which clock it read. Plan 62's row L7 saw
-it on 2026-10-07: `site-weight` printed 11:46 when it was 09:46 UTC.
+The gardener, pipeline and telemetry commands now format log timestamps in UTC
+with a trailing `Z` (CLAUDE.md section 2). The gardener writes its structured
+events with the record's UTC instant. The pipeline and telemetry entry points
+use the shared standard-library formatter in
+`backend/idhazh/command_logging.py`. It preserves the configured level, stderr
+stream, logger name, level name and message.
 
-**The three do not share one logging setup.** Each command line calls
-`logging.basicConfig` on its own (lines 539, 85 and 133), with the same three
-arguments.
-
-**Doing nothing puts every log time off by its machine's distance from UTC:
-two hours on the machine where row L7 saw it.** A GitHub runner's local time is
-UTC, so a workflow's log is right, and the fault shows only on a machine set to
-another zone, such as a developer's.
-
-**The gardener's part is fixed by plan 60's row "Every gardener log line is one
-JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
-install one handler through `settings_or_none`, and each line it writes carries
-`at`, the record's own instant in UTC as ISO-8601 with `Z`.
-`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
-in the test process and in a fresh one. The other two command lines,
-`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
-local time and need a fix of their own: the records they log carry a UTC time
-and say so, with a test that reads one. Level 1 - the time printed on each log
-line, and a wrong version shows on the first line.
-
-Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
+`backend/tests/test_command_logging.py` starts each real command path in a
+fresh process and sends it the same fixed log record. The pipeline case runs
+under `Pacific/Honolulu`, and the telemetry case under `Europe/Paris`; both
+print the same UTC instant. Both cases fail against a separate copy of
+`origin/main`, which prints local time without a zone.
 
 ## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (CLOSED 2026-10-08)
 
@@ -437,36 +485,27 @@ reads that walk a whole raw root - `ledger.raw_days`, `list_raw_files` and
 The fix above stops that warning in a read of named days, and a walk it keeps
 still logs it.
 
-## 58 - A ledger test expects an order for two runs written in the same millisecond (OPEN)
+## 58 - A ledger test expects an order for two runs written in the same millisecond (CLOSED 2026-10-09)
 
-**A ledger test failed once because two runs of one day came back in the
-other order.**
+**The test now checks replacement and preservation without ordering the runs.**
 `backend/tests/test_ledger.py::test_a_second_attempt_replaces_its_first_and_another_run_is_kept`
-writes three visual-prune files for one day, back to back: run 1, run 1's
-second attempt, then run 2. It expects run 1's row before run 2's. In CI run
-37221095434, attempt 1, at about 17:37 UTC on 2026-10-04, it read run 2's row
-first, and a re-run of the job passed. The likely cause, an estimate, is how a
-day's files are ordered: by the millisecond each was written, then by the
-file's id (`_order` in `backend/idhazh/ledger/raw_files.py`). The part of that
-id after the clock is a hash (`file_id` in `backend/idhazh/ledger/filenames.py`),
-so two files written in one millisecond sort by the hash, which that function's
-own docstring calls arbitrary.
+pins the writer clock to 2026-09-07 00:00:00.000 UTC. In a copy of main at
+`86fca9a542ca0456fec3eb2b1009574cda10ea7d`, the old positional assertion
+fails: run 2 comes before run 1 because their file hashes break the
+same-millisecond tie. The cause is confirmed, not estimated.
 
-**Doing nothing costs a red `gates` job now and then, and a re-run.** The read
-is not wrong. `load_visual_prunes` promises the oldest day first and one row
-per run, not an order for two runs of one day, and nothing outside the tests
-calls it.
+**Who reads it:** the backend contract suite reads the two visual-prune runs
+this test writes. No production caller reads `load_visual_prunes`; its
+oldest-day-first, one-row-per-run contract is unchanged.
 
-**The next move is a worker's.** Write the three files with the clock held at
-one millisecond and see whether the order follows the hash; that confirms the
-cause. Then the test compares the day's rows without an order, because what it
-is about is the attempt that replaced its first and the run that was kept.
-Level 1 - one test.
+**What settles it:** exactly two returned rows and the literal mapping
+`{"2026-09-07-1": 200, "2026-09-07-2": 300}` prove that run 1 keeps
+attempt 2's value and run 2 keeps its original value. The row count exposes
+duplicates; the mapping exposes missing runs and stale attempts. The test
+does not sort loaded rows or claim an order between independent runs.
+Plan 60 row 44 closes this Level 1 test defect.
 
-Found by plan 60's row 7 (#1286), whose checks went red three times with three
-different tests, and filed on 2026-10-04.
-
-## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (OPEN)
+## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (CLOSED 2026-10-10, PR #1526)
 
 **One browser test waited out its whole 180-second limit for a page that had
 stopped drawing.** "Every drawn string resolves to a size on a 390 px screen"
@@ -503,16 +542,23 @@ in CI opens a row.
 minutes and a re-run.** How often that is, nobody knows: it has been seen
 twice in CI, on 2026-10-04 and on 2026-10-08.
 
-**The next move is a worker's: make the stall come back where it can be
-watched.** Run this one test a few hundred times with Playwright's
-`--repeat-each`. At 1.6 seconds a run, 400 runs take about 11 minutes, an
-estimate. A stall caught that way shows whether a page script or the browser
-stopped. If none comes back, a second stall in CI opens a row, as defect 51
-does. The first run's trace is kept in its `playwright-traces` artifact until
-2026-10-11, and the second run's artifact expires on 2026-10-15. A raised
-timeout or a retry would hide the stall, not explain it (CLAUDE.md
-Guardrail #5). Level 2 - the fix is in the day page or in a helper that three
-specs share.
+**Closed on 2026-10-10.** `revealDayDrawings` snapshots the mounted rendered
+articles and lets Playwright visit each current slot, unless a figure is
+already present. A viewport assertion observes each stable article before the
+driver leaves it, so the final visit cannot be undone by returning to the top
+before the browser observes it. Top restoration is synchronous. The final
+network-idle wait and stable SVG-count check remain. The returned count now
+names visual candidates inspected, not screens traversed.
+
+The bounded DOM Oracle uses real `IntersectionObserver`, three off-screen
+slots and one already drawn article, with no network. A throwing
+`requestAnimationFrame` sentinel refuses the old helper in a separate base
+copy. The new helper inspects all four candidates, draws each once, restores
+`scrollY` to zero and makes no requests. This removes the stalled page clock
+from the test driver; it does not explain why Chromium stopped producing
+frames in either CI run. Product lazy loading, fixtures, timeouts and retries
+are unchanged. Level 2 - item-visual, canaries and whole-day depend on the
+helper and are checked by name.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04. Seen again on 2026-10-08 in main's

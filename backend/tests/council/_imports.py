@@ -10,6 +10,7 @@ from conftest import REPO_ROOT
 MODULE_NAMES = (
     "idhazh",
     "idhazh.atomic_write",
+    "idhazh.completed_writes",
     "idhazh.config",
     "idhazh.contracts.app_config",
     "idhazh.contracts.appearance_config",
@@ -82,7 +83,6 @@ MODULE_NAMES = (
     "idhazh.ledger.csv_file",
     "idhazh.ledger.day_removal",
     "idhazh.ledger.filenames",
-    "idhazh.ledger.headers",
     "idhazh.ledger.json_lines",
     "idhazh.ledger.keys",
     "idhazh.ledger.ledger_files",
@@ -92,7 +92,6 @@ MODULE_NAMES = (
     "idhazh.ledger.raw_files",
     "idhazh.ledger.rows",
     "idhazh.run_context",
-    "idhazh.ledger.settle",
     "idhazh.llm.server",
     "idhazh.sanitize",
 )

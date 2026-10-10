@@ -25,7 +25,7 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, ledger, run_context
+from idhazh import completed_writes, config, ledger, run_context
 from idhazh.contracts.base import DateStamp, RunId, ServerJob
 from idhazh.contracts.council_run_record import (
     CouncilRunRecord,
@@ -159,6 +159,7 @@ def settle(
     run_id: RunId,
     state_dir: Path,
     commit_sha: str,
+    completed: Callable[[Tenant | None, dict[Path, str]], None] | None = None,
 ) -> tuple[ShardResult, ...]:
     """Count, fit, or do nothing, once a date after every shard has reported.
 
@@ -173,28 +174,53 @@ def settle(
     """
     identity = _identify_writer(run_id=run_id, commit_sha=commit_sha)
     hosted = _hosted(council, date)
-    try:
-        return tuple(
-            _recorded(
-                host.judge_id,
-                unit="settle",
-                date=date,
-                run_id=run_id,
-                evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
-                work_part_index=None,
-                work_part_count=shard_width(council, host),
-                work=partial(
-                    host.settle,
-                    date=date,
-                    run_id=run_id,
-                    state_dir=state_dir,
-                    identity=identity,
-                ),
-            )
-            for host in hosted
-        )
-    finally:
-        _collect(hosted, date=date, state_dir=state_dir, identity=identity)
+    results: list[ShardResult] = []
+    failures: list[Exception] = []
+    for host in hosted:
+        with completed_writes.collect() as evidence:
+            try:
+                results.append(
+                    _recorded(
+                        host.judge_id,
+                        unit="settle",
+                        date=date,
+                        run_id=run_id,
+                        evaluation_step=EvaluationStep.COMBINE_JUDGE_RESULTS,
+                        work_part_index=None,
+                        work_part_count=shard_width(council, host),
+                        work=partial(
+                            host.settle,
+                            date=date,
+                            run_id=run_id,
+                            state_dir=state_dir,
+                            identity=identity,
+                        ),
+                    )
+                )
+            except Exception as error:
+                failures.append(error)
+            finally:
+                if completed is not None:
+                    try:
+                        completed(host, evidence)
+                    except Exception as error:
+                        failures.append(error)
+    with completed_writes.collect() as evidence:
+        try:
+            _collect(hosted, date=date, state_dir=state_dir, identity=identity)
+        except Exception as error:
+            failures.append(error)
+        finally:
+            if completed is not None:
+                try:
+                    completed(None, evidence)
+                except Exception as error:
+                    failures.append(error)
+    if failures:
+        if len(failures) == 1:
+            raise failures[0]
+        raise ExceptionGroup("council settlement failures", failures)
+    return tuple(results)
 
 
 def run_shard(

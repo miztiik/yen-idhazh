@@ -43,16 +43,19 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import ChartReadout from './ChartReadout.svelte';
 	import { failureLoad, type FailurePoint, type FailureStage } from '$lib/charts/glance';
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import { countDays, nameSpan } from '$lib/console/span-words';
+	import type { PanelState } from '$lib/console/waiting';
 	import { shortDate } from '$lib/format';
 
 	let {
 		rows,
 		window,
+		panelState,
 		minAttempts,
 		height,
 		width,
@@ -63,6 +66,7 @@
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
+		panelState: PanelState;
 		minAttempts: number;
 		/** The whole SVG, margins included. */
 		height: number;
@@ -190,18 +194,12 @@
 	 * every point, so nothing is lost by keeping segments to two or more here.
 	 */
 	function segments(points: readonly FailurePoint[]): string[] {
-		const runs: string[][] = [];
-		let current: string[] = [];
-		points.forEach((point, index) => {
-			if (point.rate === null) {
-				if (current.length > 1) runs.push(current);
-				current = [];
-				return;
-			}
-			current.push(`${centre(index)},${rateY(point.rate)}`);
-		});
-		if (current.length > 1) runs.push(current);
-		return runs.map((run) => run.join(' '));
+		return indexedRuns(points, (point) => point.rate !== null)
+			.filter((run) => run.length > 1)
+			.map((run) => run.flatMap((index) => {
+				const rate = points[index].rate;
+				return rate === null ? [] : [`${centre(index)},${rateY(rate)}`];
+			}).join(' '));
 	}
 
 	// The base each band stacks on - the running total of the bands beneath it,
@@ -362,7 +360,15 @@
 		{/if}
 	</div>
 
-	{#if load.empty}
+	{#if load.empty && panelState === 'loading'}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-loading>
+			Reading the monthly files. This chart is not ready yet.
+		</p>
+	{:else if load.empty && panelState !== 'quiet' && panelState !== 'ready'}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-unavailable>
+			This chart is unavailable.
+		</p>
+	{:else if load.empty}
 		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-failure-empty>
 			No item was planned in {nameSpan(windowDays)}, so there is no rate to give and no volume to
 			give it against.

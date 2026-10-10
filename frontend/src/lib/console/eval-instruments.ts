@@ -51,13 +51,20 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 	{ id: 'daily-figures', title: 'What the model did', route: '/console/model/' },
 	{
 		id: 'faithfulness',
-		title: 'Summary faithfulness, day by day',
+		title: matchTitle(),
 		route: '/console/model/'
 	},
 	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
 	{ id: 'summary-length', title: 'How long the summaries came out', route: '/console/model/' },
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
+
+/** Name the faithfulness panel for the days its window can show. */
+export function matchTitle(windowDays?: number): string {
+	return windowDays === 1
+		? 'Summary faithfulness for this one day'
+		: 'Summary faithfulness, day by day';
+}
 
 /** Which panel answers for which ledger column.
  *
@@ -118,7 +125,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 		'Which try wrote the summary. Measured 2026-09-06 over 6,966 rows: every one of them is the first try.'
 };
 
-/** The ledger rows this module reads, as the CSV reader hands them over. */
+/** The ledger rows this module reads, every cell as text. */
 export type EvalInput = Readonly<Record<string, string | undefined>>;
 
 /** An instrument the pipeline records and nothing acts on. */

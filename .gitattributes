@@ -6,34 +6,16 @@
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The committed run state still filed as CSV: the judges' day files and the
-# hand-marked holdout pairs, whose ledgers now file through the ledger door and
-# which wait for their copy onto it. CI on Linux wrote them and a developer on
-# Windows reads them; a CRLF rewrite would show every historical row as changed.
-# `*.csv text eol=lf` near the bottom of this file is what pins them, so none of
-# them needs a line of its own for that.
-#
-# Every CSV file under `state/` took `merge=union` until 2026-09-19, and that is
-# what a lost push race used to stack. A job's checkout is pinned to the commit
-# that triggered its run, so a second attempt could not see the rows the first
-# attempt pushed, appended them again, and the union kept both - a key twice in
-# a file every reader of it assumes holds each key once. A tree with more than
-# one writer now gives each writer its own file inside the day directory, named
-# for its run, attempt, job and shard, so there is nothing for a union to settle
-# and nothing to sweep up after one. No tree keeps the driver now: the judge's
-# fitted line was the last, until it moved under `state/raw/` as well.
-#
-# The feed-health record took NO union driver from that day on. Two plan jobs of
-# one night each hold a verdict on every feed, and those two verdicts can
-# disagree - so a union there would have kept both and made the conflict quiet
-# rather than removed it. It has since moved under `state/raw/`.
-#
-# `state/feed-retirements.csv` and `state/visual-prunes/` carried a union driver
-# until 2026-09-28, when both moved under `state/raw/`: every file there has one
-# writer, so there is nothing for a union to settle. `state/published/` and
-# `state/seen/` carried one until they moved there too.
+# No ledger under `state/` is CSV, and no path takes a union merge driver. A
+# union settled two appends to one shared file, and a lost push race used to
+# stack them - a job's checkout is pinned to the commit that triggered its run,
+# so a second attempt appended rows the first had already pushed, and the union
+# kept both. Every ledger now gives each writer a file of its own, so there is
+# nothing for a union to settle. `*.csv text eol=lf` near the bottom of this
+# file still pins the CSV files that are left: test fixtures and the published
+# month copies.
 
-# The training window. Deliberately NOT `merge=union`: it is a rolling window
+# The training window. Deliberately NOT a union merge: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that
 # holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest
 # records what its run saw, so a race is answered by replaying those rows onto

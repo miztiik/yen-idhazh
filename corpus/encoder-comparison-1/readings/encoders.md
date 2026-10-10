@@ -1,31 +1,57 @@
 # Encoder readings
 
-Taken 2026-10-08 on a GitHub `ubuntu-latest` runner: 4 processor threads, 16 GB, no graphics card.
+**This is a title-derived proxy, not a labeled event test.** Use [the model-judged evaluation](../README.md#complete-model-judged-comparison) for AP, precision, recall, calibrated thresholds and paired uncertainty.
 
-**Separation** is the chance this encoder scores a likely-same pair above a likely-different one. 1.0 is perfect, 0.5 is a coin toss. No difference in similarity scale can distort it.
+Saved rows are not re-encoded. Their individual UTC timestamps, task settings, model IDs and recorded host/thread information remain in `encoders.json`. Costs came from separate runner hosts, not controlled same-silicon trials.
 
-**Spread** is how far apart the two averages sit. A wide spread leaves more room for a decision to sit between them.
+## Ranking and encoding cost
 
-**Middle lean** is the share of uncertain pairs - the ones whose titles share something but not much - that this encoder scores above the halfway mark between matching and mismatching. Nobody knows whether those pairs match, so this is never right or wrong. High means the encoder will join too much; low means it will leave one story in pieces.
+Proxy ROC AUC compares title-derived positive and negative pairs only. Sorting this table by it does not establish the best event encoder.
 
-| Encoder | Numbers | Size | Separation | Spread | Same | Different | Middle | Middle lean | Articles a second | 15,122 take | A day takes | Peak memory |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `gte-base` | 768 | 109M | **0.9942** | 0.205 | 0.929 | 0.724 | 0.834 | 0.535 | 8.4 | 29.9 min | 0.67 min | 1.56 GB |
-| `minilm-l6` | 384 | 22M | **0.9925** | 0.658 | 0.760 | 0.102 | 0.462 | 0.540 | 28.0 | 9.0 min | 0.20 min | 0.88 GB |
-| `e5-base` | 768 | 109M | **0.9910** | 0.167 | 0.903 | 0.736 | 0.826 | 0.515 | 4.5 | 55.7 min | 1.24 min | 1.44 GB |
-| `bge-base` | 768 | 109M | **0.9905** | 0.384 | 0.841 | 0.457 | 0.666 | 0.537 | 4.6 | 55.2 min | 1.23 min | 1.54 GB |
-| `bge-large` | | | encoding 6144/10553 | | | | | | | | | |
-| `mxbai-large` | | | encoding 1024/10553 | | | | | | | | | |
-| `bge-m3` | | | encoding 5120/10553 | | | | | | | | | |
-| `qwen3-embedding-0.6b` | | | did not report  | | | | | | | | | |
+| Encoder | Vector dimensions | Parameters | Proxy ROC AUC | Throughput (summaries/s) | Estimated archive time (min) | Estimated batch time (min) | Peak process memory (GiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `jina-v5-nano` | 768 | 212M | 0.9961 | 3.5 | 72.6 | 4.80 | 1.91 |
+| `gte-small` | 384 | 33M | 0.9944 | 90.3 | 2.8 | 0.18 | 1.14 |
+| `gte-base` | 768 | 109M | 0.9943 | 1.2 | 202.9 | 13.43 | 0.97 |
+| `minilm-l6` | 384 | 22M | 0.9925 | 28.6 | 8.8 | 0.58 | 0.87 |
+| `gte-modernbert` | 768 | 149M | 0.9915 | 0.6 | 400.1 | 26.47 | 1.08 |
+| `embeddinggemma-two` | 768 | 270M | 0.9905 | 3.0 | 85.3 | 5.64 | 3.30 |
+| `bge-base` | 768 | 109M | 0.9905 | 5.1 | 49.6 | 3.28 | 1.48 |
 
-Why each encoder is in the list:
+The saved time estimates use 15,115 archive articles and 1,000 articles per batch. They are throughput projections, not measured full-archive or batch executions.
 
-- **`gte-base`** - Same size as bge-base, trained differently. The pair proves whether size or training is doing the work.
-- **`minilm-l6`** - What the search surface runs today. Every other row is read as a gain or a loss against it.
-- **`e5-base`** - Third model at the same size. It needs a prefix on its input, and leaving it off costs quality silently, so the run proves the prefix as well as the model.
-- **`bge-base`** - A widely used mid-sized English model. Packs unrelated pairs close together, which costs a fixed cut-off and not a rank score.
-- **`bge-large`** - Three times bge-base. The question is whether the extra time fits the job.
-- **`mxbai-large`** - Same size as bge-large, trained differently. It repeats the size-against-training control at the large end, where one pair alone would leave it untested.
-- **`bge-m3`** - The one with a different shape: a meaning vector and a weight for every word from one pass, which is two channels from one model. Carries languages this corpus never uses.
-- **`qwen3-embedding-0.6b`** - The most recent design in the list. Its vector can be cut short without encoding again, so a smaller form costs nothing extra to measure.
+## Descriptive cosine statistics
+
+Positive/negative here means the title-derived proxy label. Middle-overlap and same-outlet pairs have no event labels in this proxy. A larger mean difference or exceedance rate does not demonstrate better accuracy, precision, recall, over-merging or missed events.
+
+| Encoder | Positive mean cosine | Negative mean cosine | Mean cosine difference | Middle-overlap mean cosine | Middle-overlap fraction above class-mean midpoint | Same-outlet mean cosine | Same-outlet fraction above class-mean midpoint |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `jina-v5-nano` | 0.886 | 0.537 | 0.349 | 0.740 | 0.593 | 0.881 | 0.982 |
+| `gte-small` | 0.934 | 0.738 | 0.196 | 0.844 | 0.539 | 0.931 | 0.971 |
+| `gte-base` | 0.929 | 0.724 | 0.205 | 0.834 | 0.535 | 0.925 | 0.961 |
+| `minilm-l6` | 0.760 | 0.102 | 0.658 | 0.462 | 0.540 | 0.746 | 0.971 |
+| `gte-modernbert` | 0.859 | 0.475 | 0.384 | 0.687 | 0.557 | 0.852 | 0.963 |
+| `embeddinggemma-two` | 0.917 | 0.763 | 0.154 | 0.848 | 0.546 | 0.919 | 0.986 |
+| `bge-base` | 0.841 | 0.457 | 0.384 | 0.666 | 0.537 | 0.838 | 0.973 |
+
+## Metric glossary
+
+| Term | Meaning and measurement |
+| --- | --- |
+| Cosine similarity | Dot product divided by the vector norms; for unit vectors it is their dot product. A score, not a probability. |
+| ROC AUC | Area under the receiver operating characteristic curve; probability a positive pair outscores a negative pair, with half credit for ties. 0.5 is chance-level, 1 is perfect ordering. |
+| Average precision (AP) | Precision averaged over increases in recall as the threshold is lowered. A ranking measure, not accuracy. Reported on model-judged pairs, not calculated from unlabeled middle pairs. |
+| Precision | TP / (TP + FP): the fraction of predicted matches labeled same. Undefined when there are no predicted matches. |
+| Recall | TP / (TP + FN): the fraction of labeled same pairs found. |
+| TP / FP / FN / TN | Correct match / incorrect match / missed match / correct non-match, according to the stated labels. |
+| Mean cosine difference | Positive mean minus negative mean. Descriptive only; not standard deviation, Cohen's d or a scale-free quality score. |
+| Class-mean midpoint | (positive mean + negative mean) / 2. A diagnostic reference, not a calibrated or production decision threshold. |
+| Fraction above midpoint | Number of unlabeled scores strictly above that encoder's midpoint, divided by the group size. A descriptive exceedance rate, not a standard selection metric. |
+| Precision target | Constraint used when choosing a threshold on calibration data. It is not guaranteed on held-out or production data. |
+| Confidence interval | A range from resampling; the judged comparison uses paired article-component draws. It does not measure label errors. |
+| Throughput | Encoded summaries divided by encoding seconds, on the recorded host. |
+| Peak process memory | Process high-water resident memory, converted to GiB by the runner utility; excludes other processes. |
+
+Historical JSON keys remain unchanged: `separation` = proxy ROC AUC; `spread` = mean cosine difference; `same_mean`/`different_mean` = positive/negative means; `ambiguous_mean`/`related_mean` = middle-overlap/same-outlet means; `ambiguous_lean`/`related_lean` = the two descriptive fractions above the class-mean midpoint. These aliases preserve old measured files; they do not introduce new scientific measures.
+
+Definitions: [scikit-learn ROC AUC](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html), [average precision](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html), [precision and recall](https://scikit-learn.org/stable/modules/model_evaluation.html#precision-recall-f-measure-metrics).

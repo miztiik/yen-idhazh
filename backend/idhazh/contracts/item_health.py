@@ -79,15 +79,15 @@ Token = Annotated[str, _TOKEN, fits_its_column(_TOKEN, absent=UNPRINTABLE)]
 #: they carried before the ledger door. `job` and `shard` are the door's own
 #: columns for the writer that filed a row, and assemble files the day's census
 #: without knowing any item's machine, so one word meant two things in one file.
-#: Read on both sides of the row: a committed heading through `RETIRED_CELLS`,
+#: Read on both sides of the row: a CSV heading through `RETIRED_CELLS`,
 #: and a payload a work shard sealed before the rename through the
 #: before-validator below.
 MACHINE_CELLS_RENAMED: Final[Mapping[str, str]] = MappingProxyType(
     {"job": "machine_job", "shard": "machine_shard"}
 )
 
-#: Headings a day file an earlier run wrote still carries, and the column each
-#: one is read into now. The cost cells are derived from CALL_SLOTS so a seventh
+#: Headings an earlier row carried, and the column each one is read into now.
+#: The cost cells are derived from CALL_SLOTS so a seventh
 #: cost quantity cannot be added to one side and forgotten on the other.
 RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
     {
@@ -100,7 +100,7 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
-#: Headings a day file an earlier run wrote still carries that this row no longer
+#: Headings an earlier row carried that this row no longer
 #: names and that nothing replaced. A retired cell moves to another column; a
 #: dropped one is gone. `runner_name` is answered elsewhere - the host record
 #: carries it at job grain, which an item row reaches through `machine_job` and
@@ -1439,11 +1439,9 @@ class ItemHealthRow(Contract):
         """The inverse. An empty cell is an absent value, never the empty string.
 
         **A cell under a retired heading is read into the column that replaced
-        it.** Every day file an earlier run wrote heads its six first-call cells
-        `call_1_*` and its six second-call cells `call_2_*`, and those files are
-        the archive - a reader that cannot open them has not migrated the
-        ledger, it has abandoned it. The map is one direction only: nothing
-        writes a retired heading again.
+        it.** A row an earlier run wrote heads its six first-call cells
+        `call_1_*` and its six second-call cells `call_2_*`. The map is one
+        direction only: nothing writes a retired heading again.
         """
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
         for retired, current in RETIRED_CELLS.items():

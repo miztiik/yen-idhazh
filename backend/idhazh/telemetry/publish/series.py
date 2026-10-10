@@ -69,10 +69,7 @@ MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
     (RUN_TIMELINE_DIRNAME, ".csv"),
 )
 
-#: Every directory a fresh checkout must already hold, because
-#: `backend/utilities/commit_and_push.py` stages every path a job owns in one
-#: `git add`, and a path that is not there fails that call - which stops the
-#: push and takes every sibling ledger staged beside it.
+#: The declared series roots, also used by the site's bounded build checks.
 PUBLISHED_ROOTS: Final[tuple[str, ...]] = (
     CONSOLE_DIRNAME,
     RUN_DAYS_DIRNAME,
@@ -134,10 +131,7 @@ def published_months(
     digest_root: Path, dirname: str, suffix: str, months: Iterable[str]
 ) -> list[str]:
     """The existing files for these named months, oldest first."""
-    return [
-        path.stem
-        for path in month_files(series_root(digest_root, dirname), suffix, months)
-    ]
+    return [path.stem for path in month_files(series_root(digest_root, dirname), suffix, months)]
 
 
 def months_to_write(

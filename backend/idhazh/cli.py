@@ -53,9 +53,11 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    crash_trace,
     ledger,
     path_classes,
 )
+from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.run import RunConfig
@@ -342,6 +344,7 @@ def _planned(date: str, execution: int | None) -> RunPlan:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
         # The one verb whose rest-of-line belongs to somebody else. Its
@@ -579,11 +582,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    configure_command_logging(settings.app.logging.level.value)
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
     # the only way to guarantee that for every ledger at once is to overlay

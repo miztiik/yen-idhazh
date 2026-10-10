@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-08
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -32,7 +32,7 @@ The slots are four hours apart and a run takes under three, so two runs normally
 do not overlap. When one does - a late slot, or a dispatch fired during a run -
 both work. Nothing queues a content refresh run behind another, because every
 row each run commits lands under that run's own name and the read settles them
-([../publishing/committing.md](../publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
+([../publishing/committing.md](../publishing/committing.md#the-caller-owns-recovery-policy)).
 
 Five runs share one day. They append to the same dated digest rather than replacing it, so the day grows through the day. That is only safe because an item's identity does not depend on its rank - see below.
 
@@ -129,8 +129,9 @@ row, recorded in [../../reference/pipeline-cost.md](../../reference/pipeline-cos
 `load_published` reads one held month at a time, so what it holds while it reads
 is one month's rows and the answer, however long the history grows - at the
 structural ceiling of 1,000 rows a day, a month is about 31,000 rows.
-`backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file`
-doubles the months held and checks that the peak stays flat.
+`backend/tests/test_ledger.py::test_the_unbounded_cover_reads_one_held_month_at_a_time`
+checks that the unbounded read asks for each held month. It does not measure peak
+memory.
 
 **`canonical_url` was 48.6 percent of the row, and it is gone.**
 `load_published` reads `url_key` and `published_on` by name, and nothing else
@@ -151,7 +152,7 @@ The CSV reader `load_published` used then mapped cells by name, so it returned
 the same mapping from a five-column file and from a four-column one - measured
 2026-08-26 over two fixtures of eleven real rows, by a test deleted with that
 reader. The check that did care was `require_matching_header`, and it was
-called from `extend_ledger_file` and from nothing on the read path: a run that
+called from the CSV append and from nothing on the read path: a run that
 tried to append a four-column row onto a five-column file raised `Migrate the
 ledger before appending to it`. So the shape change and the file rewrite were
 one atomic act, and there was no read-side transition to stage.
@@ -437,7 +438,7 @@ about the story. `too_old` on each vertical's plan summary is what makes that
 checkable - a desk that thins can say whether a gate or a dead feed did it.
 The threshold is `collect.max_age_hours` and moving it is a config edit.
 
-Both first-sighting and the published ledger are files under `state/` that no run edits once another run has filed them, committed by CI. That is not a preference - it is the only shape available. There is no database (Guardrail #1), and anything a later run must read has to survive as a committed file. The second one-shot migration was 2026-09-08: a program since deleted moved every row of the flat `state/published.csv` into the day file its own date names and removed the flat file, copying each row's bytes across unchanged. The third moved both ledgers from their CSV day files onto the ledger door through `backend/utilities/migrate_to_parquet.py`, which reads every day back cell for cell before it deletes a CSV file.
+Both first-sighting and the published ledger are files under `state/` that no run edits once another run has filed them, committed by CI. That is not a preference - it is the only shape available. There is no database (Guardrail #1), and anything a later run must read has to survive as a committed file. The second one-shot migration was 2026-09-08: a program since deleted moved every row of the flat `state/published.csv` into the day file its own date names and removed the flat file, copying each row's bytes across unchanged. The third moved both ledgers from their CSV day files onto the ledger door, reading every day back cell for cell before it deleted a CSV file; that program was deleted once no CSV ledger was left.
 
 ### A per-run reading budget was proposed on 2026-08-25 and refused
 

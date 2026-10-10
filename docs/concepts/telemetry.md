@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-10
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -101,7 +101,7 @@ Read fixed host facts once per job. The host-fingerprint row records machine cap
 
 ## No network sink
 
-- Backend logging goes to stderr through standard-library logging, configured once at the entry point. GitHub Actions retains that stream as the job log.
+- Backend logging goes to stderr through standard-library logging, configured once at the entry point. Plain command logs format timestamps in UTC with a trailing `Z`. GitHub Actions retains that stream as the job log.
 - Frontend logging goes to the browser console. Do not add a beacon, collector request or runtime analytics SDK.
 - Never log credentials, signed URLs or request headers.
 - Tests may replay captured structured events without a network connection.

@@ -1,8 +1,8 @@
 <script lang="ts">
 	/** Where the merge line sits, day by day, on a corridor it cannot leave.
 	 *
-	 * Two lines. **Applied, solid** - the number that day's build actually
-	 * grouped at. **Proposed, dotted** - what the evidence asked for before the
+	 * Two lines. **Calculated, solid** - the nightly fit's final number, which a
+	 * build need not have used. **Proposed, dotted** - what the evidence asked for before the
 	 * damping and the clamps shaped it. On a normal day they sit on top of each
 	 * other. They part on a day the record pulled hard and something held the
 	 * line back, and that gap is the whole story of the panel.
@@ -21,8 +21,8 @@
 	 *
 	 * **The pairs a person marked as two stories are a tinted strip across the
 	 * plot.** This is the one chart on the route with time on one axis and score
-	 * on the other, so the line walking down into that strip is the crossing, in
-	 * the picture that can show it happening. The holdout panel draws the same
+	 * on the other, so the calculated line can be compared with that range.
+	 * A crossing is not evidence that a build used the line. The holdout panel draws the same
 	 * marks as four dots on a score axis, where the distance is legible and the
 	 * date is not - the two answer different halves of one question.
 	 *
@@ -39,11 +39,11 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import { dayMonth } from '$lib/format';
-	import { findAppliedLine } from '$lib/console/applied-line';
 	import { clampEnvelope, clampNote, corridorOf, heldNote, type LineDay } from '$lib/console/merge-line';
 	import { nameSpan } from '$lib/console/span-words';
 
@@ -55,28 +55,22 @@
 		width,
 		tickDensity,
 		readoutMaxShare,
-		configuredLine,
+		builtWith,
 		markedApart
 	}: {
 		/** Every day the record fitted a row for, oldest first. */
 		days: LineDay[];
-		/** The band, and the switch and lookback a build reads a fitted line with,
-		 * off `config/idhazh.json`. */
-		knobs: {
-			band_low: number;
-			band_high: number;
-			enabled: boolean;
-			applied_lookback_days: number;
-		};
+		/** The band a fitted line may take, off `config/idhazh.json`. */
+		knobs: { band_low: number; band_high: number };
 		viewport: TimeWindow;
 		height: number;
 		width: number;
 		tickDensity: number;
 		readoutMaxShare: number;
-		/** The committed floor. What a build groups at while the switch is off, or
-		 * when no fit applied a line in its lookback, so state K1 draws a rule
-		 * rather than an empty box. */
-		configuredLine: number;
+		/** The line the newest day was built with. The dashed rule is drawn at it
+		 * when no fitted day is in the window, so state K1 draws a rule rather
+		 * than an empty box. */
+		builtWith: number;
 		/** The lowest and highest score among the pairs a person marked as two
 		 * different stories, and how many there are. Null where nobody has marked
 		 * one, which draws no strip rather than a zero-height one. */
@@ -113,9 +107,6 @@
 	/** Which day the dashed rule is the line of, in words. At one day that day is
 	 * the whole window, so it is named as the window, not as the newest of several. */
 	const ruleDay = $derived(windowDays === 1 ? nameSpan(windowDays) : 'the newest day');
-	/** The line the window's last day was built with: where the dashed rule goes
-	 * when no fitted day is in the window. */
-	const ruleLine = $derived(findAppliedLine(viewport.end, days, knobs, configuredLine));
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	/** `zero: false` and `nice: false`, and both are load-bearing. Anchoring at
@@ -154,31 +145,22 @@
 		}))
 	);
 
-	/** The solid series. One polyline, because the applied line is continuous:
-	 * a held day still applied a number. */
+	/** The solid fit series. A held row retains its previous calculated value. */
 	const appliedPath = $derived(marks.map((mark) => `${mark.x},${mark.appliedY}`).join(' '));
 
 	/** The dotted series, BROKEN at every held day. A line drawn through a day
 	 * nothing was fitted on claims a measurement nobody took. */
 	const proposedRuns = $derived(
-		marks.reduce<string[][]>((runs, mark) => {
-			if (mark.proposedY === null) {
-				if (runs.length === 0 || runs[runs.length - 1].length > 0) runs.push([]);
-				return runs;
-			}
-			if (runs.length === 0) runs.push([]);
-			runs[runs.length - 1].push(`${mark.x},${mark.proposedY}`);
-			return runs;
-		}, [])
+		indexedRuns(marks, (mark) => mark.proposedY !== null)
 			.filter((run) => run.length > 1)
-			.map((run) => run.join(' '))
+			.map((run) => run.map((index) => `${marks[index].x},${marks[index].proposedY}`).join(' '))
 	);
 
 	/** What the line did on a day, in the words the strip prints it under. */
 	function lineDid(day: LineDay): string {
 		if (day.heldReason !== 'none') return 'stayed where it was';
-		if (day.clampKind === 'none') return 'moved to what the evidence asked for';
-		return 'was held back from what the evidence asked for';
+		if (day.clampKind === 'none') return 'was updated';
+		return 'had its change limited';
 	}
 
 	const readout = $derived(
@@ -187,19 +169,19 @@
 			columns: marks.map((mark) => dayMonth(mark.day.date)),
 			series: [
 				{
-					label: 'Applied',
+					label: 'Calculated line',
 					swatch: 'var(--chart-1)',
 					values: marks.map((mark) => mark.day.applied),
 					format: reads
 				},
 				{
-					label: 'Proposed',
+					label: 'Proposed line',
 					swatch: 'var(--chart-2)',
 					values: marks.map((mark) => mark.day.proposed ?? 'nothing was fitted'),
 					format: reads
 				},
 				{
-					label: 'The line',
+					label: 'Change',
 					swatch: null,
 					values: marks.map((mark) => lineDid(mark.day)),
 					format: String
@@ -216,18 +198,20 @@
 	function columnTitle(day: LineDay): string {
 		const on = dayMonth(day.date);
 		if (day.heldReason !== 'none') {
-			return `${on}: nothing was fitted, so the line ${lineDid(day)}, applied ${reads(day.applied)}.`;
+			return `${on}: nothing was fitted. The calculated line stayed at ${reads(day.applied)}. A build may have used a different line.`;
 		}
 		if (day.clampKind === 'none') {
-			return `${on}: the line ${lineDid(day)}, applied ${reads(day.applied)}.`;
+			return `${on}: proposed line ${reads(day.proposed ?? day.applied)}; calculated line ${reads(day.applied)} after limits on its change. A build may have used a different line.`;
 		}
-		return `${on}: the line ${lineDid(day)}, proposed ${reads(day.proposed ?? day.applied)} and applied ${reads(day.applied)}.`;
+		return `${on}: proposed line ${reads(day.proposed ?? day.applied)}; calculated line ${reads(day.applied)}. Its change was limited. A build may have used a different line.`;
 	}
 </script>
 
 <Panel
 	title="Where the merge line sits"
-	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. ${windowDays === 1 ? 'The shaded band is as far as the line was allowed to fall that day.' : 'The shaded band at each day is as far as the line was allowed to fall in one day.'}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip across the plot is where the ${markedApart.count} pairs a person marked as two stories sit: they score ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}, the strip is the part of that inside this plot, and a line inside it merges one of them.`}`}
+	note={drawn.length === 0
+		? `The dashed rule shows the line ${ruleDay} was built with. The scale is the whole range a fitted line may take.${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}.`}`
+		: `${windowDays === 1 ? "The applied reading is the nightly calculation's final score for grouping two stories as one, after limits on its change. The proposed reading is the score before those limits. The shaded band shows how far the calculated line was allowed to fall that day. A build may have used a different line." : "The solid line is the nightly calculation's final score for grouping two stories as one, after limits on its change. The dotted line is the proposed score before those limits. The shaded band shows how far the calculated line was allowed to fall each day. A build may have used a different line."}${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}. If used to group stories, ${windowDays === 1 ? 'an applied reading' : 'a calculated line'} inside this strip would clear the score threshold for at least one of those pairs. This does not show that a build grouped them.`}`}
 >
 	<div
 		data-windowed="merge-line"
@@ -248,9 +232,11 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label={windowDays === 1
-					? `The merge line for ${nameSpan(windowDays)}, on the whole range a fitted line may take`
-					: 'The merge line a day, on the whole range a fitted line may take'}
+				aria-label={drawn.length === 0
+					? `The line ${ruleDay} was built with, on the whole range a fitted line may take`
+					: windowDays === 1
+						? 'Nightly calculated merge readings for this one day, on the full allowed score range. A build may have used a different line.'
+						: 'Nightly calculated merge lines, on the full allowed score range. Builds may have used different lines.'}
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
@@ -267,8 +253,9 @@
 				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
 
 				{#if holdoutZone !== null}
-					<!-- The line walking down into this strip is a pair a person read as
-					     two stories being folded into one. Drawn as a region rather than
+					<!-- A calculated line inside this strip would clear a marked-apart
+					     pair's score threshold if used. It is not a recorded merge.
+					     Drawn as a region rather than
 					     one rule a mark: four rules inside ten pixels is one grey smear.
 					     What it holds is one fact about the whole plot rather than about a
 					     day, so the panel's note says it in words, figures and all. -->
@@ -319,15 +306,15 @@
 					<line
 						x1={box.left}
 						x2={box.right}
-						y1={yAxis.scale(ruleLine)}
-						y2={yAxis.scale(ruleLine)}
+						y1={yAxis.scale(builtWith)}
+						y2={yAxis.scale(builtWith)}
 						stroke="var(--color-text-tertiary)"
 						stroke-dasharray="4 4"
-						data-line-rule={reads(ruleLine)}
+						data-line-rule={reads(builtWith)}
 					/>
 					<text
 						x={box.left + 8}
-						y={yAxis.scale(ruleLine) - 8}
+						y={yAxis.scale(builtWith) - 8}
 						fill="var(--color-text-tertiary)"
 						font-size="12"
 						data-line-rule-label
@@ -423,7 +410,7 @@
 			at={selected}
 			name="merge-line"
 			maxShare={readoutMaxShare}
-			restingNote=", the newest day"
+			restingNote=", the newest recorded day shown"
 		/>
 
 		<p class="line-note">

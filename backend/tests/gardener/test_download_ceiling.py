@@ -9,6 +9,10 @@ fits what is left of the shard's budget, so it stops at `ceiling` and never
 passes it, and refuses by name a period larger than the whole budget. Every row
 records what the shard downloaded. A scheduled pass does not read whole folders
 just to weigh them.
+
+A period that is larger than the whole budget is a named manual action. The
+synthetic check after every task has run remains a code defect, because no task
+classified that aggregate overrun at a named refusal site.
 """
 
 from __future__ import annotations
@@ -362,7 +366,7 @@ def test_a_day_larger_than_the_whole_budget_is_refused_by_name_and_never_downloa
     assert (row.stopped_because, row.resume_from, row.fault) == (
         StopReason.FAILED,
         "2026-09-20",
-        GardenerFault.RAISED,
+        GardenerFault.MANUAL_ACTION,
     )
     assert row.downloaded_bytes == 0
     refusal = the_event(caplog.records, DownloadOverBudget)
@@ -436,7 +440,10 @@ def test_a_period_larger_than_the_whole_budget_is_refused_by_name(
             ["2026-09-20"], lambda day: PeriodFetch(folders=(tree.raw_day_folder(day),))
         )
 
-    assert (fits, over) == ([], Stop(StopReason.FAILED, "2026-09-20", GardenerFault.RAISED))
+    assert (fits, over) == (
+        [],
+        Stop(StopReason.FAILED, "2026-09-20", GardenerFault.MANUAL_ACTION),
+    )
     assert the_event(caplog.records, DownloadOverBudget) == DownloadOverBudget(
         ledger=PACKED,
         resume_from="2026-09-20",

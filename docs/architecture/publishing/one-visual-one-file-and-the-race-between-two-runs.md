@@ -1,6 +1,6 @@
 # One visual, one file, and the race between two runs
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-09
 
 A visual's file is named for the item it belongs to, and nothing recomputes that
 name. This page is why: two earlier naming rules each published one story's
@@ -44,11 +44,11 @@ from the open web, so a source page that moved between the two fetches yields a 
 table and a different plan. That path is now the same item on both sides, never two stories under one
 name - so there is nothing to choose between. The tip's copy is published and a reader may already
 hold that address, and `build_day` keeps the tip's item over this run's in any case, which makes this
-run's file the one nothing will reference. Before each rebase attempt the commit step lists the paths
-the tip already publishes and hands them to
-[`backend/utilities/drop_raced_assets.py`](../../../backend/utilities/drop_raced_assets.py), which
-deletes this run's copy of any of them. The decision payload is left naming the same path, because after
-the rebase the tip's file is sitting at it.
+run's file the one nothing will reference. The caller-owned ASSEMBLE preparation
+in `backend/utilities/digest_assemble.py` materializes the named completed day
+from fresh main and keeps an asset already committed for that item. Incoming
+assets fill only absent paths. A consistency check runs before any rebuilt
+derived set is handed to the shared private-index publisher.
 
 **The renderer's own non-determinism was a second cause of differing bytes, and it left with the
 renderer.** What that cost, and why the test that should have caught it did not, is in
@@ -85,9 +85,9 @@ Authority: the owner, 2026-08-27. Every cheaper-looking answer publishes a wrong
 failing, which is worse than losing a day because nobody finds out. Adding the day's directory to
 `REFRESH_PATHS` made the rebuild's hand-back delete every chart this run added that the tip lacks,
 while the regenerated `digest.json` still named them, so the day published with broken images.
-Since 2026-10-04 `assemble` writes a missing chart from this run's decision, so that reason no
-longer holds; the directory stays out of the list until a change tests the hand-back of a whole
-directory, and the drop stays the control. Resolving the add/add
+Since 2026-10-09 the caller prepares the named day in a separate directory:
+published assets stay, and incoming completed assets fill absent paths. Nothing
+deletes or restores charts in the user's checkout. Resolving the add/add
 by a stated side has two outcomes and no third one; `-X theirs` gives our item the tip's picture,
 `-X ours` overwrites an address a reader may already hold. **Renumbering was the answer while a path
 could mean two different stories**, and it is the wrong answer now: the path names one item, so
@@ -95,11 +95,11 @@ moving this run's copy to some other name would file that item's picture under a
 its own, and leave two files where the day references one. Dropping is what is left, and it costs
 nothing - the rebuild keeps the tip's item, so this run's copy was never going to be referenced.
 
-**Why the drop happens in the shell's retry loop and not inside `assemble`.** The rebase is what
-fails, and it runs before `REGENERATE_COMMAND` does, so a fix that runs after it never gets to run
-at all. The naming rule itself stays in `backend/idhazh/render/write.py`, which owns it: the shell
-lists paths and pipes them, and a small argv wrapper under `backend/utilities/` does the work.
-Bash never learns what an item id means (Guardrail #3).
+**Why this belongs to ASSEMBLE policy, not the publisher.** The shared core knows
+only exact operations, declarations and an optional bounded preparation
+callback. Only the caller knows that an item's first published asset wins.
+There is no shell retry/rebase engine and no model rerun. The naming rule stays
+in `backend/idhazh/render/write.py`; Bash never learns an item id's grammar.
 
 **Two things about the 2026-08-24 repair are not in the record above.** Authority: owner,
 2026-08-27.

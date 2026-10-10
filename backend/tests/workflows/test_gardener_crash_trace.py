@@ -1,24 +1,26 @@
-"""Does every gardener program and operator command print a crash as where it broke, never what it said?
+"""Does every idhazh command and gardener program print where it crashed, never what it said?
 
 Each case runs one program the way its job does, or one command the way a
 person types it, in a fresh interpreter, through a driver. The driver raises an
 exception carrying planted text and, while it handles that one, runs the
 program as `__main__` on an input the program's own code cannot read: a config
-folder with no config in it, a corpus stamp that is a folder, or a state tree
-whose door holds a file where a day's folder goes. The path carries the planted
-text, so the exception that ends the program quotes it, and so does the
-exception chained to it. Python's own trace prints both messages (Guardrail
-#11). Nothing is replaced: the program raises on real input, and Python chains
-the two.
+folder with no config in it, or a corpus stamp that is a folder. The path
+carries the planted text, so the exception that ends the program quotes it, and
+so does the exception chained to it. Python's own trace prints both messages
+(Guardrail #11). Nothing is replaced: the program raises on real input, and
+Python chains the two.
 
 The plan job and the due check install nothing, so their cases run with
 `-I -S`: no site packages, and no folder on the path but the one the program
 puts there itself.
 
-No workflow runs the three operator commands. The two `idhazh` commands run
-through the package's `__main__.py`, which calls the `main` the console script
-calls, and `run-task` stands for the gardener's three subcommands, which share
-one `main`. The ledger migrator runs as a person runs it.
+No workflow runs the two operator commands. Both run through the package's
+`__main__.py`, which calls the `main` the console script calls, and `run-task`
+stands for the gardener's three subcommands, which share one `main`.
+
+The package cases run `idhazh work --config <missing planted path>` through the
+installed console script and through `python -m idhazh`. The missing config ends
+the command before it can start network work.
 
 The last test holds the four workflow programs to every command in the workflow
 that starts Python, so a fifth program cannot land without a case here. What
@@ -27,6 +29,7 @@ the trace holds for any chain is `test_crash_trace.py`.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -39,10 +42,6 @@ from typing import Final, NamedTuple
 
 import pytest
 from conftest import REPO_ROOT, SEED_COMMIT
-from ledger_migration._fixtures import ITEM, OLD, item_row, write_csv, writer_file_name
-
-from idhazh import ledger
-from idhazh.contracts.base import ServerJob
 
 from ._harness import (
     GARDENER_PLAN_MODULE,
@@ -62,8 +61,12 @@ WORKFLOW: Final = "idhazh-gardener.yml"
 #: both call the `main` this runs.
 IDHAZH_ENTRY: Final = REPO_ROOT / "backend" / "idhazh" / "__main__.py"
 
-#: The ledger migrator, which a person runs to move a CSV tree onto the door.
-MIGRATOR: Final = REPO_ROOT / "backend" / "utilities" / "migrate_to_parquet.py"
+#: The router both package entry forms call.
+IDHAZH_ROUTER: Final = REPO_ROOT / "backend" / "idhazh" / "cli.py"
+
+#: Both installed forms of the package command. They must install the same
+#: process-wide crash boundary before routing a verb.
+IDHAZH_FORMS: Final = ("console-script", "python-module")
 
 #: What a fetched page might say, planted in the driver's exception; and the part
 #: of it that the program's input path carries too, which no line may hold.
@@ -205,32 +208,6 @@ def a_prune_crashes(root: Path) -> tuple[list[str], str]:
     ], "FileNotFoundError"
 
 
-def a_migration_crashes(root: Path) -> tuple[list[str], str]:
-    """A CSV day filed into a door that holds a file where the day's folder goes.
-
-    The migrator turns a fault in what it reads into a refusal it prints on
-    purpose, which keeps its words. A fault in what it writes is not caught: the
-    write cannot make the day's folder, and the exception names that path. The
-    text is planted in a folder above the state tree, because the migrator
-    prints a root outside the checkout by its last folder name, on purpose.
-    """
-    state = root / PLANTED / "state"
-    row = item_row(OLD, "ai-01", machine=True)
-    write_csv(state, ITEM, OLD, writer_file_name(OLD, 1, ServerJob.WORK), [row.csv_row()])
-    day = ledger.raw_root(state, ITEM).joinpath(*OLD.split("-"))
-    day.parent.mkdir(parents=True)
-    day.write_text("a file where the day's folder goes", encoding="ascii")
-    arguments = ["--state-dir", str(state), "--month", OLD[:7], "--ledger", ITEM.value]
-    return [
-        *arguments,
-        "--run-id",
-        RUN_ID,
-        "--git-sha",
-        SEED_COMMIT,
-        "--write",
-    ], "FileExistsError"
-
-
 #: The four programs the workflow runs, each with the input that ends it.
 CRASHES: Final = (
     Crash(GARDENER_PLAN_MODULE, True, the_planner_crashes),
@@ -239,11 +216,10 @@ CRASHES: Final = (
     Crash(PRUNE_PUSH_MODULE, False, the_squash_crashes),
 )
 
-#: The three commands a person runs on gardener code, which no workflow runs.
+#: The two commands a person runs on gardener code, which no workflow runs.
 OPERATOR_CRASHES: Final = (
     Crash(IDHAZH_ENTRY, False, a_gardener_task_crashes, ("gardener", "run-task")),
     Crash(IDHAZH_ENTRY, False, a_prune_crashes, ("telemetry", "prune")),
-    Crash(MIGRATOR, False, a_migration_crashes),
 )
 
 
@@ -256,6 +232,45 @@ def main_call(program: Path) -> str:
     ]
     assert len(calls) == 1, f"{program.name} calls main() on {len(calls)} lines"
     return f"  __main__:{calls[0]}"
+
+
+def subprocess_environment() -> dict[str, str]:
+    """The process environment without Python path overrides or GitHub step outputs."""
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("PYTHON") and name not in STEP_VARIABLES
+    }
+
+
+def installed_console_script() -> Path:
+    """The `idhazh` script installed beside the interpreter running this test."""
+    name = "idhazh.exe" if os.name == "nt" else "idhazh"
+    script = Path(sys.executable).with_name(name)
+    assert script.is_file(), f"{script} is missing; install the package before this test"
+    return script
+
+
+def test_the_top_router_installs_the_crash_trace_before_any_other_action() -> None:
+    """Reading argv or handing off first would leave a command outside the boundary."""
+    tree = ast.parse(IDHAZH_ROUTER.read_text(encoding="utf-8"))
+    functions = [
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main"
+    ]
+    assert len(functions) == 1
+    body = functions[0].body
+    if (
+        isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    first = body[0]
+    assert isinstance(first, ast.Expr)
+    assert isinstance(first.value, ast.Call)
+    assert isinstance(first.value.func, ast.Attribute)
+    assert isinstance(first.value.func.value, ast.Name)
+    assert (first.value.func.value.id, first.value.func.attr) == ("crash_trace", "install")
 
 
 def programs_started(script: str) -> set[str]:
@@ -273,11 +288,7 @@ def test_a_crash_prints_each_exceptions_type_and_frames_and_never_its_text(
     tmp_path: Path, crash: Crash
 ) -> None:
     arguments, ended_by = crash.inputs(tmp_path)
-    env = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith("PYTHON") and name not in STEP_VARIABLES
-    }
+    env = subprocess_environment()
     flags = ["-I", "-S"] if crash.installs_nothing else []
     if not crash.installs_nothing:
         env["PYTHONPATH"] = str(REPO_ROOT / "backend")
@@ -301,6 +312,39 @@ def test_a_crash_prints_each_exceptions_type_and_frames_and_never_its_text(
     assert "LookupError" in trace
     assert CONTEXT in trace
     assert main_call(crash.program) in trace
+
+
+@pytest.mark.parametrize("entry", IDHAZH_FORMS)
+def test_every_idhazh_entry_scrubs_a_work_crash(
+    tmp_path: Path, entry: str
+) -> None:
+    """Both installed entry forms fail on real input before any network work can begin."""
+    missing = tmp_path / PLANTED
+    command = (
+        [str(installed_console_script())]
+        if entry == "console-script"
+        else [sys.executable, "-m", "idhazh"]
+    )
+
+    done = subprocess.run(
+        [*command, "work", "--config", str(missing)],
+        cwd=tmp_path,
+        env=subprocess_environment(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 1, "Python's own code for an uncaught exception"
+    assert done.stdout == ""
+    assert PLANTED not in done.stderr, done.stderr
+    printed = done.stderr.splitlines()
+    assert HEADER in printed, done.stderr
+    trace = printed[printed.index(HEADER) :]
+    assert [line for line in trace if not TRACE_LINE.fullmatch(line)] == []
+    assert trace[-1] == "FileNotFoundError"
+    assert any(line.startswith("  idhazh.cli:") for line in trace)
+    assert any(line.startswith("  idhazh.config:") for line in trace)
 
 
 def test_every_command_the_workflow_starts_python_with_runs_a_program_crashed_here() -> None:

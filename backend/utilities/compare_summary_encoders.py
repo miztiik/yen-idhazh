@@ -1,4 +1,4 @@
-"""Rank sentence encoders on this project's own summaries.
+"""Screen sentence encoders on this project's title-derived proxy.
 
 The pipeline needs one encoder to decide whether two summaries report the same
 event. No paper read for plan 63 chooses one, and the search surface's encoder
@@ -10,8 +10,8 @@ never see: the generated title. A title in this pipeline is actor plus action
 with the hype removed, so two titles from different outlets on the same day that
 share most of their content words are very likely one event, and two drawn at
 random from one day are very likely not. That stand-in is not truth. It is the
-same stand-in for every encoder, which is what makes the ranking fair even
-though it cannot score any single encoder absolutely.
+same stand-in for every encoder, but its saturated scores cannot select a
+winner. The separate model-judged evaluation measures that harder question.
 
 The reading is the chance that an encoder scores a likely-same pair above a
 likely-different one. No difference in similarity scale can distort it, which a
@@ -27,6 +27,7 @@ Three stages, because every encoder has to score the identical pairs:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -54,6 +55,28 @@ def read_config(path: Path) -> dict[str, Any]:
         if key not in settings:
             raise SystemExit(f"{path}: no {key}")
     return settings
+
+
+def select_encoders(settings: dict[str, Any], selected: str) -> list[dict[str, Any]]:
+    """Select named shards without spending time on the saved controls."""
+    encoders: list[dict[str, Any]] = settings["encoders"]
+    if not selected:
+        return encoders
+    names = [name.strip() for name in selected.split(",")]
+    if len(set(names)) != len(names):
+        raise ValueError("an encoder may be selected only once")
+    by_slug = {encoder["slug"]: encoder for encoder in encoders}
+    unknown = [name for name in names if name not in by_slug]
+    if unknown:
+        raise ValueError(f"unknown encoder selection: {', '.join(unknown)}")
+    return [by_slug[name] for name in names]
+
+
+def stage_encoders(args: argparse.Namespace) -> None:
+    print(json.dumps([
+        encoder["slug"]
+        for encoder in select_encoders(read_config(args.config), args.selected)
+    ]))
 
 
 def content_words(text: str) -> set[str]:
@@ -271,7 +294,6 @@ def stage_score(args: argparse.Namespace) -> None:
     pairs = json.loads(args.pairs.read_text(encoding="utf-8"))
     texts = [chosen["prefix"] + text for text in pairs["texts"]]
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from idhazh.contracts.encoder_reading import (
         EncoderReading,
         PairCounts,
@@ -288,6 +310,9 @@ def stage_score(args: argparse.Namespace) -> None:
         model_id=chosen["model_id"],
         parameters_millions=chosen["parameters_millions"],
         prefix=chosen["prefix"],
+        model_options=chosen.get("model_options", {}),
+        encode_options=chosen.get("encode_options", {}),
+        pair_set_sha256=hashlib.sha256(args.pairs.read_bytes()).hexdigest(),
         why=chosen["why"],
         state=ReadingState.LOADING,
         written_at=now(),
@@ -345,7 +370,9 @@ def stage_score(args: argparse.Namespace) -> None:
         from sentence_transformers import SentenceTransformer
 
         loading = time.monotonic()
-        model = SentenceTransformer(chosen["model_id"], device="cpu")
+        model = SentenceTransformer(
+            chosen["model_id"], device="cpu", **chosen.get("model_options", {})
+        )
         model.max_seq_length = settings["encode"]["max_sequence_length"]
         reading.load_seconds = round(time.monotonic() - loading, 1)
     except Exception as failure:  # a model that will not load is a reading
@@ -376,8 +403,11 @@ def stage_score(args: argparse.Namespace) -> None:
                     convert_to_numpy=True,
                     normalize_embeddings=True,
                     show_progress_bar=False,
+                    **chosen.get("encode_options", {}),
                 ).astype(np.float32)
             )
+            if not np.isfinite(encoded[-1]).all():
+                raise ValueError("the encoder returned non-finite vectors")
             reading.articles_done = min(start + batch, len(texts))
             reading.encode_seconds = round(time.monotonic() - started, 1)
             reading.numbers_an_article = int(encoded[0].shape[1])
@@ -437,20 +467,15 @@ def stage_score(args: argparse.Namespace) -> None:
         settings["corpus"]["articles_a_batch"] / per_second / 60, 2
     )
 
-    # Where the uncertain pairs land. Nobody knows whether they match, so this
-    # is never scored right or wrong - it reports a lean. An encoder that puts
-    # the middle band up against the matching pairs will join too much; one
-    # that puts it down among the mismatches will leave one story in pieces.
+    # Unlabeled distributions are descriptive. Exceeding a class-mean midpoint
+    # is not evidence of precision, recall or a production grouping error.
     halfway = (float(same_scores.mean()) + float(different_scores.mean())) / 2
     if pairs.get("ambiguous"):
         middle = score(pairs["ambiguous"])
         reading.ambiguous_mean = round(float(middle.mean()), 3)
         reading.ambiguous_lean = round(float((middle > halfway).mean()), 3)
 
-    # One outlet's second piece on one subject in one day. A different question
-    # from the one separation answers, and kept out of it for that reason: an
-    # encoder scoring these as high as genuine matches cannot tell a follow-up
-    # from a new story.
+    # Same-outlet candidates have no event labels in this proxy.
     if pairs.get("related"):
         second = score(pairs["related"])
         reading.related_mean = round(float(second.mean()), 3)
@@ -459,9 +484,9 @@ def stage_score(args: argparse.Namespace) -> None:
     reading.peak_memory_gb = peak_memory_gb()
     reading.state = ReadingState.MEASURED
     save()
-    print(f"{chosen['slug']:22} separation {reading.separation:.4f}  "
-          f"spread {reading.spread:.3f}  "
-          f"middle lean {reading.ambiguous_lean}  "
+    print(f"{chosen['slug']:22} proxy ROC AUC {reading.separation:.4f}  "
+          f"mean cosine difference {reading.spread:.3f}  "
+          f"middle-overlap fraction above midpoint {reading.ambiguous_lean}  "
           f"{reading.articles_a_second:.1f} articles a second", flush=True)
 
 
@@ -476,6 +501,7 @@ def stage_collect(args: argparse.Namespace) -> None:
     """
     settings = read_config(args.config)
     pairs = json.loads(args.pairs.read_text(encoding="utf-8"))
+    selected = select_encoders(settings, args.selected)
 
     def find_reading(slug: str) -> Path | None:
         """Where this shard's reading landed, however the download nested it.
@@ -495,7 +521,7 @@ def stage_collect(args: argparse.Namespace) -> None:
         return None
 
     readings = []
-    for encoder in settings["encoders"]:
+    for encoder in selected:
         found = find_reading(encoder["slug"])
         if found is not None:
             readings.append(json.loads(found.read_text(encoding="utf-8")))
@@ -504,6 +530,20 @@ def stage_collect(args: argparse.Namespace) -> None:
                 {"slug": encoder["slug"], "model_id": encoder["model_id"],
                  "state": "did not report", "why": encoder["why"]}
             )
+
+    newly_measured = [r for r in readings if r.get("state") == "measured"]
+    if args.preserve_existing:
+        existing = args.out / "encoders.json"
+        if not existing.is_file():
+            raise ValueError(f"cannot preserve missing readings: {existing}")
+        previous = json.loads(existing.read_text(encoding="utf-8"))["encoders"]
+        replaced = {reading["slug"] for reading in readings}
+        pair_hash = hashlib.sha256(args.pairs.read_bytes()).hexdigest()
+        for reading in previous:
+            if reading["slug"] not in replaced:
+                if reading.get("pair_set_sha256") != pair_hash:
+                    raise ValueError(f"{reading['slug']}: the saved pair set differs")
+                readings.append(reading)
 
     measured = [r for r in readings if r.get("state") == "measured"]
     measured.sort(key=lambda r: -r["separation"])
@@ -516,69 +556,7 @@ def stage_collect(args: argparse.Namespace) -> None:
         encoding="utf-8",
     )
 
-    lines = [
-        "# Encoder readings",
-        "",
-        f"Taken {time.strftime('%Y-%m-%d', time.gmtime())} on a GitHub "
-        "`ubuntu-latest` runner: 4 processor threads, 16 GB, no graphics card.",
-        "",
-        "**Separation** is the chance this encoder scores a likely-same pair above "
-        "a likely-different one. 1.0 is perfect, 0.5 is a coin toss. No difference "
-        "in similarity scale can distort it.",
-        "",
-        "**Spread** is how far apart the two averages sit. A wide spread leaves "
-        "more room for a decision to sit between them.",
-        "",
-        "**Middle lean** is the share of uncertain pairs - the ones whose titles "
-        "share something but not much - that this encoder scores above the "
-        "halfway mark between matching and mismatching. Nobody knows whether "
-        "those pairs match, so this is never right or wrong. High means the "
-        "encoder will join too much; low means it will leave one story in "
-        "pieces.",
-        "",
-        "**Second-piece lean** is the same reading for one outlet's second "
-        "article on one subject in one day - a correction or a follow-up. Near "
-        "one means this encoder cannot tell an update from a new story.",
-        "",
-        "| Encoder | Numbers | Size | Separation | Spread | Same | Different | "
-        "Middle | Middle lean | Second piece | Second-piece lean | "
-        "Articles a second | 15,122 take | A day takes | Peak memory |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-        "---: | ---: | ---: | ---: | ---: |",
-    ]
-    for reading in ordered:
-        if reading.get("state") != "measured":
-            got = reading.get("articles_done", 0)
-            asked = reading.get("articles_to_encode", 0)
-            progress = f"{got}/{asked}" if asked else ""
-            lines.append(
-                f"| `{reading['slug']}` | | | {reading.get('state', '?')} "
-                f"{progress} | | | | | | | | | | | |"
-            )
-            continue
-        memory = f"{reading['peak_memory_gb']} GB" if reading.get("peak_memory_gb") else ""
-
-        def shown(value: object) -> str:
-            return f"{value:.3f}" if isinstance(value, (int, float)) else ""
-
-        lines.append(
-            f"| `{reading['slug']}` | {reading['numbers_an_article']} | "
-            f"{reading['parameters_millions']}M | **{reading['separation']:.4f}** | "
-            f"{reading['spread']:.3f} | {reading['same_mean']:.3f} | "
-            f"{reading['different_mean']:.3f} | "
-            f"{shown(reading.get('ambiguous_mean'))} | "
-            f"{shown(reading.get('ambiguous_lean'))} | "
-            f"{shown(reading.get('related_mean'))} | "
-            f"{shown(reading.get('related_lean'))} | "
-            f"{reading['articles_a_second']:.1f} | "
-            f"{reading['minutes_for_whole_archive']:.1f} min | "
-            f"{reading['minutes_for_one_day']:.2f} min | {memory} |"
-        )
-    lines += ["", "Why each encoder is in the list:", ""]
-    for reading in ordered:
-        lines.append(f"- **`{reading['slug']}`** - {reading.get('why', '')}")
-    lines.append("")
-    (args.out / "encoders.md").write_text("\n".join(lines), encoding="utf-8")
+    write_reading_table(settings, ordered, args.out / "encoders.md")
 
     manifest = {
         "version": settings["version"],
@@ -602,25 +580,59 @@ def stage_collect(args: argparse.Namespace) -> None:
             "pair_build": pairs["pair_build"],
         },
         "encode": settings["encode"],
-        "encoders_asked": len(settings["encoders"]),
-        "encoders_measured": len(measured),
+        "pair_set_sha256": hashlib.sha256(args.pairs.read_bytes()).hexdigest(),
+        "encoders_selected": [encoder["slug"] for encoder in selected],
+        "encoders_asked": len(selected),
+        "encoders_measured": len(newly_measured),
         "encoders_unavailable": [
-            r["slug"] for r in readings if r.get("state") != "measured"
+            r["slug"] for r in readings
+            if r["slug"] in {encoder["slug"] for encoder in selected}
+            and r.get("state") != "measured"
         ],
     }
     (args.out.parent / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
     )
 
-    print(f"measured {len(measured)} of {len(settings['encoders'])} encoders")
-    for reading in measured:
+    print(f"measured {len(newly_measured)} of {len(selected)} selected encoders")
+    for reading in newly_measured:
         print(f"  {reading['slug']:22} {reading['separation']:.4f}")
+
+
+def write_reading_table(
+    settings: dict[str, Any], readings: list[dict[str, Any]], output: Path,
+) -> None:
+    from utilities.encoder_reading_table import render_readings
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(render_readings(
+        readings,
+        archive_articles=settings["corpus"]["published_articles"],
+        batch_articles=settings["corpus"]["articles_a_batch"],
+    ), encoding="utf-8", newline="\n")
+
+
+def stage_render(args: argparse.Namespace) -> None:
+    """Refresh the readable table without rewriting measured payloads or manifests."""
+    settings = read_config(args.config)
+    readings = json.loads(args.readings.read_text(encoding="utf-8"))["encoders"]
+    write_reading_table(settings, readings, args.out)
+    print(f"rendered {len(readings)} saved readings; no encoding")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("config/encoder-comparison.json"))
     stages = parser.add_subparsers(dest="stage", required=True)
+
+    listing = stages.add_parser("encoders", help="list selected encoder shards")
+    listing.add_argument("--selected", default="")
+    listing.set_defaults(run=stage_encoders)
+
+    rendering = stages.add_parser("render", help="render existing readings without encoding")
+    rendering.add_argument("--readings", type=Path, required=True)
+    rendering.add_argument("--out", type=Path, required=True)
+    rendering.set_defaults(run=stage_render)
 
     build = stages.add_parser("pairs", help="build the pair set once")
     build.add_argument("--digest-root", type=Path, default=Path("frontend/public/digest"))
@@ -646,9 +658,12 @@ def main() -> None:
     merge.add_argument("--out", type=Path, required=True)
     merge.add_argument("--commit", default="")
     merge.add_argument("--run-url", default="")
+    merge.add_argument("--selected", default="")
+    merge.add_argument("--preserve-existing", action="store_true")
     merge.set_defaults(run=stage_collect)
 
     args = parser.parse_args()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     args.run(args)
 
 

@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -286,12 +286,15 @@ the settle runs anyway and keeps everything the surviving units produced.
 
 **The venue spells no ledger path.** A list of one tenant's paths is a list that
 never commits a second tenant's output, so the paths come back from
-`committed_paths` on the protocol and reach the commit step as one job output. A
-night with no tenant registered stages nothing, and the step is skipped: `git
-add` with no path is an error rather than a no-op. A ledger that files through
-the door is named by its folder under `state/raw/`, because the collecting job
-writes only raw files and the gardener packs them later. On a night that files
-nothing there the folder is absent, and the commit step skips the absent path.
+`committed_paths` on each tenant supply independent permission to
+`backend/utilities/council_publish.py`, which observes completed writes per
+tenant and the venue's record separately, then calls the shared publisher.
+There is one collecting job for any number of judges or shards. A tenant/date
+failure does not suppress earlier completed bytes or later tenants/dates.
+An empty venue writes no row and makes no commit. Immutable UUID collisions
+with different bytes are refused; mutable files require an unchanged baseline.
+Sparse input discovery uses each tenant's separately declared named inputs,
+periods and indexes, never the number of judges or an archive checkout.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the
@@ -535,7 +538,7 @@ that action runs is a commit call all the same.
 
 **It is not about a merge conflict.** The council used to argue this as many
 writers racing into one union-merged day file. That premise died on 2026-09-19
-when `merge=union` left the judged-pairs ledger, and quoting it today invites a
+when the union merge driver left the judged-pairs ledger, and quoting it today invites a
 reader to retire the guard along with it. The conflict that segments exist to
 solve - more than one job committing into one ledger file - is priced in
 [its own rationale below](#design-rationale-the-councils-own-path-not-a-segment-per-writer),
@@ -609,9 +612,9 @@ the only memory risk in the design. Carmack, 2026-09-21.
 
 ## Design rationale: the council's own path, not a segment per writer
 
-The digest pipeline gives every writer its own segment inside the day, at
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
-council does not, and one reason survives.
+The digest pipeline gives every writer its own file inside the day, a raw file
+the ledger door names under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`. The council
+does not need one per unit, and one reason survives.
 
 **A segment solves a conflict this workflow does not have.** It exists for the
 case where more than one job commits into one ledger file - the digest pipeline

@@ -21,7 +21,9 @@ def test_the_plan_commits_its_named_publication_inventory() -> None:
     call = shlex.split(str(step["run"]))
     assert tuple(call[: len(COMMIT_PROGRAM_CALL)]) == COMMIT_PROGRAM_CALL
     paths = call[len(COMMIT_PROGRAM_CALL) :]
-    assert "state" in paths
-    assert "frontend/public/publication.json" in paths, (
+    assert paths[0] == "plan"
+    from utilities.digest_publish import permissions
+
+    assert "frontend/public/publication.json" in permissions("plan", date="2026-10-09"), (
         "the plan registers feed-health files, but its commit drops their publication inventory"
     )

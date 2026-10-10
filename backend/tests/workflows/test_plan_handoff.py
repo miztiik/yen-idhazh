@@ -36,6 +36,7 @@ from ._harness import (
     _step,
     _steps,
     _strings,
+    _substitute,
     requires_bash,
 )
 
@@ -166,8 +167,14 @@ def test_every_step_that_reads_the_plan_names_its_own_run(workflow_name: str) ->
 
 def test_a_day_rebuilt_after_a_lost_race_reads_the_same_runs_plan() -> None:
     """The rebuild runs on a tip that may hold a plan a later run filed the same day."""
-    rebuild = _commit_call("assemble")[1]["REGENERATE_COMMAND"].split()
-    assert rebuild[rebuild.index(EXECUTION_FLAG) + 1] == SUBSTITUTED_EXECUTION
+    rebuild = _commit_call("assemble")[0]
+    assert _substitute(rebuild[rebuild.index(EXECUTION_FLAG) + 1]) == SUBSTITUTED_EXECUTION
+    import inspect
+
+    from utilities import digest_assemble
+
+    source = inspect.getsource(digest_assemble.preparation)
+    assert "common._load_plan(date, original.identity.run_id)" in source
 
 
 def test_the_bench_cuts_and_times_its_own_runs_plan() -> None:

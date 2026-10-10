@@ -1,80 +1,92 @@
-"""Replace this checkout's run state with the one origin's tip carries.
-
-`actions/checkout` restores the commit a run was TRIGGERED at. The run then
-waits for a runner, and another run of the same workflow may be committing
-under `state/` the whole time, so nothing bounds the distance between those two
-moments. Run 35660521768 was created at 22:02 and its plan job started at 22:48,
-five commits behind, and every one of those commits wrote `state/`.
-
-For most of the pipeline a stale base costs nothing: a work shard writes a
-segment named for one shard of one run, so a rebase applies both sides whole.
-The catch-up fold is the exception, because it DERIVES a committed file from
-other committed files. Against a stale ledger it folds segments the run ahead
-already folded and deleted, and writes a day head that run has already written -
-two derived versions of one file, which no rebase can settle and no merge driver
-should. That is what cost run 35660521768 a whole day's digest.
-
-Only the named path moves. The code this job runs stays pinned to the trigger
-commit, so a run cannot change its own behaviour halfway through.
-
-Run this before anything in the job writes under `state/`, or it discards what
-that step wrote. A test executes it against a real repository.
-
-It imports nothing from this project. A job reaches for this program to recover
-a checkout, and a failed `pip install -e .` is one of the ways a checkout gets
-into the state it exists to repair.
-"""
+"""Import bounded named data inputs, preserving the code HEAD, index and foreign work."""
 
 from __future__ import annotations
 
 import argparse
-import subprocess
+import shutil
 import sys
+from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+from uuid import uuid4
+
+if TYPE_CHECKING:
+    from utilities.publication_git import Repository
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-def _git(*args: str) -> subprocess.CompletedProcess[str]:
-    """One git call, or the end of the program carrying git's own exit code.
+def take_inputs(
+    repo: Path,
+    inputs: tuple[str, ...],
+    resolve: Callable[[Repository, str], tuple[str, ...]] | None = None,
+) -> str:
+    """Validate and download the complete named import before changing local inputs."""
+    from utilities.publication_git import Repository
+    from utilities.publication_inputs import materialize, named_entries
+    from utilities.publication_request import PLAIN_MODE, IntegrityError, safe_file
 
-    The shell this replaced ran under `set -e`. Reading the exit code rather
-    than the message keeps that behaviour whatever git prints.
-    """
-    done = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
-    if done.returncode:
-        sys.stderr.write(done.stderr)
-        raise SystemExit(done.returncode)
-    return done
+    git = Repository(repo)
+    source = git.git("rev-parse", "HEAD").strip()
+    previous = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
+    if previous.returncode == 0:
+        source = previous.stdout.decode().strip()
+    tip = git.fetch()
+    if resolve is not None:
+        inputs = tuple(set(inputs) | set(resolve(git, tip)))
+    before = named_entries(git, source, inputs)
+    after = named_entries(git, tip, inputs)
+    # Validate the complete import before replacing or removing any named file.
+    staged = set(git.git("diff", "--cached", "--name-only", "-z").split("\0")) - {""}
+    for path in before.keys() | after.keys():
+        if path in before and before[path][:2] != (PLAIN_MODE, "blob"):
+            raise IntegrityError("source input is not a plain data file", (path,))
+        git.parents_safe(source, path)
+        target = safe_file(repo, path, exists=False)
+        if path in staged:
+            raise IntegrityError("named input has foreign pre-staged changes", (path,))
+        if target.exists():
+            if path not in before or target.read_bytes() != git.blob(before[path][2], fetches=True):
+                raise IntegrityError("named input has foreign local changes", (path,))
+    scratch = repo / "backend" / "var" / "publication" / f"inputs-{uuid4().hex}"
+    scratch.mkdir(parents=True)
+    try:
+        materialize(git, tip, inputs, scratch)
+        for path in after:
+            target = safe_file(repo, path, exists=False)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((scratch / path).read_bytes())
+        for path in before.keys() - after.keys():
+            safe_file(repo, path, exists=False).unlink(missing_ok=True)
+        git.git("update-ref", "refs/worktree/publication-input-state", tip)
+    finally:
+        shutil.rmtree(scratch)
+    return tip
 
 
 def main(argv: list[str] | None = None) -> int:
-    # One path, and argparse refuses none and refuses two with exit 2. A
-    # workflow edit that drops the argument must stop the job, because the
-    # `git rm -r` below would otherwise run over an empty pathspec and git
-    # reads that as the whole repository.
-    parser = argparse.ArgumentParser(description="Take one path from origin's tip.")
-    parser.add_argument("path", help="the one path to take, as the workflow spells it")
-    taken = parser.parse_args(argv).path
+    from idhazh import config
+    from utilities.digest_assemble import input_paths, resolved_inputs
 
-    _git("fetch", "origin", "main")
-    tip = _git("rev-parse", "FETCH_HEAD").stdout.strip()
-
-    # `git checkout <tip> -- <path>` restores what the tip carries and leaves
-    # behind whatever it does not, and what it does not carry is precisely the
-    # drained segment that starts the double fold. Emptying the path first is
-    # what makes the result the tip's tree rather than a union of the tip's and
-    # the trigger's.
-    #
-    # `-r` has no long spelling: `git rm --recursive` exits 129 with a usage
-    # message.
-    _git("rm", "-r", "--quiet", "--force", "--ignore-unmatch", "--", taken)
-    _git("checkout", tip, "--", taken)
-
-    listed = _git("diff", "--cached", "--name-only", "-z", "--", taken).stdout
-    moved = len([name for name in listed.split("\0") if name])
-    short = _git("rev-parse", "--short", tip).stdout.strip()
-    print(
-        f"{taken} taken from {short}; {moved} paths differed from the commit "
-        "this run was triggered at"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("path", choices=("state",))
+    parser.add_argument("--date", default=datetime.now(UTC).date().isoformat())
+    args = parser.parse_args(argv)
+    settings = config.load()
+    inputs = tuple(
+        path for path in input_paths(date=args.date, settings=settings) if path.startswith("state/")
     )
+
+    def state_inputs(git: Repository, tree: str) -> tuple[str, ...]:
+        return tuple(
+            path
+            for path in resolved_inputs(git, tree, date=args.date, settings=settings)
+            if path.startswith("state/")
+        )
+
+    tip = take_inputs(Path.cwd(), inputs, state_inputs)
+    print(f"named state inputs taken from {tip}; code HEAD and index unchanged")
     return 0
 
 

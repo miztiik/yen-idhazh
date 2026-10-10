@@ -220,10 +220,10 @@ def _what_the_planner_opens(tmp_path: Path) -> list[str]:
         resolved = path.resolve()
         if any(resolved.is_relative_to(prefix) for prefix in installed):
             continue
-        if resolved.is_relative_to(REPO_ROOT.resolve()):
-            opened.append(resolved.relative_to(REPO_ROOT.resolve()).as_posix())
-        elif resolved.is_relative_to(tmp_path.resolve()):
+        if resolved.is_relative_to(tmp_path.resolve()):
             opened.append(resolved.relative_to(tmp_path.resolve()).as_posix())
+        elif resolved.is_relative_to(REPO_ROOT.resolve()):
+            opened.append(resolved.relative_to(REPO_ROOT.resolve()).as_posix())
     return opened
 
 

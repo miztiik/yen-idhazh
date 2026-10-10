@@ -35,7 +35,7 @@ def _raw(root: Path, day: str = DAY) -> Path:
             attempt=1,
             job=ServerJob.MIGRATE,
             shard=0,
-            producer="utilities.migrate_to_parquet",
+            producer="telemetry.prune",
             git_sha=SEED_COMMIT,
         ),
     )
