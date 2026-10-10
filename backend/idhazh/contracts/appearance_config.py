@@ -504,6 +504,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-09",
+            change="console.panel_groups and console.judged_panel_ids removed.",
+            why="Each route's console file owns its panel order and judged list.",
+        ),
+        ChangelogEntry(
             version="2026-10-04",
             change="Data explorer fetch-ceiling reading and held-byte total recorded.",
             why="A refused run still leaves fetched files in the page keeper.",
@@ -517,11 +522,6 @@ class AppearanceConfig(Contract):
             version="2026-10-03",
             change="console.data_explorer_tab removed; Data explorer knobs and panel group added.",
             why="The Data explorer page is live and draws its own controls.",
-        ),
-        ChangelogEntry(
-            version="2026-10-02",
-            change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
-            why="One opening span on every route, and the sixth tab waits for its page.",
         ),
         ChangelogEntry(
             version="2026-09-30",

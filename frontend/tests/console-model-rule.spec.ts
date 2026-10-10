@@ -2,6 +2,8 @@ import { expect, test, type Page } from './support/browser';
 
 import { modelRules } from '../src/lib/charts/frame';
 import { pipelineChanges } from '../src/lib/server/model-work';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-model-rule';
 
 /**
  * The model-change rule, and the judgement behind it.
@@ -47,13 +49,13 @@ function boundariesFrom(rows: Record<string, string>[]): string[] {
 	return found;
 }
 
-const ROUTES = [
-	'/console/',
-	'/console/model/',
-	'/console/machine/',
-	'/console/judgement/',
-	'/console/voices/'
-];
+const ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id] !== null).map(
+	(route) => route.href
+);
+const BOUNDARY_READOUTS = BAND_UNREAD.routes.flatMap((route) => {
+	const expected = BY_ROUTE[route.id]?.boundaryReadout;
+	return expected ? [{ route: route.href, ...expected }] : [];
+});
 
 interface Declared {
 	route: string;
@@ -361,33 +363,35 @@ test.describe('the rule, on the built console', () => {
 		expect([...new Set(names)].sort()).toEqual(names.sort());
 	});
 
-	test('the boundary reaches the readout on the days it happened, and no others', async ({
-		page
-	}) => {
-		// The rule is a mark on the plot AND a line in the strip, so a reader who
-		// steps the days with an arrow key meets it without a pointer. Stepping
-		// every column and counting is what stops the line being a constant: a row
-		// printed on every column would say the pipeline changed every day.
-		await page.goto('/console/');
-		const chart = page.locator('[data-model-rule-name="timings"]');
-		await expect(chart).toHaveCount(1);
-		const rules = await chart.locator('[data-model-rule-line]').count();
+	for (const expected of BOUNDARY_READOUTS) {
+		test('the boundary reaches the readout on the days it happened, and no others', async ({
+			page
+		}) => {
+			// The rule is a mark on the plot AND a line in the strip, so a reader who
+			// steps the days with an arrow key meets it without a pointer. Stepping
+			// every column and counting is what stops the line being a constant: a row
+			// printed on every column would say the pipeline changed every day.
+			await page.goto(expected.route);
+			const chart = page.locator(expected.chart);
+			await expect(chart).toHaveCount(1);
+			const rules = await chart.locator('[data-model-rule-line]').count();
 
-		const plot = chart.locator('svg');
-		await plot.focus();
-		await page.keyboard.press('Home');
-		const columns = Number(await chart.getAttribute('data-readout-columns'));
-		expect(columns, 'the timings chart drew no columns to step through').toBeGreaterThan(0);
+			const plot = chart.locator('svg');
+			await plot.focus();
+			await page.keyboard.press('Home');
+			const columns = Number(await chart.getAttribute('data-readout-columns'));
+			expect(columns, 'the timings chart drew no columns to step through').toBeGreaterThan(0);
 
-		let printed = 0;
-		for (let at = 0; at < columns; at += 1) {
-			printed += await chart
-				.locator('[data-readout-row="How summaries are written"]')
-				.count();
-			await page.keyboard.press('ArrowRight');
-		}
-		expect(printed, 'the strip and the plot disagree about which days changed').toBe(
-			rules
-		);
-	});
+			let printed = 0;
+			for (let at = 0; at < columns; at += 1) {
+				printed += await chart
+					.locator(expected.row)
+					.count();
+				await page.keyboard.press('ArrowRight');
+			}
+			expect(printed, 'the strip and the plot disagree about which days changed').toBe(
+				rules
+			);
+		});
+	}
 });
