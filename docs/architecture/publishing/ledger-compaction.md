@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -160,16 +160,18 @@ download at most `max_downloaded_mb` for all its tasks
 has named its periods, it reads their files' sizes off the listing, takes the
 longest run, oldest first, whose download fits what is left, and stops at the
 first period that does not fit: `ceiling`, for a later wake with room, or
-`failed` by name, with the fault `raised`, when that period alone is larger
-than the whole budget, because no wake could ever take it. Either way one
+`failed` by name, with the fault `manual-action`, when that period alone is
+larger than the whole budget and a person must settle it. Either way one
 `download-over-budget` event names the period, its bytes, the room left and
-`max_downloaded_mb`. `error_cause.classify` decides both by one
-rule, more than the whole budget is a defect, and the runner's check after the
-tasks asks it too. Adopting a file no entry names counts against the budget
-too, and so do the marks and the files an absent index is rebuilt from: a pass
-whose marks, or those files, do not fit takes nothing and ends `ceiling` at its
-index folder. A correct pass never passes the budget, so a shard over it is a
-code defect.
+`max_downloaded_mb`. A period-specific refusal uses `ManualActionError`;
+unclassified and aggregate `OverBudgetError` values remain `raised`. The
+runner's synthetic check after the tasks also remains `raised`: it means code
+passed the per-period budget rule. Adopting a file no entry names counts
+against the budget too, and so do the marks and the files an absent index is
+rebuilt from: a pass whose marks, or those files, do not fit takes nothing and
+ends `ceiling` at its index folder. A grouped index rebuild larger than the
+whole budget fails with `raised`, because its combined files are not one
+period.
 
 **Every rule counts whole UTC days after a period's own end.** The pass measures
 from 00:00 UTC on the wake's own day, so every wake of one UTC day gets the same
@@ -650,7 +652,8 @@ index is written whole and no later pass looks again once it exists. Each
 index's files are fetched in one call inside what is left of the shard's
 download budget, so a rebuild that does not fit takes nothing and ends
 `ceiling` at the index folder, or `failed` there when it alone is larger than
-the whole budget. A file at a period's path whose envelope names another ledger
+the whole budget with fault `raised`: the rebuild fetches a group of files, not
+one period. A file at a period's path whose envelope names another ledger
 or period stops the pass as `manual-action`: adopting it would put another
 period's rows under this one. An index whose ledger or period identity does not
 match the path this build named fails the same way. A malformed current index
@@ -974,11 +977,12 @@ periods, from sizes the listing already holds, so a correct pass never passes
 it, and a shard over it is a defect to fix rather than a backlog to wait out.
 Only the compaction chooses by the budget so far: the other tasks that download
 still download what they read, and the shard's check after its tasks still
-catches one that passes it. "Too large" means too large for that budget, not a
-size of its own: no value for a per-file limit has been measured, and moving a
-file aside needs the very download it is too large for. A period larger than
-the whole budget fails by name, because `ceiling` would promise a later wake
-that never comes.
+catches an aggregate overrun as `raised`: it means code passed the per-period
+budget rule. "Too large" means too large for that budget, not a size of its
+own: no value for a per-file limit has been measured, and moving a file aside
+needs the very download it is too large for. A period larger than the whole
+budget fails by name as `manual-action`, because `ceiling` would promise a
+later wake that never comes.
 
 **A year's own file is adopted before its months are read, and a month no entry
 names is adopted, recorded lost, or refused.** A year file is written only in

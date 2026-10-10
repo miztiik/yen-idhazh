@@ -35,22 +35,25 @@ Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
 57 needed evidence too, until a second stall came in main's own checks on
-2026-10-08. It closed on 2026-10-10 when the test driver stopped waiting on
-the page animation clock and visited each mounted visual article instead. Defect 59 was
+2026-10-08. It closed on 2026-10-10 in PR #1526 when the test driver stopped
+waiting on the page animation clock and visited each mounted visual article
+instead. Defect 59 was
 filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
 holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
 explorer fetches each chosen ledger's three indexes twice. Defects 61 and 62
 were filed the same day from plan 62's rows L7 and L20: three backend command
 lines stamp log records in local time, and in a worktree with no `.venv` the
-test launcher hands its inner run a Python it then refuses. Defect 63 was
+test launcher hands its inner run a Python it then refuses. Defect 61 closed
+in PR #1525, which formats the remaining command logs in UTC. Defect 63 was
 filed the same day by plan 62's text update after row L7: the plan status
 utility's docstring shows a usage that does not work and a no-install claim
 that is not true. Defects 64 and 65 were filed the same day by the plan text
 update after plan 60's row 21: the canary's telemetry step refuses a
 repository path spelled with a short name, which plan 62's row L25 met, and a
 retention task run over a person's range that finds nothing ends `not-due`,
-which plan 60's row 21 found. Defect 66 was filed on 2026-10-08 by a plan text
+which plan 60's row 21 found. Defect 65 closed in PR #1524. Defect 66 was
+filed on 2026-10-08 by a plan text
 update (#1437): the plan status utility splits a quoted row title wherever
 "and" appears in it. Defect 67 was filed the same day from the checks of plan
 62's row L37 (#1431): a browser test that failed once and passed when run
@@ -124,11 +127,11 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
 | 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
-| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | CLOSED 2026-10-10 (the test driver visits each visual article without the page animation clock) |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | CLOSED 2026-10-10 (PR #1526; the test driver visits each visual article without the page animation clock) |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | CLOSED 2026-10-09 (plan 60 row 44) |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
-| 61 | Three backend command lines stamp log records in local time | 1 | FIXED 2026-10-10 (plan 60 row 46) |
+| 61 | Three backend command lines stamp log records in local time | 1 | FIXED 2026-10-10 (plan 60 row 46, PR #1525) |
 | 62 | In a worktree with no `.venv`, the test launcher hands its inner run a Python it then refuses | 1 | **OPEN - hand the inner run a full path; until then, set `IDHAZH_PYTHON`** |
 | 63 | The plan status utility does not do what its docstring says | 1 | **OPEN - fix the docstring's example and its no-install claim, or make both true** |
 | 64 | The canary's telemetry step refuses a repository path spelled with a short name | 1 | **OPEN - resolve the path before `relative_to`; until then, name the copy by the long form of `TEMP`** |
@@ -350,7 +353,7 @@ Found by plan 62's row L25 (#1384), and filed on 2026-10-07.
 describes.** Its own usage line reads `python backend/utilities/plan_status.py
 --plan 23    # one plan`, but `--plan` is `action="append", required=True,
 help="Named plan path. Repeatable."`: it takes a path, such as
-`TODO/20261004-60-gardener-recovers-on-its-own-plan.md`, not a bare plan
+`TODO/20260930-57-upkeep-tasks-switch-on-plan.md`, not a bare plan
 number, so the docstring's own example fails before it reads a line. The same
 docstring says the utility "imports nothing from idhazh and reads no
 configuration, so it runs from a fresh clone with any supported Python and no
@@ -399,7 +402,7 @@ version stops the first check that uses it.
 
 Found by plan 62's row L20 (#1371), and filed on 2026-10-07.
 
-## 61 - Three backend command lines stamp log records in local time (CLOSED 2026-10-10)
+## 61 - Three backend command lines stamp log records in local time (CLOSED 2026-10-10, PR #1525)
 
 The gardener, pipeline and telemetry commands now format log timestamps in UTC
 with a trailing `Z` (CLAUDE.md section 2). The gardener writes its structured
@@ -502,7 +505,7 @@ duplicates; the mapping exposes missing runs and stale attempts. The test
 does not sort loaded rows or claim an order between independent runs.
 Plan 60 row 44 closes this Level 1 test defect.
 
-## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (CLOSED 2026-10-10)
+## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (CLOSED 2026-10-10, PR #1526)
 
 **One browser test waited out its whole 180-second limit for a page that had
 stopped drawing.** "Every drawn string resolves to a size on a 390 px screen"
