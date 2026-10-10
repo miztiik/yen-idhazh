@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,7 @@ from idhazh.publication import (
 )
 from utilities.publication_conflict import capture_publication_delta, replay_publication_delta
 
-from ._harness import SUBSTITUTED_DAY_DIR, _commit_call, _run_commit_script, _write
+from ._harness import _run_commit_script, _write
 
 pytestmark = pytest.mark.workflow
 
@@ -144,9 +143,8 @@ def test_replay_updates_and_removes_only_this_runs_named_entries(tmp_path: Path)
     assert inventory.total_items == 0
 
 
-@pytest.mark.parametrize("regenerate", [False, True], ids=["replay", "regenerate"])
 def test_two_checkouts_keep_both_real_publication_updates(
-    tmp_path: Path, regenerate: bool
+    tmp_path: Path,
 ) -> None:
     environment = _git_environment(tmp_path)
     origin = tmp_path / "origin.git"
@@ -169,71 +167,23 @@ def test_two_checkouts_keep_both_real_publication_updates(
     _git(tmp_path, environment, "clone", str(origin), str(second))
 
     fixture = DigestDay.read(FIXTURES_DIR / "contracts" / "digest-day" / "two-runs.json")
-    first_paths = _register_day(first, fixture, index=regenerate)
+    first_paths = _register_day(first, fixture)
     second_day = fixture.model_copy(
         update={"date": "2026-08-22", "generated_at": "2026-08-22T18:22:05Z"}
     )
-    second_paths = _register_day(second, second_day, index=regenerate)
+    second_paths = _register_day(second, second_day)
     settings = {
         "COMMIT_MESSAGE": "register publication files",
         "NOTHING_STAGED_MESSAGE": "nothing staged",
         "PUSH_FAILED_MESSAGE": "push failed",
         "GITHUB_JOB": "assemble",
     }
-    if regenerate:
-        second_paths, workflow_settings = _commit_call("assemble")
-        refresh = workflow_settings["REFRESH_PATHS"].split()
-        refresh = [
-            path.replace(
-                SUBSTITUTED_DAY_DIR,
-                f"frontend/public/digest/{second_day.date.replace('-', '/')}",
-            )
-            for path in refresh
-        ]
-        # Run the real day and index writers after hand-back, not a mock producer.
-        script = tmp_path / "regenerate.py"
-        source = tmp_path / "day.json"
-        _write(source, second_day.to_json())
-        _write(
-            script,
-            "import sys\n"
-            "from pathlib import Path\n"
-            f"sys.path.insert(0, {str(REPO_ROOT / 'backend')!r})\n"
-            "from idhazh import assemble, atomic_write\n"
-            "from idhazh.contracts.digest_day import DigestDay\n"
-            "from idhazh.publication import read_inventory, record_day, record_month\n"
-            "public = Path('frontend/public')\n"
-            "inventory = read_inventory(public)\n"
-            f"assert inventory.dates == {[fixture.date]!r}, inventory.dates\n"
-            f"day = DigestDay.read(Path({str(source)!r}))\n"
-            "path = assemble.day_dir(public / 'digest', day.date) / 'digest.json'\n"
-            "assert not path.exists(), 'hand-back must remove the unpublished day'\n"
-            "atomic_write.write_atomic(path, day.to_json())\n"
-            "record_day(public, day)\n"
-            "assemble.rebuild_search_index(digest_root=public / 'digest', "
-            "index_root=public / 'assist/index', month=day.date[:7])\n"
-            "record_month(public, day.date[:7])\n",
-        )
-        settings.update(
-            REFRESH_PATHS=" ".join(refresh),
-            REGENERATE_COMMAND=f"{Path(sys.executable).as_posix()} {script.as_posix()}",
-        )
-
     first_result = _run_commit_script(first, environment, first_paths, settings)
     second_result = _run_commit_script(second, environment, second_paths, settings)
 
     assert first_result.returncode == 0, first_result.stderr
     assert second_result.returncode == 0, second_result.stderr
-    assert "push rejected, rebasing (attempt 1)" in second_result.stdout
-    if regenerate:
-        assert "rebuilding the day against origin/main" in second_result.stdout
-        assert "rebuilt publication.json from origin and this run's named files" not in (
-            second_result.stdout
-        )
-    else:
-        assert "rebuilt publication.json from origin and this run's named files" in (
-            second_result.stdout
-        )
+    assert '"prepared": true' in second_result.stdout
     assert _git(origin, environment, "log", "--format=%an <%ae>", "main", "-2").splitlines() == [
         "miztiik <miztiik@users.noreply.github.com>",
         "miztiik <miztiik@users.noreply.github.com>",
@@ -257,9 +207,7 @@ def test_two_checkouts_keep_both_real_publication_updates(
         f"digest/{day.date.replace('-', '/')}/digest.json": len(day.items)
         for day in (fixture, second_day)
     }
-    assert {
-        entry.path: entry.items for entry in public_entries if entry.items
-    } == expected_items
+    assert {entry.path: entry.items for entry in public_entries if entry.items} == expected_items
     assert inventory.total_bytes == sum(
         int(_git(origin, environment, "cat-file", "-s", f"main:frontend/public/{entry.path}"))
         for entry in public_entries

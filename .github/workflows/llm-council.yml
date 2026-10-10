@@ -345,6 +345,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Stamp the collecting job clock
+        run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -374,41 +377,16 @@ jobs:
       # One job looping the dates rather than one job a date. Two jobs of one
       # run pushing `main` would race each other, and the workflow-level
       # `concurrency` group does not serialise jobs inside a run.
-      - name: Settle each date
+      - name: Settle and publish every completed tenant output
         env:
           COUNCIL_DATES: ${{ needs.draw.outputs.dates }}
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
         run: |
           set -euo pipefail
-          echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
-            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}"
-          done
-
-      # One call and one push, over every path the night's tenants named. The
-      # venue spells none of them: a list of one tenant's paths is a list that
-      # never commits a second tenant's output.
-      #
-      # No `REGENERATE_COMMAND`, because the council is the only writer of a
-      # tenant's own ledger and `concurrency` runs one council at a time - so a
-      # lost race is a race against a digest run, which writes none of these
-      # paths, and replaying what this run wrote onto the new base is the whole
-      # of what is needed.
-      #
-      # Skipped when no tenant is registered: `git add` with no path is an error
-      # rather than a no-op, and a night that judged nothing has nothing to say.
-      - name: Commit what the night's tenants wrote
-        if: needs.draw.outputs.committed_paths != ''
-        env:
-          # Every date the night settled, not just the one it opened on. A
-          # message naming one date on a two-date commit sends a reader looking
-          # for the other night's rows in a commit that does not mention it.
-          COMMIT_MESSAGE: "council: ${{ join(fromJSON(needs.draw.outputs.dates), ' ') }}"
-          NOTHING_STAGED_MESSAGE: "the night's tenants wrote nothing"
-          PUSH_FAILED_MESSAGE: "could not push what the night judged"
-          COMMITTED_PATHS: ${{ needs.draw.outputs.committed_paths }}
-        run: |
-          set -euo pipefail
-          # Word splitting is the point: the paths arrive as one space-separated
-          # value and the program takes them as separate arguments.
-          # shellcheck disable=SC2086
-          python backend/utilities/commit_and_push.py $COMMITTED_PATHS
+          asked=()
+          while read -r judged; do
+            asked+=(--date "$judged")
+          done < <(echo "$COUNCIL_DATES" | jq -r '.[]')
+          python backend/utilities/council_publish.py "${asked[@]}" \
+            --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" \
+            --job-started-at "$JOB_STARTED_AT"

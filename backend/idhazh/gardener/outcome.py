@@ -59,6 +59,9 @@ class Shard(Model):
         description="Every file the shard wrote, the record among them."
     )
     deleted_paths: frozenset[RelPath] = Field(description="Every file the shard deleted.")
+    owned_prefixes: frozenset[RelPath] = Field(
+        description="The task and venue declarations that permit these exact changes."
+    )
     message: str = Field(min_length=1, description="The commit message the shard lands under.")
 
     @model_validator(mode="after")
@@ -68,6 +71,8 @@ class Shard(Model):
         both = sorted(self.written_paths & self.deleted_paths)
         if both:
             raise ValueError(f"{', '.join(both)} is both written and deleted by one shard")
+        if self.owned_prefixes & {"state", "state/raw", "state/compact"}:
+            raise ValueError("the shard must name owned folders, not a blanket state root")
         return self
 
 

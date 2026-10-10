@@ -76,7 +76,7 @@ jobs:
           for day in "${days[@]}"; do
             args+=(--day "$day")
           done
-          python -m idhazh backfill-vectors "${args[@]}"
+          python backend/utilities/record_publish.py run backfill backfill-vectors "${args[@]}"
           git diff --stat -- frontend/public/digest/
           python3 backend/utilities/backfill_report.py "${args[@]}"
           python -m idhazh check-publication "${args[@]}"
@@ -119,6 +119,7 @@ jobs:
         run: python -m idhazh published-columns --site-tree build
 
       - name: Commit the repaired days
+        id: commit_backfill
         if: inputs.commit
         env:
           COMMIT_MESSAGE: 'backfill: re-encode the closed days'
@@ -126,12 +127,15 @@ jobs:
           PUSH_FAILED_MESSAGE: 'the repaired days could not be pushed'
         run: |
           set -euo pipefail
-          python backend/utilities/commit_and_push.py frontend/public/digest frontend/public/assist/index frontend/public/publication.json
+          python backend/utilities/record_publish.py land backfill
 
-      # The commit step rebases when the push loses a race, which leaves
-      # `frontend/build` describing the tree this job started from rather than
-      # the one it pushed. The gate below reads that directory, so it is rebuilt
-      # first. See ../../docs/architecture/publishing/layout.md.
+      - name: Read the actual published inputs
+        if: inputs.commit
+        env:
+          PUBLISHED_TIP: ${{ steps.commit_backfill.outputs.candidate }}
+        run: python backend/utilities/digest_publish.py published-inputs --tip "$PUBLISHED_TIP"
+
+      # The gate reads a build of the candidate's named published inputs.
       - name: Rebuild the site against the tree that was pushed
         if: inputs.commit
         working-directory: frontend

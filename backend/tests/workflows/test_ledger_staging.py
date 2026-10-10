@@ -40,6 +40,7 @@ import pytest
 
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.staging import REGISTRY, staged_path
+from utilities.digest_publish import permissions
 
 from ._harness import (
     COMMIT_JOBS,
@@ -59,6 +60,7 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 # run.
 TRIAL_WORKFLOW: Final = "measure.yml"
 
+
 def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     """(Workflow, job) -> commit label -> the paths that label stages.
 
@@ -69,7 +71,11 @@ def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     for label, workflow in COMMIT_WORKFLOWS.items():
         if workflow == TRIAL_WORKFLOW:
             continue
-        calls.setdefault((workflow, COMMIT_JOBS[label]), {})[label] = _commit_call(label)[0]
+        argv = _commit_call(label)[0]
+        assert argv[0] == label, "the workflow must select its own concrete digest policy"
+        calls.setdefault((workflow, COMMIT_JOBS[label]), {})[label] = list(
+            permissions(label, date="2026-10-09")
+        )
     return calls
 
 

@@ -156,10 +156,14 @@ def list_raw_files(
     was filed by something other than the door, and is skipped as unreadable.
     """
     found: list[RawFile] = []
-    for covers, folder in _day_folders(
-        state_dir, paths.raw_root(state_dir, ledger, registry=registry)
-    ):
-        if days is not None and covers not in days:
+    root = paths.raw_root(state_dir, ledger, registry=registry)
+    folders = (
+        [(day, root.joinpath(*paths._day_segments(day))) for day in sorted(set(days))]
+        if days is not None
+        else _day_folders(state_dir, root)
+    )
+    for covers, folder in folders:
+        if not folder.is_dir():
             continue
         for path in sorted(folder.iterdir()):
             try:

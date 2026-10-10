@@ -15,10 +15,10 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
+from idhazh.path_classes import DERIVED
 from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
-    COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
@@ -33,6 +33,7 @@ from ._harness import (
     REVIEW_STEP,
     RUN_ARTIFACTS,
     SUBSTITUTED_DATE,
+    SUBSTITUTED_DAY_DIR,
     SUBSTITUTED_SHARD,
     SUBSTITUTED_SHARDS,
     TOLERATED,
@@ -46,6 +47,7 @@ from ._harness import (
     _mapping,
     _mid_rebase,
     _normalize_condition,
+    _publication_scopes,
     _run_commit_script,
     _script,
     _scripted_origin,
@@ -53,7 +55,6 @@ from ._harness import (
     _steps,
     _substitute,
     requires_bash,
-    requires_space_free_paths,
 )
 
 pytestmark = pytest.mark.workflow
@@ -356,22 +357,12 @@ def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
     evidence with a seven-day window, so a committed sample would be the one file
     in it the prune could never justify keeping.
     """
-    staged = COMMIT_STAGED_PATHS["work"]
-    for relative in staged:
-        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-
-    committed = subprocess.run(
-        ["git", "ls-files", "--", *staged],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
-    for relative in staged:
-        carriers = [
-            path for path in committed if path == relative or path.startswith(f"{relative}/")
-        ]
-        assert carriers, f"{relative} must hold at least one committed file"
+    staged = _publication_scopes("work")
+    assert staged and "state" not in staged
+    # Exact completed files create their own parents; declarations need no seed.
+    source = (REPO_ROOT / "backend/utilities/publication_git.py").read_text(encoding="utf-8")
+    assert '"update-index"' in source
+    assert '"add"' not in source
 
 
 def test_the_eval_rows_travel_with_the_shard_that_filed_them() -> None:
@@ -387,18 +378,14 @@ def test_the_eval_rows_travel_with_the_shard_that_filed_them() -> None:
     committed sample file: it holds nothing until a shard files into it, and
     nothing again once the compaction has packed every day in it.
     """
-    staged = COMMIT_STAGED_PATHS["work"]
-    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
-    tree = ledger.raw_root(
-        Path(ledger.STATE_DIRNAME), LedgerName.SUMMARY_QUALITY_EVALS
-    ).as_posix()
+    staged = _publication_scopes("work")
+    refreshed = [path.format(day_dir=SUBSTITUTED_DAY_DIR) for path in DERIVED]
+    tree = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.SUMMARY_QUALITY_EVALS).as_posix()
     carriers = [path for path in staged if _under(tree, path)]
     assert carriers, f"{tree} is written by this shard and no path in {staged} carries it"
     assert not any(_under(tree, path) for path in refreshed), (
         f"{tree} holds a file one writer filed, so handing it back deletes it"
     )
-    for carrier in carriers:
-        assert (REPO_ROOT / carrier).is_dir(), f"{carrier} must be in a fresh checkout"
 
 
 def test_a_file_one_writer_owns_takes_no_merge_driver() -> None:
@@ -437,7 +424,6 @@ def test_a_file_one_writer_owns_takes_no_merge_driver() -> None:
 
 
 @requires_bash
-@requires_space_free_paths
 def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     """Two workers, one branch, one raw file each.
 
@@ -455,7 +441,8 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     name is one a run can produce. A raw file is binary, so what landed is
     compared by the blob git stored rather than by its text.
     """
-    staged_paths, settings = _commit_call("work")
+    staged_paths = _publication_scopes("work")
+    settings = _commit_call("work")[1]
     env = _isolated_env(tmp_path)
     origin, _ = _scripted_origin(tmp_path, env, staged_paths)
     shards = range(2)
@@ -477,7 +464,10 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
         runners.append(runner)
     assert len(set(written.values())) == len(shards), "two shards were given one name"
 
-    results = [_run_commit_script(runner, env, staged_paths, settings) for runner in runners]
+    results = [
+        _run_commit_script(runner, env, (written[shard],), settings, authority=staged_paths)
+        for shard, runner in zip(shards, runners, strict=True)
+    ]
 
     assert [result.returncode for result in results] == [0] * len(runners)
     for shard, runner in zip(shards, runners, strict=True):
@@ -489,21 +479,18 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
 
 
 def test_assemble_hands_back_no_tree_a_worker_wrote_into() -> None:
-    """Handing a writer's tree back would delete the rows this job is about to commit.
+    """Derived regeneration must never replace a writer's completed artifacts.
 
-    A lost race is answered by restoring the refreshed paths from the tip and
-    running the producer again. That is right for a file two runs rebuild to
-    different bytes, and it is destructive for a tree of written-once files: the
-    restore takes the tip's copy of the whole directory, so this attempt's own
-    file in it - named for this run and written by nothing else - goes with it
-    and the producer does not write it again.
+    A lost race rebuilds the declared derived set in private preparation.
+    Written-once rows and traces must remain outside that set, preserving each
+    attempt's own file without replaying its producer.
 
     Asked of every tree a writer files its own file into - the trace tree and
     each door ledger's raw folder - rather than of the ones a shard happens to
     fill today, so a ledger that joins the door is covered the day it is
     declared.
     """
-    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+    refreshed = [path.format(day_dir=SUBSTITUTED_DAY_DIR) for path in DERIVED]
     state = Path(ledger.STATE_DIRNAME)
     written_once = [
         ledger.tree_root(state, LedgerName.TRACES).as_posix(),
@@ -516,10 +503,7 @@ def test_assemble_hands_back_no_tree_a_worker_wrote_into() -> None:
 
     for tree in written_once:
         covered = [path for path in refreshed if tree == path or tree.startswith(f"{path}/")]
-        assert not covered, (
-            f"{covered} hands back {tree}, and a writer's own file in it is deleted by "
-            "the restore rather than rebuilt by the producer"
-        )
+        assert not covered, f"{covered} includes the completed artifact tree {tree} in regeneration"
 
 
 def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not() -> None:
@@ -527,21 +511,20 @@ def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not
 
     `state/day-metrics` is one whole JSON a day that assemble rewrites from the
     day's rows, so two attempts at one day really do land on one path with
-    different bytes. Handing it back and rebuilding it is the answer, and it
+    different bytes. Regenerating it against fresh inputs is the answer, and it
     costs milliseconds.
 
     The published ledger is the opposite case. Its rows are filed through the
     ledger door, one written-once file named for this run, attempt, job and
     shard, so two runs of one day are two adds of two paths and there is
-    nothing to settle. Handing that tree back would restore the tip's copy of
-    it and delete this attempt's own file, leaving the guard against publishing
-    one story twice to whatever the producer happens to write again.
+    nothing to settle. That tree must not be replaced by regenerated output;
+    the exact completed records remain inputs to fresh derived preparation.
 
     The paths are read from the writer's own helpers rather than spelled here,
     so moving either ledger fails this instead of leaving a refresh set naming a
     directory nothing writes (Guardrail #6).
     """
-    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+    refreshed = [path.format(day_dir=SUBSTITUTED_DAY_DIR) for path in DERIVED]
     rebuilt = day_metrics.day_metrics_relpath(SUBSTITUTED_DATE)
     filed = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.PUBLISHED).as_posix()
 
