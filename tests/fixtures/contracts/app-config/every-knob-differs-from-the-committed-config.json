@@ -106,7 +106,6 @@
     "bandwidth_min_kinds": 4,
     "chart_coverage_pct": 5.0,
     "chart_height": 160,
-    "tile_min_px": 10,
     "chart_minutes_target": 6.0,
     "chart_rule_days": 14,
     "chart_width": 520,
@@ -227,6 +226,7 @@
     "processor_lost_pct_named": 25.0,
     "shimmer_after_ms": 400,
     "source_rows": 4,
+    "tile_min_px": 10,
     "timeline_bars": 60,
     "today_anchor": "centre",
     "window_presets": [
