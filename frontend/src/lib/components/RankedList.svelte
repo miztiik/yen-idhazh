@@ -1,3 +1,22 @@
+<script module lang="ts">
+	import type { RangeMark } from '../charts/d3/rankedList';
+	export { rangeTrack, endsTrack };
+</script>
+
+{#snippet rangeTrack(mark: RangeMark, token = '--chart-2', classes = '')}
+	<span class="range-fill {classes}" style="inline-size: {mark.medianWidth}; background: var({token})"></span>
+	{#if mark.max !== null}
+		<span class="range-notch" style="inset-inline-start: {mark.notchWidth}"></span>
+	{/if}
+{/snippet}
+
+{#snippet endsTrack(valuePercent: string, endPercent: string | null, vertical = false, outlined = false, token = '--chart-3')}
+	<span class:vertical class:outlined class="ends-fill bar floor" style="{vertical ? `block-size: ${valuePercent}` : `inline-size: ${valuePercent}`}; background: var({token})"></span>
+	{#if endPercent !== null}
+		<span class:vertical class="ends-notch notch" style={vertical ? `inset-block-end: ${endPercent}` : `inset-inline-start: ${endPercent}`}></span>
+	{/if}
+{/snippet}
+
 <script lang="ts">
 	/** A list ranked by how big something is, not by when it happened.
 	 *
@@ -14,11 +33,12 @@
 	 * tell which of those they are looking at.
 	 */
 	import type { Snippet } from 'svelte';
-	import type { Ranked, RankedDisplay, RankedRow } from '../charts/rank';
+	import type { RankedDisplay, RankedRow } from '../charts/rank';
+	import type { RankedGeometry } from '../charts/d3/rankedList';
 
 	let {
 		caption,
-		ranked,
+		geometry,
 		maxText,
 		measured = true,
 		unmeasuredNote,
@@ -32,7 +52,7 @@
 	}: {
 		/** What the list is, for anyone who cannot see it. */
 		caption: string;
-		ranked: Ranked<RankedDisplay>;
+		geometry: RankedGeometry | null;
 		/** The longest bar, as words with its unit - `42 cuts`. */
 		maxText: string;
 		/** False where the ledger has never held an answer to this question.
@@ -51,9 +71,10 @@
 		track?: Snippet<[RankedRow<RankedDisplay>]> | null;
 		trend?: Snippet<[RankedRow<RankedDisplay>]> | null;
 	} = $props();
+	const ranked = $derived(geometry ?? { rows: [], max: 0, rules: [] });
 </script>
 
-<div class="ranked" data-ranked-list={caption} data-chart-type="rankedList">
+<div class="ranked" data-ranked-list={caption} data-chart-type="rankedList" data-readout-none="Each ranked row prints its name and value; agreed with Susan">
 	{#if !measured}
 		<p class="ranked-note" data-ranked="unmeasured">{unmeasuredNote}</p>
 	{:else if ranked.rows.length === 0}
@@ -93,15 +114,30 @@
 
 					<span class="ranked-value tabular-nums" data-ranked-cell="value">{row.row.value}</span>
 
-					<span class="ranked-track" data-ranked-cell="track" data-ranked-track={track ? 'own' : 'bar'}>
-						{#if track}
+					<span class="ranked-track" data-ranked-cell="track" data-ranked-track={track || row.range || row.ends || row.refused ? 'own' : 'bar'}>
+						{#if row.refused}
+							<span class="ranked-context" data-ranked-too-few>{row.refused}</span>
+						{:else if track}
 							{@render track(row)}
+						{:else if row.range}
+							<span class="ranked-range">{@render rangeTrack(row.range, '--chart-1')}</span>
+						{:else if row.ends}
+							<span class="ranked-range">{@render endsTrack(row.ends.valuePercent, row.ends.endPercent, false, false, '--chart-1')}</span>
+						{:else if row.segments.length > 0}
+							{#each row.segments as part (part.label)}
+								<span class="ranked-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {part.value}"></span>
+							{/each}
 						{:else}
 							<span
 								class="ranked-bar"
 								data-ranked-cell="bar"
 								style="inline-size: {row.percent}"
 							></span>
+						{/if}
+						{#if !row.refused}
+							{#each ranked.rules as rule (rule.label)}
+								<span class="ranked-rule" style="inset-inline-start: {rule.percent}" aria-label="{rule.label}: {rule.at}"><span>{rule.label}</span></span>
+							{/each}
 						{/if}
 					</span>
 
@@ -112,13 +148,24 @@
 			{/each}
 		</ol>
 
-		{#if tail}
-			<p class="ranked-note ranked-tail" data-ranked="tail">{tail}</p>
+		{#if tail || geometry?.tail}
+			<p class="ranked-note ranked-tail" data-ranked="tail">{tail ?? geometry?.tail}</p>
 		{/if}
 	{/if}
 </div>
 
 <style>
+	.range-fill { display: block; block-size: 100%; }
+	.range-notch { position: absolute; inset-block: 0; inline-size: 2px; background: var(--chart-marker); transform: translateX(-1px); }
+	.ends-fill { display: block; block-size: 100%; background: var(--chart-3); }
+	.ends-fill.vertical { inline-size: 100%; border-radius: 1px 1px 0 0; }
+	.ends-fill.outlined { outline: 1px solid var(--color-text); outline-offset: 0; }
+	.ends-notch { position: absolute; inset-block: 0; inline-size: 2px; background: var(--color-text); }
+	.ends-notch.vertical { inset-inline: 0; inset-block-start: auto; inline-size: auto; block-size: 2px; }
+	.ranked-range { display: block; position: relative; block-size: 12px; background: var(--color-surface-sunken); }
+	.ranked-part { position: absolute; inset-block: 0; }
+	.ranked-rule { position: absolute; inset-block: -4px; border-inline-start: 1px dashed var(--chart-marker); }
+	.ranked-rule span { position: absolute; inset-block-end: 100%; font-size: var(--text-xs); color: var(--color-text-secondary); white-space: nowrap; }
 	.ranked {
 		display: flex;
 		flex-direction: column;
@@ -260,7 +307,7 @@
 		block-size: 12px;
 		border-radius: var(--radius-full);
 		background: var(--color-surface-sunken);
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.ranked-bar {

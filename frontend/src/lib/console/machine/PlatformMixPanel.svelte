@@ -158,7 +158,8 @@
 					stacked: true,
 					density: chart.tick_density,
 					valueTicks: VALUE_TICKS,
-					padding: PADDING
+					padding: PADDING,
+					rule: { declined: 'which machine the platform hands a job does not depend on any model setting' }
 				})
 			: null
 	);

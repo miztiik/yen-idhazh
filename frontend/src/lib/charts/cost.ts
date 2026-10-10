@@ -21,6 +21,7 @@ import { dayMonth, shortDate } from '$lib/format';
 import { readoutOf, type Readout } from './readout';
 import { costOf, money, valueGutter, type CostRate, type RunWork } from './machine';
 import { paint, type ChartToken } from './theme';
+import { KEPT_COST_TOKENS } from '../console/series-tokens';
 
 /** Day by day, or every day so far added up. */
 export type CostShape = 'daily' | 'running';
@@ -53,11 +54,11 @@ export function costShapeOptions(windowDays: number): typeof COST_SHAPES {
 
 /** Reading, at the bottom of the stack. The same colour the read-against-written
  * panel gives it, so one quantity keeps one colour down the route. */
-const READ_TOKEN: ChartToken = '--chart-1';
+const READ_TOKEN: ChartToken = KEPT_COST_TOKENS.read;
 /** Writing, at the top. Read at the bottom and write at the top, everywhere. */
-const WRITTEN_TOKEN: ChartToken = '--chart-4';
+const WRITTEN_TOKEN: ChartToken = KEPT_COST_TOKENS.written;
 /** The running total, which is neither of them added up but both. */
-const RUNNING_TOKEN: ChartToken = '--chart-2';
+const RUNNING_TOKEN: ChartToken = KEPT_COST_TOKENS.running;
 
 /** Under this, a band is not a band. A browser paints nothing there, and a key
  * pointing at nothing teaches a reader the category is zero. */

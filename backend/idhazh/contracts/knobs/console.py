@@ -21,6 +21,15 @@ ConsoleChrome = Literal["console", "workbench"]
 class ConsoleConfig(Model):
     """Knobs for the operator console's time viewport."""
 
+    tile_min_px: int = Field(
+        default=6,
+        ge=6,
+        description=(
+            "Narrowest daily tile. Its inside, less two one-pixel borders, "
+            "must be at least twice the two-pixel gap between tiles."
+        ),
+    )
+
     default_window_days: int = Field(
         default=14,
         ge=1,
