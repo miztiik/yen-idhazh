@@ -25,6 +25,7 @@ import { tileStrip } from '../src/lib/charts/d3/tileStrip';
 import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
 import { inZone } from './support/in-zone';
 import { serverCompiler } from './support/server-render';
+import { drawnSourceFiles, readSource, resolveSource, scriptTree } from './support/console-sources';
 
 /**
  * The behavior checks for the documented chart vocabulary.
@@ -81,6 +82,10 @@ function declaredColumns(expression: ts.Expression | undefined, tree: ts.SourceF
 	if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression) || ts.isParenthesizedExpression(expression)) {
 		return declaredColumns(expression.expression, tree, seen);
 	}
+	if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'columns') {
+		const query = declaredPanelQuery(expression.expression, tree);
+		return query === null ? null : declaredColumns(query.columns, query.tree, seen);
+	}
 	if (ts.isArrayLiteralExpression(expression)) {
 		const columns: string[] = [];
 		for (const element of expression.elements) {
@@ -118,6 +123,201 @@ function declaredColumns(expression: ts.Expression | undefined, tree: ts.SourceF
 	}
 	return null;
 }
+
+interface SymbolOrigin {
+	readonly tree: ts.SourceFile;
+	readonly name: string;
+	readonly value?: ts.Expression;
+	readonly imported: boolean;
+}
+
+function unwrapped(expression: ts.Expression): ts.Expression {
+	if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression) ||
+		ts.isParenthesizedExpression(expression) || ts.isAwaitExpression(expression)) return unwrapped(expression.expression);
+	return expression;
+}
+
+function importedModule(expression: ts.Expression, tree: ts.SourceFile, seen = new Set<string>()): ts.SourceFile | null {
+	const value = unwrapped(expression);
+	if (ts.isCallExpression(value) && value.expression.kind === ts.SyntaxKind.ImportKeyword &&
+		value.arguments[0] && ts.isStringLiteralLike(value.arguments[0])) return resolveSource(value.arguments[0].text, tree);
+	if (!ts.isIdentifier(value)) return null;
+	const key = `${tree.fileName}:${value.text}`;
+	if (seen.has(key)) return null;
+	seen.add(key);
+	for (const statement of tree.statements) {
+		if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+			const bindings = statement.importClause?.namedBindings;
+			if (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === value.text) {
+				return resolveSource(statement.moduleSpecifier.text, tree);
+			}
+		}
+	}
+	const declaration = variableNamed(value.text, tree);
+	return declaration?.initializer ? importedModule(declaration.initializer, tree, seen) : null;
+}
+
+function variableNamed(name: string, tree: ts.SourceFile): ts.VariableDeclaration | undefined {
+	let found: ts.VariableDeclaration | undefined;
+	function visit(node: ts.Node): void {
+		if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) found ??= node;
+		ts.forEachChild(node, visit);
+	}
+	visit(tree);
+	return found;
+}
+
+function symbolOrigin(expression: ts.Expression, tree: ts.SourceFile, seen = new Set<string>()): SymbolOrigin | null {
+	const value = unwrapped(expression);
+	const key = `${tree.fileName}:${value.pos >= 0 ? value.getText(tree) : ts.isIdentifier(value) ? value.text : ''}`;
+	if (seen.has(key)) return null;
+	seen.add(key);
+	if (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value)) {
+		const name = ts.isPropertyAccessExpression(value) ? value.name.text :
+			value.argumentExpression && ts.isStringLiteralLike(value.argumentExpression) ? value.argumentExpression.text : null;
+		const module = importedModule(value.expression, tree);
+		return name && module ? exportedSymbol(name, module, seen) :
+			name === 'sliceOnce' ? { tree, name, imported: false } : null;
+	}
+	if (!ts.isIdentifier(value)) return null;
+	for (const statement of tree.statements) {
+		if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+		const bindings = statement.importClause?.namedBindings;
+		if (!bindings || !ts.isNamedImports(bindings)) continue;
+		const imported = bindings.elements.find((entry) => entry.name.text === value.text && !entry.isTypeOnly);
+		if (!imported || statement.importClause?.isTypeOnly) continue;
+		const module = resolveSource(statement.moduleSpecifier.text, tree);
+		return module ? exportedSymbol((imported.propertyName ?? imported.name).text, module, seen) : null;
+	}
+	const variable = variableNamed(value.text, tree);
+	if (variable?.initializer) {
+		const alias = unwrapped(variable.initializer);
+		if (ts.isIdentifier(alias) || ts.isPropertyAccessExpression(alias) || ts.isElementAccessExpression(alias)) {
+			return symbolOrigin(alias, tree, seen);
+		}
+		return { tree, name: value.text, value: variable.initializer, imported: false };
+	}
+	const identifier = value.text;
+	let origin: SymbolOrigin | null = null;
+	function visit(node: ts.Node): void {
+		if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && node.initializer) {
+			const binding = node.name.elements.find((entry) => ts.isIdentifier(entry.name) && entry.name.text === identifier);
+			const module = binding && importedModule(node.initializer, tree);
+			if (binding && module) origin = exportedSymbol((binding.propertyName ?? binding.name).getText(tree), module, seen);
+		}
+		ts.forEachChild(node, visit);
+	}
+	visit(tree);
+	return origin;
+}
+
+function exportedSymbol(name: string, tree: ts.SourceFile, seen: Set<string>): SymbolOrigin {
+	for (const statement of tree.statements) {
+		if (ts.isExportDeclaration(statement) && statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
+			const clause = statement.exportClause;
+			const entry = clause && ts.isNamedExports(clause) ? clause.elements.find((item) => item.name.text === name) : undefined;
+			if (entry || !clause) {
+				const module = resolveSource(statement.moduleSpecifier.text, tree);
+				if (module) {
+					const key = `${module.fileName}:${name}`;
+					if (!seen.has(key)) {
+						seen.add(key);
+						return exportedSymbol(entry ? (entry.propertyName ?? entry.name).text : name, module, seen);
+					}
+				}
+			}
+		}
+	}
+	return { tree, name, value: variableNamed(name, tree)?.initializer, imported: true };
+}
+
+function declaredPanelQuery(expression: ts.Expression, tree: ts.SourceFile): {
+	readonly tree: ts.SourceFile; readonly columns: ts.Expression;
+} | null {
+	const origin = symbolOrigin(expression, tree);
+	if (!origin?.imported || !/\/console\/queries\/(?:machine|model|pipelines|shared|voices)\.ts$/.test(origin.tree.fileName.replaceAll('\\', '/')) ||
+		!origin.value) return null;
+	const queryTree = origin.tree;
+	let satisfied = false;
+	function visit(node: ts.Node): void {
+		if (ts.isSatisfiesExpression(node) && ts.isTypeReferenceNode(node.type) && ts.isIdentifier(node.type.typeName)) {
+			const typeName = node.type.typeName.text;
+			satisfied = queryTree.statements.some((statement) => {
+				if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return false;
+				const bindings = statement.importClause?.namedBindings;
+				const module = resolveSource(statement.moduleSpecifier.text, queryTree);
+				return !!module && /\/console\/queries\/window\.ts$/.test(module.fileName.replaceAll('\\', '/')) &&
+					!!bindings && ts.isNamedImports(bindings) && bindings.elements.some((entry) =>
+						entry.name.text === typeName &&
+						(entry.propertyName ?? entry.name).text === 'PanelQuery');
+			});
+		}
+		ts.forEachChild(node, visit);
+	}
+	visit(origin.value);
+	const object = unwrapped(origin.value);
+	if (!satisfied || !ts.isObjectLiteralExpression(object)) return null;
+	const columns = object.properties.find((entry) => ts.isPropertyAssignment(entry) && entry.name.getText(origin.tree) === 'columns');
+	return columns && ts.isPropertyAssignment(columns) ? { tree: origin.tree, columns: columns.initializer } : null;
+}
+
+function panelQueryErrors(file: string, source: string): string[] {
+	const tree = scriptTree(file, source);
+	const errors: string[] = [];
+	const window = file.replaceAll('\\', '/') === 'src/lib/console/queries/window.ts';
+	function visit(node: ts.Node): void {
+		if (ts.isCallExpression(node)) {
+			const origin = symbolOrigin(node.expression, tree);
+			const call = unwrapped(node.expression);
+			const name = ts.isIdentifier(call) ? call.text : ts.isPropertyAccessExpression(call) ? call.name.text :
+				ts.isElementAccessExpression(call) && call.argumentExpression && ts.isStringLiteralLike(call.argumentExpression) ? call.argumentExpression.text : '';
+			const door = origin?.name === 'slice' && /\/data\/(?:ledger|slice)\.ts$/.test(origin.tree.fileName.replaceAll('\\', '/'));
+			const dynamicDoor = ts.isElementAccessExpression(call) && !ts.isStringLiteralLike(call.argumentExpression) &&
+				importedModule(call.expression, tree)?.fileName.replaceAll('\\', '/').endsWith('/data/ledger.ts');
+			if (!window && (door || dynamicDoor)) {
+				errors.push(`${file}: only queries/window.ts may call the ledger slice`);
+			}
+			if (name === 'sliceOnce' || origin?.name === 'sliceOnce') {
+				const query = node.arguments[0] && declaredPanelQuery(node.arguments[0], tree);
+				const columns = query ? declaredColumns(query.columns, query.tree) : null;
+				if (columns === null || columns.includes('*')) errors.push(`${file}: sliceOnce needs an imported declared PanelQuery with explicit columns`);
+			}
+		}
+		ts.forEachChild(node, visit);
+	}
+	visit(tree);
+	return errors;
+}
+
+test('gate 10 accepts declared imported queries, not direct slices or fabricated questions', () => {
+	const file = 'src/lib/console/machine/guard.ts';
+	for (const source of [
+		"import { slice as ask } from '$lib/data/ledger'; ask('scores', {});",
+		"import * as ledger from '$lib/data/ledger'; ledger.slice('scores', {});",
+		"const { slice: ask } = await import('$lib/data/ledger'); ask('scores', {});",
+		"const ledger = await import('$lib/data/ledger'); ledger['slice']('scores', {});",
+		"const ledger = await import('$lib/data/ledger'); ledger[chosen]('scores', {});"
+	]) expect(panelQueryErrors(file, source)).toHaveLength(1);
+	for (const source of [
+		"import { sliceOnce as ask } from '$lib/console/queries/window'; import { platformMixQuery as question } from '$lib/console/queries/machine'; ask(question, range);",
+		"import * as queries from '$lib/console/queries/machine'; window.sliceOnce(queries.platformMixQuery, range);",
+		"import { platformMixQuery } from '$lib/console/queries/machine'; const ask = window.sliceOnce; ask(platformMixQuery, range);",
+		"const { platformMixQuery: question } = await import('$lib/console/queries/machine'); window.sliceOnce(question, range);",
+		"import { sliceFromDisk } from '$lib/server/ledger-disk'; sliceFromDisk('scores', {}); const rows = [1, 2].slice(0, 1);",
+		"const { slice: arraySlice } = Array.prototype; arraySlice.call([1, 2], 0, 1);"
+	]) expect(panelQueryErrors(file, source)).toEqual([]);
+	for (const argument of ["{ name: 'madeUp', columns: ['date'] }", "{ ...queries.platformMixQuery, columns: ['*'] }", 'undeclared', 'queries[chosen]']) {
+		expect(panelQueryErrors(file, `import * as queries from '$lib/console/queries/machine'; window.sliceOnce(${argument}, range);`)).toHaveLength(1);
+	}
+	const tree = scriptTree(file, "import { platformMixQuery } from '$lib/console/queries/machine'; const columns = platformMixQuery.columns;");
+	const declaration = variableNamed('columns', tree)!;
+	expect(declaredColumns(declaration.initializer, tree)).toContain('fingerprint');
+	expect(panelQueryErrors('src/lib/console/queries/window.ts', "import { slice } from '$lib/data/ledger'; slice('scores', {});")).toEqual([]);
+});
+
+test('gate 10 names every console slice and checks the declared query at each sliceOnce', () => {
+	expect(drawnSourceFiles().flatMap((file) => panelQueryErrors(file, readSource(file)))).toEqual([]);
+});
 
 test('the query-column guard resolves static arrays and keeps wildcard and unknown expressions visible', () => {
 	const tree = ts.createSourceFile(path.join(frontend, 'guard.ts'), `

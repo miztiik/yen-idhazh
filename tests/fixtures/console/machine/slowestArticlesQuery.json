@@ -1,0 +1,87 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "run_id": "2026-08-20-1",
+      "item_id": "ai-01",
+      "source_id": "canary",
+      "machine_shard": 0,
+      "item_total_ms": 928,
+      "fetch_ms": 100,
+      "extract_ms": 20,
+      "summarize_ms": 600,
+      "faithfulness_ms": 44,
+      "stage_gap_ms": 164,
+      "queue_wait_ms": 344
+    },
+    {
+      "run_id": "2026-08-20-1",
+      "item_id": "ai-02",
+      "source_id": "canary",
+      "machine_shard": 1,
+      "item_total_ms": 1035,
+      "fetch_ms": 150,
+      "extract_ms": 25,
+      "summarize_ms": 650,
+      "faithfulness_ms": 45,
+      "stage_gap_ms": 165,
+      "queue_wait_ms": 345
+    },
+    {
+      "run_id": "2026-08-20-2",
+      "item_id": "ai-03",
+      "source_id": "canary",
+      "machine_shard": 0,
+      "item_total_ms": 1247,
+      "fetch_ms": 250,
+      "extract_ms": 35,
+      "summarize_ms": 750,
+      "faithfulness_ms": 46,
+      "stage_gap_ms": 166,
+      "queue_wait_ms": 346
+    },
+    {
+      "run_id": "2026-08-20-2",
+      "item_id": "ai-04",
+      "source_id": "canary",
+      "machine_shard": 1,
+      "item_total_ms": 4754,
+      "fetch_ms": 300,
+      "extract_ms": 40,
+      "summarize_ms": 4200,
+      "faithfulness_ms": 47,
+      "stage_gap_ms": 167,
+      "queue_wait_ms": 347
+    },
+    {
+      "run_id": "2026-08-20-2",
+      "item_id": "ai-05",
+      "source_id": "canary",
+      "machine_shard": 0,
+      "item_total_ms": 270,
+      "fetch_ms": 200,
+      "extract_ms": 30,
+      "summarize_ms": null,
+      "faithfulness_ms": null,
+      "stage_gap_ms": 40,
+      "queue_wait_ms": 0
+    },
+    {
+      "run_id": "2026-08-20-2",
+      "item_id": "ai-09",
+      "source_id": "canary",
+      "machine_shard": 0,
+      "item_total_ms": 130,
+      "fetch_ms": 200,
+      "extract_ms": 30,
+      "summarize_ms": 700,
+      "faithfulness_ms": 52,
+      "stage_gap_ms": -852,
+      "queue_wait_ms": 352
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

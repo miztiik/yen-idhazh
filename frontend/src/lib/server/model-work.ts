@@ -37,7 +37,10 @@ import type { MovementPolarity } from '../charts/theme';
 // layer both reducers reach, so the server one borrows it rather than the
 // console importing a server type back the other way.
 import type { DayScoredCounts } from '../console/eval-instruments';
+import { itemRates } from '../console/rates';
 import type { SummaryBand } from './config';
+
+export { itemRates } from '../console/rates';
 
 /** The ledger stamp from which `truncation_flagged` means extract cut the body.
  *
@@ -839,37 +842,6 @@ export function scoreCost(
 		days: window.days,
 		start: window.start,
 		end: window.end
-	};
-}
-
-/** One article's two rates, or null where the runtime reported no timing.
- *
- * Cached prompt tokens are taken out of the read count. Leaving them in reports
- * a rate the machine never ran at: it did not read them.
- *
- * It lives here rather than beside the throughput candle that draws it, because
- * the model-change panel compares the same two rates either side of a swap.
- * Two spellings of "the read rate" would let one surface take cached tokens out
- * and the other leave them in.
- */
-export function itemRates(row: Record<string, string>): {
-	read: number | null;
-	write: number | null;
-} {
-	const prefillMs = measured(row.prefill_ms);
-	const decodeMs = measured(row.decode_ms);
-	const prompt = measured(row.input_tokens);
-	const written = measured(row.output_tokens);
-	const evaluated = prompt === null ? null : prompt - (measured(row.cached_tokens) ?? 0);
-	return {
-		read:
-			prefillMs !== null && prefillMs > 0 && evaluated !== null && evaluated > 0
-				? evaluated / (prefillMs / 1000)
-				: null,
-		write:
-			decodeMs !== null && decodeMs > 0 && written !== null && written > 0
-				? written / (decodeMs / 1000)
-				: null
 	};
 }
 

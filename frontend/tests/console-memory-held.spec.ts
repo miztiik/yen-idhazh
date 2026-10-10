@@ -16,7 +16,7 @@
  * days carry a machine reading and the newest deliberately does not.
  */
 
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 
 const DESKTOP = { width: 1280, height: 900 };
 

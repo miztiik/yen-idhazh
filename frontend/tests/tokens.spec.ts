@@ -43,7 +43,7 @@ const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|du
  * by `color-mix`, not a colour or a utility.
  */
 const NO_UTILITY =
-	/^--(gradient|dur|ease|series|type-|source-swatch|shadow-focus|color-focus|chart-readout|chart-spread-mix$|color-surface-raised|color-surface-sunken|color-rule-strong|color-accent-strong|color-on-accent|radius-full)/;
+	/^--(gradient|dur|ease|series|type-|source-swatch|shadow-focus|color-focus|chart-readout|chart-spread-mix$|route-line-reserve$|color-surface-raised|color-surface-sunken|color-rule-strong|color-accent-strong|color-on-accent|radius-full)/;
 
 function block(css: string, selector: string): string {
 	const start = css.indexOf(selector);

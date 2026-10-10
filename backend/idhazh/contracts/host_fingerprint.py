@@ -72,6 +72,9 @@ WATCHED_FLAGS: tuple[str, ...] = (
 #: the surface that would notice first if the column stopped arriving, which is
 #: the fact a person deleting a column needs. A second reader is found by search;
 #: the first one to break is not.
+#: A declared panel query counts as a reader. Shared, pipelines, model, machine,
+#: then voices owns a column when more than one query declares it.
+#: 2026-10-10: registry ownership changed; the persisted schema remains 2026-09-20.
 #:
 #: What this cannot settle is whether the named surface still DRAWS the value -
 #: only that it still names the column. A panel that reads a cell and then throws
@@ -85,12 +88,14 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "cpu_vendor",
             "mhz_max",
             "model_load_ms",
-            "job_seconds",
+        ),
+        "frontend/src/lib/console/queries/machine.ts": (
+            "date",
+            "run_id",
+            "job",
+            "shard",
             "server_prompt_tokens",
             "server_prompt_seconds",
-        ),
-        "frontend/src/lib/charts/machine-cards.ts": (
-            "job",
             "fingerprint",
             "cpu_model",
             "cpu_family",
@@ -107,14 +112,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_location",
             "vm_zone",
             "vm_fault_domain",
-        ),
-        "frontend/src/lib/charts/machine.ts": ("cores",),
-        "frontend/src/lib/console/machine/article-cost.ts": (
-            "date",
-            "run_id",
-            "shard",
+            "job_seconds",
             "threads",
         ),
+        "frontend/src/lib/charts/machine.ts": ("cores",),
     }
 )
 

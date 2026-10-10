@@ -35,7 +35,7 @@
 {#snippet nothing()}{/snippet}
 
 {#if drawing.shimmer}
-	<Reserved panelState="loading" {height} {width} {name} {label} children={nothing} />
+	<Reserved panelState="loading" {height} {width} {name} {label} record={drawing.record ?? false} children={nothing} />
 {:else}
 	<div
 		class="empty"
