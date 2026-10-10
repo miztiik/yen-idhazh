@@ -17,6 +17,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 uuid = { version = "1", features = ["serde", "v5"] }
+ureq = { version = "3", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 [profile.dev]
 debug = 0

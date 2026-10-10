@@ -26,3 +26,21 @@ pub mod codec {
     pub mod parquet;
 }
 pub use contracts::host::{Result, Validate};
+pub mod cli;
+pub mod fingerprint;
+mod invocation;
+pub mod producers {
+    pub mod job_clock;
+    pub mod job_probe;
+    pub mod target_probe;
+}
+pub mod probe_inputs {
+    pub mod allowance;
+    pub mod bandwidth;
+    pub mod cpu;
+    pub mod files;
+    pub mod frequency;
+    pub mod placement;
+    pub mod snapshots;
+    pub mod topology;
+}

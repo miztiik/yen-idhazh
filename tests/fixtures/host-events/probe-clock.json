@@ -1,0 +1,46 @@
+{
+  "attempts": [{
+    "online_before": {"value": "0,2-3,7\n", "reason": null},
+    "online_after": {"value": "0,2-3,7\n", "reason": null},
+    "inventory": {"value": "0-7\n", "reason": null},
+    "cpuinfo": {"value": "processor : 0\nvendor_id : GenuineIntel\ncpu family : 6\nmodel : 207\nmodel name : INTEL(R) XEON(R) PLATINUM 8573C\nstepping : 2\nmicrocode : 0x21000283\ncpu MHz : 2300.000\ncpu cores : 64\nflags : fpu vme de avx2 avx512f avx512_bf16 amx_tile amx_bf16 amx_int8 fma f16c sse4_2\nprocessor : 2\ncpu MHz : 2100.000\nprocessor : 3\ncpu MHz : invalid\nprocessor : 7\ncpu MHz : 2800.000\n", "reason": null},
+    "topology": [
+      {"id": 0, "package": {"value": "0\n", "reason": null}, "core": {"value": "0\n", "reason": null}, "thread_siblings": {"value": "0\n", "reason": null}, "package_siblings": {"value": "0,2-3\n", "reason": null}},
+      {"id": 2, "package": {"value": "0\n", "reason": null}, "core": {"value": "1\n", "reason": null}, "thread_siblings": {"value": "2-3\n", "reason": null}, "package_siblings": {"value": "0,2-3\n", "reason": null}},
+      {"id": 3, "package": {"value": "0\n", "reason": null}, "core": {"value": "1\n", "reason": null}, "thread_siblings": {"value": "2-3\n", "reason": null}, "package_siblings": {"value": "0,2-3\n", "reason": null}},
+      {"id": 7, "package": {"value": "1\n", "reason": null}, "core": {"value": "0\n", "reason": null}, "thread_siblings": {"value": "7\n", "reason": null}, "package_siblings": {"value": "7\n", "reason": null}}
+    ],
+    "policies": {"value": [
+      {"name": "policy0", "cpus": {"value": "0 2 3\n", "reason": null}, "maximum_khz": {"value": "3600000\n", "reason": null}},
+      {"name": "policy7", "cpus": {"value": "7\n", "reason": null}, "maximum_khz": {"value": "3200000\n", "reason": null}}
+    ], "reason": null},
+    "target_before": {
+      "start_ticks": {"value": 800, "reason": null},
+      "cgroup": {"value": "0::/slice/job\n", "reason": null},
+      "mountinfo": {"value": "29 23 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n", "reason": null},
+      "affinity": {"value": [2,3,7], "reason": null},
+      "constraints": {"value": [
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice/job", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2,7\n", "reason": null}, "quota": {"value": "50000 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2-3,7\n", "reason": null}, "quota": {"value": "max 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup", "root": true, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0-7\n", "reason": null}, "quota": {"value": null, "reason": "missing"}, "period": {"value": null, "reason": "missing"}}
+      ], "reason": null}
+    },
+    "target_after": {
+      "start_ticks": {"value": 800, "reason": null},
+      "cgroup": {"value": "0::/slice/job\n", "reason": null},
+      "mountinfo": {"value": "29 23 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n", "reason": null},
+      "affinity": {"value": [2,3,7], "reason": null},
+      "constraints": {"value": [
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice/job", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2,7\n", "reason": null}, "quota": {"value": "50000 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2-3,7\n", "reason": null}, "quota": {"value": "max 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup", "root": true, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0-7\n", "reason": null}, "quota": {"value": null, "reason": "missing"}, "period": {"value": null, "reason": "missing"}}
+      ], "reason": null}
+    },
+    "cache_bytes": {"value": 33554432, "reason": null},
+    "uptime": {"value": "12345.75 98765.00\n", "reason": null}
+  }],
+  "placement_json": {"value": "{\"vmSize\":\"Standard_D4s_v5\",\"location\":\"westeurope\",\"zone\":\"2\",\"platformFaultDomain\":\"1\"}", "reason": null},
+  "runner_name": "  hosted-linux-17  ",
+  "captured_at": "2026-10-10T12:00:00Z",
+  "written_at_ms": 1791633600000
+}
