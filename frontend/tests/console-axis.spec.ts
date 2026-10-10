@@ -1,6 +1,8 @@
 import { expect, test, type Page } from './support/browser';
 import { chartsReady } from './support/charts-ready';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-axis';
 
 /**
  * THE ORACLE for one date axis: no two dates touch, and none is cut off.
@@ -28,14 +30,6 @@ import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths'
  * that cannot be made to fail is not measuring anything.
  */
 
-const ROUTES = [
-	'/console/',
-	'/console/model/',
-	'/console/machine/',
-	'/console/judgement/',
-	'/console/voices/'
-];
-
 /** Which routes draw a date axis of their own.
  *
  * Every route that has one does since 2026-09-01. The Machine route drew none
@@ -48,14 +42,6 @@ const ROUTES = [
  * 2026-09-17. That is stated here rather than discovered, so a route that stops
  * declaring one fails this file instead of passing it with an empty scan.
  */
-const DECLARES: Record<string, boolean> = {
-	'/console/': true,
-	'/console/model/': true,
-	'/console/machine/': true,
-	'/console/judgement/': true,
-	'/console/voices/': true
-};
-
 /** A label's box, and the box of the `svg` that may clip it. */
 interface Label {
 	chart: string;
@@ -107,11 +93,13 @@ async function load(page: Page, route: string, width: number): Promise<void> {
 
 for (const width of CONSOLE_WIDTHS) {
 	test.describe(`the date axis at ${width}px`, () => {
-		for (const route of ROUTES) {
+		for (const { id, href: route } of BAND_UNREAD.routes) {
+			const expected = BY_ROUTE[id];
+			if (expected === null) continue;
 			test(`THE ORACLE: no two dates touch and none is cut off on ${route}`, async ({ page }) => {
 				await load(page, route, width);
 				const labels = await labelsOn(page);
-				if (DECLARES[route]) {
+				if (expected.declaresDateAxis) {
 					expect(
 						labels.length,
 						`${route} declares no date axis - the scan is broken`
@@ -119,7 +107,7 @@ for (const width of CONSOLE_WIDTHS) {
 				} else {
 					expect(
 						labels,
-						`${route} now draws a date axis of its own - say so in DECLARES`
+						`${route} now draws a date axis of its own - say so in its expectations`
 					).toEqual([]);
 				}
 
@@ -164,12 +152,14 @@ for (const width of CONSOLE_WIDTHS) {
 	});
 }
 
-test('every column the ceiling allows keeps its mark, even where the date went', async ({
+for (const { id, href: route } of BAND_UNREAD.routes) {
+	if (!BY_ROUTE[id]?.ceilingMarks) continue;
+	test(`every column the ceiling allows keeps its mark, even where the date went on ${route}`, async ({
 	page
 }) => {
 	// A reader counting columns needs the grid whether or not the label survived
 	// the fit, so the marks are drawn from the ceiling and only the dates thin.
-	await load(page, '/console/', 390);
+	await load(page, route, 390);
 
 	const plots = await page.evaluate(() =>
 		[...document.querySelectorAll('svg')]
@@ -195,13 +185,15 @@ test('every column the ceiling allows keeps its mark, even where the date went',
 		'the fit dropped nothing at 390px, so the oracle above is a tautology'
 	).toBe(true);
 });
+}
 
 test('a date on the console is written the way a reader reads one', async ({ page }) => {
 	// `2026-08-25` is how the ledger spells a day and `08-25` is how it spelled
 	// one on two engine-drawn axes. A term from a subsystem is not a term for a
 	// user (CLAUDE.md section 0b), and a page with three date grammars on it
 	// makes a reader learn which chart they are looking at first.
-	for (const route of ROUTES) {
+	for (const { id, href: route } of BAND_UNREAD.routes) {
+		if (BY_ROUTE[id] === null) continue;
 		await load(page, route, 1440);
 		const ledgerish = await page.evaluate(() =>
 			[...document.querySelectorAll('svg text')]

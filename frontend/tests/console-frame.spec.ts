@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { cellFor, CELL_PX, GAP_PX } from '../src/lib/charts/run-history';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-frame';
 
 /**
  * The console's frame, measured rather than looked at.
@@ -19,22 +21,15 @@ const DESKTOP = { width: 1440, height: 900 };
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-interface PanelGroup {
-	id: string;
-	title: string;
-	panels: string[];
-}
-
-/** What `config/appearance.json` says the Hardware route draws, and in what
- * order. Read inside each test rather than at module scope, so a malformed
- * config fails the one test that wanted it instead of the whole file. */
-function machineGroups(): PanelGroup[] {
+/** The width the server draws a console chart at, before anything has measured
+ * it - read from the knob rather than written here. */
+function consoleChartWidth(): number {
 	const parsed = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
-		console?: { panel_groups?: Record<string, PanelGroup[]> };
+		console?: { chart_width?: number };
 	};
-	const groups = parsed.console?.panel_groups?.machine ?? [];
-	expect(groups.length, 'config/appearance.json declares no Hardware groups').toBeGreaterThan(0);
-	return groups;
+	const width = parsed.console?.chart_width;
+	expect(width, 'config/appearance.json names no console.chart_width').toBeDefined();
+	return width as number;
 }
 
 test.describe('the run strip uses the room it has', () => {
@@ -75,10 +70,15 @@ test.describe('the run strip uses the room it has', () => {
 	});
 });
 
-test.describe('the console frame', () => {
+for (const { id, href: route, label } of BAND_UNREAD.routes) {
+	const expected = BY_ROUTE[id];
+	if (expected === null) continue;
+test.describe(`the console frame on ${label}`, () => {
+	const layout = expected.layout;
+	if (layout !== null) {
 	test('nothing scrolls sideways on a desktop', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/');
+		await page.goto(route);
 		await chartsReady(page);
 
 		const overflowing = await page.evaluate(() => {
@@ -106,7 +106,7 @@ test.describe('the console frame', () => {
 
 	test('every chart you read a value off is drawn wide enough to read it', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/');
+		await page.goto(route);
 		await chartsReady(page);
 
 		const charts = await page.evaluate(() =>
@@ -134,7 +134,7 @@ test.describe('the console frame', () => {
 		expect(charts.length, 'no chart found - the scan is broken').toBeGreaterThan(0);
 		// 164px was the measured width of three charts squeezed side by side into
 		// a 624px column, and it is the number this bound exists to forbid.
-		const narrow = charts.filter((c) => c.width < 320);
+		const narrow = charts.filter((c) => c.width < layout.minChartWidth);
 		expect(narrow, 'these charts are too narrow to read a value off').toEqual([]);
 	});
 
@@ -146,7 +146,7 @@ test.describe('the console frame', () => {
 		// silent for a screen reader the moment that paragraph is trimmed, and
 		// nothing in a screenshot or a byte gate would show it.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/');
+		await page.goto(route);
 		await chartsReady(page);
 
 		const charts = await page.evaluate(() => {
@@ -185,7 +185,7 @@ test.describe('the console frame', () => {
 				});
 		});
 
-		expect(charts.length, 'no chart found - the scan is broken').toBeGreaterThan(6);
+		expect(charts.length, 'no chart found - the scan is broken').toBeGreaterThan(layout.minNamedCharts);
 		expect(
 			charts.filter((c) => c.description === ''),
 			'these charts carry no accessible description'
@@ -194,14 +194,17 @@ test.describe('the console frame', () => {
 
 	test('the page is one column of panels, not a wall of headings', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/');
+		await page.goto(route);
 		// `data-console-panel`, not `data-panel`: FailurePanels already carried the
 		// shorter name, so the obvious selector passed before a single panel
 		// existed. A test that cannot fail is not a test.
 		const panels = await page.locator('[data-console-panel]').count();
 		expect(panels).toBeGreaterThan(0);
 	});
+	}
 
+	const declared = expected.groups;
+	if (declared !== null) {
 	test('THE ORACLE: every Hardware panel hangs off a heading of its own group', async ({
 		page
 	}) => {
@@ -212,13 +215,13 @@ test.describe('the console frame', () => {
 		// underneath it stepped down a level - read off the DOM rather than off
 		// what any paragraph says.
 		//
-		// It is read against `console.panel_groups` rather than against itself.
+		// It is read against independently written expectations, not the config.
 		// A page that agreed with its own markup would pass with every panel in
 		// the wrong group, which is exactly what a regrouping row can get wrong.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await page.goto(route);
 
-		const declared = machineGroups();
+		expect(declared.length, 'the Hardware expectations declare no groups').toBeGreaterThan(0);
 		const groups = await page.locator('[data-console-group]').evaluateAll((nodes) =>
 			nodes.map((node) => ({
 				id: node.getAttribute('data-console-group') ?? '',
@@ -275,7 +278,7 @@ test.describe('the console frame', () => {
 		// the panel. A subtitle whose last clause names no grain leaves a reader
 		// guessing which of the two a figure is.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await page.goto(route);
 
 		const notes = await page
 			.locator('[data-console-panel-id]')
@@ -288,7 +291,8 @@ test.describe('the console frame', () => {
 				}))
 			);
 
-		expect(notes.length, 'the route drew no panels to read').toBe(machineGroups().flatMap((group) => group.panels).length);
+		expect(declared.length, 'the Hardware expectations declare no groups').toBeGreaterThan(0);
+		expect(notes.length, 'the route drew no panels to read').toBe(declared.flatMap((group) => group.panels).length);
 		for (const panel of notes) {
 			expect(panel.note.length, `${panel.id} carries no subtitle at all`).toBeGreaterThan(20);
 			// One sentence. A subtitle that grew into a paragraph is the wall of
@@ -307,7 +311,7 @@ test.describe('the console frame', () => {
 		// token rename that put them back at one size would pass every other
 		// check on this page.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await page.goto(route);
 
 		const sizes = await page.evaluate(() => {
 			const group = document.querySelector('[data-console-group]');
@@ -324,31 +328,34 @@ test.describe('the console frame', () => {
 			'the group heading is drawn no larger than the titles it groups'
 		).toBeGreaterThan(sizes.title);
 	});
+	}
 
+	const verdict = expected.verdict;
+	if (verdict !== null) {
 	test('THE ORACLE: each route opens on the panel that verdicts the rest', async ({ page }) => {
 		// The thirteenth chart rule: a verdict panel sits above the panels it
 		// verdicts, or an operator reads ten readings before he reaches the line
 		// that says whether to trust them. Asserted on the attribute the panel
 		// declares, never on its title, so a rename cannot quietly retire it.
-		for (const route of ['/console/', '/console/machine/']) {
 			await page.goto(route);
 			const panels = page.locator('[data-console-panel]');
 			expect(await panels.count(), `${route} draws no panels`).toBeGreaterThan(0);
 			expect(
 				await panels.first().getAttribute('data-panel-verdict'),
 				`${route} does not open on its verdict panel`
-			).toBe('route');
+			).toBe(verdict.state);
 			expect(
 				await panels.first().getAttribute('data-panel-question'),
 				`${route}'s first panel does not say which question it answers`
-			).toBe('is it working');
+			).toBe(verdict.question);
 			expect(
-				await page.locator('[data-panel-verdict="route"]').count(),
+				await page.locator(`[data-panel-verdict="${verdict.state}"]`).count(),
 				`${route} names more than one verdict panel`
 			).toBe(1);
-		}
 	});
+	}
 
+	if (expected.runSquares) {
 	test('the run squares take the width the browser measured, not the arithmetic', async ({
 		page
 	}) => {
@@ -357,7 +364,7 @@ test.describe('the console frame', () => {
 		// never fires leaves the chart at the width the server drew it and the
 		// squares with it, and every arithmetic test still passes.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/');
+		await page.goto(route);
 		await chartsReady(page);
 
 		const measured = await page.evaluate(() => {
@@ -379,18 +386,8 @@ test.describe('the console frame', () => {
 		expect(measured.room).toBe(measured.chart);
 		expect(measured.square).toBeGreaterThan(0);
 	});
+	}
 });
-
-/** The width the server draws a console chart at, before anything has measured
- * it - read from the knob rather than written here. */
-function consoleChartWidth(): number {
-	const parsed = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
-		console?: { chart_width?: number };
-	};
-	const width = parsed.console?.chart_width;
-	expect(width, 'config/appearance.json names no console.chart_width').toBeDefined();
-	return width as number;
-}
 
 /**
  * The console as a browser lays it out before any of its JavaScript has run.
@@ -407,12 +404,13 @@ function consoleChartWidth(): number {
  * how this arrived, as one red `layout-overflow.spec.ts` in a job whose other
  * theme passed.
  */
-test.describe('the console before its JavaScript runs', () => {
+if (expected.prerender) {
+test.describe(`the console before its JavaScript runs on ${label}`, () => {
 	test.use({ javaScriptEnabled: false });
 
 	test('a phone-width document has nothing past its edge', async ({ page }) => {
 		await page.setViewportSize({ width: 360, height: 900 });
-		await page.goto('/console/');
+		await page.goto(route);
 
 		const measured = await page.evaluate(() => {
 			const root = document.documentElement;
@@ -444,3 +442,5 @@ test.describe('the console before its JavaScript runs', () => {
 		).toBeLessThanOrEqual(measured.clientWidth);
 	});
 });
+}
+}

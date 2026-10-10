@@ -11,6 +11,9 @@ import { encodeQuestion, explorerAddress, requestTargetBytes } from '../src/lib/
 import { consoleConfig, explorerConfig, ledgerArchiveBaseUrl } from '../src/lib/server/config';
 import type { LedgerName } from '../src/lib/data/ledger';
 import { CONSOLE_CHROMES, consoleChromeOf } from '../src/lib/console/chrome';
+import { BAND_UNREAD } from '../src/lib/console/band';
+
+const EXPLORER_HREF = BAND_UNREAD.routes.find((route) => route.id === 'data-explorer')!.href;
 
 /** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
 const PINNED = '2030-06-15';
@@ -140,7 +143,7 @@ async function statePage(parent: Page, drive: (page: Page) => Promise<void>): Pr
 }
 
 test('THE ORACLE: Data explorer opens as the sixth tab and renders its two panels before a run', async ({ page }) => {
-	const response = await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	const response = await page.goto(EXPLORER_HREF, { waitUntil: 'domcontentloaded' });
 	expect([200, 404]).toContain(response?.status());
 	await expect(page.locator('[data-console-route="data-explorer"]')).toHaveCount(1);
 	await expect(page.locator('[data-console-tab="data-explorer"]')).toContainText('Data explorer');
@@ -162,7 +165,7 @@ test('THE ORACLE: console chrome resolves to console unless the route asks for w
 });
 
 test('THE ORACLE: Data explorer asks for workbench chrome and the other routes keep console chrome', async ({ page }) => {
-	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await page.goto(EXPLORER_HREF, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-surface="operator"]')).toHaveAttribute('data-console-chrome', 'workbench');
 	await expect(page.locator('#console-top')).toHaveText('Console');
 	await expect(page.locator('#console-top')).toHaveClass(/sr-only/);
@@ -173,7 +176,7 @@ test('THE ORACLE: Data explorer asks for workbench chrome and the other routes k
 	await expect(page.locator('[data-console-noscript]')).toHaveCount(0);
 	await expect(page.locator('[data-console-contents]')).toHaveCount(0);
 
-	for (const route of ['/console/', '/console/model/', '/console/machine/', '/console/judgement/', '/console/voices/']) {
+	for (const route of BAND_UNREAD.routes.filter((route) => route.id !== 'data-explorer').map((route) => route.href)) {
 		await page.goto(route, { waitUntil: 'domcontentloaded' });
 		await expect(page.locator('[data-surface="operator"]'), `${route} kept full chrome`).toHaveAttribute('data-console-chrome', 'console');
 		await expect(page.locator('[data-console-band]'), `${route} kept the band`).toHaveCount(1);
@@ -189,7 +192,7 @@ for (const view of [
 ] as const) {
 	test(`THE ORACLE: the workbench strip is one compact row at ${view.width}`, async ({ page }) => {
 		await page.setViewportSize(view);
-		await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+		await page.goto(EXPLORER_HREF, { waitUntil: 'domcontentloaded' });
 		const geometry = await page.locator('[data-console-strip]').evaluate((strip) => {
 			const stripBox = strip.getBoundingClientRect();
 			const tabs = [...strip.querySelectorAll('[data-console-tab]')].map((tab) => {
@@ -233,7 +236,7 @@ for (const view of [
 }
 
 test('THE ORACLE: Data explorer puts the span, dates and Run in the editor head', async ({ page }) => {
-	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await page.goto(EXPLORER_HREF, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-workbench-region="toolbar"]')).toHaveCount(0);
 	const head = page.locator('[data-workbench-region="editor"] .editor-head');
 	await expect(page.locator('[data-window-control]')).toHaveCount(1);
@@ -696,7 +699,7 @@ test('THE ORACLE: a shared address fills the editor and does not run itself', as
 
 test('THE ORACLE: link notices render on the page', async ({ page }) => {
 	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
-	await page.goto('/console/data-explorer/?ledgers=published,unknown-ledger&days=365&q=not-valid-***', { waitUntil: 'domcontentloaded' });
+	await page.goto(`${EXPLORER_HREF}?ledgers=published,unknown-ledger&days=365&q=not-valid-***`, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link named "unknown-ledger"');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The link asked for 365 days');
 	await expect(page.locator('[data-explorer-action-line]')).toContainText('The question in this link could not be read');
@@ -755,7 +758,7 @@ test('THE ORACLE: a link naming a day that does not exist shows the span notice,
 	const thrown: string[] = [];
 	page.on('pageerror', (error) => thrown.push(error.message));
 	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
-	await page.goto(`/console/data-explorer/?ledgers=published&from=2026-08-32&end=${PINNED}`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`${EXPLORER_HREF}?ledgers=published&from=2026-08-32&end=${PINNED}`, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('[data-explorer-action-line]')).toContainText(
 		'The link asked for 2026-08-32 to 2030-06-15, which is not a span this page can read, so it ends today.'
 	);
@@ -1016,7 +1019,7 @@ test('THE ORACLE: a question kept with a day that is not on the calendar is drop
 	const logs: string[] = [];
 	page.on('console', (message) => logs.push(message.text()));
 	await page.clock.setFixedTime('2026-09-01T12:00:00Z');
-	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await page.goto(EXPLORER_HREF, { waitUntil: 'domcontentloaded' });
 	await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
 	await expect(page.locator('.saved-chip')).toHaveCount(0);
 	await page.locator('.history-list summary').click();
@@ -1112,7 +1115,7 @@ test('Ctrl+Enter runs nothing before the page has read its ledgers, even a quest
 	const link = new URL((await explorerAddress({ basePath: '/', ledgers: ['published'], days: 14, statement })).href, 'http://link.invalid');
 	const release = await holdNext(page, '**/config/ledgers.json');
 	await page.clock.setFixedTime(`${PINNED}T12:00:00Z`);
-	await page.goto(`/console/data-explorer/${link.search}`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`${EXPLORER_HREF}${link.search}`, { waitUntil: 'domcontentloaded' });
 	const editor = page.locator('#explorer-sql');
 	const inFlight = page.locator('.run-button[aria-busy="true"]');
 	await expect(editor).toHaveValue(statement);

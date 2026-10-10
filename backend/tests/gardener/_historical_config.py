@@ -1,4 +1,7 @@
-"""Which recorded config preserves the cleanup windows before yearly expiry was enabled?"""
+"""Which recorded config preserves the cleanup windows before yearly expiry was enabled?
+
+Retention declarations stay frozen; unrelated appearance fields follow the current contract.
+"""
 
 from __future__ import annotations
 

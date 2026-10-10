@@ -10,7 +10,8 @@ import { chartDays } from '$lib/server/chart-days';
 import { cutsByRun } from '$lib/server/cuts-by-run';
 import { pipelineChanges } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
-import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
+import { chartConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
+import { routeConsole } from '$lib/console/route-console';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import { stageTimingDays } from '$lib/server/stage-timing-days';
 import { windowDay } from '$lib/server/window-day';
@@ -28,12 +29,12 @@ export const prerender = true;
 export type { ItemCost } from '$lib/console/item-cost';
 export type { Extraction } from '$lib/console/extraction';
 
-/** Every section this route draws, as the ids `console.panel_groups` orders.
+/** Every section this route draws, as the route's console file orders.
  *
  * The list is here rather than in the config because it is a fact about the
  * markup: a section exists because a snippet in `+page.svelte` draws it. The
- * config decides the order, and `panelGroupsFor` refuses a config that
- * disagrees with this list either way round.
+ * config decides the order, and this route refuses a config that disagrees
+ * with this list either way round.
  */
 const DRAWN_PANELS = [
 	'at-a-glance',
@@ -56,6 +57,17 @@ const DRAWN_PANELS = [
  * and what stops today's code quietly restating yesterday's numbers.
  */
 export async function load() {
+	const panelGroups = routeConsole('pipelines').panel_groups;
+	const named = panelGroups.flatMap((group) => group.panels);
+	const missing = DRAWN_PANELS.filter((panel) => !named.includes(panel));
+	const unknown = named.filter((panel) => !(DRAWN_PANELS as readonly string[]).includes(panel));
+	if (missing.length > 0 || unknown.length > 0) {
+		throw new Error(
+			`config/console/pipelines.json panel_groups does not match the route: ` +
+				`${missing.length} panel(s) it draws are unplaced [${missing.join(', ')}], ` +
+				`${unknown.length} named panel(s) it does not draw [${unknown.join(', ')}]`
+		);
+	}
 	const console = consoleConfig();
 	// Read once. It decides how a chart labels its axis AND, through `width_px`,
 	// whether a band is wide enough for a browser to paint at all.
@@ -233,8 +245,8 @@ export async function load() {
 		// scroll to (measured 2026-09-09, Intel Core i7-1265U, one build).
 		console,
 		// The order the sections above are drawn in, and the headings they group
-		// under, from `config/appearance.json` rather than from markup order.
-		panelGroups: panelGroupsFor('pipelines', DRAWN_PANELS),
+		// under, from `config/console/pipelines.json` rather than from markup order.
+		panelGroups,
 		// How many separate figures of one unit make an article chartable. The
 		// extraction panel prints it, and the pass it reports on reads the same knob.
 		visuals: visualsConfig(),

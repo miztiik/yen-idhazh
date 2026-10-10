@@ -1,4 +1,6 @@
 import { expect, test, type Page } from './support/browser';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console';
 import type { TestInfo } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -37,12 +39,8 @@ import { telemetryRow } from './support/telemetry-row';
  * See `backend/utilities/build_canary_day.py` for the fixture.
  */
 
-/** The cap read from the knob, so the test cannot drift from the config. */
-const FAILURE_LIST_MAX = (
-	JSON.parse(
-		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-	) as { console?: { failure_list_max?: number } }
-).console?.failure_list_max ?? 25;
+/** The independently declared cap the failure list must keep. */
+const FAILURE_LIST_MAX = BY_ROUTE.pipelines!.failureListMax!;
 
 /** The window the viewport opens on, read from the same knob the page reads. */
 const DEFAULT_WINDOW_DAYS = (
@@ -60,6 +58,12 @@ const WINDOW_PRESETS = (
 
 /** The widest span the control offers. Every column of the run strip is a day of it. */
 const WIDEST = Math.max(...WINDOW_PRESETS);
+
+function routeHref(id: RouteId): string {
+	const route = BAND_UNREAD.routes.find((route) => route.id === id);
+	if (!route) throw new Error(`The console names no route ${id}`);
+	return route.href;
+}
 
 /** Every window control is disabled in the prerendered document and enabled on
  * mount, so a click before this just times out. */
@@ -98,13 +102,13 @@ function newestColumn(page: Page) {
 	return page.locator('[data-day]').last();
 }
 
-/** Open `/console/` on a stored span, the way a reader's last choice reopens it. */
+/** Open Pipelines on a stored span, the way a reader's last choice reopens it. */
 async function openOnWindow(page: Page, days: number) {
 	await page.addInitScript(
 		(stored) => localStorage.setItem('idhazh:console-window', String(stored)),
 		days
 	);
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await expect(page.locator('[data-window-control]')).toHaveAttribute(
 		'data-window-days',
 		String(days)
@@ -174,7 +178,7 @@ function watchFor404s(page: Page): string[] {
 }
 
 test('the strip reads oldest to newest, left to right', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	const columns = page.locator('[data-day]');
 	const dates = await columns.evaluateAll((nodes) =>
@@ -237,7 +241,7 @@ test('runs rise from a shared baseline, on a square day track', async ({ page })
 	// takes the chart's slot instead, and `console-run-health.spec.ts` holds it to
 	// the bars.
 	await page.setViewportSize(PHONE);
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await expect(page.locator('[data-run-history="strip"]')).toHaveCount(1);
 
 	const stack = await newestColumn(page).locator('[data-health]').evaluateAll(TO_BOX);
@@ -292,7 +296,7 @@ test('no two date labels print on top of each other', async ({ page }) => {
 	// The phone strip's own date row. Under the chart the squares have none - the
 	// chart's date row is directly above them.
 	await page.setViewportSize(PHONE);
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await expect(page.locator('[data-run-history="strip"]')).toHaveCount(1);
 
 	const labels = await page.locator('[data-axis-label]').evaluateAll(TO_BOX);
@@ -318,7 +322,7 @@ test('a phone strip that cannot fill its frame is centred in it', async ({ page 
 	// excluded for the opposite reason: one square has no inside to be centred in,
 	// and every assertion here would pass on it.
 	await page.setViewportSize(UNDERFULL_VIEWPORT);
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	await setWindow(page, Math.min(...WINDOW_PRESETS.filter((days) => days > 1)));
 
@@ -350,7 +354,7 @@ test('THE ORACLE: the run strip fills its frame, keeps a cadence and reads a day
 	// narrow columns have room for two; and the only way to read a square was a
 	// native tooltip, which no thumb and no keyboard can reach.
 	await page.setViewportSize({ width: 1440, height: 1000 });
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 
 	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
@@ -445,7 +449,7 @@ test('on a phone the strip scrolls, and opens on the newest run', async ({ page 
 });
 
 test('the grid draws one square per run, coloured by what the run did', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	// The colour and the sentence on a square are made from the same facts of one
 	// run (`$lib/console/run-square.ts`), so each sentence names the colour its
@@ -474,7 +478,7 @@ test('the grid draws one square per run, coloured by what the run did', async ({
 });
 
 test('a square says what happened without a mouse', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	// The colour alone is not the answer. Anyone who cannot see the difference
 	// between amber and red still has to be able to read the run - and a native
@@ -493,7 +497,7 @@ test('a square says what happened without a mouse', async ({ page }) => {
 test('the run that read only the start of an article says so on its own square', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
 	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that
@@ -521,7 +525,7 @@ test('a listed feed failed at least once, and a feed the pipeline never read is 
 	// `console-voices-feeds.spec.ts`: an answer that carried nothing is one, and a polite
 	// refusal is not. What the page owes is to list only feeds that failed, and never one it
 	// names as unread.
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 
 	const listed = await page.locator('[data-feed]').evaluateAll((rows) =>
 		rows.map((row) => ({
@@ -554,7 +558,7 @@ test('an answer that carried nothing is labelled as such, and never as ok', () =
 test('a feed still failing never reports its last result as ok', async ({ page }) => {
 	// A streak runs to the newest read, so a feed that has one has not answered since: its last
 	// result is a failure or a read that did not ask, never the word ok.
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 
 	const rows = await page.locator('[data-feed]').evaluateAll((nodes) =>
 		nodes.map((node) => ({
@@ -571,21 +575,11 @@ test('a feed still failing never reports its last result as ok', async ({ page }
 	}
 });
 
-/** The cap the feed list draws with, from the file the page reads it from. */
-const FEED_ROWS =
-	(
-		JSON.parse(
-			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-		) as { console?: { feed_rows?: number } }
-	).console?.feed_rows ?? 10;
+/** The independently declared cap the feed list must keep. */
+const FEED_ROWS = BY_ROUTE.voices!.feedRows!;
 
 /** The threshold under which this page prints counts and no rate. */
-const MIN_ATTEMPTS =
-	(
-		JSON.parse(
-			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-		) as { console?: { min_attempts_for_rate?: number } }
-	).console?.min_attempts_for_rate ?? 5;
+const MIN_ATTEMPTS = BY_ROUTE.voices!.minAttempts!;
 
 /** The feed record the voices page prints in its headline, read off its own attributes.
  *
@@ -607,7 +601,7 @@ async function feedHeadline(page: Page) {
 }
 
 test('THE ORACLE: the feed headline carries its own denominator and span', async ({ page }) => {
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 
 	const { headline, clean, checked, runs } = await feedHeadline(page);
 	// Read against facts the page publishes, never against a locator count alone: a
@@ -631,7 +625,7 @@ test('THE ORACLE: the feed headline carries its own denominator and span', async
 test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', async ({
 	page
 }) => {
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 
 	const { clean } = await feedHeadline(page);
 	const named = await page
@@ -657,7 +651,7 @@ test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', 
 test('THE ORACLE: the failure list is capped and its tail counts the remainder', async ({
 	page
 }) => {
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 
 	const { clean, checked } = await feedHeadline(page);
 	// A feed the headline checked and did not count clean is a feed that failed.
@@ -960,7 +954,7 @@ test('the timing chart draws one unit per CSS pixel at every width', async ({ pa
 	// Loaded once: the first width drives the mount-time measure, the other two
 	// the resize path, which is the one a reader turning a tablet takes.
 	await page.setViewportSize({ width: 380, height: 1000 });
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	for (const viewport of [380, 768, 1400]) {
 		await page.setViewportSize({ width: viewport, height: 1000 });
 		const plot = page.locator('[data-timing="plot"]');
@@ -1139,7 +1133,7 @@ async function newestCandleDay(page: Page): Promise<string> {
 }
 
 test('a candle carries its spread and its runs without a mouse', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 
 	const newest = page.locator(`[data-candle="write"][data-date="${await newestCandleDay(page)}"]`);
 	// Its name, never a native tooltip: a `<title>` needs a hover, and the strip
@@ -1163,7 +1157,7 @@ test('a candle carries its spread and its runs without a mouse', async ({ page }
 });
 
 test('the slower of reading and writing sits lower, on one shared scale', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 
 	// Each candle's last mark is its median. The strip under the chart rests on the
 	// newest day and prints both medians, so the drawing is held to the rates the
@@ -1189,17 +1183,17 @@ test('the slower of reading and writing sits lower, on one shared scale', async 
 });
 
 test('the chart points at the write-up rather than restating it', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 
-	const link = page.getByRole('link', { name: 'why the range is wide' });
+	const link = page.getByRole('link', { name: BY_ROUTE.model!.throughputLink!.label });
 	await expect(link).toHaveAttribute(
 		'href',
-		'https://github.com/miztiik/yen-idhazh/blob/main/docs/architecture/summarize/throughput.md'
+		BY_ROUTE.model!.throughputLink!.href
 	);
 });
 
 test('the throughput chart draws in the pixels it occupies', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 
 	const svg = page.locator('[data-throughput="chart"] svg');
 	// A viewBox is a scale factor, not a unit. Where the two disagree the chart
@@ -1262,7 +1256,7 @@ test('the telemetry viewport renders the published projection', async ({ page })
 		asked.push(month);
 		return route.fulfill({ status: 200, contentType: 'text/csv', body: everyDayOf(month) });
 	});
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
@@ -1273,7 +1267,7 @@ test('the telemetry viewport renders the published projection', async ({ page })
 });
 
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	// The rows sit behind a disclosure, so the control that reaches them is what
 	// has to work before anything about them can be read.
@@ -1294,7 +1288,7 @@ test('the failed-item list is capped, states its scope, and offers the rest', as
 });
 
 test('the candle reads out its day and every series at that column', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 
 	const readout = page.locator('[data-readout="throughput"]');
 	// The strip rests on the newest day rather than opening blank, so it never
@@ -1319,24 +1313,24 @@ test('the candle reads out its day and every series at that column', async ({ pa
 		.evaluateAll((nodes) =>
 			nodes.map((node) => (node.getAttribute('data-readout-row') ?? '').trim())
 		);
-	expect(rows.slice(0, 3)).toEqual(['read', 'write', 'items']);
+	expect(rows.slice(0, 3)).toEqual(BY_ROUTE.model!.readoutRows);
 	expect(rows.length, 'the day printed no run').toBeGreaterThan(3);
 	for (const run of rows.slice(3)) expect(run).toMatch(/^run \S+$/);
-	for (const series of ['read', 'write']) {
+	for (const series of BY_ROUTE.model!.readoutSeries!) {
 		await expect(readout.locator(`[data-readout-row="${series}"] dd`).last()).toHaveText(
 			/^median [\d.]+ tok\/s, middle half [\d.]+ to [\d.]+, slowest [\d.]+, fastest [\d.]+$/
 		);
 	}
 
 	await expect(page.locator('[data-readout-hint="throughput"]')).toHaveText(
-		'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.'
+		BY_ROUTE.model!.readoutHint!
 	);
 });
 
 test('keyboard alone pans the viewport and steps its window through the presets', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	const viewport = page.locator('[data-viewport-control]');
 	await viewport.focus();
@@ -1405,7 +1399,7 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	page.on('pageerror', (error) => errors.push(error.message));
 	const missing = watchFor404s(page);
 
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 
 	// The canary records one failed item, so the list has a row to draw and the
 	// page carries on around it: the timing chart, the run grid and the score
@@ -1414,7 +1408,7 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	// not the table itself.
 	await expect(page.locator('[data-failure-toggle]')).toBeVisible();
 	await expect(page.locator('[data-failure-scope]')).toContainText('in this window.');
-	await expect(page.getByText('Time per item, by stage')).toBeVisible();
+	await expect(page.getByText(BY_ROUTE.pipelines!.stageHeading!)).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	// The daily rows are behind a disclosure now, so what has to survive is the
 	// control that reaches them - not the table itself.
@@ -1423,14 +1417,14 @@ test('an empty section costs the page that section, never the page', async ({ pa
 
 	// And the same on the route the model section moved to, which has its own
 	// empty states and its own band above them.
-	await page.goto('/console/model/');
-	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
+	await page.goto(routeHref('model'));
+	await expect(page.getByRole('heading', { name: BY_ROUTE.model!.sectionHeading! })).toBeVisible();
 	await expect(page.locator('[data-console-band]')).toBeVisible();
 
 	// And on the route the feed and source panels moved to on 2026-09-14. The
 	// feed table is the surface this test used to check on Pipelines; it is the
 	// same check, on the route that now owns it.
-	await page.goto('/console/voices/');
+	await page.goto(routeHref('voices'));
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 	await expect(page.locator('[data-console-band]')).toBeVisible();
 
@@ -1502,7 +1496,7 @@ async function chartRows(page: Page) {
 }
 
 test('every chart row is a day of the window, newest first, and its rates follow its own counts', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await openDailyCharts(page);
 
 	const rows = await chartRows(page);
@@ -1539,7 +1533,7 @@ test('every chart row is a day of the window, newest first, and its rates follow
 test('the measured day prints rates, and the day with no minutes prints dashes', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await openDailyCharts(page);
 
 	// Both states this table has to tell apart are in the window: a day the planner
@@ -1624,7 +1618,10 @@ test('no console route reads the word router to an operator', async ({ page }) =
 	// 0b bars a subsystem word from a string a person reads. The word is gone from
 	// the code as well now, so this is a ban list: it holds the old name out of
 	// every reader string whatever a later row calls the stage.
-	for (const route of ['/console/', '/console/model/', '/console/machine/']) {
+	for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+		const expected = BY_ROUTE[id];
+		if (expected === null || !expected.bansRouter) continue;
+		const route = routeHref(id);
 		await page.goto(route);
 		const leaks = await page.evaluate(() => {
 			const found: string[] = [];
@@ -1653,13 +1650,10 @@ test('the renamed section draws what it drew before, figure for figure', async (
 	// pass the grep above. The counts are `origin/main` at bb7fd4a, counted in
 	// its own source: two figures, each a target bar over a sparkline, and one
 	// flow diagram beside them.
-	await page.goto('/console/');
-	const section = page.locator('[data-windowed="chart-drawing"]');
-	await expect(section.locator('[data-rule-figure]')).toHaveCount(2);
-	await expect(section.locator('[data-target-bar]')).toHaveCount(2);
-	await expect(section.locator('[data-sparkline]')).toHaveCount(2);
-	await expect(page.locator('[data-flow]')).toHaveCount(1);
-	await expect(page.locator('[data-charts="table"] thead th')).toHaveCount(8);
+	await page.goto(routeHref('pipelines'));
+	for (const figure of BY_ROUTE.pipelines!.renamedFigures!) {
+		await expect(page.locator(figure.selector)).toHaveCount(figure.count);
+	}
 });
 
 /** The daily figures sit behind a disclosure now; the cards above them lead.
@@ -1691,22 +1685,10 @@ async function modelRows(page: Page): Promise<{ date: string; cells: Record<stri
  * whole units of time with `<1` for work too short to round to one. A day the
  * ledger holds no answer for prints a dash. Which values are absent is the model
  * work's own rule, pinned over rows written in `console-model-work.spec.ts`. */
-const MODEL_CELL: Record<string, RegExp> = {
-	summaries: /^(-|\d+)$/,
-	'not-sure': /^(-|\d+)$/,
-	unsupported: /^(-|\d+)$/,
-	hedge: /^(-|\d+)$/,
-	part: /^(-|\d+)$/,
-	'part-pct': /^(-|\d+%)$/,
-	copied: /^(-|\d+%)$/,
-	'per-item': /^(-|(<1|\d+)( (<1|\d+) when cut short)?)$/,
-	minutes: /^(-|<1|\d+)$/,
-	'too-long': /^(-|\d+)$/,
-	failed: /^(-|\d+)$/
-};
+const MODEL_CELL = BY_ROUTE.model!.cellFormats!;
 
 test('every model cell prints a count, a share, a time or a dash, on a day of the window', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 	await openDailyFigures(page);
 
 	const rows = await modelRows(page);
@@ -1731,7 +1713,7 @@ test('every model cell prints a count, a share, a time or a dash, on a day of th
 test('a day the scorer never reached prints dashes, and still prints its speed', async ({
 	page
 }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 	await openDailyFigures(page);
 
 	// A day the scorer never reached has summaries nobody counted, so every figure
@@ -1741,7 +1723,7 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 	const unscored = rows.filter((row) => row.cells.summaries === '-');
 	expect(unscored.length, 'every day in the window was scored, so the dashes are untested').toBeGreaterThan(0);
 	for (const row of unscored) {
-		for (const cell of ['not-sure', 'unsupported', 'hedge', 'part', 'part-pct', 'copied']) {
+		for (const cell of BY_ROUTE.model!.unscoredCells!) {
 			expect(row.cells[cell], `${row.date} ${cell}`).toBe('-');
 		}
 	}
@@ -1759,7 +1741,7 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 });
 
 test('nothing under the heading is a score or an internal column name', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 	// Opened, so the scan below reads the cards AND the rows. A closed disclosure
 	// keeps its rows out of `innerText`, and a scan that cannot see half the
 	// section is a scan that passes for the wrong reason.
@@ -1776,28 +1758,7 @@ test('nothing under the heading is a score or an internal column name', async ({
 	// A ledger column name on screen makes a reader open the schema to read the
 	// page. Every one of these is a real column of the eval ledger or the
 	// item-health ledger.
-	for (const name of [
-		'hhem',
-		'coverage',
-		'compression',
-		'extractiveness',
-		'verbatim_run',
-		'unsupported_numbers',
-		'hedge_dropped',
-		'truncation_flagged',
-		'extraction_suspect',
-		'determinism_violation',
-		'evidential_density',
-		'speculative_density',
-		'scorer_version',
-		'score_ms',
-		'summarize_ms',
-		'prefill_ms',
-		'decode_ms',
-		'input_tokens',
-		'output_tokens',
-		'cached_tokens'
-	]) {
+	for (const name of BY_ROUTE.model!.internalColumns!) {
 		expect(section.toLowerCase(), `${name} is printed under the heading`).not.toContain(name);
 	}
 
@@ -1810,17 +1771,17 @@ test('nothing under the heading is a score or an internal column name', async ({
 });
 
 test('the candle stays first inside the section, above the table', async ({ page }) => {
-	await page.goto('/console/model/');
+	await page.goto(routeHref('model'));
 
 	const order = await page
 		.locator('[data-model-section] [data-throughput="chart"], [data-model-section] [data-model="table"]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-throughput') ?? 'table'));
-	expect(order).toEqual(['chart', 'table']);
+	expect(order).toEqual(BY_ROUTE.model!.sectionOrder);
 
 	// One heading for the whole section. The candle keeps its own name, one level
 	// down, so a fourth console section is not what this became.
-	await expect(page.getByRole('heading', { level: 2, name: 'What the model did' })).toBeVisible();
+	await expect(page.getByRole('heading', { level: 2, name: BY_ROUTE.model!.sectionHeading! })).toBeVisible();
 	await expect(
-		page.getByRole('heading', { level: 3, name: 'Model tokens per second' })
+		page.getByRole('heading', { level: 3, name: BY_ROUTE.model!.chartHeading! })
 	).toBeVisible();
 });

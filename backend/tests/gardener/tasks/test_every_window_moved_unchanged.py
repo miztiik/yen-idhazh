@@ -125,3 +125,15 @@ def test_the_three_windows_that_stayed_still_read_what_they_did() -> None:
     }
 
     assert {key: frozen[key] for key in stayed} == stayed
+
+
+def test_the_recorded_config_still_keeps_yearly_expiry_disabled() -> None:
+    """An unrelated config migration must not replace the historical retention policy."""
+    tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
+    compactions = {
+        name: policy for name, policy in tasks.items() if isinstance(policy, CompactionPolicy)
+    }
+    assert compactions, "the recorded pre-expiry config must contain compaction declarations"
+    for name, policy in compactions.items():
+        assert policy.yearly_keep_months is None, f"{name} must still keep years forever"
+        assert policy.yearly_prune_enable is False, f"{name} must still disable yearly expiry"
