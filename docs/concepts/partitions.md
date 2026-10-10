@@ -132,7 +132,7 @@ other class honest. Settling one in favour of a single writer deletes the other
 writer's rows and exits 0 - three written-once inputs all land intact while the
 file derived from them quietly loses half its content, and no gate can see it.
 What the push does with each class is
-[in committing.md](../architecture/publishing/committing.md#a-conflicted-path-is-settled-by-who-wrote-it-never-by-which-side-it-came-from).
+[in committing.md](../architecture/publishing/committing.md#the-caller-owns-recovery-policy).
 
 `backend/tests/contracts/test_path_classes.py` holds the two classes disjoint and
 covering every path a production stage writes. It enumerates the writers from

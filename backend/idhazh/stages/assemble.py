@@ -101,9 +101,7 @@ def _earlier_days(date: str, *, window_hours: float) -> list[assemble.EarlierDay
         day = _load_day(assemble.day_dir(common.PUBLIC_ROOT, stem) / "digest.json")
         if day is None:
             continue
-        found.append(
-            assemble.EarlierDay(date=stem, items=day.items, embeddings=day.embeddings)
-        )
+        found.append(assemble.EarlierDay(date=stem, items=day.items, embeddings=day.embeddings))
     return found
 
 
@@ -115,9 +113,7 @@ def _recorded_inputs(items_dir: Path) -> PipelineInputs | None:
     return PipelineInputs.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def _report_prose_change(
-    inputs: PipelineInputs | None, previous: RunManifest | None
-) -> None:
+def _report_prose_change(inputs: PipelineInputs | None, previous: RunManifest | None) -> None:
     """Say when the words we asked for moved and the machine reading them did not.
 
     The one alarm that survives the retired stamp (owner decision, 2026-09-10).
@@ -130,9 +126,7 @@ def _report_prose_change(
     """
     if inputs is None or previous is None:
         return
-    earlier = next(
-        (run.inputs for run in reversed(previous.runs) if run.inputs is not None), None
-    )
+    earlier = next((run.inputs for run in reversed(previous.runs) if run.inputs is not None), None)
     moved = prose_changed_alone(earlier, inputs)
     if not moved:
         return
@@ -184,6 +178,7 @@ def stage_assemble(
     commit_sha: str,
     runner: str = "local",
     shards: int | None = None,
+    regenerate_only: bool = False,
 ) -> DigestDay:
     """Collect whatever finished, publish it, and append the ledger.
 
@@ -263,9 +258,7 @@ def stage_assemble(
                 config=settings.app.evaluation,
             )
         decision = (
-            VisualDecision.read(payload.decision_path)
-            if payload.decision_path.exists()
-            else None
+            VisualDecision.read(payload.decision_path) if payload.decision_path.exists() else None
         )
         if decision is not None:
             decisions.append(decision)
@@ -307,7 +300,9 @@ def stage_assemble(
         if fragment_file.exists()
         else generated_at
     )
-    if ledger.accepts_new_rows(LedgerName.DIGEST_FRAGMENTS, len(digest_items)):
+    if not regenerate_only and ledger.accepts_new_rows(
+        LedgerName.DIGEST_FRAGMENTS, len(digest_items)
+    ):
         atomic_write.write_atomic(
             fragment_file,
             DigestRunFragment(
@@ -419,18 +414,30 @@ def stage_assemble(
         producer=PRODUCER,
         git_sha=commit_sha,
     )
-    published = ledger.append_published(
-        common.STATE_ROOT, day.date, _published_rows(day, plan), identity=identity
+    published = (
+        0
+        if regenerate_only
+        else ledger.append_published(
+            common.STATE_ROOT, day.date, _published_rows(day, plan), identity=identity
+        )
     )
-    filed = ledger.persist(
-        common.STATE_ROOT,
-        item_health_rows,
-        ledger=LedgerName.ITEM_HEALTH,
-        covers=plan.date,
-        identity=identity,
+    filed = (
+        []
+        if regenerate_only
+        else ledger.persist(
+            common.STATE_ROOT,
+            item_health_rows,
+            ledger=LedgerName.ITEM_HEALTH,
+            covers=plan.date,
+            identity=identity,
+        )
     )
     item_health = len(item_health_rows) if filed else 0
-    landed = writer.file_measurements(common.STATE_ROOT, rows, identity=identity)
+    landed = (
+        0
+        if regenerate_only
+        else writer.file_measurements(common.STATE_ROOT, rows, identity=identity)
+    )
     # Every projection of the instrument, in the one order `dispatch` names. It
     # runs after the ledgers this stage appended and reads those files rather
     # than anything in memory here, so a run that failed to append publishes the
@@ -480,9 +487,10 @@ def stage_assemble(
         # counts all along and nobody read them, which is why this speaks.
         print(f"::warning title=Sources answering but not reading::{yield_alarm}")
         LOG.warning("%s", yield_alarm)
-    _retire_low_yield_sources(
-        instrument.sources, plan=plan, run_id=run_id, settings=settings, commit_sha=commit_sha
-    )
+    if not regenerate_only:
+        _retire_low_yield_sources(
+            instrument.sources, plan=plan, run_id=run_id, settings=settings, commit_sha=commit_sha
+        )
     _report_nothing_published(day, plan)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "

@@ -13,6 +13,8 @@ and a file out (CLAUDE.md section 1a).
 
 from __future__ import annotations
 
+from datetime import date as date_type
+from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
@@ -94,6 +96,37 @@ class ContentSimilarityJudge:
     def committed_paths(self) -> tuple[str, ...]:
         return COMMITTED_PATHS
 
+    def publication_inputs(self, *, date: str) -> tuple[str, ...]:
+        """The flat record, published day and fitted evidence's configured window."""
+        from idhazh.contracts.file_envelope import Period
+        from idhazh.ledger import paths
+
+        knobs = config.load().app.assemble.same_story.judging_knobs()
+        window = max(knobs.settled_window_days, knobs.step_change_window_rows * 2)
+        which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+        state = Path("state")
+        asked = {
+            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION).as_posix(),
+            f"frontend/public/digest/{date.replace('-', '/')}/digest.json",
+        }
+        for period in Period:
+            asked.add(paths.compact_index_path(state, which, period).as_posix())
+        for offset in range(window):
+            day = (date_type.fromisoformat(date) - timedelta(days=offset)).isoformat()
+            asked.add((paths.raw_root(state, which) / day.replace("-", "/")).as_posix())
+            for period, covers in (
+                (Period.DAILY, day),
+                (Period.MONTHLY, day[:7]),
+                (Period.YEARLY, day[:4]),
+            ):
+                for suffix in (".json", ".parquet"):
+                    asked.add(
+                        paths.compact_path(state, which, period, covers)
+                        .with_suffix(suffix)
+                        .as_posix()
+                    )
+        return tuple(sorted(asked))
+
     def nights_outstanding(
         self, *, window: tuple[DateStamp, ...], state_dir: Path | None = None
     ) -> tuple[DateStamp, ...]:
@@ -129,9 +162,7 @@ class ContentSimilarityJudge:
         record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
         if not record_path.exists():
             return ()
-        record = StorySimilarityDistribution.from_json(
-            record_path.read_text(encoding="utf-8")
-        )
+        record = StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
         read = set(record.judged_dates)
         return tuple(night for night in window if night not in read)
 
