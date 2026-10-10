@@ -147,6 +147,7 @@ DROPPED_CELLS: Final[frozenset[str]] = frozenset(
 #: the first one to break is not.
 #: A declared panel query counts as a reader. Shared, pipelines, model, machine,
 #: then voices owns a column when more than one query declares it.
+#: 2026-10-10: registry and description changes leave the persisted schema at 2026-09-29.
 #:
 #: What this cannot settle is whether the named surface still DRAWS the value -
 #: only that it still names the column. A panel that reads a cell and then throws
@@ -614,11 +615,6 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-10",
-            change="Declared console queries own their columns; fetch_ttfb_ms stops at headers.",
-            why="Reader metadata and the clock description changed, not the persisted row.",
-        ),
-        ChangelogEntry(
             version="2026-09-29",
             change="job and shard are machine_job and machine_shard.",
             why="The ledger's own job and shard name the writer; these name the machine.",
@@ -632,6 +628,11 @@ class ItemHealthRow(Contract):
             version="2026-09-21",
             change="Retired max_output_tokens; the two settings behind it left inference.",
             why="The budgets that bounded a decode are the two derived ones still on the row.",
+        ),
+        ChangelogEntry(
+            version="2026-09-20T18:00",
+            change="Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
+            why="Time another tenant used, and pages the kernel took back, are not our own work.",
         ),
         ChangelogEntry(
             version="2026-08-23",

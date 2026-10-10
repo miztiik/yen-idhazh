@@ -15,7 +15,7 @@
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
-	import { emptyState } from '$lib/charts/d3/empty';
+	import { emptyState, recordEmptyState } from '$lib/charts/d3/empty';
 	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import {
 		FLEET_HINT,
@@ -130,7 +130,7 @@
 	// Every ledger a panel reads is published, so `missing` is a record with no
 	// compact folder: one that is not packed yet, never one left unpublished.
 	const empty = $derived(
-		panelState === 'loading' ? emptyState('loading')
+		panelState === 'loading' ? recordEmptyState('loading')
 			: panelState === 'missing' ? emptyState('missing', 'The machine record is not packed yet.')
 				: panelState === 'unreachable' ? emptyState('unreachable', 'The machine record could not be read. Reload this page to try again.')
 					: emptyState('quiet', 'No jobs were recorded in this window.')

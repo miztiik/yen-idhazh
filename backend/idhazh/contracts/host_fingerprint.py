@@ -74,6 +74,7 @@ WATCHED_FLAGS: tuple[str, ...] = (
 #: the first one to break is not.
 #: A declared panel query counts as a reader. Shared, pipelines, model, machine,
 #: then voices owns a column when more than one query declares it.
+#: 2026-10-10: registry ownership changed; the persisted schema remains 2026-09-20.
 #:
 #: What this cannot settle is whether the named surface still DRAWS the value -
 #: only that it still names the column. A panel that reads a cell and then throws
@@ -125,11 +126,6 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-10",
-            change="Declared Hardware queries own their host columns, including platformMixQuery.",
-            why="Reader metadata changed, not the persisted row.",
-        ),
-        ChangelogEntry(
             version="2026-09-20",
             change="`memcpy_probe_mib` is the derived buffer, not the configured one.",
             why="A constant could not clear a cache that varies fifteenfold across the fleet.",
@@ -145,9 +141,14 @@ class HostFingerprintRow(Contract):
             why="A job's clock is only known at its end, so the row arrives in two halves.",
         ),
         ChangelogEntry(
+            version="2026-09-17",
+            change="Widened `job` to every workflow job that draws its own machine.",
+            why="A run whose slowest job is unmeasured is a run whose cost nobody can attribute.",
+        ),
+        ChangelogEntry(
             version="2026-09-16",
-            change="Earlier changes are in this file's git history.",
-            why="A changelog says what moved lately; git is the archive.",
+            change="Initial shape: the silicon a job drew, its instruction set and its bandwidth.",
+            why="Throughput moved 3.7x by machine and nothing recorded which machine.",
         ),
     )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
@@ -290,8 +291,26 @@ def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rul
 
 
 def test_registry_only_changes_metadata_and_the_fetch_header_description() -> None:
-    assert ItemHealthRow.__changelog__[0].version == "2026-10-10"
-    assert HostFingerprintRow.__changelog__[0].version == "2026-10-10"
-    assert "not the persisted row" in ItemHealthRow.__changelog__[0].why
-    assert "not the persisted row" in HostFingerprintRow.__changelog__[0].why
+    assert ItemHealthRow.schema_version() == "2026-09-29"
+    assert HostFingerprintRow.schema_version() == "2026-09-20"
     assert "response headers" in (ItemHealthRow.model_fields["fetch_ttfb_ms"].description or "")
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    (
+        (ItemHealthRow, "f34f9059d04779cff2c5b4239dc73a176fcaec396429e8f14ec794af2f0d4b3d"),
+        (HostFingerprintRow, "ae2151ffdba753b463c5e3ea837dde7dff93ff433065991aa25fdc689678d93f"),
+    ),
+)
+def test_registry_keeps_the_pre_query_persisted_shape(model: type[ItemHealthRow] | type[HostFingerprintRow], expected: str) -> None:
+    """Frozen pre-row-4 schemas retain field order, constraints, requiredness and defaults."""
+    def shape(value: object) -> object:
+        if isinstance(value, dict):
+            return {key: shape(child) for key, child in value.items() if key != "description"}
+        if isinstance(value, list):
+            return [shape(child) for child in value]
+        return value
+
+    encoded = json.dumps(shape(model.model_json_schema()), separators=(",", ":"), ensure_ascii=True).encode()
+    assert hashlib.sha256(encoded).hexdigest() == expected
