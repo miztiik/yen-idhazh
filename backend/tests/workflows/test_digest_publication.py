@@ -148,6 +148,17 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
         if path.is_relative_to(repo) and not path.is_relative_to(repo / "backend")
     }
     authority = digest_publish.permissions("assemble", date=run_plan.date)
+    month = run_plan.date[:7]
+    projections = (
+        "frontend/public/console/band.json",
+        f"frontend/public/day-metrics/{month}.json",
+        f"frontend/public/machine/{month}.csv",
+        f"frontend/public/run-days/{month}.json",
+        f"frontend/public/run-timeline/{month}.csv",
+        "frontend/public/source-health.json",
+        f"frontend/public/telemetry/{month}.csv",
+    )
+    assert set(projections) <= hashes.keys(), "every changed projection needs write evidence"
     day = "frontend/public/digest/" + run_plan.date.replace("-", "/")
     mutable = (
         *(
@@ -227,6 +238,12 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     result = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
     assert result.status is Status.LANDED, result
     assert result.prepared
+    for path in projections:
+        entry = Repository(origin).entry("main", path)
+        assert entry is not None, f"projection was omitted from publication: {path}"
+        assert Repository(origin).blob(entry.oid) == (repo / path).read_bytes()
+    assert result.observed_tip is not None
+    digest_publish.published_inputs(repo, result.observed_tip, date=run_plan.date, settings=settings)
     manifest_text = on_origin(origin, f"{day}/run.json")
     assert manifest_text is not None
     from idhazh.cli import shard_count
