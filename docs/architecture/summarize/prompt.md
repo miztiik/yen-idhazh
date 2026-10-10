@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-10
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -124,7 +124,7 @@ Re-tokenize the complete rendered requests for a candidate model. Recorded incum
 | Section | Required content |
 | --- | --- |
 | Framing | Make clear how the article knows what it reports |
-| Title | A new factual title drawn from body and headline |
+| Title | A new factual title drawn from the body, with a source headline when available |
 | Length | The selected band's request |
 | Source form | Attribute an abstract's claims to its authors |
 | Attribution | Name who made a claim; distinguish self-reported figures |
@@ -136,6 +136,9 @@ Re-tokenize the complete rendered requests for a candidate model. Recorded incum
 ## The title is ours, and the source's is only a fallback
 
 Ask for actor and action without hype, withheld facts or a question addressed to the reader. Fence the source headline like the body. Require a title in the decoded draft so the model attempts it, but permit the published title to fall back to the source headline and then `Untitled item`.
+
+An absent source headline does not block summarization. The article keeps that
+absence; the generated title belongs to the summary, not to the source.
 
 The evaluation record identifies the article with its source headline, not a generated title that can change between runs.
 

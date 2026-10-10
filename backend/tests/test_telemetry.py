@@ -142,26 +142,10 @@ def row_for(code: FailureCode) -> ItemHealthRow:
         case FailureCode.NO_TEXT:
             failed = failed_article(ArticleStatus.EXTRACT_FAILED, "extractor found no article text")
         case FailureCode.NO_TITLE:
-            headless = item().model_validate(item().model_dump(mode="json") | {"title": None})
-            failed = extract.to_article(
-                headless,
-                FetchResult(
-                    FetchOutcome.OK,
-                    status=200,
-                    body=(
-                        b"<html><body><article>"
-                        b"<p>This sentence has enough words to count as article prose today.</p>"
-                        b"<p>Another sentence has enough words to count as article prose today.</p>"
-                        b"<p>A third sentence has enough words to count as article prose today.</p>"
-                        b"<p>The fourth sentence has enough words to count as article prose too.</p>"
-                        b"<p>Its fifth neighbour has enough words to count as article prose too.</p>"
-                        b"<p>One final sentence has enough words to count as article prose too.</p>"
-                        b"</article></body></html>"
-                    ),
-                ),
-                config=settings.app.extract,
-                fetched_at="2026-08-21T06:00:00Z",
-            )
+            failed = failed_article(
+                ArticleStatus.EXTRACT_FAILED,
+                "neither the feed nor the page carries a headline we will publish",
+            ).model_copy(update={"failure_code": FailureCode.NO_TITLE})
         case FailureCode.TOO_SHORT:
             failed = failed_article(
                 ArticleStatus.EXTRACT_FAILED, "only 12 words extracted; page furniture is short"
