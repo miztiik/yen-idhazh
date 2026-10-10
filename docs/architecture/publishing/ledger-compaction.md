@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -160,16 +160,18 @@ download at most `max_downloaded_mb` for all its tasks
 has named its periods, it reads their files' sizes off the listing, takes the
 longest run, oldest first, whose download fits what is left, and stops at the
 first period that does not fit: `ceiling`, for a later wake with room, or
-`failed` by name, with the fault `raised`, when that period alone is larger
-than the whole budget, because no wake could ever take it. Either way one
+`failed` by name, with the fault `manual-action`, when that period alone is
+larger than the whole budget and a person must settle it. Either way one
 `download-over-budget` event names the period, its bytes, the room left and
-`max_downloaded_mb`. `error_cause.classify` decides both by one
-rule, more than the whole budget is a defect, and the runner's check after the
-tasks asks it too. Adopting a file no entry names counts against the budget
-too, and so do the marks and the files an absent index is rebuilt from: a pass
-whose marks, or those files, do not fit takes nothing and ends `ceiling` at its
-index folder. A correct pass never passes the budget, so a shard over it is a
-code defect.
+`max_downloaded_mb`. A period-specific refusal uses `ManualActionError`;
+unclassified and aggregate `OverBudgetError` values remain `raised`. The
+runner's synthetic check after the tasks also remains `raised`: it means code
+passed the per-period budget rule. Adopting a file no entry names counts
+against the budget too, and so do the marks and the files an absent index is
+rebuilt from: a pass whose marks, or those files, do not fit takes nothing and
+ends `ceiling` at its index folder. A grouped index rebuild larger than the
+whole budget fails with `raised`, because its combined files are not one
+period.
 
 **Every rule counts whole UTC days after a period's own end.** The pass measures
 from 00:00 UTC on the wake's own day, so every wake of one UTC day gets the same
@@ -446,9 +448,9 @@ days held rows. A month no entry names adopts its own file when one is at its
 path. With none, when nothing of the month is left - no day file, no raw file,
 no daily entry - its days are recorded lost; while something is left, the month
 never closed, so the year is refused by name as `day-missing`, the yearly
-mark stays, and the task exits 1. A year's file covers the whole year, so
-a reach that counts from the yearly index starts on its 1 January even when its
-first rows came later.
+mark stays, and the task exits 1 with `manual-action`. A year's file covers the
+whole year, so a reach that counts from the yearly index starts on its 1 January
+even when its first rows came later.
 
 **The earliest a year can go is `daily_keep_days` plus 32 days after it ends.**
 Its next January is absorbed `daily_keep_days` after that January ends, 31 days
@@ -471,8 +473,8 @@ indexes name is read from its year.
 holds one month's rows at a time rather than the year's, and a reader that
 filters on a date can skip the row groups of the other months. A year file over
 50 MiB, the size at which GitHub warns about a pushed file, is refused by name
-and its month files are kept: GitHub refuses a push that holds a file over
-100 MiB, and one that did would stall every later wake.
+as `manual-action` and its month files are kept: GitHub refuses a push that
+holds a file over 100 MiB, and one that did would stall every later wake.
 
 ## Yearly expiry
 
@@ -506,13 +508,13 @@ report a larger size; that known tool difference is not a reason to raise the
 production ceiling ([gate notes](../../reference/agent-notes/gates-and-builds.md)).
 
 An established compact tree with yearly pruning enabled must have
-`index/yearly.json`. If it is missing, the pass refuses it by name. Restore
-the index from git before retrying: surviving files cannot reconstruct which
-years were deliberately deleted. With yearly pruning enabled, a new ledger
-with no compact tree initializes all three indexes, even when it has no rows.
-A live pass that writes these indexes ends `done`, not `empty`: initialization
-is completed work. Idle-outcome tests disable yearly pruning so they test
-the idle reason without also initializing expiry metadata.
+`index/yearly.json`. If it is missing, the pass fails with `manual-action`.
+Restore the index from git before retrying: surviving files cannot reconstruct
+which years were deliberately deleted. With yearly pruning enabled, a new
+ledger with no compact tree initializes all three indexes, even when it has no
+rows. A live pass that writes these indexes ends `done`, not `empty`:
+initialization is completed work. Idle-outcome tests disable yearly pruning so
+they test the idle reason without also initializing expiry metadata.
 A corrupt index stops the pass, never reads as empty.
 Indexes and deletions land together in the shard's one commit.
 
@@ -650,9 +652,12 @@ index is written whole and no later pass looks again once it exists. Each
 index's files are fetched in one call inside what is left of the shard's
 download budget, so a rebuild that does not fit takes nothing and ends
 `ceiling` at the index folder, or `failed` there when it alone is larger than
-the whole budget. A file at a period's path whose envelope names another ledger
-or period stops the pass by name: adopting it would put another period's rows
-under this one.
+the whole budget with fault `raised`: the rebuild fetches a group of files, not
+one period. A file at a period's path whose envelope names another ledger
+or period stops the pass as `manual-action`: adopting it would put another
+period's rows under this one. An index whose ledger or period identity does not
+match the path this build named fails the same way. A malformed current index
+or an older payload that needs a missing read migration remains `raised`.
 
 **What a rebuild cannot see.** A quiet day, month or year has no file, so a
 rebuilt index cannot name it; a quiet day then reads as a hole, and its month
@@ -717,11 +722,21 @@ in every row. `until` is the newest day that was due. A pass that used its
 budget - the cap, a day's most raw files, or what is left of the shard's
 download budget - stops `ceiling`, with `resume_from` naming the day, month or
 year the next pass starts at. One that refused a period stops at it, naming it,
-and `fault` says why: `failed` with the fault `raised` for a defect, which turns
-the job red, or `deferred` with `range-starts-late`, `no-month-to-reopen` or
-`packed-file-unreadable` for a period a person settles
+and `fault` says why: `failed` with `raised` for a defect or unclassified
+failure, `failed` with `manual-action` for one of the eight recognized refusals
+below, or `deferred` with `range-starts-late`, `no-month-to-reopen` or
+`packed-file-unreadable` for a retryable stop
 ([idhazh-gardener.md](idhazh-gardener.md#the-record)). `recovered` lists every
 note the pass made instead of stopping, one a period, in the order it met them.
+
+The eight `manual-action` refusals are closed: a year contains a month that
+never closed; a year file crosses GitHub's large-file line; an unindexed month
+file disagrees with its day files; a Rule R or Rule L file has the wrong ledger
+or period envelope; an index has the wrong ledger or period identity; a raw-day
+folder contains an entry that is not a file; one period is larger than the
+whole download budget; or an established compact tree has yearly expiry
+enabled and no yearly index. A raw aggregate shard-over-budget error is not on
+this list and remains `raised`.
 
 ## Design rationale
 
@@ -962,11 +977,12 @@ periods, from sizes the listing already holds, so a correct pass never passes
 it, and a shard over it is a defect to fix rather than a backlog to wait out.
 Only the compaction chooses by the budget so far: the other tasks that download
 still download what they read, and the shard's check after its tasks still
-catches one that passes it. "Too large" means too large for that budget, not a
-size of its own: no value for a per-file limit has been measured, and moving a
-file aside needs the very download it is too large for. A period larger than
-the whole budget fails by name, because `ceiling` would promise a later wake
-that never comes.
+catches an aggregate overrun as `raised`: it means code passed the per-period
+budget rule. "Too large" means too large for that budget, not a size of its
+own: no value for a per-file limit has been measured, and moving a file aside
+needs the very download it is too large for. A period larger than the whole
+budget fails by name as `manual-action`, because `ceiling` would promise a
+later wake that never comes.
 
 **A year's own file is adopted before its months are read, and a month no entry
 names is adopted, recorded lost, or refused.** A year file is written only in
@@ -1047,21 +1063,33 @@ The full-grain series still sets the input floor on `item-health`.
 No live data files are removed by this configuration change; the first
 possible yearly expiry is 2030-01-01 at 00:00 UTC for 2026.
 
-**2026-10-07: a refusal a person settles defers the pass, and only a defect
-fails it.** Before, every refused period ended the pass `failed` and turned the
-job red, whatever the cause. Now a range that starts after a ready period
+**2026-10-07: a retryable refusal defers the pass.** Before, every refused
+period ended the pass `failed` and turned the job red, whatever the cause. A
+range that starts after a ready period
 (`range-starts-late`), a raw day in a month that has no entry to re-open
 (`no-month-to-reopen`), and a packed day or month file that a re-run or a late
 file would be settled into and that cannot be read or is not there
 (`packed-file-unreadable`) each end the pass `deferred` with that word, and the
-job stays green; every other refusal is `raised`, a defect, and the job turns
-red (the owner, 2026-10-04 and 2026-10-06; words by Fowler, 2026-10-07). A step
+job stays green (the owner, 2026-10-04 and 2026-10-06; words by Fowler,
+2026-10-07). At that date every other refusal was `raised`; the 2026-10-09
+decision below separates the recognized manual cases. A step
 that a fault stopped holds the daily mark below its day whichever way it stops,
 so a deferred day is never passed. A fault word was chosen over setting the
 unreadable file aside, because the entry would then call the period whole while
 it held only the rows that ran again. A hole in a day's history packed from its
 raw files is noted `repacked-from-raw` only when nothing was adopted for it, so
 the note never depends on which step adopted a file first (Fowler, 2026-10-07).
+
+**2026-10-09: eight recognized refusals fail as `manual-action`.** These cases
+cannot recover on a later wake without a person changing data or policy, but
+calling them code defects is false. Each constructs `ManualActionError` at its
+named source. Generic `ValueError`, input/output errors, malformed current
+payloads, missing read migrations and every unnamed failure remain `raised`.
+Both faults are paired with `failed` and log errors. The three retryable faults
+above remain deferred and green. A period larger than the whole download
+budget is one of the eight; the synthetic shard aggregate overrun remains a
+defect because it means a task bypassed the per-period choice (owner approval
+and Fowler review, 2026-10-09).
 
 ## See also
 

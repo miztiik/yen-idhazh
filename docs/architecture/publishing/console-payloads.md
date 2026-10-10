@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-09
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -226,12 +226,11 @@ list order; two lists that can drift is one list too many, and a payload absent
 from either builds locally and never reaches the site. The staged path list on
 the same step still moves with a new payload root.
 
-**Every new payload root ships with a committed file.**
-`backend/utilities/commit_and_push.py` stages every path a job owns in one
-`git add`, so a path that does not exist fails that call, stops the whole commit
-step, and takes every sibling ledger staged beside it.
-`test_every_path_the_day_stages_exists_in_a_fresh_checkout` asks the working
-tree for each one.
+**Seed payloads support the first site build, not directory staging.**
+`backend/utilities/publish_to_repo.py` indexes exact confirmed files, so a
+declared output root need not exist in a fresh checkout. ASSEMBLE rebuilds the
+complete derived set before publishing; failure publishes no partial set.
+See [committing.md](committing.md) for the independent output declarations.
 
 ### What checks them
 

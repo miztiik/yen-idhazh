@@ -134,7 +134,7 @@ for (const width of WIDTHS) {
 		page.on('request', (request) => requests.push(new URL(request.url()).pathname));
 
 		await openWholeDay(page, width);
-		const steps = await revealDayDrawings(page);
+		const candidates = await revealDayDrawings(page);
 		await expect(page.locator('main figure svg')).toHaveCount(DRAWN.length);
 
 		const requestedLateDrawing = DRAWN_AFTER_SEED.some((item) =>
@@ -142,7 +142,7 @@ for (const width of WIDTHS) {
 		);
 		expect(
 			requestedLateDrawing,
-			`no visual past the ${SEED}-item seed was fetched over ${steps} screens`
+			`no visual past the ${SEED}-item seed was fetched after inspecting ${candidates} visual candidates`
 		).toBe(true);
 
 		const shape = await page.evaluate(() => ({

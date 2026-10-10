@@ -1,87 +1,59 @@
-"""What does the shared commit program do when it loses the race to push?"""
+"""Real Git publication regressions, without the retired checkout/rebase engine."""
 
-from __future__ import annotations
-
-import ast
+import dataclasses
+import hashlib
 import json
-import re
-import sys
-from collections.abc import Iterator, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import CONFIG_DIR
+from gardener._garden import an_origin, git, on_origin, quiet_git, write
 
-from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.ledger_name import LedgerName
-from utilities import commit_and_push
+from idhazh.contracts.file_envelope import WriterIdentity
+from utilities import publish_to_repo
+from utilities.publication_git import Repository
+from utilities.publication_request import PublicationRequest, Write
+from utilities.publish_to_repo import Status, publish
 from utilities.push_retry import PushRetry, load_retry
 
-from ._harness import (
-    COMMIT_IDENTITY,
-    COMMIT_PROGRAM,
-    COMMIT_STEPS,
-    GIT_IDENTITY_SOURCES,
-    RACED_ASSET,
-    RACED_ITEM_ID,
-    SUBSTITUTED_DATE,
-    SUBSTITUTED_DAY_DIR,
-    _chart,
-    _commit_call,
-    _digest_origin,
-    _drop_command,
-    _fast_push_retry,
-    _git,
-    _isolated_env,
-    _load_workflows,
-    _mapping,
-    _mid_rebase,
-    _push_attempts,
-    _race,
-    _race_the_day,
-    _reading_its_output,
-    _rebuild,
-    _rebuild_command,
-    _reject_the_first_pushes,
-    _rows,
-    _run_commit_script,
-    _scripted_origin,
-    _seed_ledger,
-    _step_outputs,
-    _steps,
-    _tracked,
-    _write,
-    requires_space_free_paths,
-)
+from ._harness import _reject_the_first_pushes
 
-pytestmark = pytest.mark.workflow
+RETRY = PushRetry({"default": 300}, 0.001, 0.001, 1)
+PATH = "state/raw/seen/2026/10/09/[item].json"
+
+
+def evidence(repo: Path) -> PublicationRequest:
+    source = git(repo, "rev-parse", "HEAD").strip()
+    return PublicationRequest(
+        WriterIdentity(
+            run_id="2026-10-09-123",
+            attempt=1,
+            job=ServerJob.PLAN,
+            shard=0,
+            producer="tests.publisher",
+            git_sha=source,
+        ),
+        "completed",
+        source,
+        ("state/raw/seen",),
+        (),
+        {
+            PATH: Write(
+                hashlib.sha256((repo / PATH).read_bytes()).hexdigest(),
+                Repository(repo).entry(source, PATH),
+                True,
+            )
+        },
+    )
 
 
 def test_the_production_backoff_grows_and_caps() -> None:
     retry = load_retry(CONFIG_DIR / "push-retry.json")
-    assert [retry.backoff_seconds(count) for count in range(1, 8)] == [1, 2, 4, 8, 8, 8, 8]
+    assert [retry.backoff_seconds(n) for n in range(1, 8)] == [1, 2, 4, 8, 8, 8, 8]
     assert retry.deadline_for("work") == 120
     assert retry.deadline_for("assemble") == 300
     assert retry.deadline_for("a-new-job") == 300
-
-
-def test_every_deadline_override_names_a_job_that_runs_the_commit_program() -> None:
-    retry = load_retry(CONFIG_DIR / "push-retry.json")
-    committing_jobs = {
-        job
-        for filename, workflow in _load_workflows().items()
-        for job in _mapping(workflow.get("jobs"), f"{filename} jobs")
-        if any(
-            isinstance(script := step.get("run"), str) and "commit_and_push.py" in script
-            for step in _steps(workflow, job)
-        )
-    }
-    assert committing_jobs, "no committing workflow jobs were found"
-    stale = set(retry.deadline_seconds) - {"default"} - committing_jobs
-    assert not stale, f"deadline_seconds overrides name no committing workflow job: {sorted(stale)}"
 
 
 @pytest.mark.parametrize(
@@ -96,29 +68,28 @@ def test_each_backoff_knob_changes_the_real_step(
     base: float, ceiling: float, after: int, expected: list[float]
 ) -> None:
     retry = PushRetry({"default": 300, "work": 120}, base, ceiling, after)
-    assert [retry.backoff_seconds(count) for count in range(1, 6)] == pytest.approx(expected)
+    assert [retry.backoff_seconds(n) for n in range(1, 6)] == pytest.approx(expected)
     assert retry.backoff_seconds(10**6) == pytest.approx(expected[-1])
     with pytest.raises(ValueError, match="failures"):
         retry.backoff_seconds(0)
 
 
 @pytest.mark.parametrize(
-    "key",
-    ["deadline_seconds", "base_step_seconds", "ceiling_seconds", "ceiling_after"],
+    "key", ["deadline_seconds", "base_step_seconds", "ceiling_seconds", "ceiling_after"]
 )
 @pytest.mark.parametrize("invalid", [None, True, "1", 0, -1, float("inf"), float("nan")])
 def test_invalid_or_missing_retry_knobs_are_refused_by_name(
     tmp_path: Path, key: str, invalid: object
 ) -> None:
-    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    declared = json.loads((CONFIG_DIR / "push-retry.json").read_text(encoding="utf-8"))
     if invalid is None:
-        del config[key]
+        del declared[key]
     else:
-        config[key] = invalid
-    path = tmp_path / "retry.json"
-    _write(path, json.dumps(config) + "\n")
+        declared[key] = invalid
+    target = tmp_path / "retry.json"
+    write(target, json.dumps(declared) + "\n")
     with pytest.raises(ValueError, match=key):
-        load_retry(path)
+        load_retry(target)
 
 
 @pytest.mark.parametrize("job", ["default", "work"])
@@ -126,816 +97,225 @@ def test_invalid_or_missing_retry_knobs_are_refused_by_name(
 def test_invalid_or_missing_job_deadlines_are_refused_by_name(
     tmp_path: Path, job: str, invalid: object
 ) -> None:
-    config = json.loads(read_text(CONFIG_DIR / "push-retry.json"))
+    declared = json.loads((CONFIG_DIR / "push-retry.json").read_text(encoding="utf-8"))
     if invalid is None and job == "default":
-        del config["deadline_seconds"][job]
+        del declared["deadline_seconds"][job]
     else:
-        config["deadline_seconds"][job] = invalid
-    path = tmp_path / "retry.json"
-    _write(path, json.dumps(config) + "\n")
+        declared["deadline_seconds"][job] = invalid
+    target = tmp_path / "retry.json"
+    write(target, json.dumps(declared) + "\n")
     with pytest.raises(ValueError, match=f"deadline_seconds.{job}"):
-        load_retry(path)
+        load_retry(target)
 
 
-def test_the_retry_config_accepts_fractional_seconds_and_refuses_a_falling_step(
-    tmp_path: Path,
-) -> None:
-    config = _fast_push_retry()
-    config["deadline_seconds"]["default"] = 0.05
-    path = tmp_path / "retry.json"
-    _write(path, json.dumps(config) + "\n")
-    retry = load_retry(path)
+def test_fractional_deadlines_and_falling_backoff_are_checked(tmp_path: Path) -> None:
+    declared = {
+        "deadline_seconds": {"default": 0.05},
+        "base_step_seconds": 0.003,
+        "ceiling_seconds": 0.024,
+        "ceiling_after": 4,
+    }
+    target = tmp_path / "retry.json"
+    write(target, json.dumps(declared) + "\n")
+    retry = load_retry(target)
     assert retry.deadline_for("plan") == 0.05
     assert retry.backoff_seconds(1) == 0.003
-    config["ceiling_seconds"] = 0.001
-    _write(path, json.dumps(config) + "\n")
+    declared["ceiling_seconds"] = 0.001
+    write(target, json.dumps(declared) + "\n")
     with pytest.raises(ValueError, match="base_step_seconds"):
-        load_retry(path)
+        load_retry(target)
 
 
-def test_a_bad_retry_config_stops_before_git_changes(tmp_path: Path) -> None:
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    before = _git(origin, env, "rev-parse", "main").strip()
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nfresh\n")
-    retry_file = tmp_path / "invalid-retry.json"
-    _write(retry_file, "{}\n")
-    result = _run_commit_script(
-        runner, env, staged_paths, {**settings, "PUSH_RETRY_CONFIG": str(retry_file)}
-    )
-    assert result.returncode == 2
-    assert "deadline_seconds" in result.stderr
-    assert _git(origin, env, "rev-parse", "main").strip() == before
-    assert _git(runner, env, "rev-parse", "HEAD").strip() == before
-    assert _git(runner, env, "diff", "--cached", "--name-only").strip() == ""
-
-
-def _a_writers_file(*, attempt: int) -> str:
-    """One writer's own file inside a day directory, spelled by the producer.
-
-    A test of what a rebase does to two committed names has to use names a run
-    can actually produce, so a name written by hand here would be a name no
-    writer ever takes. The name is minted as `ledger.persist` mints it: the work
-    unit from the ledger, the day, the run, the job and the shard, then the
-    attempt, so two attempts at one unit take two files in one raw day folder.
-    Feed health is the ledger the plan job files into.
-    """
-    covers = SUBSTITUTED_DATE
-    unit = ledger.unit_id(
-        ledger=LedgerName.FEED_HEALTH.value,
-        covers=covers,
-        run_id=f"{covers}-40000000001",
-        job=ServerJob.PLAN.value,
-        shard=0,
-        producer="tests.workflows",
-    )
-    written_at = datetime.fromisoformat(covers).replace(tzinfo=UTC)
-    name = ledger.file_id(
-        unit=unit, attempt=attempt, written_at_ms=int(written_at.timestamp() * 1000)
-    )
-    return ledger.raw_path(Path("state"), LedgerName.FEED_HEALTH, covers, name).as_posix()
-
-
-def _stand_in_day(tree: str, date: str) -> str:
-    """Where the harness's stand-in producer files one day of one of its three trees.
-
-    `rebuild_day.py` has no ledger behind it: it writes each run's rows by hand,
-    one CSV file per writer, into a day folder it spells itself. So the folder
-    is asked of that same spelling rather than of the ledger registry, which
-    files none of these ledgers by day folder any more.
-    """
-    return f"{ledger.STATE_DIRNAME}/{tree}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def _committed_day(origin: Path, env: dict[str, str], relpath: str) -> list[dict[str, str]]:
-    """Every writer's rows for one committed day, in the order a settlement reads them.
-
-    A day is a directory of writer-owned files now, so one `git show` answers
-    with a listing rather than with rows. The files are read in name order, so
-    the rows come back in one fixed order whichever push landed first.
-    """
-    listed = _git(origin, env, "ls-tree", "--name-only", f"main:{relpath}").split()
-    return [
-        row
-        for name in sorted(listed)
-        for row in _rows(_git(origin, env, "show", f"main:{relpath}/{name}"))
-    ]
-
-
-def test_every_committing_job_configures_the_same_identity() -> None:
-    """The repository commits under one name, and it says so in one voice.
-
-    A hosted runner carries no git identity, so a job that commits has to set
-    one or `git commit` refuses. The commit program is executed by the tests
-    below, which read the name off the commit it pushed - so what is left here
-    is every workflow, for an identity set inline where nothing runs it. None
-    sets one today; one that did could drift to a different name and nothing
-    would notice until a reader wondered who the other authors were.
-    """
-    assert f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>" == (
-        COMMIT_IDENTITY
-    )
-
-    assert GIT_IDENTITY_SOURCES, "no file is read, so this test would pass on nothing"
-    for path in GIT_IDENTITY_SOURCES:
-        text = read_text(path)
-        authors = re.findall(r'git config user\.name "([^"]+)"', text)
-        addresses = re.findall(r'git config user\.email "([^"]+)"', text)
-        assert len(authors) == len(addresses), f"{path.name} sets half an identity"
-        for author, address in zip(authors, addresses, strict=True):
-            assert f"{author} <{address}>" == COMMIT_IDENTITY, path.name
-
-
-@requires_space_free_paths
-@pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
-def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
-    staged_paths, settings = _commit_call(job_name)
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    if "REGENERATE_COMMAND" in settings:
-        # The push wins here, so the producer never runs. Point it at the
-        # harness one anyway: the pipeline's own `assemble` anchors its paths on
-        # the installed repository, so a regression that made it run would write
-        # into the working repository rather than fail the test.
-        settings = {**settings, "REGENERATE_COMMAND": _rebuild_command(SUBSTITUTED_DATE)}
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert _git(origin, env, "log", "-1", "--format=%s").strip() == (
-        settings["COMMIT_MESSAGE"]
-    )
-    # The script sets the committer itself, and the test supplies none.
-    assert _git(origin, env, "log", "-1", "--format=%an <%ae>").strip() == COMMIT_IDENTITY
-    # And it adds no attribution tag (CLAUDE.md section 8). Nothing refused one
-    # until now, so the day a tool starts writing `Co-authored-by` into a commit
-    # body it would reach the permanent record with no test in the way.
-    assert "Co-authored-by" not in _git(origin, env, "log", "-1", "--format=%B")
-    assert _git(runner, env, "status", "--porcelain").strip() == ""
-
-
-def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) -> None:
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    before = _git(origin, env, "rev-parse", "main").strip()
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
-    assert _git(origin, env, "rev-parse", "main").strip() == before
-    assert _git(runner, env, "rev-parse", "HEAD").strip() == before
-
-
-@requires_space_free_paths
-def test_a_path_the_tip_retired_does_not_stop_the_retry(tmp_path: Path) -> None:
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _write(runner / "retired/summary.json", "this run's copy\n")
-    _race(tmp_path, env, "unrelated.txt", "winning")
-    settings = {
-        **settings,
-        "REFRESH_PATHS": "retired/summary.json",
-        "REGENERATE_COMMAND": f"{sys.executable} -c pass",
-    }
-
-    result = _run_commit_script(runner, env, [*staged_paths, "retired"], settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "did not match any files" not in result.stderr
-    assert not _tracked(origin, env, "retired/summary.json")
-    assert _git(origin, env, "show", "main:unrelated.txt") == "winning"
-
-
-def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
-    """The whole point of the loop: a push that loses a race still lands."""
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _race(tmp_path, env, "docs/unrelated.md", "racing\n")
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    _write(runner / "runner-noise.txt", "dirty\n")
-    _write(runner / "leftover.log", "kept\n")
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "push rejected, rebasing (attempt 1)" in result.stdout
-    assert "discarding working-tree noise before the rebase:" in result.stdout
-    assert "runner-noise.txt" in result.stdout
-    assert _git(origin, env, "log", "--format=%s", "-2").splitlines() == [
-        settings["COMMIT_MESSAGE"],
-        "racing change",
-    ]
-    # The noise was discarded; the untracked file was not.
-    assert (runner / "runner-noise.txt").read_text(encoding="ascii") == "clean\n"
-    assert (runner / "leftover.log").is_file()
-    assert _git(runner, env, "status", "--porcelain", "--untracked-files=no").strip() == ""
-
-
-@requires_space_free_paths
-def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: Path) -> None:
-    """Run `35152132574`: an untracked file stopped the rebase and cost a shard its rows.
-
-    A work shard wrote `state/host-fingerprint/2026/09/16.csv` at a time when its
-    commit step did not stage that path, so the file stayed untracked. A sibling
-    shard pushed the same path while this one was still reading articles, and the
-    rebase would not even detach - `untracked working tree files would be
-    overwritten by checkout`. There was no rebase left to abort, the loop broke on
-    the first of its three attempts, and 303 measured rows over six ledgers were
-    committed locally and thrown away with the runner.
-
-    The work shard stages `state` whole now, which closes that collision for
-    every tree under it. The list a job hands the script is still written by
-    hand, and a new writer has arrived without it three times - so the path
-    modelled here is one outside the tree this job stages. A path this job did
-    not stage is a path it is not pushing, so the file goes and everything that
-    WAS staged still lands.
-    """
-    staged_paths, settings = _commit_call("work")
-    unstaged = "frontend/public/a-later-writer/2026-09-16.json"
-    assert not any(unstaged == path or unstaged.startswith(f"{path}/") for path in staged_paths), (
-        "this models a writer the staging list has not caught up with"
-    )
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _race(tmp_path, env, unstaged, "version\nthe sibling shard\n")
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    _write(runner / unstaged, "version\nthis shard\n")
-    _write(runner / "llama-server.log", "kept\n")
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "push rejected, rebasing (attempt 1)" in result.stdout
-    assert unstaged in result.stdout, "the log must name every file it removed"
-    assert _git(origin, env, "log", "--format=%s", "-2").splitlines() == [
-        settings["COMMIT_MESSAGE"],
-        "racing change",
-    ]
-    # What this shard staged landed.
-    assert "fresh" in _git(origin, env, "show", f"main:{_seed_ledger(staged_paths[0])}")
-    # The tip's copy of the path nobody staged is what the tree holds now, and the
-    # untracked file nothing was going to write over is untouched.
-    assert (runner / unstaged).read_text(encoding="ascii") == "version\nthe sibling shard\n"
-    assert (runner / "llama-server.log").is_file()
-
-
-def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
-    """What the rebuild step reads. A clean push left the tree it was handed.
-
-    Written explicitly rather than left unwritten. An output nobody wrote is the
-    empty string, which is falsy and would skip the rebuild too - and which is
-    indistinguishable from the script dying before it could answer.
-    """
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    _, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    settings, written = _reading_its_output(tmp_path, settings)
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "push rejected" not in result.stdout
-    assert _step_outputs(written) == {"rebased": "false"}
-
-
-def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
-    """Nothing was pushed, so there is no new tree for a later step to read."""
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    _, runner = _scripted_origin(tmp_path, env, staged_paths)
-    settings, written = _reading_its_output(tmp_path, settings)
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
-    assert _step_outputs(written) == {"rebased": "false"}
-
-
-def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
-    """The rebase replaced the checkout, so the build made before it is stale.
-
-    This is what `digest.yml` keys the rebuild on. Run 33270983446 weighed one
-    tree's pages against another tree's ceilings and failed a day that had
-    already published; a rebase that reported nothing would do it again.
-    """
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    _, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _race(tmp_path, env, "docs/unrelated.md", "racing\n")
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    settings, written = _reading_its_output(tmp_path, settings)
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "push rejected, rebasing (attempt 1)" in result.stdout
-    assert _step_outputs(written) == {"rebased": "true"}
-
-
-def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path) -> None:
-    """The guard on the write, and it is what lets one copy of the script serve both.
-
-    `set -u` ends the run on an unset variable, so an unguarded write would kill
-    every one of these tests and anybody running the script by hand. Only a
-    workflow step has `$GITHUB_OUTPUT`.
-    """
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-
-    assert "GITHUB_OUTPUT" not in {**env, **settings}, "the harness is what removes it"
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "GITHUB_OUTPUT" not in result.stderr, "an unset variable must not end the script"
-    assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
-
-
-#: Every way `main` hands a number back that is not a caller error. Three come
-#: back zero - nothing staged, the push landed, the rebuild produced nothing new
-#: - two cannot commit what the job produced, and one gives up on the clock. A
-#: caller error returns 2 and is deliberately outside this count.
-WAYS_OUT: Final = 6
-
-
-def _statement_blocks(node: ast.AST) -> Iterator[list[ast.stmt]]:
-    """Every list of statements under a node, so a return reads with its neighbours."""
-    for child in ast.walk(node):
-        for field in ("body", "orelse", "finalbody"):
-            block = getattr(child, field, None)
-            if isinstance(block, list) and all(isinstance(item, ast.stmt) for item in block):
-                yield block
-
-
-def _says_whether_it_rebased(before: Sequence[ast.stmt]) -> bool:
-    """Whether one of these statements is the call that writes the step output."""
-    return any(
-        isinstance(statement, ast.Expr)
-        and isinstance(statement.value, ast.Call)
-        and isinstance(statement.value.func, ast.Name)
-        and statement.value.func.id == "_report_rebased"
-        for statement in before
-    )
-
-
-def test_every_way_out_of_the_commit_program_says_whether_it_rebased() -> None:
-    """Three exits return zero and a fixture reaches two of them.
-
-    The third - origin already holding everything a rebuild produced - needs a
-    racing run that publishes the same items, and the value it reports decides
-    whether the day's own gate reads a stale build. So the exits are checked
-    where they are written instead.
-
-    A caller error returns 2 and is deliberately out of scope. Those fire before
-    anything is committed, they fail the step, and a step that failed has
-    already stopped the rebuild.
-    """
-    routine = next(
-        node
-        for node in ast.walk(ast.parse(read_text(COMMIT_PROGRAM)))
-        if isinstance(node, ast.FunctionDef) and node.name == "main"
-    )
-    ways_out = [
-        (node.lineno, _says_whether_it_rebased(block[max(0, index - 3) : index]))
-        for block in _statement_blocks(routine)
-        for index, node in enumerate(block)
-        if isinstance(node, ast.Return)
-        and isinstance(node.value, ast.Constant)
-        and node.value.value in {0, 1}
-    ]
-
-    assert len(ways_out) == WAYS_OUT, (
-        "three ways out with nothing wrong, two that cannot commit, and the one that gives up"
-    )
-    silent = [line for line, said in ways_out if not said]
-    assert not silent, (
-        f"line(s) {silent} leave without saying whether the checkout was rewritten"
-    )
-
-
-def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:
-    """Two writers, two files, one rebase, and nothing has to choose.
-
-    This is where the loop used to die. `git pull --rebase origin main` was the
-    one unguarded command in it, so a conflicting rebase ended the script inside
-    attempt 1 under `set -e`: no attempt 2, no failure message, no day, and a
-    checkout left mid-rebase. Measured that way on 2026-08-25, git 2.55.0, bash
-    5.3.15. Every command in the loop is guarded now.
-
-    A union merge driver on the shared ledger head was the other half of the
-    answer until 2026-09-19, and it was the wrong half: it concatenated two
-    attempts at the same row as readily as two independent ones. Each writer
-    takes the file its own run, attempt, job and shard name instead, so two
-    sides of a race are two adds of two paths and the rebase applies both whole.
-
-    The two names come from the producer. A shard is two digits in a committed
-    name and a runner holds a bare number, so a name spelled by hand here is not
-    a name a run can produce.
-    """
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    theirs = _a_writers_file(attempt=1)
-    ours = _a_writers_file(attempt=2)
-    _race(tmp_path, env, theirs, "header\ntheirs\n")
-    _write(runner / ours, "header\nours\n")
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
-    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
-    assert _git(origin, env, "log", "--format=%s", "-2").splitlines() == [
-        settings["COMMIT_MESSAGE"],
-        "racing change",
-    ]
-    assert _git(origin, env, "show", f"main:{theirs}").splitlines() == ["header", "theirs"]
-    assert _git(origin, env, "show", f"main:{ours}").splitlines() == ["header", "ours"]
-    assert not _mid_rebase(runner)
-
-
-def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path) -> None:
-    """The guard, proved by running it: no command in the loop can exit early.
-
-    A ledger retired upstream while this run appended to it is a modify/delete,
-    which no merge driver resolves. The loop must abort the rebase, say what
-    happened, print the failure message and leave the checkout usable - not stop
-    on the line that failed.
-    """
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    other = tmp_path / "other"
-    _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
-    _git(other, env, "rm", "--quiet", f"{staged_paths[0]}/ledger.csv")
-    _git(other, env, "commit", "-m", "retire the ledger")
-    _git(other, env, "push", "origin", "main")
-    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 1
-    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
-    assert "the rebase did not apply cleanly" in result.stderr
-    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
-    # The attempt it really spent. A conflicting rebase leaves the loop on the
-    # first one, so a message naming the count it was allowed sends the reader
-    # to the retry budget, which is not what stopped it.
-    assert "the push was given up on attempt 1" in result.stderr
-    assert _git(origin, env, "log", "-1", "--format=%s").strip() == "retire the ledger"
-    assert not _mid_rebase(runner)
-
-
-def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
+def test_literal_paths_and_untracked_racing_noise_are_preserved(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Row 4's Oracle: the loop stops on a clock, so a fourth attempt exists.
-
-    Origin refuses the first four pushes and takes the fifth. The old loop had
-    three attempts and would have given up on the third, published nothing, and
-    said it had spent three - so this case could not pass before and its whole
-    value is that it does now.
-
-    Every attempt prints one line, and the windows those lines report sum to
-    less than the deadline. What this cannot settle is the real window on a
-    runner: that is what the printed line exists to collect, over twenty runs.
-    """
-    staged_paths, settings = _commit_call("plan")
-    # The deadline is scaffolding here, not the subject, so it is set wide
-    # enough that only a regression can reach it. Five real pushes cost 36s on
-    # an idle Windows box, but 53s, 78s and 93s on three runs of the suite
-    # eight-wide - so at 60s this gave up before the fifth push landed on two
-    # of those three, and the count it reported was right rather than wrong.
-    # Nothing else bounds a hang: the harness sets no subprocess timeout, so
-    # this number is also the worst case when the loop really is broken, and it
-    # stops at the deadline the program itself defaults to.
-    deadline = 300
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    _reject_the_first_pushes(origin, 4)
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
-    assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
-
-    attempts = _push_attempts(result.stdout)
-    assert [row["attempt"] for row in attempts] == [1, 2, 3, 4, 5]
-    assert [row["outcome"] for row in attempts] == [
-        *["rejected"] * 4,
-        "landed",
-    ]
-    # Attempt 1 has no window in the retry sense: nothing fetches before the
-    # first push, so its exposure is the whole job rather than a retry
-    # parameter, and its zero is the truth about it.
-    assert attempts[0]["window_ms"] == 0
-    assert all(row["window_ms"] > 0 for row in attempts[1:])
-    assert sum(row["window_ms"] for row in attempts) < deadline * 1000
-    # Six stamps, because one figure cannot tell a slow rebuild from a slow push.
-    for row in attempts:
-        assert set(row) == {
-            "attempt",
-            "job",
-            "shard",
-            "outcome",
-            "window_ms",
-            "fetch_ms",
-            "handback_ms",
-            "rebase_ms",
-            "rebuild_ms",
-            "push_ms",
-        }
-    assert not _mid_rebase(runner)
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
+    write(repo / PATH, "completed\n")
+    write(repo / "foreign.txt", "local\n")
+    before = git(repo, "rev-parse", "HEAD"), (repo / ".git" / "index").read_bytes()
+    result = publish(evidence(repo), repo=repo, retry=RETRY)
+    assert result.status is Status.LANDED
+    assert on_origin(origin, PATH) == "completed\n"
+    assert (repo / "foreign.txt").read_text() == "local\n"
+    assert before == (git(repo, "rev-parse", "HEAD"), (repo / ".git" / "index").read_bytes())
 
 
-def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
+def test_an_uncertain_push_that_actually_landed_is_verified(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The other end of the deadline: it is a bound, not a promise.
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
+    write(repo / PATH, "completed\n")
 
-    Origin refuses every push. The loop has to give up on its own clock, leave
-    no rebase in progress, print the caller's own sentence, and name the attempt
-    it really reached - which is what a reader needs to tell a run that spent
-    its budget from a run that stopped on the first conflict.
+    class UncertainTransport(Repository):
+        def push(self, candidate: str) -> bool:
+            assert super().push(candidate)
+            raise RuntimeError("connection disappeared after the remote accepted the ref")
 
-    **How many attempts fit before the deadline is a fact about the machine.** This
-    asserted two until 2026-09-24, and failed on a box running several test
-    suites at once: one rejected push there costs more than the whole deadline,
-    so the loop gets a single attempt and the count is right rather than wrong.
-    The claim it was reaching for - that the deadline is a clock and not a retry
-    counter - is proven without a stopwatch by the test above, which reaches a
-    fifth attempt against a deadline set wide enough that only a regression can
-    reach it, and could not pass against the three-try loop this replaced. What
-    is left here is what only this case can show, and none of it depends on how
-    fast the push was.
-    """
-    staged_paths, settings = _commit_call("plan")
-    retry_file = tmp_path / "deadline-retry.json"
-    config = _fast_push_retry()
-    config["deadline_seconds"]["default"] = 0.05
-    _write(retry_file, json.dumps(config) + "\n")
-    settings = {**settings, "PUSH_RETRY_CONFIG": str(retry_file)}
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    before = _git(origin, env, "rev-parse", "main").strip()
-    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    _reject_the_first_pushes(origin, 99)
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 1
-    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
-    spent = _push_attempts(result.stdout)
-    assert spent, "a run that gave up without attempting a push reports nothing to read"
-    # The count it names is the count it printed, whether the box fitted one
-    # attempt into the deadline or seven.
-    assert f"the push was given up on attempt {len(spent)} after 0.05s" in result.stderr
-    assert [row["attempt"] for row in spent] == list(range(1, len(spent) + 1))
-    assert all(row["outcome"] == "rejected" for row in spent)
-    assert _git(origin, env, "rev-parse", "main").strip() == before
-    assert not _mid_rebase(runner)
+    monkeypatch.setattr(publish_to_repo, "Repository", UncertainTransport)
+    result = publish(evidence(repo), repo=repo, retry=RETRY)
+    assert result.status is Status.LANDED
+    assert result.push_count == 1
+    assert on_origin(origin, PATH) == "completed\n"
 
 
-def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None:
-    """Row 2's Oracle, run rather than read: the B6 shape, at exit 0.
+@pytest.mark.parametrize("clears_operations", [False, True], ids=["already-published", "empty"])
+def test_preparation_that_finds_nothing_left_to_publish_does_not_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clears_operations: bool,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {PATH: "old\n"})
+    write(repo / PATH, "this run\n")
+    original = evidence(repo)
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / PATH, "this run and another run\n")
+    git(mover, "add", "--", PATH)
+    git(mover, "commit", "--quiet", "-m", "both runs are already represented")
+    git(mover, "push", "--quiet", "origin", "HEAD:main")
+    tip = git(origin, "rev-parse", "main").strip()
+    prepared_at: list[str] = []
 
-    One job drains a directory - which is what the compaction does to a raw day
-    once it has packed it - while another writes a brand-new file into it.
-    Git reads the emptied directory as having been RENAMED to wherever its files
-    went, and applies that guess to the arriving file, so the rebase stops with
-    `CONFLICT (file location)` over a tree that was correct and the job loses
-    what it had already finished.
+    def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
+        prepared_at.append(base)
+        current = git(repo, "show", f"{base}:{PATH}")
+        write(repo / PATH, current)
+        return dataclasses.replace(
+            active,
+            source_tip=base,
+            writes={}
+            if clears_operations
+            else {
+                PATH: Write(
+                    hashlib.sha256((repo / PATH).read_bytes()).hexdigest(),
+                    Repository(repo).entry(base, PATH),
+                )
+            },
+        )
 
-    `merge.directoryRenames=false` is what turns the guess off. Nothing about
-    the data changes: both sides are applied whole, the tip's deletion still
-    stands, and the arriving file lands.
-
-    What this cannot settle is whether the guess is left on somewhere else in
-    the pipeline. It drives the one script the daily run pushes through.
-    """
-    staged_paths, settings = _commit_call("plan")
-    env = _isolated_env(tmp_path)
-    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    drained = _a_writers_file(attempt=1)
-    arriving = _a_writers_file(attempt=2)
-
-    # The base both sides start from: one writer's file waiting to be folded.
-    other = tmp_path / "other"
-    _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
-    _write(other / drained, "header\nwaiting\n")
-    _git(other, env, "add", drained)
-    _git(other, env, "commit", "-m", "one writer's file is waiting")
-    _git(other, env, "push", "origin", "main")
-    _git(runner, env, "pull", "--ff-only", "origin", "main")
-
-    # Origin's tip: a sibling folded that day and deleted the file it read,
-    # which leaves the day directory holding nothing.
-    _git(other, env, "pull", "--ff-only", "origin", "main")
-    _git(other, env, "rm", "--quiet", drained)
-    _git(other, env, "commit", "-m", "the fold drained the day")
-    _git(other, env, "push", "origin", "main")
-
-    # This job: a straggler, written into the day the tip just emptied.
-    _write(runner / arriving, "header\nmine\n")
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert "the rebase did not apply cleanly" not in result.stderr
-    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
-    assert _git(origin, env, "show", f"main:{arriving}").splitlines() == ["header", "mine"]
-    assert not _tracked(origin, env, drained), "the tip's own deletion must still stand"
-    assert not _mid_rebase(runner)
-
-
-@requires_space_free_paths
-def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
-    """The Oracle: a stale base is answered by a current base, not by a text merge.
-
-    Run `32772221068` lost a finished day here. The assemble job checks out
-    main's tip at TRIGGER time and the run takes 164-184 min, so the day was
-    always rebuilt from a base up to three hours old, and the push found a main
-    that had moved. Here it has moved twice: another run published the same day,
-    and a pull request merged on top.
-
-    So the day is refreshed from the tip the push wants and built again against
-    it. Both runs' items reach the reader, both runs' rows reach all three
-    ledgers exactly once, the pull request is untouched, and the chart this run
-    wrote into the day's directory is still there.
-    """
-    date = SUBSTITUTED_DATE
-    month = date[:7]
-    staged_paths, settings = _commit_call("assemble")
-    settings = {
-        **settings,
-        "REGENERATE_COMMAND": _rebuild_command(date),
-        "DROP_RACED_ASSETS_COMMAND": _drop_command(date),
-    }
-    env = _isolated_env(tmp_path)
-    origin, runner = _digest_origin(tmp_path, env, date)
-    _race_the_day(
-        tmp_path, env, date, ["item-c"], "Merge pull request #123 from someone/branch"
+    requested = dataclasses.replace(
+        original,
+        writes={PATH: dataclasses.replace(original.writes[PATH], immutable=False)},
+        preparation_scopes=(PATH,),
+        prepare=prepare,
     )
-    # This run: assemble wrote a chart into the day's directory and published
-    # two items on the base the checkout carried.
-    _write(runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg", "<svg />\n")
-    _rebuild(runner, env, date, ["item-d", "item-e"])
 
-    result = _run_commit_script(runner, env, staged_paths, settings)
+    result = publish(requested, repo=repo, retry=RETRY)
 
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
-    assert "rebuilding the day against origin/main" in result.stdout
-    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
-    assert _git(origin, env, "log", "--format=%s", "-3").splitlines() == [
-        f"digest: {date}",
-        "Merge pull request #123 from someone/branch",
-        f"digest: {date}",
-    ]
-
-    day = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/digest.json"))
-    assert day["items"] == ["item-a", "item-b", "item-c", "item-d", "item-e"]
-    # Run three, not a second run two. The rebuild read the day origin holds, so
-    # it knows which run it is; on its own last attempt it would not.
-    assert day["runs"] == [
-        {"n": 1, "items_added": 2},
-        {"n": 2, "items_added": 1},
-        {"n": 3, "items_added": 2},
-    ]
-    manifest = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/run.json"))
-    assert manifest["runs"] == day["runs"]
-
-    published = _committed_day(origin, env, _stand_in_day("published", date))
-    scores = _committed_day(origin, env, _stand_in_day("scores", date))
-    health = _committed_day(origin, env, _stand_in_day("item-health", date))
-    every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
-    # Exactly once each in the three day trees. Each run writes the one file its
-    # own run, attempt, job and shard name, so a rebuild cannot add to what a
-    # previous attempt wrote - it replaces the file it owns. The published
-    # ledger stacked a second copy of this run's rows here while it was one
-    # shared file a day that a union driver settled.
-    assert [row["item_id"] for row in published] == every_item
-    assert [row["item_id"] for row in scores] == every_item
-    assert [row["item_id"] for row in health] == every_item
-
-    telemetry = _rows(_git(origin, env, "show", f"main:frontend/public/telemetry/{month}.csv"))
-    assert telemetry == health, "the public projection is a rewrite of item-health, not a merge"
-
-    assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
-    assert _tracked(origin, env, f"{SUBSTITUTED_DAY_DIR}/assets/chart-1.svg")
-    assert (runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg").is_file()
-    assert not _mid_rebase(runner)
+    assert prepared_at == [tip]
+    assert result.status is (Status.NO_CHANGES if clears_operations else Status.ALREADY_ON_MAIN)
+    assert result.prepared and result.push_count == 0
+    assert result.candidate is None
+    assert git(origin, "rev-parse", "main").strip() == tip
 
 
-@requires_space_free_paths
-def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -> None:
-    """The Oracle above, with the one thing it never had: both sides create the path.
+def test_mode_conversion_is_an_integrity_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {PATH: "old\n"})
+    git(repo, "update-index", "--chmod=+x", PATH)
+    git(repo, "commit", "--quiet", "-m", "executable source")
+    git(repo, "push", "--quiet", "origin", "HEAD:main")
+    write(repo / PATH, "new\n")
+    result = publish(evidence(repo), repo=repo, retry=RETRY)
+    assert result.status is Status.INTEGRITY_REFUSED
+    assert on_origin(origin, PATH) == "old\n"
 
-    Run `32869125768` finished eight workers and a visual planner and then lost
-    the whole day here. A chart was filed by its vertical and its ordinal within
-    the day, and the ordinal was seeded by reading the day's directory - so two
-    runs of one day, neither able to see what the other pushed, wrote
-    `energy-01.svg`
-    for DIFFERENT items with different bytes. Git cannot rebase two adds of one
-    path, `assemble` exited 1, and the `items-*` artifacts expired with every
-    summary in them.
 
-    A chart is now filed under its item's own id, so that case cannot happen at
-    all. What is left is this one: two runs rendering the SAME item, which is
-    one story's picture drawn twice. The tip's copy is published and a reader
-    may already hold that address, and the rebuild keeps the tip's item anyway,
-    so this run's copy is dropped and the day publishes.
-    """
-    date = SUBSTITUTED_DATE
-    raced, fresh = RACED_ITEM_ID, "energy-0000000002"
-    fresh_asset = f"digest/{date.replace('-', '/')}/{fresh}.json"
-    staged_paths, settings = _commit_call("assemble")
-    settings = {
-        **settings,
-        "REGENERATE_COMMAND": _rebuild_command(date),
-        "DROP_RACED_ASSETS_COMMAND": _drop_command(date),
-    }
-    env = _isolated_env(tmp_path)
-    origin, runner = _digest_origin(tmp_path, env, date)
-    _race_the_day(
+@pytest.mark.parametrize("path", ["../escape", "/absolute", "state/../escape", ".git/config"])
+def test_non_repository_paths_never_reach_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
+    write(repo / PATH, "completed\n")
+    original = evidence(repo)
+    result = publish(
+        dataclasses.replace(
+            original, writes={path: original.writes[PATH]}, write_permissions=(path,)
+        ),
+        repo=repo,
+        retry=RETRY,
+    )
+    assert result.status is Status.INTEGRITY_REFUSED
+    assert result.push_count == 0
+    assert Repository(origin).entry("main", PATH) is None
+
+
+def test_expired_deadline_does_not_count_a_candidate_as_a_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
+    write(repo / PATH, "completed\n")
+    result = publish(
+        evidence(repo), repo=repo, retry=PushRetry({"default": 0.00001}, 0.001, 0.001, 1)
+    )
+    assert result.status is Status.REFUSED
+    assert result.push_count == 0
+    assert Repository(origin).entry("main", PATH) is None
+
+
+@pytest.mark.parametrize("maximum,landed,pushes", [(2, False, 2), (4, True, 4)])
+def test_real_rejections_count_actual_pushes_not_candidate_builds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    maximum: int,
+    landed: bool,
+    pushes: int,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
+    write(repo / PATH, "completed\n")
+    _reject_the_first_pushes(origin, 3)
+    result = publish(evidence(repo), repo=repo, retry=RETRY, max_pushes=maximum)
+    assert result.push_count == pushes
+    assert (result.status is Status.LANDED) is landed
+    assert (Repository(origin).entry("main", PATH) is not None) is landed
+
+
+def test_clean_filters_cannot_change_confirmed_candidate_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(
         tmp_path,
-        env,
-        date,
-        [raced],
-        "Merge pull request #125 from someone/branch",
-        charts={raced: RACED_ASSET},
+        {"seed": "seed\n", ".gitattributes": "*.json text eol=lf\n"},
     )
-    # This run planned the same item, because the push above had not happened
-    # when it planned - and drew it again, to different bytes.
-    _chart(runner, date, raced, RACED_ASSET, body="ours")
-    _chart(runner, date, fresh, fresh_asset)
-    _rebuild(runner, env, date, [raced, fresh])
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
-    assert f"{RACED_ASSET} is already published, so this run's copy of it was dropped" in (
-        result.stdout
-    )
-    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
-    assert not _mid_rebase(runner)
-
-    day = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/digest.json"))
-    assert day["items"] == ["item-a", "item-b", raced, fresh]
-    # The item this run introduced kept its picture, and no two items share one.
-    assert day["visuals"] == {raced: RACED_ASSET, fresh: fresh_asset}
-    assert len(set(day["visuals"].values())) == len(day["visuals"])
-    # The gate a broken image would fail: every path the day publishes is a file
-    # the day publishes. A picture that 404s is worse than a job that stops.
-    for relpath in day["visuals"].values():
-        assert _tracked(origin, env, f"frontend/public/{relpath}")
-    # The published address still holds the bytes that were published under it,
-    # rather than this run's second attempt at the same picture.
-    assert _git(origin, env, "show", f"main:frontend/public/{RACED_ASSET}") == (
-        f'{{"item_id": "{raced}"}}\n'
-    )
-    assert _git(origin, env, "show", f"main:frontend/public/{fresh_asset}") == (
-        f'{{"item_id": "{fresh}"}}\n'
-    )
-    assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
+    (repo / PATH).parent.mkdir(parents=True)
+    (repo / PATH).write_bytes(b"completed\r\n")
+    result = publish(evidence(repo), repo=repo, retry=RETRY)
+    assert result.status is Status.INTEGRITY_REFUSED
+    assert result.push_count == 0
+    assert Repository(origin).entry("main", PATH) is None
 
 
-@requires_space_free_paths
-def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path) -> None:
-    """A producer that cannot run is a lost day, said out loud, not a half-rebased tree."""
-    date = SUBSTITUTED_DATE
-    staged_paths, settings = _commit_call("assemble")
-    # A date this checkout has no artifacts for: the producer really fails, on a
-    # real missing input, rather than being told to pretend.
-    settings = {
-        **settings,
-        "REGENERATE_COMMAND": _rebuild_command("2026-08-24"),
-        "DROP_RACED_ASSETS_COMMAND": _drop_command(date),
-    }
-    env = _isolated_env(tmp_path)
-    origin, runner = _digest_origin(tmp_path, env, date)
-    _race_the_day(tmp_path, env, date, ["item-c"], "Merge pull request #124 from someone/other")
-    _rebuild(runner, env, date, ["item-d"])
-
-    result = _run_commit_script(runner, env, staged_paths, settings)
-
-    assert result.returncode == 1
-    assert "the rebuild failed against origin/main" in result.stderr
-    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
-    assert len(_push_attempts(result.stdout)) == 1
-    assert _git(origin, env, "log", "-1", "--format=%s").strip() == (
-        "Merge pull request #124 from someone/other"
-    )
-    assert not _mid_rebase(runner)
+@pytest.mark.parametrize("mode", ["120000", "160000"])
+def test_symlink_and_submodule_source_entries_cannot_become_data_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {PATH: "original\n"})
+    oid = git(repo, "rev-parse", "HEAD" if mode == "160000" else f"HEAD:{PATH}").strip()
+    git(repo, "update-index", "--cacheinfo", mode, oid, PATH)
+    git(repo, "commit", "--quiet", "-m", "non-data source entry")
+    git(repo, "push", "--quiet", "origin", "HEAD:main")
+    write(repo / PATH, "completed\n")
+    result = publish(evidence(repo), repo=repo, retry=RETRY)
+    assert result.status is Status.INTEGRITY_REFUSED
+    assert result.push_count == 0
+    entry = Repository(origin).entry("main", PATH)
+    assert entry is not None and entry.mode == mode

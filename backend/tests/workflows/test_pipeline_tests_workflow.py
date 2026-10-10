@@ -39,7 +39,6 @@ from utilities import (
 )
 
 from ._harness import (
-    COMMIT_PROGRAM_CALL,
     MODEL_RUNTIME_MODULE,
     MODEL_SERVER_ACTION,
     PINNED_LLAMA_BUILD,
@@ -641,13 +640,12 @@ def test_the_commit_job_stages_the_declared_trial_roots_and_nothing_wider() -> N
     workflow = _load_workflows()[WORKFLOW]
     body = _script(_step(workflow, COMMIT_JOB, "name", COMMIT_STEP), "the commit step")
 
-    assert f"{LEDGER_MODULE} place" in body, "the roots to stage are printed, never spelled"
-    assert " ".join(COMMIT_PROGRAM_CALL) in body, "it commits through the shared program"
-    staged = re.search(rf"{re.escape(COMMIT_PROGRAM_CALL[1])} (?P<paths>.+)", body)
-    assert staged is not None
-    assert staged["paths"].strip() == '"${TRIAL_ROOTS[@]}"', (
-        f"the commit step stages a path of its own: {staged['paths']}"
-    )
+    assert "backend/utilities/pipeline_test_publish.py --tree backend/var/trial-ledgers" in body
+    assert "git add" not in body
+    source = read_text(REPO_ROOT / "backend/utilities/pipeline_test_publish.py")
+    assert "artifacts._roots(config_root)" in source
+    assert "immutable=True" in source
+    assert "return publish(" in source
 
     roots = [test_case.id for test_case in _settings().test_cases]
     assert len(set(roots)) == len(roots), (
@@ -800,9 +798,7 @@ def test_the_check_passes_the_two_shapes_a_test_case_really_writes(tmp_path: Pat
     test_case = _settings().test_cases[0]
     tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_case.id)
 
-    assert (
-        pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.id})) == []
-    )
+    assert pipeline_test_ledgers.refusals(tree, roots=frozenset({test_case.id})) == []
 
 
 def test_the_check_has_nothing_to_refuse_when_nothing_arrived(tmp_path: Path) -> None:
@@ -914,9 +910,7 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
     costs the whole push, including the test case that did produce rows.
     """
     test_cases = _settings().test_cases
-    tree = _a_downloaded_tree(
-        tmp_path / "trial-ledgers", test_case=test_cases[0].id
-    )
+    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", test_case=test_cases[0].id)
     state = tmp_path / "state"
 
     staged = pipeline_test_ledgers.place(
@@ -925,11 +919,11 @@ def test_every_declared_test_case_is_placed_whether_or_not_it_wrote_anything(
 
     assert len(staged) == 2 * len(test_cases), "a traces root and a raw root for every case"
     for test_case in test_cases:
-        assert (state / ledger.paths.TRIAL_TRACES_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
+        assert (
+            state / ledger.paths.RAW_DIRNAME / "traces" / TRIAL_STATE / test_case.id
+        ).is_dir()
         assert (state / ledger.paths.RAW_DIRNAME / TRIAL_STATE / test_case.id).is_dir()
-    with ledger.use_registry(
-        ledger.overlay_registry((TRIAL_STATE_PREFIX, test_cases[0].id))
-    ):
+    with ledger.use_registry(ledger.overlay_registry((TRIAL_STATE_PREFIX, test_cases[0].id))):
         assert ledger.raw_root(state, LedgerName.ITEM_HEALTH).is_dir()
 
 
@@ -1154,11 +1148,10 @@ def test_each_test_case_writes_below_the_shared_root_with_its_own_slug(
     assert len(set(roots.values())) == len(roots), f"two test cases share a trial root: {roots}"
     for test_case_id, (root, case) in roots.items():
         assert (root, case) == declared[test_case_id]
-        assert common.state_root_of(
-            config.load(written_test_cases[test_case_id]), base=Path("state")
-        ) == Path("state") / TRIAL_STATE / test_case_id, (
-            f"{test_case_id} did not append its case slug under the shared trial root"
-        )
+        assert (
+            common.state_root_of(config.load(written_test_cases[test_case_id]), base=Path("state"))
+            == Path("state") / TRIAL_STATE / test_case_id
+        ), f"{test_case_id} did not append its case slug under the shared trial root"
 
 
 def test_a_parallel_test_case_keeps_the_window_the_gate_admits_articles_against() -> None:
@@ -1298,9 +1291,7 @@ def test_the_test_case_runner_refuses_to_run_without_the_plan_the_test_cases_sha
     which job writes it.
     """
     (tmp_path / pipeline_test_case.TEST_CASES_ROOT / _enabled_id() / "config").mkdir(parents=True)
-    completed = _ran_a_test_case(
-        tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "1"]
-    )
+    completed = _ran_a_test_case(tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "1"])
     assert completed.returncode == 2
     assert "no plan to run" in completed.stderr
 
@@ -1310,7 +1301,9 @@ def _drawn_plan(tmp_path: Path, date: str, execution: int) -> RunPlan:
     drawn = RunPlan.model_validate(
         {
             **RunPlan.from_json(
-                read_text(REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json")
+                read_text(
+                    REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json"
+                )
             ).model_dump(mode="json"),
             "date": date,
             "run_id": f"{date}-{execution}",
@@ -1327,9 +1320,7 @@ def test_the_test_case_runner_refuses_a_plan_drawn_for_another_run(tmp_path: Pat
     """A plan left from another dispatch would run that dispatch's articles under this one's name."""
     (tmp_path / pipeline_test_case.TEST_CASES_ROOT / _enabled_id() / "config").mkdir(parents=True)
     _drawn_plan(tmp_path, "2026-09-14", 1)
-    completed = _ran_a_test_case(
-        tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "2"]
-    )
+    completed = _ran_a_test_case(tmp_path, ["run", _enabled_id(), "2026-09-14", "--execution", "2"])
     assert completed.returncode == 2
     assert "drawn for run 2026-09-14-1" in completed.stderr
 

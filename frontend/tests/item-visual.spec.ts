@@ -107,9 +107,8 @@ async function wearing(page: Page, theme: string): Promise<void> {
  * **The scroll is not optional.** A story asks for its marks when it is nearly
  * on screen, so a `goto` and a wait draws whatever happened to start near the
  * top - and a comparison taken over that is a comparison over a different set
- * of stories each time. One viewport at a time, because a jump to the bottom
- * steps over every slot in between
- * (`docs/reference/agent-notes/browser.md`).
+ * of stories each time. Visit each mounted visual article, because a jump to
+ * the bottom steps over every slot in between.
  *
  * **It waits for the count to settle rather than for the slots to empty.** A
  * story whose marks were refused keeps its zero-height slot for ever, which is
@@ -163,6 +162,53 @@ function fileDrawing(name: string): string {
 	}
 	throw new Error(`no canary marks file draws a first bar called ${JSON.stringify(name)}`);
 }
+
+test('the drawing helper visits lazy candidates without the page animation clock', async ({
+	page
+}) => {
+	const requests: string[] = [];
+	page.on('request', (request) => requests.push(request.url()));
+	await page.setContent(`
+		<style>
+			article { margin-top: 200vh; height: 50vh; }
+			.slot, figure { height: 20vh; margin: 0; }
+		</style>
+		<main>
+			<article data-visual="rendered" data-draws="1"><figure><svg></svg></figure></article>
+			<article data-visual="rendered" data-draws="0"><div class="slot"></div></article>
+			<article data-visual="rendered" data-draws="0"><div class="slot"></div></article>
+			<article data-visual="rendered" data-draws="0"><div class="slot"></div></article>
+		</main>
+	`);
+	await page.evaluate(() => {
+		window.requestAnimationFrame = () => {
+			throw new Error('the drawing helper must not use the page animation clock');
+		};
+		const observer = new IntersectionObserver((entries) => {
+			for (const entry of entries) {
+				if (!entry.isIntersecting) continue;
+				const article = entry.target.closest('article');
+				if (!article) throw new Error('the observed slot has no article');
+				const figure = document.createElement('figure');
+				figure.append(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+				article.dataset.draws = String(Number(article.dataset.draws) + 1);
+				entry.target.replaceWith(figure);
+				observer.unobserve(entry.target);
+			}
+		});
+		for (const slot of document.querySelectorAll('main article .slot')) observer.observe(slot);
+	});
+	await expect(page.locator('main figure svg')).toHaveCount(1);
+
+	expect(await revealDayDrawings(page)).toBe(4);
+
+	await expect(page.locator('main figure svg')).toHaveCount(4);
+	expect(await page.locator('main article').evaluateAll((articles) =>
+		articles.map((article) => article.getAttribute('data-draws'))
+	)).toEqual(['1', '1', '1', '1']);
+	expect(await page.evaluate(() => window.scrollY)).toBe(0);
+	expect(requests).toEqual([]);
+});
 
 test.describe('the browser draws the chart', () => {
 	test('a story with marks carries one drawing and no image', async ({ page }) => {

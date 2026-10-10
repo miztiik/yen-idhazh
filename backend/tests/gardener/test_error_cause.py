@@ -1,20 +1,20 @@
 """Does every error a gardener pass meets mean what the plan says it means, built from real errors?
 
 Each case is the error object the standard library really raises - an
-`HTTPError` with GitHub's status code, a `URLError` around the reason a
-connection failed, a timeout, a file the system refused - built here, with no
-network (Guardrail #7). The classifier reads the type and the status code, so
-an error built here is the error a pass meets.
+`HTTPError` with GitHub's status code and response headers, a `URLError` around
+the reason a connection failed, a timeout, a file the system refused - built
+here, with no network (Guardrail #7). The classifier reads the type, status and
+closed response-header signals, so an error built here is the error a pass
+meets.
 """
 
 from __future__ import annotations
 
-import email.message
 import http.client
 import io
 import json
 import urllib.error
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from http import HTTPStatus
 
@@ -22,7 +22,7 @@ import pytest
 
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.gardener import error_cause
-from idhazh.gardener.error_cause import ErrorCause
+from idhazh.gardener.error_cause import ErrorCause, ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 
 pytestmark = pytest.mark.contract
@@ -32,10 +32,15 @@ DELETED: str = "https://api.github.com/repos/miztiik/yen-idhazh/actions/artifact
 
 
 @contextmanager
-def an_answer(status: int) -> Iterator[urllib.error.HTTPError]:
+def an_answer(
+    status: int, headers: Mapping[str, str] | None = None
+) -> Iterator[urllib.error.HTTPError]:
     """GitHub's answer with this status, as `urlopen` raises it, closed once the case is done."""
+    response_headers = http.client.HTTPMessage()
+    for name, value in (headers or {}).items():
+        response_headers[name] = value
     answer = urllib.error.HTTPError(
-        DELETED, status, HTTPStatus(status).phrase, email.message.Message(), io.BytesIO(b"{}")
+        DELETED, status, HTTPStatus(status).phrase, response_headers, io.BytesIO(b"{}")
     )
     try:
         yield answer
@@ -57,13 +62,41 @@ def an_answer(status: int) -> Iterator[urllib.error.HTTPError]:
         pytest.param(504, ErrorCause.API_UNAVAILABLE, id="504-gateway-timeout"),
         pytest.param(400, ErrorCause.RAISED, id="400-bad-request"),
         pytest.param(401, ErrorCause.RAISED, id="401-no-token"),
-        pytest.param(403, ErrorCause.RAISED, id="403-forbidden"),
     ],
 )
 def test_each_answer_github_gives_means_one_cause(status: int, cause: ErrorCause) -> None:
     """An `HTTPError` is read first, so a refusal is never mistaken for a lost connection."""
     with an_answer(status) as answer:
         assert isinstance(answer, urllib.error.URLError), "the order of the tests is the point"
+        assert error_cause.classify(answer) is cause
+
+
+@pytest.mark.parametrize(
+    ("headers", "cause"),
+    [
+        pytest.param(
+            {"X-RateLimit-Remaining": "0"},
+            ErrorCause.API_UNAVAILABLE,
+            id="rate-limit-exhausted",
+        ),
+        pytest.param(
+            {"Retry-After": "not parsed"},
+            ErrorCause.API_UNAVAILABLE,
+            id="retry-after-present",
+        ),
+        pytest.param({}, ErrorCause.RAISED, id="ordinary-forbidden"),
+        pytest.param(
+            {"X-RateLimit-Remaining": "1"},
+            ErrorCause.RAISED,
+            id="rate-limit-remains",
+        ),
+    ],
+)
+def test_a_403_is_unavailable_only_when_headers_prove_exhaustion(
+    headers: Mapping[str, str], cause: ErrorCause
+) -> None:
+    """Header names are case-insensitive, and header text is never parsed."""
+    with an_answer(HTTPStatus.FORBIDDEN, headers) as answer:
         assert error_cause.classify(answer) is cause
 
 
@@ -101,6 +134,13 @@ def test_every_other_error_is_a_code_defect(error: Exception) -> None:
     assert error_cause.classify(error) is ErrorCause.RAISED
 
 
+def test_only_the_typed_named_refusal_needs_manual_action() -> None:
+    refusal = ManualActionError("the data needs a person's decision")
+
+    assert error_cause.classify(refusal) is ErrorCause.MANUAL_ACTION
+    assert error_cause.classify(ValueError(str(refusal))) is ErrorCause.RAISED
+
+
 @pytest.mark.parametrize(
     ("needed", "cause"),
     [
@@ -110,7 +150,7 @@ def test_every_other_error_is_a_code_defect(error: Exception) -> None:
     ],
 )
 def test_one_rule_decides_the_download_budget(needed: int, cause: ErrorCause) -> None:
-    """More than the whole budget is a defect a person resolves; less waits for a wake with room."""
+    """The raw aggregate error stays a defect; an explicit period refusal wraps it by name."""
     spent = OverBudgetError(needed=needed, room=100_000, budget=1_048_576)
 
     assert error_cause.classify(spent) is cause
@@ -120,6 +160,7 @@ def test_one_rule_decides_the_download_budget(needed: int, cause: ErrorCause) ->
     ("cause", "fault"),
     [
         (ErrorCause.API_UNAVAILABLE, GardenerFault.API_UNAVAILABLE),
+        (ErrorCause.MANUAL_ACTION, GardenerFault.MANUAL_ACTION),
         (ErrorCause.RAISED, GardenerFault.RAISED),
         (ErrorCause.BUDGET_SPENT, GardenerFault.RAISED),
         (ErrorCause.GONE, GardenerFault.RAISED),
@@ -127,7 +168,7 @@ def test_one_rule_decides_the_download_budget(needed: int, cause: ErrorCause) ->
     ],
     ids=lambda value: value.value,
 )
-def test_a_stop_records_api_unavailable_or_raised(
+def test_a_stop_records_the_fault_its_cause_declares(
     cause: ErrorCause, fault: GardenerFault
 ) -> None:
     """A 404 on a read is a wrong request, not a member gone, so a stop for it is a defect."""

@@ -132,6 +132,7 @@ def _context(
     policy = tasks[name]
     folders = runner.folders_of(name, tasks, root, committed_folders(root, tasks))
     listed = runner.listed_folders(policy, folders)
+    operator_range = None if wake else period_range
     if wake:
         period_range = scheduled_range(name, policy, today)
         named = paths_for_task(root, name, policy, period_range, today=today)
@@ -150,6 +151,7 @@ def _context(
         owned_folders=folders.walk,
         listing=FileListing.from_disk(root, listed, paths=named),
         first_ledger_year=first_year,
+        operator_range=operator_range,
         period_range=period_range,
     )
 

@@ -270,6 +270,44 @@ def test_a_shard_a_code_defect_failed_names_the_task_in_its_heading() -> None:
     )
 
 
+def test_a_shard_a_known_refusal_failed_says_manual_action_in_its_heading() -> None:
+    """A manual refusal is red without calling its known condition a code defect."""
+    tasks = [
+        a_task(
+            "compact-gardener",
+            TaskOutcome.FAILED,
+            stopped_because=StopReason.FAILED,
+            fault=GardenerFault.MANUAL_ACTION,
+            error="ManualActionError",
+            where="idhazh.gardener.tasks._absent_indexes:111",
+            next=report.WHY[GardenerFault.MANUAL_ACTION],
+        )
+    ]
+    shard = a_shard(tasks, exit_code=EXIT_TASK_FAILED, downloaded_bytes=0)
+
+    page = run_summary.markdown(shard, tasks)
+
+    assert page == (
+        "### A task or the shard itself failed, and a person reads why; manual action is "
+        "required for `compact-gardener` (exit 1)\n"
+        "\n"
+        "The shard's changes and its record landed on main on try 1 of up to 6: "
+        f"`{RECORD}`.\n"
+        "\n"
+        "The tasks downloaded 0.0 MB of their 128 MB budget (`max_downloaded_mb`).\n"
+        "\n"
+        "| Task | How it ended | What it did |\n"
+        "| --- | --- | --- |\n"
+        "| `compact-gardener` | **failed** (manual-action) | stopped by "
+        "`ManualActionError` at `idhazh.gardener.tasks._absent_indexes:111` |\n"
+        "\n"
+        "What the words mean, and what happens next:\n"
+        "\n"
+        "- *manual-action*: a known refusal needs a person's action before the next wake can "
+        "continue\n"
+    )
+
+
 TWO_STALE: Final = ["state/compact/x/index/daily.json", "state/compact/x/index/monthly.json"]
 
 

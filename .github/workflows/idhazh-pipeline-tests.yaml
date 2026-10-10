@@ -27,8 +27,8 @@
 # It publishes nothing a reader sees. No step writes `frontend/public/` and
 # nothing here is on any reader's path. The `commit` job appends what each test
 # case wrote under that test case's own trial roots - its raw ledgers
-# tier-first at `state/raw/pipeline-tests/<id>/` and its traces at
-# `state/pipeline-tests/<id>/traces/` - which no console page reads; every
+# tier-first at `state/raw/pipeline-tests/<id>/` and its JSONL traces at
+# `state/raw/traces/pipeline-tests/<id>/` - which no console page reads; every
 # other job keeps `contents: read`. What the runners produced - the article
 # text included - leaves only as an artifact.
 #
@@ -428,9 +428,7 @@ jobs:
           python3 backend/utilities/pipeline_test_ledgers.py check \
             --tree backend/var/trial-ledgers
 
-      # `place` prints the roots to stage, and creates every declared one first.
-      # The commit script hands its arguments to `git add`, which aborts on a
-      # path the checkout does not hold and takes the whole step with it.
+      # One collector validates exact artifacts and independently declared case roots.
       - name: Commit the ledgers the test cases wrote
         env:
           COMMIT_MESSAGE: 'pipeline tests: what the test cases wrote'
@@ -438,6 +436,4 @@ jobs:
           PUSH_FAILED_MESSAGE: 'the pipeline-test ledgers lost every push attempt'
         run: |
           set -euo pipefail
-          mapfile -t TRIAL_ROOTS < <(python3 backend/utilities/pipeline_test_ledgers.py place \
-            --tree backend/var/trial-ledgers)
-          python backend/utilities/commit_and_push.py "${TRIAL_ROOTS[@]}"
+          python backend/utilities/pipeline_test_publish.py --tree backend/var/trial-ledgers

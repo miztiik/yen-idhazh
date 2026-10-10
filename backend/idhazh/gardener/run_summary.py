@@ -9,7 +9,7 @@ ran, in the order the tasks ran - so it cannot say anything the log does not.
 Top to bottom:
 
 - one heading, the lede: what the exit code means, which tasks a code defect
-  stopped and which were deferred, then the exit code;
+  stopped, which need manual action and which were deferred, then the exit code;
 - where the record went, or why nothing landed;
 - what the tasks downloaded against their budget, when something measured it;
 - one row a task: how it ended and what it did;
@@ -42,7 +42,7 @@ from idhazh.contracts.gardener_events import (
     TaskFinished,
     TaskOutcome,
 )
-from idhazh.contracts.gardener_fault import RecoveryNote
+from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import PrunableCollection
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import report
@@ -90,10 +90,18 @@ def markdown(published: ShardPublished, finished: Sequence[TaskFinished]) -> str
 
 
 def _lede(published: ShardPublished, finished: Sequence[TaskFinished]) -> str:
-    """The one heading: what the exit code means, who a code defect or a deferral names."""
+    """The one heading: what the exit code means, and which tasks need which response."""
     said = _escaped(published.means[:1].upper() + published.means[1:])
-    if published.failed_tasks:
-        said += f"; a code defect stopped {_names(published.failed_tasks)}"
+    manual = [
+        each.task
+        for each in finished
+        if each.outcome is TaskOutcome.FAILED and each.fault is GardenerFault.MANUAL_ACTION
+    ]
+    defects = [task for task in published.failed_tasks if task not in manual]
+    if defects:
+        said += f"; a code defect stopped {_names(defects)}"
+    if manual:
+        said += f"; manual action is required for {_names(manual)}"
     deferred = [each.task for each in finished if each.outcome is TaskOutcome.DEFERRED]
     if deferred:
         said += f"; deferred: {_names(deferred)}"

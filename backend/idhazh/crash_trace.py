@@ -1,13 +1,12 @@
-"""What does a gardener program or command print when it crashes? Where it broke, never its text.
+"""What does an idhazh program or command print when it crashes? Where it broke, never its text.
 
 Python's own trace prints each exception's message, and the message of every
 exception chained to it. A message can quote a ledger row or what GitHub's API
 or a file returned, and that can be text fetched from the open web (Guardrail
-#11). So each program `.github/workflows/idhazh-gardener.yml` runs calls
-`install` before its `main`; `idhazh gardener` calls it
-as its `main` starts, and `idhazh telemetry` for `prune` alone. A program that
-catches an exception to end on an exit code of its own prints it with
-`print_trace`.
+#11). So the package command calls `install` before it reads argv or hands a
+line to a subrouter, and each utility program that bypasses that router calls
+`install` before its `main`. A program that catches an exception to end on an
+exit code of its own prints it with `print_trace`.
 
 **The trace keeps Python's layout and drops every word an exception carries.**
 For the exception and each one chained to it, oldest first, with Python's own

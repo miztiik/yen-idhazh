@@ -509,7 +509,7 @@ drift guard to a file rather than to a question is what let a second writer
 through**, and what replaced both names no file - it charges each ledger to the
 job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job that
 records a machine and stages nothing fails without an edit
-([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
+([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-caller-owns-recovery-policy)).
 
 **A repeated row now settles, and it could not have before.** Until 2026-09-16
 nothing paired this ledger with what makes two of its rows one record, which

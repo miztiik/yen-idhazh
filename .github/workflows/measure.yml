@@ -715,7 +715,7 @@ jobs:
       - name: What machine this bench drew
         run: |
           set -euo pipefail
-          python -m idhazh fingerprint \
+          python backend/utilities/record_publish.py run measure fingerprint \
             --config backend/var/candidate-config \
             --date "$RUNTIME_DATE" \
             --execution "${{ github.run_id }}" \
@@ -825,7 +825,7 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: |
           if [ -d state/raw/pipeline-tests/host-fingerprint ]; then
-            python backend/utilities/commit_and_push.py state/raw/pipeline-tests/host-fingerprint
+            python backend/utilities/record_publish.py land measure
           else
             echo "$NOTHING_STAGED_MESSAGE"
           fi
