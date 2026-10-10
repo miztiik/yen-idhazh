@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Rows #3, #10 and #11 declare persisted shapes and pause for the owner; every other row states its own level.
-**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. Fowler and Andre reviewed it on 2026-10-11 and settled two contested items in debate. No row started. Table P awaits the owner.
+**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. Fowler and Andre reviewed it on 2026-10-11 and settled two contested items in debate. The owner ruled P1 to P12 on 2026-10-11 (P12 deferred to row #8's replay). No row started.
 
 ## 0. Operating contract
 
@@ -40,8 +40,8 @@ Table C - when to stop and ask
 
 | # | Trigger | What happens |
 | --- | --- | --- |
-| C1 | A row would declare a persisted shape: a contract under backend/idhazh/contracts/ read by a later run, a ledger, or a committed reference file with expected values | Stop. The owner rules on the shape (CLAUDE.md section 0). Row #3's shape is P1 |
-| C2 | A row needs a new runtime dependency, or a model or extra the council's jobs do not install today | Stop. Name the cost and the beneficiary (Guardrail #8); consult Carmack for runner minutes. scipy is P7 |
+| C1 | A row would declare a persisted shape: a contract under backend/idhazh/contracts/ read by a later run, a ledger, or a committed reference file with expected values | Stop. The owner rules on the shape (CLAUDE.md section 0). Row #3's shape was approved as P1 on 2026-10-11; rows #10 and #11 still stop here |
+| C2 | A row needs a new runtime dependency, or a model or extra the council's jobs do not install today | Stop. Name the cost and the beneficiary (Guardrail #8); consult Carmack for runner minutes. scipy was approved as P7 on 2026-10-11 |
 | C3 | A row's Decisions table cites a Table P item the owner has not ruled | Stop before implementation of that row |
 | C4 | A check would read ledger files other than through ledger.load_days or the door's own indexes | Stop. The ledger door is the only reader (docs/concepts/growing-reads.md, Guardrail #12) |
 | C5 | Row #8's replay shows more crossed checks per judged date than a person can inspect | Report it as a finding with options (CLAUDE.md section 0d), never as a veto |
@@ -107,7 +107,7 @@ Table E2 - rejected alternatives
 
 ### Row #2 - The judge's settings file and site identity
 
-- **Scope:** config/judges/summary-fidelity-judge.json holds every number the judge uses (Table F1), validated by a model that forbids unknown keys and bounds every field and read only by the judge's own package, with each setting landing in the first row that reads it; this row lands the two site settings, and site.py decides a site and a page type: a site stays the host without a leading www., a host listed in multi_tenant_hosts (F1.8) adds its first path segment, and page_types (F1.9) names the path prefixes that mark a page type inside one site.
+- **Scope:** config/judges/summary-fidelity-judge.json holds every number the judge uses (Table F1), validated by a model that forbids unknown keys and bounds every field and read only by the judge's own package, with each setting landing in the first row that reads it; this row lands the two site settings, and site.py decides a site and a page type: a site stays the host without a leading www., a host listed in multi_tenant_hosts (F1.10) adds its first path segment, and page_types (F1.11) names the path prefixes that mark a page type inside one site.
 - **Level:** 3 (decides how every check is grouped).
 - **Files touched:**
   - config/judges/summary-fidelity-judge.json (new)
@@ -130,18 +130,19 @@ Table F1 - settings this plan declares (named once here; every row points here)
 | F1.3 | min_articles | 20 | 5 to 200 | Articles each side of a check needs before it is tested; was min_domain_rows | 4 | drift.py; owner, 2026-10-10 (R10) |
 | F1.4 | min_window_rows | 20 | 1 to 1000 | Rows each whole window needs; below it the judged date stores one window_rows row and no check | 4 | drift.py |
 | F1.5 | short_tail_percentile | 0.05 | 0.01 to 0.25 | Baseline percentile whose length defines an unusually short article | 5 | Blueprint section 1 |
-| F1.6 | permutations | 9999 | 999 to 1000000 | Reshuffles per permutation check; replaced by reshuffle_stop_hits, reshuffle_cap_floor and reshuffle_cap_multiple if P4 is approved | 5 | Owner, 2026-10-10 (R2) |
-| F1.7 | reshuffle_seed | a fixed integer | any integer | Base seed; each row's reshuffles are seeded from it and the row's key, so a judged date gives the same p-values on every run and a p-value never depends on the order checks run in | 5 | Owner, 2026-10-11 (every number in config); Andre (reviewed 2026-10-11) |
-| F1.8 | multi_tenant_hosts | substack.com, medium.com, github.com | host names | Hosts whose first path segment names its own site | 2 | Blueprint section 3; owner, 2026-10-10 (R7) |
-| F1.9 | page_types | news.mongabay.com: short_article = /short-article/, video = /video/ | per host, path prefixes | Path prefixes that name a page type inside one site; any other address is type other | 2 | Owner, 2026-10-10 (R5) |
-| F1.10 | false_discovery_rate | 0.05 | 0.001 to 0.2 | Target share of false crossings among the checks that cross, averaged over judged dates | 8 | Blueprint section 5 |
-| F1.11 | urgent_p_value | 0.001 | 0.000001 to 0.05 | An article_count check that crosses with a p-value under this is stored as urgent; deleted if P9 is approved | 8 | Blueprint ("Sev-1 if p < 0.001"); owner, 2026-10-10 (R9) |
+| F1.6 | reshuffle_stop_hits | 10 | 1 to 100 | Reshuffling stops once this many reshuffles give a distance at least as large as the observed one (a tie counts) | 6 | Owner, 2026-10-11 (P4) |
+| F1.7 | reshuffle_cap_floor | 100000 | 1000 to 10000000 | The smallest cap on reshuffles per check | 6 | Owner, 2026-10-11 (P4) |
+| F1.8 | reshuffle_cap_multiple | 10 | 1 to 100 | The cap is the larger of reshuffle_cap_floor and this times the tested checks in the run divided by false_discovery_rate, minus one, counted before any reshuffle | 6 | Owner, 2026-10-11 (P4) |
+| F1.9 | reshuffle_seed | a fixed integer | any integer | Base seed; each row's reshuffles are seeded from it and the row's key, so a judged date gives the same p-values on every run and a p-value never depends on the order checks run in | 6 | Owner, 2026-10-11 (every number in config; P4) |
+| F1.10 | multi_tenant_hosts | substack.com, medium.com, github.com | host names | Hosts whose first path segment names its own site | 2 | Blueprint section 3; owner, 2026-10-10 (R7) |
+| F1.11 | page_types | news.mongabay.com: short_article = /short-article/, video = /video/ | per host, path prefixes | Path prefixes that name a page type inside one site; any other address is type other | 2 | Owner, 2026-10-10 (R5) |
+| F1.12 | false_discovery_rate | 0.05 | 0.001 to 0.2 | Target share of false crossings among the checks that cross, averaged over judged dates | 8 | Blueprint section 5 |
 
 Table F2 - decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| F2.1 | One settings file per judge under config/judges/, loaded only by that judge, so its numbers never enter the import closure of every module that reads config/idhazh.json | Owner ruling pending (P6) |
+| F2.1 | One settings file per judge under config/judges/, loaded only by that judge, so its numbers never enter the import closure of every module that reads config/idhazh.json | Owner, 2026-10-11 (P6) |
 | F2.2 | Every field declares its allowed range, and an autotune loop may move a field only within it; reshuffle_seed is a fact, and no loop moves it, because a loop would keep the seed with the fewest crossings | Owner, 2026-10-11 (every number in config, ready for autotune); Fowler (reviewed 2026-10-11) |
 | F2.3 | A site stays the host without www.; no public suffix lookup, because registered-domain grouping is rejected (F3.3) | Owner, 2026-10-10 (R7) |
 | F2.4 | Page types group articles inside one site; they are never separate sites | Owner, 2026-10-10 (R5) |
@@ -151,7 +152,7 @@ Table F3 - rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| F3.1 | A block in config/idhazh.json, as the content-similarity judge's settings are | AppConfig is in the council's import closure, so the block would be a fourth judge contract crossing it, which llm-council.md says cannot grow (C9) | One block in AppConfig and its changelog entry | Owner ruling pending (P6) |
+| F3.1 | A block in config/idhazh.json, as the content-similarity judge's settings are | AppConfig is in the council's import closure, so the block would be a fourth judge contract crossing it, which llm-council.md says cannot grow (C9) | One block in AppConfig and its changelog entry | Owner, 2026-10-11 (P6) |
 | F3.2 | Constants in the check modules | Guardrail #6 refuses a hard-coded threshold, and autotune cannot move a constant | One edit per module; every tuning needs a code change and a review | CLAUDE.md Guardrail #6 |
 | F3.3 | Group by registered domain from the public suffix list, as the blueprint writes | Merges news.mongabay.com with india.mongabay.com, a second #1270-type mix; the seven author.substack.com feeds merge unless the list carries substack.com | courlan is already installed; the cost is the merged series | Owner, 2026-10-10 (R7) |
 | F3.4 | Page types as separate sites | The #1270 week would compare nothing: 10 full and 11 Short recent articles, both under min_articles | Smaller series per site and more untested checks | Owner, 2026-10-10 (R5) |
@@ -193,7 +194,7 @@ Table H1 - check names (WindowCheck; declared once here)
 | H1.3 | unusually_short | Share of a site's recent articles shorter than the baseline's short_tail_percentile (F1.5) length, within page type | more | 5 |
 | H1.4 | article_length | Wasserstein-1 distance between baseline and recent log word counts within each page type, averaged with weights n_b x n_r / (n_b + n_r), reshuffled within type | either | 6 |
 | H1.5 | page_furniture | Share of distinct articles flagged extraction_suspect ("The text looks like page furniture", eval_row.py), within page type; was scoring_chrome | more | 6 |
-| H1.6 | page_mix | Share of each declared page type (F1.9); stored, never tested | none | 6 |
+| H1.6 | page_mix | Share of each declared page type (F1.11); stored, never tested | none | 6 |
 | H1.7 | copied_phrase_share | Wasserstein-1 distance of extractiveness (the share of the summary's 4-word phrases found verbatim in the source), per model-and-scorer pair, within page type as H1.4 | either | 7 |
 | H1.8 | faithfulness | Wasserstein-1 distance of hhem, per model-and-scorer pair, within page type as H1.4 | either | 7 |
 
@@ -227,24 +228,23 @@ Table H3 - SummaryFidelityWindowCheck, one row per check per judged date per cou
 | H3.14 | direction | Direction: fewer, more, shorter, longer, higher, lower or none | Which way the tested comparison moved, within page type where the test is |
 | H3.15 | p_value | float or null | Null when not tested |
 | H3.16 | q_value | float or null | The smallest false_discovery_rate at which this check would cross in its family, the (run_id, date) pair: the Benjamini-Hochberg adjusted p-value. It depends on every other check of the same run and date that enters the false-discovery step, so an outcome is not a property of one check alone. Null outside the step, earlier_model_baseline included. Rank or re-threshold only rows of one run_id, the date's latest |
-| H3.17 | false_discovery_rate, min_articles, short_tail_percentile, urgent_p_value | float, int, float, float | F1.10, F1.3, F1.5 and F1.11 in force, so a later reader needs no git history (urgent_p_value goes if P9 is approved) |
+| H3.17 | false_discovery_rate, min_articles, short_tail_percentile | float, int, float | F1.12, F1.3 and F1.5 in force, so a later reader needs no git history |
 | H3.18 | reshuffles | int or null | Reshuffles used, on permutation checks |
 | H3.19 | outcome | CheckOutcome (H2) | What the check concluded |
-| H3.20 | urgent | bool | True for an article_count row that crossed with a p-value under urgent_p_value (F1.11); goes if P9 is approved |
 
 Table H4 - decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| H4.1 | The ledger is window-checks in the family summary-fidelity-judge: rows land in state/raw/summary-fidelity-judge/window-checks/YYYY/MM/DD/ as parquet, and the gardener packs them into state/compact/summary-fidelity-judge/window-checks/ (daily, monthly and yearly files with their index files); the family leaves room for the judge's later ledgers (rows #10, #11) | Owner ruling pending (P1) |
+| H4.1 | The ledger is window-checks in the family summary-fidelity-judge: rows land in state/raw/summary-fidelity-judge/window-checks/YYYY/MM/DD/ as parquet, and the gardener packs them into state/compact/summary-fidelity-judge/window-checks/ (daily, monthly and yearly files with their index files); the family leaves room for the judge's later ledgers (rows #10, #11) | Owner, 2026-10-11 (P1) |
 | H4.2 | Every file name is minted by the ledger door (a version 8 UUID per writer and attempt); no writer names a file | backend/idhazh/ledger/persist.py |
 | H4.3 | Every check of every judged date is stored, untested ones included, so a skipped check is visible; a date whose whole window is under min_window_rows stores its one window_rows row instead | Owner, 2026-10-10 (store every check); blueprint section 2 ("eliminating the silent skip") |
 | H4.4 | Retention follows the owner-approved live chain in ledger-registry.md, held by test_every_ledger_uses_the_approved_live_retention_chain | ledger-registry.md |
-| H4.5 | Key: run_id, date, site, check_name, page_type, model_id, scorer_version, with no preference, so packing keeps every council run of a date; a retry of one run settles to its highest attempt through the door; a reader of one judged date takes the run with the latest checked_at | Owner ruling pending (P1); ledger-registry.md, the rule a judge ledger follows; Fowler (reviewed 2026-10-11) |
+| H4.5 | Key: run_id, date, site, check_name, page_type, model_id, scorer_version, with no preference, so packing keeps every council run of a date; a retry of one run settles to its highest attempt through the door; a reader of one judged date takes the run with the latest checked_at | Owner, 2026-10-11 (P1); ledger-registry.md, the rule a judge ledger follows; Fowler (reviewed 2026-10-11) |
 | H4.6 | The row declares none of the door's names (ledger, covers, attempt, job, shard, unit_id) and run_id only as the council run; the writer identity is the council's, job save_council_results | ledger-registry.md, the rule a judge ledger follows |
-| H4.7 | One unit a night (shard_count 1): run_shard computes every check's row into a scratch file in the tenant's own slot under backend/var/council/, reports no model calls, writes that file once, after its last check, or leaves none and returns stopped_on_deadline, so settle files a whole date or nothing, and settle applies row #8's step and files the rows, naming its own producer; the tenant declares no refusal of a night, because its work has no cost worth weighing against the council's clock | Owner ruling pending (P8); backend/idhazh/council/tenancy.py |
+| H4.7 | One unit a night (shard_count 1): run_shard computes every check's row into a scratch file in the tenant's own slot under backend/var/council/, reports no model calls, writes that file once, after its last check, or leaves none and returns stopped_on_deadline, so settle files a whole date or nothing, and settle applies row #8's step and files the rows, naming its own producer; the tenant declares no refusal of a night, because its work has no cost worth weighing against the council's clock | Owner, 2026-10-11 (P8); backend/idhazh/council/tenancy.py |
 | H4.8 | Check names state what is measured and the outcome states whether the threshold was crossed, so a stored row never claims a movement its own outcome denies | Owner, 2026-10-10 (rename request); replaces the alert names of R8; outcome names debated by Fowler and Andre, 2026-10-11 |
-| H4.9 | Readers count a stretch, not a night: a stretch is consecutive run days on which one key crosses, and a day with no run does not end one, because one real change stays in the recent window for seven nights | Owner ruling pending (P11) |
+| H4.9 | Readers count a stretch, not a night: a stretch is consecutive run days on which one key crosses, and a day with no run does not end one, because one real change stays in the recent window for seven nights | Owner, 2026-10-11 (P11) |
 
 Table H5 - rejected alternatives
 
@@ -252,9 +252,9 @@ Table H5 - rejected alternatives
 | --- | --- | --- | --- | --- |
 | H5.1 | state/raw/summary-quality-evals/drift/ | The registry refuses a door ledger inside another door ledger's folder, because a walk of the outer ledger's raw days would read the inner one's files (backend/idhazh/contracts/ledgers.py); a fixed file name such as ledger.parquet is also refused, because a raw file is immutable once written | A change to the registry rule, or renaming the eval ledger and moving its committed raw and compact files into a nested folder; either is Level 5 | backend/idhazh/contracts/ledgers.py |
 | H5.2 | JSON files under state/summary-fidelity-judge/, as two of the content-similarity judge's ledgers still are | The owner wants parquet under state/raw/ with the ledger enrolment; the flat and stamped grains are the ones the registry calls transitional | None | Owner, 2026-10-11 |
-| H5.3 | A ledger that is its own family, at state/raw/summary-fidelity-judge/ | No door ledger may sit inside another, so rows #10 and #11 could never add a ledger beside it | A second family later | Owner ruling pending (P1) |
+| H5.3 | A ledger that is its own family, at state/raw/summary-fidelity-judge/ | No door ledger may sit inside another, so rows #10 and #11 could never add a ledger beside it | A second family later | Owner, 2026-10-11 (P1) |
 | H5.4 | Store only crossed checks | A reader cannot tell "checked, threshold not crossed" from "never checked" | Fewer rows a night; row #8's replay measures how many | Owner, 2026-10-10 (store every check) |
-| H5.5 | Compute the checks in settle | settle runs inside the collecting job's 30-minute bound for every tenant and date, and a job killed there commits nothing for any tenant | None; the unit's model-server start is spent either way | Owner ruling pending (P8) |
+| H5.5 | Compute the checks in settle | settle runs inside the collecting job's 30-minute bound for every tenant and date, and a job killed there commits nothing for any tenant | None; the unit's model-server start is spent either way | Owner, 2026-10-11 (P8) |
 | H5.6 | A preference that keeps one run per date | Packing would delete the earlier run's rows, against "every check stored", and could mix two runs' false-discovery sets in one day | None | Fowler (reviewed 2026-10-11) |
 
 ### Row #4 - Article-count check from the item-health census
@@ -279,7 +279,7 @@ Table I1 - decisions
 | I1.1 | The count comes from the item-health census, because the eval ledger counts what the pipeline selected and scored | Owner, 2026-10-10 (R3) |
 | I1.2 | Negative-binomial tail with spread from the baseline's daily counts; the rate uses the days the unit actually read, never the settings | Owner, 2026-10-10 (R3) |
 | I1.3 | No article floor for this check: a site with any baseline address is tested | Blueprint section 2 |
-| I1.4 | A daily variance under the daily mean is raised to the mean, and the variance also carries the baseline's own noise | Owner ruling pending (P3) |
+| I1.4 | A daily variance under the daily mean is raised to the mean, and the variance also carries the baseline's own noise | Owner, 2026-10-11 (P3) |
 | I1.5 | A judged date whose whole window is thin stores one window_rows row and no check, so a stopped instrument never reads as a quiet week | drift.py (min_window_rows) |
 
 Table I2 - rejected alternatives
@@ -291,12 +291,12 @@ Table I2 - rejected alternatives
 
 ### Row #5 - Unusually-short check
 
-- **Scope:** per site and within each declared page type, the check counts recent articles with strictly fewer words than the baseline's short_tail_percentile (F1.5) length, takes a p-value by reshuffling that re-derives the cut on every reshuffle, and returns one unusually_short row.
+- **Scope:** per site and within each declared page type, the check counts recent articles with strictly fewer words than the baseline's short_tail_percentile (F1.5) length, takes the exact beta-binomial tail as its p-value, adding each page type's exact tail, and returns one unusually_short row; a type with no baseline article has no cut and its recent articles are left out.
 - **Level:** 2.
 - **Files touched:**
   - backend/idhazh/summary_fidelity/unusually_short.py (new)
   - backend/idhazh/summary_fidelity/tenant.py
-  - backend/idhazh/contracts/knobs/summary_fidelity_judge.py and config/judges/summary-fidelity-judge.json (short_tail_percentile, permutations, reshuffle_seed)
+  - backend/idhazh/contracts/knobs/summary_fidelity_judge.py and config/judges/summary-fidelity-judge.json (short_tail_percentile)
   - backend/tests/summary_fidelity/test_unusually_short.py (new)
   - docs/architecture/publishing/summary-fidelity-judge.md
 - **Acceptance gates:** local - ruff, mypy and the shared test selector over backend/tests/summary_fidelity/; CI - full suite.
@@ -306,8 +306,7 @@ Table J1 - decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| J1.1 | The p-value comes from reshuffling, because the cut is itself estimated from the baseline | Owner, 2026-10-10 (R2) |
-| J1.2 | The exact beta-binomial tail replaces the reshuffling | Owner ruling pending (P2) |
+| J1.1 | The p-value is the exact beta-binomial tail, the exact form of the reshuffling R2 approved, because the cut is itself estimated from the baseline; a recent article counts when it has strictly fewer words than the cut | Owner, 2026-10-10 (R2); owner, 2026-10-11 (P2) |
 
 Table J2 - rejected alternatives
 
@@ -322,7 +321,9 @@ Table J2 - rejected alternatives
 - **Files touched:**
   - backend/idhazh/summary_fidelity/article_length.py (new)
   - backend/idhazh/summary_fidelity/page_furniture.py (new)
+  - backend/idhazh/summary_fidelity/reshuffle.py (new: the early-stopping reshuffle and its automatic cap, seeded per row key)
   - backend/idhazh/summary_fidelity/tenant.py
+  - backend/idhazh/contracts/knobs/summary_fidelity_judge.py and config/judges/summary-fidelity-judge.json (reshuffle_stop_hits, reshuffle_cap_floor, reshuffle_cap_multiple, reshuffle_seed)
   - backend/tests/summary_fidelity/test_article_length.py (new)
   - backend/tests/summary_fidelity/test_page_furniture.py (new)
   - backend/tests/summary_fidelity/fixtures/issue_1270_window.json (new: news.mongabay.com, 102 baseline and 21 recent lengths with page types, copied from the committed eval ledger)
@@ -338,7 +339,7 @@ Table K1 - decisions
 | K1.2 | Log word counts, so a cut is measured as a share of the text; the row still stores medians in words | Owner, 2026-10-10 (R14) |
 | K1.3 | Reshuffles stay within page type, so the p-value asks whether one type got shorter and a change in mix alone does not cross | Owner, 2026-10-10 (R5) |
 | K1.4 | page_furniture replaces scoring_chrome and reads extraction_suspect, with an exact p-value | Owner, 2026-10-10 (R15; renamed by the rename request) |
-| K1.5 | The distance and the furniture share are taken within each page type, so a mix that moves toward the shortened type cannot hide a real cut, and one distinct article counts once | Owner ruling pending (P11) |
+| K1.5 | The distance and the furniture share are taken within each page type, so a mix that moves toward the shortened type cannot hide a real cut, and one distinct article counts once | Owner, 2026-10-11 (P11) |
 
 Table K2 - rejected alternatives
 
@@ -365,7 +366,7 @@ Table L1 - decisions
 | --- | --- | --- |
 | L1.1 | Wasserstein-1 with a permutation p-value for hhem and extractiveness | Owner, 2026-10-10 (R2) |
 | L1.2 | A deliberate model or scorer change is never a crossing: the comparison with earlier pairs is stored and stays outside row #8 | Owner, 2026-10-10 (R4) |
-| L1.3 | A pair with 1 to 19 baseline articles is compared with earlier pairs too, so no pair falls into the gap L2.2 rejects | Owner ruling pending (P11) |
+| L1.3 | A pair with 1 to 19 baseline articles is compared with earlier pairs too, so no pair falls into the gap L2.2 rejects | Owner, 2026-10-11 (P11) |
 
 Table L2 - rejected alternatives
 
@@ -376,12 +377,12 @@ Table L2 - rejected alternatives
 
 ### Row #8 - One false-discovery step per judged date, and the replay
 
-- **Scope:** settle collects the p-value of every tested check of a judged date, with no earlier cut-off, applies the Benjamini-Hochberg step-up at false_discovery_rate (F1.10), stores each row's q_value and outcome, marks urgent rows (F1.11) unless P9 removes them, and a replay utility runs the unit over past dates with its own test.
+- **Scope:** settle collects the p-value of every tested check of a judged date, with no earlier cut-off, applies the Benjamini-Hochberg step-up at false_discovery_rate (F1.12), stores each row's q_value and outcome, and a replay utility runs the unit over past dates with its own test.
 - **Level:** 3.
 - **Files touched:**
   - backend/idhazh/summary_fidelity/false_discovery.py (new)
   - backend/idhazh/summary_fidelity/tenant.py (settle applies the step before filing)
-  - backend/idhazh/contracts/knobs/summary_fidelity_judge.py and config/judges/summary-fidelity-judge.json (false_discovery_rate, urgent_p_value)
+  - backend/idhazh/contracts/knobs/summary_fidelity_judge.py and config/judges/summary-fidelity-judge.json (false_discovery_rate)
   - backend/utilities/summary_fidelity_replay.py (new; operator utility)
   - backend/tests/summary_fidelity/test_false_discovery.py (new)
   - backend/tests/summary_fidelity/test_replay.py (new: a tmp_path ledger with two judged dates, read through ledger.load_days)
@@ -394,9 +395,9 @@ Table M1 - decisions
 | # | Decision | Authority |
 | --- | --- | --- |
 | M1.1 | Every check with a p-value hands the step one row; the step is the only threshold, and no check is cut before it by its p-value | Owner, 2026-10-10 (R2) |
-| M1.2 | One judged date within one council run, the (run_id, date) pair, is one family for the step; two runs of a date are two families, and a repair date judged on the same night is a family of its own | Owner ruling pending (P1); Fowler and Andre (reviewed 2026-10-11) |
+| M1.2 | One judged date within one council run, the (run_id, date) pair, is one family for the step; two runs of a date are two families, and a repair date judged on the same night is a family of its own | Owner, 2026-10-11 (P1); Fowler and Andre (reviewed 2026-10-11) |
 | M1.3 | The replay reads through ledger.load_days, one judged date at a time (Guardrail #12) | Fowler (reviewed 2026-10-10: keep) |
-| M1.4 | Reshuffling stops early and its cap follows the number of checks | Owner ruling pending (P4) |
+| M1.4 | Reshuffling stops early and its cap follows the number of checks | Owner, 2026-10-11 (P4) |
 
 Table M2 - rejected alternatives
 
@@ -446,7 +447,7 @@ Table O1 - decisions
 | # | Decision | Authority |
 | --- | --- | --- |
 | O1.1 | The scorer job re-scores; the judge reads the dated rows through ledger.load_days | Owner, 2026-10-10 (R12) |
-| O1.3 | Any difference from the record is a library change, so this check has no p-value and stays outside row #8's step | Owner ruling pending (P11) |
+| O1.3 | Any difference from the record is a library change, so this check has no p-value and stays outside row #8's step | Owner, 2026-10-11 (P11) |
 | O1.2 | One dated benchmark-row contract serves rows #10 and #11; its shape and the set's location | Owner ruling pending (C1) |
 
 Table O2 - rejected alternatives
@@ -480,11 +481,11 @@ Table Q2 - rejected alternatives
 
 ### Row #12 - The stored checks on a console page
 
-- **Scope:** window-checks joins ledger.published so the console's Data explorer can query its compact files, and one panel on the console page the owner names (P5) lists the newest council run's crossed checks by site with effect and q_value, drawing consecutive nightly crossings of one check as one stretch.
+- **Scope:** window-checks joins ledger.published so the console's Data explorer can query its compact files, and one panel on the console's Model page (P5) lists the newest council run's crossed checks by site with effect and q_value, drawing consecutive nightly crossings of one check as one stretch.
 - **Level:** 3.
 - **Files touched:**
   - config/idhazh.json (ledger.published gains window-checks)
-  - frontend/src/routes/console/model/+page.server.ts and frontend/src/routes/console/model/+page.svelte (or the Judgement page's two files, per P5)
+  - frontend/src/routes/console/model/+page.server.ts and frontend/src/routes/console/model/+page.svelte (the Model route, which the console's settings call the Summaries route)
   - frontend/src/lib/server/ledger-rows.ts (a build-time reader of the window-checks compact files, beside evalRows and itemHealthRows)
   - backend/tests/contracts/test_frontend_vocabularies.py and backend/tests/contracts/test_frontend_field_set.py (the hand copy of H1, H2 and the fields the panel reads)
   - backend/tests/contracts/test_panel_queries.py and backend/tests/contracts/test_frontend_console_lists.py (re-derive at dispatch)
@@ -499,7 +500,7 @@ Table T1 - decisions
 | # | Decision | Authority |
 | --- | --- | --- |
 | T1.1 | The Data explorer is the first view; the panel follows | Owner, 2026-10-10 (visualisation is secondary) |
-| T1.2 | Which page carries the panel, and publishing the ledger's compact files on the site | Owner ruling pending (P5) |
+| T1.2 | The Model page carries the panel, and the ledger's compact files are published on the site | Owner, 2026-10-11 (P5) |
 
 Table T2 - rejected alternatives
 
@@ -509,22 +510,22 @@ Table T2 - rejected alternatives
 
 ## 3. Owner rulings
 
-Table P - rulings pending before the rows that cite them run
+Table P - rulings the owner made on 2026-10-11
 
-| # | Question | Proposed answer | Evidence | Rows held |
+| # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
-| P1 | Sign off the judge's ledger: family summary-fidelity-judge, ledger window-checks, its path (H4.1), the row shape (H1 to H3) with the reviewers' changes to it (copied_phrase_share; threshold_crossed and threshold_not_crossed; check_name; baseline_value and recent_value; the effect definition; q_value per (run_id, date); the settings in force on every row), the key with the council run and the reader's rule (H4.5), and one (run_id, date) pair as one false-discovery family (M1.2) | Approve | ledger-registry.md lists what a new ledger owes and the rule a judge ledger follows; row #3 makes every edit in one change. The changes fix a field name the console's query engine reserves, a medians field that also held shares and rates, an effect that divided by zero and ranked small sites first, and outcome names that read as "nothing moved" (Fowler and Andre, 2026-10-11) | 3 and every later row |
-| P2 | Unusually-short check: the exact beta-binomial tail instead of reshuffling, counting recent articles with strictly fewer words than the cut, with page types combined by adding each type's exact tail; a type with no baseline article has no cut and its recent articles are left out | Approve | When the cut is the j-th shortest of N_b baseline articles, the count below it follows BetaBinomial(N_recent, j, N_b - j + 1) with no change; this is the exact form of the reshuffling already approved (checked against every reshuffle of a small case, to 2e-16). With no change it fires on 0.17 to 0.44 percent at 0.5 percent and 2.45 to 4.83 percent at 5 percent (exact, baselines 20 to 102, recent 21 and 40); counting ties as short would fire 0.60 to 2.44 percent at 0.5 percent | 5 |
-| P3 | Article-count check: raise a daily variance under the daily mean to the mean, and add the baseline's own noise to the variance (x (1 + recent_days / baseline_days)) | Approve | The negative binomial is undefined when the daily variance is under the mean, which happened in 54 percent of Poisson samples. The baseline rate is itself estimated: with the term, false rates were 0.0055 to 0.21 percent at 0.135 percent nominal (200,000 repeats; 1.5, 4 and 10 a day; Poisson, spread twice the mean, and quiet weekends). Over-dispersed sites still fire up to 3 times nominal at 0.0001, so row #8's replay reports article_count on its own | 4 |
-| P4 | Reshuffling: stop once 10 reshuffles give a distance at least as large as the observed one (a tie counts); cap at the larger of 100,000 and 10 x (tested checks in the run) / false_discovery_rate - 1, counted before any reshuffle; seed each row's reshuffles from reshuffle_seed and its key; every one of these numbers in the settings file | Approve | The smallest p-value 9,999 reshuffles can give is 0.0001, which equals the first threshold at 500 checks (0.05 / 500), so from 500 checks a lone crossing becomes impossible. With early stopping an unchanged check used about 101 reshuffles instead of 9,999, and the p-values stayed valid over 1,000,000 checks. Not counting ties fired 5.8 percent at 5 percent nominal on tie-heavy scores; counting them fired 4.0 percent | 5, 6, 7, 8 |
-| P5 | Which console page carries the panel (Model or Judgement), and whether the window-checks compact files are published on the site | Model page; publish | The Model page already reads the score and item-health ledgers and lists the sources the checker doubts; the Judgement page reads the similarity judge's merge line, which no check here touches; the Data explorer reads only ledgers in ledger.published | 12 |
-| P6 | Where the judge's numbers live: config/judges/summary-fidelity-judge.json, read only by the judge | Approve | Every number bounded in one file an autotune loop can move. A block in config/idhazh.json would put a fourth judge contract in the council's import closure, because the council's registry imports AppConfig, and llm-council.md says that list cannot grow. The house already keeps one file per gardener task (config/gardener/), per console page (config/console/) and per model (config/models/) | 2 and every later row |
-| P7 | scipy: an optional extra named for what it carries (statistics), installed by the council's planning, judging and collecting jobs | Approve | The planning job imports every registered tenant module to resolve its slug, and the collecting job runs settle; both install only pip install -e . today, so a scipy import reached from the tenant module would fail every judge's night. CI installs the dev extra, so the tests would stay green. R11 named the drift job, which row #1 deletes | 4, 9 |
-| P8 | Build the judge in the council from the first row, with one unit a night computing and settle filing (H4.7), and no stage in drift.yml that later moves | Approve | Nothing is built yet, so there is nothing to migrate; CLAUDE.md section 14 asks for each increment in its intended code path; the council already gives a nightly schedule, one commit path and a writer identity. A shard_count of 0 would break the council's own record, so the judge pays one model-server start a night | 1, 3 and every later row |
-| P9 | Drop urgent (H3.20) and urgent_p_value (F1.11), which R9 kept | Approve | Their only reader, the issue title, went with the issues; a p-value says how unlikely a drop is by chance, not how much it matters, so "urgent" claims a priority nothing measured (CLAUDE.md section 0b); the stored q_value and effect already rank a crossing | 3, 8 |
-| P10 | Repair dates: this judge names none in its first version (B8), and a council plan of its own fans out each tenant's own repair dates before a third judge arrives | Approve | A council date runs every tenant, so a date only this judge named would make the content-similarity judge re-judge a night it already counted, at model cost. The cost of naming none: a night only this judge missed stays missing, and the next window shares six of its seven days (Fowler, 2026-10-11) | 3 |
-| P11 | The reviewers' fixes to the checks: distances and the furniture share within page type (K1.5); a pair with 1 to 19 baseline articles compared with earlier pairs (L1.3); the scorer reference check outside the false-discovery step (O1.3); readers count stretches (H4.9); the replay reshuffles each article's label once per site | Approve | With full articles cut by a quarter and the mix moving toward them, the pooled distance flagged 0 percent and the per-type distance 61 percent; pooled Fisher fired 9.6 percent at 5 percent nominal when the mix moved with no change; a pair with 1 to 19 baseline articles fell into the gap R4 closed; overlapping windows do not raise the false rate per night, they group crossings into stretches (Andre, 2026-10-11) | 6, 7, 8, 10 |
-| P12 | Two optional refinements: leave out of the step a check whose smallest reachable p-value is above false_discovery_rate; and count articles item-health rejected as too short as below the cut | Defer to row #8's replay | Neither was measured here; the second needs item-health to record a too-short rejection per address, which is not checked | 5, 8 |
+| P1 | Sign off the judge's ledger: family summary-fidelity-judge, ledger window-checks, its path (H4.1), the row shape (H1 to H3) with the reviewers' changes to it (copied_phrase_share; threshold_crossed and threshold_not_crossed; check_name; baseline_value and recent_value; the effect definition; q_value per (run_id, date); the settings in force on every row), the key with the council run and the reader's rule (H4.5), and one (run_id, date) pair as one false-discovery family (M1.2) | Approved | ledger-registry.md lists what a new ledger owes and the rule a judge ledger follows; row #3 makes every edit in one change. The changes fix a field name the console's query engine reserves, a medians field that also held shares and rates, an effect that divided by zero and ranked small sites first, and outcome names that read as "nothing moved" (Fowler and Andre, 2026-10-11) | 3 and every later row |
+| P2 | Unusually-short check: the exact beta-binomial tail instead of reshuffling, counting recent articles with strictly fewer words than the cut, with page types combined by adding each type's exact tail; a type with no baseline article has no cut and its recent articles are left out | Approved | When the cut is the j-th shortest of N_b baseline articles, the count below it follows BetaBinomial(N_recent, j, N_b - j + 1) with no change; this is the exact form of the reshuffling already approved (checked against every reshuffle of a small case, to 2e-16). With no change it fires on 0.17 to 0.44 percent at 0.5 percent and 2.45 to 4.83 percent at 5 percent (exact, baselines 20 to 102, recent 21 and 40); counting ties as short would fire 0.60 to 2.44 percent at 0.5 percent | 5 |
+| P3 | Article-count check: raise a daily variance under the daily mean to the mean, and add the baseline's own noise to the variance (x (1 + recent_days / baseline_days)) | Approved | The negative binomial is undefined when the daily variance is under the mean, which happened in 54 percent of Poisson samples. The baseline rate is itself estimated: with the term, false rates were 0.0055 to 0.21 percent at 0.135 percent nominal (200,000 repeats; 1.5, 4 and 10 a day; Poisson, spread twice the mean, and quiet weekends). Over-dispersed sites still fire up to 3 times nominal at 0.0001, so row #8's replay reports article_count on its own | 4 |
+| P4 | Reshuffling: stop once 10 reshuffles give a distance at least as large as the observed one (a tie counts); cap at the larger of 100,000 and 10 x (tested checks in the run) / false_discovery_rate - 1, counted before any reshuffle; seed each row's reshuffles from reshuffle_seed and its key; every one of these numbers in the settings file | Approved | The smallest p-value 9,999 reshuffles can give is 0.0001, which equals the first threshold at 500 checks (0.05 / 500), so from 500 checks a lone crossing becomes impossible. With early stopping an unchanged check used about 101 reshuffles instead of 9,999, and the p-values stayed valid over 1,000,000 checks. Not counting ties fired 5.8 percent at 5 percent nominal on tie-heavy scores; counting them fired 4.0 percent | 5, 6, 7, 8 |
+| P5 | Which console page carries the panel (Model or Judgement), and whether the window-checks compact files are published on the site | Approved: Model page; publish | The Model page already reads the score and item-health ledgers and lists the sources the checker doubts; the Judgement page reads the similarity judge's merge line, which no check here touches; the Data explorer reads only ledgers in ledger.published | 12 |
+| P6 | Where the judge's numbers live: config/judges/summary-fidelity-judge.json, read only by the judge | Approved | Every number bounded in one file an autotune loop can move. A block in config/idhazh.json would put a fourth judge contract in the council's import closure, because the council's registry imports AppConfig, and llm-council.md says that list cannot grow. The house already keeps one file per gardener task (config/gardener/), per console page (config/console/) and per model (config/models/) | 2 and every later row |
+| P7 | scipy: an optional extra named for what it carries (statistics), installed by the council's planning, judging and collecting jobs | Approved | The planning job imports every registered tenant module to resolve its slug, and the collecting job runs settle; both install only pip install -e . today, so a scipy import reached from the tenant module would fail every judge's night. CI installs the dev extra, so the tests would stay green. R11 named the drift job, which row #1 deletes | 4, 9 |
+| P8 | Build the judge in the council from the first row, with one unit a night computing and settle filing (H4.7), and no stage in drift.yml that later moves | Approved | Nothing is built yet, so there is nothing to migrate; CLAUDE.md section 14 asks for each increment in its intended code path; the council already gives a nightly schedule, one commit path and a writer identity. A shard_count of 0 would break the council's own record, so the judge pays one model-server start a night | 1, 3 and every later row |
+| P9 | Drop urgent and urgent_p_value, which R9 kept | Approved | Their only reader, the issue title, went with the issues; a p-value says how unlikely a drop is by chance, not how much it matters, so "urgent" claims a priority nothing measured (CLAUDE.md section 0b); the stored q_value and effect already rank a crossing | 3, 8 |
+| P10 | Repair dates: this judge names none in its first version (B8), and a council plan of its own fans out each tenant's own repair dates before a third judge arrives | Approved | A council date runs every tenant, so a date only this judge named would make the content-similarity judge re-judge a night it already counted, at model cost. The cost of naming none: a night only this judge missed stays missing, and the next window shares six of its seven days (Fowler, 2026-10-11) | 3 |
+| P11 | The reviewers' fixes to the checks: distances and the furniture share within page type (K1.5); a pair with 1 to 19 baseline articles compared with earlier pairs (L1.3); the scorer reference check outside the false-discovery step (O1.3); readers count stretches (H4.9); the replay reshuffles each article's label once per site | Approved | With full articles cut by a quarter and the mix moving toward them, the pooled distance flagged 0 percent and the per-type distance 61 percent; pooled Fisher fired 9.6 percent at 5 percent nominal when the mix moved with no change; a pair with 1 to 19 baseline articles fell into the gap R4 closed; overlapping windows do not raise the false rate per night, they group crossings into stretches (Andre, 2026-10-11) | 6, 7, 8, 10 |
+| P12 | Two optional refinements: leave out of the step a check whose smallest reachable p-value is above false_discovery_rate; and count articles item-health rejected as too short as below the cut | Deferred to row #8's replay | Neither was measured here; the second needs item-health to record a too-short rejection per address, which is not checked | 5, 8 |
 
 Table R - the review changes the owner approved on 2026-10-10, and where each lands now
 
@@ -538,7 +539,7 @@ Table R - the review changes the owner approved on 2026-10-10, and where each la
 | R6 | Daily runs that never repeat one notice; fixed text; trigger C7 | 9 | Superseded: no issues exist, the council runs nightly, and its fixed commit message keeps C7 satisfied |
 | R7 | A site stays the host; multi_tenant_hosts applies to listed hosts only; site keys in code spans | 2 | Applied |
 | R8 | Alert names that state a measurement | 3 | Replaced by the rename request: check names (H1) plus outcomes (H2) |
-| R9 | Urgent marking for a count crossing with p under 0.001; no label | 8 | Applied as the stored urgent field (H3.20); P9 asks to drop it |
+| R9 | Urgent marking for a count crossing with p under 0.001; no label | 8 | Withdrawn by P9 on 2026-10-11: its only reader, the issue title, went with the issues |
 | R10 | A flag for the new path; the old rules and settings leave together | 1, 9 | Superseded: row #1 deletes the old review outright, and registration in council.tenants is the switch |
 | R11 | scipy in an optional extra installed only by the job that runs the checks | 4, 9 | Adapted to the council's judging job (P7) |
 | R12 | Scorer reference and golden set in the jobs that already load their models; one benchmark-row contract | 10, 11 | Applied; their ledgers join the summary-fidelity-judge family |
