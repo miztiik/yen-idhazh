@@ -18,16 +18,23 @@ function tmpdir() {
 test('native Rust and its actual file fixture select focused checks without browser preparation', () => {
 	for (const path of ['backend/rust/host-telemetry/src/codec/parquet.rs',
 		'backend/rust/host-telemetry/rust-toolchain.toml', 'backend/rust/host-telemetry/Cargo.lock',
-		'tests/fixtures/host-events/file-parity.json', 'backend/tests/contracts/test_rust_host_file_parity.py']) {
+		'tests/fixtures/host-events/file-parity.json', 'backend/tests/contracts/test_rust_host_file_parity.py',
+		'backend/rust/host-telemetry/src/ledger/store.rs', 'backend/tests/test_rust_host_store_parity.py']) {
 		const selected = selectPaths([path]);
 		assert.deepEqual(selected.groups, ['backend']);
 		assert.equal(selected.rust, true);
 		assert.equal(selected.contracts, false);
-		assert.deepEqual(selected.backendFiles, ['backend/tests/contracts/test_rust_host_file_parity.py']);
+		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
+			? ['backend/tests/contracts/test_rust_host_file_parity.py']
+			: ['backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py']);
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
 		assert.equal(ciAnswer([path], true).robots, false);
 	}
+	const storage = selectPaths(['tests/fixtures/host-events/storage-parity.json']);
+	assert.equal(storage.rust, true);
+	assert.deepEqual(storage.groups, ['backend']);
+	assert.deepEqual(storage.backendFiles, ['backend/tests/test_rust_host_store_parity.py']);
 });
 
 test('isolated host contracts and verification have finite consumers; unknowns stay broad', () => {

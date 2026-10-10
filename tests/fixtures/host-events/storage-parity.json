@@ -1,0 +1,39 @@
+{
+  "rows": [
+    {
+      "version": "2026-10-10",
+      "date": "2026-10-10",
+      "run_id": "2026-10-10-42",
+      "job": "work",
+      "shard": 0,
+      "cpu_vendor": "GenuineIntel",
+      "cpu_model": "Native \u03bb \ud83d\ude80",
+      "cpu_physical_cores": 2,
+      "cpu_logical_processors": 4,
+      "cpu_observed_mhz": 2199.75,
+      "boot_seconds": -0.0,
+      "measured_at": "2026-10-10T12:00:00Z"
+    },
+    {
+      "version": "2026-10-10",
+      "date": "2026-10-09",
+      "run_id": "2026-10-10-42",
+      "job": "work",
+      "shard": 0,
+      "cpu_vendor": "GenuineIntel",
+      "cpu_model": "Native \u03bb \ud83d\ude80",
+      "cpu_logical_processors": 4,
+      "measured_at": "2026-10-09T23:59:59Z"
+    }
+  ],
+  "identity": {
+    "run_id": "2026-10-10-42",
+    "attempt": 2,
+    "job": "work",
+    "shard": 0,
+    "producer": "telemetry.silicon",
+    "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "written_at_ms": 1791633600123,
+  "event_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+}

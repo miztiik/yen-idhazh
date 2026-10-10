@@ -41,7 +41,9 @@ test('an explicit Rust selection keeps Python to the concrete native parity test
 	const root = fileURLToPath(new URL('../../../', import.meta.url));
 	const selected = selection(root, options(['--group', 'rust']));
 	assert.deepEqual(selected.groups, ['backend']);
-	assert.deepEqual(selected.backendFiles, ['backend/tests/contracts/test_rust_host_file_parity.py']);
+	assert.deepEqual(selected.backendFiles, [
+		'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py'
+	]);
 	assert.equal(selected.rust, true);
 	assert.equal(selected.tooling, false);
 });
