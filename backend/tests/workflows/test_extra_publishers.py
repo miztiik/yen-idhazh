@@ -15,6 +15,7 @@ from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import silicon
+from idhazh.telemetry.traces import committed_trace_path
 from utilities import (
     pipeline_test_ledgers,
     pipeline_test_publish,
@@ -107,6 +108,14 @@ def test_pipeline_collector_checks_executed_raw_identity_and_declared_case(
                 update={"git_sha": source}
             ),
         )
+        trace = committed_trace_path(
+            producer / "state",
+            run_id=f"{DATE}-{EXECUTION}",
+            attempt=1,
+            job=ServerJob.WORK,
+            shard=0,
+        )
+        write(trace, "{}\n")
     collector = tmp_path / "collector"
     git(tmp_path, "clone", "--quiet", str(origin), str(collector))
     tree = collector / "backend/var/trial-ledgers"
@@ -140,7 +149,14 @@ def test_pipeline_collector_checks_executed_raw_identity_and_declared_case(
     for path in tree.rglob("*"):
         if path.is_file():
             name, tier, *tail = path.relative_to(tree).parts
-            relative = "/".join(("state", tier, "pipeline-tests", name, *tail))
+            if tier == pipeline_test_ledgers.TRACES:
+                relative = ledger.tree_root(
+                    Path("state"),
+                    LedgerName.TRACES,
+                    registry=ledger.overlay_registry(("pipeline-tests", name)),
+                ).joinpath(*tail).as_posix()
+            else:
+                relative = "/".join(("state", tier, "pipeline-tests", name, *tail))
             entry = Repository(origin).entry("main", relative)
             assert entry is not None
             assert Repository(origin).blob(entry.oid) == path.read_bytes()

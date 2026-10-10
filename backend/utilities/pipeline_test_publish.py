@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from idhazh import ledger, run_context
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from utilities import pipeline_test_ledgers as artifacts
 from utilities.publication_git import Repository
@@ -31,10 +32,21 @@ def land(
     refused = artifacts.refusals(tree, roots=frozenset(roots))
     if refused:
         raise IntegrityError("; ".join(refused))
-    scopes = tuple(
-        f"state/{tier}/{TRIAL_STATE_PREFIX}/{name}"
+    trace_roots = {
+        name: ledger.tree_root(
+            Path("state"),
+            LedgerName.TRACES,
+            registry=ledger.overlay_registry((TRIAL_STATE_PREFIX, name)),
+        )
         for name in roots
-        for tier in (ledger.paths.RAW_DIRNAME, ledger.paths.TRIAL_TRACES_DIRNAME)
+    }
+    scopes = tuple(
+        path
+        for name in roots
+        for path in (
+            f"state/{ledger.paths.RAW_DIRNAME}/{TRIAL_STATE_PREFIX}/{name}",
+            trace_roots[name].as_posix(),
+        )
     )
     git = Repository(repo)
     source = git.git("rev-parse", "HEAD").strip()
@@ -53,7 +65,7 @@ def land(
                 raise IntegrityError(
                     "trace belongs to another executed invocation", (str(artifact),)
                 )
-            tier = ledger.paths.TRIAL_TRACES_DIRNAME
+            path = trace_roots[name].joinpath(*tail).as_posix()
         else:
             identity = ledger.read_envelope(artifact).identity
             if (
@@ -62,7 +74,7 @@ def land(
                 or identity.git_sha != code_sha
             ):
                 raise IntegrityError("raw artifact belongs to another invocation", (str(artifact),))
-        path = "/".join(("state", tier, TRIAL_STATE_PREFIX, name, *tail))
+            path = "/".join(("state", tier, TRIAL_STATE_PREFIX, name, *tail))
         data = artifact.read_bytes()
         digest = hashlib.sha256(data).hexdigest()
         baseline = git.entry(source, path)
