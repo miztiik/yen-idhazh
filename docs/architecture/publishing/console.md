@@ -100,6 +100,17 @@ from config or the band: it records what the page must show, not what the page
 already uses. A chart-lifetime or chart-pending expectation is null when the
 route draws no legacy `Chart.svelte`.
 
+The shared window spec owns arithmetic, controls, declared surface coverage,
+daily disclosure rules and actual cross-route navigation. It generates route
+coverage from the exhaustive `BY_ROUTE` literals. An absent expected surface
+fails; an explicit null remains inapplicable. Detailed telemetry, judge,
+Hardware and Voices fixtures and execution belong to focused route window
+specs. Agreement readouts, marks, day labels and cumulative record bars answer
+separate questions. Expectation files contain typed data, not callbacks.
+The shared navigation check may use Hardware's small content-span observer;
+it does not own Hardware fixtures or component compilation.
+The ownership guard checks this execution boundary as well as quoted addresses.
+
 Each `frontend/tests/support/panel-drivers/<route>.ts` exports `DRIVERS` and
 `BUILD_TIME`. Drivers put fetched panels into the states declared by
 `Nothing` in `panel-gates.ts`. `BUILD_TIME` names judged panels that make no

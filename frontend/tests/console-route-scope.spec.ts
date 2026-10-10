@@ -134,7 +134,41 @@ const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'telemetry-row.ts', 'views.ts'
 	],
 	'tests/fixtures/panels': ['WitnessPanel.svelte']
+	,'tests/support/console-window': [
+		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
+		'client-render.ts', 'server-panels.ts'
+	]
 };
+
+const WINDOW_SHARED_IMPORTS = new Set([
+	'./support/browser', '../src/lib/console/band',
+	'./support/console-expect/console-window', './support/span-said',
+	'../src/lib/charts/viewport', './support/console-window/controls',
+	'./support/console-window/readout', './support/console-window/machine-spans'
+]);
+
+function windowOwnershipErrors(file: string, source: string): string[] {
+	const path = file.replaceAll('\\', '/');
+	const tree = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+	const errors: string[] = [];
+	function visit(node: ts.Node): void {
+		if (path === 'tests/console-window.spec.ts' && ts.isStringLiteralLike(node) &&
+			/(?:routes\/console\/|console\/machine\/|judgement-fixtures|server-panels|client-render)/.test(node.text)) {
+			errors.push(`${path} owns route execution: ${node.text}`);
+		}
+		if (path === 'tests/console-window.spec.ts' && ts.isImportDeclaration(node) &&
+			ts.isStringLiteral(node.moduleSpecifier) && !WINDOW_SHARED_IMPORTS.has(node.moduleSpecifier.text)) {
+			errors.push(`${path} imports detailed execution: ${node.moduleSpecifier.text}`);
+		}
+		if (/^tests\/support\/console-expect\/console-window\//.test(path) &&
+			(ts.isFunctionLike(node) || ts.isCallExpression(node))) {
+			errors.push(`${path} contains executable expectations`);
+		}
+		ts.forEachChild(node, visit);
+	}
+	visit(tree);
+	return errors;
+}
 
 const DEFINE_OWNERS = new Set(['vite.config.ts', 'src/app.d.ts', 'src/lib/console/route-console.ts']);
 
@@ -284,6 +318,20 @@ test('named expectations, drivers and specs keep route ownership', () => {
 	const files = [...supportFiles(), ...specs.map((name) => `tests/${name}`), 'tests/whole-day.spec.ts'];
 	const errors = files.flatMap((file) => routeScopeErrors(file, readFileSync(join(FRONTEND, file), 'utf8')));
 	expect(errors, 'Move quoted addresses to the owning route expectation or driver').toEqual([]);
+});
+
+test('shared window ownership rejects route execution and callback expectations without route addresses', () => {
+	for (const path of ['tests/console-window.spec.ts', String.raw`tests\console-window.spec.ts`]) {
+		expect(windowOwnershipErrors(path, "import { judgeDay } from './support/console-window/judgement-fixtures';")).toHaveLength(2);
+		expect(windowOwnershipErrors(path, "const panel = 'src/routes/console/judgement/JudgeAgreement.svelte';")).toHaveLength(1);
+		expect(windowOwnershipErrors(path, "import { machineSpan } from './support/console-window/machine-spans';")).toEqual([]);
+	}
+	expect(windowOwnershipErrors('tests/support/console-expect/console-window/judgement.ts', 'export const EXPECT = { execute: () => true };')).toHaveLength(1);
+	expect(windowOwnershipErrors('tests/support/console-expect/console-window/judgement.ts', "export const EXPECT = { windowed: ['judge-agreement'] };")).toEqual([]);
+	const files = ['tests/console-window.spec.ts', ...['index', ...BAND_UNREAD.routes.map(({ id }) => id)].map(
+		(route) => `tests/support/console-expect/console-window/${route}.ts`
+	)];
+	expect(files.flatMap((file) => windowOwnershipErrors(file, readFileSync(join(FRONTEND, file), 'utf8')))).toEqual([]);
 });
 
 test('named sources expose the console define only through its route boundary', () => {
