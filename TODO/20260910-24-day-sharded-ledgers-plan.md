@@ -1,6 +1,6 @@
 # 24 - Five ledgers file by day
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-10-10
 **Level**: 5 (a persisted layout every stage writes, the retention path that deletes, and the mirrors a reader fetches)
 
 **Every row has landed. This is the record of how the five ledgers changed grain, not a queue of work.** Section 10 says which two statements were distilled afterwards and where they went.
@@ -520,7 +520,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 ## See also
 
-- [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
+- [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - resume unfinished work, check each row against the code, and update its own Reckoner.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Row #1 here is the second-heaviest constraint in the project**, blocking 17 of the 58 live rows, and rows #5 to #8 are the one place where four rows collide with each other so hard that no arrangement runs two of them together.
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan this split out of; its section 0 names this work and its section 26 names the same open gaps. **Three edges run between the two plans**: its rows #14, #16, #17 and #21 wait on row #1 here for `backend/idhazh/day_partition.py` and each add a prune to `backend/idhazh/retention.py` that rows #5 to #8 here rewrite; its row #1b and row #8 here both rewrite `state/scores/`; and its row #1b deletes `state/fingerprints.csv`, which section 0.2 here rules on.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation this plan split out of, including the measurements its budget arithmetic rests on.
