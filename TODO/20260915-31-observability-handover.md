@@ -1,6 +1,6 @@
 # Handover: the instrument is built, the slowdown is not fixed
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-10-10
 
 **Level**: 3 for everything open here, except the two marked Level 5 in section 6.
 
@@ -143,7 +143,7 @@ CLAUDE.md section 13 already names the migration case. It does not name this one
 | --- | --- | --- |
 | 1 | **Fix the slowdown how?** The instrument is built and the diagnosis is settled. The fix will touch an output budget, a truncation cap, or the call sequence | Section 3.1's escalation line. **Level 5** |
 | 2 | **Should the label call still ask for `keyphrases` and `lede_sentence_ids`?** Zero consumers, and the call is 39.3 percent of model time | Editor rules what the digest carries |
-| 3 | **Is a story with no headline dropped or published untitled?** It is dropped today. Every downstream surface already has an "Untitled item" fallback, so publishing is a one-line revert | Editor rules what runs, CLAUDE.md section 14 |
+| 3 | **Closed.** An acceptable body reaches summarization without a source headline. The model generates the title; the existing publication fallback remains. The article contract and extraction path changed together. | User-directed fix; [current behavior](../docs/architecture/summarize/prompt.md#the-title-is-ours-and-the-sources-is-only-a-fallback) |
 | 4 | ~~Plan the ten tests in section 4, or just execute them?~~ **Closed 2026-09-15: executed.** Section 4 is now the record of what each became | - |
 | 5 | Should the published telemetry mirror move from month grain to day, to match `state/`? | The console's 90-day view is 5 fetches at month grain and up to 90 at day grain. **Level 5** - the day-sharding plan lists it as an escalation trigger |
 | 6 | Is `n_parallel: 2` worth taking to production? | Unmeasured. Section 3.3's rig answers it in 140 minutes |

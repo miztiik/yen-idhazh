@@ -21,9 +21,12 @@ from typing import Final
 from conftest import FIXTURES_DIR, read_text
 from pytest import MonkeyPatch
 
+from idhazh import assemble
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource
-from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.sources import SourceKind
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.fetch import FetchResult
 
 from ._builders import _work_stage, captured_article_fetch, plan
@@ -44,8 +47,7 @@ def headless_page_fetch(url: str) -> FetchResult:
     All three elements go, and the third is why: with `<title>` and `<h1>` gone,
     trafilatura's own title extraction reaches the `<h2>` of the page's "Related
     stories" aside and hands back `Related stories`. So a page this stripped is
-    what it takes to reach `no_title` at all - a real page that heads itself,
-    however badly, now publishes under the headline it gave.
+    what it takes to leave the source headline absent.
     """
     captured = captured_article_fetch(url)
     stripped = _HEADLINES.sub("", captured.body.decode("utf-8"))
@@ -82,13 +84,7 @@ def worked_a_headless_day(tmp_path: Path, monkeypatch: MonkeyPatch) -> tuple[Run
 def test_an_item_with_no_headline_is_recorded_and_its_siblings_still_run(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """This is the defect, and a unit test could never have caught it.
-
-    The extractor used to build an ok payload carrying the planned item's title,
-    `Article` refuses an ok payload with no title, and the per-item loop above it
-    catches nothing - so one headline-less entry raised out of the stage and the
-    other four items were never attempted. The shard reported no items at all.
-    """
+    """Missing source headlines never prevent siblings from running."""
     run_plan, items = worked_a_headless_day(tmp_path, monkeypatch)
 
     written = {path.name.removesuffix(".article.json") for path in items.glob("*.article.json")}
@@ -96,17 +92,29 @@ def test_an_item_with_no_headline_is_recorded_and_its_siblings_still_run(
     assert written == {item.item_id for item in run_plan.items}
 
 
-def test_the_headline_that_was_missing_is_the_reason_that_was_recorded(
+def test_a_headless_article_publishes_with_the_generated_headline(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """A degraded item is only useful if it says which knob an operator turns."""
+    """Real extraction and recorded model replies produce a publishable title."""
     run_plan, items = worked_a_headless_day(tmp_path, monkeypatch)
 
     for planned in run_plan.items[:2]:
         article = Article.from_json(read_text(items / f"{planned.item_id}.article.json"))
-        assert article.status is ArticleStatus.EXTRACT_FAILED, planned.item_id
-        assert article.failure_code is FailureCode.NO_TITLE, planned.item_id
+        assert article.status is ArticleStatus.OK, planned.item_id
+        assert article.title is None, planned.item_id
         assert article.title_source is None, planned.item_id
+        summary = Summary.from_json(read_text(items / f"{planned.item_id}.summary.json"))
+        assert summary.status is SummaryStatus.OK, planned.item_id
+        assert summary.title, planned.item_id
+        published = assemble.to_digest_item(
+            article=article,
+            summary=summary,
+            band=ConfidenceBand.HIGH,
+            source_name="Fixture source",
+            source_kind=SourceKind.ANNOUNCEMENT,
+            run_n=1,
+        )
+        assert published.title == summary.title
 
 
 def test_a_feed_that_named_nothing_publishes_under_the_page_s_own_headline(

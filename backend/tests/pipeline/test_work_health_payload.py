@@ -29,7 +29,7 @@ from pytest import LogCaptureFixture, MonkeyPatch
 
 from idhazh import config
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
@@ -275,16 +275,10 @@ def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
     }
 
 
-def test_an_item_that_failed_extraction_still_leaves_a_row(
+def test_a_headless_item_reaches_the_model_and_leaves_a_row(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The failing item is the one worth measuring, and it stops earliest.
-
-    An item with no headline never reaches the model, so the work stage closes
-    its record on a branch of its own. That branch is where a payload written at
-    one call site only would go missing, and a shard whose failures are the rows
-    that did not survive is a shard that reports a clean day.
-    """
+    """An absent source headline is not an extraction failure."""
     run_plan, items_dir = worked(tmp_path, monkeypatch, degraded=True)
 
     written = rows(items_dir)
@@ -292,8 +286,9 @@ def test_an_item_that_failed_extraction_still_leaves_a_row(
     assert set(written) == {item.item_id for item in run_plan.items}
     for planned in run_plan.items[:2]:
         row = written[planned.item_id]
-        assert row.outcome is ItemOutcome.FAILED, planned.item_id
-        assert row.code is FailureCode.NO_TITLE, planned.item_id
+        assert row.code is not FailureCode.NO_TITLE, planned.item_id
+        assert row.label_ms is not None, planned.item_id
+        assert row.summary_ms is not None, planned.item_id
 
 
 def test_an_item_the_shard_abandoned_leaves_a_row_too(

@@ -84,9 +84,9 @@ class PipelineTestCandidate(Model):
             "The page's own headline. A daily run reads this off the feed entry, and a "
             "dispatch has no feed to read - the address is pinned and has long since "
             "fallen out of its feed's window. So it is declared here, and the plan step "
-            "fills it in exactly where `discover` would have. Required rather than "
-            "optional: an item with no headline is one the extractor now refuses, so an "
-            "optional field would let a dispatch draw a candidate it cannot summarize."
+            "fills it in exactly where `discover` would have. Required to keep the "
+            "declared benchmark input complete, even though production can summarize "
+            "an article whose source headline is absent."
         )
     )
 

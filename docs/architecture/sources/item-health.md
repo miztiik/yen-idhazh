@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -504,6 +504,10 @@ stage that did the work.
 | `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `contaminated`, `paywalled`, `unsupported_form` |
 | `summarize` | `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
+
+`no_title` remains readable on historical failures. New extractions do not
+reject an acceptable body for an absent source headline; the summarizer
+generates the title.
 
 **A new code is named in five places, and the fifth only fails at runtime.**
 `FailureCode` itself, `FAILURE_CODE_STAGES`, `SOURCE_NEUTRAL_FAILURE_CODES`,
