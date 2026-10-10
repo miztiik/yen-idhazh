@@ -249,8 +249,14 @@ test('missing and unreachable slices are retried using real repaired files, not 
 
 test('an explicit new read session invalidates same-endpoint answers and preserves new promises against old completions', async ({}, info) => {
 	const root = info.outputPath('refreshed-rows');
+	const refreshedRoot = info.outputPath('new-session-rows');
 	await writeWindowLedgers(root);
-	const door = diskDoor(root);
+	await buildRows(refreshedRoot, 'item-health', [{ covers: '2026-09-26', rows: [item('2026-09-26', 'refreshed-machine')] }]);
+	let currentRoot = root;
+	const door: PanelDoor = {
+		reach: (ledger) => reachFromDisk(currentRoot, ledger),
+		rows: (ledger, options) => sliceFromDisk(currentRoot, ledger, options)
+	};
 	const range = windowRange(1, '2026-09-26', '2026-09-24');
 	let release: () => void = () => { throw new Error('no held read'); };
 	let hold = false;
@@ -266,7 +272,7 @@ test('an explicit new read session invalidates same-endpoint answers and preserv
 	});
 	const first = reader.sliceOnce(slowerOnSameWorkQuery, range);
 	expect((await first).rows[0].cpu_model).toBe('machine-b');
-	await buildRows(root, 'item-health', [{ covers: '2026-09-26', rows: [item('2026-09-26', 'refreshed-machine')] }]);
+	currentRoot = refreshedRoot;
 	expect(reader.sliceOnce(slowerOnSameWorkQuery, range)).toBe(first);
 	renewReadSession();
 	const refreshed = reader.sliceOnce(slowerOnSameWorkQuery, range);
