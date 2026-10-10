@@ -138,6 +138,7 @@ const INPUTS = [
 	'src/lib/data/slice-query.ts',
 	'src/lib/data/slice-reader.ts',
 	'src/lib/data/slice-shapes.ts',
+	'src/lib/data/read-session.ts',
 	'src/lib/data/slice.ts',
 	'src/lib/data/statement.ts',
 	'src/lib/day-shape.ts',

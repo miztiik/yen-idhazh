@@ -1,0 +1,49 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-20",
+      "hhem": 0.44,
+      "hhem_delta": 0.01
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.71,
+      "hhem_delta": 0.01
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.83,
+      "hhem_delta": 0.14
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.86,
+      "hhem_delta": 0.02
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.88,
+      "hhem_delta": 0.01
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.9,
+      "hhem_delta": 0.01
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.91,
+      "hhem_delta": 0.13
+    },
+    {
+      "date": "2026-08-20",
+      "hhem": 0.93,
+      "hhem_delta": 0.01
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

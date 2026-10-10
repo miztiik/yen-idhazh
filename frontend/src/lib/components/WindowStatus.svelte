@@ -16,6 +16,7 @@
 	 * screen it is off screen.
 	 */
 	import { plural } from '$lib/format';
+	import { recordWindowSentence, type RecordWindow } from '$lib/console/waiting';
 
 	let {
 		days,
@@ -23,7 +24,8 @@
 		monthsFor,
 		busy = false,
 		ready = false,
-		statusLine = null
+		statusLine = null,
+		record = null
 	}: {
 		days: number;
 		presets: readonly number[];
@@ -33,6 +35,7 @@
 		/** False until a browser has run the route. */
 		ready?: boolean;
 		statusLine?: string | null;
+		record?: RecordWindow | null;
 	} = $props();
 
 	const pending = $derived(monthsFor(days));
@@ -46,6 +49,7 @@
 	);
 
 	const status = $derived.by(() => {
+		if (record !== null) return ready ? recordWindowSentence(record) : '';
 		if (statusLine !== null) return statusLine;
 		if (!ready) {
 			// It said the sections below were "showing N days" until 2026-09-09.

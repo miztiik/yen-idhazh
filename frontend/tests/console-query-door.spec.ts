@@ -1,5 +1,5 @@
 /** The Hardware panel queries the real worker, keeps whole files and draws each read outcome. */
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 import { machineRecordState, type MachineRecordState } from './support/machine-record-state';
 
 const PANEL = '[data-windowed="machine-fleet"]';

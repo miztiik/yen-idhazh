@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -54,7 +54,23 @@ config fails the build rather than the page:
 - The presets are ascending and distinct.
 - Every preset sits between `min_window_days` and `max_window_days`.
 
-**A window of N days is exactly N days, even when the ledger holds fewer.** A
+### Published-ledger panels anchor the window on the returned record
+
+As an eligible route moves to its declared queries, its common endpoint is the
+oldest available `through` among its ledgers. Each query clamps its first day
+to its own ledger's first day. Neither the browser clock nor the build clock
+supplies a data day. A reach that did not arrive supplies no day at all.
+
+The typed record reach passes through the existing route-to-layout window
+slot. `WindowStatus` says `Showing N days, to DATE.` If the record is shorter
+than the requested preset, it also names its first day and the UTC day on
+which that preset fills. A first frame with no record yet prints no data date.
+The remaining build-time routes keep the published-day behavior above until
+their own migrations; this does not reinterpret the evidence on Judgement.
+
+### Build-time window space and control behavior
+
+**A build-time window of N days is exactly N days, even when the ledger holds fewer.** A
 window that shrinks to fit the rows it finds is invisible while nothing on the
 page names the span and a lie the moment a control does - a page reading 90 days
 while the charts draw 2 cannot be trusted about anything else. Empty calendar
@@ -73,9 +89,9 @@ files are in the air. Narrowing costs nothing.
 prerender.** First paint is therefore always the window the server drew, so the
 prerendered document and the control cannot disagree while the page hydrates.
 
-**Every route hands the layout the same props.** Pipelines prices the month
-files a wider window would fetch; the other routes fetch nothing and price
-nothing. All of them read the same `idhazh:console-window` key, so a span picked on
+**Every route hands the layout the same window choice.** Existing month-based
+surfaces price their month files; published-ledger routes add their typed record
+reach. All read the same `idhazh:console-window` key, so a span picked on
 Pipelines is the span Hardware opens on and the other way round -
 [../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
 drives it both ways in one browser session, because a route that writes the key

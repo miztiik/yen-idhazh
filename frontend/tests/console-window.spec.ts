@@ -1,5 +1,5 @@
 /** One shared control, declared surface coverage, and actual cross-route navigation. */
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { type RouteId } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-window';
 import { ONE_DAYS, spanSaid } from './support/span-said';

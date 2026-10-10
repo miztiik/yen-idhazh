@@ -1,0 +1,49 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-20",
+      "url_key": "18a7e83de6a8fba2be7f845f2d46fd981337ed6f6ae11f3eed4ce30b1e028786",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "2417a49d5af445c3180d97ec0fabcaf806067139786986cafc4e59cd2402e96a",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "42534acf26ed05427f1f9c9ccb4b73cb9d21b6fc470d6d2da2ebca9a9ddadaa0",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "9745da333fc4ba446410d2787c4dde7799acae850551b694d78fdbd58c5b2e89",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "b90d2318156c57fe8fb5cf21b52d5425ee012ca7cf98239c35c6bd3d2cc75f15",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "bebf099ed6a0d1bb696bf05f9a1587a84d5d7ea53414a5f1209b3bed8b585ee2",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "e1ece4340223bec76c3b311050ecc5ebaece5f30bf18ed6e5338ab01c8ccd979",
+      "extraction_suspect": false
+    },
+    {
+      "date": "2026-08-20",
+      "url_key": "f8b17c9d1094601c97b68df1ccc4e65fb1989a0352001003eb6b85bc8f2a07d3",
+      "extraction_suspect": false
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

@@ -541,8 +541,9 @@ npm run setup:duckdb -- --check
 
 The setup command may download it. Playwright's global setup only checks the
 shared home cache and fails with the setup command when the file is absent.
-Hardware browser specs use `tests/support/browser.ts` to answer the worker from
-that cached file. HTTP-cache tests keep their local add-on host instead, because
+Ledger-route browser specs use `tests/support/door-page.ts`, which re-exports
+`tests/support/browser.ts`, to answer the worker from that cached file.
+HTTP-cache tests keep their local add-on host instead, because
 Playwright routing disables the browser's HTTP cache. CI prepares the same cache
 before tests; the weekly add-on workflow refreshes it on main. The source and
 version rules are in

@@ -1,0 +1,617 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-10",
+      "item_id": "old-cut-00",
+      "source_id": "old-cut",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 7000000000,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-00",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-00",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-01",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-02",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-03",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-04",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-05",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-a-06",
+      "source_id": "cut-a",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 9000
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-b-00",
+      "source_id": "cut-b",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-b-01",
+      "source_id": "cut-b",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-b-02",
+      "source_id": "cut-b",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-b-03",
+      "source_id": "cut-b",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-b-04",
+      "source_id": "cut-b",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-b-05",
+      "source_id": "cut-b",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 30000
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-c-00",
+      "source_id": "cut-c",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-c-01",
+      "source_id": "cut-c",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-c-02",
+      "source_id": "cut-c",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-c-03",
+      "source_id": "cut-c",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-d-00",
+      "source_id": "cut-d",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-d-01",
+      "source_id": "cut-d",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-d-02",
+      "source_id": "cut-d",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-d-03",
+      "source_id": "cut-d",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-d-04",
+      "source_id": "cut-d",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-e-00",
+      "source_id": "cut-e",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-e-01",
+      "source_id": "cut-e",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-e-02",
+      "source_id": "cut-e",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-e-03",
+      "source_id": "cut-e",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-e-04",
+      "source_id": "cut-e",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-f-00",
+      "source_id": "cut-f",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-f-01",
+      "source_id": "cut-f",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-f-02",
+      "source_id": "cut-f",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-f-03",
+      "source_id": "cut-f",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-f-04",
+      "source_id": "cut-f",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-g-00",
+      "source_id": "cut-g",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-g-01",
+      "source_id": "cut-g",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-g-02",
+      "source_id": "cut-g",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-g-03",
+      "source_id": "cut-g",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-g-04",
+      "source_id": "cut-g",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-h-00",
+      "source_id": "cut-h",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-h-01",
+      "source_id": "cut-h",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-h-02",
+      "source_id": "cut-h",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-h-03",
+      "source_id": "cut-h",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-h-04",
+      "source_id": "cut-h",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-i-00",
+      "source_id": "cut-i",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-i-01",
+      "source_id": "cut-i",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 401
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-i-02",
+      "source_id": "cut-i",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-i-03",
+      "source_id": "cut-i",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-i-04",
+      "source_id": "cut-i",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-j-00",
+      "source_id": "cut-j",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-j-01",
+      "source_id": "cut-j",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 401
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-j-02",
+      "source_id": "cut-j",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-j-03",
+      "source_id": "cut-j",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-j-04",
+      "source_id": "cut-j",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-k-00",
+      "source_id": "cut-k",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-k-01",
+      "source_id": "cut-k",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 401
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-k-02",
+      "source_id": "cut-k",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-k-03",
+      "source_id": "cut-k",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "cut-k-04",
+      "source_id": "cut-k",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "no-length-00",
+      "source_id": "no-length",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3363472384,
+      "source_words": 800
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "no-length-01",
+      "source_id": "no-length",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 2963472384,
+      "source_words": 801
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "no-length-02",
+      "source_id": "no-length",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3063472384,
+      "source_words": 802
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "no-length-03",
+      "source_id": "no-length",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3163472384,
+      "source_words": 803
+    },
+    {
+      "date": "2026-08-17",
+      "item_id": "no-length-04",
+      "source_id": "no-length",
+      "os_mem_total_bytes": 16765374464,
+      "os_mem_available_min_bytes": 3263472384,
+      "source_words": 804
+    },
+    {
+      "date": "2026-08-18",
+      "item_id": "ai-06",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 8300000000,
+      "source_words": 32
+    },
+    {
+      "date": "2026-08-18",
+      "item_id": "ai-07",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 7900000000,
+      "source_words": 27
+    },
+    {
+      "date": "2026-08-18",
+      "item_id": "ai-08",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 8000000000,
+      "source_words": 35
+    },
+    {
+      "date": "2026-08-19",
+      "item_id": "ai-01",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 5855843328,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-19",
+      "item_id": "ai-02",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 5455843328,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-19",
+      "item_id": "ai-03",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766414848,
+      "os_mem_available_min_bytes": 5555843328,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-01",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_min_bytes": 6272000000,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-02",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_min_bytes": 7310000000,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-03",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_min_bytes": 8348000000,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-04",
+      "source_id": "canary",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_min_bytes": 3386000000,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-05",
+      "source_id": "canary",
+      "os_mem_total_bytes": null,
+      "os_mem_available_min_bytes": null,
+      "source_words": 174
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-09",
+      "source_id": "canary",
+      "os_mem_total_bytes": null,
+      "os_mem_available_min_bytes": null,
+      "source_words": 1410
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

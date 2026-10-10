@@ -1,0 +1,86 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "assemble",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "plan",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "work",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "work",
+      "shard": 1,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "job": "plan",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "job": "work",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "job": "work",
+      "shard": 1,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "assemble",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "plan",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "work",
+      "shard": 0,
+      "threads": 4
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "work",
+      "shard": 1,
+      "threads": null
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

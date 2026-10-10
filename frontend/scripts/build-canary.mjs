@@ -16,13 +16,20 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import { canaryFiles } from './canary-inventory.mjs';
 
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
+const { values: options } = parseArgs({ options: {
+	'fixtures-only': { type: 'boolean', default: false },
+	'fixture-root': { type: 'string' }
+} });
+const CANARY = options['fixture-root']
+	? resolve(options['fixture-root'])
+	: resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 const ROOT = resolve(CANARY, 'digest');
 const STATE = resolve(CANARY, 'state');
-/** Where the item-health and host-fingerprint rows are written as CSV, one file a
- * run, before `build_canary_day.py --file-fixture-rows` files them through the
+/** Where item rows are staged per run and host rows per job and shard as CSV,
+ * before `build_canary_day.py --file-fixture-rows` files them through the
  * ledger door and deletes them. Beside the state tree, never inside it: the
  * door is the only writer of those two ledgers under `state/`. */
 const FIXTURE_ROWS = resolve(CANARY, 'fixture-rows');
@@ -111,17 +118,15 @@ function standInKey(id) {
  *
  * One file a run, named `<run_id>-<attempt>-<job>-<shard>.csv`, so two runs of
  * one day never share a file. `build_canary_day.py --file-fixture-rows` reads
- * each row through its contract and files it through the ledger door under the
- * run its own `run_id` cell names. One process builds the whole fixture, so it
- * is one attempt and one shard - and `assemble` is the job that measures a whole
- * published day in production, which is why the Python half of this fixture
- * names it too.
+ * each row through its contract and files it through the ledger door. Items
+ * keep the whole-day `assemble` writer; hosts use their own production job and
+ * shard, with the same writer for a job's probe and whole completion.
  */
-function writeDayShard(root, day, runId, columns, rows) {
+function writeDayShard(root, day, runId, columns, rows, job = 'assemble', shard = 0) {
 	const at = join(root, day.slice(0, 4), day.slice(5, 7), day.slice(8, 10));
 	mkdirSync(at, { recursive: true });
 	writeFileSync(
-		join(at, `${runId}-1-assemble-00.csv`),
+		join(at, `${runId}-1-${job}-${String(shard).padStart(2, '0')}.csv`),
 		[columns.join(','), ...rows].join('\n') + '\n'
 	);
 }
@@ -361,6 +366,11 @@ function writeItemHealthCanary() {
 			output_tokens: model[3],
 			cached_tokens: model[4],
 			source_words_before_cap: cut?.[2],
+			// The cut article also exercises the ranker's watchlist and inferred clock.
+			...(id === 'ai-04' ? {
+				watchlist_hit: 'True', on_front_page: 'True',
+				published_at: `${rowDate}T05:00:00Z`, time_source: 'first_seen'
+			} : {}),
 			...extraction(id),
 			...perCall(model, calls, cut),
 			...clock(rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls)
@@ -680,6 +690,7 @@ function writeItemHealthCanary() {
 			source_words: words,
 			fetch_ms: fetchMs,
 			extract_ms: extractMs,
+			...(code === 'boilerplate' ? { span_integrity: 'False' } : {}),
 			...place(rowDate, run, id, fetchMs + extractMs + 40, 0),
 			queue_wait_ms: 0,
 			item_total_ms: fetchMs + extractMs + 40,
@@ -1156,13 +1167,18 @@ function writeHostFingerprintCanary() {
 	// A day tree, one file a writer, the shape a bounded window reads.
 	const dateAt = COLUMNS.indexOf('date');
 	const runAt = COLUMNS.indexOf('run_id');
+	const jobAt = COLUMNS.indexOf('job');
+	const shardAt = COLUMNS.indexOf('shard');
 	const byWriter = new Map();
 	for (const row of rows) {
 		const cells = row.split(',');
-		const at = `${cells[dateAt]}/${cells[runAt]}`;
+		const at = `${cells[dateAt]}/${cells[runAt]}/${cells[jobAt]}/${cells[shardAt]}`;
 		const held = byWriter.get(at);
 		if (held === undefined) {
-			byWriter.set(at, { day: cells[dateAt], runId: cells[runAt], rows: [row] });
+			byWriter.set(at, {
+				day: cells[dateAt], runId: cells[runAt],
+				job: cells[jobAt], shard: Number(cells[shardAt]), rows: [row]
+			});
 		} else held.rows.push(row);
 	}
 	// A day the record opened a file for and kept no row of, on a day that
@@ -1175,10 +1191,15 @@ function writeHostFingerprintCanary() {
 	// directory the file sits in.
 	const quiet = back(2);
 	if (![...byWriter.values()].some((writer) => writer.day === quiet)) {
-		byWriter.set(`${quiet}/${quiet}-1`, { day: quiet, runId: `${quiet}-1`, rows: [] });
+		byWriter.set(`${quiet}/${quiet}-1/assemble/0`, {
+			day: quiet, runId: `${quiet}-1`, job: 'assemble', shard: 0, rows: []
+		});
 	}
 	for (const writer of byWriter.values()) {
-		writeDayShard(join(FIXTURE_ROWS, 'host-fingerprint'), writer.day, writer.runId, COLUMNS, writer.rows);
+		writeDayShard(
+			join(FIXTURE_ROWS, 'host-fingerprint'), writer.day, writer.runId,
+			COLUMNS, writer.rows, writer.job, writer.shard
+		);
 	}
 }
 
@@ -1244,12 +1265,15 @@ python([
 rmSync(publicNames);
 rmSync(stateNames);
 
-console.log(`building the site from ${ROOT}`);
-execFileSync('npm', ['run', 'build'], {
-	stdio: 'inherit',
-	shell: process.platform === 'win32',
-	env: {
-		...process.env, CANARY_BUILD: '1', DIGEST_ROOT: ROOT,
-		STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry')
-	}
-});
+// Correctness tests can prepare the same native data without compiling a site.
+if (!options['fixtures-only']) {
+	console.log(`building the site from ${ROOT}`);
+	execFileSync('npm', ['run', 'build'], {
+		stdio: 'inherit',
+		shell: process.platform === 'win32',
+		env: {
+			...process.env, CANARY_BUILD: '1', DIGEST_ROOT: ROOT,
+			STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry')
+		}
+	});
+}

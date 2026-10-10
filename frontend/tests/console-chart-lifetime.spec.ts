@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

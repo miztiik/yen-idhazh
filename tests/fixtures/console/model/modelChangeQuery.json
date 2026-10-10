@@ -1,0 +1,105 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 118,
+      "source_words_before_cap": null,
+      "source_words": 1320,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "medium",
+      "unsupported_numbers": 0,
+      "hedge_dropped": true
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 164,
+      "source_words_before_cap": null,
+      "source_words": 2100,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "low",
+      "unsupported_numbers": 0,
+      "hedge_dropped": false
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 190,
+      "source_words_before_cap": 6100,
+      "source_words": 2100,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "low",
+      "unsupported_numbers": 2,
+      "hedge_dropped": false
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 205,
+      "source_words_before_cap": 2800,
+      "source_words": 2100,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "high",
+      "unsupported_numbers": 0,
+      "hedge_dropped": false
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 31,
+      "source_words_before_cap": 38,
+      "source_words": 38,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "high",
+      "unsupported_numbers": 0,
+      "hedge_dropped": false
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 62,
+      "source_words_before_cap": 140,
+      "source_words": 140,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "high",
+      "unsupported_numbers": 0,
+      "hedge_dropped": false
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 78,
+      "source_words_before_cap": 4200,
+      "source_words": 2100,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "medium",
+      "unsupported_numbers": 0,
+      "hedge_dropped": false
+    },
+    {
+      "date": "2026-08-20",
+      "model_id": "canary",
+      "summary_words": 96,
+      "source_words_before_cap": 880,
+      "source_words": 880,
+      "extractiveness": 0.22,
+      "verbatim_run": 0.07,
+      "band": "high",
+      "unsupported_numbers": 0,
+      "hedge_dropped": false
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

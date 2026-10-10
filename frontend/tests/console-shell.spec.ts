@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-shell';
 import { readFileSync } from 'node:fs';

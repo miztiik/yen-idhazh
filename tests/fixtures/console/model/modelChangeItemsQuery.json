@@ -1,0 +1,801 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 1100,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 1250,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 4300,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 4900,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 520,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 560,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 640,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 690,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 700,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 760,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 810,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-07-11",
+      "summarize_ms": 880,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-10",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-18",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-18",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-18",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    },
+    {
+      "date": "2026-08-19",
+      "summarize_ms": 610,
+      "prefill_ms": 53309,
+      "decode_ms": 40210,
+      "input_tokens": 1497,
+      "cached_tokens": 900,
+      "output_tokens": 215
+    },
+    {
+      "date": "2026-08-19",
+      "summarize_ms": 720,
+      "prefill_ms": 77778,
+      "decode_ms": 43436,
+      "input_tokens": 1765,
+      "cached_tokens": 900,
+      "output_tokens": 230
+    },
+    {
+      "date": "2026-08-19",
+      "summarize_ms": 780,
+      "prefill_ms": 63586,
+      "decode_ms": 50753,
+      "input_tokens": 1608,
+      "cached_tokens": 900,
+      "output_tokens": 270
+    },
+    {
+      "date": "2026-08-20",
+      "summarize_ms": 4200,
+      "prefill_ms": 82146,
+      "decode_ms": 33203,
+      "input_tokens": 1337,
+      "cached_tokens": 383,
+      "output_tokens": 189
+    },
+    {
+      "date": "2026-08-20",
+      "summarize_ms": 600,
+      "prefill_ms": 79100,
+      "decode_ms": 29062,
+      "input_tokens": 942,
+      "cached_tokens": 0,
+      "output_tokens": 170
+    },
+    {
+      "date": "2026-08-20",
+      "summarize_ms": 650,
+      "prefill_ms": 7120,
+      "decode_ms": 28206,
+      "input_tokens": 975,
+      "cached_tokens": 900,
+      "output_tokens": 167
+    },
+    {
+      "date": "2026-08-20",
+      "summarize_ms": 700,
+      "prefill_ms": 64000,
+      "decode_ms": 10300,
+      "input_tokens": 1700,
+      "cached_tokens": 100,
+      "output_tokens": 60
+    },
+    {
+      "date": "2026-08-20",
+      "summarize_ms": 750,
+      "prefill_ms": 8883,
+      "decode_ms": 22537,
+      "input_tokens": 999,
+      "cached_tokens": 900,
+      "output_tokens": 129
+    },
+    {
+      "date": "2026-08-20",
+      "summarize_ms": null,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null,
+      "output_tokens": null
+    }
+  ],
+  "first": "2026-07-11",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

@@ -27,6 +27,7 @@ import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
 import { nameSpan } from '$lib/console/span-words';
 import type { AskRefusal } from '$lib/data/ledger';
 import type { UnansweredDays } from '$lib/data/slice-shapes';
+import { isDay } from '$lib/data/slice-shapes';
 
 export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable' | 'refused';
 
@@ -39,6 +40,59 @@ export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachabl
  * that failed, and a floor missed is not a failure.
  */
 export type ChartState = PanelState | 'too-few';
+
+/** Day-ledger panels name their settled state inside each reserved frame. */
+export const STATE_WORDS = {
+	quiet: 'Nothing recorded.',
+	missing: 'Not published yet.',
+	unreachable: 'Did not arrive.'
+} as const;
+
+export interface RouteStanding {
+	state: 'loading' | 'ok' | 'quiet' | 'missing' | 'unreachable';
+	days: number;
+	through: string | null;
+	missing: number;
+	unreachable: number;
+	shimmer: boolean;
+}
+
+export function routeStanding(reading: RouteStanding): string {
+	if (!Number.isInteger(reading.days) || reading.days < 1) throw new Error('A route standing needs a positive day count.');
+	if (reading.state === 'loading') return reading.shimmer ? 'Fetching the record.' : '';
+	if (reading.state === 'unreachable') {
+		return `Part of the record did not arrive, so ${reading.unreachable} ${reading.unreachable === 1 ? 'panel has' : 'panels have'} nothing to draw.`;
+	}
+	if (reading.state === 'missing') {
+		return `${reading.missing} ${reading.missing === 1 ? 'panel reads' : 'panels read'} a record this site has not published yet, so ${reading.missing === 1 ? 'it has' : 'they have'} nothing to draw.`;
+	}
+	if (reading.state === 'quiet') return `Nothing was recorded in ${nameSpan(reading.days)}.`;
+	if (!isDay(reading.through)) throw new Error('A loaded route standing must name the day its panels reach.');
+	return `The panels below reach ${shortDate(reading.through)}.`;
+}
+
+export interface RecordWindow {
+	asked: number;
+	first: string | null;
+	through: string | null;
+}
+
+/** Freshness is anchored on the returned record, never on the current clock. */
+export function recordWindowSentence(record: RecordWindow): string {
+	if (!Number.isSafeInteger(record.asked) || record.asked < 1) throw new Error('A record window needs a positive preset.');
+	if (record.first === null || record.through === null) return '';
+	if (!isDay(record.first) || !isDay(record.through)) throw new Error('A record window needs ordered UTC days.');
+	const start = Date.parse(`${record.first}T00:00:00Z`);
+	const end = Date.parse(`${record.through}T00:00:00Z`);
+	if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) throw new Error('A record window needs ordered UTC days.');
+	const dayMs = 86_400_000;
+	const available = Math.floor((end - start) / dayMs) + 1;
+	const days = Math.min(record.asked, available);
+	const shown = `Showing ${days} ${days === 1 ? 'day' : 'days'}, to ${shortDate(record.through)}.`;
+	if (available >= record.asked) return shown;
+	const fills = new Date(start + (record.asked - 1) * dayMs).toISOString().slice(0, 10);
+	return `${shown} The record starts on ${shortDate(record.first)}; the ${record.asked}-day window fills on ${shortDate(fills)}.`;
+}
 
 /** What became of one month file the open window reaches into. */
 export type MonthState = 'held' | 'loading' | 'missing' | 'unreachable';

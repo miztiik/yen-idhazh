@@ -9,7 +9,7 @@
  * failing one test.
  */
 
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { seconds } from '../src/lib/charts/machine';

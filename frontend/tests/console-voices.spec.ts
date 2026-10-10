@@ -1,4 +1,4 @@
-import { test, expect } from './support/browser';
+import { test, expect } from './support/door-page';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-voices';
 import { reliabilityPublished, type SourceHealthView } from '../src/lib/server/payload';

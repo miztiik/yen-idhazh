@@ -1,0 +1,541 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-10",
+      "source_id": "old-cut",
+      "url_key": "b812354aa1813cc426c43ba03714b4a03906ebec5d1abcfc423e41b639b82a1e",
+      "source_words_before_cap": 4000,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "37727b1b2941b36b81b583f0e3f74c9d1b451332bd2f011d22ba3d8c294dd7df",
+      "source_words_before_cap": 5423,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "733d3b23aca0e4c8191869e70b46ebadb50ace426894d2a3a9781b9c9f11019a",
+      "source_words_before_cap": 6123,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "7685e7b2d732e7bcb5a2b3cf0dd5cfdc9f2eb5b190042c3c2708bea351d31678",
+      "source_words_before_cap": 9000,
+      "source_words": 9000
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "7bbe6be2485ae445a10320b0002febdd12d29905c8068f577396cbee4912cd01",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "7bbe6be2485ae445a10320b0002febdd12d29905c8068f577396cbee4912cd01",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "870533019d07c2d0208755937b5b1f1c60d8d0a9bd86f15dbd29b9186cef6b6a",
+      "source_words_before_cap": 4023,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "8c79fcf1d01c251e6887c34902b7cb015863a62458f9dd9514c4b3ee8a679e3e",
+      "source_words_before_cap": 4723,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-a",
+      "url_key": "c10d3a9c29cbba7893c70afd064182fb6f455c64f77bd73d8d06e050349e5d9c",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-b",
+      "url_key": "251790dc50545587b3f86f1e52f1539a15aa7235de68bc3e5261e380dfeac3ef",
+      "source_words_before_cap": 5423,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-b",
+      "url_key": "5d34567f1d77d2b5fab1dfc6c6cd9316f66ba488925881cc037532a455c0b674",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-b",
+      "url_key": "b3bc62c1f7e4d2fbb4b917e51f70df6c862596d220acdaedce329fb832ea623a",
+      "source_words_before_cap": 4723,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-b",
+      "url_key": "cf8561260d2b662a4122cd78dcaccf7c532bf39f16907a349591130d272bf408",
+      "source_words_before_cap": null,
+      "source_words": 30000
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-b",
+      "url_key": "e96c27bc7b043a78e48539a57ce943dc928c5e0a55bfdc80617e8a8efe4f7e5d",
+      "source_words_before_cap": 4023,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-b",
+      "url_key": "ed86e171db384d0334057c00471f31ad6bae6555e36772ff2fc8e24a229a1273",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-c",
+      "url_key": "5eeb20af485826d42cba5f965ed8c3321fdb4889b774ea75c00f5e3a03d4ee7a",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-c",
+      "url_key": "766f356f996b5ceb1db1cb151c93ef78f1428e80c7a897c6d834b24f94b539b5",
+      "source_words_before_cap": 4723,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-c",
+      "url_key": "78425e56c08c08007e474f58bab50100333925eea890741071f721321aba638c",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-c",
+      "url_key": "9d07e00c15573d6c7ff048068724ff34f10d2c37694e4de1b7775403d3b86dac",
+      "source_words_before_cap": 4023,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-d",
+      "url_key": "05f35bb85835307c0db0df17ae44c159479f77736c7f0f48ab284a62e85b593e",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-d",
+      "url_key": "075c7e37aca97bf7121fdc10338ac2d50a28b02a79343ea176a1936bd11a28e1",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-d",
+      "url_key": "2e562096f6aa2274041086bf7fee327c2734de1cdc37efb331500a24c1bfa364",
+      "source_words_before_cap": 4023,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-d",
+      "url_key": "65397352078b7526f3f00a4ba36ed92d4d77de1b3e4e6a91a7eefcdf2e4a1190",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-d",
+      "url_key": "89e24b97a6f1b4a32a7c030927566ef0ea61d418e8d644b6f96d934868d4824e",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-e",
+      "url_key": "1f66b4f44bbaa82f06af01d5660a21ac946bf12495fe918d282574a7bafb80a0",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-e",
+      "url_key": "329d1887ba6f62ecefd86e8b7f295ea5c39e97fa4f3f2cd1a3c96f0aa34003fe",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-e",
+      "url_key": "3d75022d56b7b582bcffa3f866121fa92fa4445295996ac35d9c1d581f0d6178",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-e",
+      "url_key": "75ab951052bc76c3618a09a905f6ad5e6da70329b0abeec02db3ecbd0650d450",
+      "source_words_before_cap": 4023,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-e",
+      "url_key": "f6bef7c8d53e711300ce295c5d2b099e66daeab1968da8d87f55a7d998b00320",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-f",
+      "url_key": "08765f4151117f429fbe9acce1e76f25687df1ecf1dfa1ca2743c1db23894078",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-f",
+      "url_key": "13cf6b4d479e49dba95b8392d72e6047e75046cc30594e48950d1115394004af",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-f",
+      "url_key": "30f7046b81d9978e5aa2b5a44fa6fb1dba1f02994185728cbdce730c4343ea64",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-f",
+      "url_key": "6266fc34b7b1cffa83bbab31b8a916f65889f520ece56a984490af11fc605884",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-f",
+      "url_key": "64ac9578fc247217781b16733989d42029ba89835a9aa103ce235b3bf199fb2c",
+      "source_words_before_cap": 402,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-g",
+      "url_key": "6e9665d700d4aeebc7e975467fc3c8a4cb9477ac36f8593aa8e39db5a47094ab",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-g",
+      "url_key": "8a257481e93b52f4ec6333cf72cd28e2e0dbd45442e45b7bf876e538572815d1",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-g",
+      "url_key": "95193b91bf166f08d749072bde5313ad79af019496b7c18b9daedf36253d500d",
+      "source_words_before_cap": 402,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-g",
+      "url_key": "ddb7fb356df1e32f3ce29d11dcff7887999d6e7e0c0412c20a9447249bde7381",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-g",
+      "url_key": "f9a7c23b5dda7e64f094763620e66b15fc1863c744911e65a460ffda8e0bc0e3",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-h",
+      "url_key": "21d207bc4d374a3abe033f35f556af4832fd3ab778068cc2f5c29a7fffe8ce6d",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-h",
+      "url_key": "74205834b660ab936b3755d9cd4f0d87324358d75eb63f43ba5cec4a80899e1e",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-h",
+      "url_key": "894a97e640723cb5352edf077f83dd74cb809aa4ddd1e4eb4eb2bc5cc42c8f18",
+      "source_words_before_cap": 402,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-h",
+      "url_key": "e212f83a8b8e4c0f919ce7965f25d7761c47e9e57321c17e7386ad6b6d888af7",
+      "source_words_before_cap": 3323,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-h",
+      "url_key": "f7e0f61c8c8a564bdae9734218d5a3c026e6ca9f9ead5dba8969051d69c2164a",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-i",
+      "url_key": "01c135f5dcb41cd22b4d57b21c9c891f57a62012f16ed91dbed211d6dc24cab6",
+      "source_words_before_cap": 402,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-i",
+      "url_key": "364c4951e99a37ff013dd292e786d0af2b4f2f4d16659f5e4b2967b0e215e9fb",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-i",
+      "url_key": "433ab39ff7ce15d6986ecacbf758481b126812239299a3c3da1e216e12f3630e",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-i",
+      "url_key": "4c49e6c5fadb9c54eec4c6bc5dfd40ebd6391cf393e79ec9481acb13e5b9b1fc",
+      "source_words_before_cap": 401,
+      "source_words": 401
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-i",
+      "url_key": "80938ccd51f4ac939792c59407a9bed3e0f408df1382492ca1b35c28274d96d7",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-j",
+      "url_key": "57a02d725fb76416a46c75590d512c8b95393ecab711dc939bcfadd743964fc2",
+      "source_words_before_cap": 401,
+      "source_words": 401
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-j",
+      "url_key": "96788dc33591d65b99def25ec6b5d36bb5487fc79cd1838373358c8e214dc65b",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-j",
+      "url_key": "af74a11b2860e3beea5160ff21e9d4d90c18a1086a4d63e6a95a29f77fee77fd",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-j",
+      "url_key": "c4a48d53a99af7f86ad840f2c6bb92537f361e6a501ac1c989a290dc74a2e92d",
+      "source_words_before_cap": 402,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-j",
+      "url_key": "d463ba8e52fcf65fca89a8081c236ad43814a5635e88a0963eed250b30d17446",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-k",
+      "url_key": "55567fcdcee5f9485d05d074814dc75aab63b7829e194324d50eb016d3bcb8ee",
+      "source_words_before_cap": 402,
+      "source_words": 402
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-k",
+      "url_key": "79dc7724a04fbc82695ef0eb28367a800ff719ce61090a7f87ee1f849e818f24",
+      "source_words_before_cap": 2623,
+      "source_words": 1923
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-k",
+      "url_key": "9fabec625c0c64d8f2eeaf8649c636d6dd1dd47878ceb67268a93c0f60816de7",
+      "source_words_before_cap": 401,
+      "source_words": 401
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-k",
+      "url_key": "a2a08ccda98af0d273d2385ecd5b87cb3ad2f94a08ff901bba2477d7f559de49",
+      "source_words_before_cap": 404,
+      "source_words": 404
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "cut-k",
+      "url_key": "d8ce6c141071438e9d087dcc9ad7d869e38931305ad07ec8150d0ecfee189658",
+      "source_words_before_cap": 403,
+      "source_words": 403
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "no-length",
+      "url_key": "20b1ebf2a693fe0ce021e1d4ff8277cbb00810659a026506c967eec54c404d7b",
+      "source_words_before_cap": null,
+      "source_words": 801
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "no-length",
+      "url_key": "85731664a8185b94eea52723ea4973eea183ff9fa1f5b585dee089a27bd04588",
+      "source_words_before_cap": null,
+      "source_words": 800
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "no-length",
+      "url_key": "c3384f3468f845fa4c827b6d4647bec291e6560255bbc3144141066898a0c82c",
+      "source_words_before_cap": null,
+      "source_words": 802
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "no-length",
+      "url_key": "d5f4ea83ddeee4803abcc780efe2b338e839272aa402e1776e67b68d1726ed97",
+      "source_words_before_cap": null,
+      "source_words": 804
+    },
+    {
+      "date": "2026-08-17",
+      "source_id": "no-length",
+      "url_key": "e0007d54efbf751e5a58d1d22e6c3b82047539d7e527dd2152c98a33bfceec49",
+      "source_words_before_cap": null,
+      "source_words": 803
+    },
+    {
+      "date": "2026-08-18",
+      "source_id": "canary",
+      "url_key": "18a7e83de6a8fba2be7f845f2d46fd981337ed6f6ae11f3eed4ce30b1e028786",
+      "source_words_before_cap": null,
+      "source_words": 32
+    },
+    {
+      "date": "2026-08-18",
+      "source_id": "canary",
+      "url_key": "2417a49d5af445c3180d97ec0fabcaf806067139786986cafc4e59cd2402e96a",
+      "source_words_before_cap": null,
+      "source_words": 27
+    },
+    {
+      "date": "2026-08-18",
+      "source_id": "canary",
+      "url_key": "bebf099ed6a0d1bb696bf05f9a1587a84d5d7ea53414a5f1209b3bed8b585ee2",
+      "source_words_before_cap": null,
+      "source_words": 35
+    },
+    {
+      "date": "2026-08-19",
+      "source_id": "canary",
+      "url_key": "42534acf26ed05427f1f9c9ccb4b73cb9d21b6fc470d6d2da2ebca9a9ddadaa0",
+      "source_words_before_cap": null,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-19",
+      "source_id": "canary",
+      "url_key": "9745da333fc4ba446410d2787c4dde7799acae850551b694d78fdbd58c5b2e89",
+      "source_words_before_cap": null,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-19",
+      "source_id": "canary",
+      "url_key": "b90d2318156c57fe8fb5cf21b52d5425ee012ca7cf98239c35c6bd3d2cc75f15",
+      "source_words_before_cap": null,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary",
+      "url_key": "42534acf26ed05427f1f9c9ccb4b73cb9d21b6fc470d6d2da2ebca9a9ddadaa0",
+      "source_words_before_cap": null,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary",
+      "url_key": "65ebe6847f9f35407934d98b9bc24bb47ffc58fc52cb7c69548bb64daf623188",
+      "source_words_before_cap": null,
+      "source_words": 1410
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary",
+      "url_key": "9745da333fc4ba446410d2787c4dde7799acae850551b694d78fdbd58c5b2e89",
+      "source_words_before_cap": null,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary",
+      "url_key": "b90d2318156c57fe8fb5cf21b52d5425ee012ca7cf98239c35c6bd3d2cc75f15",
+      "source_words_before_cap": null,
+      "source_words": 180
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary",
+      "url_key": "e1ece4340223bec76c3b311050ecc5ebaece5f30bf18ed6e5338ab01c8ccd979",
+      "source_words_before_cap": null,
+      "source_words": 174
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary",
+      "url_key": "f8b17c9d1094601c97b68df1ccc4e65fb1989a0352001003eb6b85bc8f2a07d3",
+      "source_words_before_cap": 2612,
+      "source_words": 1923
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

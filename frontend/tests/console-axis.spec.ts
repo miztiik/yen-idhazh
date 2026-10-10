@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { chartsReady } from './support/charts-ready';
 import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
 import { BAND_UNREAD } from '../src/lib/console/band';

@@ -24,11 +24,13 @@ import { readAsk, readAskCost, type ArchiveTier, type RawListedThrough } from '.
 import { readColumns } from './ledger-columns';
 import { readReach, type LedgerReach } from './ledger-reach';
 import { pageKeeper, type PageKeeper } from './page-keeper';
+import { renewReadSession } from './read-session';
 import { readSlice } from './slice-reader';
 import type { QueryEngine } from './slice-query';
 import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
+export { readSession } from './read-session';
 export type { AskFault, AskOptions, AskRefusal, AskResult, Column, DateStamp, FetchCost, LedgerFault, LedgerName, Predicate, Row, SetAsideFiles, SliceOptions, SliceResult, SpanCost, SpanGap } from './slice-shapes';
 
 let kept: PageKeeper | null = null;
@@ -110,6 +112,7 @@ export function askColumns(ledger: LedgerName, maxFetchBytes: number): Promise<C
 
 /** Drop this page's query-door cache, so Refresh reads the registry and indexes anew. */
 export async function startAfresh(): Promise<void> {
+	renewReadSession();
 	const current = kept;
 	const archive = keptArchive;
 	kept = null;

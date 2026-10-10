@@ -1,0 +1,465 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-10",
+      "run_id": "2026-08-10-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-2",
+      "machine_shard": null,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-18",
+      "run_id": "2026-08-18-1",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-18",
+      "run_id": "2026-08-18-1",
+      "machine_shard": 1,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-18",
+      "run_id": "2026-08-18-1",
+      "machine_shard": 1,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "machine_shard": 1,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "machine_shard": 1,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_shard": 0,
+      "cpu_steal_pct": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_shard": 1,
+      "cpu_steal_pct": null
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

@@ -20,7 +20,7 @@
  * run the page drew.
  */
 
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {

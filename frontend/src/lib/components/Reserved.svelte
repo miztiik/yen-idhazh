@@ -18,7 +18,7 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import { skeletonFrame } from '$lib/charts/skeleton';
-	import type { PanelState } from '$lib/console/waiting';
+	import { STATE_WORDS, type PanelState } from '$lib/console/waiting';
 
 	let {
 		panelState: state,
@@ -26,6 +26,7 @@
 		width,
 		name,
 		label,
+		record = false,
 		children
 	}: {
 		/** Named `panelState` rather than `state` because a prop called `state`
@@ -44,27 +45,18 @@
 		name: string;
 		/** What the panel is, for anyone who cannot see it. */
 		label: string;
+		/** Ledger callers own their state words; month-based callers keep their old treatment until migration. */
+		record?: boolean;
 		children: Snippet;
 	} = $props();
 
 	const skeleton = $derived(skeletonFrame(width, height));
 	/** Warn only where something failed. */
 	const tone = $derived(state === 'unreachable' ? 'warn' : 'neutral');
-	/** The box takes over for exactly two states, and the rule is one sentence:
-	 * **it appears where the panel's own words would be false.**
-	 *
-	 * A panel with rows on the way that printed "nothing is on record" would be
-	 * wrong for the next second; a panel whose month did not arrive and printed
-	 * the same thing would be wrong outright. Those are `loading` and
-	 * `unreachable`. An empty window and a real gap are the other way round - the
-	 * panel's own sentence is TRUE and more precise than anything a general box
-	 * could write, so it keeps it, and which of the two it is gets said once for
-	 * the whole page beside the control that governs the window.
-	 *
-	 * The box itself carries no words for the same reason: a dozen panels each
-	 * repeating one page-level fact is a dozen announcements of one thing.
-	 */
-	const passthrough = $derived(state !== 'loading' && state !== 'unreachable');
+	/** Month callers retain their own settled words. Ledger callers use the
+	 * shared words inside this frame; loading never prints an answer. */
+	const settledWord = $derived(record && (state === 'quiet' || state === 'missing' || state === 'unreachable') ? STATE_WORDS[state] : null);
+	const passthrough = $derived(state !== 'loading' && state !== 'unreachable' && settledWord === null);
 </script>
 
 {#if passthrough}
@@ -72,6 +64,7 @@
 {:else}
 	<div
 		class="reserved"
+		class:loading={record && state === 'loading'}
 		data-reserved={name}
 		data-panel-state={state}
 		data-tone={tone}
@@ -79,7 +72,7 @@
 		role="img"
 		aria-label={state === 'loading'
 			? `${label} - waiting for its rows`
-			: `${label} - its rows did not arrive, and the sentence above the panels says which months`}
+			: settledWord === null ? `${label} - its rows did not arrive, and the sentence above the panels says which months` : `${label} - ${settledWord}`}
 		aria-busy={state === 'loading'}
 	>
 		<!-- The frame, and only the frame. Ticks are marks; a tick LABEL needs a
@@ -131,7 +124,9 @@
 			{/each}
 		</svg>
 
-		{#if state === 'loading'}
+		{#if settledWord !== null}
+			<p class="record-state">{settledWord}</p>
+		{:else if state === 'loading' && !record}
 			<!-- The marks that stand where the data will be, inside the same plot
 			     the SVG drew. They carry the `loading` state class, so the sweep is
 			     switched on by an ancestor and every block on the page moves in one
@@ -151,6 +146,17 @@
 {/if}
 
 <style>
+	.record-state {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		margin: 0;
+		padding-inline: var(--space-4);
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		text-align: center;
+	}
 	/* No tint of its own. The axis frame is the only thing this box says, and a
 	   tint under it costs exactly that: measured 2026-09-09 over the committed
 	   token values, `--chart-axis` reads 2.76:1 dark and 2.38:1 light on a tinted
@@ -161,6 +167,10 @@
 		position: relative;
 		inline-size: 100%;
 		border-radius: var(--radius-md);
+	}
+
+	.reserved.loading {
+		background-color: transparent;
 	}
 
 	/* A failed fetch is the only one of the four that is a fault, so it is the

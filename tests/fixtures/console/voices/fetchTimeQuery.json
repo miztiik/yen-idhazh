@@ -1,0 +1,693 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "source_id": "canary",
+      "fetch_ms": 100,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 120,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 130,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 150,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 200,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 200,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 210,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 220,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 250,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 260,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 270,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "canary",
+      "fetch_ms": 300,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-a",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-b",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-b",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-b",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-b",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-b",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-b",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-c",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-c",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-c",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-c",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-d",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-d",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-d",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-d",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-d",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-e",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-e",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-e",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-e",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-e",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-f",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-f",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-f",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-f",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-f",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-g",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-g",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-g",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-g",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-g",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-h",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-h",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-h",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-h",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-h",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-i",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-i",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-i",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-i",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-i",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-j",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-j",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-j",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-j",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-j",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-k",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-k",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-k",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-k",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "cut-k",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "no-length",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "no-length",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "no-length",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "no-length",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "no-length",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    },
+    {
+      "source_id": "old-cut",
+      "fetch_ms": null,
+      "fetch_connect_ms": null,
+      "fetch_ttfb_ms": null,
+      "robots_ms": null,
+      "retry_total_ms": null,
+      "retry_count": null
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

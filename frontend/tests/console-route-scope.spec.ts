@@ -1,147 +1,20 @@
 /** Which named console files cross a route's ownership boundary? */
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { groupedSpecs } from '../scripts/test-groups';
 import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { FRONTEND, drawnSourceFiles, readSource, scriptTree, sourceFiles } from './support/console-sources';
 
-const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
 const CROSS_ROUTE_SPECS = [
 	'console-axis', 'console-band', 'console-chart-lifetime', 'console-chart-pending',
 	'console-chrome', 'console-frame', 'console-mark-parity', 'console-model-panels',
 	'console-model-rule', 'console-nav', 'console-polarity', 'console-readout',
-	'console-shell', 'console-title', 'console-voices', 'console-window', 'console'
+	'console-shell', 'console-title', 'console-voices', 'console-window', 'console', 'console-built-page'
 ] as const;
 
-// Named inputs, not a walk: a new consumer must join this inventory.
-const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
-	'': [
-		'vite.config.ts', 'svelte.config.js', 'asset-base.js', 'playwright.config.ts',
-		'playwright.logic.config.ts', 'playwright.whole-day.config.ts'
-	],
-	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
-	'src/lib': [
-		'archive-calendar.ts', 'bands.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
-		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts'
-	],
-	'src/lib/assist': [
-		'day.ts', 'encoder.ts', 'index.ts', 'loader.ts', 'month.ts', 'search.ts', 'session.ts', 'weights.ts'
-	],
-	'src/lib/charts': [
-		'chart-flow.ts', 'Chart.svelte', 'core.ts', 'cost.ts', 'day-slots.ts', 'engine.ts',
-		'extraction-trend.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
-		'machine-cards.ts', 'machine-colour.ts', 'machine-name.ts', 'machine-split.ts',
-		'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
-		'skeleton.ts', 'span-track.ts', 'sparkline.ts', 'stacked.ts', 'targetbar.ts',
-		'telemetry-hold.ts', 'theme.ts', 'viewport.ts', 'waterfall.ts'
-	],
-	'src/lib/charts/d3': [
-		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'Distribution.svelte', 'distribution.ts',
-		'empty.ts', 'EmptyState.svelte', 'Flow.svelte', 'flow.ts', 'motion.ts', 'ordered-colour.ts',
-		'overlapTimeline.ts', 'paired.ts', 'PairedScatter.svelte', 'pairedScatter.ts',
-		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
-	],
-	'src/lib/components': [
-		'ArchiveSearch.svelte', 'BandDistance.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
-		'ConfidenceChip.svelte', 'ConsoleBand.svelte', 'ConsoleNav.svelte', 'DayNotice.svelte',
-		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte',
-		'FailurePanels.svelte', 'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
-		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
-		'MachineCard.svelte', 'MachineSplitGroup.svelte', 'MemoryBoard.svelte', 'MoreDays.svelte',
-		'NotHere.svelte', 'Notice.svelte', 'Panel.svelte', 'PanelGroup.svelte', 'PayloadState.svelte',
-		'RankedList.svelte', 'RateControl.svelte', 'ReadAloud.svelte', 'Reserved.svelte',
-		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',
-		'ShapeSwitch.svelte', 'ShardBoard.svelte', 'SiteFooter.svelte', 'SiteHeader.svelte',
-		'SourceCutRange.svelte', 'SourceLink.svelte', 'SourceMark.svelte', 'Sparkline.svelte',
-		'StageTimings.svelte', 'StatusChip.svelte', 'SwapDots.svelte', 'TargetBar.svelte',
-		'ThemeToggle.svelte', 'ThroughputTrend.svelte', 'TimeHistogram.svelte', 'Viewport.svelte',
-		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
-	],
-	'src/lib/console': [
-		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'daily-figures.ts',
-		'doubt-reasons.ts', 'eval-instruments.ts', 'extraction.ts', 'held-part-note.ts',
-		'holdout.ts', 'item-cost.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts', 'prompt-cache-subtitle.ts',
-		'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts',
-		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
-	],
-	'src/lib/console/explorer': [
-		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
-		'ColumnList.svelte', 'ColumnPicker.svelte', 'ColumnType.svelte', 'CopyAnswer.svelte',
-		'days-read.ts', 'floating-list.ts', 'gaps.ts', 'HistoryList.svelte', 'keep.ts',
-		'LedgerList.svelte', 'preset-span.ts', 'QueryEditor.svelte', 'QuestionStrip.svelte',
-		'registry.ts', 'role-row.ts', 'RunStatus.svelte', 'shape.ts', 'ShapePanel.svelte',
-		'status.ts', 'strip-fit.ts', 'type-colour.ts', 'type-family.ts', 'utc-instant.ts'
-	],
-	'src/lib/console/machine': [
-		'article-cost.ts', 'ArticleCostPanel.svelte', 'context-cost.ts', 'ContextCostPanel.svelte',
-		'CounterfactualCostPanel.svelte', 'disk-reads.ts', 'DiskReadsPanel.svelte', 'FleetDots.svelte',
-		'MachineCardsPanel.svelte', 'MachineSplitPanel.svelte', 'memory-held.ts',
-		'MemoryBoardPanel.svelte', 'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
-		'processor-lost.ts', 'ProcessorLostPanel.svelte', 'prompt-reuse.ts', 'PromptReusePanel.svelte',
-		'ReadAgainstWrittenPanel.svelte', 'refused-runs.ts', 'run-axis.ts', 'ShardBoardPanel.svelte',
-		'TailTrendPanel.svelte', 'TwoClocksPanel.svelte'
-	],
-	'src/lib/data': [
-		'ask-reader.ts', 'compact-index.ts', 'engine.ts', 'fetched-bytes.ts', 'ledger-columns.ts',
-		'ledger-reach.ts', 'ledger.ts', 'page-keeper.ts', 'raw-day-index.ts', 'site-window.ts',
-		'slice-query.ts', 'slice-reader.ts', 'slice-shapes.ts', 'slice.ts', 'statement.ts'
-	],
-	'src/lib/icons': ['generated.ts', 'Icon.svelte'],
-	'src/lib/payload': ['desks.ts', 'drawing.ts', 'lenses.ts', 'project.ts', 'types.ts'],
-	'src/lib/server': [
-		'chart-days.ts', 'chart-render.ts', 'config.ts', 'cuts-by-run.ts', 'host-fingerprint.ts',
-		'ledger-disk.ts', 'ledger-rows.ts', 'machine-counters.ts', 'model-work.ts', 'payload.ts',
-		'publication.ts', 'recorded-line.ts', 'run-days.ts', 'run-timeline.ts', 'server-counter-notes.ts',
-		'content-similarity-holdout.ts', 'content-similarity-judge.ts', 'source-retiring.ts', 'stage-timing-days.ts', 'window-day.ts'
-	],
-	'src/lib/visual': ['bar.ts', 'width.ts'],
-	'src/routes': ['+error.svelte', '+layout.svelte', '+layout.ts', '+page.server.ts', '+page.svelte'],
-	'src/routes/archive': ['+page.server.ts', '+page.svelte'],
-	'src/routes/console': [
-		'+layout.svelte', '+layout.ts', '+page.server.ts', '+page.svelte',
-		'RunHealthPanel.svelte', 'RunTimelinePanel.svelte'
-	],
-	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
-	'src/routes/console/judgement': [
-		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'JudgeAgreement.svelte',
-		'MergedStoriesPanel.svelte', 'MergeLinePlot.svelte', 'RecordGates.svelte', 'VerdictSplit.svelte'
-	],
-	'src/routes/console/machine': ['+page.server.ts', '+page.svelte'],
-	'src/routes/console/model': ['+page.server.ts', '+page.svelte'],
-	'src/routes/console/voices': ['+page.server.ts', '+page.svelte'],
-	'src/routes/[date]': ['+page.svelte', '+page.ts'],
-	'src/routes/[date]/[vertical]': ['+page.svelte', '+page.ts'],
-	scripts: [
-		'build-canary.mjs', 'build-frame-css.mjs', 'build-icons.mjs', 'build-state.ts',
-		'build-worker-switch.mjs', 'bundle-gate.mjs', 'canary-inventory.mjs', 'copy-visuals.mjs',
-		'doc-test-inputs.ts', 'duckdb-addon.ts', 'payload-ceilings.mjs', 'published-ledgers.mjs',
-		'query-engine-assets.ts', 'raw-listed-through.mjs', 'run-checks.ts', 'setup-duckdb.ts',
-		'staged-publication.mjs', 'test-groups.ts', 'test-results.ts', 'test-scope.ts', 'verified-preview.ts'
-	],
-	'scripts/tests': [
-		'build-state.test.mjs', 'canary-inventory.test.mjs', 'duckdb-addon.test.mjs',
-		'query-engine-assets.test.mjs', 'run-checks.test.mjs', 'test-results.test.mjs', 'test-scope.test.mjs'
-	],
-	'tests/support': [
-		'backend-python.ts', 'browser.ts', 'canary-config.ts', 'charts-ready.ts', 'check-addons.ts',
-		'consecutive-days.ts', 'console-panels.ts', 'console-widths.ts', 'day-drawings.ts',
-		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
-		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
-		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
-		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
-		'telemetry-row.ts', 'views.ts'
-	],
-	'tests/fixtures/panels': ['WitnessPanel.svelte']
-	,'tests/support/console-window': [
-		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
-		'client-render.ts', 'server-panels.ts'
-	]
-};
-
 const WINDOW_SHARED_IMPORTS = new Set([
-	'./support/browser', '../src/lib/console/band',
+	'./support/browser', './support/door-page', '../src/lib/console/band',
 	'./support/console-expect/console-window', './support/span-said',
 	'../src/lib/charts/viewport', './support/console-window/controls',
 	'./support/console-window/readout', './support/console-window/machine-spans'
@@ -240,6 +113,81 @@ function defineScopeErrors(file: string, source: string): string[] {
 	return [...errors];
 }
 
+function imports(tree: ts.SourceFile): ts.ImportDeclaration[] {
+	return tree.statements.filter(ts.isImportDeclaration);
+}
+
+function movedRoutes(sources: Readonly<Record<string, string>>): RouteId[] {
+	return BAND_UNREAD.routes.filter(({ id }) => Object.entries(sources).some(([file, source]) => {
+		const path = file.replaceAll('\\', '/');
+		const route = id === 'pipelines' ? 'src/routes/console/' : `src/routes/console/${id}/`;
+		const owns = path.startsWith(`src/lib/console/${id}/`) ||
+			(path.startsWith(route) && !path.slice(route.length).includes('/'));
+		if (!owns) return false;
+		return imports(scriptTree(path, source)).some((node) => ts.isStringLiteral(node.moduleSpecifier) &&
+			/^(?:\$lib\/console\/queries\/|(?:\.\.\/)+queries\/)/.test(node.moduleSpecifier.text));
+	})).map(({ id }) => id);
+}
+
+function doorFixtureErrors(file: string, source: string, moved: readonly RouteId[]): string[] {
+	const path = file.replaceAll('\\', '/');
+	if (!/^tests\/[^/]+\.spec\.ts$/.test(path)) return [];
+	const tree = scriptTree(path, source);
+	const imported = imports(tree);
+	const shared = imported.some((node) => ts.isStringLiteral(node.moduleSpecifier) &&
+		/^\.\/support\/(?:console-expect(?:\/|$)|console-panels$|panel-drivers(?:\/|$))/.test(node.moduleSpecifier.text));
+	// Quoted address samples in a pure oracle do not open a page.
+	function usesBrowser(input: ts.Node): boolean {
+		let browserCall = false;
+		function visit(node: ts.Node): void {
+			if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) &&
+				['goto', 'newPage', 'newContext'].includes(node.expression.name.text)) browserCall = true;
+			if (ts.isParameter(node) && ts.isObjectBindingPattern(node.name) &&
+				node.name.elements.some((entry) => ts.isIdentifier(entry.name) &&
+					['page', 'browser', 'context'].includes((entry.propertyName ?? entry.name).getText(tree)))) browserCall = true;
+			ts.forEachChild(node, visit);
+		}
+		visit(input);
+		return browserCall;
+	}
+	if (!usesBrowser(tree) || !moved.some((route) => shared || namedRoutes(source).includes(route))) return [];
+	const fixtures = new Map<string, boolean>();
+	for (const node of imported) {
+		const bindings = node.importClause?.namedBindings;
+		if (!bindings || !ts.isNamedImports(bindings) || node.importClause?.isTypeOnly) continue;
+		for (const entry of bindings.elements) {
+			if (!entry.isTypeOnly && (entry.propertyName ?? entry.name).text === 'test') {
+				fixtures.set(entry.name.text, ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === './support/door-page');
+			}
+		}
+	}
+	function fixture(expression: ts.Expression, seen = new Set<string>()): boolean | undefined {
+		if (ts.isPropertyAccessExpression(expression)) return fixture(expression.expression, seen);
+		if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression) &&
+			expression.expression.name.text === 'extend') return fixture(expression.expression.expression, seen);
+		if (!ts.isIdentifier(expression) || seen.has(expression.text)) return undefined;
+		if (fixtures.has(expression.text)) return fixtures.get(expression.text);
+		seen.add(expression.text);
+		for (const statement of tree.statements) {
+			if (!ts.isVariableStatement(statement)) continue;
+			const declaration = statement.declarationList.declarations.find((entry) =>
+				ts.isIdentifier(entry.name) && entry.name.text === expression.text);
+			if (declaration?.initializer) return fixture(declaration.initializer, seen);
+		}
+		return undefined;
+	}
+	let wrongFixture = false;
+	function registration(node: ts.Node): void {
+		if (ts.isCallExpression(node) && fixture(node.expression) === false &&
+			!(ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'describe') &&
+			node.arguments.some((argument) => (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) && usesBrowser(argument))) wrongFixture = true;
+		ts.forEachChild(node, registration);
+	}
+	registration(tree);
+	return [...fixtures.values()].includes(true) && !wrongFixture ? [] :
+		[`${path} opens a moved route without test from ./support/door-page`];
+}
+
 function supportFiles(): string[] {
 	const routes = BAND_UNREAD.routes.map(({ id }) => id);
 	return [
@@ -248,6 +196,12 @@ function supportFiles(): string[] {
 		)),
 		...['index', ...routes].map((route) => `tests/support/panel-drivers/${route}.ts`)
 	];
+}
+
+function specFiles(): string[] {
+	return [...new Set([...Object.values(groupedSpecs(join(FRONTEND, 'tests'))).flat(),
+		'console-built-page.spec.ts', 'console-drawn-cells.spec.ts', 'whole-day.spec.ts'])]
+		.map((name) => `tests/${name}`);
 }
 
 test('quoted href matching covers all six routes and counts distinct routes only', () => {
@@ -283,9 +237,7 @@ test('each route owns only its expectations and drivers, and indexes own no addr
 });
 
 test('the console define and imports cannot move into shared code or pure-parser specs', () => {
-	for (const path of DEFINE_OWNERS) {
-		expect(defineScopeErrors(path, 'const chosen = __CONSOLE__;')).toEqual([]);
-	}
+	for (const path of DEFINE_OWNERS) expect(defineScopeErrors(path, 'const chosen = __CONSOLE__;')).toEqual([]);
 	for (const path of ['src/lib/components/Panel.svelte', 'tests/appearance-config.spec.ts']) {
 		const code = 'const chosen = __CONSOLE__;';
 		expect(defineScopeErrors(path, path.endsWith('.svelte') ? `<script lang="ts">${code}</script>` : code)).toHaveLength(1);
@@ -293,14 +245,10 @@ test('the console define and imports cannot move into shared code or pure-parser
 	expect(defineScopeErrors('src/lib/components/Panel.svelte', '<p>{__CONSOLE__.shared.chart_height}</p>')).toHaveLength(1);
 	const module = '$lib/console/route-console';
 	for (const code of [
-		`import { routeConsole } from '${module}';`,
-		`import type { RouteConsole } from '${module}';`,
-		`import '${module}';`,
-		`export { routeConsole } from '${module}';`,
-		`import value = require('${module}');`,
-		`const value = import('${module}');`,
-		`type Value = import('${module}').RouteConsole;`,
-		`const value = require('${module}');`
+		`import { routeConsole } from '${module}';`, `import type { RouteConsole } from '${module}';`,
+		`import '${module}';`, `export { routeConsole } from '${module}';`,
+		`import value = require('${module}');`, `const value = import('${module}');`,
+		`type Value = import('${module}').RouteConsole;`, `const value = require('${module}');`
 	]) {
 		expect(defineScopeErrors('src/lib/server/config.ts', code)).toEqual([]);
 		expect(defineScopeErrors('src/routes/console/+page.server.ts', code)).toEqual([]);
@@ -314,9 +262,7 @@ test('the console define and imports cannot move into shared code or pure-parser
 });
 
 test('named expectations, drivers and specs keep route ownership', () => {
-	const specs = Object.values(groupedSpecs(join(FRONTEND, 'tests'))).flat();
-	const files = [...supportFiles(), ...specs.map((name) => `tests/${name}`), 'tests/whole-day.spec.ts'];
-	const errors = files.flatMap((file) => routeScopeErrors(file, readFileSync(join(FRONTEND, file), 'utf8')));
+	const errors = [...supportFiles(), ...specFiles()].flatMap((file) => routeScopeErrors(file, readSource(file)));
 	expect(errors, 'Move quoted addresses to the owning route expectation or driver').toEqual([]);
 });
 
@@ -325,21 +271,56 @@ test('shared window ownership rejects route execution and callback expectations 
 		expect(windowOwnershipErrors(path, "import { judgeDay } from './support/console-window/judgement-fixtures';")).toHaveLength(2);
 		expect(windowOwnershipErrors(path, "const panel = 'src/routes/console/judgement/JudgeAgreement.svelte';")).toHaveLength(1);
 		expect(windowOwnershipErrors(path, "import { machineSpan } from './support/console-window/machine-spans';")).toEqual([]);
+		expect(windowOwnershipErrors(path, "import { test } from './support/door-page';")).toEqual([]);
 	}
 	expect(windowOwnershipErrors('tests/support/console-expect/console-window/judgement.ts', 'export const EXPECT = { execute: () => true };')).toHaveLength(1);
 	expect(windowOwnershipErrors('tests/support/console-expect/console-window/judgement.ts', "export const EXPECT = { windowed: ['judge-agreement'] };")).toEqual([]);
 	const files = ['tests/console-window.spec.ts', ...['index', ...BAND_UNREAD.routes.map(({ id }) => id)].map(
 		(route) => `tests/support/console-expect/console-window/${route}.ts`
 	)];
-	expect(files.flatMap((file) => windowOwnershipErrors(file, readFileSync(join(FRONTEND, file), 'utf8')))).toEqual([]);
+	expect(files.flatMap((file) => windowOwnershipErrors(file, readSource(file)))).toEqual([]);
 });
 
 test('named sources expose the console define only through its route boundary', () => {
-	const sources = Object.entries(SOURCE_INPUTS).flatMap(([directory, names]) => names.map(
-		(name) => directory ? `${directory}/${name}` : name
-	));
-	const specs = Object.values(groupedSpecs(join(FRONTEND, 'tests'))).flat().map((name) => `tests/${name}`);
-	const files = [...sources, ...supportFiles(), ...specs, 'tests/whole-day.spec.ts'];
-	const errors = files.flatMap((file) => defineScopeErrors(file, readFileSync(join(FRONTEND, file), 'utf8')));
+	const files = [...sourceFiles(), ...supportFiles(), ...specFiles()];
+	expect(new Set(sourceFiles()).size).toBe(sourceFiles().length);
+	const errors = files.flatMap((file) => defineScopeErrors(file, readSource(file)));
 	expect(errors, 'Pass console values as props; test the parser through the server config loader').toEqual([]);
+});
+
+test('a moved route requires the cached fixture only for browser execution', () => {
+	const href = BAND_UNREAD.routes.find(({ id }) => id === 'machine')!.href;
+	const sources = {
+		'src/lib/console/machine/PlatformMixPanel.svelte': "<script>import { platformMixQuery } from '$lib/console/queries/machine';</script>",
+		'src/routes/console/model/+page.svelte': '<!-- import anything from $lib/console/queries/model -->'
+	};
+	const moved = movedRoutes(sources);
+	expect(moved).toEqual(['machine']);
+	const browser = `test('open', async ({ page }) => { await page.goto('${href}'); });`;
+	for (const fixture of ['@playwright/test', './support/browser']) {
+		expect(doorFixtureErrors('tests/route.spec.ts', `import { test } from '${fixture}'; ${browser}`, moved)).toHaveLength(1);
+	}
+	for (const fixture of [
+		"import { test } from './support/door-page';",
+		"import { test as browserTest } from './support/door-page'; const test = browserTest.extend({});"
+	]) expect(doorFixtureErrors('tests/route.spec.ts', `${fixture} ${browser}`, moved)).toEqual([]);
+	expect(doorFixtureErrors('tests/route.spec.ts', `import type { test } from './support/door-page'; ${browser}`, moved)).toHaveLength(1);
+	expect(doorFixtureErrors('tests/route.spec.ts', `import { expect } from './support/door-page'; ${browser}`, moved)).toHaveLength(1);
+	expect(doorFixtureErrors('tests/route.spec.ts',
+		`import { test as unused } from './support/door-page'; import { test } from '@playwright/test'; ${browser}`, moved)).toHaveLength(1);
+	for (const helper of ['console-expect/console-frame', 'console-panels', 'panel-drivers']) {
+		const source = `import { BY_ROUTE } from './support/${helper}'; test('open', async ({ page }) => helper(page));`;
+		expect(doorFixtureErrors('tests/route.spec.ts', source, moved)).toHaveLength(1);
+		expect(doorFixtureErrors('tests/route.spec.ts', `${source} import { test } from './support/door-page';`, moved)).toEqual([]);
+	}
+	expect(doorFixtureErrors('tests/pure.spec.ts', `const sample = '${href}'; test('literal', () => expect(sample).toBeTruthy());`, moved)).toEqual([]);
+	expect(doorFixtureErrors('tests/pure.spec.ts', "import { BY_ROUTE } from './support/console-expect/console-nav'; test('shape', () => expect(BY_ROUTE).toBeTruthy());", moved)).toEqual([]);
+	expect(doorFixtureErrors('tests/unmoved.spec.ts', browser, [])).toEqual([]);
+});
+
+test('the shipped Hardware query remains a moved route and its browser consumers use door-page', () => {
+	const sources = Object.fromEntries(drawnSourceFiles().map((file) => [file, readSource(file)]));
+	const moved = movedRoutes(sources);
+	expect(moved).toContain('machine');
+	expect(specFiles().flatMap((file) => doorFixtureErrors(file, readSource(file), moved))).toEqual([]);
 });

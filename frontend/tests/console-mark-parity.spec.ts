@@ -36,7 +36,7 @@
  * window's marks the moment the control moves.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 import { buildSwap, pair, renderSwap, swapFixture, timedPair } from './support/model-swap';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE, type Chart } from './support/console-expect/console-mark-parity';

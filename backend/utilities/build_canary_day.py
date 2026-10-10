@@ -33,8 +33,8 @@ import re
 import shutil
 from array import array
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from datetime import date as calendar_date
-from datetime import timedelta
 from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
@@ -100,6 +100,7 @@ from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
+from idhazh.telemetry import silicon
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
@@ -122,8 +123,18 @@ SCORE_ATTEMPT: Final = 1
 SCORE_JOB: Final = ServerJob.ASSEMBLE
 SCORE_SHARD: Final = 0
 
-#: The name every file this fixture files through the ledger door carries.
+#: The producer for the canary's item and score writers. Hosts use silicon's.
 PRODUCER: Final = "utilities.build_canary_day"
+
+#: Modeled native inputs for the newest work shard's existing fixture readings,
+#: not a live server capture. The production clock parses these, not a JSON row.
+HOST_CLOCK_LOG: Final = (
+    "0.00.011.682 I srv load_model: loading model 'canary.gguf'\n"
+    "0.02.482.510 I srv llama_server: model loaded\n"
+)
+HOST_CLOCK_METRICS: Final = (
+    "llamacpp:prompt_tokens_total 1700\nllamacpp:prompt_seconds_total 73.72\n"
+)
 
 type FixtureRow = ItemHealthRow | HostFingerprintRow
 
@@ -1576,11 +1587,11 @@ def scored_keys(state: Path) -> dict[str, str]:
 def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
     """File the rows `build-canary.mjs` wrote as CSV through the door, then delete the CSV.
 
-    That script writes one file a run under `<staged>/<ledger>/<YYYY>/<MM>/<DD>/`.
+    That script stages rows under `<staged>/<ledger>/<YYYY>/<MM>/<DD>/`.
     Those files are scratch the two build steps hand each other, never committed
     and never read by a later run, so each row is read with its contract's own
-    `from_csv_row` and filed as one raw file a run, under the run's own id: a
-    run the fixture names is a writer the door names too.
+    `from_csv_row`. Items file as one writer per run; hosts file as their own
+    production job and shard, so closing one host cannot replace its siblings.
     """
     filed: dict[LedgerName, int] = {}
     for which, (model, key) in FIXTURE_ROW_LEDGERS.items():
@@ -1593,13 +1604,84 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
             for row in _staged_rows(files, model, key):
                 by_run.setdefault(row.run_id, []).append(row)
             for run_id, rows in by_run.items():
-                ledger.persist(
-                    state, rows, ledger=which, covers=day, identity=_fixture_writer(run_id)
-                )
+                if which == LedgerName.HOST_FINGERPRINT:
+                    for row in rows:
+                        if not isinstance(row, HostFingerprintRow):
+                            raise TypeError("a host fixture must be a HostFingerprintRow")
+                        if (
+                            day == DATE
+                            and run_id == f"{DATE}-2"
+                            and row.job == ServerJob.WORK
+                            and row.shard == 0
+                        ):
+                            _file_host_halves(state, row)
+                        else:
+                            ledger.persist(
+                                state,
+                                [row],
+                                ledger=which,
+                                covers=day,
+                                identity=_host_fixture_writer(row),
+                            )
+                else:
+                    ledger.persist(
+                        state, rows, ledger=which, covers=day, identity=_fixture_writer(run_id)
+                    )
                 count += len(rows)
         shutil.rmtree(root)
         filed[which] = count
     return filed
+
+
+def _host_fixture_writer(row: HostFingerprintRow) -> WriterIdentity:
+    """The production work unit this fixture host job would write under."""
+    return WriterIdentity(
+        run_id=row.run_id,
+        attempt=SCORE_ATTEMPT,
+        job=row.job,
+        shard=row.shard,
+        producer=silicon.PRODUCER,
+        git_sha=FIXTURE_SHA,
+    )
+
+
+def _file_host_halves(state: Path, row: HostFingerprintRow) -> None:
+    """Replay a validated probe, then let the production clock file its whole row."""
+    probe = HostFingerprintRow.model_validate(row.model_dump() | dict.fromkeys(silicon.CLOCK_CELLS))
+    ledger.persist(
+        state,
+        [probe],
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=row.date,
+        identity=_host_fixture_writer(row),
+    )
+    inputs = state.parent / "fixture-clock" / f"{row.run_id}-{row.job}-{row.shard}"
+    server_log = inputs / "server.log"
+    metrics = inputs / "metrics.prom"
+    write_atomic(server_log, HOST_CLOCK_LOG)
+    write_atomic(metrics, HOST_CLOCK_METRICS)
+    try:
+        silicon.file_job_clock(
+            date=row.date,
+            run_id=row.run_id,
+            settings=config.load(),
+            state_root=state,
+            commit_sha=FIXTURE_SHA,
+            shard=row.shard,
+            job=row.job,
+            attempt=SCORE_ATTEMPT,
+            job_started_at=int(
+                datetime.fromisoformat(f"{row.date}T22:00:00").replace(tzinfo=UTC).timestamp()
+            ),
+            finished_at=f"{row.date}T22:15:00Z",
+            server_log_path=server_log,
+            metrics_path=metrics,
+        )
+    finally:
+        server_log.unlink()
+        metrics.unlink()
+        inputs.rmdir()
+        inputs.parent.rmdir()
 
 
 def _staged_days(root: Path) -> dict[str, list[Path]]:

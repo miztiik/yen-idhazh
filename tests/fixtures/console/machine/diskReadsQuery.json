@@ -1,0 +1,617 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-10",
+      "run_id": "2026-08-10-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 5035253760,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-1",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-17",
+      "run_id": "2026-08-17-2",
+      "item_index": null,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 2699153408,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-18",
+      "run_id": "2026-08-18-1",
+      "item_index": 0,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 5035253760,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-18",
+      "run_id": "2026-08-18-1",
+      "item_index": 0,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 5035253760,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-18",
+      "run_id": "2026-08-18-1",
+      "item_index": 1,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": 5035253760,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "item_index": 0,
+      "llama_major_faults": 148000,
+      "os_mem_cached_bytes": 10200000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "item_index": 0,
+      "llama_major_faults": 148000,
+      "os_mem_cached_bytes": 10200000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "item_index": 1,
+      "llama_major_faults": 1700,
+      "os_mem_cached_bytes": 10200000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "item_index": 0,
+      "llama_major_faults": 148000,
+      "os_mem_cached_bytes": 10400000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "item_index": 0,
+      "llama_major_faults": 148000,
+      "os_mem_cached_bytes": 10400000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "item_index": 0,
+      "llama_major_faults": 148000,
+      "os_mem_cached_bytes": 10400000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "item_index": 0,
+      "llama_major_faults": 148000,
+      "os_mem_cached_bytes": 10400000000,
+      "weights_pinned": false
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "item_index": 1,
+      "llama_major_faults": null,
+      "os_mem_cached_bytes": null,
+      "weights_pinned": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "item_index": 2,
+      "llama_major_faults": 8200,
+      "os_mem_cached_bytes": 6600000000,
+      "weights_pinned": false
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

@@ -172,9 +172,8 @@
 	     be a page claiming the pipeline recorded nothing. -->
 	{#if !workbench}<noscript>
 		<p class="console-noscript" data-console-noscript>
-			The verdict above is in this page. Everything below it is drawn from
-			month files a browser fetches, so with JavaScript off the panels keep
-			their shape and stay empty.
+			Panels drawn from the published record need JavaScript; with it off
+			they keep their shape and stay empty.
 		</p>
 	</noscript>{/if}
 
@@ -186,6 +185,7 @@
 			busy={windowSource.busy}
 			ready={windowSource.ready}
 			statusLine={windowSource.statusLine ?? null}
+			record={windowSource.record ?? null}
 		/>
 	{/if}
 

@@ -105,6 +105,7 @@
 	--chart-7: #e07ce8;
 	--chart-8: #94a3b8;
 	--chart-spread-mix: 0.30;
+	--route-line-reserve: 3;
 
 	--series-1: var(--chart-1);
 	--series-2: var(--chart-2);
@@ -273,6 +274,7 @@
 	--chart-7: #c026d3;
 	--chart-8: #64748b;
 	--chart-spread-mix: 0.30;
+	--route-line-reserve: 3;
 
 	--series-1: var(--chart-1);
 	--series-2: var(--chart-2);

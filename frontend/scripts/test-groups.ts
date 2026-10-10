@@ -9,6 +9,7 @@ export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 
 const FILES: Record<FrontendGroup, readonly string[]> = {
 	console: [
+		'console-built-page', 'console-route-waiting',
 		'console', 'console-article-cost', 'console-axis', 'console-band',
 		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
 		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
@@ -37,6 +38,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-voices-sources', 'console-voices', 'console-window-claims', 'console-window'
 	],
 	logic: [
+		'console-canary-host-halves', 'console-drawn-cells', 'console-panel-queries', 'console-waiting', 'recorded-slices',
 		'console-judgement-nothings',
 		'appearance-config', 'applied-line', 'archive-scope', 'asset-base', 'assist-guard', 'browser-selection', 'chart-types', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'console-data-explorer-address', 'console-data-explorer-cells', 'console-data-explorer-examples', 'console-data-explorer-gaps', 'console-data-explorer-keep', 'console-data-explorer-shape',

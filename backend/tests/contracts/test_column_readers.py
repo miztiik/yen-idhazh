@@ -51,6 +51,15 @@ pytestmark = pytest.mark.contract
 #: the checker must name it.
 A_COLUMN_NOBODY_READS: Final = "a_column_nobody_reads"
 
+#: The five declared query readers, not a walk over a growing frontend tree.
+QUERY_READERS: Final = (
+    "frontend/src/lib/console/queries/shared.ts",
+    "frontend/src/lib/console/queries/pipelines.ts",
+    "frontend/src/lib/console/queries/model.ts",
+    "frontend/src/lib/console/queries/machine.ts",
+    "frontend/src/lib/console/queries/voices.ts",
+)
+
 
 def reader_faults(
     readers: Mapping[str, Sequence[str]],
@@ -164,6 +173,9 @@ def test_a_named_reader_exists_and_still_names_its_columns(
             faults.append(f"{row}: {reader} is named as a reader and does not exist")
             continue
         text = read_text(path)
+        if reader in QUERY_READERS:
+            # A column in a comment or an unrelated helper is not a query read.
+            text = " ".join(re.findall(r"columns:\s*\[([^\]]*)\]", text))
         faults += [
             f"{row}: {reader} is named as the reader of {name} and does not name it"
             for name in columns

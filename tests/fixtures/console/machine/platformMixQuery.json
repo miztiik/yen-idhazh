@@ -1,0 +1,130 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "assemble",
+      "shard": 0,
+      "fingerprint": "3a7f0b1c2d4e5f60",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "job_seconds": null,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "plan",
+      "shard": 0,
+      "fingerprint": "c81d9e0a1b2c3d4e",
+      "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "job_seconds": null,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "work",
+      "shard": 0,
+      "fingerprint": "c81d9e0a1b2c3d4e",
+      "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "job_seconds": 868,
+      "server_prompt_tokens": 1300,
+      "server_prompt_seconds": 117.74
+    },
+    {
+      "date": "2026-08-19",
+      "run_id": "2026-08-19-1",
+      "job": "work",
+      "shard": 1,
+      "fingerprint": "c81d9e0a1b2c3d4e",
+      "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "job_seconds": 851,
+      "server_prompt_tokens": 860,
+      "server_prompt_seconds": 78.18
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "job": "plan",
+      "shard": 0,
+      "fingerprint": "3a7f0b1c2d4e5f60",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "job_seconds": null,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "job": "work",
+      "shard": 0,
+      "fingerprint": "3a7f0b1c2d4e5f60",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "job_seconds": 812,
+      "server_prompt_tokens": 950,
+      "server_prompt_seconds": 80.65
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "job": "work",
+      "shard": 1,
+      "fingerprint": "3a7f0b1c2d4e5f60",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "job_seconds": 795,
+      "server_prompt_tokens": 76,
+      "server_prompt_seconds": 7.29
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "assemble",
+      "shard": 0,
+      "fingerprint": "3a7f0b1c2d4e5f60",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "job_seconds": null,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "plan",
+      "shard": 0,
+      "fingerprint": "3a7f0b1c2d4e5f60",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor",
+      "job_seconds": null,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "work",
+      "shard": 0,
+      "fingerprint": "c81d9e0a1b2c3d4e",
+      "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "job_seconds": 900,
+      "server_prompt_tokens": 1700,
+      "server_prompt_seconds": 73.72
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "job": "work",
+      "shard": 1,
+      "fingerprint": null,
+      "cpu_model": null,
+      "job_seconds": null,
+      "server_prompt_tokens": 962,
+      "server_prompt_seconds": 83.73
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

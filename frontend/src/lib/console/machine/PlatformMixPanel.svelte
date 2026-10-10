@@ -15,10 +15,9 @@
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
-	import { emptyState } from '$lib/charts/d3/empty';
+	import { emptyState, recordEmptyState } from '$lib/charts/d3/empty';
 	import { absentHatch } from '$lib/charts/d3/ordered-colour';
 	import {
-		FLEET_COLUMNS,
 		FLEET_HINT,
 		fleetDots,
 		fleetHintOne,
@@ -33,10 +32,12 @@
 	import { rateWords, type MachineRamp } from '$lib/charts/machine-colour';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
+	import { platformMixQuery } from '$lib/console/queries/machine';
+	import { sliceOnce, windowRange } from '$lib/console/queries/window';
 	import type { LostDay, RecordingNotes } from '$lib/console/recording';
 	import { nameSpan } from '$lib/console/span-words';
 	import type { PanelState } from '$lib/console/waiting';
-	import { ledgerReach, slice, type LedgerFault, type Row } from '$lib/data/ledger';
+	import { ledgerReach, type LedgerFault, type Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
 	import { onMount, tick } from 'svelte';
@@ -88,6 +89,7 @@
 	$effect(() => {
 		const from = start;
 		const to = end;
+		const days = windowDays;
 		const enabled = recording;
 		if (!mounted) return;
 		let current = true;
@@ -109,7 +111,7 @@
 					// The route's own window, which ends on the site's newest published day,
 					// never on this record's newest packed day.
 					span = { start: from, end: to };
-					const answer = await slice('host-fingerprint', { columns: FLEET_COLUMNS, from, to });
+					const answer = await sliceOnce(platformMixQuery, windowRange(days, to, from));
 					if (!current) return;
 					// The door cuts a window that starts before the record began, and names the day it answered from.
 					if (answer.state === 'ok' || answer.state === 'quiet') span = { start: answer.first, end: to };
@@ -128,7 +130,7 @@
 	// Every ledger a panel reads is published, so `missing` is a record with no
 	// compact folder: one that is not packed yet, never one left unpublished.
 	const empty = $derived(
-		panelState === 'loading' ? emptyState('loading')
+		panelState === 'loading' ? recordEmptyState('loading')
 			: panelState === 'missing' ? emptyState('missing', 'The machine record is not packed yet.')
 				: panelState === 'unreachable' ? emptyState('unreachable', 'The machine record could not be read. Reload this page to try again.')
 					: emptyState('quiet', 'No jobs were recorded in this window.')
