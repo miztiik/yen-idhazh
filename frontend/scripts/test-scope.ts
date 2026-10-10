@@ -163,6 +163,8 @@ const UTILITY_TESTS: Record<string, string> = {
 	'backend/utilities/doc_load.py': 'backend/tests/test_doc_load.py'
 };
 export const RUST_PARITY_TEST = 'backend/tests/contracts/test_rust_host_file_parity.py';
+export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
+export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST];
 const HOST_TESTS: Record<string, string[]> = {
 	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
 	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
@@ -172,6 +174,7 @@ const HOST_TESTS: Record<string, string[]> = {
 	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
 	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
 	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
+	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
 	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
 	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py'],
 	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py']
@@ -194,15 +197,15 @@ export function selectPaths(paths: readonly string[]): Selection {
 			reason = 'documentation a test reads';
 		} else if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
 			selected = [];
-		} else if (path.startsWith('backend/rust/host-telemetry/') || path === RUST_PARITY_TEST) {
+		} else if (path.startsWith('backend/rust/host-telemetry/') || RUST_TESTS.includes(path)) {
 			selected = ['backend'];
-			backendFiles.add(RUST_PARITY_TEST);
+			for (const file of RUST_TESTS) backendFiles.add(file);
 			rust = true;
 			reason = 'native Rust module checks and actual cross-language codec fixtures';
 		} else if (Object.hasOwn(HOST_TESTS, path)) {
 			selected = ['backend'];
 			for (const file of HOST_TESTS[path]) backendFiles.add(file);
-			rust ||= HOST_TESTS[path].includes(RUST_PARITY_TEST);
+			rust ||= HOST_TESTS[path].some((file) => RUST_TESTS.includes(file));
 			reason = 'isolated host exchange/verifier tests and declared native consumers';
 		} else if (/^backend\/tests\/(?:[^/]+\/)?test_[^/]+\.py$/.test(path)) {
 			selected = ['backend'];
