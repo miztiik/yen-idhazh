@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-10
 
-**Thirty-nine defects are open.** Five of them need evidence or a ruling before any code
+**Thirty-seven defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -398,37 +398,20 @@ version stops the first check that uses it.
 
 Found by plan 62's row L20 (#1371), and filed on 2026-10-07.
 
-## 61 - Three backend command lines stamp log records in local time (OPEN)
+## 61 - Three backend command lines stamp log records in local time (CLOSED 2026-10-10)
 
-**Three backend command lines stamp each log record with the machine's local
-time, not UTC** (CLAUDE.md section 2). `backend/idhazh/cli.py` line 541,
-`backend/idhazh/gardener/cli.py` line 87 and `backend/idhazh/telemetry/cli.py`
-line 135 set the format `%(asctime)s %(levelname)s %(name)s %(message)s` and
-keep the clock `logging` uses by default, which is local time. The stamp names
-no zone, so nothing on the line says which clock it read. Plan 62's row L7 saw
-it on 2026-10-07: `site-weight` printed 11:46 when it was 09:46 UTC.
+The gardener, pipeline and telemetry commands now format log timestamps in UTC
+with a trailing `Z` (CLAUDE.md section 2). The gardener writes its structured
+events with the record's UTC instant. The pipeline and telemetry entry points
+use the shared standard-library formatter in
+`backend/idhazh/command_logging.py`. It preserves the configured level, stderr
+stream, logger name, level name and message.
 
-**The three do not share one logging setup.** Each command line calls
-`logging.basicConfig` on its own (lines 539, 85 and 133), with the same three
-arguments.
-
-**Doing nothing puts every log time off by its machine's distance from UTC:
-two hours on the machine where row L7 saw it.** A GitHub runner's local time is
-UTC, so a workflow's log is right, and the fault shows only on a machine set to
-another zone, such as a developer's.
-
-**The gardener's part is fixed by plan 60's row "Every gardener log line is one
-JSON event".** `idhazh gardener` and `backend/utilities/gardener_publish.py`
-install one handler through `settings_or_none`, and each line it writes carries
-`at`, the record's own instant in UTC as ISO-8601 with `Z`.
-`backend/tests/gardener/test_event_log.py` pins it under a zone that is not UTC,
-in the test process and in a fresh one. The other two command lines,
-`backend/idhazh/cli.py` and `backend/idhazh/telemetry/cli.py`, still stamp
-local time and need a fix of their own: the records they log carry a UTC time
-and say so, with a test that reads one. Level 1 - the time printed on each log
-line, and a wrong version shows on the first line.
-
-Found by plan 62's row L7 (#1370), and filed on 2026-10-07.
+`backend/tests/test_command_logging.py` starts each real command path in a
+fresh process and sends it the same fixed log record. The pipeline case runs
+under `Pacific/Honolulu`, and the telemetry case under `Europe/Paris`; both
+print the same UTC instant. Both cases fail against a separate copy of
+`origin/main`, which prints local time without a zone.
 
 ## 60 - On open, the data explorer fetches each chosen ledger's three indexes twice (CLOSED 2026-10-08)
 
