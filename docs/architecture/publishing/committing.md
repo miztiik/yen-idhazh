@@ -124,6 +124,12 @@ that main rejected a push. Gardener preserves its logged crash/exit-1 path.
    [`publication_evidence.save`, `read`, `identified` and `confirmed`](../../../backend/utilities/publication_evidence.py)
    retain receipts, check raw identities and construct confirmed writes.
    A receipt proves bytes, not permission.
+   Telemetry projections use the shared observed atomic-write helpers without
+   changing their paths, encoders or skip-if-unchanged rules. Direct file writes
+   bypass observation: a changed projection would be omitted from the receipt
+   and candidate, then refused as foreign local bytes by `published-inputs`.
+   A clean build checkout alone would hide that refusal without publishing the
+   update.
 4. Build
    [`PublicationRequest`](../../../backend/utilities/publication_request.py)
    with exact hashes, independent write/delete permissions and the actual
