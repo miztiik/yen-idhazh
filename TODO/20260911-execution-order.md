@@ -1,6 +1,6 @@
 # Execution order across the five open plans
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-10-10
 
 **What this is.** One schedule over the five plan-docs that are open at once. Each of them proves its own rows do not collide; **nothing proved they do not collide with each other**, and nothing said what an orchestrator may dispatch on any given morning. This document is that answer and nothing else.
 
@@ -30,9 +30,9 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 ## 1. Why the opening wave was seven
 
-**The dispatch list is not here, and no list of ready rows is.** Run `python backend/utilities/plan_status.py --ready` for that answer plus drift; it reads the Reckoners, writes nothing, and cannot go stale because it is derived at the moment you ask. What is worth reading on this page is the REASONING a generator cannot produce: **which rows write the same file**, why a wave is the size it is, and what it costs. [`20260911-handover.md`](20260911-handover.md) is the entry point for an agent arriving with no context.
+**The dispatch list is not here, and no list of ready rows is.** Run `python backend/utilities/plan_status.py --ready` for that answer plus drift; it reads the Reckoners, writes nothing, and cannot go stale because it is derived at the moment you ask. What is worth reading on this page is the REASONING a generator cannot produce: **which rows write the same file**, why a wave is the size it is, and what it costs. [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) owns how to resume work and check a row before dispatch.
 
-**Nineteen rows had every dependency satisfied when this was derived on 2026-09-11, and the recommended opening wave of seven has since landed in full** - plan 23 row `#P1` as pull request #608, plan 24 row `#1` as #609, plan 11 row `#4` as #612, plan 26 row `#2` as #613, plan 26 row `#3` as #614, plan 24 row `#2` as #615 and plan 25 row `#11` as #616. **Not one of the seven updated its own Reckoner line**, which is why [`20260911-handover.md`](20260911-handover.md) makes that update part of the row rather than a step after the merge; #610 flipped the first two and #617 flipped the other five. **The table of ready rows that stood here has been deleted rather than corrected**, because a list of what can start is re-derivable every time it is asked and a page cannot keep it true. The counts below are the counts as derived, and they are kept because the arithmetic about the wave rests on them.
+The opening wave landed. A row's change updates its own Reckoner line, as required by [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md). Read the queue again for current readiness; the counts below describe the original scheduling calculation, not today's work.
 
 **Nineteen were unblocked; seven could run at once.** The other twelve were blocked by a *file*, not by a dependency, and section 3 is where that is proved. **Exactly one of the nineteen collided with nothing else in the set: plan 26 row #2.**
 
@@ -219,13 +219,13 @@ It schedules nothing outside these five plans. Measured 2026-09-11 with `python 
 
 It changes no decision, no oracle, no measurement and no vocabulary in any plan. It moves no row between groups. Where it disagrees with a plan, the plan wins.
 
-**It does not stay true on its own, so refreshing it is part of the row that invalidated it.** Every number here is derived from the plans' Reckoners and file lists on 2026-09-11. A row that widens its file list invalidates section 3; a row that lands invalidates sections 0, 1 and 2. **The row that invalidated a section corrects that section in its own pull request** - saying in a pull request that this page is stale is not updating it, and the next agent reads the page, not the pull request. [`20260911-handover.md`](20260911-handover.md) lists which section goes stale on what.
+These calculations describe the plans' Reckoners and file lists on 2026-09-11. Do not use them as a current dispatch list. Read each active plan's own rows and check their dependencies and shared files per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md).
 
 ---
 
 ## See also
 
-- [`20260911-handover.md`](20260911-handover.md) - **start here with no context.** The queue reader, the reading order, the standing traps, and which section of this page a row has to refresh.
+- [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) - find the page that owns the change.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row in the five plans is written in.
 - The two-call summariser plan - one model, two calls; delivered and removed from TODO/.

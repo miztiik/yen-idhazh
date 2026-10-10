@@ -101,7 +101,8 @@ const trend = dateSeries([{ label: 'Minutes', token: '--chart-1', points: minute
 	frame: frame(760, 220),
 	density: 6,
 	valueTicks: 4,
-	padding: 0.2
+	padding: 0.2,
+	rule: { changes: [], note: null }
 });
 
 /** Every nothing drawn the way `waiting.ts` words it. */

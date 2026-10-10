@@ -155,6 +155,7 @@
     "processor_lost_pct_named": 10.0,
     "shimmer_after_ms": 400,
     "source_rows": 10,
+    "tile_min_px": 8,
     "timeline_bars": 120,
     "today_anchor": "right",
     "window_presets": [

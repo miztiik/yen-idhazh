@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-10
 
-**Status**: Row 1 is merged in PR #1529. Rows 3a and 3 are implemented on `feat/console-judgement-panels`, ready for PR checks and merge: route-owned window tests and truthful retained Judgement evidence. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED.
+**Status**: Rows 1 and 2 are merged in PRs #1529 and #1537. Rows 3a and 3 are implemented on `feat/console-judgement-panels`, ready for PR checks and merge: route-owned window tests and truthful retained Judgement evidence. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -17,6 +17,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 **Owner direction, 2026-10-10.** Row 3 may repair the outgoing Pipelines page's shared-config access and update its renamed reader references in the three shared docs listed in its scope. Visual and colour improvements are approved. Bring concrete speed improvements for a shell UI with no prerender to the owner before changing that architecture; the existing measurement suspension remains in force.
 
 **Structural repair approved, 2026-10-10.** The owner selected A3 after Fowler and Susan's consultation. Row 3a completes route ownership of the shared window tests before row 3 retains existing read-state information and unknown counts through Judgement. This replaces the proposed five-literal exception. Both are ordered Level 3 changes, not new persisted contracts or a no-prerender change. Keep real zero and partial evidence, independent exact expectations, and every existing route and assertion.
+
+**Chart integration authorized, 2026-10-10.** The owner extended row 2 to `frontend/tests/tokens.spec.ts` and `frontend/tests/support/judgement-route.ts`: classify `--chart-spread-mix` as a numeric fraction without a Tailwind utility, and add the three actual chart dependencies to the existing private-build inventory. Keep the independent value checks, the bounded inventory and all existing assertions.
 
 | Field | Value |
 | --- | --- |
@@ -56,7 +58,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Each route gets its own console file, gate drivers and test expectations | - | A | DONE | p52-route-ownership (`feat/console-route-ownership`) | Read from merge | Owner and file workers |
-| 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | PENDING | - | - | - |
+| 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | DONE | p52-chart-contracts (`feat/console-chart-contracts`) | Read from merge | Fowler; Susan S1-S6 |
 | 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | READY: implemented; PR checks and merge pending | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Fowler and owner |
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | READY: implemented; PR checks and merge pending | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Susan, Fowler and owner |
 | 4 | Every panel's question is declared before it is drawn, and the door is measured at the console's real volume | 2 | C | PENDING | - | - | - |
@@ -767,6 +769,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 
 ### Row #2 - The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout
 
+- **Authorized integration repair, 2026-10-10:** the numeric `--chart-spread-mix` belongs to the token test's exact no-utility classification, not an unused colour utility. The private Judgement build names `src/lib/charts/d3/rankedList.ts`, `src/lib/charts/d3/model-rule.ts` and `src/lib/console/series-tokens.ts` as fixed inputs. This does not permit source-tree copying or weaker assertions.
 - **Already carried by plan 55 row 20:** optional readouts for PartsOfOne, TileStrip and Flow; explorer-only native tooltip removal; caller part colours (K2), tile thresholds only with readings (K3), caller tile-state words (K4), and an opt-in shared Flow count verdict for a truthful fallback lede. Every other caller keeps its defaults.
 
 - **Scope:** section 2.5 and the colour table of section 2.4. **No pixel moves**, except that dark `--chart-6` takes its re-tuned value, and no route row edits `frontend/src/lib/charts/d3/` or a shared chart component this row changes afterwards. The settings line's data is row 5's; this row declares `ModelRule` in `frontend/src/lib/charts/d3/model-rule.ts` and makes `dateSeries` take it.
@@ -780,6 +783,7 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   - `config/appearance.json` (`console.tile_min_px`), `backend/idhazh/contracts/knobs/console.py`, `backend/idhazh/contracts/appearance_config.py`, `frontend/src/lib/server/config.ts`, `backend/tests/test_appearance_config.py`, `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
   - `frontend/tests/fixtures/panels/WitnessPanel.svelte`, `frontend/tests/panel-sufficiency.spec.ts` (callers of the new `rule`)
   - `frontend/tests/chart-types.spec.ts` (new), `frontend/scripts/test-groups.ts`
+  - `frontend/tests/tokens.spec.ts` (numeric mix classification only), `frontend/tests/support/judgement-route.ts` (the three fixed chart inputs only; owner-authorized integration repair)
   - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` (the widened ranked list, the settings and checker lines, the named rules, the spread, the log scale, the tile width and the colour table, with Susan's ruling beside each; range marks remain one vocabulary type)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks - **every spec whose page renders a changed component**, which is every console group; `ruff check .`, `pytest backend/tests/test_appearance_config.py`; `python backend/utilities/doc_load.py docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` before and after. CI runs the full suite.
 - **Oracle:** **each change draws what its signature promises, and nothing that drew before draws differently.** Over written-down rows in `chart-types.spec.ts`: a `range` row puts the fill at `value` and the notch at `high`, and below `minCount` draws no mark and ranks last; an `ends` row notches at `end`; `rule: {changes}` puts one line per date inside the frame on the boundary before its column, dashed for `settings` and dotted for `checker`, and writes `data-model-rule="yes"`, and `{declined}` under five words is refused; `opts.rules` draws a named dashed line; a log `distribution` bins by decade; a 90-day `tileStrip` at 390 px draws tiles at least `console.tile_min_px` wide and the overflow line; every type carries `data-chart-type`; `KpiCard` and `FailureList` with no new prop draw what they drew. The pictures of the `BandDistance`, `FailureList`, `ShardBoard` and `MemoryBoard` panels match before and after, apart from dark `--chart-6`. `chart-vocabulary.spec.ts` stays green unchanged. It cannot settle whether a route's panels read well; the route rows' consult does.

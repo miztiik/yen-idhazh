@@ -1,0 +1,103 @@
+{
+  "version": "2026-10-10",
+  "description": "Independent synthetic snapshots for the candidate row contract, not evidence of a running collector.",
+  "snapshots": [
+    {
+      "name": "probe-without-target",
+      "online_ids": [0, 2, 3, 7],
+      "package_core_pairs": [[0, 0], [0, 1], [0, 1], [1, 0]],
+      "valid_observed_mhz": [2000.0, 2400.0, 2800.0],
+      "row": {
+        "version": "2026-10-10",
+        "date": "2026-10-10",
+        "run_id": "2026-10-10-17",
+        "shard": 0,
+        "cpu_physical_cores": 3,
+        "cpu_logical_processors": 4,
+        "cpu_observed_mhz": 2400.0,
+        "cpu_reported_max_mhz": 3600.0,
+        "measured_at": "2026-10-10T12:00:00Z"
+      }
+    },
+    {
+      "name": "fractional-quota-target",
+      "online_ids": [0, 2, 3, 7],
+      "affinity_ids": [2, 3, 7],
+      "effective_cpuset_ids": [0, 2, 7],
+      "quota_us": 50000,
+      "period_us": 100000,
+      "row": {
+        "version": "2026-10-10",
+        "date": "2026-10-10",
+        "run_id": "2026-10-10-17",
+        "shard": 0,
+        "cpu_physical_cores": 3,
+        "cpu_logical_processors": 4,
+        "cpu_allowed_processors": 2,
+        "cpu_quota_cores": 0.5,
+        "cpu_quota_state": "finite",
+        "cpu_target_measured_at": "2026-10-10T12:00:01Z",
+        "cpu_observed_mhz": 2400.0,
+        "cpu_reported_max_mhz": 3600.0,
+        "measured_at": "2026-10-10T12:00:00Z"
+      }
+    },
+    {
+      "name": "verified-unlimited",
+      "row": {
+        "version": "2026-10-10",
+        "date": "2026-10-10",
+        "run_id": "2026-10-10-17",
+        "shard": 0,
+        "cpu_logical_processors": 4,
+        "cpu_allowed_processors": 4,
+        "cpu_quota_state": "unlimited",
+        "cpu_target_measured_at": "2026-10-10T12:00:01Z"
+      }
+    },
+    {
+      "name": "attempted-unavailable-is-not-unlimited",
+      "row": {
+        "version": "2026-10-10",
+        "date": "2026-10-10",
+        "run_id": "2026-10-10-17",
+        "shard": 0,
+        "cpu_quota_state": "unavailable",
+        "cpu_target_measured_at": "2026-10-10T12:00:01Z"
+      }
+    },
+    {
+      "name": "snapshot-changed-preserves-independent-quota",
+      "row": {
+        "version": "2026-10-10",
+        "date": "2026-10-10",
+        "run_id": "2026-10-10-17",
+        "shard": 0,
+        "cpu_quota_cores": 8.0,
+        "cpu_quota_state": "finite",
+        "cpu_target_measured_at": "2026-10-10T12:00:01Z"
+      }
+    }
+  ],
+  "legacy_row": {
+    "version": "2026-09-20",
+    "date": "2026-10-10",
+    "run_id": "2026-10-10-17",
+    "shard": 0,
+    "fingerprint": "6d3aef58c0e544e3",
+    "cpu_vendor": "GenuineIntel",
+    "cpu_family": 6,
+    "cpu_model_number": 143,
+    "cpu_stepping": 8,
+    "cpu_model": "Xeon \u00e9\n\"host\"",
+    "cores": 32,
+    "threads": 4,
+    "l3_cache_bytes": 67108864,
+    "flags": "avx2 avx512f",
+    "mhz_max": 3000.0,
+    "mhz_at_probe": 2500.0,
+    "measured_at": "2026-10-10T12:00:00Z",
+    "memcpy_probe_mib": 512,
+    "job_seconds": 42
+  }
+}

@@ -2,6 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { chartDays } from '../src/lib/server/chart-days';
 import type { RunRecord, RunSummary } from '../src/lib/server/payload';
+import { readChartEvidence } from '../src/lib/chart-evidence';
 
 /** One run of a day, with the planner's counts a case names and nothing else. */
 function run(date: string, n: number, cells: Partial<RunRecord>): RunRecord {
@@ -19,6 +20,7 @@ function run(date: string, n: number, cells: Partial<RunRecord>): RunRecord {
 		decided: 0,
 		prefiltered: 0,
 		chartsDrafted: 0,
+		chartEvidence: null,
 		decisionMs: null,
 		inputs: null,
 		...cells
@@ -28,6 +30,29 @@ function run(date: string, n: number, cells: Partial<RunRecord>): RunRecord {
 function day(date: string, records: RunRecord[]): RunSummary {
 	return { date, runs: records.length, planned: 0, failed: 0, siteBytes: 0, siteFiles: 0, models: [], records };
 }
+
+test('chart evidence keeps unmeasured history separate from measured zero figures', () => {
+	expect(readChartEvidence(undefined)).toBeNull();
+	expect(readChartEvidence(null)).toBeNull();
+	const empty = {
+		displayed_values: 0, derived_values: 0, trusted_values: 0,
+		derived_value_rate: null, trusted_data_ratio: null
+	};
+	expect(readChartEvidence(empty)).toEqual(empty);
+	const measured = {
+		displayed_values: 7, derived_values: 1, trusted_values: 6,
+		derived_value_rate: 1 / 7, trusted_data_ratio: 6 / 7
+	};
+	expect(readChartEvidence(measured)).toEqual(measured);
+	for (const invalid of [
+		{},
+		{ ...empty, derived_value_rate: 0 },
+		{ ...measured, derived_values: 1.5 },
+		{ ...measured, trusted_values: 8 },
+		{ ...measured, derived_value_rate: 1 / 6 },
+		{ ...measured, trusted_data_ratio: null }
+	]) expect(() => readChartEvidence(invalid)).toThrow(/chart_evidence/);
+});
 
 test('a day sums its runs, and only a run that timed the planner adds minutes', () => {
 	const rows = chartDays(

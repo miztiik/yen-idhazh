@@ -1,6 +1,6 @@
 # Where every drawn figure came from
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-10
 
 Every number a reader reads off an axis has exactly one of two origins, and this
 page is the whole of that promise: it is characters the article itself wrote, or
@@ -173,19 +173,43 @@ gains a legal role, which is a stamp that says less than it appears to.
 ## The two rates, and why both
 
 `derived_value_rate` is the **narrowness** alarm: what share of the figures on a page code computed
-rather than the article wrote. `trusted_data_ratio` is the **correctness** alarm: what share resolves
-at all, against the table it claims to come from. A build can move either without moving the other,
-which is why both are reported. The closed allow-list and the separate rate are the only two things
-keeping this contract narrow, and skipping either loses the guarantee unnoticed.
+rather than the article wrote. `trusted_data_ratio` measures **source-reference coverage**:
+what share names an element in the source table, or a derived value whose every
+input names one. It does not prove numeric or semantic correctness. The compiler
+and the validator still enforce those rules. A build can move either rate without
+moving the other, which is why both are reported.
 
 Both are `None` over an empty set rather than zero. A rate over nothing is not zero, and a day whose
 planner drew no charts reads as a perfect score under the other convention.
 
-**Neither is wired to a surface, and that is a named seam rather than an oversight.** Nothing resolves
-a plan into figures on the daily path yet, because the compiler that would is plan 12's. They ship as
-functions over a resolved set with bounded tests; the run manifest is where a per-run rate belongs,
-beside `charts_drafted` and `items_prefiltered`, and it gains the two columns on the day the compiler
-produces resolved sets. A field nobody writes is worse than a seam somebody named.
+The compiler measures the numeric sequence it actually puts into the chart.
+For bars, that is the quantity channel: one figure per bar. Category names,
+unused encodings, and repeated label or annotation references add no figures.
+The same resolution supplies the marks, the alternative text and the evidence.
+Reporting never resolves the plan again and never calls a model.
+
+`ChartEvidence` in `backend/idhazh/contracts/chart_evidence.py` holds
+`displayed_values`, `derived_values`, `trusted_values`, `derived_value_rate`
+and `trusted_data_ratio`. The decision carries it as `chart_evidence`.
+The compiler retains each numeric mark's source element or derived chain in
+the published chart data; counts do not replace that evidence.
+
+Assembly sums counts from charts that survive on the final day, then divides
+once. It never averages chart percentages. Only rendered, uncollapsed cards
+written by this run qualify. A revision belongs to `updated_by_run`, otherwise
+to `introduced_by_run`. Failed writes, refused plans, unpublished items and
+charts carried from another run add nothing.
+
+The run manifest records the totals in each run's `chart_evidence`. The
+[monthly run-days report](console-payloads.md#the-producers) copies that field
+unchanged. The existing frontend manifest reader returns it as `chartEvidence`.
+There is no separate dashboard or evidence ledger.
+
+A missing field on an old payload means unknown. If any eligible chart lacks
+measured evidence or a matching rendered decision, the entire run's evidence
+is null. Do not publish a partial rate as the run's rate. A measured run with
+no eligible numeric figures has three zero counts and two null rates. It is
+distinct from an unmeasured run. Earlier run records are not remeasured.
 
 `sum` is the one function the resolver does not reach today: no type in the vocabulary draws a total.
 It is here, tested and complete, because shipping the list four short of its own definition would be

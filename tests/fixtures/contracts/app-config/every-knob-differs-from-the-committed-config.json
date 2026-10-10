@@ -226,6 +226,7 @@
     "processor_lost_pct_named": 25.0,
     "shimmer_after_ms": 400,
     "source_rows": 4,
+    "tile_min_px": 10,
     "timeline_bars": 60,
     "today_anchor": "centre",
     "window_presets": [

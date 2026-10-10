@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { rankedGeometry } from '$lib/charts/d3/rankedList';
 	/** What the model did, and nothing else.
 	 *
 	 * It is one of the console's three routes. The band and the strip above are
@@ -1028,7 +1029,7 @@
 				<div class="mt-3" data-model-doubt-list>
 					<RankedList
 						caption="Sources in {nameSpan(windowDays)}, most doubted summaries first"
-						ranked={doubtRanked}
+						geometry={rankedGeometry(doubtRanked)}
 						maxText="{grouped(doubtRanked.max)} doubted {doubtRanked.max === 1
 							? 'summary'
 							: 'summaries'}"

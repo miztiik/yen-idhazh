@@ -64,7 +64,8 @@
 		noRuleReason,
 		width,
 		height,
-		readoutMaxShare = 1
+		readoutMaxShare = 1,
+		domain
 	}: {
 		times: Distribution;
 		/** What this instance is of, so a page with two can tell them apart. */
@@ -86,6 +87,7 @@
 		height: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
+		domain?: [number, number];
 	} = $props();
 
 	/** Room for the count axis, the percent axis and the two rule labels. */
@@ -111,8 +113,18 @@
 	 * everything under a second and has no lower edge to place, so it borrows
 	 * half its upper one - which is the same doubling as every other bar.
 	 */
-	const lowEdge = $derived(times.bins[0].from === 0 ? times.bins[0].to / 2 : times.bins[0].from);
-	const highEdge = $derived(times.bins[times.bins.length - 1].to);
+	const extent = $derived.by((): [number, number] => {
+		const low = times.bins[0].from === 0 ? times.bins[0].to / 2 : times.bins[0].from;
+		const high = times.bins[times.bins.length - 1].to;
+		if (domain === undefined) return [low, high];
+		if (!Number.isFinite(domain[0]) || !Number.isFinite(domain[1]) ||
+			domain[0] <= 0 || domain[0] >= domain[1] || domain[0] > low || domain[1] < high) {
+			throw new Error('The time histogram domain must be positive and contain every bin.');
+		}
+		return domain;
+	});
+	const lowEdge = $derived(extent[0]);
+	const highEdge = $derived(extent[1]);
 
 	function x(seconds: number): number {
 		const held = Math.min(Math.max(seconds, lowEdge), highEdge);
