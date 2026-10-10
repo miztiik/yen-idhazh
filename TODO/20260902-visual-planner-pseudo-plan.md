@@ -1818,16 +1818,6 @@ index, not the plan.
 
 | # | Plan-doc | Delivers, on its own |
 |---|---|---|
-| 01 | [The chart stops being invisible](20260905-01-visible-chart-plan.md) | A chart a reader can actually read, in both themes |
-| 02 | ["Route" leaves the repository](20260905-02-retire-the-route-name-plan.md) | One word for the stage, in every identifier and every sentence |
-| 03 | [The console shows the numbers already in the repo](20260905-03-console-backfill-plan.md) | Every committed number becomes visible, for every past run |
-| 04 | [The site cannot fill up](20260905-04-site-cap-defence-plan.md) | A published site that stays inside the platform's 1 GB |
-| 05 | [Where the time actually goes](20260905-05-span-tree-plan.md) | The span tree, a per-shard rollup, and the first answer on model idle time |
-| 06 | [Fewer, better articles](20260905-06-fewer-better-articles-plan.md) | Feed reliability in the score, and a duplicate cut before it costs a model call |
-| 07 | [Better summaries](20260905-07-better-summaries-plan.md) | The prompt loop, per-band key-point caps, and the new-fact rate |
-| 08 | [Every fact in an article, with the characters that prove it](20260905-08-element-table-plan.md) | The element table - a queryable fact table over every article |
-| 09 | [The runtime stops guessing which model it was tuned for](20260905-09-pin-the-runtime-plan.md) | A runtime whose settings are pinned to the weights they were measured on |
-| 10 | [A plan that cannot draw a number the article did not state](20260905-10-visual-plan-contract-plan.md) | The visual plan contract and its validator |
 | 11 | One model, two calls (delivered) | One set of weights instead of two, and the cache saving that comes with it |
 | 12 | [Visuals a reader can read](20260905-12-readable-visuals-plan.md) | Inline SVG, both themes resolving, full-width reflow |
 | 13 | [Deletion switched on](20260905-13-switch-on-deletion-plan.md) | Retention that actually deletes, with a visible backlog |

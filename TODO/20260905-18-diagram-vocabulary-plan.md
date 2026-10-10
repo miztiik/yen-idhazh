@@ -188,4 +188,4 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md) - the previous plan.
 - [`20260905-19-visual-telemetry-plan.md`](20260905-19-visual-telemetry-plan.md) - the next plan.
-- [`20260905-08-element-table-plan.md`](20260905-08-element-table-plan.md) - where the first two potential classes landed.
+- [Article elements](../docs/architecture/extraction/elements.md) - the extracted facts and their source characters.

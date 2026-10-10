@@ -1,6 +1,6 @@
 # What llama-server reports about its own runtime settings
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-10-10
 Which of the runtime settings we pin the server will confirm back, and through
 which surface - the log, `/props` or `/metrics`.
 
@@ -14,14 +14,13 @@ whole model-loader block is missing.
 
 So a check that flash attention is ACTIVE, rather than that a flag was accepted,
 is writable today. It costs one flag on the server and about 15 KB of log per
-server start. This is the instrument
-[row 3 of the runtime plan](../../../TODO/20260905-09-pin-the-runtime-plan.md) was
-held on - its section 1a reads "the instrument does not exist" - and the same
-flag hands row 4 the KV-buffer and compute-buffer lines it needs. The hold
-itself is not lifted by this page: the row's other trigger is memory, which this
-page has nothing to say about, and the build tested here is not the pinned one.
+server start. The same flag exposes the KV-buffer and compute-buffer lines.
+This instrument reports what the server enabled; it does not prove that a
+different model or context size fits in memory. The current per-model settings
+and their weights binding are documented in
+[the model boundary](../../architecture/summarize/model-boundary.md).
 
-**Both were lifted on the runner, and this instrument is what read them.** Run
+**The pinned runner build confirmed the log format.** Run
 `2026-09-09-34379502244` at `log_verbosity: 4` wrote 1,306 log lines a shard
 against 342 to 404 at verbosity 3, and the KV-buffer line was among them. One
 correction from that run: on build 10598 the named state is

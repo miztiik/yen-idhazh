@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -990,10 +990,6 @@ panel, or write the sentence saying why it is not a measurement.
 Where each one is drawn is recorded in
 [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md);
 this page stays about what the columns mean.
-
-Authority: row 4 of
-[../../TODO/20260905-03-console-backfill-plan.md](../../TODO/20260905-03-console-backfill-plan.md),
-2026-09-06.
 
 Historical duplicate rows are not rewritten by the lookup migration. It
 preserves their legacy IDs and adds their current three-part measurement keys.

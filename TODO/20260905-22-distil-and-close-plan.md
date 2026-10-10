@@ -116,5 +116,5 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes, and which this plan deletes.
 - [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md) - the previous plan.
-- [`20260905-01-visible-chart-plan.md`](20260905-01-visible-chart-plan.md) - the first plan of the group.
+- [The published frontend](../docs/architecture/publishing/frontend.md) - the delivered chart carrier and day loading.
 - [`../docs/how-to/distill-a-plan.md`](../docs/how-to/distill-a-plan.md) - the closure ritual this plan follows.

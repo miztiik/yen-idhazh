@@ -181,4 +181,4 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md) - the previous plan.
 - [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md) - the next plan.
-- [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - where the Derived Value contract was written.
+- [Where every drawn figure came from](../docs/architecture/publishing/where-every-drawn-figure-came-from.md) - the arithmetic contract and its source evidence.

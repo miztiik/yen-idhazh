@@ -122,4 +122,4 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the previous plan.
 - [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md) - the next plan.
-- [`20260905-04-site-cap-defence-plan.md`](20260905-04-site-cap-defence-plan.md) - where the measurement and the reporting were built.
+- [Site weight](../docs/reference/site-weight.md) - the capacity check and its reporting.
