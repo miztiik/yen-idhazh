@@ -121,6 +121,13 @@ Fowler ruled that disjoint modules can be written in parallel after their tested
 prerequisite contracts. The owner integrates one whole row before main merges;
 dependent leaf branches are not independent release units.
 
+Fowler approved sharing compilation of the nine fixed native contract
+expressions when repeated receipt validation made local recovery checks costly.
+Each expression has one standard-library initialization slot. Unknown expressions
+remain uncached. The predicates, error results and every validation call remain;
+the registry cannot grow from input. Original-result and concurrent-reuse tests
+hold this structural change separately from receipt behaviour.
+
 A forged compressed-string fixture exposed allocation before an old
 post-decode check. Bounded actual-page admission fixes that boundary. Apache
 Thrift supplies compact-protocol primitives and cramjam supplies bounded raw
