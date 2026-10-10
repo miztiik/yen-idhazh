@@ -258,7 +258,7 @@ class SourceCoverage(ExchangeModel):
         if self.observed > self.expected:
             raise ValueError("observed coverage exceeds expected coverage")
         if self.status == "complete":
-            if self.observed != self.expected or self.reason is not None:
+            if self.expected == 0 or self.observed != self.expected or self.reason is not None:
                 raise ValueError("complete coverage needs every expected input and no reason")
         elif self.reason is None:
             raise ValueError("unavailable or partial coverage needs a typed reason")
@@ -290,6 +290,10 @@ class CpuDiagnostics(ExchangeModel):
             raise ValueError("CPU diagnostics require each of the seven declared sources once")
         if any(source.reason is UnavailableReason.DISABLED for source in self.sources):
             raise ValueError("the memory switch cannot disable CPU sources")
+        online = next(source for source in self.sources if source.source is CaptureSource.ONLINE)
+        if self.online_cpu_ids or online.status == "complete":
+            if online.status != "complete" or online.observed != len(self.online_cpu_ids):
+                raise ValueError("online inventory requires matching positive complete coverage")
         return self
 
 
@@ -494,8 +498,13 @@ class HostResultBody(ExchangeModel):
         ):
             if getattr(self.row, name) is not None:
                 evidence = sources[source]
-                if evidence.status != "complete":
+                if evidence.status != "complete" or evidence.observed == 0:
                     raise ValueError(f"{name} requires complete source coverage")
+                if source in (CaptureSource.TOPOLOGY, CaptureSource.CPUFREQ) and (
+                    not self.cpu.online_cpu_ids
+                    or sources[CaptureSource.ONLINE].status != "complete"
+                ):
+                    raise ValueError(f"{name} requires a validated nonempty online inventory")
         if self.row.cpu_allowed_processors is not None:
             cpuset = sources.get(CaptureSource.CPUSET)
             if cpuset is None or cpuset.status != "complete":

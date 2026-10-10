@@ -8,7 +8,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Annotated, Any, get_args, get_origin
+from typing import Annotated, Any, Literal, get_args, get_origin
 from uuid import uuid4
 
 import pytest
@@ -19,8 +19,11 @@ from idhazh.contracts import host_events
 from idhazh.contracts.host_events import (
     MEMORY_SOURCES,
     WINDOW_CELL_SOURCES,
+    CaptureSource,
     CollectionControls,
+    CpuDiagnostics,
     HostEvent,
+    HostResultBody,
     HostSessionManifest,
     HostWindowCells,
     LegacyJobSample,
@@ -30,7 +33,7 @@ from idhazh.contracts.host_events import (
     UnavailableReason,
     WindowResultBody,
 )
-from idhazh.contracts.host_output import INT64_MAX
+from idhazh.contracts.host_output import INT64_MAX, CorrectedHostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.telemetry.host import HostCells
 from utilities import memory_sampler
@@ -245,6 +248,7 @@ def test_memory_off_nulls_only_memory_and_fault_cells() -> None:
         {"source": "invented"},
         {"observed": True},
         {"expected": INT64_MAX + 1},
+        {"expected": 0, "observed": 0},
     ],
 )
 def test_source_coverage_is_finite_and_consistent(change: dict[str, Any]) -> None:
@@ -393,3 +397,91 @@ def test_contract_has_no_reverse_transport_collector_or_verifier_imports() -> No
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("idhazh."):
             assert node.module is not None and node.module.startswith("idhazh.contracts.")
+
+
+@pytest.mark.parametrize(
+    ("field", "source", "value"),
+    [
+        ("cpu_physical_cores", CaptureSource.TOPOLOGY, 1),
+        ("cpu_reported_max_mhz", CaptureSource.CPUFREQ, 3200.0),
+    ],
+)
+@pytest.mark.parametrize("online_ids", [(), (0, 2)])
+def test_positive_cpu_measurements_cannot_claim_zero_or_unvalidated_coverage(
+    field: str, source: CaptureSource, value: int | float, online_ids: tuple[int, ...]
+) -> None:
+    row = CorrectedHostFingerprintRow.model_validate(
+        {
+            "version": "2026-10-10", "date": "2026-10-10",
+            "run_id": "2026-10-10-123456789", "shard": 0, field: value,
+        }
+    )
+    sources = [
+        {
+            "source": name,
+            "status": "complete" if name == source else "unavailable",
+            "expected": len(online_ids) if name != source else 0,
+            "observed": 0,
+            "reason": None if name == source else "missing",
+        }
+        for name in (
+            CaptureSource.ONLINE, CaptureSource.TOPOLOGY, CaptureSource.CPUINFO,
+            CaptureSource.CPUFREQ, CaptureSource.AFFINITY, CaptureSource.CPUSET, CaptureSource.QUOTA,
+        )
+    ]
+    with pytest.raises(ValidationError, match=r"complete coverage|online inventory"):
+        HostResultBody.model_validate(
+            {
+                "row": row,
+                "cpu": {"online_cpu_ids": online_ids, "sources": sources},
+                "completion_event_ids": (uuid4(),),
+            }
+        )
+
+
+@pytest.mark.parametrize("status", ["complete", "partial", "unavailable"])
+def test_online_inventory_cannot_disagree_with_its_source_coverage(
+    status: Literal["complete", "partial", "unavailable"],
+) -> None:
+    names = (
+        CaptureSource.ONLINE, CaptureSource.TOPOLOGY, CaptureSource.CPUINFO,
+        CaptureSource.CPUFREQ, CaptureSource.AFFINITY, CaptureSource.CPUSET, CaptureSource.QUOTA,
+    )
+    sources = [
+        SourceCoverage(
+            source=name, status=status if name == CaptureSource.ONLINE else "unavailable",
+            expected=3,
+            observed=(3 if status == "complete" else 1 if status == "partial" else 0)
+            if name == CaptureSource.ONLINE else 0,
+            reason=None if name == CaptureSource.ONLINE and status == "complete" else UnavailableReason.MISSING,
+        )
+        for name in names
+    ]
+    with pytest.raises(ValidationError, match="online inventory"):
+        CpuDiagnostics(online_cpu_ids=(0, 2), sources=tuple(sources))
+
+
+def test_positive_cpu_measurements_accept_real_nonempty_complete_coverage() -> None:
+    names = (
+        CaptureSource.ONLINE, CaptureSource.TOPOLOGY, CaptureSource.CPUINFO,
+        CaptureSource.CPUFREQ, CaptureSource.AFFINITY, CaptureSource.CPUSET, CaptureSource.QUOTA,
+    )
+    measured = {CaptureSource.ONLINE, CaptureSource.TOPOLOGY, CaptureSource.CPUFREQ}
+    cpu = CpuDiagnostics(
+        online_cpu_ids=(0, 2),
+        sources=tuple(
+            SourceCoverage(
+                source=name, expected=2, observed=2 if name in measured else 0,
+                status="complete" if name in measured else "unavailable",
+                reason=None if name in measured else UnavailableReason.MISSING,
+            )
+            for name in names
+        ),
+    )
+    row = CorrectedHostFingerprintRow(
+        version="2026-10-10", date="2026-10-10", run_id="2026-10-10-123456789", shard=0,
+        cpu_physical_cores=1, cpu_logical_processors=2, cpu_reported_max_mhz=3200.0,
+    )
+    result = HostResultBody(row=row, cpu=cpu, completion_event_ids=(uuid4(),))
+    assert result.row.cpu_physical_cores == 1
+    assert result.row.cpu_reported_max_mhz == 3200.0

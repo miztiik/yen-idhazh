@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import inspect
+import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Literal
@@ -25,6 +26,7 @@ from idhazh.contracts.host_events import (
     ProtocolFaultCode,
     SourceCoverage,
     UnavailableReason,
+    WriteCompletedBody,
 )
 from idhazh.contracts.host_output import (
     CandidateFileEnvelope,
@@ -140,9 +142,11 @@ def generated_plan(
     command: HostEvent,
     *,
     clock: int = 1791633601000,
+    day: str | None = None,
     **row_cells: Any,
 ) -> HostWritePlan:
     session = files.manifest
+    day = day or session.date
     identity = HostWriterIdentity(
         run_id=session.run_id,
         attempt=session.attempt,
@@ -151,15 +155,15 @@ def generated_plan(
         producer="telemetry.silicon",
         git_sha=session.git_sha,
     )
-    unit = host_unit_id(covers=session.date, identity=identity)
+    unit = host_unit_id(covers=day, identity=identity)
     row = HostStoredRow.model_validate(
         {
-            "date": session.date,
+            "date": day,
             "run_id": session.run_id,
             "job": session.job,
             "shard": session.shard,
             "ledger": "host-fingerprint",
-            "covers": session.date,
+            "covers": day,
             "attempt": session.attempt,
             "unit_id": str(unit),
             "measured_at": "2026-10-10T12:00:00Z",
@@ -173,7 +177,7 @@ def generated_plan(
             "row_schema_version": row.version,
             "tier": "raw",
             "ledger": "host-fingerprint",
-            "covers": session.date,
+            "covers": day,
             "written_at_ms": clock,
             "identity": identity,
             "unit_id": unit,
@@ -187,7 +191,7 @@ def generated_plan(
     planned = HostPlannedFile(
         envelope=envelope,
         format=Format.JSON,
-        relative_path=f"raw/host-fingerprint/{session.date.replace('-', '/')}/{file_id}.json",
+        relative_path=f"raw/host-fingerprint/{day.replace('-', '/')}/{file_id}.json",
         rows=(row,),
     )
     return HostWritePlan(
@@ -660,6 +664,47 @@ def test_local_monotonic_ticks_are_strict(bad: Any, tmp_path: Path) -> None:
         files.bookkeeping.accept(event, now_ms=bad)
 
 
+def publish_completion(
+    files: HostEventFiles,
+    plan: HostWritePlan,
+    *,
+    monitor_sequence: int,
+    now_ms: int,
+    indices: tuple[int, ...] | None = None,
+) -> HostEvent:
+    writes = {}
+    for index in range(len(plan.files)) if indices is None else indices:
+        planned = plan.files[index]
+        physical = files.project_root / plan.target_root / planned.relative_path
+        physical.parent.mkdir(parents=True, exist_ok=True)
+        raw = json_lines.render(
+            (row.model_dump(mode="json") for row in planned.rows),
+            envelope=planned.envelope.as_metadata(),
+        )
+        if physical.exists():
+            assert physical.read_bytes() == raw
+        else:
+            physical.write_bytes(raw)
+        writes[f"{plan.target_root}/{planned.relative_path}"] = hashlib.sha256(
+            physical.read_bytes()
+        ).hexdigest()
+    completion = HostWriteCompletion.model_validate(
+        {
+            "event_id": plan.event_id,
+            "receipt": {"identity": plan.publication_identity, "writes": writes},
+        }
+    )
+    completed = message(
+        files.manifest,
+        "host.write.completed",
+        {"completion": completion},
+        sequence=monitor_sequence,
+        reply_to=plan.event_id,
+    )
+    files.publish(completed, now_ms=now_ms)
+    return completed
+
+
 def publish_host_successor(
     files: HostEventFiles,
     command: HostEvent,
@@ -681,35 +726,10 @@ def publish_host_successor(
         ),
         now_ms=now_ms,
     )
+    completed = publish_completion(
+        files, plan, monitor_sequence=monitor_sequence + 1, now_ms=now_ms
+    )
     planned = plan.files[0]
-    physical = files.project_root / plan.target_root / planned.relative_path
-    physical.write_bytes(
-        json_lines.render(
-            (row.model_dump(mode="json") for row in planned.rows),
-            envelope=planned.envelope.as_metadata(),
-        )
-    )
-    completion = HostWriteCompletion.model_validate(
-        {
-            "event_id": command.event_id,
-            "receipt": {
-                "identity": plan.publication_identity,
-                "writes": {
-                    f"{plan.target_root}/{planned.relative_path}": hashlib.sha256(
-                        physical.read_bytes()
-                    ).hexdigest()
-                },
-            },
-        }
-    )
-    completed = message(
-        session,
-        "host.write.completed",
-        {"completion": completion},
-        sequence=monitor_sequence + 1,
-        reply_to=command.event_id,
-    )
-    files.publish(completed, now_ms=now_ms)
     row = CorrectedHostFingerprintRow.model_validate(
         {name: getattr(planned.rows[0], name) for name in CorrectedHostFingerprintRow.model_fields}
     )
@@ -745,7 +765,7 @@ def test_target_then_clock_enrich_the_same_real_unit_without_remeasuring_cpu(
         emitter="operator",
         sequence=2,
     )
-    target_cells = {
+    target_cells: dict[str, Any] = {
         "cpu_allowed_processors": 1,
         "cpu_quota_state": "unlimited",
         "cpu_target_measured_at": "2026-10-10T12:00:01Z",
@@ -983,3 +1003,412 @@ def test_single_shard_cannot_declare_conflicting_model_server_targets() -> None:
     data["workers"][1]["server"]["start_ticks"] += 1
     with pytest.raises(ValidationError, match="selected model server"):
         HostSessionManifest.model_validate(data)
+
+
+@pytest.mark.parametrize("order", ["begin_first", "abort_first", "abort_only", "after_stop"])
+def test_abort_before_opening_ack_resolves_begin_and_retains_both_responses(
+    tmp_path: Path, order: str
+) -> None:
+    files = store(tmp_path)
+    ready(files)
+    register(files)
+    session = files.manifest
+    opening = message(session, "window.begin", window_body(session), emitter="worker-0", sequence=2)
+    abort = message(
+        session,
+        "window.abort",
+        {**window_body(session), "reason": "work_failed"},
+        emitter="worker-0",
+        sequence=3,
+    )
+    files.publish(opening, now_ms=2)
+    files.publish(abort, now_ms=3)
+    requests = (opening, abort) if order == "begin_first" else (abort, opening)
+    responses = []
+    sequence = 3
+    for request in requests:
+        if request == opening and order in ("abort_only", "after_stop"):
+            continue
+        response = message(
+            session,
+            "window.result",
+            result_body(session, abort=True),
+            sequence=sequence,
+            reply_to=request.event_id,
+        )
+        files.publish(response, now_ms=4)
+        responses.append(response)
+        sequence += 1
+    stop = message(session, "monitor.stop", {"reason": "completed"}, emitter="operator")
+    files.publish(stop, now_ms=5)
+    stopped = message(
+        session,
+        "monitor.stopped",
+        {"drained": True, "aborted_window_ids": (session.windows[0].window_id,)},
+        sequence=sequence,
+        reply_to=stop.event_id,
+    )
+    files.publish(stopped, now_ms=6)
+    if order == "after_stop":
+        late = message(
+            session,
+            "window.result",
+            result_body(session, abort=True),
+            sequence=sequence + 1,
+            reply_to=opening.event_id,
+        )
+        files.publish(late, now_ms=7)
+        responses.append(late)
+    begin_replies = files.read_event(opening.event_id, "inbox", now_ms=8).replies
+    abort_replies = files.read_event(abort.event_id, "inbox", now_ms=8).replies
+    assert begin_replies
+    assert abort_replies == tuple(response for response in responses if response.reply_to == abort.event_id)
+    assert set(begin_replies) | set(abort_replies) == set(responses)
+    for response in responses:
+        assert files.publish(response, now_ms=9).replayed
+        assert files.event_path(response.event_id, "results").read_bytes() == event_bytes(response)
+    for event in (opening, abort, *responses):
+        files.bookkeeping.mark_consumed(event.event_id)
+    retired = set(files.retire(opening.event_id, now_ms=10000))
+    if order == "begin_first":
+        assert retired == {opening.event_id, responses[0].event_id}
+        retired.update(files.retire(abort.event_id, now_ms=10000))
+    assert retired == {opening.event_id, abort.event_id, *(response.event_id for response in responses)}
+    assert files.read_event(stop.event_id, "inbox", now_ms=10001).replies == (stopped,)
+
+
+@pytest.mark.parametrize("encoding", ["native", "reordered"])
+def test_native_and_noncanonical_utf8_lf_events_keep_original_immutable_bytes(
+    tmp_path: Path, encoding: str
+) -> None:
+    files = store(tmp_path)
+    session = files.manifest
+    worker = session.workers[0]
+    startup = message(
+        session, "monitor.ready", {"boot_id": session.boot_id, "supported_version": session.version}
+    )
+    command = message(
+        session,
+        "worker.register",
+        {"target": worker.target, "server": worker.server},
+        emitter=worker.emitter_id,
+    )
+    ack = message(session, "worker.registered", command.body, sequence=2, reply_to=command.event_id)
+    named: list[tuple[HostEvent, Literal["inbox", "results"]]] = [
+        (startup, "results"), (command, "inbox"), (ack, "results")
+    ]
+    accepted_bytes = {}
+    for event, direction in named:
+        raw = (
+            event.model_dump_json().encode("utf-8") + b"\n"
+            if encoding == "native"
+            else json.dumps(
+                dict(reversed(list(event.model_dump(mode="json").items()))),
+                indent=2,
+                ensure_ascii=False,
+            ).encode("utf-8") + b"\n"
+        )
+        assert raw != event_bytes(event)
+        path = files.event_path(event.event_id, direction)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        assert files.read_event(event.event_id, direction, now_ms=0).event == event
+        accepted_bytes[event.event_id] = raw
+    assert files.bookkeeping.total_bytes == sum(map(len, accepted_bytes.values()))
+    assert files.read_event(command.event_id, "inbox", now_ms=1).replies == (ack,)
+    path = files.event_path(command.event_id, "inbox")
+    path.write_bytes(event_bytes(command))
+    with pytest.raises(HostProtocolError) as fault:
+        files.read_event(command.event_id, "inbox", now_ms=2)
+    assert fault.value.code is ProtocolFaultCode.DUPLICATE
+    path.write_bytes(accepted_bytes[command.event_id])
+    with pytest.raises(HostProtocolError) as fault:
+        files.publish(command, now_ms=2)
+    assert fault.value.code is ProtocolFaultCode.DUPLICATE
+    for event, direction in named:
+        assert files.event_path(event.event_id, direction).read_bytes() == accepted_bytes[event.event_id]
+        files.bookkeeping.mark_consumed(event.event_id)
+    assert files.retire(command.event_id, now_ms=10000) == (command.event_id, ack.event_id)
+    assert files.retire(startup.event_id, now_ms=10000) == (startup.event_id,)
+    path.write_bytes(accepted_bytes[command.event_id])
+    with pytest.raises(HostProtocolError) as fault:
+        files.read_event(command.event_id, "inbox", now_ms=10001)
+    assert fault.value.code is ProtocolFaultCode.RETIRED
+
+
+def two_day_plan(
+    files: HostEventFiles, command: HostEvent, *, clock: int = 1791633601000,
+    first_cells: dict[str, Any] | None = None, second_cells: dict[str, Any] | None = None,
+) -> HostWritePlan:
+    first = generated_plan(files, command, clock=clock, **(first_cells or {}))
+    second = generated_plan(files, command, clock=clock, day="2026-10-11", **(second_cells or {}))
+    return HostWritePlan.model_validate(first.model_dump() | {"files": (*first.files, *second.files)})
+
+
+def host_command(
+    files: HostEventFiles, kind: str, *, sequence: int, previous: HostEvent | None = None,
+) -> HostEvent:
+    return message(
+        files.manifest, kind,
+        {
+            "controls": files.manifest.controls,
+            "input_names": (),
+            "target": files.bookkeeping.cpu_target,
+            "previous_result_id": previous.event_id if previous is not None else None,
+        },
+        emitter="operator", sequence=sequence,
+    )
+
+
+def consume_exchange(files: HostEventFiles, command: HostEvent, *, now_ms: int) -> None:
+    replies = files.read_event(command.event_id, "inbox", now_ms=now_ms).replies
+    for event in (command, *replies):
+        files.bookkeeping.mark_consumed(event.event_id)
+    files.retire(command.event_id, now_ms=now_ms + files.manifest.limits.retry_window_ms)
+
+
+@pytest.mark.parametrize("completed_index", [0, 1])
+@pytest.mark.parametrize("attack", ["same_path", "rollback"])
+def test_partial_two_day_skip_keeps_each_completed_file_constraints_after_retirement(
+    tmp_path: Path, completed_index: int, attack: str
+) -> None:
+    files = store(tmp_path)
+    ready(files)
+    probe = host_command(files, "host.probe", sequence=1)
+    original = two_day_plan(files, probe)
+    first = publish_host_successor(
+        files, probe, original, cpu_evidence(), monitor_sequence=2, now_ms=1
+    )
+    consume_exchange(files, probe, now_ms=2)
+    partial_command = host_command(files, "host.clock", sequence=2, previous=first)
+    partial = two_day_plan(
+        files, partial_command, clock=1791633602000,
+        first_cells={"job_seconds": 1}, second_cells={"job_seconds": 2},
+    )
+    files.publish(partial_command, now_ms=6000)
+    plan_event = message(
+        files.manifest, "host.write.plan", {"plan": partial}, sequence=5,
+        reply_to=partial_command.event_id,
+    )
+    files.publish(plan_event, now_ms=6000)
+    completed = publish_completion(
+        files, partial, monitor_sequence=6, now_ms=6000, indices=(completed_index,)
+    )
+    skipped = message(
+        files.manifest, "instrument.skipped",
+        {
+            "command_kind": "host.clock",
+            "unavailable": ({"source": "clock.log", "reason": "missing"},),
+            "completion_event_ids": (completed.event_id,),
+        },
+        sequence=7, reply_to=partial_command.event_id,
+    )
+    files.publish(skipped, now_ms=6000)
+    physical = tmp_path / partial.target_root / partial.files[completed_index].relative_path
+    immutable = physical.read_bytes()
+    consume_exchange(files, partial_command, now_ms=6001)
+    retry = host_command(files, "host.clock", sequence=3, previous=first)
+    files.publish(retry, now_ms=12000)
+    candidate = two_day_plan(
+        files, retry, clock=1791633603000,
+        first_cells={"job_seconds": 3}, second_cells={"job_seconds": 3},
+    )
+    bad_file = (
+        generated_plan(
+            files, retry, clock=1791633602000,
+            day=partial.files[completed_index].rows[0].date, job_seconds=3,
+        ).files[0]
+        if attack == "same_path" else original.files[completed_index]
+    )
+    invalid_files = list(candidate.files)
+    invalid_files[completed_index] = bad_file
+    invalid = HostWritePlan.model_validate(candidate.model_dump() | {"files": invalid_files})
+    invalid_event = message(
+        files.manifest, "host.write.plan", {"plan": invalid}, sequence=8,
+        reply_to=retry.event_id,
+    )
+    with pytest.raises(ValueError, match="strictly later clock"):
+        files.publish(invalid_event, now_ms=12000)
+    assert not files.event_path(invalid_event.event_id, "results").exists()
+    assert physical.read_bytes() == immutable
+    valid_files = list(candidate.files)
+    valid_files[completed_index] = partial.files[completed_index]
+    valid = HostWritePlan.model_validate(candidate.model_dump() | {"files": valid_files})
+    result = publish_host_successor(
+        files, retry, valid, cpu_evidence(), monitor_sequence=8, now_ms=12000
+    )
+    assert isinstance(result.body, HostResultBody)
+    assert result.body.row.job_seconds == (1 if completed_index == 0 else 3)
+    assert physical.read_bytes() == immutable
+    replies = files.read_event(retry.event_id, "inbox", now_ms=12001).replies
+    assert len(replies) == 3
+    assert isinstance(replies[1].body, WriteCompletedBody)
+    assert set(replies[1].body.completion.receipt.writes) == {
+        f"{valid.target_root}/{file.relative_path}" for file in valid.files
+    }
+
+
+@pytest.mark.parametrize("kind", ["host.clock", "host.target"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_two_day_command_ownership_matches_every_unit_not_file_position(
+    tmp_path: Path, kind: str, reverse: bool
+) -> None:
+    files = store(tmp_path)
+    ready(files)
+    register(files)
+    probe = host_command(files, "host.probe", sequence=1)
+    initial = two_day_plan(files, probe)
+    first = publish_host_successor(
+        files, probe, initial, cpu_evidence(), monitor_sequence=3, now_ms=2
+    )
+    command = host_command(files, kind, sequence=2, previous=first)
+    target_cells: dict[str, Any] = {
+        "cpu_allowed_processors": 1,
+        "cpu_quota_state": "unlimited",
+        "cpu_target_measured_at": "2026-10-10T12:00:01Z",
+    }
+    candidate = two_day_plan(
+        files, command, clock=1791633602000,
+        first_cells={"job_seconds": 1} if kind == "host.clock" else target_cells,
+        second_cells=target_cells if kind == "host.clock" else {"job_seconds": 1},
+    )
+    if reverse:
+        candidate = HostWritePlan.model_validate(
+            candidate.model_dump() | {"files": tuple(reversed(candidate.files))}
+        )
+    files.publish(command, now_ms=3)
+    plan_event = message(
+        files.manifest, "host.write.plan", {"plan": candidate}, sequence=6,
+        reply_to=command.event_id,
+    )
+    with pytest.raises(HostProtocolError, match="another instrument"):
+        files.publish(plan_event, now_ms=3)
+    assert not files.event_path(plan_event.event_id, "results").exists()
+    valid = two_day_plan(
+        files, command, clock=1791633602000,
+        first_cells={"job_seconds": 1} if kind == "host.clock" else target_cells,
+        second_cells={"job_seconds": 2} if kind == "host.clock" else target_cells,
+    )
+    valid_event = message(
+        files.manifest, "host.write.plan", {"plan": valid}, sequence=6,
+        reply_to=command.event_id,
+    )
+    files.publish(valid_event, now_ms=3)
+    assert files.read_event(command.event_id, "inbox", now_ms=4).replies == (valid_event,)
+
+
+def test_targetless_probe_cannot_publish_selected_manifest_target_cells(tmp_path: Path) -> None:
+    files = store(tmp_path)
+    ready(files)
+    session = files.manifest
+    command = message(
+        session, "host.probe", {"controls": session.controls, "input_names": (), "target": None},
+        emitter="operator",
+    )
+    files.publish(command, now_ms=1)
+    invalid = two_day_plan(
+        files, command,
+        second_cells={
+            "cpu_allowed_processors": 1, "cpu_quota_state": "unlimited",
+            "cpu_target_measured_at": "2026-10-10T12:00:01Z",
+        },
+    )
+    plan_event = message(
+        session, "host.write.plan", {"plan": invalid}, sequence=2, reply_to=command.event_id
+    )
+    with pytest.raises(HostProtocolError) as fault:
+        files.publish(plan_event, now_ms=1)
+    assert fault.value.code is ProtocolFaultCode.TARGET
+    assert not files.event_path(plan_event.event_id, "results").exists()
+    valid = generated_plan(files, command)
+    first = publish_host_successor(
+        files, command, valid, cpu_evidence(), monitor_sequence=2, now_ms=1
+    )
+    assert isinstance(first.body, HostResultBody)
+    assert first.body.cpu.target is None
+    assert first.body.row.cpu_target_measured_at is None
+    enrichment = host_command(files, "host.target", sequence=2, previous=first)
+    with pytest.raises(HostProtocolError, match="registration ACK"):
+        files.publish(enrichment, now_ms=2)
+    register(files, monitor_sequence=5)
+    target_cells: dict[str, Any] = {
+        "cpu_allowed_processors": 1, "cpu_quota_state": "unlimited",
+        "cpu_target_measured_at": "2026-10-10T12:00:01Z",
+    }
+    enriched_plan = generated_plan(files, enrichment, clock=1791633602000, **target_cells)
+    original_cpu = cpu_evidence()
+    target_cpu = CpuDiagnostics(
+        online_cpu_ids=original_cpu.online_cpu_ids, target=session.cpu_target,
+        sources=tuple(
+            SourceCoverage(source=source.source, status="complete", expected=1, observed=1)
+            if source.source in {CaptureSource.AFFINITY, CaptureSource.CPUSET, CaptureSource.QUOTA}
+            else source
+            for source in original_cpu.sources
+        ),
+    )
+    enriched = publish_host_successor(
+        files, enrichment, enriched_plan, target_cpu, monitor_sequence=6, now_ms=3
+    )
+    assert isinstance(enriched.body, HostResultBody)
+    assert enriched.body.cpu.target == session.cpu_target
+    assert enriched.body.row.cpu_allowed_processors == 1
+
+
+def test_probe_result_target_stays_bound_to_command_when_registration_arrives(
+    tmp_path: Path,
+) -> None:
+    data = manifest_data()
+    data.update(cpu_target=None, cpu_target_role="unselected")
+    session = HostSessionManifest.model_validate(data)
+    files = HostEventFiles(tmp_path, session)
+    ready(files)
+    command = host_command(files, "host.probe", sequence=1)
+    plan = generated_plan(files, command)
+    files.publish(command, now_ms=1)
+    plan_event = message(
+        session, "host.write.plan", {"plan": plan}, sequence=2, reply_to=command.event_id
+    )
+    files.publish(plan_event, now_ms=1)
+    completed = publish_completion(files, plan, monitor_sequence=3, now_ms=1)
+    register(files, monitor_sequence=4)
+    target = files.bookkeeping.cpu_target
+    assert target == session.workers[0].server and target is not None
+    original = cpu_evidence()
+    captured = CpuDiagnostics(
+        online_cpu_ids=original.online_cpu_ids, target=target,
+        sources=tuple(
+            SourceCoverage(source=source.source, status="complete", expected=1, observed=1)
+            if source.source in {CaptureSource.AFFINITY, CaptureSource.CPUSET, CaptureSource.QUOTA}
+            else source
+            for source in original.sources
+        ),
+    )
+    row = CorrectedHostFingerprintRow.model_validate(
+        {
+            name: getattr(plan.files[0].rows[0], name)
+            for name in CorrectedHostFingerprintRow.model_fields
+        }
+        | {
+            "cpu_allowed_processors": 1, "cpu_quota_state": "unlimited",
+            "cpu_target_measured_at": "2026-10-10T12:00:01Z",
+        }
+    )
+    forged = message(
+        session, "host.result",
+        HostResultBody(row=row, cpu=captured, completion_event_ids=(completed.event_id,)),
+        sequence=5, reply_to=command.event_id,
+    )
+    with pytest.raises(HostProtocolError) as fault:
+        files.publish(forged, now_ms=2)
+    assert fault.value.code is ProtocolFaultCode.TARGET
+    assert not files.event_path(forged.event_id, "results").exists()
+    valid_row = CorrectedHostFingerprintRow.model_validate(
+        {name: getattr(plan.files[0].rows[0], name) for name in CorrectedHostFingerprintRow.model_fields}
+    )
+    valid = message(
+        session, "host.result",
+        HostResultBody(row=valid_row, cpu=original, completion_event_ids=(completed.event_id,)),
+        sequence=5, reply_to=command.event_id,
+    )
+    files.publish(valid, now_ms=2)
+    assert files.read_event(command.event_id, "inbox", now_ms=3).replies == (plan_event, completed, valid)

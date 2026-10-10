@@ -34,7 +34,14 @@ from idhazh.contracts.host_events import (
     WriteCompletedBody,
     WritePlanBody,
 )
-from idhazh.contracts.host_output import INT64_MAX
+from idhazh.contracts.host_output import INT64_MAX, HostPlannedFile, HostWritePlan
+
+_CLOCK_FIELDS = frozenset(
+    {"model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"}
+)
+_TARGET_FIELDS = frozenset(
+    {"cpu_allowed_processors", "cpu_quota_cores", "cpu_quota_state", "cpu_target_measured_at"}
+)
 
 
 class HostProtocolError(ValueError):
@@ -103,6 +110,7 @@ class HostSessionBookkeeping:
         self.manifest = HostSessionManifest.model_validate(manifest.model_dump(mode="json"))
         self._events: dict[UUID, HostEvent] = {}
         self._digests: dict[UUID, str] = {}
+        self._sizes: dict[UUID, int] = {}
         self._sequences: dict[str, int] = {}
         self._replies: dict[UUID, tuple[UUID, ...]] = {}
         self._terminal: set[UUID] = set()
@@ -113,8 +121,10 @@ class HostSessionBookkeeping:
         self._windows: dict[UUID, str] = {}
         self._window_opened: dict[UUID, str] = {}
         self._aborted: set[UUID] = set()
+        self._cancelled_begins: set[UUID] = set()
         self._plans: dict[UUID, WritePlanBody] = {}
         self._completions: dict[UUID, WriteCompletedBody] = {}
+        self._completed_files: dict[UUID, tuple[HostWritePlan, HostPlannedFile]] = {}
         self._last_host: HostEvent | None = None
         self._last_plan: WritePlanBody | None = None
         self._phase = "starting"
@@ -136,13 +146,18 @@ class HostSessionBookkeeping:
     def _restore(self, checkpoint: dict[str, Any]) -> None:
         self.__dict__.update(checkpoint)
 
-    def accept(self, event: HostEvent, *, now_ms: int) -> EventAcceptance:
+    def accept(
+        self, event: HostEvent, *, now_ms: int, raw: bytes | None = None
+    ) -> EventAcceptance:
         """Identical retries return retained replies; failures leave every state unchanged."""
         _tick(now_ms)
         event = HostEvent.model_validate(event.model_dump(mode="json"))
         if now_ms < self._now_ms:
             _refuse(ProtocolFaultCode.ORDER, "local monotonic time moved backwards")
-        raw = event_bytes(event)
+        if raw is None:
+            raw = event_bytes(event)
+        elif HostEvent.model_validate(_decode(raw)) != event:
+            _refuse(ProtocolFaultCode.IDENTITY, "accepted bytes differ from the typed event")
         digest = hashlib.sha256(raw).hexdigest()
         if event.event_id in self._digests:
             if self._digests[event.event_id] != digest:
@@ -178,6 +193,7 @@ class HostSessionBookkeeping:
             self._transition(event)
             self._events[event.event_id] = event
             self._digests[event.event_id] = digest
+            self._sizes[event.event_id] = len(raw)
             self._sequences[event.emitter_id] = event.sequence
             self._received_at[event.event_id] = now_ms
             if event.reply_to is not None:
@@ -268,18 +284,71 @@ class HostSessionBookkeeping:
                 ids and ids[-1] > manifest.capture_limits.max_cpu_id
             ):
                 _refuse(ProtocolFaultCode.BOUNDS, "CPU evidence exceeds declared ID bounds")
-            if body.cpu.target is not None and body.cpu.target != self._cpu_target:
-                _refuse(ProtocolFaultCode.TARGET, "CPU result captured another PID/start ticks")
 
-    def _request(self, event: HostEvent, kinds: set[str]) -> HostEvent:
+    def _request(
+        self, event: HostEvent, kinds: set[str], *, cancelled_begin: bool = False
+    ) -> HostEvent:
         request = self._events.get(event.reply_to) if event.reply_to is not None else None
-        if request is None or request.kind not in kinds or request.event_id in self._terminal:
+        if (
+            request is None
+            or request.kind not in kinds
+            or (
+                request.event_id in self._terminal
+                and not (cancelled_begin and request.event_id in self._cancelled_begins)
+            )
+        ):
             _refuse(ProtocolFaultCode.STATE, "reply has no matching unfinished command")
         assert request is not None
         if isinstance(event.body, WindowBody) and isinstance(request.body, WindowBody):
             if event.body.window_id != request.body.window_id:
                 _refuse(ProtocolFaultCode.IDENTITY, "reply names another window")
         return request
+
+    @staticmethod
+    def _owned_cells(before: HostPlannedFile, after: HostPlannedFile, kind: str) -> None:
+        allowed = (
+            _CLOCK_FIELDS
+            if kind == "host.clock"
+            else _TARGET_FIELDS
+            if kind == "host.target"
+            else ()
+        )
+        row = before.rows[0]
+        if any(
+            getattr(row, name) != getattr(after.rows[0], name)
+            for name in type(row).model_fields
+            if name not in allowed
+        ):
+            _refuse(ProtocolFaultCode.STATE, "host command changed another instrument's cells")
+
+    def _completed_successor(self, plan: HostWritePlan, kind: str) -> None:
+        current = {file.envelope.unit_id: file for file in plan.files}
+        if not self._completed_files.keys() <= current.keys():
+            _refuse(ProtocolFaultCode.IDENTITY, "successor omitted a completed work unit")
+        for unit, (previous, old) in self._completed_files.items():
+            new = current[unit]
+            before = previous.model_copy(update={"files": (old,)})
+            after = plan.model_copy(update={"files": (new,)})
+            if new.envelope.content_sha256 == old.envelope.content_sha256:
+                # Other days may change under a new command; this completed file may not.
+                after = after.model_copy(update={"event_id": before.event_id})
+            after.validate_successor(before)
+            self._owned_cells(old, new, kind)
+
+    def _resolve_cancelled_begin(self, event: HostEvent, window_id: UUID) -> None:
+        for pending in self._events.values():
+            if (
+                pending.kind == "window.begin"
+                and isinstance(pending.body, WindowBody)
+                and pending.body.window_id == window_id
+                and pending.event_id not in self._terminal
+            ):
+                self._terminal.add(pending.event_id)
+                self._cancelled_begins.add(pending.event_id)
+                self._replies[pending.event_id] = (
+                    *self._replies.get(pending.event_id, ()),
+                    event.event_id,
+                )
 
     def _transition(self, event: HostEvent) -> None:
         body, kind = event.body, event.kind
@@ -289,7 +358,8 @@ class HostSessionBookkeeping:
                 _refuse(ProtocolFaultCode.IDENTITY, "readiness phase or boot identity conflicts")
             self._phase = "ready"
             return
-        if self._phase == "starting" or self._phase == "stopped":
+        late_begin_failure = kind == "window.result" and event.reply_to in self._cancelled_begins
+        if self._phase == "starting" or (self._phase == "stopped" and not late_begin_failure):
             _refuse(ProtocolFaultCode.STATE, "monitor is not ready or has stopped")
         if kind in COMMAND_KINDS and self._phase == "stopping":
             _refuse(ProtocolFaultCode.STATE, "monitor is draining; new commands are refused")
@@ -340,6 +410,7 @@ class HostSessionBookkeeping:
             request = self._request(
                 event,
                 {"window.begin", "window.end", "window.abort", "monitor.stop"},
+                cancelled_begin=True,
             )
             assert isinstance(body, WindowResultBody)
             state = self._windows.get(body.window_id)
@@ -347,7 +418,11 @@ class HostSessionBookkeeping:
                 if state not in ("opening", "begun", "closing", "aborting"):
                     _refuse(ProtocolFaultCode.STATE, "stop result has no unresolved window")
             elif request.kind == "window.begin":
-                if state != "aborting" and not (self._phase == "stopping" and state == "opening"):
+                if (
+                    state != "aborting"
+                    and not (state == "complete" and body.window_id in self._aborted)
+                    and not (self._phase == "stopping" and state == "opening")
+                ):
                     _refuse(ProtocolFaultCode.STATE, "begin failure requires abort or shutdown")
             elif state != ("closing" if request.kind == "window.end" else "aborting"):
                 _refuse(ProtocolFaultCode.STATE, "window result has no closing/abort command")
@@ -363,8 +438,12 @@ class HostSessionBookkeeping:
                 self._aborted.add(body.window_id)
             if request.kind != "window.begin" or state != "aborting":
                 self._windows[body.window_id] = "complete"
+                if request.kind in ("window.abort", "monitor.stop"):
+                    self._resolve_cancelled_begin(event, body.window_id)
             if request.kind != "monitor.stop":
                 self._terminal.add(request.event_id)
+            if request.kind == "window.begin":
+                self._cancelled_begins.discard(request.event_id)
         elif kind.startswith("host.") and kind in COMMAND_KINDS:
             assert isinstance(body, HostCommandBody)
             if any(
@@ -403,31 +482,24 @@ class HostSessionBookkeeping:
                 _refuse(ProtocolFaultCode.IDENTITY, "plan has another publication invocation")
             if request.event_id in self._plans:
                 _refuse(ProtocolFaultCode.DUPLICATE, "command already has an immutable plan")
+            assert isinstance(request.body, HostCommandBody)
+            if request.body.target is None and any(
+                getattr(file.rows[0], name) is not None
+                for file in plan.files
+                for name in _TARGET_FIELDS
+            ):
+                _refuse(ProtocolFaultCode.TARGET, "targetless command requires null target cells")
             if self._last_plan is not None:
                 plan.validate_successor(self._last_plan.plan)
-                before = self._last_plan.plan.files[0].rows[0]
-                after = plan.files[0].rows[0]
-                clock_fields = {
-                    "model_load_ms",
-                    "job_seconds",
-                    "server_prompt_tokens",
-                    "server_prompt_seconds",
+                prior_files = {
+                    file.envelope.unit_id: file for file in self._last_plan.plan.files
                 }
-                target_fields = {
-                    "cpu_allowed_processors",
-                    "cpu_quota_cores",
-                    "cpu_quota_state",
-                    "cpu_target_measured_at",
-                }
-                allowed = clock_fields if request.kind == "host.clock" else target_fields
-                if any(
-                    getattr(before, name) != getattr(after, name)
-                    for name in type(before).model_fields
-                    if name not in allowed
-                ):
-                    _refuse(
-                        ProtocolFaultCode.STATE, "host command changed another instrument's cells"
-                    )
+                prior_files.update(
+                    {unit: file for unit, (_, file) in self._completed_files.items()}
+                )
+                for file in plan.files:
+                    self._owned_cells(prior_files[file.envelope.unit_id], file, request.kind)
+            self._completed_successor(plan, request.kind)
             self._plans[request.event_id] = body
         elif kind == "host.write.completed":
             request = self._request(event, {"host.probe", "host.target", "host.clock"})
@@ -452,6 +524,10 @@ class HostSessionBookkeeping:
             ):
                 _refuse(ProtocolFaultCode.STORE, "completion lost/changed earlier evidence")
             self._completions[event.event_id] = body
+            for file in plan_body.plan.files:
+                path = f"{plan_body.plan.target_root}/{file.relative_path}"
+                if path in body.completion.receipt.writes:
+                    self._completed_files[file.envelope.unit_id] = (plan_body.plan, file)
         elif kind in ("host.result", "instrument.skipped"):
             request = self._request(event, {"host.probe", "host.target", "host.clock"})
             assert isinstance(body, (HostResultBody, InstrumentSkippedBody))
@@ -469,6 +545,15 @@ class HostSessionBookkeeping:
             if set(body.completion_event_ids) != expected_references:
                 _refuse(ProtocolFaultCode.STORE, "result omitted earlier completed-file evidence")
             if isinstance(body, HostResultBody):
+                assert isinstance(request.body, HostCommandBody)
+                if body.cpu.target is not None and body.cpu.target != request.body.target:
+                    _refuse(ProtocolFaultCode.TARGET, "CPU result captured another command target")
+                if request.body.target is None and any(
+                    getattr(body.row, name) is not None for name in _TARGET_FIELDS
+                ):
+                    _refuse(
+                        ProtocolFaultCode.TARGET, "targetless command requires null target cells"
+                    )
                 plan_body = self._plans.get(request.event_id)
                 if plan_body is None:
                     _refuse(ProtocolFaultCode.STATE, "host result requires a write plan")
@@ -547,6 +632,27 @@ class HostSessionBookkeeping:
             if event_id not in self._terminal:
                 _refuse(ProtocolFaultCode.STATE, "unfinished command cannot be retired")
             group = (event_id, *self._replies.get(event_id, ()))
+            # Cancellation evidence can resolve both begin and abort/stop. Retain it together.
+            members = set(group)
+            while True:
+                related = {
+                    command
+                    for command, replies in self._replies.items()
+                    if members.intersection(replies)
+                }
+                expanded = members | related | {
+                    reply for command in related for reply in self._replies[command]
+                }
+                if expanded == members:
+                    break
+                members = expanded
+            if any(
+                member not in self._terminal
+                for member in members
+                if self._events[member].kind in COMMAND_KINDS
+            ):
+                _refuse(ProtocolFaultCode.STATE, "unfinished related command cannot be retired")
+            group = (*group, *sorted(members - set(group), key=str))
         elif event.reply_to is not None:
             _refuse(ProtocolFaultCode.STATE, "retire replies with their triggering command")
         else:
@@ -567,9 +673,11 @@ class HostSessionBookkeeping:
             self._received_at.pop(member)
             self._consumed.discard(member)
             self._completions.pop(member, None)
-        self._replies.pop(event_id, None)
-        self._plans.pop(event_id, None)
-        self._terminal.discard(event_id)
+            self._sizes.pop(member, None)
+            self._replies.pop(member, None)
+            self._plans.pop(member, None)
+            self._terminal.discard(member)
+            self._cancelled_begins.discard(member)
         # Digests/sequences remain as bounded tombstones: retirement never permits ID reuse.
         return group
 
@@ -674,7 +782,7 @@ class HostEventFiles:
         event = HostEvent.model_validate(_decode(raw))
         if event.event_id != event_id or (event.kind in COMMAND_KINDS) != (direction == "inbox"):
             _refuse(ProtocolFaultCode.IDENTITY, "event ID or kind contradicts the named file")
-        return self.bookkeeping.accept(event, now_ms=now_ms)
+        return self.bookkeeping.accept(event, now_ms=now_ms, raw=raw)
 
     def read_input(self, name: str) -> bytes:
         declared = next((entry for entry in self.manifest.named_inputs if entry.name == name), None)
@@ -737,7 +845,11 @@ class HostEventFiles:
                 "inbox" if event.kind in COMMAND_KINDS else "results"
             )
             path = self.event_path(member, direction)
-            if self._bounded_read(path, len(event_bytes(event))) != event_bytes(event):
+            raw = self._bounded_read(path, self.bookkeeping._sizes[member])
+            if (
+                len(raw) != self.bookkeeping._sizes[member]
+                or hashlib.sha256(raw).hexdigest() != self.bookkeeping._digests[member]
+            ):
                 _refuse(ProtocolFaultCode.DUPLICATE, "retirement found changed immutable evidence")
             paths.append(path)
         for path in paths:
