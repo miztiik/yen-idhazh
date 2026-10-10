@@ -68,6 +68,18 @@ checks exact downloaded artifacts, executed raw identities and independently
 declared case roots before invoking the same publisher. Empty artifacts publish
 nothing; committed UUID collisions and foreign local bytes are refused.
 
+Encoder comparison uses `encoder_publish.py`. Collection still runs when
+`commit_readings` is false; only publication is skipped. The adapter confirms
+the downloaded pair set, the generated manifest and two reading files, and
+logs named by the selected config slugs. Other dataset files are not staged.
+The ignore rule allows logs only under `corpus/encoder-comparison-1/logs/`;
+scratch logs elsewhere remain ignored.
+Reused pairs retain unselected saved readings. These comparison files are
+replaceable: unrelated main changes can be kept, but a changed target refuses
+the whole stale comparison with exit 1. Artifacts remain available on refusal.
+The publisher uses the caller's commit message unchanged, with no added
+attribution tags.
+
 ## The deadline bounds retries
 
 `config/push-retry.json` supplies monotonic job deadlines and configured backoff.
@@ -98,7 +110,9 @@ that main rejected a push. Gardener preserves its logged crash/exit-1 path.
    [`digest_publish.py`](../../../backend/utilities/digest_publish.py),
    [`record_publish.py`](../../../backend/utilities/record_publish.py) for
    measure, validate and vector backfill, and
-   [`pipeline_test_publish.py`](../../../backend/utilities/pipeline_test_publish.py).
+   [`pipeline_test_publish.py`](../../../backend/utilities/pipeline_test_publish.py),
+   or [`encoder_publish.py`](../../../backend/utilities/encoder_publish.py) for
+   a comparison's replaceable files.
    These already cover more than the three daily workflows.
 2. Declare the writer's owned paths and ledger prefixes independently of its
    output. Use the ledger registry's

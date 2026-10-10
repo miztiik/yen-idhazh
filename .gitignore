@@ -58,6 +58,8 @@ backend/var/
 # Scratch
 .tmp_*
 *.log
+# Completed encoder comparison logs are part of its declared result.
+!corpus/encoder-comparison-1/logs/*.log
 
 # Resume checkpoints and trial runs for the supplied-URL collection. The durable
 # outputs beside it - the manifest, the extractions and the selections - are not
