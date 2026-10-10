@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-10
 
-**Thirty-seven defects are open.** Five of them need evidence or a ruling before any code
+**Thirty-six defects are open.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -34,8 +34,9 @@ Fowler's review of plan 60: a page names a test that two pull requests deleted.
 Defects 56 to 58 were filed the same day: three tests that each failed once in
 the checks of plan 60's row 7 and passed when run again. The runs' own records
 settle 56, and show that 57 was a page that stopped drawing, not a slow runner;
-57 needed evidence too, because one stall is not enough to find its cause,
-until a second stall came in main's own checks on 2026-10-08. Defect 59 was
+57 needed evidence too, until a second stall came in main's own checks on
+2026-10-08. It closed on 2026-10-10 when the test driver stopped waiting on
+the page animation clock and visited each mounted visual article instead. Defect 59 was
 filed on 2026-10-05 by plan 60's row 10: reading named
 days of a ledger that the ledger door files lists every raw day folder the ledger
 holds. Defect 60 was filed on 2026-10-07 by plan 62's row L10: on open, the data
@@ -123,7 +124,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 54 | The first squash that rewrites history may not fit in its 30-minute job | 2 | **OPEN - due 2026-10-29: raise the limit, or time one replay first** |
 | 55 | The query-door page names a deleted test, so nothing may hold the rule it states | 2 | **OPEN - find the test that holds the rule, or restore one over named config** |
 | 56 | A byte-range test counts a correct 304 as a failure | 1 | FIXED 2026-10-06 (PR #1354) |
-| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | **OPEN - two stalls seen in CI; a row to fix it is now due** |
+| 57 | A day page stopped drawing during a browser test, and the test waited three minutes for it | 2 | CLOSED 2026-10-10 (the test driver visits each visual article without the page animation clock) |
 | 58 | A ledger test expects an order for two runs written in the same millisecond | 1 | CLOSED 2026-10-09 (plan 60 row 44) |
 | 59 | Reading named days of a door ledger lists every raw day folder the ledger holds | 2 | **OPEN - one function; costs little until a ledger packed report-only grows** |
 | 60 | On open, the data explorer fetches each chosen ledger's three indexes twice | 1 | CLOSED 2026-10-08 (PR #1435) |
@@ -501,7 +502,7 @@ duplicates; the mapping exposes missing runs and stale attempts. The test
 does not sort loaded rows or claim an order between independent runs.
 Plan 60 row 44 closes this Level 1 test defect.
 
-## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (OPEN)
+## 57 - A day page stopped drawing during a browser test, and the test waited three minutes for it (CLOSED 2026-10-10)
 
 **One browser test waited out its whole 180-second limit for a page that had
 stopped drawing.** "Every drawn string resolves to a size on a 390 px screen"
@@ -538,16 +539,23 @@ in CI opens a row.
 minutes and a re-run.** How often that is, nobody knows: it has been seen
 twice in CI, on 2026-10-04 and on 2026-10-08.
 
-**The next move is a worker's: make the stall come back where it can be
-watched.** Run this one test a few hundred times with Playwright's
-`--repeat-each`. At 1.6 seconds a run, 400 runs take about 11 minutes, an
-estimate. A stall caught that way shows whether a page script or the browser
-stopped. If none comes back, a second stall in CI opens a row, as defect 51
-does. The first run's trace is kept in its `playwright-traces` artifact until
-2026-10-11, and the second run's artifact expires on 2026-10-15. A raised
-timeout or a retry would hide the stall, not explain it (CLAUDE.md
-Guardrail #5). Level 2 - the fix is in the day page or in a helper that three
-specs share.
+**Closed on 2026-10-10.** `revealDayDrawings` snapshots the mounted rendered
+articles and lets Playwright visit each current slot, unless a figure is
+already present. A viewport assertion observes each stable article before the
+driver leaves it, so the final visit cannot be undone by returning to the top
+before the browser observes it. Top restoration is synchronous. The final
+network-idle wait and stable SVG-count check remain. The returned count now
+names visual candidates inspected, not screens traversed.
+
+The bounded DOM Oracle uses real `IntersectionObserver`, three off-screen
+slots and one already drawn article, with no network. A throwing
+`requestAnimationFrame` sentinel refuses the old helper in a separate base
+copy. The new helper inspects all four candidates, draws each once, restores
+`scrollY` to zero and makes no requests. This removes the stalled page clock
+from the test driver; it does not explain why Chromium stopped producing
+frames in either CI run. Product lazy loading, fixtures, timeouts and retries
+are unchanged. Level 2 - item-visual, canaries and whole-day depend on the
+helper and are checked by name.
 
 Found by plan 60's row 7 (#1286), whose checks went red three times with three
 different tests, and filed on 2026-10-04. Seen again on 2026-10-08 in main's
