@@ -61,6 +61,12 @@ Use grammar-constrained decoding derived from the declared reply model. Refuse u
 
 The completion prompts are rendered explicitly. The second extends the first prompt and its validated reply instead of reconstructing a chat-message array. Keep the calls adjacent on the same slot so another item cannot evict the shared prefix.
 
+The label reply still declares `keyphrases` and `lede_sentence_ids`, although
+neither has a downstream consumer. The user deferred their removal. This is
+not a requirement to retain them permanently or proof of their runtime cost.
+Reopening the change requires updating the reply shape and its readers and
+checking summary and visual behavior together.
+
 ### Every instruction sits in front of the article
 
 Put shared instructions in one stable system turn: element labels, summary rules and visual-plan rules. Keep only item-dependent requests, such as the chosen word range, in the continuation. Derive requested field names from the reply shape.
