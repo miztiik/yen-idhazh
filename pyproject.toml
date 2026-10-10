@@ -99,6 +99,12 @@ dependencies = [
     # inside the spread between runs, and 12 s at the widest. pyarrow 25.0.1
     # declares no dependencies of its own, so it moves no version already there.
     "pyarrow>=21",
+    # Admit actual host Parquet pages before Arrow allocates rows. Apache Thrift
+    # supplies the compact protocol; cramjam supplies bounded raw Snappy output.
+    # Windows CPython 3.14: 2,210,224 wheel bytes (Thrift built locally),
+    # 5,668,229 installed bytes; cached task-venv install 20.50 s (one run).
+    "thrift==0.25.0",
+    "cramjam==2.13.0",
 ]
 
 [project.optional-dependencies]
@@ -238,6 +244,10 @@ ignore_missing_imports = true
 # untyped inside the one module that imports it, and nowhere else.
 [[tool.mypy.overrides]]
 module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["thrift", "thrift.*", "cramjam", "cramjam.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
