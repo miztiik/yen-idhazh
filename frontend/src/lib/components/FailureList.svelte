@@ -39,6 +39,7 @@
 	import { countDays } from '$lib/console/span-words';
 	import ChartReadout from './ChartReadout.svelte';
 	import RankedList from './RankedList.svelte';
+	import { rankedGeometry } from '$lib/charts/d3/rankedList';
 	import Sparkline from './Sparkline.svelte';
 
 	let {
@@ -47,9 +48,10 @@
 		selectedCode,
 		max,
 		sourceMax,
-		readoutMaxShare
+		readoutMaxShare,
+		stages
 	}: {
-		rows: TelemetryRow[];
+		rows: (TelemetryRow & { failed_rule?: string })[];
 		window: TimeWindow;
 		selectedCode: string | null;
 		max: number;
@@ -58,16 +60,26 @@
 		sourceMax: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
+		stages?: { options: readonly string[]; chosen: string };
 	} = $props();
 
 	let selectedCause = $state<string | null>(null);
 	let selectedSource = $state<string | null>(null);
 	let rowsOpen = $state(false);
+	let chosenStage = $state<string | null>(null);
+	const stageName = $props.id();
+	const stage = $derived(chosenStage ?? stages?.chosen ?? null);
+	const stageRows = $derived(
+		stages === undefined ? rows : rows.filter((row) => row.stage === stage).map((row) => ({
+			...row,
+			code: row.failed_rule ?? row.code
+		}))
+	);
 
-	const ledger = $derived(failureLedger(rows, window));
-	const losses = $derived(sourceLosses(rows, window));
+	const ledger = $derived(failureLedger(stageRows, window));
+	const losses = $derived(sourceLosses(stageRows, window));
 	const failures = $derived(
-		failedRows(rows, window, selectedCode, selectedCause, selectedSource)
+		failedRows(stageRows, window, selectedCode, selectedCause, selectedSource)
 	);
 	// svelte-ignore state_referenced_locally
 	let shown = $state(max);
@@ -79,6 +91,7 @@
 		void window.start;
 		void window.end;
 		void selectedCode;
+		void stage;
 		selectedCause = null;
 		selectedSource = null;
 	});
@@ -270,6 +283,14 @@
 </script>
 
 <section class="mt-8">
+	{#if stages !== undefined}
+		<fieldset class="stage-choices" data-failure-stages>
+			<legend>Stage</legend>
+			{#each stages.options as option (option)}
+				<label><input type="radio" name={stageName} value={option} checked={stage === option} onchange={() => chosenStage = option} />{option}</label>
+			{/each}
+		</fieldset>
+	{/if}
 	<h2 class="text-[1.0625rem] font-semibold text-text">Why items failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		One row per cause, worst first. A cause is a stage and the code it stopped on. Pick one to see
@@ -301,7 +322,7 @@
 		>
 			<RankedList
 				caption="Failure causes in this window, most failures first"
-				{ranked}
+				geometry={rankedGeometry(ranked)}
 				maxText="{grouped(ranked.max)} {failureWord(ranked.max)}"
 				measured={ledger.rows > 0}
 				unmeasuredNote="Nothing was recorded in this window."
@@ -349,7 +370,7 @@
 	<div class="mt-3" data-source-losses>
 		<RankedList
 			caption="Sources in this window, most articles lost first"
-			ranked={sourceRanked}
+			geometry={rankedGeometry(sourceRanked)}
 			maxText="{grouped(sourceRanked.max)} {articleWord(sourceRanked.max)}"
 			measured={losses.rows > 0}
 			unmeasuredNote="Nothing was recorded in this window."
@@ -460,4 +481,3 @@
 		outline-offset: 2px;
 	}
 </style>
-

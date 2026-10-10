@@ -270,6 +270,7 @@ export interface ConsoleConfig {
 	/** The size a console chart is drawn at on the server, before a script
 	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
+	tile_min_px: number;
 	chart_width: number;
 	/** How long a reserved console block stays still before it shimmers, in
 	 * milliseconds. A fetch that lands inside it never animates at all. 400 is a
@@ -567,6 +568,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	faithfulness_axis_step: 5,
 	faithfulness_axis_floor_max: 75,
 	chart_height: 220,
+	tile_min_px: 6,
 	chart_width: 760,
 	shimmer_after_ms: 400,
 	failure_list_max: 25,

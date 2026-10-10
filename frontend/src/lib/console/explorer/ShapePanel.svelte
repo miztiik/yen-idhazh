@@ -32,6 +32,7 @@
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { rank } from '$lib/charts/rank';
 	import RankedList from '$lib/components/RankedList.svelte';
+	import { rankedGeometry } from '$lib/charts/d3/rankedList';
 	import ColumnPicker from '$lib/console/explorer/ColumnPicker.svelte';
 	import { MOST_ROLES, SERIES_TOKENS, type ExplorerChartType, type RoleId } from '$lib/console/explorer/chart-roles';
 	import { IN_THE_ANSWER, chartNotes, chooseDateSeriesDays, numericValue, readTruthValue, type ExplorerChart, type ExplorerShape, type ExplorerShapeBounds } from './shape';
@@ -222,7 +223,7 @@
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const seriesColumns = active.seriesColumns}
 							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
-							{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: SERIES_TOKENS[index] ?? SERIES_TOKENS[0], points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: plotFrame, density: 6, valueTicks: 4, padding: 0.25 })}
+							{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: SERIES_TOKENS[index] ?? SERIES_TOKENS[0], points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: plotFrame, density: 6, valueTicks: 4, padding: 0.25, rule: { declined: 'A written question supplies no settings comparison record.' } })}
 							{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(${SERIES_TOKENS[index] ?? SERIES_TOKENS[0]})`, values: days.map(({ row }) => (row === null ? null : numericValue(row, column))), format: (n) => text({ [column]: n }, column) })), notMeasured: 'No number for this day', resting: 'last' })}
 							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 								<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={dateReadout} />
@@ -230,7 +231,7 @@
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'rankedList'}
 							{@const ranked = rank(rows.map((row) => ({ key: text(row, active.labelColumn), value: numericValue(row, active.valueColumn) ?? Number.NaN, row: { label: text(row, active.labelColumn), value: text(row, active.valueColumn) } })), active.rowsDrawn)}
-							<RankedList caption={`Ranked by ${active.valueColumn}`} {ranked} maxText={`${text({ [active.valueColumn]: ranked.max }, active.valueColumn)} ${active.valueColumn}`} unmeasuredNote="No rows carried a number to rank." emptyNote="No rows carried a number to rank." tail={active.moreRows > 0 ? `${active.moreRows} more ${active.moreRows === 1 ? 'row is' : 'rows are'} in the table.` : null} />
+							<RankedList caption={`Ranked by ${active.valueColumn}`} geometry={rankedGeometry(ranked)} maxText={`${text({ [active.valueColumn]: ranked.max }, active.valueColumn)} ${active.valueColumn}`} unmeasuredNote="No rows carried a number to rank." emptyNote="No rows carried a number to rank." tail={active.moreRows > 0 ? `${active.moreRows} more ${active.moreRows === 1 ? 'row is' : 'rows are'} in the table.` : null} />
 							{#if readout}<dl class="shape-readout" data-readout="data-explorer-shape" data-readout-shape="record"><dt data-readout-subject>{readout.subject}</dt>{#each readout.facts as fact}<div data-readout-row={fact.label}><dd>{fact.label}</dd><dd>{fact.value}</dd></div>{/each}</dl>{/if}
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'pairedScatter'}
@@ -243,7 +244,7 @@
 							{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
 							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 							<div tabindex="0" role="group" aria-label={`Spread readout: ${active.valueColumn}`} data-chart-readout-focus>
-								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
+								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4, scale: 'linear' })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
 							</div>
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{/if}

@@ -7,7 +7,8 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { render } from 'svelte/server';
 import { rank, tailSentence, percentOf } from '../src/lib/charts/rank';
 import type { RankedDisplay } from '../src/lib/charts/rank';
-import { targetBar, targetGeometry, targetMarks } from '../src/lib/charts/targetbar';
+import { targetGeometry, targetMarks } from '../src/lib/charts/targetbar';
+import { rankedGeometry } from '../src/lib/charts/d3/rankedList';
 import { sparklineMarks, sparklineShape } from '../src/lib/charts/sparkline';
 
 /**
@@ -260,7 +261,7 @@ test.describe('the target geometry', () => {
 			[5.6, 6],
 			[0.03, 0.05]
 		] as const) {
-			const chart = targetBar(value, target, 'lower-is-better', 'x');
+			const chart = targetGeometry(value, target, 'lower-is-better');
 			const markup = targetGeometry(value, target, 'lower-is-better');
 			expect(markup.markerFraction).toBeCloseTo(chart.markerFraction, 12);
 			expect(markup.band).toBe(chart.band);
@@ -338,7 +339,7 @@ test.describe('the ranked list, rendered', () => {
 
 	test('every drawn bar is the value over the printed maximum', async ({ page }) => {
 		const ranked = list();
-		await show(page, draw({ caption: 'cuts by source', ranked, maxText: '38 cuts', unmeasuredNote: 'x', emptyNote: 'y' }));
+		await show(page, draw({ caption: 'cuts by source', geometry: rankedGeometry(ranked), maxText: '38 cuts', unmeasuredNote: 'x', emptyNote: 'y' }));
 
 		const printed = await page.locator('[data-ranked-max]').getAttribute('data-ranked-max');
 		const divisor = Math.max(...magnitudes.map((m) => m.value));
@@ -382,12 +383,12 @@ test.describe('the ranked list, rendered', () => {
 			emptyNote: 'No article was cut short in these 7 days.'
 		};
 
-		await show(page, draw({ caption: 'c', ranked: rank([], 10), maxText: '-', measured: false, ...notes }));
+		await show(page, draw({ caption: 'c', geometry: rankedGeometry(rank([], 10)), maxText: '-', measured: false, ...notes }));
 		await expect(page.locator('[data-ranked="unmeasured"]')).toHaveText(notes.unmeasuredNote);
 		await expect(page.locator('[data-ranked="none"]')).toHaveCount(0);
 		await expect(page.locator('[data-ranked="rows"]')).toHaveCount(0);
 
-		await show(page, draw({ caption: 'c', ranked: rank([], 10), maxText: '-', measured: true, ...notes }));
+		await show(page, draw({ caption: 'c', geometry: rankedGeometry(rank([], 10)), maxText: '-', measured: true, ...notes }));
 		await expect(page.locator('[data-ranked="none"]')).toHaveText(notes.emptyNote);
 		await expect(page.locator('[data-ranked="unmeasured"]')).toHaveCount(0);
 	});
@@ -398,7 +399,7 @@ test.describe('the ranked list, rendered', () => {
 			3
 		);
 		const tail = tailSentence(ranked, { one: 'source', many: 'sources', unitOne: 'cut', unitMany: 'cuts' });
-		await show(page, draw({ caption: 'c', ranked, maxText: '9 cuts', unmeasuredNote: 'x', emptyNote: 'y', tail }));
+		await show(page, draw({ caption: 'c', geometry: rankedGeometry(ranked), maxText: '9 cuts', unmeasuredNote: 'x', emptyNote: 'y', tail }));
 		await expect(page.locator('[data-ranked="tail"]')).toHaveText('2 more sources had 11 cuts between them.');
 		await expect(page.locator('[data-ranked-row]')).toHaveCount(3);
 	});
@@ -409,7 +410,7 @@ test.describe('the ranked list, rendered', () => {
 			page,
 			draw({
 				caption: 'c',
-				ranked,
+				geometry: rankedGeometry(ranked),
 				maxText: '38 cuts',
 				unmeasuredNote: 'x',
 				emptyNote: 'y',
@@ -424,7 +425,7 @@ test.describe('the ranked list, rendered', () => {
 	});
 
 	test('with no onSelect there is no control to reach', async ({ page }) => {
-		await show(page, draw({ caption: 'c', ranked: list(), maxText: '38 cuts', unmeasuredNote: 'x', emptyNote: 'y' }));
+		await show(page, draw({ caption: 'c', geometry: rankedGeometry(list()), maxText: '38 cuts', unmeasuredNote: 'x', emptyNote: 'y' }));
 		await expect(page.locator('[data-ranked-row] button')).toHaveCount(0);
 	});
 });
