@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -280,9 +280,12 @@ cost of that is real and is the price of one list: a config that narrows the
 presets has to name the archive's span inside the narrowed list. Thirty is about
 the reach `assist.search_months` already gives a search, so the control ships
 opening on what the archive costs today; it was also what the console opened on
-until the console moved to fourteen on 2026-10-02. Nothing
-reads it yet; the control is row 25 of
-[../../../TODO/20260906-constant-cost-reads-plan.md](../../../TODO/20260906-constant-cost-reads-plan.md).
+until the console moved to fourteen on 2026-10-02. The archive server supplies
+this default to its browse control. The browser fetches only months inside the
+selected window, measured from the newest published UTC day. A sparse topic
+does not make it read older months to fill a page. Search has its own window;
+[the archive behaviour](../../architecture/publishing/how-a-reader-finds-a-story.md#the-archive-lists-stories-and-fetches-them-a-month-at-a-time)
+defines both scopes.
 
 `ui.filter_min_chars` (2) is how many characters a reader types before an
 in-place filter narrows a list. It binds both surfaces, because the day page and
