@@ -280,7 +280,10 @@ def test_one_unmeasured_eligible_chart_makes_the_whole_run_unknown(
 
 
 def test_old_manifests_remain_unknown_including_runs_with_no_charts() -> None:
-    old = RunManifest.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    for run in payload["runs"]:
+        del run["chart_evidence"]
+    old = RunManifest.model_validate(payload)
     assert all(run.chart_evidence is None for run in old.runs)
 
 

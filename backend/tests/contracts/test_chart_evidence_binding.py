@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -46,6 +47,9 @@ def test_evidence_numeric_types_and_null_rates_match_the_frontend_copy() -> None
 
 
 def test_an_old_monthly_report_reads_as_unknown_not_as_zero_figures() -> None:
-    old = PublicRunDay.read(CONTRACT_FIXTURES_DIR / "public-run-day" / "five-runs.json")
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "public-run-day" / "five-runs.json"))
+    for run in payload["runs"]:
+        del run["chart_evidence"]
+    old = PublicRunDay.model_validate(payload)
     assert old.runs
     assert all(run.chart_evidence is None for run in old.runs)
