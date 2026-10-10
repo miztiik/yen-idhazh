@@ -361,11 +361,13 @@ def read_row(
     )
 
 
-def _writer(run_id: str, *, commit_sha: str, job: ServerJob, shard: int) -> WriterIdentity:
+def _writer(
+    run_id: str, *, commit_sha: str, job: ServerJob, shard: int, attempt: int | None = None
+) -> WriterIdentity:
     """This job's writer identity, the same for its probe and its clock."""
     return WriterIdentity(
         run_id=run_id,
-        attempt=run_context.run_attempt(),
+        attempt=run_context.run_attempt() if attempt is None else attempt,
         job=job,
         shard=shard,
         producer=PRODUCER,
@@ -376,6 +378,69 @@ def _writer(run_id: str, *, commit_sha: str, job: ServerJob, shard: int) -> Writ
 def _shown_files(state_root: Path, paths: list[Path]) -> str:
     """Where a write landed, as it may leave the process: relative and POSIX."""
     return ",".join(ledger.paths.shown(state_root, path) for path in paths) or "nothing"
+
+
+def file_machine_row(
+    *,
+    date: str,
+    run_id: str,
+    settings: config.Settings | config.GardenerSettings,
+    state_root: Path,
+    commit_sha: str,
+    shard: int = 0,
+    job: ServerJob = WORK_JOB,
+    attempt: int | None = None,
+) -> tuple[HostFingerprintRow | None, list[Path]]:
+    """Record what machine this job drew, and say where the row landed.
+
+    `stage_fingerprint` is this for a caller that only wants the row. A caller
+    that has to name its own writes needs the paths as well: the gardener's shard
+    declares every file it wrote so its publisher can refuse one it did not, and
+    a row the shard filed but never named is a row that dies with the runner.
+    """
+    knobs = settings.app.observability
+    if not knobs.host_fingerprint:
+        LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, run_id)
+        return None, []
+    reads_bandwidth = job in knobs.host_fingerprint_bandwidth_jobs
+    row = read_row(
+        date=date,
+        run_id=run_id,
+        job=job,
+        shard=shard,
+        probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib if reads_bandwidth else 0,
+        probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
+    )
+    landed = ledger.persist(
+        state_root,
+        [row],
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=date,
+        identity=_writer(run_id, commit_sha=commit_sha, job=job, shard=shard, attempt=attempt),
+    )
+    LOG.info(
+        "fingerprint job=%s shard=%s run=%s id=%s cpu=%s family=%s model=%s stepping=%s "
+        "flags=%s l3_bytes=%s memcpy_gib_s=%s probe_mib=%s vm_size=%s zone=%s "
+        "boot_seconds=%s mhz=%s file=%s",
+        job,
+        shard,
+        run_id,
+        row.fingerprint,
+        row.cpu_model,
+        row.cpu_family,
+        row.cpu_model_number,
+        row.cpu_stepping,
+        row.flags or "none",
+        row.l3_cache_bytes,
+        row.memcpy_gib_s,
+        row.memcpy_probe_mib,
+        row.vm_size,
+        row.vm_zone,
+        row.boot_seconds,
+        row.mhz_at_probe,
+        _shown_files(state_root, landed),
+    )
+    return row, landed
 
 
 def stage_fingerprint(
@@ -408,47 +473,21 @@ def stage_fingerprint(
     two strings the caller already holds would make this probe refuse every
     workflow that does not plan - the gardener's wakes and the council's nights
     among them - for a payload it never opens.
+    **The bandwidth reading is taken only by the jobs config names.** It wants a
+    gigabyte and an idle machine, so a job that takes it anywhere but the bench
+    measures its own run rather than the host. A job outside the list is handed a
+    floor of zero, which is the caller saying do not probe, and the row carries
+    `memcpy_probe_mib` of zero beside an empty rate - the reading was not taken,
+    rather than a machine that could not copy.
     """
-    knobs = settings.app.observability
-    if not knobs.host_fingerprint:
-        LOG.info("fingerprint off job=%s shard=%s run=%s", job, shard, run_id)
-        return None
-    row = read_row(
+    row, _ = file_machine_row(
         date=date,
         run_id=run_id,
-        job=job,
+        settings=settings,
+        state_root=state_root,
+        commit_sha=commit_sha,
         shard=shard,
-        probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib,
-        probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
-    )
-    landed = ledger.persist(
-        state_root,
-        [row],
-        ledger=LedgerName.HOST_FINGERPRINT,
-        covers=date,
-        identity=_writer(run_id, commit_sha=commit_sha, job=job, shard=shard),
-    )
-    LOG.info(
-        "fingerprint job=%s shard=%s run=%s id=%s cpu=%s family=%s model=%s stepping=%s "
-        "flags=%s l3_bytes=%s memcpy_gib_s=%s probe_mib=%s vm_size=%s zone=%s "
-        "boot_seconds=%s mhz=%s file=%s",
-        job,
-        shard,
-        run_id,
-        row.fingerprint,
-        row.cpu_model,
-        row.cpu_family,
-        row.cpu_model_number,
-        row.cpu_stepping,
-        row.flags or "none",
-        row.l3_cache_bytes,
-        row.memcpy_gib_s,
-        row.memcpy_probe_mib,
-        row.vm_size,
-        row.vm_zone,
-        row.boot_seconds,
-        row.mhz_at_probe,
-        _shown_files(state_root, landed),
+        job=job,
     )
     return row
 
@@ -502,11 +541,11 @@ def _with_clock(probe: HostFingerprintRow, clock: HostFingerprintRow) -> HostFin
     return HostFingerprintRow.model_validate(cells)
 
 
-def stage_job_clock(
+def file_job_clock(
     *,
     date: str,
     run_id: str,
-    settings: config.Settings,
+    settings: config.Settings | config.GardenerSettings,
     state_root: Path,
     commit_sha: str,
     shard: int = 0,
@@ -514,7 +553,9 @@ def stage_job_clock(
     job_started_at: int | None = None,
     server_log_path: Path | None = None,
     metrics_path: Path | None = None,
-) -> HostFingerprintRow | None:
+    attempt: int | None = None,
+    finished_at: str | None = None,
+) -> tuple[HostFingerprintRow | None, list[Path]]:
     """What the job cost, recorded onto the host row the probe opened.
 
     The other end of `stage_fingerprint`. Four cells of that row are only knowable
@@ -542,8 +583,8 @@ def stage_job_clock(
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
         LOG.info("job clock off job=%s shard=%s run=%s", job, shard, run_id)
-        return None
-    scraped_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        return None, []
+    scraped_at = finished_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     prompt_tokens, prompt_seconds = server_prompt_totals(_text_if_readable(metrics_path))
     row = HostFingerprintRow(
         version=HostFingerprintRow.schema_version(),
@@ -556,7 +597,7 @@ def stage_job_clock(
         server_prompt_tokens=prompt_tokens,
         server_prompt_seconds=prompt_seconds,
     )
-    identity = _writer(run_id, commit_sha=commit_sha, job=job, shard=shard)
+    identity = _writer(run_id, commit_sha=commit_sha, job=job, shard=shard, attempt=attempt)
     probe = _own_probe(state_root, date, identity)
     whole = _with_clock(probe, row) if probe is not None else row
     landed = ledger.persist(
@@ -578,6 +619,35 @@ def stage_job_clock(
         row.server_prompt_seconds,
         "found" if probe is not None else "absent",
         _shown_files(state_root, landed),
+    )
+    return whole, landed
+
+
+def stage_job_clock(
+    *,
+    date: str,
+    run_id: str,
+    settings: config.Settings,
+    state_root: Path,
+    commit_sha: str,
+    shard: int = 0,
+    job: ServerJob = WORK_JOB,
+    job_started_at: int | None = None,
+    server_log_path: Path | None = None,
+    metrics_path: Path | None = None,
+) -> HostFingerprintRow | None:
+    """Close the machine row when the caller does not need its written paths."""
+    whole, _ = file_job_clock(
+        date=date,
+        run_id=run_id,
+        settings=settings,
+        state_root=state_root,
+        commit_sha=commit_sha,
+        shard=shard,
+        job=job,
+        job_started_at=job_started_at,
+        server_log_path=server_log_path,
+        metrics_path=metrics_path,
     )
     return whole
 

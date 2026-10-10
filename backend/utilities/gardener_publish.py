@@ -679,6 +679,7 @@ def _run_and_land(
                 {
                     *owned,
                     staging.staged_path(LedgerName.GARDENER),
+                    staging.staged_path(LedgerName.HOST_FINGERPRINT),
                     *(
                         staging.staged_path(which)
                         for name in names

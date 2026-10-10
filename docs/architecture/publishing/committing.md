@@ -2,7 +2,8 @@
 
 **Last Updated**: 2026-10-10
 
-Gardener, council and digest use one ordinary publisher:
+Start here when an agent adds a workflow that commits generated files.
+Gardener, council, digest and the additional clients below use one publisher:
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py).
 It builds a private candidate on fetched `main`, not a commit or rebase in the
 caller's checkout. HEAD, the caller's index and sparse patterns do not move.
@@ -88,6 +89,56 @@ Producer failure remains separate: gardener may publish completed diagnostics
 after exceeding its download ceiling and still exits 1.
 A fetch failure before a candidate is built is preparation failure, not proof
 that main rejected a push. Gardener preserves its logged crash/exit-1 path.
+
+## Adopting the publisher in another workflow
+
+1. Reuse an adapter when its policy fits. See
+   [`gardener_publish.py`](../../../backend/utilities/gardener_publish.py),
+   [`council_publish.py`](../../../backend/utilities/council_publish.py),
+   [`digest_publish.py`](../../../backend/utilities/digest_publish.py),
+   [`record_publish.py`](../../../backend/utilities/record_publish.py) for
+   measure, validate and vector backfill, and
+   [`pipeline_test_publish.py`](../../../backend/utilities/pipeline_test_publish.py).
+   These already cover more than the three daily workflows.
+2. Declare the writer's owned paths and ledger prefixes independently of its
+   output. Use the ledger registry's
+   [`staging.staged_path`](../../../backend/idhazh/ledger/staging.py) where it
+   applies. Do not grant blanket `state` permission.
+3. Observe the real producer inside
+   [`completed_writes.collect`](../../../backend/idhazh/completed_writes.py).
+   Keep completed writes even on failure. Record the executed `WriterIdentity`;
+   [`publication_evidence.save`, `read`, `identified` and `confirmed`](../../../backend/utilities/publication_evidence.py)
+   retain receipts, check raw identities and construct confirmed writes.
+   A receipt proves bytes, not permission.
+4. Build
+   [`PublicationRequest`](../../../backend/utilities/publication_request.py)
+   with exact hashes, independent write/delete permissions and the actual
+   source data revision in `source_tip`. Keep the executed code revision in
+   the identity. A deletion needs its source `Entry` and completion proof.
+5. Choose recovery from the workflow's intent. `Write.immutable=True` retains
+   completed bytes and refuses a different committed file at that name.
+   Mutable writes and deletions reject a changed source baseline, as gardener
+   does. Derived output can use `prepare` with declared `preparation_scopes`
+   to rebuild only named inputs on a fresh base; digest's
+   `inventory_preparation` and
+   [`digest_assemble.preparation`](../../../backend/utilities/digest_assemble.py)
+   are working examples.
+   Do not rerun models or merge generated text.
+6. Load `config/push-retry.json` with
+   [`push_retry.load_retry`](../../../backend/utilities/push_retry.py), then
+   call `publish(request, repo=..., retry=...)` in the one core. Do not add a
+   Git push loop. Keep producer failure separate from publication status:
+   completed diagnostics can land while failed work still exits nonzero.
+7. Test through a real local bare origin, not a fake Git result. Cover a stale
+   source, foreign staged files, sparse checkout and immutable collisions.
+   Start with
+   [`test_shared_publisher.py`](../../../backend/tests/gardener/test_shared_publisher.py)
+   and
+   [`test_publication.py`](../../../backend/tests/council/test_publication.py).
+
+Machine recording is a separate adoption step. Follow
+[host-metrics](../../reference/host-metrics.md); adding the publisher does not
+enable the expensive memory copy. Only jobs selected by its config knob copy.
 
 ## Design rationale
 

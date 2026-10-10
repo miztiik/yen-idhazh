@@ -118,6 +118,7 @@ from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.site_weight import BYTES_PER_MB
+from idhazh.telemetry import job_machine
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -637,77 +638,92 @@ def run(
     too_heavy: str | None = None
     downloaded_bytes: int | None = None
     try:
-        # Every task's folders before the first task runs, so a task the commit
-        # cannot answer for stops the shard with nothing yet done.
-        resolved = {
-            name: folders_of(name, settings.tasks, repo_root, committed_folders) for name in names
-        }
-        covered = {name: listed_folders(settings.tasks[name], resolved[name]) for name in names}
-        period_ranges = {
-            name: period_range
-            if period_range is not None
-            else scheduled_range(name, settings.tasks[name], today)
-            for name in names
-        }
-        if listing is None:
-            period_paths = {
-                path
+        with job_machine.record(
+            date=today.isoformat(),
+            run_id=run_id,
+            settings=settings,
+            state_root=state_dir,
+            commit_sha=git_sha,
+            job=job,
+            shard=shard,
+            attempt=attempt,
+            started_at=started,
+            clock=clock,
+        ) as machine:
+            # Resolve ownership before the first task runs.
+            resolved = {
+                name: folders_of(name, settings.tasks, repo_root, committed_folders)
                 for name in names
-                for path in paths_for_task(
-                    repo_root,
-                    name,
-                    settings.tasks[name],
-                    period_ranges[name],
-                    today=today,
-                )
             }
-            listing = FileListing.from_disk(
-                repo_root,
-                {folder for folders in covered.values() for folder in folders},
-                paths=period_paths,
-            )
-        for name in names:
-            context = TaskContext(
+            covered = {name: listed_folders(settings.tasks[name], resolved[name]) for name in names}
+            period_ranges = {
+                name: period_range
+                if period_range is not None
+                else scheduled_range(name, settings.tasks[name], today)
+                for name in names
+            }
+            if listing is None:
+                period_paths = {
+                    path
+                    for name in names
+                    for path in paths_for_task(
+                        repo_root,
+                        name,
+                        settings.tasks[name],
+                        period_ranges[name],
+                        today=today,
+                    )
+                }
+                listing = FileListing.from_disk(
+                    repo_root,
+                    {folder for folders in covered.values() for folder in folders},
+                    paths=period_paths,
+                )
+            for name in names:
+                context = TaskContext(
+                    state_dir=state_dir,
+                    repo_root=repo_root,
+                    today=today,
+                    policy=settings.tasks[name],
+                    run_id=run_id,
+                    attempt=attempt,
+                    job=job,
+                    shard=shard,
+                    git_sha=git_sha,
+                    owned_folders=resolved[name].walk,
+                    listing=listing.within(covered[name]),
+                    first_ledger_year=settings.config.first_ledger_year,
+                    operator_range=operator_range,
+                    period_range=period_ranges[name],
+                )
+                event_log.emit(_planned(name, context, resolved[name], operator_range))
+                done = _run_one(name, bound[name], context)
+                finished.append(_said_finished(done))
+                _refuse_a_path_outside(done, settings.tasks)
+                _refuse_an_append_outside(done, today.isoformat())
+                ran.append(done)
+                written, taken = _landed(done)
+                listing = listing.settled(written=written, deleted=taken)
+            downloaded = listing.downloaded()
+            if downloaded is not None:
+                downloaded_bytes = sum(downloaded.values())
+                too_heavy = over_the_ceiling(
+                    downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
+                )
+            ended = clock().strftime(_INSTANT)
+            record = _record(
+                ran,
                 state_dir=state_dir,
-                repo_root=repo_root,
-                today=today,
-                policy=settings.tasks[name],
-                run_id=run_id,
-                attempt=attempt,
-                job=job,
-                shard=shard,
-                git_sha=git_sha,
-                owned_folders=resolved[name].walk,
-                listing=listing.within(covered[name]),
-                first_ledger_year=settings.config.first_ledger_year,
-                operator_range=operator_range,
-                period_range=period_ranges[name],
+                today=today.isoformat(),
+                identity=identity,
+                ended=ended,
+                cone_bytes=weighed,
+                downloaded_bytes=downloaded_bytes,
             )
-            event_log.emit(_planned(name, context, resolved[name], operator_range))
-            done = _run_one(name, bound[name], context)
-            finished.append(_said_finished(done))
-            _refuse_a_path_outside(done, settings.tasks)
-            _refuse_an_append_outside(done, today.isoformat())
-            ran.append(done)
-            written, taken = _landed(done)
-            listing = listing.settled(written=written, deleted=taken)
-        downloaded = listing.downloaded()
-        if downloaded is not None:
-            downloaded_bytes = sum(downloaded.values())
-            too_heavy = over_the_ceiling(
-                downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
-            )
-        ended = clock().strftime(_INSTANT)
-        record = _record(
-            ran,
-            state_dir=state_dir,
-            today=today.isoformat(),
-            identity=identity,
-            ended=ended,
-            cone_bytes=weighed,
-            downloaded_bytes=downloaded_bytes,
-        )
     except ShardRefusedError as refusal:
+        # An ownership refusal must leave no machine files eligible for a commit.
+        for path in machine:
+            path.unlink(missing_ok=True)
         say(f"shard {shard}: {refusal}")
         return Outcome(
             exit_code=EXIT_INTEGRITY,
@@ -720,13 +736,14 @@ def run(
     if too_heavy is not None:
         say(too_heavy)
     recorded = record.relative_to(repo_root).as_posix()
+    machine_paths = {path.relative_to(repo_root).as_posix() for path in machine}
     wrote = {path for each in ran for path in _landed(each)[0]}
     deleted = {path for each in ran for path in _landed(each)[1]}
     landing = Shard(
         index=shard,
         task_names=tuple(names),
         record_path=recorded,
-        written_paths=frozenset({recorded, *wrote}),
+        written_paths=frozenset({recorded, *machine_paths, *wrote}),
         deleted_paths=frozenset(deleted),
         message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )

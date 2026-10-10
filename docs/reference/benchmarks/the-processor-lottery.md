@@ -391,18 +391,21 @@ explain why the Xeon 8573C reads Qwen 3.9 times faster and writes it 35 percent
 slower.
 
 **What would settle it:** a memory-bandwidth figure beside every throughput
-figure. **This one is now instrumented**: every job records a large-block copy
-rate, so the next several runs build the scatter this needs
-([telemetry.md](../../concepts/telemetry.md)).
+figure. **The copy reading is bench-only by default from 2026-10-09.**
+`observability.host_fingerprint_bandwidth_jobs` selects the jobs that take it.
+Scheduled digest runs no longer build this scatter by default. Use bench
+readings with throughput measured on the same runner, or explicitly enable the
+reading for `work` before collecting a production comparison
+([../host-metrics.md](../host-metrics.md)).
 
 **2026-09-17: still open, and the verdict it carried is retired.** This page read
 the 2026-09-16 halving as evidence that decode does not explain the wall clock.
 That rested on a decode figure taken by `llama-bench` on the other job's machine.
 On the server's own counters the two machines differ by **1.85 times at decode
 against a wall clock of 1.86 to 1.88**, so decode does explain the wall clock and
-always did. What is still missing is the bandwidth figure that would say why
-decode differs, and that is a fingerprint column no bench artifact carries - the
-scatter has to come from daily runs.
+always did. The four historical artifacts cannot supply the missing bandwidth
+figure. Current bench runs write host rows of their own and take the copy
+reading by default; daily runs take it only when their job is selected in config.
 
 ### H4. L3 size is why the two Intel parts read fast
 
