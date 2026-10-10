@@ -13,6 +13,7 @@
  * browser runs the page in any case.
  */
 import { getContext, onDestroy, setContext } from 'svelte';
+import type { RecordWindow } from './waiting';
 
 /** What the control reads off the route under it.
  *
@@ -28,6 +29,7 @@ export interface WindowSource {
 	readonly ready: boolean;
 	/** Sentence this route wants under the band instead of the default window sentence. */
 	readonly statusLine?: string | null;
+	readonly record?: RecordWindow | null;
 	/** Month files a preset would fetch that the route does not hold yet. */
 	monthsFor(days: number): number;
 	onChange(days: number): void;

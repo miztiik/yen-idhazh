@@ -1,4 +1,4 @@
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 
 /**
  * What the stolen-processor panel says on the archive as it stands.

@@ -1,6 +1,6 @@
 # How a console chart gets its data
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-10-10
 
 Seven rules about where a panel's bytes come from, and what a panel may never do to
 get them. **They are settled by what the formats do, not by a benchmark**, and none
@@ -92,6 +92,16 @@ then read every column anyway.
 So a panel's query names its columns and its date range explicitly. `SELECT *` is a
 defect on this surface, not a shortcut.
 
+Each eligible panel declares one `PanelQuery` under `frontend/src/lib/console/queries/`.
+Its ledger, columns, structured predicates and span are independent of the drawing.
+The native score ledger is `summary-quality-evals`; the older `scores` name and
+word-count spellings are not new columns.
+
+`queries/window.ts` owns the console's slice call and holds only the current
+promise for a query's range. A changed window replaces that ask. The query door
+still owns fetched files, index validation and the signed engine add-on.
+An unavailable reach names no invented day and starts no slice.
+
 ### 6. A panel degrades; it never white-screens
 
 A missing file, an empty file and a file whose day has been pruned are all normal.
@@ -102,6 +112,28 @@ This is [`CLAUDE.md`](../../../CLAUDE.md) section 12's fifth check applied per
 panel rather than per page, and it matters more once a panel fetches its own bytes:
 a build-time read fails the build, where a view-time read fails in front of a
 person.
+
+Ledger panels name their settled nothing inside the reserved frame:
+`Nothing recorded.`, `Not published yet.`, or `Did not arrive.` Waiting has no
+answer, number or fabricated bar. Only a failed read takes warning colour.
+The route has one reserved standing and one delayed shimmer; retry asks only
+for the failed record, not already usable siblings. Existing month-based
+callers retain their treatment until their route migration removes it.
+
+The standing says `Fetching the record.` while delayed reads are pending.
+Size and timing studies are suspended by owner direction; the UI prints no
+guessed engine-download figure and no absent reading holds the functionality.
+
+The standing's state tally is pure. It imports no query engine, and completing
+one answer does not restart the route's wait while another is pending. Ledger
+frames share that one shimmer without drawing placeholder bars. With reduced
+motion they keep a still frame.
+
+The packed canary replays the machine producer's two actual writes. Each job
+uses its own run, attempt, job, shard and `telemetry.silicon` producer. The clock
+writer reads its saved probe and files one complete row; the ledger keeps that
+later file, not a union of partial rows. Sixteen raw records become fifteen
+jobs, with the probe fields and completion clocks retained and siblings intact.
 
 ### 7. None of these is gated on a measurement
 

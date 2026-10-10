@@ -10,7 +10,7 @@
  * it was handed, whatever run it drew.
  */
 
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { WATCHED_FLAG, type HostFingerprint } from '../src/lib/server/host-fingerprint';

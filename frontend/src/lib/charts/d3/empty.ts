@@ -10,7 +10,7 @@
  * sentence, and the type says so, because an empty frame with no words is the
  * one picture where a quiet pipeline and a broken fetch look the same.
  */
-import type { ChartState } from '../../console/waiting';
+import { STATE_WORDS, type ChartState } from '../../console/waiting';
 
 export {
 	missingSentence,
@@ -35,14 +35,27 @@ export interface EmptyDrawing {
 	/** What the box says. Null only for a wait: a panel with rows on the way
 	 * that printed "nothing" would be wrong in a second. */
 	sentence: string | null;
+	record?: boolean;
 }
 
 export function emptyState(kind: 'loading'): EmptyDrawing;
+export function emptyState(kind: keyof typeof STATE_WORDS): EmptyDrawing;
 export function emptyState(kind: Exclude<EmptyKind, 'loading'>, sentence: string): EmptyDrawing;
 export function emptyState(kind: EmptyKind, sentence?: string): EmptyDrawing {
 	if (kind === 'loading') return { kind, shimmer: true, tone: 'neutral', sentence: null };
+	if (sentence === undefined && (kind === 'quiet' || kind === 'missing' || kind === 'unreachable')) sentence = STATE_WORDS[kind];
 	if (sentence === undefined || sentence.trim() === '') {
 		throw new Error(`A chart that is ${kind} says so in words; it was given no sentence.`);
 	}
 	return { kind, shimmer: false, tone: kind === 'unreachable' ? 'warn' : 'neutral', sentence };
+}
+
+/** Ledger callers reserve an honest frame without fabricated placeholder readings. */
+export function recordEmptyState(kind: 'loading' | keyof typeof STATE_WORDS): EmptyDrawing;
+export function recordEmptyState(kind: Exclude<EmptyKind, 'loading'>, sentence: string): EmptyDrawing;
+export function recordEmptyState(kind: EmptyKind, sentence?: string): EmptyDrawing {
+	if (kind === 'loading') return { ...emptyState('loading'), record: true };
+	if (sentence !== undefined) return { ...emptyState(kind, sentence), record: true };
+	if (kind === 'quiet' || kind === 'missing' || kind === 'unreachable') return { ...emptyState(kind), record: true };
+	throw new Error(`A chart that is ${kind} needs its own sentence.`);
 }

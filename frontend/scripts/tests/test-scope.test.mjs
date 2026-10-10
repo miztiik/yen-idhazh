@@ -37,6 +37,22 @@ test('real Judgement evidence checks keep their appropriate explicit tiers', () 
 	assert.deepEqual(selectPaths([String.raw`frontend\tests\console-judgement-evidence.spec.ts`]).groups, ['console']);
 });
 
+test('query foundation checks are registered in their real execution tiers', () => {
+	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
+	for (const [group, names] of [
+		['logic', ['console-canary-host-halves', 'console-drawn-cells', 'console-panel-queries', 'console-waiting', 'recorded-slices']],
+		['console', ['console-built-page', 'console-route-waiting']]
+	]) {
+		for (const name of names) {
+			assert.ok(inventory[group].includes(`${name}.spec.ts`), name);
+			for (const separator of ['/', '\\']) {
+				const path = ['frontend', 'tests', `${name}.spec.ts`].join(separator);
+				assert.deepEqual(selectPaths([path]).groups, [group], path);
+			}
+		}
+	}
+});
+
 test('a window helper edit selects all its console consumers under either path convention', () => {
 	for (const name of ['controls', 'readout', 'judgement-fixtures', 'machine-spans', 'client-render', 'server-panels']) {
 		for (const separator of ['/', '\\']) {

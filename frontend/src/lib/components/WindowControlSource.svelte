@@ -7,6 +7,7 @@
 	 * owns them. The layout is what puts the control on the strip.
 	 */
 	import { fillWindowSlot } from '$lib/console/window-slot';
+	import type { RecordWindow } from '$lib/console/waiting';
 
 	let {
 		days,
@@ -14,6 +15,8 @@
 		monthsFor,
 		busy = false,
 		ready = false,
+		record = null,
+		statusLine = null,
 		onChange
 	}: {
 		days: number;
@@ -23,6 +26,8 @@
 		busy?: boolean;
 		/** False until a browser has run the route. */
 		ready?: boolean;
+		record?: RecordWindow | null;
+		statusLine?: string | null;
 		onChange: (days: number) => void;
 	} = $props();
 
@@ -38,6 +43,12 @@
 		},
 		get ready() {
 			return ready;
+		},
+		get record() {
+			return record;
+		},
+		get statusLine() {
+			return statusLine;
 		},
 		monthsFor: (preset) => monthsFor(preset),
 		onChange: (preset) => onChange(preset)

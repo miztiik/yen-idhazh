@@ -1,0 +1,29 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-20",
+      "source_id": "canary-network",
+      "stage": "fetch",
+      "outcome": "failed",
+      "code": "network_error",
+      "http_status": null,
+      "source_form": null,
+      "tier": null
+    },
+    {
+      "date": "2026-08-20",
+      "source_id": "canary-rate",
+      "stage": "fetch",
+      "outcome": "failed",
+      "code": "http_rate_limited",
+      "http_status": 429,
+      "source_form": null,
+      "tier": null
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

@@ -12,7 +12,7 @@
  * it drew, whatever run it drew them for.
  */
 
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 import { shardBoard } from '../src/lib/charts/machine';
 import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';

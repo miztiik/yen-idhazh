@@ -31,12 +31,13 @@ test('an absent or invalid cached add-on names the setup command without downloa
 
 test('Hardware browser tests share the cached add-on and HTTP-cache tests keep their own host', () => {
 	const directory = fileURLToPath(new URL('../../tests/', import.meta.url));
+	assert.match(readFileSync(join(directory, 'support', 'door-page.ts'), 'utf8'), /export \* from '\.\/browser';/);
 	for (const [group, filenames] of Object.entries(groupedSpecs(directory))) {
 		if (group === 'logic') continue;
 		for (const filename of filenames) {
 			const source = readFileSync(join(directory, filename), 'utf8');
 			if (/\/console\/machine|console-panels|CONSOLE_ROUTES/.test(source)) {
-				assert.match(source, /from '\.\/support\/browser'/, filename);
+				assert.match(source, /from '\.\/support\/(?:browser|door-page)'/, filename);
 			}
 		}
 	}

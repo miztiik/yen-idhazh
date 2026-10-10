@@ -16,7 +16,7 @@
  * against a figure the canary holds.
  */
 
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

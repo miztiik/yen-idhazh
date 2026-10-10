@@ -7,7 +7,7 @@
  * than from four copies that can drift.
  */
 
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

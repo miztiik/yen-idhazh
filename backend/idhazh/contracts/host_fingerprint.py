@@ -72,6 +72,8 @@ WATCHED_FLAGS: tuple[str, ...] = (
 #: the surface that would notice first if the column stopped arriving, which is
 #: the fact a person deleting a column needs. A second reader is found by search;
 #: the first one to break is not.
+#: A declared panel query counts as a reader. Shared, pipelines, model, machine,
+#: then voices owns a column when more than one query declares it.
 #:
 #: What this cannot settle is whether the named surface still DRAWS the value -
 #: only that it still names the column. A panel that reads a cell and then throws
@@ -85,12 +87,14 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "cpu_vendor",
             "mhz_max",
             "model_load_ms",
-            "job_seconds",
+        ),
+        "frontend/src/lib/console/queries/machine.ts": (
+            "date",
+            "run_id",
+            "job",
+            "shard",
             "server_prompt_tokens",
             "server_prompt_seconds",
-        ),
-        "frontend/src/lib/charts/machine-cards.ts": (
-            "job",
             "fingerprint",
             "cpu_model",
             "cpu_family",
@@ -107,14 +111,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_location",
             "vm_zone",
             "vm_fault_domain",
-        ),
-        "frontend/src/lib/charts/machine.ts": ("cores",),
-        "frontend/src/lib/console/machine/article-cost.ts": (
-            "date",
-            "run_id",
-            "shard",
+            "job_seconds",
             "threads",
         ),
+        "frontend/src/lib/charts/machine.ts": ("cores",),
     }
 )
 
@@ -124,6 +124,11 @@ class HostFingerprintRow(Contract):
 
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Declared Hardware queries own their host columns, including platformMixQuery.",
+            why="Reader metadata changed, not the persisted row.",
+        ),
         ChangelogEntry(
             version="2026-09-20",
             change="`memcpy_probe_mib` is the derived buffer, not the configured one.",
@@ -140,14 +145,9 @@ class HostFingerprintRow(Contract):
             why="A job's clock is only known at its end, so the row arrives in two halves.",
         ),
         ChangelogEntry(
-            version="2026-09-17",
-            change="Widened `job` to every workflow job that draws its own machine.",
-            why="A run whose slowest job is unmeasured is a run whose cost nobody can attribute.",
-        ),
-        ChangelogEntry(
             version="2026-09-16",
-            change="Initial shape: the silicon a job drew, its instruction set and its bandwidth.",
-            why="Throughput moved 3.7x by machine and nothing recorded which machine.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
