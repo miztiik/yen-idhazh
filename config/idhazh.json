@@ -259,9 +259,6 @@
     "host_fingerprint_bandwidth_jobs": [
       "runtime"
     ],
-    "public_day_metrics_keep_months": 14,
-    "public_machine_keep_months": 14,
-    "public_run_days_keep_months": 14,
     "public_run_timeline_keep_months": 2,
     "sample_rate": 1.0,
     "telemetry_publish": true,

@@ -1194,16 +1194,12 @@ def test_every_published_window_outlives_the_shards_a_console_read_selects() -> 
     assert shards == 14, "a 366-day read reaches fourteen month shards, not thirteen"
     assert 13 * 30 > window, "the retired check passed 13, which is the whole point"
 
-    fresh = ObservabilityConfig()
-    assert set(fresh.full_grain_months()) == {
-        "public_run_days_keep_months",
-        "public_day_metrics_keep_months",
+    for name in (
+        "public_run_days_keep_months", "public_day_metrics_keep_months",
         "public_machine_keep_months",
-    }
-    for name, months in fresh.full_grain_months().items():
-        assert months >= shards, f"observability.{name} is shorter than a console read"
-        with pytest.raises(ValidationError, match=name):
-            AppConfig.model_validate({"observability": {name: months - 1}})
+    ):
+        with pytest.raises(ValidationError, match="Extra inputs"):
+            AppConfig.model_validate({"observability": {name: 14}})
 
 
 def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:

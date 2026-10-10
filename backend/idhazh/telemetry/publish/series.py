@@ -3,9 +3,8 @@
 `backend/idhazh/contracts/console_payloads.py` says WHICH datasets the console
 fetches and what may not cross with each. This module says WHERE each one is
 written and HOW: one file per calendar month, written only when its bytes move,
-and deleted once it is past its own configured age. Four producer modules sit
-on top of it - `run_days`, `day_metrics`, `machine` and
-`run_timeline` - plus `console_band`, which is one file rather than a series,
+and deleted once it is past its own configured age. The retained `run_timeline`
+producer sits on top of it, plus `console_band`, which is one file rather than a series,
 and none of them spells a path or a prune of its own.
 
 **The root is derived, never spelled.** Every path here hangs off the digest
@@ -50,10 +49,7 @@ from idhazh.month_partition import (
 CONSOLE_DIRNAME: Final = "console"
 BAND_FILENAME: Final = "band.json"
 
-#: The four month series, each the directory name under `frontend/public/`.
-RUN_DAYS_DIRNAME: Final = "run-days"
-DAY_METRICS_DIRNAME: Final = "day-metrics"
-MACHINE_DIRNAME: Final = "machine"
+#: The retained month series directory under `frontend/public/`.
 RUN_TIMELINE_DIRNAME: Final = "run-timeline"
 
 #: Every root this module owns, with the suffix its month files take. The
@@ -63,29 +59,20 @@ RUN_TIMELINE_DIRNAME: Final = "run-timeline"
 #: `scores` and `feed-health` were two more until 2026-09-16, when the trees
 #: they named were deleted with the projections that wrote them.
 MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
-    (RUN_DAYS_DIRNAME, ".json"),
-    (DAY_METRICS_DIRNAME, ".json"),
-    (MACHINE_DIRNAME, ".csv"),
     (RUN_TIMELINE_DIRNAME, ".csv"),
 )
 
 #: The declared series roots, also used by the site's bounded build checks.
 PUBLISHED_ROOTS: Final[tuple[str, ...]] = (
     CONSOLE_DIRNAME,
-    RUN_DAYS_DIRNAME,
-    DAY_METRICS_DIRNAME,
-    MACHINE_DIRNAME,
     RUN_TIMELINE_DIRNAME,
 )
 
 __all__ = [
     "BAND_FILENAME",
     "CONSOLE_DIRNAME",
-    "DAY_METRICS_DIRNAME",
-    "MACHINE_DIRNAME",
     "MONTH_SERIES",
     "PUBLISHED_ROOTS",
-    "RUN_DAYS_DIRNAME",
     "RUN_TIMELINE_DIRNAME",
     "console_root",
     "encode_csv",

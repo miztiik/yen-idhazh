@@ -61,10 +61,8 @@ from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
-from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
@@ -154,10 +152,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     ItemHealthSummaryRow,
     LabelRow,
     MachinePanels,
-    MachineShardRow,
     MergeLineHoldoutScore,
     PipelineTestsConfig,
-    PublicRunDay,
     PublicTelemetryRow,
     PublicationInventory,
     PublicationReceipt,

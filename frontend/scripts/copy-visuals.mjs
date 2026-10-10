@@ -20,12 +20,16 @@ const stateRoot = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)
 	: resolve('..', 'state');
 const servedElsewhere = assetBaseUrl() !== '';
-const stagedTrees = ['digest', 'index', 'telemetry', 'console', 'run-days', 'day-metrics', 'machine', 'state'];
+const stagedTrees = ['digest', 'index', 'telemetry', 'console', 'state'];
 
 // These are this build's generated output directories, not the committed input.
 // Replacing them also removes files the producer no longer names, with no
 // discovery of either the archive or the previous build's files.
 for (const tree of stagedTrees) rmSync(join('static', tree), { recursive: true, force: true });
+// Cleanup only: no retired public projection is staged into this build.
+for (const tree of ['machine', 'run-days', 'day-metrics']) {
+	rmSync(join('static', tree), { recursive: true, force: true });
+}
 
 function stage(bytes, destination) {
 	mkdirSync(dirname(destination), { recursive: true });

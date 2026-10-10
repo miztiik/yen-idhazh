@@ -548,9 +548,8 @@ class DayMetrics(Contract):
     def _drop_retired_keys(cls, data: Any) -> Any:
         """Read-side migration for `pipeline_fingerprint`, removed 2026-09-13T22:00.
 
-        Delete this when `git grep -l pipeline_fingerprint -- state/day-metrics
-        frontend/public/day-metrics` returns nothing. It holds today because 23
-        committed day records and both published month mirrors carry the key,
+        Delete this when `git grep -l pipeline_fingerprint -- state/day-metrics`
+        returns nothing. Historic native day records still carry the key,
         and `extra="forbid"` refuses a key the model does not declare.
         """
         return without_retired_keys(data, "pipeline_fingerprint")

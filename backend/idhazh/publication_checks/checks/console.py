@@ -5,18 +5,9 @@ the producer's own gate on what it just wrote, and it runs where the payload is
 - in CI, against the committed tree.
 
 `ctx.months` names the months this run touched, which is what the day workflow
-passes. None means every month still on disk, which is the sweep `ci.yml` takes
-on a change that can move a contract - and reading everything is the point of
-that case, because a contract change can invalidate any file.
-
-Four of the five directories are trimmed on every assemble by
-`series.prune_months`, so the sweep opens at most their own
-`public_*_keep_months` files. `telemetry` is the exception and says so here
-rather than in a sentence that would be wrong: its deletion lives in the
-gardener's `telemetry-aggregate` task, which ships `dry_run: true` in its own
-declaration, so its `public-copy` window is declared and not yet enforced and
-that directory gains one file a month. The daily case is unaffected - it opens
-only the months the run wrote.
+passes. None selects the configured console window's month cover.
+Telemetry is the retained month projection checked here; the public machine,
+run-days and day-metrics mirrors have no producer or check anymore.
 
 The band is checked every time whatever `ctx.months` says. It is one small file
 and it is the first thing the console asks for, so a band that will not load is
@@ -37,10 +28,7 @@ from idhazh.month_partition import months_between, oldest_month_kept
 from idhazh.publication_checks.registry import Check, CheckResult, CheckScope, TreeContext
 from idhazh.telemetry.publish import (
     console_band,
-    day_metrics,
-    machine,
     public_telemetry,
-    run_days,
     series,
 )
 
@@ -55,13 +43,6 @@ def _faults(root: Path, months: frozenset[str] | None) -> list[str]:
         )
     faults: list[str] = []
     readers: tuple[tuple[str, str, Callable[[Path], object]], ...] = (
-        (machine.DIRNAME, machine.SUFFIX, machine.read_shard),
-        (
-            day_metrics.PUBLIC_DIRNAME,
-            day_metrics.PUBLIC_SUFFIX,
-            day_metrics.read_public_shard,
-        ),
-        (run_days.DIRNAME, run_days.SUFFIX, run_days.read_shard),
         (public_telemetry.PUBLIC_TELEMETRY_DIRNAME, ".csv", public_telemetry.read_shard),
     )
     for dirname, suffix, read in readers:

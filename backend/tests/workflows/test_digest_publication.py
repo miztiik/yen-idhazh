@@ -317,6 +317,22 @@ def test_named_indexes_import_old_permanent_heads_without_scanning_raw_archive(
     assert "state/raw/feed-retirements" not in inputs
 
 
+def test_native_band_inputs_include_both_spans_without_retired_projection_roots() -> None:
+    settings = config.load(CONFIG_DIR)
+    through = "2026-10-09"
+    widest = max(settings.appearance.console.window_presets)
+    first = (date.fromisoformat(through) - timedelta(days=2 * widest - 1)).isoformat()
+    inputs = digest_assemble.input_paths(date=through, settings=settings)
+    day = first.replace("-", "/")
+    assert f"frontend/public/digest/{day}/run.json" in inputs
+    assert f"state/day-metrics/{day}.json" in inputs
+    assert f"frontend/public/digest/{day}/digest.json" not in inputs
+    assert not any(
+        path.startswith(f"frontend/public/{root}/")
+        for path in inputs for root in ("machine", "run-days", "day-metrics")
+    )
+
+
 def test_inputs_include_the_full_seen_and_published_consumer_windows() -> None:
     settings = config.load(CONFIG_DIR)
     settings.app.collect.seen_window_days = 900

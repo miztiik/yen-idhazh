@@ -26,19 +26,16 @@ throughput figure is interpolated as `series.ts` takes it.
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 from collections import Counter
-from collections.abc import Collection, Iterable, Sequence
-from datetime import date
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
 from idhazh.assemble import TaxonomyVectors, nearest_label_cosines
 from idhazh.atomic_write import write_atomic
-from idhazh.contracts.base import records_json
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
     DayBands,
@@ -59,7 +56,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, RunManifest
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals.metrics import extractable_but_unused_rate, span_integrity_rate
-from idhazh.telemetry.publish import series
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -716,79 +712,3 @@ def backfill(state_root: Path, days: Iterable[tuple[str, DigestDay, RunManifest]
         publish(state_root=state_root, date=date, day=day, manifest=manifest)
         for date, day, manifest in days
     ]
-
-
-# --- the browser's copy ------------------------------------------------------
-#
-# The record above is written under `state/`, and the site does not serve this
-# ledger. The console reads one record a date, so the copy files by month: one
-# fetch answers for every day of the month an operator is panning over.
-
-
-PUBLIC_DIRNAME: Final = series.DAY_METRICS_DIRNAME
-PUBLIC_SUFFIX: Final = ".json"
-
-
-def public_shard_path(digest_root: Path, month: str) -> Path:
-    """The browser's copy of one month of day records."""
-    return series.month_path(digest_root, PUBLIC_DIRNAME, month, PUBLIC_SUFFIX)
-
-
-def public_shard_relpath(month: str) -> str:
-    """`frontend/public/day-metrics/<YYYY-MM>.json` - the POSIX form, for a log line."""
-    return series.relpath(PUBLIC_DIRNAME, f"{month}{PUBLIC_SUFFIX}")
-
-
-def records_in_month(state_root: Path, month: str) -> list[DayMetrics]:
-    """Every record one month holds, oldest day first.
-
-    One directory listing and at most 31 small files, whatever the archive
-    grows to - the state records are nested `<YYYY>/<MM>/<DD>.json` for exactly
-    this reason (Guardrail #12). A record that will not validate raises rather than
-    being skipped: this is the only place a band count or an extraction census
-    survives once a day's items are folded, and a month quietly published short
-    would report work that happened as work that did not.
-    """
-    root = ledger.tree_root(state_root, LedgerName.DAY_METRICS) / month[:4] / month[5:7]
-    if not root.is_dir():
-        return []
-    return [DayMetrics.read(path) for path in sorted(root.glob("*.json"))]
-
-
-def read_public_shard(path: Path) -> list[DayMetrics]:
-    """Load a published month back through the contract that wrote it."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, list):
-        raise ValueError(f"{path.as_posix()} is not a list of day records")
-    return [DayMetrics.model_validate(row) for row in payload]
-
-
-def publish_public(
-    *,
-    state_root: Path,
-    digest_root: Path,
-    keep_months: int,
-    today: date,
-    months: Collection[str] | None = None,
-    ensure_month: str | None = None,
-) -> list[Path]:
-    """Write only caller-named months; no range means no historical reads."""
-
-    def encode(month: str) -> bytes:
-        rows = records_in_month(state_root, month)
-        return records_json(
-            [row.model_dump(mode="json") for row in rows],
-            record_lists=frozenset({"sources", "instruments", "stage_timing"}),
-        ).encode("utf-8")
-
-    return series.publish_series(
-        digest_root=digest_root,
-        dirname=PUBLIC_DIRNAME,
-        suffix=PUBLIC_SUFFIX,
-        available=sorted(set(months or ())),
-        encode=encode,
-        keep_months=keep_months,
-        today=today,
-        months=months,
-        ensure_month=ensure_month,
-    )

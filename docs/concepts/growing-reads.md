@@ -279,23 +279,19 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
 | `telemetry.item.report` | the requested UTC day's item-health rows through `ledger.load_days`, and only that day's trace files | one named day; the trace declaration's retention is enforced before opening files, even when old files remain. Each matching writer's tree is printed separately |
 | `public_telemetry.publish` | the item-health days of the months the caller names, through `ledger.load_days`, or every month `ledger.held_months` names when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
-| `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
-| `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
-| `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards, the host-fingerprint days inside the window through `ledger.load_days`, and the newest day's `run.json` | `max(console.window_presets)`, committed at 90, for the first two; one file for the third |
+| `console_band.publish` | native manifests and state day-metrics; native host-fingerprint, feed-health, item-health and eval rows through the ledger door | the widest configured console span, plus at most one equal-length walkback independently for settings and checker movement; never `digest.json` |
 
-**Two of them list a tree to learn which months exist**, and that residue is
-named rather than hidden: `run_days.months_published` and
-`day_metrics.months_recorded` cost one directory entry a year plus one a
-month, for ever. Deriving the newest stem from today's date instead would answer
-nothing at all for a tree whose last run was two months ago - the same reason
-`payload.readShards` lists its own directory.
+**The obsolete public mirrors no longer list source trees.** The band finds its
+newest native manifest within the configured month cover, then reads a bounded
+day span. Telemetry alone supplies its months list; native ledgers keep their
+own indexes.
 
 **None is unbounded any more.** `machine.months_on_file` was the last, and it
 streamed `state/runtime-counters.csv` - one appended file with no shards and no
 prune, so a run that wanted September's rows walked every row ever appended to
 find them. That ledger was deleted on 2026-09-20 and the machine series is folded
-from the host-fingerprint and item-health ledgers instead, so the read is now the
-months `series.months_to_write` names, read through `ledger.load_days`.
+from the host-fingerprint and item-health ledgers instead. That public machine
+projection is now retired too; native reads continue through `ledger.load_days`.
 
 **The eighth answers to a different knob, and that knob has never bitten,
 2026-09-12.** `public_telemetry.publish` is the odd member of this block: it
