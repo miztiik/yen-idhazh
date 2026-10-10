@@ -818,3 +818,42 @@ def test_each_way_a_task_can_end_is_said_once_after_what_it_was_planned_with(
     assert outcome.exit_code == (EXIT_TASK_FAILED if word is TaskOutcome.FAILED else EXIT_OK)
     if word is TaskOutcome.EMPTY:
         assert planned.absent == ["state/raw/visual-prunes", "state/compact/visual-prunes"]
+
+
+def test_empty_retention_range_keeps_operator_intent_separate_from_scheduled_window(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    declaration = CONFIG_DIR / "gardener" / "digest-fragments.json"
+    settings = config.load_gardener(a_config(tmp_path, declaration))
+    named = ("2024-08-01", "2024-08-02")
+
+    def run(
+        run_id: str, period_range: tuple[str, str] | None
+    ) -> tuple[TaskPlanned, TaskFinished]:
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger=event_log.__name__):
+            runner.run(
+                ("digest-fragments",),
+                settings=settings,
+                repo_root=tmp_path,
+                run_id=run_id,
+                attempt=1,
+                shard=0,
+                git_sha="a" * 40,
+                committed_folders=None,
+                cone_bytes=None,
+                listing=None,
+                period_range=period_range,
+                clock=lambda: WAKE,
+            )
+        planned = the_event(caplog.records, TaskPlanned)
+        finished = the_event(caplog.records, TaskFinished)
+        return planned, finished
+
+    named_planned, named_finished = run(RUN_ID, named)
+    scheduled_planned, scheduled_finished = run("2026-09-27-18012345679", None)
+
+    assert named_planned.operator_range == named
+    assert named_finished.outcome is TaskOutcome.OUTSIDE_RANGE
+    assert scheduled_planned.operator_range is None
+    assert scheduled_finished.outcome is TaskOutcome.NOT_DUE
