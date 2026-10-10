@@ -1,6 +1,10 @@
 import { expect, test, type Page } from './support/browser';
 import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt } from './support/explorer-answer';
 import { everyDay } from './support/ledger-lifecycle';
+import { BAND_UNREAD } from '../src/lib/console/band';
+
+const PIPELINES_HREF = BAND_UNREAD.routes.find((route) => route.id === 'pipelines')!.href;
+const EXPLORER_HREF = BAND_UNREAD.routes.find((route) => route.id === 'data-explorer')!.href;
 
 /**
  * Where the Data explorer's regions stand: the workbench fills the window, Run
@@ -497,7 +501,7 @@ for (const view of [
 
 test('only the Data explorer lifts the width cap and leaves the footer out', async ({ page }) => {
 	await page.setViewportSize({ width: 1920, height: 1080 });
-	await page.goto('/console/', { waitUntil: 'domcontentloaded' });
+	await page.goto(PIPELINES_HREF, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('.frame:has(> main) > footer')).toBeVisible();
 	const capped = await page.locator('.frame:has(> main)').evaluate((node) => node.getBoundingClientRect().width);
 	expect(capped, 'the Pipelines route lost its width cap').toBeLessThan(1920);
@@ -755,7 +759,7 @@ test('History closes its list on Escape, on a press outside it and after a pick,
 test('the line that says the ledger list did not arrive starts where the editor heading starts', async ({ page }) => {
 	await page.route('**/config/ledgers.json', (route) => route.fulfill({ status: 404, body: '' }));
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await page.goto('/console/data-explorer/', { waitUntil: 'domcontentloaded' });
+	await page.goto(EXPLORER_HREF, { waitUntil: 'domcontentloaded' });
 	const line = page.locator('.editor-stack > .state');
 	await expect(line).toHaveText('config/ledgers.json did not arrive (404)', { timeout: 60_000 });
 	const starts = await line.evaluate((node) => {

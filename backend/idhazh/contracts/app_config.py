@@ -111,6 +111,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-09",
+            change="console.panel_groups and console.judged_panel_ids removed.",
+            why="Each route's console file owns its panel order and judged list.",
+        ),
+        ChangelogEntry(
             version="2026-10-08",
             change="similarity.holdout_reach_days added, additive.",
             why="The hand marks moved onto the ledger door, and their read needs a bound.",
@@ -124,11 +129,6 @@ class AppConfig(Contract):
             version="2026-10-02",
             change="console.default_window_days 30 to 14; console.data_explorer_tab added.",
             why="One opening span on every route, and the sixth tab waits for its page.",
-        ),
-        ChangelogEntry(
-            version="2026-09-30",
-            change="console.machine_colour_stops 7 to 5, and three machine-panel knobs added.",
-            why="A machine's colour is a speed ramp of five steps, not a key-ordered palette.",
         ),
         ChangelogEntry(
             version="2026-09-28",

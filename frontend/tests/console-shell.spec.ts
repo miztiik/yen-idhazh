@@ -1,4 +1,6 @@
 import { expect, test, type Page } from './support/browser';
+import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-shell';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -29,7 +31,6 @@ type Appearance = {
 	frame: { breakpoints_px: [number, number, number] };
 	console: {
 		completeness_grace_days: number;
-		panel_groups: Record<string, { id: string; title: string }[]>;
 	};
 };
 
@@ -44,6 +45,12 @@ function appearance(): Appearance {
 const WIDE = { width: 1440, height: 1000 };
 const NARROW = { width: 768, height: 1000 };
 const DAY_MS = 86_400_000;
+
+function routeHref(id: RouteId): string {
+	const route = BAND_UNREAD.routes.find((route) => route.id === id);
+	if (!route) throw new Error(`The console names no route ${id}`);
+	return route.href;
+}
 
 /** The strip sticks only once a script has run, and the days control is
  * enabled in the same mount - so both are waited for. */
@@ -153,7 +160,7 @@ const CASES: { name: string; grow: (page: Page) => Promise<number>; mustScroll: 
 for (const { name, grow, mustScroll } of CASES) {
 	test(`THE ORACLE: at 1440 the stuck strip is one row, with ${name}`, async ({ page }) => {
 		await page.setViewportSize(WIDE);
-		await page.goto('/console/machine/');
+		await page.goto(routeHref('machine'));
 		await hydrated(page);
 		const extra = await grow(page);
 
@@ -197,7 +204,7 @@ test("from the breakpoint up a tab's worst state stands under its label, and eve
 	// and on the landing route the fifth tab stayed out of view at every width
 	// up to 1920. Stacked, a tab is as wide as the longer of the two.
 	await page.setViewportSize(WIDE);
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await hydrated(page);
 	const at = await page.evaluate(() => {
 		const list = document.querySelector('[data-console-nav] ul') as HTMLElement;
@@ -238,7 +245,9 @@ test('THE ORACLE: at 1024 every console route opens with its own tab whole', asy
 	// not say which route it is. The band's worst route is brought into view only
 	// where the reader's own tab stays whole beside it.
 	await page.setViewportSize({ width: 1024, height: 900 });
-	for (const path of ['/console/', '/console/model/', '/console/machine/', '/console/judgement/', '/console/voices/', '/console/data-explorer/']) {
+	for (const id of Object.keys(BY_ROUTE) as RouteId[]) {
+		if (BY_ROUTE[id] === null) continue;
+		const path = routeHref(id);
 		await page.goto(path);
 		await hydrated(page);
 		const at = await page.evaluate(() => {
@@ -262,10 +271,10 @@ test('THE ORACLE: at 1024 every console route opens with its own tab whole', asy
 
 test('THE ORACLE: every jump link lands its heading below the stuck strip', async ({ page }) => {
 	await page.setViewportSize(WIDE);
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 
-	const groups = appearance().console.panel_groups.machine.filter((group) => group.title !== '');
+	const groups = BY_ROUTE.machine!.groups;
 	const links = page.locator('[data-console-contents] [data-console-contents-link]');
 	await expect(links).toHaveCount(groups.length);
 
@@ -308,7 +317,7 @@ test('THE ORACLE: every jump link lands its heading below the stuck strip', asyn
 
 test('THE ORACLE: at 768 nothing is stuck', async ({ page }) => {
 	await page.setViewportSize(NARROW);
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 	await scrollPastStrip(page);
 
@@ -331,7 +340,7 @@ test('the strip sticks from the configured breakpoint and not a pixel before it'
 		[stick, true]
 	] as const) {
 		await page.setViewportSize({ width, height: 900 });
-		await page.goto('/console/machine/');
+		await page.goto(routeHref('machine'));
 		await hydrated(page);
 		const at = await stripGeometry(page);
 		console.log(`[strip] asked ${width} -> innerWidth ${at.innerWidth}, position ${at.position}`);
@@ -343,7 +352,7 @@ test('the strip sticks from the configured breakpoint and not a pixel before it'
 
 test('the page does not move when the strip sticks and drops its descriptions', async ({ page }) => {
 	await page.setViewportSize(WIDE);
-	await page.goto('/console/machine/');
+	await page.goto(routeHref('machine'));
 	await hydrated(page);
 
 	const loose = await stripGeometry(page);
@@ -372,7 +381,7 @@ test('the days control is on the strip at every width, and its sentence is under
 }) => {
 	for (const size of [WIDE, NARROW, { width: 390, height: 844 }]) {
 		await page.setViewportSize(size);
-		await page.goto('/console/');
+		await page.goto(routeHref('pipelines'));
 		await hydrated(page);
 		await expect(page.locator('[data-console-strip] [data-window-control]')).toHaveCount(1);
 		await expect(page.locator('[data-console-strip] [data-window-status]')).toHaveCount(0);
@@ -385,8 +394,8 @@ test('the days control is on the strip at every width, and its sentence is under
 test('a route with named groups carries a jump link to each, and a flat route carries none', async ({
 	page
 }) => {
-	const groups = appearance().console.panel_groups.machine.filter((group) => group.title !== '');
-	await page.goto('/console/machine/');
+	const groups = BY_ROUTE.machine!.groups;
+	await page.goto(routeHref('machine'));
 	const links = await page
 		.locator('[data-console-contents] [data-console-contents-link]')
 		.evaluateAll((nodes) =>
@@ -408,12 +417,12 @@ test('a route with named groups carries a jump link to each, and a flat route ca
 	await expect(page.locator('#console-top')).toHaveCount(1);
 
 	// Pipelines takes one untitled group: an order, with nothing to jump between.
-	await page.goto('/console/');
-	await expect(page.locator('[data-console-contents]')).toHaveCount(0);
+	await page.goto(routeHref('pipelines'));
+	await expect(page.locator('[data-console-contents]')).toHaveCount(BY_ROUTE.pipelines!.groups.length);
 });
 
 test('the site line drops on the console and stays on the reading pages', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await expect(page.locator('[data-site-tagline]')).toBeHidden();
 	await page.goto('/');
 	await expect(page.locator('[data-site-tagline]')).toBeVisible();
@@ -423,7 +432,7 @@ test("the band's first fact is named for the newest day, never for yesterday", a
 	// The verdict is the newest day the record holds, which is today once
 	// today's first run has finished. A label that said "Yesterday" sat under a
 	// sentence dating the same run to today.
-	await page.goto('/console/');
+	await page.goto(routeHref('pipelines'));
 	await expect(page.locator('[data-band-verdict-label]')).toHaveText('Latest day');
 	await expect(page.locator('[data-console-band]')).not.toContainText('Yesterday');
 });
@@ -455,7 +464,7 @@ test.describe('the sentence that dates the record', () => {
 		page
 	}) => {
 		const at = await finished(page);
-		const document = await (await page.request.get('/console/')).text();
+		const document = await (await page.request.get(routeHref('pipelines'))).text();
 		expect(document).toContain(
 			`The latest run on this page finished at ${spelled(at)}. A run still going is not on this page yet.`
 		);
@@ -472,7 +481,7 @@ test.describe('the sentence that dates the record', () => {
 
 		// Just after midnight UTC on the last day inside the grace.
 		await page.clock.setFixedTime(new Date(recordDay + grace * DAY_MS + 30_000));
-		await page.goto('/console/');
+		await page.goto(routeHref('pipelines'));
 		await hydrated(page);
 		await expect(sentence).toHaveAttribute('data-console-completeness', 'complete');
 		await expect(sentence).toHaveText(
@@ -483,7 +492,7 @@ test.describe('the sentence that dates the record', () => {
 		for (const past of [1, 2]) {
 			const missing = grace + past - 1;
 			await page.clock.setFixedTime(new Date(recordDay + (grace + past) * DAY_MS + 30_000));
-			await page.goto('/console/');
+			await page.goto(routeHref('pipelines'));
 			await hydrated(page);
 			await expect(sentence).toHaveAttribute('data-console-completeness', 'behind');
 			await expect(sentence).toHaveText(
@@ -497,7 +506,7 @@ test.describe('the sentence that dates the record', () => {
 		const grace = appearance().console.completeness_grace_days;
 		const at = await finished(page);
 		await page.clock.setFixedTime(new Date(at + (grace + 3) * DAY_MS));
-		await page.goto('/console/');
+		await page.goto(routeHref('pipelines'));
 		await hydrated(page);
 		const colours = await page.evaluate(() => {
 			const probe = (value: string) => {

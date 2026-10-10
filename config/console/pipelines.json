@@ -1,0 +1,23 @@
+{
+  "panel_groups": [
+    {
+      "id": "pipelines",
+      "panels": [
+        "at-a-glance",
+        "run-health",
+        "site-cost-per-item",
+        "failure-mix",
+        "item-time-split",
+        "throughput-viewport",
+        "stage-timings",
+        "item-cost",
+        "run-timeline",
+        "chart-drawing",
+        "extraction"
+      ],
+      "title": ""
+    }
+  ],
+  "judged": [],
+  "knobs": {}
+}

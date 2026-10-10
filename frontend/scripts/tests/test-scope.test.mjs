@@ -22,6 +22,9 @@ test('named frontend specs map to their declared groups', () => {
 		assert.equal(ciAnswer([`frontend/tests/${name}.spec.ts`], true).browser, false, name);
 	}
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
+	assert.equal(groupForSpec('console-route-scope.spec.ts'), 'logic');
+	assert.deepEqual(selectPaths(['frontend/tests/console-route-scope.spec.ts']).groups, ['logic']);
+	assert.equal(ciAnswer(['frontend/tests/console-route-scope.spec.ts'], true).browser, false);
 	assert.equal(groupForSpec('panel-captures.spec.ts'), 'panels');
 	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), 'panels');
 	assert.equal(groupForSpec('new-feature.spec.ts'), undefined);
@@ -90,6 +93,62 @@ test('data helpers select ledger logic and console consumers without unrelated f
 		assert.deepEqual(ciAnswer([path], true), {
 			browser: true, code: true, modelAbsent: false, console: false, panels: false, robots: false, validateAll: false
 		});
+	}
+});
+
+test('each route-owned config buys console and panel checks on a pull request', () => {
+	for (const route of ['pipelines', 'model', 'machine', 'voices', 'judgement', 'data-explorer']) {
+		for (const path of [
+			`config/console/${route}.json`, `config\\console\\${route}.json`
+		]) {
+			const selection = selectPaths([path]);
+			assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
+			assert.equal(selection.contracts, true, path);
+			assert.equal(selection.tooling, false, path);
+			assert.equal(selection.reasons[0].reason, 'route-owned console config and panel checks', path);
+			const answer = ciAnswer([path], true);
+			assert.equal(answer.browser, true, path);
+			assert.equal(answer.console, true, path);
+			assert.equal(answer.panels, true, path);
+			assert.equal(answer.validateAll, true, path);
+		}
+	}
+	assert.deepEqual(selectPaths(['docs/a.md', 'config/console/machine.json']).groups, ['logic', 'console', 'panels', 'publishing']);
+	assert.deepEqual(selectPaths(['config/console/machine.json', 'frontend/src/routes/+layout.svelte']).groups, [...FRONTEND_GROUPS]);
+	assert.deepEqual(selectPaths(['config/console/machine.json', 'unknown-area/module.ts']).groups, ['backend', ...FRONTEND_GROUPS]);
+	assert.deepEqual(selectPaths(['config/console-other/machine.json']).groups, ['backend', ...FRONTEND_GROUPS]);
+});
+
+test('route-owned expectations and drivers remain console inputs after extraction', () => {
+	for (const route of ['pipelines', 'model', 'machine', 'voices', 'judgement', 'data-explorer', 'index']) {
+		for (const file of [
+			`frontend/tests/support/console-expect/console-band/${route}.ts`,
+			`frontend/tests/support/panel-drivers/${route}.ts`
+		]) {
+			for (const path of [file, file.replaceAll('/', '\\')]) {
+				assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'panels', 'publishing'], path);
+				assert.equal(ciAnswer([path], true).console, true, path);
+				assert.equal(ciAnswer([path], true).panels, true, path);
+			}
+		}
+	}
+	assert.equal(ciAnswer(['frontend/tests/support/console-expect-other/machine.ts'], true).console, false);
+	assert.equal(ciAnswer(['frontend/tests/support/panel-gates.ts'], true).console, false);
+});
+
+test('the shared panel frame buys console consumers without widening the exception', () => {
+	for (const path of [
+		'frontend/src/lib/components/Panel.svelte', String.raw`frontend\src\lib\components\Panel.svelte`
+	]) {
+		assert.deepEqual(selectPaths([path]).groups, [...FRONTEND_GROUPS], path);
+		assert.equal(ciAnswer([path], true).console, true, path);
+		assert.equal(ciAnswer([path], true).panels, true, path);
+	}
+	for (const path of [
+		'frontend/src/lib/components/PanelGroup.svelte', 'frontend/src/lib/components/ChartReadout.svelte'
+	]) {
+		assert.equal(ciAnswer([path], true).console, false, path);
+		assert.equal(ciAnswer([path], true).panels, true, path);
 	}
 });
 
@@ -262,11 +321,13 @@ const PULL_REQUEST_SCOPE = [
 	['frontend/package-lock.json', true, true, true],
 	['frontend/scripts/test-groups.ts', true, true, true],
 	['.github/workflows/ci.yml', true, true, true],
-	// What every panel is drawn from, which buys the pictures but not the console.
+	// The shared panel frame reaches every console route (known defect 45).
+	['frontend/src/lib/components/Panel.svelte', true, true, true],
+	['config/console/machine.json', true, true, true],
+	// Other shared drawing inputs buy panel checks but defer the console.
 	['frontend/tests/panel-captures.spec.ts', true, false, true],
 	['frontend/tests/fixtures/panels/WitnessPanel.svelte', true, false, true],
 	['frontend/tests/support/panel-gates.ts', true, false, true],
-	['frontend/src/lib/components/Panel.svelte', true, false, true],
 	['frontend/src/lib/components/ChartReadout.svelte', true, false, true],
 	['frontend/src/lib/charts/d3/DateSeries.svelte', true, false, true],
 	['frontend/src/lib/charts/engine.ts', true, false, true],

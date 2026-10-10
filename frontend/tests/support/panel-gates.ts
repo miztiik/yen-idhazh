@@ -13,7 +13,14 @@
  * number printed beside a capture is the number a gate judged.
  */
 
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+
+/** Prepare a panel's state before navigation. Interactive panels can finish
+ * setting it up after navigation, and release a held fetch after its reading. */
+export type Driver = (page: Page) => Promise<void | {
+	afterOpen?: () => Promise<void>;
+	afterRead?: () => Promise<void>;
+}>;
 
 /** A colour as it lands on screen, every see-through layer already blended
  * onto what is behind it. Two computed strings can differ while the pixels do

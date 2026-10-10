@@ -22,6 +22,8 @@ import type { ObservabilityConfig } from '../src/lib/server/config';
 import { machineCounters } from '../src/lib/server/machine-counters';
 import { listManifestDays } from '../src/lib/server/model-work';
 import { describeServerCounters } from '../src/lib/server/server-counter-notes';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-chrome';
 
 /** `chart.readout_max_share`, read off the committed config inside the test
  * that uses it, so a malformed file fails one test rather than the module. */
@@ -46,14 +48,12 @@ function readoutMaxShare(): number {
  * appears: a tooltip needs a hover, and a hover is not a thing a thumb can do.
  */
 
-// `/console/voices/` is NOT here, and that is a decision rather than an
+// Voices is NOT here, and that is a decision rather than an
 // oversight. Every block below needs a strip to read, and the two day matrices
 // on that route declare they have none: each square already names its own day
 // and what that day did, so a strip would reprint the list the pointer is
 // already on. An `if` inside this loop to walk past them is how a route list
 // stops meaning one thing.
-const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/judgement/'];
-
 test.describe('the shape switch draws one array two ways', () => {
 	const COLUMNS = ['Mon', 'Tue', 'Wed'];
 	const SERIES = [
@@ -953,7 +953,11 @@ test.describe('what the recording was doing, in fixed words', () => {
 	});
 });
 
-for (const route of ROUTES) {
+for (const { id, href: route, label } of BAND_UNREAD.routes) {
+	const expected = BY_ROUTE[id];
+	if (expected === null) continue;
+	test.describe(label, () => {
+	if (expected.readout) {
 	test(`every chart on ${route} resolves to non-empty accessible text`, async ({ page }) => {
 		await page.goto(route, { waitUntil: 'domcontentloaded' });
 
@@ -1041,13 +1045,15 @@ for (const route of ROUTES) {
 	});
 }
 
+	const handWritten = expected.handWritten;
+	if (handWritten !== null) {
 test('a hand-written multi-series chart prints every series at one column', async ({ page }) => {
-	await page.goto('/console/', { waitUntil: 'domcontentloaded' });
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 	// The failure chart is the hardest shape on the page to read one band off:
 	// columns on the left axis, a rate line per stage on the right. Comparing them
 	// by eye is what the strip replaces, and four hovers is what it replaces.
-	const strip = page.locator('[data-readout="failure-rate"]');
+	const strip = page.locator(`[data-readout="${handWritten.id}"]`);
 	await expect(strip).toHaveCount(1);
 
 	const rows = await strip
@@ -1057,82 +1063,94 @@ test('a hand-written multi-series chart prints every series at one column', asyn
 	expect(new Set(rows).size, 'no series is printed twice').toBe(rows.length);
 	// Where the items stopped AND what share that was, at one column. A stack
 	// without its own rate beside it is the reading this chart exists to refuse.
-	expect(rows.some((row) => row.endsWith(' rate'))).toBe(true);
+	expect(rows.some((row) => row.endsWith(handWritten.rateSuffix))).toBe(true);
 });
+	}
 
+	const engineSeries = expected.engineSeries;
+	if (engineSeries !== null) {
 test('an engine-drawn chart prints both its series at one column', async ({ page }) => {
-	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 	// The two-clocks chart is the one this rule exists for: two readings of one
 	// quantity on a shared axis, which is exactly the comparison a reader would
 	// otherwise make by eye, one hover at a time.
-	const strip = page.locator('[data-readout="clocks"]');
+	const strip = page.locator(`[data-readout="${engineSeries.id}"]`);
 	await expect(strip, 'the two-instrument chart carries a strip').toHaveCount(1);
 
 	const rows = await strip
 		.locator('[data-readout-row]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-readout-row') ?? ''));
 	// Both instruments, and the gap between them, at the column the reader is on.
-	expect(rows).toEqual(['Item ledger', 'Model server', 'Apart']);
+	expect(rows).toEqual(engineSeries.labels);
 });
+	}
 
+	const keyboard = expected.keyboard;
+	if (keyboard !== null) {
 test('an arrow key moves an engine chart readout and draws a guide', async ({ page }) => {
-	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 	// One column a run, and a run id is unique, so the column Home lands on can
 	// never print what the resting column prints.
-	const frame = page.locator('[data-chart-readout="read-against-written"]');
+	const frame = page.locator(`[data-chart-readout="${keyboard.id}"]`);
 	await expect(frame).toHaveCount(1);
-	const head = page.locator('[data-readout="read-against-written"] [data-readout-day]');
+	const head = page.locator(`[data-readout="${keyboard.id}"] [data-readout-day]`);
 	const resting = await head.textContent();
 
 	// The keyboard is the point. A tooltip that only a pointer can raise leaves
 	// a value with nowhere to appear on a phone or under a screen reader.
 	await frame.focus();
 	await page.keyboard.press('Home');
-	await expect(page.locator('[data-chart-guide="read-against-written"]')).toHaveCount(1);
+	await expect(page.locator(`[data-chart-guide="${keyboard.id}"]`)).toHaveCount(1);
 	expect(await head.textContent()).not.toBe(resting);
 
 	// Escape returns it to rest, and the guide goes with it.
 	await page.keyboard.press('Escape');
-	await expect(page.locator('[data-chart-guide="read-against-written"]')).toHaveCount(0);
+	await expect(page.locator(`[data-chart-guide="${keyboard.id}"]`)).toHaveCount(0);
 	expect(await head.textContent()).toBe(resting);
 });
+	}
 
+	const shape = expected.shape;
+	if (shape !== null) {
 test('the shape switch is one control per panel and reaches the chart', async ({ page }) => {
-	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 	// The counterfactual panel carries the one switch on this route that names
 	// shapes; the other two name units and grains.
-	const control = page.locator('[data-shape-switch="cost-shape"]');
+	const control = page.locator(`[data-shape-switch="${shape.control}"]`);
 	await expect(control, 'one control, not one per series').toHaveCount(1);
-	await expect(control).toHaveAttribute('data-shape', 'daily');
-	const chart = page.locator('[data-chart-readout="counterfactual-cost"]');
+	await expect(control).toHaveAttribute('data-shape', shape.initial);
+	const chart = page.locator(`[data-chart-readout="${shape.chart}"]`);
 
 	// The label, not the input: the segment box sits over it, which is exactly the
 	// trap `console-window.spec.ts` already records for the window presets.
-	await control.locator('[data-shape-option="running"]').click();
-	await expect(control).toHaveAttribute('data-shape', 'running');
+	await control.locator(`[data-shape-option="${shape.next}"]`).click();
+	await expect(control).toHaveAttribute('data-shape', shape.next);
 	// And it reaches the chart rather than only its own fieldset. The accessible
 	// name is where a reader who cannot see the marks is told which shape it is,
 	// so a switch that moved the radio and left the drawing named as before is a
 	// defect this file owns.
 	await expect(chart, 'the chart is still named as the shape the switch left').toHaveAttribute(
 		'aria-label',
-		/added up day by day/
+		shape.nextLabel
 	);
-	await control.locator('[data-shape-option="daily"]').click();
-	await expect(control).toHaveAttribute('data-shape', 'daily');
-	await expect(chart).toHaveAttribute('aria-label', /one column a day/);
+	await control.locator(`[data-shape-option="${shape.initial}"]`).click();
+	await expect(control).toHaveAttribute('data-shape', shape.initial);
+	await expect(chart).toHaveAttribute('aria-label', shape.initialLabel);
 });
+	}
 
+	const recording = expected.recording;
+	if (recording !== null) {
 test('a route in a state says which state, in fixed words', async ({ page }) => {
-	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 	// The states are the panel rather than a replacement for it, so the heading
 	// above them is still there. A route that hid itself until it had data would
 	// be a route nobody knew to check.
-	await expect(page.locator('[data-machine="intro"]')).toHaveCount(1);
+	await expect(page.locator(recording.intro)).toHaveCount(1);
 
 	const notes = await page
 		.locator('[data-recording]')
@@ -1146,31 +1164,37 @@ test('a route in a state says which state, in fixed words', async ({ page }) => 
 	for (const note of notes) {
 		expect(note.text.length).toBeGreaterThan(0);
 		// Never the knob's name, and never styled as an error.
-		expect(note.text).not.toContain('host_fingerprint');
-		expect(note.text).not.toContain('evaluation_enabled');
-		expect(note.text).not.toContain('sample_rate');
+		for (const forbidden of recording.forbidden) {
+			expect(note.text).not.toContain(forbidden);
+		}
 	}
 });
+	}
 
+	const recordingLines = expected.recordingLines;
+	if (recordingLines !== null) {
 test('Summaries prints its recording lines before its first section, never inside it', async ({ page }) => {
-	await page.goto('/console/model/', { waitUntil: 'domcontentloaded' });
+	await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 	// One group, printed whatever the sections below hold. Inside the section, which
 	// prints only when the widest window holds model data, the "Measurement is off"
 	// line went unsaid on the page that needed it most.
-	await expect(page.locator('[data-recording-lines]')).toHaveCount(1);
-	await expect(page.locator('[data-model-section] [data-recording]')).toHaveCount(0);
-	await expect(page.locator('[data-model-section] [data-recording-lines]')).toHaveCount(0);
-	const beforeHeading = await page.evaluate(() => {
-		const group = document.querySelector('[data-recording-lines]');
+	await expect(page.locator(recordingLines.group)).toHaveCount(1);
+	await expect(page.locator(`${recordingLines.section} [data-recording]`)).toHaveCount(0);
+	await expect(page.locator(`${recordingLines.section} ${recordingLines.group}`)).toHaveCount(0);
+	const beforeHeading = await page.evaluate((recordingLines) => {
+		const group = document.querySelector(recordingLines.group);
 		const heading = [...document.querySelectorAll('h2')].find(
-			(node) => (node.textContent ?? '').trim() === 'What the model did'
+			(node) => (node.textContent ?? '').trim() === recordingLines.heading
 		);
 		if (group === null || heading === undefined) return false;
 		return (group.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-	});
+	}, recordingLines);
 	expect(beforeHeading, 'the recording lines are not above the first section').toBe(true);
 });
+	}
+	});
+}
 
 // The route-wide sweep for a nought standing in for an absent reading lived
 // here, and its only instrument was the host panel's own `data-host-value`
