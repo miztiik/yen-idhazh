@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-10
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -222,6 +222,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 
 - Use the canary, the fixed test-data build, for the browser suite; use the real build for published-site measurements. Verify which build is served.
 - Finish one build before starting another that writes the same output directory. Do not rebuild files while a preview or test is reading them.
+- **A lazy-drawing test can stall on the page's animation clock.** Use
+  `revealDayDrawings` in `frontend/tests/support/day-drawings.ts`: it snapshots
+  mounted visual articles, visits each current slot through Playwright and
+  checks that the article is in the viewport before restoring the top.
+  Scrolling the last slot and immediately restoring the top can precede
+  `IntersectionObserver` delivery. Do not replace the driver with in-page
+  animation-frame waits.
+- **Browser-side scrolling can pass the isolated drawing check and still
+  change keyboard traversal.** Keep the Playwright scroll action and check
+  the keyboard/pointer comparison in `item-visual.spec.ts` too. An isolated
+  regression check does not replace the helper's named dependant checks:
+  run `item-visual` and `canaries` together, then `whole-day` separately.
 - **A browser run ends `Timed out waiting 120000ms from config.webServer` and runs no test; the build was refused as stale.**
   The build record fingerprints Git's committed tree, the working diff and
   untracked files, so any edit after `build:canary`, a doc or a plan
