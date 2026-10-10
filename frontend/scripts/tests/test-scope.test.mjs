@@ -26,8 +26,8 @@ test('native Rust and its actual file fixture select focused checks without brow
 		assert.equal(selected.contracts, false);
 		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
 			? ['backend/tests/contracts/test_rust_host_file_parity.py']
-			: ['backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py',
-				'backend/tests/test_rust_host_receipts.py']);
+			: ['backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
+				'backend/tests/test_rust_host_store_parity.py']);
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
 		assert.equal(ciAnswer([path], true).robots, false);
