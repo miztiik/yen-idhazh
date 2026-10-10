@@ -33,6 +33,7 @@ from idhazh.contracts.base import (
     records_json,
     without_retired_keys,
 )
+from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.models import ModelRef
 
@@ -189,6 +190,14 @@ class RunRecord(Model):
         ),
     )
     verticals: list[VerticalCount] = Field(default_factory=list)
+    chart_evidence: ChartEvidence | None = Field(
+        default=None,
+        description=(
+            "Weighted totals for visible charts written by this run in the final day. "
+            "Null if any eligible chart lacks evidence, or on historical unmeasured runs. "
+            "Zero counts with null rates mean the run measured no published chart figures."
+        ),
+    )
 
     inputs: PipelineInputs | None = Field(
         default=None,
@@ -314,6 +323,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-10",
+            change="Added chart_evidence totals for published numeric figures.",
+            why="Weighted rates need exact totals and must preserve historical unknown evidence.",
+        ),
+        ChangelogEntry(
             version="2026-09-23",
             change="The recorded sampling block is every key sent, not the three read by name.",
             why="Ten keys could move the decode with the record unchanged.",
@@ -327,11 +341,6 @@ class RunManifest(Contract):
             version="2026-09-22",
             change="Recorded sampling and runtime flags become mappings; an old run reads.",
             why="Joined, a rename moved the whole record and the console called it a change.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T03:00",
-            change="The embedded settings become plain mappings, and two blocks replace one.",
-            why="A record carrying a retired option name has to keep reading.",
         ),
         ChangelogEntry(
             version="2026-09-20",

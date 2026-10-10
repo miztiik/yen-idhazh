@@ -18,6 +18,7 @@ from pydantic import Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import ChangelogEntry, Contract, ItemId, RelPath, Slug, Timestamp, UrlKey
+from idhazh.contracts.chart_evidence import ChartEvidence
 
 #: What one item's decision is filed as, under `backend/var/run/<date>/items/`.
 #: The writer, the reader and the workflow's upload glob all spell it, and a run
@@ -93,6 +94,11 @@ class VisualDecision(Contract):
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-10",
+            change="Added chart_evidence counts and rates for compiled numeric figures.",
+            why="Run reports need exact counts from the compiler's single resolution.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:30",
             change="Retired asset_path.",
             why="The build-time renderer is deleted, so nothing writes an SVG to name.",
@@ -106,11 +112,6 @@ class VisualDecision(Contract):
             version="2026-09-13",
             change="NoneReason takes a fifth member, window_exhausted.",
             why="A reply that runs into the wall of the context window had no name of its own.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T18:40",
-            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
-            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -183,6 +184,14 @@ class VisualDecision(Contract):
         ),
     )
     failure_detail: UntrustedLine | None = None
+    chart_evidence: ChartEvidence | None = Field(
+        default=None,
+        description=(
+            "Evidence from the numeric marks in the compiler's single resolution. "
+            "Null on historical unmeasured charts and on plans that never compiled. "
+            "A failed write may retain compiled evidence but is excluded from run totals."
+        ),
+    )
 
     @model_validator(mode="after")
     def _a_published_chart_was_drafted_as_one(self) -> Self:
@@ -194,6 +203,8 @@ class VisualDecision(Contract):
     @model_validator(mode="after")
     def _outcome_matches_the_decision(self) -> Self:
         if self.kind is VisualKind.NONE:
+            if self.chart_evidence is not None:
+                raise ValueError("an item decided to nothing carries no compiled chart evidence")
             if self.spec is not None:
                 raise ValueError("an item decided to nothing carries no spec")
             if self.visual_state is not VisualState.ABSENT:

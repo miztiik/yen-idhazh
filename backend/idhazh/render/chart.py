@@ -27,6 +27,7 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Final, NamedTuple
 
+from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.derived import DisplayedValue
 from idhazh.contracts.element import Element, ElementId, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -37,7 +38,7 @@ from idhazh.contracts.visual_data import (
     VisualEncoding,
     VisualMark,
 )
-from idhazh.derived_values import resolve_displayed_values
+from idhazh.derived_values import measure_displayed_values, resolve_displayed_values
 from idhazh.sanitize import sanitize
 
 #: How many of an element's own characters name one bar. The drawn label is the
@@ -66,13 +67,12 @@ class CompiledChart(NamedTuple):
     disagree - which is the reason `alt_text` is not a field the model may write
     (`docs/architecture/publishing/visuals.md`).
 
-    It carried a third member, the Vega-Lite spec, until the renderer went. One
-    resolution is still the rule, and now there is nothing left for a second one
-    to drift from.
+    Evidence counts the same numeric sequence that supplies the marks.
     """
 
     alt_text: str
     data: VisualData
+    evidence: ChartEvidence
 
 
 class _Figure(NamedTuple):
@@ -144,7 +144,9 @@ def compile_bar(plan: VisualPlan, table: ElementTable, *, visuals: VisualsConfig
     # the plan's own order rather than a rule minted here.
     unit = figures[0].unit
     data = _bar_data(table.item_id, names, naming, figures, measuring)
-    return CompiledChart(_alt_text(names, figures, unit), data)
+    return CompiledChart(
+        _alt_text(names, figures, unit), data, measure_displayed_values(measuring, table)
+    )
 
 
 def _bar_data(

@@ -462,6 +462,13 @@ test('a run manifest reads into the facts its square and its line are built from
 					items_routed: 5,
 					items_prefiltered: 3,
 					charts_drafted: 2,
+					chart_evidence: {
+						displayed_values: 7,
+						derived_values: 1,
+						trusted_values: 7,
+						derived_value_rate: 1 / 7,
+						trusted_data_ratio: 1
+					},
 					route_ms: 90_000,
 					inputs: { summarizer: 'model-a' },
 					models: [model],
@@ -513,6 +520,13 @@ test('a run manifest reads into the facts its square and its line are built from
 			decided: 5,
 			prefiltered: 3,
 			chartsDrafted: 2,
+			chartEvidence: {
+				displayed_values: 7,
+				derived_values: 1,
+				trusted_values: 7,
+				derived_value_rate: 1 / 7,
+				trusted_data_ratio: 1
+			},
 			decisionMs: 90_000,
 			inputs: { summarizer: 'model-a' }
 		},
@@ -530,6 +544,7 @@ test('a run manifest reads into the facts its square and its line are built from
 			decided: 0,
 			prefiltered: 0,
 			chartsDrafted: 0,
+			chartEvidence: null,
 			// Nothing timed the planner, and the manifest says so with a null: a zero
 			// here would be a measurement nobody took.
 			decisionMs: null,

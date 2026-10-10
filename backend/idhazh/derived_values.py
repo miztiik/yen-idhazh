@@ -82,6 +82,7 @@ from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from enum import StrEnum
 from typing import Final, NamedTuple
 
+from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.derived import DerivedFunction, DerivedValue, DisplayedValue
 from idhazh.contracts.element import Element, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -617,6 +618,21 @@ def _resolved(
     return drawn
 
 
+def measure_displayed_values(
+    values: Sequence[DisplayedValue], table: ElementTable
+) -> ChartEvidence:
+    """Count the compiler's displayed numeric sequence without resolving it again."""
+    return ChartEvidence.from_counts(
+        displayed=len(values),
+        derived=_derived_values_count(values),
+        trusted=_trusted_values_count(values, table),
+    )
+
+
+def _derived_values_count(values: Sequence[DisplayedValue]) -> int:
+    return sum(1 for one in values if one.derived is not None)
+
+
 def derived_value_rate(values: Sequence[DisplayedValue]) -> float | None:
     """What share of these figures code computed rather than the article wrote.
 
@@ -631,14 +647,14 @@ def derived_value_rate(values: Sequence[DisplayedValue]) -> float | None:
     """
     if not values:
         return None
-    return sum(1 for one in values if one.derived is not None) / len(values)
+    return _derived_values_count(values) / len(values)
 
 
 def trusted_data_ratio(values: Sequence[DisplayedValue], table: ElementTable) -> float | None:
     """What share of these figures resolves, against the table they claim to come from.
 
-    The correctness alarm, and the reported face of the rule this whole contract
-    is for: a figure resolves when it is a Tier 1 element the article's table
+    This measures source-reference coverage, not numeric correctness: a figure
+    resolves when it is a Tier 1 element the article's table
     holds, or a derived value whose every input is one. Below one means something
     is drawn that resolves to nothing.
 
@@ -650,6 +666,10 @@ def trusted_data_ratio(values: Sequence[DisplayedValue], table: ElementTable) ->
     """
     if not values:
         return None
+    return _trusted_values_count(values, table) / len(values)
+
+
+def _trusted_values_count(values: Sequence[DisplayedValue], table: ElementTable) -> int:
     known = {element.element_id for element in table.elements}
     resolved = 0
     for one in values:
@@ -657,4 +677,4 @@ def trusted_data_ratio(values: Sequence[DisplayedValue], table: ElementTable) ->
             resolved += int(one.element_id in known)
         elif one.derived is not None:
             resolved += int(all(cited in known for cited in one.derived.inputs))
-    return resolved / len(values)
+    return resolved

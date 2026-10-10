@@ -221,6 +221,7 @@ def render_planned_visual(
             "none_reason": None,
             "spec": compiled.data.to_json(),
             "alt_text": compiled.alt_text,
+            "chart_evidence": compiled.evidence.model_dump(mode="json"),
         }
     )
     try:
