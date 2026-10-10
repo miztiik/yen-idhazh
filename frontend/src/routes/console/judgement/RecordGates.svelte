@@ -121,6 +121,7 @@
 		data-windowed="record-gates"
 		data-panel-question="Does the record hold enough evidence to move the line?"
 		data-model-rule="no"
+		data-model-rule-name="record-gates"
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-gates-met={standing === null ? undefined : met ? 'yes' : 'no'}

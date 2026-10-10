@@ -469,6 +469,7 @@
 		data-windowed="judge-agreement"
 		data-panel-question="Did the judge agree with its own second reading?"
 		data-model-rule="no"
+		data-model-rule-name="judge-agreement"
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-agreement-domain={`${corridor[0]},${corridor[1]}`}

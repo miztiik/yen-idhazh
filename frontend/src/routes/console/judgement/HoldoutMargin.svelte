@@ -293,6 +293,7 @@
 		data-holdout
 		data-panel-question="How much room does the line leave above pairs a person marked apart?"
 		data-model-rule="no"
+		data-model-rule-name="holdout-margin"
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-holdout-state={absent ? 'missing' : reading}
 		data-holdout-tone={tone}

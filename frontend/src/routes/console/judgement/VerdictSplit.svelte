@@ -126,6 +126,7 @@
 		data-verdict-split
 		data-panel-question="Which pairs did the judge call one story?"
 		data-model-rule="no"
+		data-model-rule-name="verdict-split"
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-readout-none={record === null
 			? "the judge's score record is unavailable, so there is no range to read; agreed with Susan"
