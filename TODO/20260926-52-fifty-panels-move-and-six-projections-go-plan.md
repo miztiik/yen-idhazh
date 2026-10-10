@@ -53,7 +53,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Each route gets its own console file, gate drivers and test expectations | - | A | DONE | p52-route-ownership (`feat/console-route-ownership`) | Read from merge | Owner and file workers |
 | 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | PENDING | - | - | - |
-| 3 | Judgement carries its ids and gates, and its readers are named for the judge | 1 | B | PENDING | - | - | - |
+| 3 | Judgement carries its ids and gates, and its readers are named for the judge | 1 | B | BLOCKED: ESCALATE6 shared docs and Pipelines navigation; code implemented | p52-judgement (`feat/console-judgement-panels`) | Owner handles | Susan |
 | 4 | Every panel's question is declared before it is drawn, and the door is measured at the console's real volume | 2 | C | PENDING | - | - | - |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | PENDING | - | - | - |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |

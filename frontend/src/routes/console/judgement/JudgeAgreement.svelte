@@ -68,7 +68,7 @@
 	}
 
 	let {
-		days,
+		days: inputDays,
 		limits,
 		viewport,
 		height,
@@ -77,7 +77,7 @@
 		readoutMaxShare,
 		attemptsFloor
 	}: {
-		days: JudgeDay[];
+		days: JudgeDay[] | null;
 		limits: AgreementLimits;
 		viewport: TimeWindow;
 		height: number;
@@ -92,6 +92,7 @@
 	let selected = $state<number | null>(null);
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
+	const days = $derived(inputDays ?? []);
 	const drawn = $derived(
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
@@ -444,22 +445,39 @@
 </script>
 
 <Panel
+	id="judge-agreement"
 	title="Whether the judge agrees with itself"
 	note={`Every pair is read twice, with the two summaries swapped. A "disagreed" dot shows how often a pair's two readings disagreed. A "could not tell" dot shows how often the pairs whose two readings agreed could not tell. When a day's rate is past its own dashed mark, the run does not move the merge line that day.`}
 >
 	<div
 		data-windowed="judge-agreement"
+		data-panel-question="Did the judge agree with its own second reading?"
+		data-model-rule="no"
+		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-agreement-domain={`${corridor[0]},${corridor[1]}`}
 		data-agreement-days={read.length}
 		data-readout-columns={count > 0 ? count : undefined}
 		data-readout-none={count > 0
 			? undefined
-			: 'no pair has been read twice, so there is no column to read; agreed with Susan'}
+			: 'no judge readings were returned, so there is no column to read; agreed with Susan'}
 	>
+		<p class="comparison" data-comparison="The judge's two readings against each other, and each rate against its own limit.">
+			The judge's two readings against each other, and each rate against its own limit.
+		</p>
+		{#if inputDays === null}
+			<p class="lede" data-lede data-empty="missing">The judge's numbers are unavailable.</p>
+		{:else}
+		<p class="lede" data-lede>
+			{read.length === 0
+				? 'No judge readings were returned for this window.'
+				: `${disagreeShare ?? `${grouped(Math.round(disagreed))} of ${formatPairs(judged)}`} disagreed with the judge's own second reading`}
+		</p>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
+				data-chart-type="dateSeries"
+				data-chart-name="The judge's two readings"
 				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
@@ -599,7 +617,7 @@
 		<p class="agreement-note">
 			{#if read.length === 0}
 				<span data-agreement-state="none"
-					>No pair was read twice in {nameSpan(windowDays)}, so there is nothing to compare.</span
+					>No judge readings were returned for {nameSpan(windowDays)}, so there is nothing to compare.</span
 				>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
@@ -634,10 +652,22 @@
 		{#if floorNote !== null}
 			<p class="floor-note" data-agreement-floor-note>{floorNote}</p>
 		{/if}
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.lede {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		color: var(--color-text);
+	}
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	.agreement-note {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-sm);

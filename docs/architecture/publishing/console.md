@@ -141,27 +141,61 @@ Preserve protected copy such as `What the model did` on Summaries. The
 [summary-page checks](../../../frontend/tests/console-model.spec.ts) hold labels
 and stable addresses together. An approved copy change updates both.
 
-## Judgement distinguishes counts from model verdicts
+## Judgement distinguishes published merges from judging evidence
 
-`Stories the day merged` counts recorded grouping outcomes. Daily columns show
-stories merged behind another; each column's dot shows the largest group,
-including its retained story. Both count stories and share an axis.
+The tab says: `Which stories the day merged, and where the judge and a person
+disagreed.` Six panels form one untitled group, in this order:
 
-Use the recorded `same_story_as` decision. Do not repeat the similarity or
-classification decision in the browser. Derive display counts through shared
-logic and bounded browser reads, not a server-loader scan of published days.
+- `merged-stories` counts the published `same_story_as` decisions. Daily columns
+  count stories merged behind another; dots count the largest group, including
+  its retained story. The merge share stays in words with its denominator.
+- `merge-line` compares each nightly calculated line with its proposal. The
+  recorded line the newest day used is a separate fact. Neither a calculation
+  nor a pair above a threshold proves a published merge.
+- `judge-agreement` compares the judge's first reading with its own second
+  reading, with the summaries swapped. Disagreement and uncertainty keep their
+  own denominators and limits. A day below the reporting floor keeps its counts
+  but draws no rate dot.
+- `record-gates` compares each recorded count with the count needed to fit a
+  line. Its day strip keeps days without rows. Missing counts are not zero bars.
+- `verdict-split` separates pairs called one story from pairs called two stories,
+  on each side of the merge line. Its cells say eligible, not merged.
+- `holdout-margin` compares pairs a person marked apart with the merge line.
+  It keeps the score-range strip for pairs marked one story, the margin, and
+  the separate committed scoring result. See the
+  [holdout drawing rule](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
 
-Show the merge share in text with its denominator, not as a rate line on an axis
-that either flattens small shares or exaggerates noise. A nonzero share that
-rounds below one percent prints `<1`, not `0`.
+All six keep their build-time reads. The digest days and the content-similarity
+judge's records are not published ledgers. `content-similarity-judge.ts` and
+`content-similarity-holdout.ts` stay under `frontend/src/lib/server/`; the browser
+must not import them. Reads keep their existing window and holdout-reach bounds.
+The browser changes the window over those inlined results, without a fetch.
 
-Counts do not answer which desk or lenses a model chose. Name absent evidence
-until those records actually exist; adding one panel must not hide another
-unanswered question. A navigation tab must lead to a real route, even when that
-route can only explain what is missing. The holdout comparison follows the
-[chart rules](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
+Each panel has a stable id, one leading figure or sentence, a visible comparison,
+a named question, a chart type, and a readout declaration. Each declines the
+summary-settings rule because it draws the judge's record, not how summaries
+are written. All six are judged and listed in the route's `BUILD_TIME`.
+
+The component boundary keeps absent evidence as `null` and supplied empty
+evidence as an empty array or a zero-count record. Missing evidence prints an
+unavailable sentence without measured zeros. The existing readers do not always
+distinguish an absent dataset from an empty query result; those results say no
+rows were returned, not that no run happened. The component-state test renders
+both inputs through the real components and judges their different words,
+without a fabricated fetch.
+
+The old per-article desk and lens heading and its named absence are removed.
+These panels do not promise classification evidence they cannot show.
 
 ## Design rationale
+
+Judgement keeps its existing questions and drawings. The agreement chart has
+no human verdict input, so calling it agreement with a person would mislabel
+evidence. Its leading disagreement share and comparison describe the two real
+readings; the hand-marked comparison remains in `holdout-margin`. Likewise, the
+merge-line drawing receives calculated lines, not individual pair scores, so
+its leading figure is the newest calculated line, not an invented pair count.
+These limits preserve the drawings without presenting absent evidence as fact.
 
 | Alternative | Why not |
 | --- | --- |

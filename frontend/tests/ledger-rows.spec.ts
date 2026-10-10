@@ -25,7 +25,7 @@ import { datedFirst, evalRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } 
 import { machineCounters } from '../src/lib/server/machine-counters';
 import { listManifestDays } from '../src/lib/server/model-work';
 import { describeServerCounters } from '../src/lib/server/server-counter-notes';
-import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/similarity-holdout';
+import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/content-similarity-holdout';
 import { windowDay } from '../src/lib/server/window-day';
 import { buildLedger, buildRows, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
 import { publishedSite } from './support/published-site';

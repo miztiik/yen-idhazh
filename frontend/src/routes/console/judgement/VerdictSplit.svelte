@@ -116,15 +116,30 @@
 </script>
 
 <Panel
+	id="verdict-split"
 	title="What the judge said about the line"
 	note="Every judged pair, split by whether its score cleared the line the newest day was built with and by what the judge said about it."
 >
 	<div
 		data-verdict-split
-		data-readout-none="two population ranges on one score axis, so there is no column to share, and each range prints its lowest, middle and highest in words; agreed with Susan"
+		data-panel-question="Which pairs did the judge call one story?"
+		data-model-rule="no"
+		data-model-rule-none="the judge's record, not how summaries are written"
+		data-readout-none={record === null
+			? "the judge's score record is unavailable, so there is no range to read; agreed with Susan"
+			: 'two population ranges on one score axis, so there is no column to share, and each range prints its lowest, middle and highest in words; agreed with Susan'}
 		data-verdict-line={reads(applied)}
-		data-verdict-days={record?.daysCounted ?? 0}
+		data-verdict-days={record?.daysCounted}
 	>
+		<p class="comparison" data-comparison="Pairs judged one story against pairs judged two stories, split at the merge line.">
+			Pairs judged one story against pairs judged two stories, split at the merge line.
+		</p>
+		{#if record === null}
+			<p class="lede" data-lede data-empty="missing">The judge's score record is unavailable.</p>
+		{:else}
+		<p class="lede" data-lede>
+			{grouped(split.eligibleAgreed + split.refusedAgreed)} pairs judged one story
+		</p>
 		<div class="grid">
 			{#each cells as cell (cell.key)}
 				<div class="cell" data-verdict-cell={cell.key}>
@@ -157,6 +172,7 @@
 
 		<div use:observeWidth={(next) => (measured = next)}>
 			<svg
+				data-chart-type="distribution"
 				class="block max-w-full overflow-visible"
 				width={box.width}
 				height={box.height}
@@ -269,10 +285,22 @@
 				</table>
 			{/if}
 		</details>
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.lede {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		color: var(--color-text);
+	}
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));

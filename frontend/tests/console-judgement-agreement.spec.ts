@@ -7,9 +7,8 @@
  * days the window spans.
  *
  * **The canary build has judged nothing**, so the baseline here is the empty
- * state - which on both panels is the state that proves the design. Three bars
- * draw, three markers are placed, and the panel says exactly what has to happen
- * before anything is fitted.
+ * state. A gate without recorded counts draws no zero bar. The populated
+ * private route in `console-judgement-verdict` checks all three policy bars.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -18,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { agreementCorridor } from '../src/lib/console/merge-line';
+import { BUILD_TIME } from './support/panel-drivers/judgement';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8'));
@@ -119,37 +119,19 @@ test.describe('whether the judge agrees with itself', () => {
 
 		if ((await page.locator(`${AGREEMENT} [data-agreement-day]`).count()) > 0) return;
 		await expect(page.locator('[data-agreement-state="none"]')).toContainText(
-			'No pair was read twice in'
+			'No judge readings were returned for'
 		);
 	});
 });
 
 test.describe('what the record still needs', () => {
-	test('the three bars draw when the record is empty', async ({ page }) => {
+	test('absent gate counts do not draw measured zeros', async ({ page }) => {
 		await open(page);
 
-		// The panel's best day, not its worst: on the first run every bar draws,
-		// every marker is placed, and the panel says what has to happen. A panel
-		// that waits for data teaches an operator the measurement does not exist.
-		expect(await page.locator(`${GATES} [data-target-bar]`).count()).toBe(3);
-		if ((await page.locator('[data-gates-state="empty"]').count()) > 0) {
-			await expect(page.locator('[data-gates-state="empty"]')).toContainText(
-				'Nothing was judged in'
-			);
-		}
-	});
-
-	test('the gate bars take the policy tone', async ({ page }) => {
-		await open(page);
-
-		// A gate is a threshold somebody chose, not a health fact. Tinting it with
-		// the confidence ramp would invent a verdict on the machine. The bite: set
-		// tone to `health` and this goes red.
-		const tones = await page
-			.locator(`${GATES} [data-target-bar]`)
-			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-target-tone')));
-
-		expect(tones).toEqual(['policy', 'policy', 'policy']);
+		await expect(page.locator(`${GATES} [data-target-bar]`)).toHaveCount(0);
+		await expect(page.locator('[data-gates-state="empty"]')).toContainText(
+			'No gate counts were returned for'
+		);
 	});
 
 	test('the squares strip names every date, including the silent ones', async ({ page }) => {
@@ -176,6 +158,37 @@ test.describe('what the record still needs', () => {
 		const days = Number(await page.locator(GATES).getAttribute('data-window-days'));
 		expect(dates.length).toBeGreaterThanOrEqual(days);
 	});
+
+	for (const width of [390, 768, 1440]) {
+		for (const theme of ['light', 'dark']) {
+			test(`Judgement smoke: ${width}, ${theme}, absent judge record`, async ({ page }) => {
+				await page.addInitScript((choice) => localStorage.setItem('idhazh:theme', choice), theme);
+				const errors: string[] = [];
+				page.on('pageerror', (error) => errors.push(error.message));
+				page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+				page.on('response', (response) => { if (response.status() === 404) errors.push(`404 ${response.url()}`); });
+				await open(page, width);
+				await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+				expect(await page.locator('[data-console-panel-id]').evaluateAll(
+					(nodes) => nodes.map((node) => node.getAttribute('data-console-panel-id'))
+				)).toEqual(BUILD_TIME);
+				for (const id of BUILD_TIME) {
+					const panel = page.locator(`[data-console-panel-id="${id}"]`);
+					await expect(panel.locator('[data-lede]')).toHaveCount(1);
+					await expect(panel.locator('[data-lede]')).toBeVisible();
+					await expect(panel.locator('[data-comparison]')).toHaveCount(1);
+					await expect(panel.locator('[data-comparison]')).toHaveAttribute('data-comparison', / against /);
+					await expect(panel.locator('[data-panel-question]')).toHaveAttribute('data-model-rule', 'no');
+					await expect(panel.locator('[data-panel-question]')).toHaveAttribute(
+						'data-model-rule-none', "the judge's record, not how summaries are written"
+					);
+				}
+				await expect(page.locator('[data-console-empty="judgement"]')).toHaveCount(0);
+				await expect(page.locator('[data-verdict-split] [data-empty="missing"]')).toBeVisible();
+				expect(errors).toEqual([]);
+			});
+		}
+	}
 
 	test('a held day while filling is not painted as a warning', async ({ page }) => {
 		await open(page);

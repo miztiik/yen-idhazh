@@ -41,7 +41,7 @@ function knobs(): { applied: number; maxDownStep: number; bandLow: number; bandH
 		.same_story;
 	const threshold = block.adaptive_dedup_threshold;
 	// The committed config leaves `bin_width` unset, so the contract's own default
-	// stands in for it - the same fallback `similarity-ledger.ts` uses.
+	// stands in for it - the same fallback `content-similarity-judge.ts` uses.
 	return {
 		applied: block.floor_min,
 		maxDownStep: threshold.max_down_bins * (threshold.bin_width ?? 0.001),

@@ -12,8 +12,8 @@ import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
 import { readRecordedLine } from '$lib/server/recorded-line';
-import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
-import { holdoutReading, markReach, mergeLineHoldoutScore } from '$lib/server/similarity-holdout';
+import { fittedLines, scoreRecord } from '$lib/server/content-similarity-judge';
+import { holdoutReading, markReach, mergeLineHoldoutScore } from '$lib/server/content-similarity-holdout';
 import { windowDay } from '$lib/server/window-day';
 
 export const prerender = true;
@@ -172,7 +172,6 @@ export async function load() {
 			// which is the part a rebuild of this page cannot reconstruct.
 			scored
 		},
-		console,
 		// How many date labels the day axis may carry - `chart.tick_density`.
 		chart: chartConfig(),
 		// The day every window on this route ends on: the site's newest published day.

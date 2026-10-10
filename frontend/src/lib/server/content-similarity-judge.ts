@@ -1,4 +1,4 @@
-/** Where the merge line sat each day, read at build time from `state/`.
+/** Where the content-similarity judge's merge line sat each day, read at build time.
  *
  * `state/compact/content-similarity-judge/fitted-thresholds/` holds one row a
  * run, filed through the ledger door by the council's save job and packed by

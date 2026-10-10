@@ -290,10 +290,10 @@ test.describe('the judge, and what the record still needs', () => {
 		]);
 	});
 
-	test('a record with nothing in it still draws three bars at zero', () => {
-		// The panel's best day, not its worst. A panel that waits for data before
-		// it draws anything teaches an operator the measurement does not exist.
-		const needs = gateNeeds(null, {
+	test('a supplied zero-count record has three gate readings at zero', () => {
+		const needs = gateNeeds(judgeDay('2030-06-14', {
+			negativesOnRecord: 0, daysOnRecord: 0, aboveLineOnRecord: 0
+		}), {
 			minimumNegatives: 200,
 			minimumDays: 10,
 			minimumAboveLine: 30
@@ -323,7 +323,7 @@ test.describe('the judge, and what the record still needs', () => {
 		expect(gateNeeds(findNewestRow(rows, '2030-06-15'), gates).map((need) => need.value)).toEqual([
 			120, 6, 12
 		]);
-		// No row by then is a record that never held one, which keeps its three zeros.
+		// Without a recorded row the component has no measured bars to draw.
 		expect(findNewestRow(rows, '2030-06-11')).toBeNull();
 		expect(findNewestRow([], '2030-06-15')).toBeNull();
 	});

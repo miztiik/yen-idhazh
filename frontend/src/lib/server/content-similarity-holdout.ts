@@ -25,13 +25,13 @@
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
  * to bundle it for a browser, the same place and for the same reason as
- * `similarity-ledger.ts`.
+ * `content-similarity-judge.ts`.
  */
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// Relative, not `$lib`, for the reason in `similarity-ledger.ts`: the browser
+// Relative, not `$lib`, for the reason in `content-similarity-judge.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
 import { windowOfDays, type TimeWindow } from '../charts/viewport';
 import {

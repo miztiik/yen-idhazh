@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ledgerFolder } from '../src/lib/data/slice-reader';
-import { FITTED_LINE_COLUMNS, fittedLines, type FittedLine } from '../src/lib/server/similarity-ledger';
+import { FITTED_LINE_COLUMNS, fittedLines, type FittedLine } from '../src/lib/server/content-similarity-judge';
 import { backendPython } from './support/backend-python';
 import { buildLedger, everyDay, quietDays } from './support/ledger-lifecycle';
 
