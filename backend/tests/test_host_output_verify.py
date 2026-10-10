@@ -29,6 +29,7 @@ from idhazh.contracts.host_output import (
     HostWriterIdentity,
     LegacyHostFingerprintRow,
     fingerprint_v1,
+    fingerprint_v2,
     host_file_id,
     host_unit_id,
 )
@@ -709,3 +710,55 @@ def test_enrichment_requires_later_clock_and_frozen_probe(tmp_path: Path) -> Non
 def test_limits_cannot_be_disabled_or_overflow(limit: Any) -> None:
     with pytest.raises(ValueError):
         replace(LIMITS, max_files=limit)
+
+
+@pytest.mark.parametrize("native", [False, True])
+@pytest.mark.parametrize("fmt", list(Format))
+def test_only_native_boundary_refuses_invented_algorithm_one(
+    tmp_path: Path,
+    native: bool,
+    fmt: Format,
+) -> None:
+    row = source_row() | {"fingerprint": "a" * 16, "fingerprint_version": 1}
+    path, _, data = render_file(tmp_path, fmt, rows=[row], native_candidate=native)
+    if native and fmt is Format.PARQUET:
+        # Candidate boundary coverage, not a claimed native Rust codec.
+        size = int.from_bytes(data[-8:-4], "little")
+        footer = data[-8 - size : -8]
+        old = f"parquet-cpp-arrow version {parquet.engine_version()}".encode()
+        replacement = b"parquet-rs version candidate-only"
+        at = footer.index(old)
+        assert len(old) < 128 and footer[at - 1] == len(old)
+        footer = (
+            footer[: at - 1] + bytes([len(replacement)]) + replacement + footer[at + len(old) :]
+        )
+        data = data[: -8 - size] + footer + len(footer).to_bytes(4, "little") + b"PAR1"
+        path.write_bytes(data)
+    if native:
+        with pytest.raises(ValueError, match="native host output"):
+            read_host_output(path, root=tmp_path, limits=LIMITS)
+    else:
+        assert read_host_output(path, root=tmp_path, limits=LIMITS).rows[0].fingerprint_version == 1
+    assert path.read_bytes() == data
+
+
+def test_native_boundary_keeps_null_and_sourced_algorithm_two(tmp_path: Path) -> None:
+    row = source_row()
+    sourced = fingerprint_v2(HostStoredRow.model_validate(row))
+    assert sourced is not None
+    for cells in (row, row | {"fingerprint": sourced, "fingerprint_version": 2}):
+        path, _, data = render_file(tmp_path, rows=[cells], native_candidate=True)
+        assert (
+            read_host_output(path, root=tmp_path, limits=LIMITS).rows[0].fingerprint
+            == cells["fingerprint"]
+        )
+        assert path.read_bytes() == data
+    unsourced = row | {
+        "cpu_model": None,
+        "fingerprint": "a" * 16,
+        "fingerprint_version": 2,
+    }
+    path, _, data = render_file(tmp_path, rows=[unsourced], native_candidate=True)
+    with pytest.raises(ValueError, match="hardware facts"):
+        read_host_output(path, root=tmp_path, limits=LIMITS)
+    assert path.read_bytes() == data

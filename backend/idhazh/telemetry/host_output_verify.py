@@ -33,6 +33,7 @@ from idhazh.contracts.host_output import (
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import json_lines
 from idhazh.ledger.arrow_schema import Column, ColumnType, columns_of
+from idhazh.telemetry.host_parquet_admission import admit_host_parquet, check_parquet_footer
 
 
 @dataclass(frozen=True)
@@ -231,8 +232,8 @@ def _read_json(
 ) -> tuple[CandidateFileEnvelope, list[dict[str, Any]]]:
     if not data.isascii() or b"\r" in data or not data.endswith(b"\n"):
         raise ValueError("JSONL host output must be ASCII with LF-terminated lines")
-    if data.count(b"\n") - 1 > limits.max_rows:
-        raise ValueError("JSONL host output exceeds the row limit")
+    if data.count(b"\n") != 2:
+        raise ValueError("a raw host JSONL file must contain exactly one whole row")
     head, _, body = data.partition(b"\n")
     if len(head) > limits.max_footer_bytes or len(body) > limits.max_decode_bytes:
         raise ValueError("JSONL host output exceeds envelope or decode byte limits")
@@ -256,11 +257,12 @@ def _read_parquet(
 ) -> tuple[CandidateFileEnvelope, list[dict[str, Any]], str]:
     from idhazh.ledger import parquet
 
-    if len(data) < 12 or data[:4] != b"PAR1" or data[-4:] != b"PAR1":
-        raise ValueError("invalid Parquet file framing")
-    footer_size = int.from_bytes(data[-8:-4], "little")
-    if not 0 < footer_size <= min(limits.max_footer_bytes, len(data) - 12):
-        raise ValueError("Parquet footer exceeds its byte limit or file boundary")
+    footer_start = check_parquet_footer(
+        data,
+        max_footer_bytes=limits.max_footer_bytes,
+        max_thrift_items=limits.max_thrift_items,
+        max_depth=limits.max_json_depth,
+    )
     # Reach the existing engine through its container adapter. Its ordinary
     # whole-file read has no Thrift limits, so inspect a bounded footer first.
     engine = parquet.pyarrow  # type: ignore[attr-defined]  # Existing adapter's engine import.
@@ -273,10 +275,8 @@ def _read_parquet(
         ) as opened,
     ):
         footer = opened.metadata
-        if not 1 <= footer.num_rows <= limits.max_rows:
-            raise ValueError("Parquet host output exceeds the row limit or is empty")
-        if not 1 <= footer.num_row_groups <= limits.max_rows:
-            raise ValueError("Parquet host output exceeds the row-group limit")
+        if footer.num_rows != 1 or footer.num_row_groups != 1:
+            raise ValueError("a raw host Parquet file must contain exactly one row and row group")
         metadata = dict(footer.metadata or {})
         schema_metadata = dict(opened.schema_arrow.metadata or {})
         if any(metadata.get(key) != value for key, value in schema_metadata.items()):
@@ -294,31 +294,18 @@ def _read_parquet(
         )
         if created_by != f"{engine_name} version {env.writer_version}":
             raise ValueError("Parquet created_by contradicts writer and engine version")
-        decoded_bytes = 0
-        for index in range(footer.num_row_groups):
-            group = footer.row_group(index)
-            if group.num_columns != len(expected) or not 1 <= group.num_rows <= limits.max_rows:
-                raise ValueError("Parquet row-group shape contradicts the host schema")
-            for column_index in range(group.num_columns):
-                column = group.column(column_index)
-                if column.file_path:
-                    raise ValueError("Parquet host output references a foreign column file")
-                if column.compression.lower() not in (
-                    env.compression.value,
-                    "uncompressed" if env.compression.value == "none" else "",
-                ):
-                    raise ValueError("Parquet compression contradicts its envelope")
-                if column.total_uncompressed_size < 0 or column.total_compressed_size < 0:
-                    raise ValueError("Parquet column has invalid byte sizes")
-                offset = column.dictionary_page_offset or column.data_page_offset
-                if (
-                    offset < 4
-                    or offset + column.total_compressed_size > len(data) - footer_size - 8
-                ):
-                    raise ValueError("Parquet column bytes exceed the file body")
-                decoded_bytes += column.total_uncompressed_size
-        if decoded_bytes > limits.max_decode_bytes:
-            raise ValueError("Parquet output exceeds the uncompressed byte limit")
+        admit_host_parquet(
+            data,
+            footer_start=footer_start,
+            opened=opened,
+            columns=host_output_columns(env.row_schema_version),
+            compression=env.compression.value,
+            max_decode_bytes=limits.max_decode_bytes,
+            max_header_bytes=limits.max_footer_bytes,
+            max_thrift_items=limits.max_thrift_items,
+            max_depth=limits.max_json_depth,
+            engine=engine,
+        )
         rows: list[dict[str, Any]] = []
         batch_bytes = 0
         for batch in opened.iter_batches(batch_size=1, use_threads=False):
@@ -336,6 +323,10 @@ def _validate_rows(
 ) -> tuple[HostStoredRow, ...]:
     # Hash the original dictionaries, not coerced/normalized model dumps.
     normalized = normalize_stored_host_rows(rows, content_sha256=env.content_sha256)
+    if env.writer.startswith("idhazh_rust.") and any(
+        row.fingerprint_version not in (None, 2) for row in normalized
+    ):
+        raise ValueError("native host output requires a null fingerprint or sourced algorithm 2")
     if len(rows) != 1:
         raise ValueError("a raw host work unit must contain exactly one whole row")
     columns = host_output_columns(env.row_schema_version)

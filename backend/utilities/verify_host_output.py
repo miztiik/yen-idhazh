@@ -16,7 +16,15 @@ from idhazh.telemetry.host_output_verify import (
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog=(
+            "Raw host files contain exactly one row. Parquet admits only flat "
+            "int64/float64/string PLAIN or one-entry dictionary pages before row decoding. "
+            "The decode budget includes actual pages and Arrow flat-cell buffers; "
+            "max-json-depth also bounds compact Thrift nesting."
+        ),
+    )
     parser.add_argument("--workspace-root", required=True, type=Path)
     parser.add_argument("--target-root", required=True)
     parser.add_argument("--plan", required=True, type=Path)
