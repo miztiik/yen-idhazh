@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { compile, preprocess } from 'svelte/compiler';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import svelteConfig from '../../../svelte.config.js';
 
 declare global {
 	interface Window {
@@ -15,6 +14,7 @@ declare global {
 	}
 }
 export async function clientCode(components: readonly (readonly [string,string])[]): Promise<string> {
+const { default: svelteConfig } = await import('../../../svelte.config.js');
 const kit: {
 	paths: { base: string; assets?: string; relative?: boolean };
 	appDir?: string;
