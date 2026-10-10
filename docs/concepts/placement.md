@@ -1,6 +1,6 @@
 # Placement
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-10
 
 How admitted stories are ordered and filed in a published day. [Discovery](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement) owns the selection score; [placement.py](../../backend/idhazh/placement.py) applies the page's ordering and desk rules.
 
@@ -57,6 +57,37 @@ Sort each run's new stories by `rank_score` descending, then story time, then ad
 Keep run blocks in publication order. `introduced_by_run` must never decrease down the day's items. Sorting the whole day would move stories a reader had already read, so sorting and head constraints apply within each run's block.
 
 The leading block is separate. Assemble chooses it across the finished day and may refresh it each run without reordering the stream. It combines the selection score with shared-subject and coverage signals, then applies the story's current age. [The published order](../architecture/publishing/how-a-day-is-ordered-and-what-each-desk-published.md#the-weighted-score-that-chooses-the-leading-block) owns that formula.
+
+### The leading score's Gaussian age multiplier
+
+`placement.freshness_multiplier` applies a Gaussian curve with a flat shoulder.
+Age is the hours from the item's `published_at` to the run's `generated_at`, both
+UTC. The leading block is chosen during backend assembly; a browser reads those
+stored leads and does not choose them again from its own clock.
+
+Inside `freshness_offset_hours` the multiplier is exactly 1.0. Past that offset,
+the calculation is:
+
+```text
+past_offset = age_hours - freshness_offset_hours
+sigma_squared = -(freshness_scale_hours * freshness_scale_hours)
+                / (2 * log(freshness_decay_at_scale))
+multiplier = exp(-(past_offset * past_offset) / (2 * sigma_squared))
+```
+
+At `freshness_scale_hours` past the offset, the multiplier equals
+`freshness_decay_at_scale`. With the committed settings, a story keeps its full
+score for six hours and half its score at thirty hours old. The curve approaches
+zero; it has no finite cutoff. A missing date or a future date receives 1.0.
+Setting `freshness_decay_at_scale` to 1.0 disables the curve exactly.
+
+Age multiplies the weighted leading score; it is not an added bonus. It changes
+neither grouping nor the fixed story stream. The separate plan-time recency
+bonus decides which candidates earn a slot before extraction.
+[test_freshness_curve.py](../../backend/tests/placement/test_freshness_curve.py)
+checks the shoulder, the derived width and the disabled case;
+[test_leading_stories.py](../../backend/tests/test_leading_stories.py) checks
+that later assembly can change the leads without changing the stored rank scores.
 
 ## The frame, and the three things it may never do
 

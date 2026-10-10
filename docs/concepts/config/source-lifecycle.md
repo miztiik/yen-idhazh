@@ -1,6 +1,6 @@
 # When a feed is rested, retired, or kept out
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-10
 
 The knobs that decide how long a run keeps asking a feed that answers badly,
 when an address is given up on, and what keeps a link out of the candidate pool
@@ -95,6 +95,16 @@ An address that failed today is a different question, and its knob is a memory
 rather than a guard: `collect.settled_failure_codes` is on
 [run-limits.md](run-limits.md#a-guard-is-not-a-limit-and-its-name-has-to-say-so),
 with the rest of the vocabulary that separates a guard from an alarm.
+
+## Design rationale
+
+A curated retirement is not proof that a host serves only templates.
+`energymonitor` remains retired in `config/sources.json`, but the review that
+retired it found real article bodies in most of its recorded outcomes. A review
+must include successful outcomes as well as failures; reading only failures
+would misclassify a working publisher. Its retirement is a source-selection
+decision, not evidence for a template detector. Restoring it requires a curated
+registry change, not a change to automatic retirement rules.
 
 ## See also
 
