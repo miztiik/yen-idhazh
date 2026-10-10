@@ -56,6 +56,7 @@ from idhazh import (
     ledger,
     path_classes,
 )
+from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.run import RunConfig
@@ -578,11 +579,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    configure_command_logging(settings.app.logging.level.value)
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
     # the only way to guarantee that for every ledger at once is to overlay

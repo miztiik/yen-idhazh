@@ -33,8 +33,6 @@ against a tree of its own.
 from __future__ import annotations
 
 import argparse
-import logging
-import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -43,6 +41,7 @@ from typing import Final
 
 from idhazh import config
 from idhazh.assemble import day_dir, utc_now
+from idhazh.command_logging import configure_command_logging
 from idhazh.telemetry import inventory, item, prune, republish
 
 #: The word that reaches this router. `idhazh/cli.py` holds it in one place -
@@ -130,11 +129,7 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    configure_command_logging(settings.app.logging.level.value)
 
     date = args.date or utc_now()[:10]
     try:
