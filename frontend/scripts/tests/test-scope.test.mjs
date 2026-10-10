@@ -26,7 +26,8 @@ test('native Rust and its actual file fixture select focused checks without brow
 		assert.equal(selected.contracts, false);
 		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
 			? ['backend/tests/contracts/test_rust_host_file_parity.py']
-			: ['backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_store_parity.py']);
+			: ['backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
+				'backend/tests/test_rust_host_store_parity.py']);
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
 		assert.equal(ciAnswer([path], true).robots, false);
@@ -35,6 +36,10 @@ test('native Rust and its actual file fixture select focused checks without brow
 	assert.equal(storage.rust, true);
 	assert.deepEqual(storage.groups, ['backend']);
 	assert.deepEqual(storage.backendFiles, ['backend/tests/test_rust_host_store_parity.py']);
+	const receipts = selectPaths(['tests/fixtures/host-events/publication-parity.json']);
+	assert.equal(receipts.rust, true);
+	assert.deepEqual(receipts.groups, ['backend']);
+	assert.deepEqual(receipts.backendFiles, ['backend/tests/test_rust_host_receipts.py']);
 });
 
 test('isolated host contracts and verification have finite consumers; unknowns stay broad', () => {

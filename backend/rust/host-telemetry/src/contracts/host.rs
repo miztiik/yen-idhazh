@@ -1,7 +1,6 @@
 //! Which corrected host values and shared scalar constraints cross a boundary?
 
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -40,14 +39,7 @@ pub fn require(condition: bool, message: &str) -> Result<()> {
         Err(message.to_owned())
     }
 }
-pub fn pattern(value: &str, expression: &str, name: &str) -> Result<()> {
-    require(
-        Regex::new(expression)
-            .map_err(|e| e.to_string())?
-            .is_match(value),
-        name,
-    )
-}
+pub use super::patterns::pattern;
 pub fn day(value: &str) -> Result<()> {
     let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|e| e.to_string())?;
     require(
