@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -226,6 +227,13 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     result = publish(request, repo=repo, retry=PushRetry({"default": 300}, 0.001, 0.001, 1))
     assert result.status is Status.LANDED, result
     assert result.prepared
+    manifest_text = on_origin(origin, f"{day}/run.json")
+    assert manifest_text is not None
+    from idhazh.cli import shard_count
+
+    assert json.loads(manifest_text)["runs"][-1]["shards"] == shard_count(
+        len(run_plan.items), run=settings.app.run
+    )
     assert on_origin(origin, "frontend/public/other.json") == '{"newer":true}\n'
     for path, data in raw.items():
         entry = Repository(origin).entry("main", path)
@@ -287,6 +295,10 @@ def test_named_indexes_import_old_permanent_heads_without_scanning_raw_archive(
         entries=[CompactEntry(covers="2023", rows=1, bytes=5)],
     )
     seed = {index_path: index.to_json(), "state/raw/feed-retirements/1990/01/01/old.json": "{}\n"}
+    for period in (Period.DAILY, Period.MONTHLY):
+        seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = CompactIndex(
+            version=CompactIndex.schema_version(), ledger=which, period=period, entries=[]
+        ).to_json()
     if not missing_head:
         seed[compact_path] = "head\n"
     _, repo = an_origin(tmp_path, seed)
@@ -303,6 +315,119 @@ def test_named_indexes_import_old_permanent_heads_without_scanning_raw_archive(
     assert compact_path in inputs
     assert not any(path.startswith("state/raw/feed-retirements/1990") for path in inputs)
     assert "state/raw/feed-retirements" not in inputs
+
+
+def test_inputs_include_the_full_seen_and_published_consumer_windows() -> None:
+    settings = config.load(CONFIG_DIR)
+    settings.app.collect.seen_window_days = 900
+    settings.app.collect.published_window_days = 1000
+    through = "2026-10-09"
+    inputs = digest_assemble.input_paths(date=through, settings=settings)
+
+    for which, window in ((LedgerName.SEEN, 900), (LedgerName.PUBLISHED, 1000)):
+        first = (date.fromisoformat(through) - timedelta(days=window)).isoformat()
+        expected = (ledger.raw_root(Path("state"), which) / first.replace("-", "/")).as_posix()
+        assert expected in inputs, "the reader includes the boundary day"
+        excluded = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
+        outside = (ledger.raw_root(Path("state"), which) / excluded.replace("-", "/")).as_posix()
+        assert outside not in inputs
+
+
+@pytest.mark.parametrize("raw_only", [False, True], ids=["packed-and-raw", "raw-only"])
+def test_unbounded_published_inputs_use_the_declared_start_and_all_index_heads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw_only: bool
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    which = LedgerName.PUBLISHED
+    gardener = json.loads((CONFIG_DIR / "idhazh_gardener.json").read_text(encoding="utf-8"))
+    gardener["first_ledger_year"] = "2023"
+    seed = {
+        "config/idhazh_gardener.json": json.dumps(gardener),
+        "state/raw/published/2023/01/01/older-than-the-index.json": "old raw\n",
+        "state/raw/published/2022/01/01/foreign-archive.json": "outside the declared start\n",
+    }
+    heads: set[str] = set()
+    if not raw_only:
+        for period, covers in (
+            (Period.DAILY, "2024-02-01"),
+            (Period.MONTHLY, "2024-03"),
+            (Period.YEARLY, "2024"),
+        ):
+            head = paths.compact_path(Path("state"), which, period, covers).as_posix()
+            heads.add(head)
+            seed[head] = "head\n"
+            seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = CompactIndex(
+                version=CompactIndex.schema_version(),
+                ledger=which,
+                period=period,
+                entries=[CompactEntry(covers=covers, rows=1, bytes=5)],
+            ).to_json()
+    _, repo = an_origin(tmp_path, seed)
+    settings = config.load(CONFIG_DIR)
+    settings.app.collect.published_window_days = -1
+    tip = git(repo, "rev-parse", "HEAD").strip()
+
+    inputs = digest_assemble.resolved_inputs(
+        Repository(repo), tip, date="2026-10-09", settings=settings
+    )
+
+    assert "state/raw/published/2023/01/01" in inputs
+    assert not any(path.startswith("state/raw/published/2022") for path in inputs)
+    assert heads <= set(inputs)
+    assert "state/raw/published" not in inputs
+
+
+@pytest.mark.parametrize("foreign", [False, True], ids=["one-published-snapshot", "foreign-state"])
+def test_published_build_imports_raw_state_and_compact_heads_without_foreign_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, foreign: bool
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    which = LedgerName.HOST_FINGERPRINT
+    day = "2026-10-09"
+    head = paths.compact_path(Path("state"), which, Period.DAILY, day).as_posix()
+    raw_folder = ledger.raw_root(Path("state"), which) / day.replace("-", "/")
+    old_raw, new_raw = ((raw_folder / name).as_posix() for name in ("old.json", "new.json"))
+    seed = {
+        digest_publish.INVENTORY: PublicationInventory(
+            version=PublicationInventory.schema_version(), dates=[]
+        ).to_json(),
+        head: "old head\n",
+        old_raw: "old raw\n",
+    }
+    for period in Period:
+        seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = CompactIndex(
+            version=CompactIndex.schema_version(),
+            ledger=which,
+            period=period,
+            entries=[CompactEntry(covers=day, rows=1, bytes=9)] if period is Period.DAILY else [],
+        ).to_json()
+    origin, repo = an_origin(tmp_path, seed)
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / head, "new head\n")
+    (mover / old_raw).unlink()
+    write(mover / new_raw, "new raw\n")
+    write(mover / "frontend/public/other.json", '{"sameTip":true}\n')
+    record_files(mover / "frontend/public", paths=("other.json",))
+    git(mover, "add", "--", "state", "frontend")
+    git(mover, "commit", "--quiet", "-m", "published state and public projections")
+    git(mover, "push", "--quiet", "origin", "HEAD:main")
+    tip = git(mover, "rev-parse", "HEAD").strip()
+    git(repo, "fetch", "--quiet", "origin", "main")
+    before = git(repo, "rev-parse", "HEAD"), (repo / ".git/index").read_bytes()
+    if foreign:
+        write(repo / head, "foreign state\n")
+        with pytest.raises(IntegrityError, match="foreign"):
+            digest_publish.published_inputs(repo, tip, date=day, settings=config.load(CONFIG_DIR))
+        assert (repo / head).read_text() == "foreign state\n"
+        assert not (repo / "frontend/public/other.json").exists()
+    else:
+        digest_publish.published_inputs(repo, tip, date=day, settings=config.load(CONFIG_DIR))
+        assert (repo / head).read_text() == "new head\n"
+        assert (repo / new_raw).read_text() == "new raw\n"
+        assert not (repo / old_raw).exists()
+        assert (repo / "frontend/public/other.json").read_text() == '{"sameTip":true}\n'
+    assert before == (git(repo, "rev-parse", "HEAD"), (repo / ".git/index").read_bytes())
 
 
 def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(

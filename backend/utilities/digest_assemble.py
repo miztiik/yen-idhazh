@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from idhazh import completed_writes, config, corpus
 from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_index import CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
@@ -33,14 +34,23 @@ from utilities.publication_request import (
 INVENTORY = "frontend/public/publication.json"
 
 
-def input_paths(*, date: str, settings: config.Settings) -> tuple[str, ...]:
-    """A configured period window plus named records, indexes and current-month days."""
-    through = date_type.fromisoformat(date)
+def _input_window(which: LedgerName, settings: config.Settings) -> int:
     window = max(
         settings.app.console.max_window_days,
+        settings.appearance.console.max_window_days,
         max(settings.app.observability.full_grain_months().values()) * 31,
         settings.app.collect.reliability_window_days,
     )
+    if which is LedgerName.SEEN:
+        return max(window, settings.app.collect.seen_window_days + 1)
+    if which is LedgerName.PUBLISHED:
+        return max(window, settings.app.collect.published_window_days + 1)
+    return window
+
+
+def input_paths(*, date: str, settings: config.Settings) -> tuple[str, ...]:
+    """A configured period window plus named records, indexes and current-month days."""
+    through = date_type.fromisoformat(date)
     asked: set[str] = {
         INVENTORY,
         "corpus/corpus.jsonl",
@@ -50,7 +60,7 @@ def input_paths(*, date: str, settings: config.Settings) -> tuple[str, ...]:
     for which in staging.REGISTRY:
         grain = paths.entry(which).grain
         if grain is Grain.RAW_AND_COMPACT:
-            asked.update(ledger_window(which, through=date, days=window))
+            asked.update(ledger_window(which, through=date, days=_input_window(which, settings)))
         elif grain is Grain.FLAT:
             asked.add(paths.relpath(which))
     # Search-index rebuilding opens only this month; same-story reads an earlier
@@ -87,16 +97,41 @@ def resolved_inputs(
         days=max(count, max(settings.app.observability.full_grain_months().values()) * 31) - 1
     )
     permanent = (LedgerName.FEED_RETIREMENTS, LedgerName.VISUAL_PRUNES)
+    unbounded_published = settings.app.collect.published_window_days == UNBOUNDED_WINDOW
+    if unbounded_published:
+        # This existing configuration guarantees that no ledger row predates this year.
+        first = date_type(int(config._gardener_config(git.repo / "config").first_ledger_year), 1, 1)
+        if first > through:
+            raise IntegrityError("configured first ledger year is after the input day")
+        asked.update(
+            ledger_window(
+                LedgerName.PUBLISHED, through=through.isoformat(), days=(through - first).days + 1
+            )
+        )
+    published = tuple(settings.app.ledger.published)
     promised: set[tuple[str, str]] = set()
-    for which in (*permanent, LedgerName.FEED_HEALTH, LedgerName.ITEM_HEALTH):
+    for which in dict.fromkeys(
+        (
+            *permanent,
+            LedgerName.FEED_HEALTH,
+            LedgerName.ITEM_HEALTH,
+            LedgerName.PUBLISHED,
+            *published,
+        )
+    ):
         asked.update(
             ledger_window(which, through=through.isoformat(), days=(through - cutoff).days + 1)
         )
         days: set[str] = set()
+        newest: date_type | None = None
+        compact_root = paths.compact_folder(Path("state"), which).as_posix()
+        has_compact_tree = git.entry(tree, compact_root) is not None
         for period in Period:
             index_path = paths.compact_index_path(Path("state"), which, period).as_posix()
             entry = git.entry(tree, index_path)
             if entry is None:
+                if has_compact_tree:
+                    raise IntegrityError("required compact index is absent", (index_path,))
                 continue
             git.parents_safe(tree, index_path)
             if entry.mode != "100644":
@@ -107,6 +142,15 @@ def resolved_inputs(
                     "required index declares another ledger or period", (index_path,)
                 )
             for row in index.entries:
+                covered_days = (
+                    [row.covers]
+                    if period is Period.DAILY
+                    else ledger.month_days(row.covers)
+                    if period is Period.MONTHLY
+                    else ledger.month_days(f"{row.covers}-12")
+                )
+                last_day = date_type.fromisoformat(covered_days[-1])
+                newest = max(newest, last_day) if newest is not None else last_day
                 if row.state is not EntryState.PACKED:
                     continue
                 compact = paths.compact_path(Path("state"), which, period, row.covers)
@@ -114,7 +158,7 @@ def resolved_inputs(
                     compact.with_suffix(suffix).as_posix() for suffix in (".json", ".parquet")
                 )
                 promised.add((pair[0], pair[1]))
-                if which in permanent:
+                if which in permanent or (which is LedgerName.PUBLISHED and unbounded_published):
                     asked.update(pair)
                 if period is Period.DAILY:
                     days.add(row.covers)
@@ -128,6 +172,16 @@ def resolved_inputs(
                         days.update(ledger.month_days(month))
         for recorded_day in sorted(days)[-count:]:
             asked.update(ledger_window(which, through=recorded_day, days=1))
+        if which in published and newest is not None:
+            build_window = settings.appearance.console.max_window_days
+            asked.update(ledger_window(which, through=newest.isoformat(), days=build_window))
+            asked.update(
+                ledger_window(
+                    which,
+                    through=(newest + timedelta(days=build_window)).isoformat(),
+                    days=build_window,
+                )
+            )
     for pair in promised:
         if any(path in asked for path in pair) and not any(
             git.entry(tree, path) is not None for path in pair
@@ -167,6 +221,7 @@ def preparation(
     }
 
     def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
+        from idhazh.cli import shard_count
         from idhazh.publication_checks import runner as checks
         from idhazh.stages import assemble as producer
 
@@ -235,6 +290,7 @@ def preparation(
                         settings=settings,
                         commit_sha=original.identity.git_sha,
                         runner="ubuntu-latest",
+                        shards=shard_count(len(plan.items), run=settings.app.run),
                         regenerate_only=True,
                     )
             finally:

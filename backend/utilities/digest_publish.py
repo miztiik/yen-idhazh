@@ -10,6 +10,7 @@ import os
 import shutil
 import sys
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -222,19 +223,34 @@ def land(*, repo: Path, identity: WriterIdentity, date: str) -> PublicationResul
     return result
 
 
-def published_inputs(repo: Path, tip: str) -> None:
+def published_inputs(
+    repo: Path,
+    tip: str,
+    *,
+    date: str | None = None,
+    settings: config.Settings | None = None,
+) -> None:
     """Validate every named local input before importing the actual published bytes."""
     from idhazh.contracts.publication_receipt import PublicationReceipt
+    from utilities.digest_assemble import resolved_inputs
 
     git = Repository(repo)
     entry = git.entry(tip, INVENTORY)
     if entry is None:
         raise ValueError("published revision has no publication inventory")
     inventory = PublicationInventory.model_validate_json(git.blob(entry.oid, fetches=True))
-    inputs = (
+    public_inputs = (
         INVENTORY,
         *(f"frontend/public/{held.path}" for held in inventory.entries if held.root == "public"),
     )
+    settings = config.load() if settings is None else settings
+    date = date or max(inventory.dates, default=datetime.now(UTC).date().isoformat())
+    state_inputs = tuple(
+        path
+        for path in resolved_inputs(git, tip, date=date, settings=settings)
+        if path.startswith("state/")
+    )
+    inputs = (*public_inputs, *state_inputs)
     known: dict[str, str] = {}
     job = os.environ.get("GITHUB_JOB", "")
     if job in VERBS:
@@ -258,12 +274,16 @@ def published_inputs(repo: Path, tip: str) -> None:
                 )
             known.update(receipt.writes)
     head = git.git("rev-parse", "HEAD").strip()
+    imported = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
+    baseline_tip = imported.stdout.decode().strip() if imported.returncode == 0 else head
+    before = named_entries(git, baseline_tip, state_inputs)
     incoming = named_entries(git, tip, inputs)
-    missing = set(inputs) - incoming.keys()
+    missing = set(public_inputs) - incoming.keys()
     if missing:
         raise IntegrityError("published inventory names absent input", tuple(sorted(missing)))
-    git.prime(head, set(incoming))
-    for path, (mode, kind, oid) in incoming.items():
+    git.prime(head, incoming.keys() | before.keys())
+    for path in incoming.keys() | before.keys():
+        mode, kind, oid = incoming.get(path, before.get(path, ("", "", "")))
         if mode != "100644" or kind != "blob":
             raise IntegrityError("published input is not a plain data file", (path,))
         baseline = git.entry(head, path)
@@ -273,13 +293,19 @@ def published_inputs(repo: Path, tip: str) -> None:
         if not target.exists():
             continue
         local = target.read_bytes()
-        if local == git.blob(oid, fetches=True):
+        if path in incoming and local == git.blob(oid, fetches=True):
             continue
         if hashlib.sha256(local).hexdigest() == known.get(path):
+            continue
+        imported_entry = before.get(path)
+        if imported_entry is not None and local == git.blob(imported_entry[2], fetches=True):
             continue
         if baseline is None or local != git.blob(baseline.oid, fetches=True):
             raise IntegrityError("published input has foreign local changes", (path,))
     materialize(git, tip, inputs, repo)
+    for path in before.keys() - incoming.keys():
+        safe_file(repo, path, exists=False).unlink(missing_ok=True)
+    git.git("update-ref", "refs/worktree/publication-input-state", tip)
 
 
 def main(argv: list[str] | None = None) -> int:

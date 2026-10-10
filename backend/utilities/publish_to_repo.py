@@ -184,6 +184,10 @@ def publish(
                     if isinstance(error, IntegrityError):
                         return result(Status.INTEGRITY_REFUSED, error.paths, str(error))
                     return result(Status.PREPARATION_FAILURE, detail=str(error))
+                if not active.writes and not active.deletions:
+                    return result(Status.NO_CHANGES)
+                if _matches(git, observed, active, entries):
+                    return result(Status.ALREADY_ON_MAIN)
                 stale = _stale(git, observed, active, entries)
             if stale:
                 return result(Status.STALE, stale)
@@ -229,6 +233,11 @@ def publish(
                 subprocess.TimeoutExpired,
             ) as verification_error:
                 return result(Status.REFUSED, detail=f"{error}; verification: {verification_error}")
-        return result(Status.REFUSED, detail=str(error))
+        return result(
+            Status.PREPARATION_FAILURE
+            if candidate is None and time.monotonic() < deadline
+            else Status.REFUSED,
+            detail=str(error),
+        )
     finally:
         INVOCATION_DEADLINE.reset(deadline_token)

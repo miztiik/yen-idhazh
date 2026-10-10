@@ -162,6 +162,58 @@ def test_an_uncertain_push_that_actually_landed_is_verified(
     assert on_origin(origin, PATH) == "completed\n"
 
 
+@pytest.mark.parametrize("clears_operations", [False, True], ids=["already-published", "empty"])
+def test_preparation_that_finds_nothing_left_to_publish_does_not_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clears_operations: bool,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {PATH: "old\n"})
+    write(repo / PATH, "this run\n")
+    original = evidence(repo)
+    mover = tmp_path / "mover"
+    git(tmp_path, "clone", "--quiet", str(origin), str(mover))
+    write(mover / PATH, "this run and another run\n")
+    git(mover, "add", "--", PATH)
+    git(mover, "commit", "--quiet", "-m", "both runs are already represented")
+    git(mover, "push", "--quiet", "origin", "HEAD:main")
+    tip = git(origin, "rev-parse", "main").strip()
+    prepared_at: list[str] = []
+
+    def prepare(base: str, active: PublicationRequest) -> PublicationRequest:
+        prepared_at.append(base)
+        current = git(repo, "show", f"{base}:{PATH}")
+        write(repo / PATH, current)
+        return dataclasses.replace(
+            active,
+            source_tip=base,
+            writes={}
+            if clears_operations
+            else {
+                PATH: Write(
+                    hashlib.sha256((repo / PATH).read_bytes()).hexdigest(),
+                    Repository(repo).entry(base, PATH),
+                )
+            },
+        )
+
+    requested = dataclasses.replace(
+        original,
+        writes={PATH: dataclasses.replace(original.writes[PATH], immutable=False)},
+        preparation_scopes=(PATH,),
+        prepare=prepare,
+    )
+
+    result = publish(requested, repo=repo, retry=RETRY)
+
+    assert prepared_at == [tip]
+    assert result.status is (Status.NO_CHANGES if clears_operations else Status.ALREADY_ON_MAIN)
+    assert result.prepared and result.push_count == 0
+    assert result.candidate is None
+    assert git(origin, "rev-parse", "main").strip() == tip
+
+
 def test_mode_conversion_is_an_integrity_refusal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

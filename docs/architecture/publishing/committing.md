@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
 Gardener, council and digest use one ordinary publisher:
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py).
@@ -15,6 +15,9 @@ actual source data revision, independent write/delete declarations, confirmed
 write hashes and modes, and source entries for completed deletions.
 Declarations come from tasks, the ledger registry or registered tenants.
 `state`, `state/raw` and `state/compact` are refused as permissions.
+Gardener task ownership and its explicitly declared `appends_to` ledgers are
+separate write permissions. A dry-run report can therefore land without granting
+the task authority over another ledger.
 
 The version `2026-10-09` `PublicationReceipt` holds only identity and exact
 `relative-path -> SHA256` writes. It is an invocation artifact under `backend/var`,
@@ -39,9 +42,16 @@ Pre-staged files never ride along.
 ASSEMBLE rolls actual incoming completed corpus rows into the latest corpus with
 `corpus.roll`, deduplication, the configured row window and a checked census.
 Two rolled snapshots are never unioned. A failed rebuild publishes no partial
-derived set. The final site build reads the observed published tip's named
-inventory inputs. Permanent readers also receive older compact heads named by
-their three existing indexes; they are not reduced to a calendar window.
+derived set. Rebuilding retains the original producer's plan/config-derived
+shard count. The final site build imports both public files and its raw state,
+indexes and index-named compact heads from one observed published tip. An import
+validates all named local files first and refuses foreign changes.
+
+Input windows include the planning readers' configured seen and published
+boundaries, not only the console's shorter window. With unbounded published
+history, raw days start at the existing configured `first_ledger_year`; all
+packed heads come from the three validated indexes. No raw archive walk is
+needed. Permanent readers likewise receive their index-named older heads.
 
 The collecting council job serves any number of judges/shards. Later tenants
 and dates still run after a task failure; completed output can land while that
@@ -65,6 +75,9 @@ Candidates have one parent: the fetched main used to build them. Ordinary
 non-force pushes name the candidate SHA and main explicitly, with `--no-thin`.
 A failed or uncertain push is verified against **all** exact operations; one
 matching record does not prove publication.
+After fresh-base preparation, completion is checked again. An empty operation
+set returns `no-changes`; operations already present return `already-on-main`.
+Neither creates an empty commit or spends a push attempt.
 
 Results distinguish `landed`, `already-on-main`, `no-changes`, `stale`, `lost`,
 `integrity-refused`, `refused` and `preparation-failure`, with candidate/base/tip,
@@ -73,6 +86,8 @@ Unpublished council/digest work exits 1. Gardener deliberately warns and exits
 0 for stale/lost work, meaning SKIPPED rather than published; refusal exits 3.
 Producer failure remains separate: gardener may publish completed diagnostics
 after exceeding its download ceiling and still exits 1.
+A fetch failure before a candidate is built is preparation failure, not proof
+that main rejected a push. Gardener preserves its logged crash/exit-1 path.
 
 ## Design rationale
 

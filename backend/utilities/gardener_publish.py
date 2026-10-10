@@ -103,6 +103,7 @@ from idhazh.contracts.gardener_events import (
     TaskOutcome,
 )
 from idhazh.contracts.knobs.gardener import GardenerConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import cli as gardener_cli
 from idhazh.gardener import event_log, github_collections, run_summary, runner
@@ -125,6 +126,7 @@ from idhazh.gardener.outcome import (
     worst,
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
 from utilities.publication_git import Repository
 from utilities.publication_request import Delete, IntegrityError, PublicationRequest, Write
@@ -352,6 +354,9 @@ def publish(
     if result.status is Status.INTEGRITY_REFUSED:
         say(f"shard {shard.index}: {result.detail}: {', '.join(result.refusal_paths)}")
         return PushOutcome(EXIT_INTEGRITY)
+    if result.status is Status.PREPARATION_FAILURE:
+        # A failed fetch is a shard failure, not a rejected push with a verified base.
+        raise RuntimeError(result.detail)
     if result.status in (Status.STALE, Status.LOST):
         code = EXIT_OK
     elif result.status is Status.REFUSED:
@@ -669,7 +674,19 @@ def _run_and_land(
             producer="gardener.runner",
             git_sha=sha,
         ),
-        write_permissions=tuple(sorted({*owned, "state/raw/gardener"})),
+        write_permissions=tuple(
+            sorted(
+                {
+                    *owned,
+                    staging.staged_path(LedgerName.GARDENER),
+                    *(
+                        staging.staged_path(which)
+                        for name in names
+                        for which in settings.tasks[name].appends_to
+                    ),
+                }
+            )
+        ),
         delete_permissions=tuple(owned),
     )
     code = worst(ran.exit_code, pushed.exit_code)
