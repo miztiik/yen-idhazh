@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import inspect
 import os
 import sys
@@ -12,7 +13,7 @@ import pytest
 from conftest import REPO_ROOT, writer_identity
 from pydantic import ValidationError
 
-from idhazh import ledger, retention
+from idhazh import completed_writes, ledger, retention
 from idhazh.contracts.item_health import (
     FailureCode,
     ItemHealthRow,
@@ -21,6 +22,7 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import GAP_NAMED_STAGES, PublicTelemetryRow
+from idhazh.telemetry.publish import public_telemetry, series
 from idhazh.telemetry.publish.dispatch import publish_all
 from idhazh.telemetry.publish.public_telemetry import (
     DEFAULT_PUBLIC_ROOT,
@@ -33,6 +35,33 @@ from idhazh.telemetry.publish.public_telemetry import (
     shard_relpath,
 )
 from idhazh.telemetry.record import NAMED_STAGE_MS
+
+
+@pytest.mark.parametrize("kind", ["series", "telemetry"])
+def test_projection_records_exact_bytes_and_skips_unchanged(
+    tmp_path: Path, kind: str
+) -> None:
+    target = tmp_path / "2026-10.csv"
+    payload = b"column\nvalue\n" if kind == "series" else public_telemetry._encode([])
+    with completed_writes.collect() as writes:
+        changed = (
+            series.write_if_changed(target, payload)
+            if kind == "series"
+            else public_telemetry._write_if_changed(target, [])
+        )
+    assert changed
+    assert target.read_bytes() == payload
+    assert writes == {target.absolute(): hashlib.sha256(payload).hexdigest()}
+    before = target.stat().st_mtime_ns
+    with completed_writes.collect() as unchanged:
+        changed = (
+            series.write_if_changed(target, payload)
+            if kind == "series"
+            else public_telemetry._write_if_changed(target, [])
+        )
+    assert not changed
+    assert not unchanged
+    assert target.stat().st_mtime_ns == before
 
 
 def _row(**overrides: object) -> ItemHealthRow:
