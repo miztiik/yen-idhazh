@@ -30,6 +30,7 @@ const INPUTS = [
 	'src/lib/assist/session.ts',
 	'src/lib/assist/weights.ts',
 	'src/lib/bands.ts',
+	'src/lib/chart-evidence.ts',
 	'src/lib/charts/d3/DateSeries.svelte',
 	'src/lib/charts/d3/Distribution.svelte',
 	'src/lib/charts/d3/EmptyState.svelte',
