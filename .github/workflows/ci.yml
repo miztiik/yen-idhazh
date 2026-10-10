@@ -103,6 +103,8 @@ jobs:
     needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/backend/var/rust-host-telemetry
     steps:
       # Two commits rather than one, for the plan-queue check below. A pull
       # request is checked out as a merge commit whose first parent is the base
@@ -116,6 +118,24 @@ jobs:
       # below it is about code, and a documentation change skips all of it.
       - name: Whitespace
         run: git diff --check HEAD^1 HEAD
+
+      - name: Pinned locked Rust preparation
+        if: needs.scope.outputs.code == 'true'
+        working-directory: backend/rust/host-telemetry
+        run: |
+          rustup show active-toolchain
+          cargo fetch --locked
+          cargo build --locked --all-targets
+
+      - name: Offline Rust module gates
+        if: needs.scope.outputs.code == 'true'
+        working-directory: backend/rust/host-telemetry
+        env:
+          CARGO_NET_OFFLINE: 'true'
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --offline --all-targets -- -D warnings
+          cargo test --locked --offline
 
       - uses: actions/setup-node@v7
         if: needs.scope.outputs.code == 'true'

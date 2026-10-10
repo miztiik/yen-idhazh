@@ -4,8 +4,9 @@
 
 ## What is implemented
 
-The isolated candidate contracts and read-only verifier do not change production
-collectors or shared ledger readers. No Rust collector exists at this increment.
+The isolated candidate contracts, native Rust codecs and read-only verifier do
+not change production collectors or shared ledger readers. Rust renders real
+files, but host collection and persistence are not implemented at this increment.
 The corrected host row removes the legacy CPU count and frequency columns.
 The candidate reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
@@ -51,6 +52,25 @@ PLAIN and the writers' PLAIN-dictionary/RLE-dictionary encodings are supported;
 dictionary cardinality and page counts are bounded. None, raw Snappy and Zstd
 must match actual bounded decoded sizes. Footer claims do not establish bounds.
 The decode-byte cap bounds payload, not process RSS or all allocator overhead.
+
+The native crate separates contracts, configuration, canonical JSON, logical
+schema and in-memory codecs. Only the Parquet codec imports native Arrow/Parquet
+types. Both codecs use the explicit corrected 40-column host/identity schema.
+Parquet uses one-row V1 groups, PLAIN encoding, statistics and no dictionary or
+auxiliary indexes. None, Snappy and Zstd pass the same candidate verifier on the
+actual Rust bytes. JSONL uses `.json`, envelope-first ASCII rows and LF.
+
+The Rust test harness and `codec-fixture` executable generate named files under
+`backend/var/`; Python reads those same files and their physical receipts. The
+fixture executable serves these cross-language tests, not production collection.
+Missing native binaries or harness evidence fail rather than skip.
+
+Rust 1.95.0 and all dependencies are pinned/locked. On Windows, a clean cached
+offline all-target development build took 152.040 seconds; the development
+fixture executable was 23,662,080 bytes. These are not Linux production costs
+or release-size measurements. The 102 locked registry packages occupied
+10,176,946 cached archive bytes. Arrow/Parquet serve native files; serde serves
+closed exchange contracts; SHA-256 and Ryu serve canonical identity bytes.
 
 ## Configuration and verification command
 

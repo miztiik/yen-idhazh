@@ -62,7 +62,7 @@ Table D - authoritative execution queue
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Approve corrected design and documentation only | - | A | DONE | rust-host-profiling-investigation | - | Fowler |
 | D2 | 2 | Declare exchanges and a read-only host-output verifier | 1 | B | DONE | rust-host-telemetry-delivery | - | owner; disjoint exchange/verifier workers |
-| D10 | 10 | Render compatible host files through tested Rust codecs | 2 | C | PENDING | - | - | - |
+| D10 | 10 | Render compatible host files through tested Rust codecs | 2 | C | DONE | rust-d10-native-codecs | - | rust-d10-native-codecs |
 | D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | PENDING | - | - | - |
 | D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | PENDING | - | - | - |
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | PENDING | - | - | - |
@@ -260,6 +260,7 @@ Table N - Row 2 rejected alternatives
 - **Files touched:**
   - `backend/rust/host-telemetry/Cargo.toml`
   - `backend/rust/host-telemetry/Cargo.lock`
+  - `backend/rust/host-telemetry/rust-toolchain.toml`
   - `backend/rust/host-telemetry/src/main.rs`
   - `backend/rust/host-telemetry/src/cli.rs`
   - `backend/rust/host-telemetry/src/lib.rs`
@@ -597,6 +598,8 @@ Table AB - Row 9 rejected alternatives
 - **Files touched:**
   - `backend/rust/host-telemetry/Cargo.toml`
   - `backend/rust/host-telemetry/Cargo.lock`
+  - `backend/rust/host-telemetry/rust-toolchain.toml`
+  - `backend/rust/host-telemetry/src/bin/codec-fixture.rs`
   - `backend/rust/host-telemetry/src/lib.rs`
   - `backend/rust/host-telemetry/src/contracts/host.rs`
   - `backend/rust/host-telemetry/src/contracts/events.rs`

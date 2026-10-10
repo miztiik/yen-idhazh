@@ -11,6 +11,7 @@ export type Selection = {
 	backendFiles: string[] | null;
 	contracts: boolean;
 	tooling: boolean;
+	rust: boolean;
 	reasons: { path: string; groups: TestGroup[]; reason: string }[];
 };
 
@@ -161,6 +162,20 @@ const MODULE_TESTS: Record<string, string[]> = {
 const UTILITY_TESTS: Record<string, string> = {
 	'backend/utilities/doc_load.py': 'backend/tests/test_doc_load.py'
 };
+export const RUST_PARITY_TEST = 'backend/tests/contracts/test_rust_host_file_parity.py';
+const HOST_TESTS: Record<string, string[]> = {
+	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
+	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
+	'backend/idhazh/telemetry/host_event_files.py': ['backend/tests/test_host_event_files.py'],
+	'backend/idhazh/telemetry/host_output_verify.py': ['backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
+	'backend/idhazh/telemetry/host_parquet_admission.py': ['backend/tests/test_host_parquet_admission.py', 'backend/tests/test_host_output_verify.py', RUST_PARITY_TEST],
+	'backend/utilities/verify_host_output.py': ['backend/tests/test_host_output_verify.py'],
+	'config/host-telemetry-experiment.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
+	'tests/fixtures/host-events/file-parity.json': [RUST_PARITY_TEST],
+	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', RUST_PARITY_TEST],
+	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py'],
+	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py']
+};
 
 export function selectPaths(paths: readonly string[]): Selection {
 	const groups = new Set<TestGroup>();
@@ -168,6 +183,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 	let fullBackend = false;
 	let contracts = false;
 	let tooling = false;
+	let rust = false;
 	const reasons: Selection['reasons'] = [];
 	for (const original of [...new Set(paths)].sort()) {
 		const path = original.replaceAll('\\', '/');
@@ -178,6 +194,16 @@ export function selectPaths(paths: readonly string[]): Selection {
 			reason = 'documentation a test reads';
 		} else if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
 			selected = [];
+		} else if (path.startsWith('backend/rust/host-telemetry/') || path === RUST_PARITY_TEST) {
+			selected = ['backend'];
+			backendFiles.add(RUST_PARITY_TEST);
+			rust = true;
+			reason = 'native Rust module checks and actual cross-language codec fixtures';
+		} else if (Object.hasOwn(HOST_TESTS, path)) {
+			selected = ['backend'];
+			for (const file of HOST_TESTS[path]) backendFiles.add(file);
+			rust ||= HOST_TESTS[path].includes(RUST_PARITY_TEST);
+			reason = 'isolated host exchange/verifier tests and declared native consumers';
 		} else if (/^backend\/tests\/(?:[^/]+\/)?test_[^/]+\.py$/.test(path)) {
 			selected = ['backend'];
 			backendFiles.add(path);
@@ -236,7 +262,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 			fullBackend = true;
 			reason = 'shared or unknown input; full coverage';
 		}
-		if (/^(config\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
+		if (!Object.hasOwn(HOST_TESTS, path) && /^(config\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
 			contracts = true;
 		}
 		if (/^(frontend\/(scripts\/|playwright(?:\.logic)?\.config\.ts$|package(?:-lock)?\.json$)|\.github\/workflows\/ci\.yml$|backend\/utilities\/gate_lock\.py$|pyproject\.toml$|unresolved-change-base$|full-ci-run$)/.test(path)) {
@@ -250,6 +276,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 		backendFiles: fullBackend ? null : [...backendFiles].sort(),
 		contracts,
 		tooling,
+		rust: rust || fullBackend,
 		reasons
 	};
 }
