@@ -9,36 +9,71 @@
  * Drawn by `RankedList.svelte`, as markup rather than a chart: seventy rows
  * would be seventy chart instances, and markup still draws with no script.
  */
-import { percentOf, rank } from '../rank';
+import { percentOf, rank, type Ranked, type RankedDisplay, type RankedRow } from '../rank';
+
+/** A middle reading and its highest reading on one caller-owned track. */
+export interface RangeMark {
+	median: number | null;
+	max: number | null;
+	medianWidth: string;
+	notchWidth: string;
+	empty: boolean;
+}
+
+export function rangeMark(middle: number | null, highest: number | null, scale: number): RangeMark {
+	if (middle === null && highest === null) {
+		return { median: null, max: null, medianWidth: '0%', notchWidth: '0%', empty: true };
+	}
+	const fraction = (value: number | null) =>
+		value === null || scale <= 0 ? 0 : Math.min(value / scale, 1);
+	return {
+		median: middle,
+		max: highest,
+		medianWidth: percentOf(fraction(middle)),
+		notchWidth: percentOf(fraction(highest)),
+		empty: false
+	};
+}
 
 export interface RankedInput {
 	label: string;
 	value: number;
-	segments?: readonly { label: string; value: number }[];
+	context?: string;
+	status?: string;
+	segments?: readonly { label: string; value: number; token?: string }[];
+	range?: { high: number; count: number };
+	ends?: { end: number };
 }
 
 export interface RankedOptions {
 	/** The most rows drawn. Every row, where it is absent. */
 	max?: number;
+	order?: 'largest-first' | 'smallest-first';
+	minCount?: number;
+	rules?: readonly { at: number; label: string }[];
+	tail?: string;
 }
 
 export interface RankedSegment {
 	label: string;
 	value: number;
+	token: string;
 	/** Where the part starts along the track, as a CSS length. */
 	start: string;
 	/** How long it is along the same track, as a CSS length. */
 	size: string;
 }
 
-export interface RankedEntry {
+export interface RankedEntry extends RankedRow<RankedDisplay> {
 	label: string;
-	value: number;
 	/** `value / max`, 0 to 1. */
 	fraction: number;
 	/** The same fraction as a CSS length, for the bar's inline size. */
 	percent: string;
 	segments: RankedSegment[];
+	range: RangeMark | null;
+	ends: { valuePercent: string; endPercent: string } | null;
+	refused: string | null;
 }
 
 export interface RankedGeometry {
@@ -49,6 +84,19 @@ export interface RankedGeometry {
 	/** Rows the cap left off, and their magnitudes summed, for the tail line. */
 	hidden: number;
 	hiddenValue: number;
+	rules: { at: number; label: string; percent: string }[];
+	tail?: string;
+}
+
+/** Preserve a kept caller's formatting, keys, tie order and custom tracks. */
+export function rankedGeometry<T extends RankedDisplay>(ranked: Ranked<T>): RankedGeometry {
+	return {
+		...ranked,
+		rows: ranked.rows.map((row) => ({
+			...row, label: row.row.label, segments: [], range: null, ends: null, refused: null
+		})),
+		rules: []
+	};
 }
 
 function segmentsOf(row: RankedInput, max: number): RankedSegment[] {
@@ -60,7 +108,7 @@ function segmentsOf(row: RankedInput, max: number): RankedSegment[] {
 		}
 		const start = sum;
 		sum += part.value;
-		return { label: part.label, value: part.value, start: percentOf(start / max), size: percentOf(part.value / max) };
+		return { label: part.label, value: part.value, token: part.token ?? '--chart-1', start: percentOf(start / max), size: percentOf(part.value / max) };
 	});
 	// Adding fractions can land a hair over the row; the bound is the rounding
 	// error of the sum itself. Past it, the parts claim more than the row does.
@@ -82,6 +130,19 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 		if (row.value < 0) {
 			throw new RangeError(`"${row.label}" is ${row.value}; a ranked list takes a magnitude, never a signed value.`);
 		}
+		const kinds = ['segments', 'range', 'ends'].filter((key) => row[key as keyof RankedInput] !== undefined);
+		if (kinds.length > 1) throw new Error(`"${row.label}" carries ${kinds.join(' and ')}; a row carries at most one.`);
+		if (row.range !== undefined) {
+			if (opts.minCount === undefined) throw new Error(`"${row.label}" carries range; minCount is required.`);
+			if (!Number.isInteger(row.range.count) || row.range.count < 0) throw new Error(`"${row.label}" has an invalid range count.`);
+			if (!Number.isFinite(row.range.high) || row.range.high < row.value) throw new Error(`"${row.label}" has a range high below its value.`);
+		}
+		if (row.ends !== undefined && (!Number.isFinite(row.ends.end) || row.ends.end < 0)) throw new Error(`"${row.label}" has an invalid end.`);
+	}
+	if (opts.minCount !== undefined && (!Number.isInteger(opts.minCount) || opts.minCount < 1)) throw new Error('minCount must be a positive article count.');
+	const rules = opts.rules ?? [];
+	for (const rule of rules) {
+		if (!Number.isFinite(rule.at) || rule.at < 0 || !rule.label.trim()) throw new Error('A ranked rule needs a nonnegative at and a label.');
 	}
 	const ranked = rank(
 		rows.map((row) => ({
@@ -89,19 +150,34 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 			value: row.value,
 			row: { label: row.label, value: String(row.value), input: row }
 		})),
-		opts.max ?? 0
+		0
 	);
-	if (ranked.empty || ranked.max <= 0) return null;
+	const short = (row: RankedInput) => row.range !== undefined && row.range.count < (opts.minCount ?? 0);
+	const ordered = [...ranked.rows].sort((a, b) =>
+		Number(short(a.row.input)) - Number(short(b.row.input)) ||
+		(opts.order === 'smallest-first' ? a.value - b.value : b.value - a.value) ||
+		a.key.localeCompare(b.key)
+	);
+	const drawn = ordered.slice(0, opts.max);
+	const max = Math.max(0, ...drawn.flatMap((entry) => [entry.value, entry.row.input.range?.high ?? 0, entry.row.input.ends?.end ?? 0]), ...rules.map((rule) => rule.at));
+	if (ranked.empty || (max <= 0 && !drawn.some((entry) => short(entry.row.input)))) return null;
 	return {
-		rows: ranked.rows.map((entry) => ({
+		rows: drawn.map((entry) => ({
+			key: entry.key,
+			row: { ...entry.row, status: entry.row.input.status, context: entry.row.input.context },
 			label: entry.key,
 			value: entry.value,
-			fraction: entry.fraction,
-			percent: entry.percent,
-			segments: segmentsOf(entry.row.input, ranked.max)
+			fraction: max > 0 ? entry.value / max : 0,
+			percent: percentOf(entry.value / max),
+			segments: segmentsOf(entry.row.input, max),
+			range: entry.row.input.range === undefined ? null : rangeMark(entry.value, entry.row.input.range.high, max),
+			ends: entry.row.input.ends === undefined ? null : { valuePercent: percentOf(entry.value / max), endPercent: percentOf(entry.row.input.ends.end / max) },
+			refused: short(entry.row.input) ? `Too few: ${entry.row.input.range?.count} of the ${opts.minCount} articles a row needs.` : null
 		})),
-		max: ranked.max,
-		hidden: ranked.hidden,
-		hiddenValue: ranked.hiddenValue
+		max,
+		hidden: ordered.length - drawn.length,
+		hiddenValue: ordered.slice(drawn.length).reduce((sum, entry) => sum + entry.value, 0),
+		rules: rules.map((rule) => ({ ...rule, percent: percentOf(rule.at / max) })),
+		tail: opts.tail
 	};
 }

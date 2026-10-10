@@ -39,10 +39,11 @@ const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|du
  * existing chart had to change in the row that widened the ramp - the stop they
  * point at is mirrored, and mirroring the alias too would be a second name for
  * one utility. The type colours are applied by one component from a column's
- * type family, never by a class.
+ * type family, never by a class. `--chart-spread-mix` is a fraction consumed
+ * by `color-mix`, not a colour or a utility.
  */
 const NO_UTILITY =
-	/^--(gradient|dur|ease|series|type-|source-swatch|shadow-focus|color-focus|chart-readout|color-surface-raised|color-surface-sunken|color-rule-strong|color-accent-strong|color-on-accent|radius-full)/;
+	/^--(gradient|dur|ease|series|type-|source-swatch|shadow-focus|color-focus|chart-readout|chart-spread-mix$|color-surface-raised|color-surface-sunken|color-rule-strong|color-accent-strong|color-on-accent|radius-full)/;
 
 function block(css: string, selector: string): string {
 	const start = css.indexOf(selector);

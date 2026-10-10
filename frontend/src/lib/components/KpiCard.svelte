@@ -18,6 +18,7 @@
 	import { percentOf } from '$lib/charts/rank';
 	import { movementVerdict, type MovementPolarity } from '$lib/charts/theme';
 	import type { Snippet } from 'svelte';
+	import { ruleDeclaration, type ModelRule } from '$lib/charts/d3/model-rule';
 
 	let {
 		label,
@@ -30,7 +31,9 @@
 		track = null,
 		trend = null,
 		windowed = null,
-		windowDays = null
+		windowDays = null,
+		lede = false,
+		rule
 	}: {
 		label: string;
 		/** Already formatted. The card never does arithmetic on a number. */
@@ -59,12 +62,15 @@
 		 * not, which is most of them - only a rate has a span. */
 		windowed?: string | null;
 		windowDays?: number | null;
+		lede?: boolean;
+		rule?: ModelRule;
 	} = $props();
 
 	const percent = $derived(
 		movement === null ? '' : `${movement >= 0 ? '+' : ''}${Math.round(movement * 100)}%`
 	);
 	const verdict = $derived(movementVerdict(movement, polarity));
+	const declaration = $derived(rule === undefined ? null : ruleDeclaration(rule));
 </script>
 
 <div
@@ -73,9 +79,11 @@
 	data-tone={tone}
 	data-windowed={windowed}
 	data-window-days={windowDays}
+	data-model-rule={declaration?.value}
+	data-model-rule-none={declaration?.none}
 >
 	<p class="kpi-label" data-kpi-label>{label}</p>
-	<p class="kpi-value tabular-nums" data-kpi-value>{value}</p>
+	<p class="kpi-value tabular-nums" class:lede data-kpi-value data-lede={lede ? '' : undefined}>{value}</p>
 	{#if track}
 		<div
 			class="kpi-track"
@@ -114,9 +122,13 @@
 		</p>
 	{/if}
 	{#if line}<p class="kpi-line" data-kpi-line>{line}</p>{/if}
+	{#if rule !== undefined && 'changes' in rule && rule.note !== null}
+		<p class="kpi-line" data-model-rule-empty={rule.changes.length === 0 ? '' : undefined} data-model-rule-note={rule.changes.length > 0 ? '' : undefined}>{rule.note}</p>
+	{/if}
 </div>
 
 <style>
+	.kpi-value.lede { font-size: var(--text-3xl); line-height: var(--leading-3xl); }
 	.kpi {
 		display: flex;
 		flex-direction: column;

@@ -12,6 +12,7 @@
  */
 
 import type { EChartsOption } from 'echarts';
+import { KEPT_TIME_TOKENS, SERIES_TOKENS } from '../console/series-tokens';
 import type { RunSummary } from '$lib/server/payload';
 import { countDays, nameSpan, openWithSpan } from '../console/span-words';
 import { dayMonth, shortDate } from '../format';
@@ -460,16 +461,14 @@ export function failureMix(series: readonly StageFailureSeries[], shape: StackSh
 	const columns = series[0]?.days.map((d) => dayMonth(d.date)) ?? [];
 	return stacked(
 		columns,
-		series.map((s, i) => ({
+		series.map((s) => ({
 			label: s.label,
-			token: MIX_TOKENS[i % MIX_TOKENS.length],
+			token: SERIES_TOKENS[s.stage],
 			values: s.days.map((d) => (d.planned > 0 ? d.failures : null))
 		})),
 		shape
 	);
 }
-
-const MIX_TOKENS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 
 /** What the failure mix's window holds: the items it planned and how many of
  * them failed at any of the three stages.
@@ -518,17 +517,6 @@ export function failureMixAbsent(windowDays: number, planned: number): string {
  * band shares a colour with another. Bound to the band and never to its size:
  * a colour that followed the largest band would repaint the chart every day.
  */
-const TIME_TOKENS: readonly ChartToken[] = [
-	'--chart-1',
-	'--chart-2',
-	'--chart-3',
-	'--chart-4',
-	'--chart-5',
-	'--chart-6',
-	'--chart-7',
-	'--chart-8'
-];
-
 /** Where did an item's time go, and is the split changing?
  *
  * Stacked and absolute, like the failure mix: the column height is the mean
@@ -551,7 +539,7 @@ export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape 
 		columns,
 		TIME_BANDS.map((band, index) => ({
 			label: band.label,
-			token: TIME_TOKENS[index % TIME_TOKENS.length],
+			token: KEPT_TIME_TOKENS[band.key],
 			values: days.map((day) => (day.items > 0 ? Math.round(day.ms[index] ?? 0) : null))
 		})),
 		shape
@@ -574,7 +562,7 @@ export function timeSplitColumns(days: readonly TimeSplitDay[]): Readout {
 		columns: days.map((day) => shortDate(day.date)),
 		series: TIME_BANDS.map((band, index) => ({
 			label: band.label,
-			swatch: `var(${TIME_TOKENS[index % TIME_TOKENS.length]})`,
+			swatch: `var(${KEPT_TIME_TOKENS[band.key]})`,
 			values: days.map((day) => (day.items > 0 ? Math.round(day.ms[index] ?? 0) : null)),
 			format: (ms: number, column: number) => {
 				const total = days[column]?.total ?? 0;
@@ -622,9 +610,9 @@ export function failureMixColumns(series: readonly StageFailureSeries[]): Readou
 	return readoutOf({
 		type: 'dateSeries',
 		columns: dates.map((date) => shortDate(date)),
-		series: series.map((stage, position) => ({
+		series: series.map((stage) => ({
 			label: stage.label,
-			swatch: `var(${MIX_TOKENS[position % MIX_TOKENS.length]})`,
+			swatch: `var(${SERIES_TOKENS[stage.stage]})`,
 			values: dates.map((_, index) => {
 				const day = stage.days[index];
 				return day === undefined || day.planned === 0 ? null : day.failures;
@@ -637,8 +625,6 @@ export function failureMixColumns(series: readonly StageFailureSeries[]): Readou
 }
 
 /** The three stages in the categorical ramp, in pipeline order. */
-const STAGE_TOKENS: readonly ChartToken[] = ['--chart-1', '--chart-2', '--chart-3'];
-
 /** The band under the failures: items that got through all three stages.
  *
  * A neutral rather than a fourth ramp colour, because colour is spent on a
@@ -648,13 +634,13 @@ const STAGE_TOKENS: readonly ChartToken[] = ['--chart-1', '--chart-2', '--chart-
  * height IS the volume, so a band nobody can see loses the one fact this chart
  * was rebuilt to carry.
  */
-const FINISHED_TOKEN: ChartToken = '--chart-axis';
+const FINISHED_TOKEN: ChartToken = SERIES_TOKENS['ended-on-own'];
 
 /** Items the run listed and never fetched. Zero on every day measured so far,
  * so it draws only when it is not. The last stop of the ramp is the slate one,
  * which reads as another neutral beside the ground rather than a fourth kind of
  * failure. */
-const SKIPPED_TOKEN: ChartToken = '--chart-8';
+const SKIPPED_TOKEN: ChartToken = SERIES_TOKENS['never-fetched'];
 
 export interface FailureBand {
 	key: string;
@@ -727,8 +713,8 @@ export function failureLoad(
 	minAttempts: number
 ): FailureLoad {
 	const dates = series[0]?.days.map((day) => day.date) ?? [];
-	const stages = series.map((entry, index) => {
-		const token = STAGE_TOKENS[index % STAGE_TOKENS.length];
+	const stages = series.map((entry) => {
+		const token = SERIES_TOKENS[entry.stage];
 		const reached = entry.days.reduce((sum, day) => sum + day.reached, 0);
 		const failures = entry.days.reduce((sum, day) => sum + day.failures, 0);
 		const thin = reached > 0 && reached < minAttempts;
@@ -759,10 +745,10 @@ export function failureLoad(
 		const skipped = Math.max(0, planned - (series[0]?.days[index]?.reached ?? 0));
 		const bands: FailureBand[] = [
 			{ key: 'finished', label: 'Finished', token: FINISHED_TOKEN, value: finished },
-			...series.map((entry, stageIndex) => ({
+			...series.map((entry) => ({
 				key: entry.stage,
 				label: entry.label,
-				token: STAGE_TOKENS[stageIndex % STAGE_TOKENS.length],
+				token: SERIES_TOKENS[entry.stage],
 				value: entry.days[index]?.failures ?? 0
 			})),
 			{ key: 'skipped', label: 'Never fetched', token: SKIPPED_TOKEN, value: skipped }

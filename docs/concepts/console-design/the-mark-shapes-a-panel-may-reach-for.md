@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -254,6 +254,26 @@ into the domain beside the drawn values rather than as the maximum, so a shard
 that went past the ceiling would still draw past the line, and the panel prints
 the ceiling. The processor mark is a share, so it runs nought to a hundred.
 
+`rankedList` takes optional `range: {high, count}`, `ends: {end}`, `segments`,
+`context` and `status`. A row may carry only one of the three mark shapes.
+The shared divisor includes every drawn value, high, end and named rule.
+`order` is `largest-first` by default, or `smallest-first`; `max` caps the rows.
+The `tail` sentence accounts for the rows outside the cap.
+
+A range requires `minCount`, the caller's article floor. Below it the row draws
+no mark, follows every drawn row, and says `Too few: 12 of the 20 articles a row
+needs.` A status is a word pill, not a tint. Named `rules: [{at, label}]` draw
+dashed uprights at their value, with their name. Susan's ruling: a range remains
+a ranked-list row, not a tenth chart type.
+
+`RankedList.svelte` takes `RankedGeometry`. `rankedGeometry` preserves a kept
+caller's keys, formatted values and tie order. Its exported `rangeTrack` and
+`endsTrack` snippets also draw the shard and memory boards' existing cells.
+The boards retain their columns, labels, orientations, absent hatches and
+selection marks. `rangeMark` lives in `d3/rankedList.ts`, not `machine.ts`.
+Susan, 2026-10-10: extract the marks, not the board rows; the reader loses no
+spatial grouping.
+
 ## A mark with two named ends is not a range mark, and it says which end is which
 
 A range mark has a typical end and a worst end, and the reader learns that shape
@@ -274,6 +294,96 @@ the floor fell, so an item that dipped once and an item that sat at the floor
 throughout draw identically. That is a question for a sampled series over one
 item, which is a different grain and an instrument nobody has built - and the
 panel says it cannot answer it rather than leaving the reader to assume it did.
+
+## A dated line declares which settings it can compare
+
+The date-series contract requires one `ModelRule` in `opts.rule`. It is either
+`{changes: [{date, kind, words}], note}` or `{declined: reason}`. A declined
+reason has at least five words. The component derives `data-model-rule="yes"`
+or `"no"` and `data-model-rule-none` from that same value.
+
+A settings change draws a one-pixel dashed vertical; a checker change draws a
+dotted vertical. Each lies before its day's column, between that column and the
+preceding one. The first-column boundary lies at the frame's left edge. Both
+changes on one date draw only the dashed line, but retain both rows in
+`ReadoutInput.events`. Their words are under the plot, never on it. A non-null
+note prints as `data-model-rule-empty` with no changes, otherwise
+`data-model-rule-note`. Susan and Andre: the declaration and mark must never
+disagree, and a checker change must not look like a settings change.
+Given dated changes but no caller strip, the geometry supplies the recorded
+series' strip. A caller strip keeps its formatting; matching rule-event rows
+are included once, not twice.
+
+`dateSeries` also accepts named horizontal `rules: [{at, label}]`, one shared
+`domain: [low, high]`, and point `spread: {low, high}`. The domain must contain
+all readings, spreads and rules. Stacked domains also contain zero, so every
+segment's start and end stays inside the frame. A spread lies behind its series
+line, in the series colour mixed with the page surface at `--chart-spread-mix: 0.30`.
+
+`distribution` requires `scale: 'linear' | 'log'`. Log readings, rule values and
+domain ends must be positive; its bins are cut at powers of ten. Its optional
+domain contains every reading and named rule. Two charts or small multiples
+receive the same domain so the same value has the same position. The kept
+`TimeHistogram` accepts an optional positive domain in seconds. A pooled window
+that crosses a setting change says so in the panel note rather than drawing a
+date on a value axis.
+
+Fowler and Susan, 2026-10-10: named `LegacyDateSeriesOptions` and
+`LegacyDistributionOptions` overloads preserve old call signatures. They admit
+only old options; new date rules and domains require the primary contracts. An old
+date caller receives the explicit decline `This caller supplied no record of
+settings changes.` This is an unknown comparison, not evidence of no change.
+These internal arguments have no persisted-history migration.
+
+An optional `KpiCard.lede` raises its figure to `--text-3xl`. Its optional `rule`
+declares the same value and prints its note; its date-series trend draws any
+dated marks. A scalar card invents no date axis. Without either prop it keeps
+its old drawing. `FailureList.stages` supplies stage radio choices; the chosen
+stage ranks its `failed_rule`, with the legacy `code` when no new field exists.
+Omitting the prop keeps the existing cause and source lists.
+
+Every drawing declares `data-chart-type` and its readout. Date-series and
+distribution columns use `readoutOf`; record shapes use `factsOf`. Kept parts,
+tiles and flows with no supplied readout keep their key or printed counts and
+declare `data-readout-none`, with Susan's reason. This exception leaves some
+legacy facts without a visible inspection strip. Native `title` tooltips are
+removed; complete mark names remain accessible. Supplied readouts and the
+explorer's optional Flow count verdict retain their existing behaviour.
+
+## A colour belongs to a quantity, not its position
+
+`frontend/src/lib/console/series-tokens.ts` owns the quantity table below.
+`partsOfOne.quantityByLabel` explicitly maps display labels to those names.
+It cannot be combined with an explicit caller `tokens` array. No component
+guesses a quantity from display text. A single unnamed quantity uses `--chart-1`.
+Machine keys still use `machine-colour.ts`; a spread uses its series' stop.
+
+| Quantity | Token or mark |
+| --- | --- |
+| fetch; failed-fetch tile | `--chart-1` |
+| extract | `--chart-2` |
+| summarize; model time not split into calls | `--chart-3` |
+| label call | `--chart-4` |
+| summary call | `--chart-5` |
+| visual plan | `--chart-6` |
+| checking | `--chart-7` |
+| unattributed; other; never fetched; not recorded; never checked; fetch rest; other memory | `--chart-8` |
+| queue wait | no fill; one-pixel `--chart-axis` line before the first step |
+| reading a prompt; writing a reply | `--chart-6`; `--chart-7` |
+| done by then in a histogram | `--chart-3` |
+| model server memory; worker memory | `--chart-1`; `--chart-3` |
+| free memory | no fill; the empty track |
+| robots check | `--chart-3` |
+| waiting for headers; retries; connecting | `--chart-2`; `--chart-4`; `--chart-5` |
+| authority; recency; lens; watchlist and its day; carriage | `--chart-1`; `--chart-2`; `--chart-4`; `--chart-5`; `--chart-7` |
+| cut off at the length limit; other ending; ended on its own | `--chart-4`; `--chart-2`; `--chart-axis` ground |
+| numbers not in the article; does not match; opening left out; maybe as fact | `--chart-1`; `--chart-2`; `--chart-4`; `--chart-5` |
+
+Susan, 2026-10-10: preserve explicit caller colours and the legacy categorical
+ramp, normalized once into a label-keyed lookup. `KEPT_TIME_TOKENS` and
+`KEPT_COST_TOKENS` preserve existing callers until they adopt semantic quantities.
+The reader keeps familiar colours; older panels do not yet gain cross-panel
+colour consistency. Dark `--chart-6` alone changes to the approved `#1ab6ff`.
 
 ## A reading and the window it is read against are one track
 
@@ -323,6 +433,19 @@ started with has no low-to-high window to place a run inside, so it is a line of
 text. The range rule binds a figure with a span, and nothing else.
 
 ## A reading that is quiet on most days is a strip of tiles, never a line
+
+Configured callers pass `console.tile_min_px` as `TileStrip.tileMinPx`.
+Its default is six: after two one-pixel borders, four pixels remain, twice the
+two-pixel gap. At a crowded width the strip keeps only the newest days that fit.
+The pure `tileWindow` result counts each earlier state, for example `63 earlier
+days: 2 fired, 58 quiet, 3 not recorded.` The count never treats an unrecorded
+day as quiet. The first and last visible day use `dayTicks` words below the strip.
+Shared axes set `showAxis` on the last strip only.
+
+Susan, 2026-10-10: an omitted `tileMinPx` preserves legacy layout; the chart reads
+no hidden config and contains no duplicate default. New configured callers gain
+the minimum. Overflow loses individual older-day marks, but keeps their counted
+states and correct visible-day readout alignment.
 
 > **A rare event has no useful value axis.** Draw one tile a day at a fixed
 > height, in three states, and lead with the finding in words.

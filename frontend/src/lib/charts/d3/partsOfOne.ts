@@ -15,6 +15,7 @@
 import { UNRECORDED_STOP } from '../machine-colour';
 import { percentOf } from '../rank';
 import type { ChartToken } from '../theme';
+import { quantityToken, type Quantity } from '../../console/series-tokens';
 
 export interface PartsInput {
 	label: string;
@@ -27,6 +28,7 @@ export interface PartsOptions {
 	overlapping?: boolean;
 	/** Caller colours in part order; omitted callers keep the categorical ramp. */
 	tokens?: readonly ChartToken[];
+	quantityByLabel?: Readonly<Record<string, Quantity>>;
 }
 
 export interface PartSegment {
@@ -57,10 +59,6 @@ export interface PartsGeometry {
 
 /** The hues a part may take, in order: the categorical ramp up to, and never
  * including, the grey the ramp keeps for an absence. */
-function hueOf(index: number): ChartToken {
-	return `--chart-${index + 1}` as ChartToken;
-}
-
 /** The rows split into their parts, or null where no row has anything in it. */
 export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): PartsGeometry | null {
 	const overlapping = opts.overlapping ?? false;
@@ -69,7 +67,15 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 		throw new RangeError(`A row splits into at most ${hues} parts, one hue each; the order names ${opts.order.length}.`);
 	}
 	const place = new Map(opts.order.map((label, index) => [label, index]));
-	const chooseToken = (index: number): ChartToken => opts.tokens?.[index] ?? hueOf(index);
+	if (opts.tokens !== undefined && opts.quantityByLabel !== undefined) throw new Error('Parts colours cannot carry both tokens and quantityByLabel.');
+	const tokenByLabel = new Map(opts.order.map((label, index) => {
+		const quantity = opts.quantityByLabel?.[label];
+		if (opts.quantityByLabel !== undefined && quantity === undefined) throw new Error(`No quantity is named for "${label}".`);
+		const token = quantity === undefined ? opts.tokens?.[index] ?? `--chart-${index + 1}` as ChartToken : quantityToken(quantity);
+		if (token === null) throw new Error(`"${label}" is an unfilled quantity, not a part.`);
+		return [label, token] as const;
+	}));
+	const chooseToken = (label: string): ChartToken => tokenByLabel.get(label) as ChartToken;
 	if (place.size !== opts.order.length) throw new Error('The order names one part twice.');
 
 	const measured = rows.map((row) => {
@@ -104,7 +110,7 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 					return {
 						label: part.label,
 						value: part.value,
-						token: chooseToken(part.index),
+						token: chooseToken(part.label),
 						start: percentOf(at / max),
 						size: percentOf(part.value / max)
 					};
@@ -113,6 +119,6 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 		}),
 		max,
 		overlapping,
-		key: opts.order.map((label, index) => ({ label, token: chooseToken(index) }))
+		key: opts.order.map((label) => ({ label, token: chooseToken(label) }))
 	};
 }

@@ -51,6 +51,28 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
 
 
+def test_daily_tiles_keep_an_inside_wider_than_the_gap() -> None:
+    assert ConsoleConfig().tile_min_px == 6
+    assert ConsoleConfig(tile_min_px=8).tile_min_px == 8
+    for value in (0, 2, 5):
+        with pytest.raises(ValidationError, match="tile_min_px"):
+            ConsoleConfig(tile_min_px=value)
+    appearance = AppearanceConfig.model_validate_json(
+        (
+            REPO_ROOT
+            / "tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json"
+        ).read_text()
+    )
+    assert appearance.console.tile_min_px == 8
+    app = AppConfig.model_validate_json(
+        (
+            REPO_ROOT
+            / "tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json"
+        ).read_text()
+    )
+    assert app.console.tile_min_px == 10
+
+
 def committed_app_config() -> AppConfig:
     """`AppConfig` has one block with no default, so `{}` is not a document.
 
@@ -296,9 +318,7 @@ def test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue(
     # already has - and a second copy that agrees today is the next divergence.
     settled_away = {"ui": ("visual_side",), "console": ("chart_height", "chart_width")}
     for key in settled_away.get(legacy_key, ()):
-        assert key not in legacy, (
-            f"{key} has one owner, and it is config/appearance.json"
-        )
+        assert key not in legacy, f"{key} has one owner, and it is config/appearance.json"
 
 
 def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() -> None:
@@ -386,7 +406,9 @@ def test_a_config_that_still_says_system_reads_as_dark() -> None:
     nothing asks the device is the base theme.
     """
     assert (
-        AppearanceConfig.model_validate({"digest": {"theme_default": "system"}}).digest.theme_default
+        AppearanceConfig.model_validate(
+            {"digest": {"theme_default": "system"}}
+        ).digest.theme_default
         is ThemeChoice.DARK
     )
     legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
@@ -463,9 +485,7 @@ def test_the_committed_movement_pair_is_what_tokens_css_declares() -> None:
     light_at = tokens.index("[data-theme='light']")
     for block, start, end in (("dark", 0, light_at), ("light", light_at, len(tokens))):
         for name in ("good", "bad"):
-            declared = re.search(
-                rf"--movement-{name}:\s*(#[0-9a-f]{{6}});", tokens[start:end]
-            )
+            declared = re.search(rf"--movement-{name}:\s*(#[0-9a-f]{{6}});", tokens[start:end])
             assert declared is not None, f"--movement-{name} is not declared in the {block} theme"
             assert declared.group(1) == getattr(theme, f"movement_{name}_{block}"), (
                 f"tokens.css and config/appearance.json disagree about "

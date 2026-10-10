@@ -61,11 +61,9 @@
 			class="witness-plot"
 			class:tinted={plotTinted}
 			style="inline-size: {plotShare * 100}%"
-			data-model-rule={ruleNote === null ? undefined : 'yes'}
-			data-model-rule-name={ruleNote === null ? undefined : trend}
 		>
 			<DateSeries
-				{geometry}
+				geometry={geometry === null ? null : { ...geometry, rule: { changes: [], note: ruleNote } }}
 				{empty}
 				name={trend}
 				label="Minutes to write one summary, one day at a time"
@@ -73,9 +71,6 @@
 				height={geometry?.frame.height ?? 220}
 			/>
 		</div>
-		{#if geometry !== null && ruleNote !== null}
-			<p class="witness-rule-note" data-model-rule-empty={trend}>{ruleNote}</p>
-		{/if}
 	</div>
 </Panel>
 
@@ -100,9 +95,4 @@
 		background: var(--color-surface-sunken);
 	}
 
-	.witness-rule-note {
-		margin: var(--space-2) 0 0;
-		font-size: var(--text-sm);
-		color: var(--color-text-tertiary);
-	}
 </style>

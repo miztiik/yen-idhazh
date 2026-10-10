@@ -46,6 +46,7 @@
 		data-chart-name={name}
 		data-parts-overlapping={geometry.overlapping ? 'yes' : 'no'}
 		data-readout-records={readout === null ? undefined : records.length}
+		data-readout-none={readout === null ? 'This kept parts chart keeps its key without a separate reading strip; agreed with Susan' : undefined}
 	>
 		{#if readout === null}
 		<ul class="parts-key" aria-label="{label} - the parts, in order">
@@ -63,7 +64,7 @@
 						{#each row.segments as segment (segment.label)}
 							<span
 								class="parts-segment"
-								title={readout === null ? `${segment.label}: ${segment.value}` : undefined}
+								aria-label={`${segment.label}: ${segment.value}`}
 								style="inset-inline-start: {segment.start}; inline-size: {segment.size}; background: var({segment.token})"
 							></span>
 						{/each}

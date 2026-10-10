@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { endsTrack } from './RankedList.svelte';
 	/** How close one article came to using up the machine's memory.
 	 *
 	 * **The lead is the within-item floor of what the kernel had left.** A
@@ -314,10 +315,7 @@
 						{#if item.headroom.empty}
 							<span class="bar absent-bar" style="background: {hatch.background}"></span>
 						{:else}
-							<span class="bar floor" style="block-size: {item.headroom.floorWidth}"></span>
-							{#if item.headroom.endBytes !== null}
-								<span class="notch" style="inset-block-end: {item.headroom.endWidth}"></span>
-							{/if}
+							{@render endsTrack(item.headroom.floorWidth, item.headroom.endBytes === null ? null : item.headroom.endWidth, true, item.tightest)}
 						{/if}
 					</span>
 				{/each}
@@ -575,10 +573,6 @@
 		border-radius: 1px 1px 0 0;
 	}
 
-	.floor {
-		background: var(--chart-3);
-	}
-
 	.load {
 		background: var(--chart-4);
 	}
@@ -588,13 +582,6 @@
 	   stripes are the console's one hatch for no reading, set inline. */
 	.absent-bar {
 		block-size: 100%;
-	}
-
-	.notch {
-		position: absolute;
-		inset-inline: 0;
-		block-size: 2px;
-		background: var(--color-text);
 	}
 
 	.mark.tightest .bar {

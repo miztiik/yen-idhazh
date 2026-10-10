@@ -13,6 +13,7 @@
  */
 import { bin } from 'd3-array';
 import { line } from 'd3-shape';
+import { scaleLog } from 'd3-scale';
 
 import type { Frame } from '../frame';
 import { tooFewSentence } from '../../console/waiting';
@@ -31,7 +32,11 @@ export interface DistributionOptions {
 	 * own ticks, so every bin edge is a labelled number. */
 	valueTicks: number;
 	rules?: readonly DistributionRule[];
+	scale: 'linear' | 'log';
+	domain?: [number, number];
 }
+
+export type LegacyDistributionOptions = Omit<DistributionOptions, 'scale' | 'domain'> & { scale?: never; domain?: never };
 
 export interface Bin {
 	x0: number;
@@ -80,16 +85,41 @@ export function distributionShortfall(
 }
 
 /** The distribution, or null where there are fewer readings than its floor. */
-export function distribution(values: readonly number[], opts: DistributionOptions): BinGeometry | null {
+export function distribution(values: readonly number[], opts: DistributionOptions): BinGeometry | null;
+export function distribution(values: readonly number[], opts: LegacyDistributionOptions): BinGeometry | null;
+export function distribution(values: readonly number[], opts: DistributionOptions | LegacyDistributionOptions): BinGeometry | null {
 	const box = opts.frame;
 	const readings = finiteOf(values);
 	if (readings.length === 0 || readings.length < opts.minValues) return null;
 	const rules = opts.rules ?? [];
 
-	const x = valueAxis([...readings, ...rules.map((rule) => rule.at)], box, {
+	const all = [...readings, ...rules.map((rule) => rule.at)];
+	for (const rule of rules) {
+		if (!Number.isFinite(rule.at) || !rule.label.trim()) throw new Error('A distribution rule needs at and a label.');
+	}
+	let x = valueAxis(all, box, {
 		along: 'x',
 		ticks: opts.valueTicks
 	});
+	if (opts.scale === 'log' && all.some((value) => value <= 0)) throw new Error('A log distribution needs positive readings and rules.');
+	const domain: [number, number] = opts.domain ?? (opts.scale === 'log'
+		? [10 ** Math.floor(Math.log10(Math.min(...all))), 10 ** (Math.floor(Math.log10(Math.max(...all))) + 1)]
+		: x.domain);
+	if (!Number.isFinite(domain[0]) || !Number.isFinite(domain[1]) || domain[0] >= domain[1] || all.some((value) => value < domain[0] || value > domain[1])) throw new Error('The distribution domain must contain all readings and rules.');
+	if (opts.scale === 'log') {
+		if (domain[0] <= 0) throw new Error('A log distribution domain must be positive.');
+		const scale = scaleLog().domain(domain).range([box.left, box.right]);
+		const ticks = [];
+		for (let power = Math.ceil(Math.log10(domain[0])); 10 ** power <= domain[1]; power += 1) {
+			const value = 10 ** power;
+			ticks.push({ value, at: scale(value), text: String(value) });
+		}
+		x = { domain, along: 'x', scale: (value) => scale(value), ticks };
+	} else if (opts.domain !== undefined) {
+		const scale = (value: number) => box.left + (value - domain[0]) / (domain[1] - domain[0]) * box.innerWidth;
+		const axis = valueAxis(domain, box, { along: 'x', ticks: opts.valueTicks, zero: false });
+		x = { ...axis, domain, scale, ticks: axis.ticks.filter((tick) => tick.value >= domain[0] && tick.value <= domain[1]).map((tick) => ({ ...tick, at: scale(tick.value) })) };
+	}
 	const edges = x.ticks.map((tick) => tick.value);
 	const binned = bin()
 		.domain(x.domain)

@@ -504,6 +504,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-10",
+            change="console.tile_min_px added for readable daily tiles.",
+            why="A tile keeps room inside its borders instead of becoming a stripe.",
+        ),
+        ChangelogEntry(
             version="2026-10-09",
             change="console.panel_groups and console.judged_panel_ids removed.",
             why="Each route's console file owns its panel order and judged list.",
@@ -517,11 +522,6 @@ class AppearanceConfig(Contract):
             version="2026-10-03T12:00",
             change="icons.stroke_px added; icon strokes are fixed in screen pixels.",
             why="One icon line weight keeps every glyph aligned with text at every size.",
-        ),
-        ChangelogEntry(
-            version="2026-10-03",
-            change="console.data_explorer_tab removed; Data explorer knobs and panel group added.",
-            why="The Data explorer page is live and draws its own controls.",
         ),
         ChangelogEntry(
             version="2026-09-30",

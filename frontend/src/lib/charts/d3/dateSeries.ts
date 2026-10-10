@@ -12,18 +12,21 @@
  * **The dates on the axis come from `dayTicks`**, the one rule this console has
  * for a date axis, and never from an axis generator.
  */
-import { line, stack } from 'd3-shape';
+import { area, line, stack } from 'd3-shape';
 
 import { dayTicks, type DayTick, type Frame } from '../frame';
 import type { ChartToken } from '../theme';
 import { valueAxis, type ValueAxis } from './axis';
 import { bandScale } from './scale';
+import { checkedRule, LEGACY_MODEL_RULE, ruleBoundaries, ruleEvents, type ModelRule, type RuleBoundary } from './model-rule';
+import { readoutOf, type Readout, type ReadoutInput } from '../readout';
 
 /** One reading: a UTC day as `YYYY-MM-DD`, and its value or null where none
  * was recorded. */
 export interface SeriesPoint {
 	date: string;
 	value: number | null;
+	spread?: { low: number; high: number };
 }
 
 export interface SeriesInput {
@@ -46,7 +49,13 @@ export interface DateSeriesOptions {
 	valueTicks: number;
 	/** The share of each day's column left empty beside its bar, 0 to 1. */
 	padding: number;
+	rule: ModelRule;
+	rules?: readonly { at: number; label: string }[];
+	domain?: [number, number];
 }
+
+/** Old callers keep their drawing; new chart options require a declared rule. */
+export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain'> & { rule?: never; rules?: never; domain?: never };
 
 export interface PlacedPoint {
 	date: string;
@@ -63,6 +72,7 @@ export interface SeriesLine {
 	token: ChartToken;
 	path: string;
 	points: PlacedPoint[];
+	spread: string;
 }
 
 export interface SeriesBar {
@@ -104,6 +114,11 @@ export interface SeriesGeometry {
 	bars: SeriesBar[];
 	/** Empty when not stacked. */
 	joins: SeriesJoin[];
+	rule: ModelRule;
+	boundaries: RuleBoundary[];
+	events: NonNullable<ReadoutInput['events']>;
+	readout: Readout;
+	rules: { at: number; label: string; y: number }[];
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -125,8 +140,11 @@ function byDay(series: readonly SeriesInput[]): Map<string, number | null>[] {
 }
 
 /** The series over their days, or null where not one day holds a reading. */
-export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptions): SeriesGeometry | null {
+export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptions): SeriesGeometry | null;
+export function dateSeries(series: readonly SeriesInput[], opts: LegacyDateSeriesOptions): SeriesGeometry | null;
+export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptions | LegacyDateSeriesOptions): SeriesGeometry | null {
 	const box = opts.frame;
+	const rule = checkedRule(opts.rule ?? LEGACY_MODEL_RULE);
 	const stacked = opts.stacked ?? false;
 	const readings = byDay(series);
 	const dates = [...new Set(readings.flatMap((days) => [...days.keys()]))].sort();
@@ -139,9 +157,45 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	const band = bandScale(dates, box, 'x', opts.padding);
 	const columns = dates.map((date) => (band(date) ?? 0) + band.bandwidth() / 2);
 	const ticks = dayTicks(dates, { density: opts.density, columns, bounds: [box.left, box.right] });
+	const rules = opts.rules ?? [];
+	for (const named of rules) {
+		if (!Number.isFinite(named.at) || !named.label.trim()) throw new Error('A date series rule needs at and a label.');
+	}
+	const spreads = series.flatMap((entry) => entry.points.flatMap((point) => {
+		if (point.spread === undefined) return [];
+		const { low, high } = point.spread;
+		if (point.value === null || !Number.isFinite(low) || !Number.isFinite(high) || low > point.value || high < point.value) throw new Error(`"${entry.label}" has an invalid spread on ${point.date}.`);
+		return [low, high];
+	}));
+	const metadata = {
+		rule,
+		boundaries: ruleBoundaries(rule, dates, columns, box.left),
+		events: ruleEvents(rule, dates),
+		readout: readoutOf({
+			type: 'dateSeries',
+			columns: dates,
+			series: series.map((entry, index) => ({
+				label: entry.label,
+				swatch: entry.fill ?? `var(${entry.token})`,
+				values: dates.map((date) => readings[index].get(date) ?? null),
+				format: String
+			})),
+			notMeasured: 'Not recorded.',
+			resting: 'last'
+		})
+	};
+	function axisFor(readings: readonly number[]): ValueAxis {
+		const axis = valueAxis([...readings, ...spreads, ...rules.map((named) => named.at)], box, { along: 'y', ticks: opts.valueTicks });
+		if (opts.domain === undefined) return axis;
+		const [low, high] = opts.domain;
+		if (!Number.isFinite(low) || !Number.isFinite(high) || low >= high || [...readings, ...spreads, ...rules.map((named) => named.at)].some((value) => value < low || value > high)) throw new Error('The date series domain must contain all readings, spreads and rules.');
+		const placed = valueAxis([low, high], box, { along: 'y', ticks: opts.valueTicks, zero: false });
+		const scale = (value: number) => box.bottom - (value - low) / (high - low) * box.innerHeight;
+		return { ...placed, domain: [low, high], scale, ticks: placed.ticks.filter((tick) => tick.value >= low && tick.value <= high).map((tick) => ({ ...tick, at: scale(tick.value) })) };
+	}
 
 	if (!stacked) {
-		const axis = valueAxis(values, box, { along: 'y', ticks: opts.valueTicks });
+		const axis = axisFor(values);
 		const lines = series.map((entry, index) => {
 			const row = dates.map((date) => readings[index].get(date) ?? null);
 			const draw = line<number | null>()
@@ -161,9 +215,14 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 							}
 						]
 			);
-			return { label: entry.label, token: entry.token, path: draw(row) ?? '', points };
+			const byDate = new Map(entry.points.map((point) => [point.date, point.spread]));
+			const spread = area<string>().defined((date) => byDate.get(date) !== undefined)
+				.x((_, at) => columns[at])
+				.y0((date) => axis.scale(byDate.get(date)?.low ?? 0))
+				.y1((date) => axis.scale(byDate.get(date)?.high ?? 0))(dates) ?? '';
+			return { label: entry.label, token: entry.token, path: draw(row) ?? '', points, spread };
 		});
-		return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines, bars: [], joins: [] };
+		return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines, bars: [], joins: [], ...metadata, rules: rules.map((named) => ({ ...named, y: axis.scale(named.at) })) };
 	}
 
 	const keys = series.map((entry) => entry.label);
@@ -174,7 +233,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		.keys(keys)
 		.value((day, key) => day[key] ?? 0)(table);
 	const totals = layers.length === 0 ? [] : layers[layers.length - 1].map((span) => span[1]);
-	const axis = valueAxis(totals, box, { along: 'y', ticks: opts.valueTicks });
+	const axis = axisFor([0, ...totals]);
 	const bars = layers.flatMap((layer, index) =>
 		layer.flatMap((span, at) => {
 			const value = table[at][layer.key];
@@ -204,5 +263,5 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	const joins = bars
 		.filter((bar) => bar.y > (highest.get(bar.date) ?? bar.y))
 		.map((bar) => ({ x: bar.x, y: bar.y, width: bar.width }));
-	return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines: [], bars, joins };
+	return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines: [], bars, joins, ...metadata, rules: rules.map((named) => ({ ...named, y: axis.scale(named.at) })) };
 }

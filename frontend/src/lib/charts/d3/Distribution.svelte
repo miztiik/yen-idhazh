@@ -12,6 +12,7 @@
 	import type { BinGeometry } from './distribution';
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 
 	let {
 		geometry,
@@ -34,12 +35,25 @@
 	/** The curve is a reading drawn over marks, so it is thinner than a series
 	 * line and still clear of the bars' edges. */
 	const CURVE = 1.5;
+	let selected = $state<number | null>(null);
+	const readout = $derived(geometry === null ? null : readoutOf({
+		type: 'distribution',
+		columns: geometry.bins.map((bin) => `${bin.x0} to ${bin.x1}`),
+		series: [
+			{ label: 'Rows', swatch: 'var(--chart-1)', values: geometry.bins.map((bin) => bin.count), format: String },
+			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: (value) => `${value.toFixed(1)}%` }
+		],
+		notMeasured: 'No readings in this bin.',
+		resting: geometry.bins.reduce((best, bin, index, bins) => bin.count > bins[best].count ? index : best, 0)
+	}));
+	const marks = $derived(geometry === null ? [] : readoutMarks(geometry.bins.map((bin) => bin.left + bin.width / 2)));
 </script>
 
 {#if geometry === null}
 	<EmptyState drawing={empty} {height} {width} {name} {label} />
 {:else}
 	{@const box = geometry.frame}
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<svg
 		class="distribution"
 		viewBox="0 0 {box.width} {box.height}"
@@ -49,7 +63,9 @@
 		aria-label={label}
 		data-chart-type="distribution"
 		data-chart-name={name}
-		data-readout-records={geometry.bins.length}
+		data-readout-columns={geometry.bins.length}
+		tabindex="0"
+		use:pointerReadout={{ marks, width: box.width, onSelect: (index) => selected = index }}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -115,12 +131,12 @@
 			>
 		{/each}
 	</svg>
-	{@const resting = geometry.bins.reduce((best, bin) => (bin.count > best.count ? bin : best), geometry.bins[0])}
-	{#if resting}
+	{#if readout !== null}
+		{@const at = selected ?? readout.resting}
 		<dl class="record-readout" data-readout={name} data-readout-shape="record">
-			<dt data-readout-subject>{resting.x0} to {resting.x1}</dt>
-			<div data-readout-row="rows"><dd>Rows</dd><dd>{resting.count}</dd></div>
-			<div data-readout-row="share"><dd>At or below</dd><dd>{resting.share.toFixed(1)}%</dd></div>
+			<dt data-readout-subject>{readout.columns[at]}</dt>
+			<div data-readout-row="rows"><dd>Rows</dd><dd>{readout.series[0]?.values[at]}</dd></div>
+			<div data-readout-row="share"><dd>At or below</dd><dd>{readout.series[1]?.values[at]}</dd></div>
 		</dl>
 	{/if}
 {/if}

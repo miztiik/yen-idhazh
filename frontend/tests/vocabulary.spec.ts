@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { sparklineShape } from '../src/lib/charts/sparkline';
 import { stacked } from '../src/lib/charts/stacked';
-import { targetBar } from '../src/lib/charts/targetbar';
+import { targetGeometry } from '../src/lib/charts/targetbar';
 import { waterfall } from '../src/lib/charts/waterfall';
 import { SENTINEL_PATTERN } from '../src/lib/charts/theme';
 
@@ -29,7 +29,7 @@ function colours(option: unknown): string[] {
 
 test.describe('the target bar', () => {
 	test('the marker sits at the target fraction of the track', () => {
-		const t = targetBar(4.1, 6, 'lower-is-better', 'minutes per chart');
+		const t = targetGeometry(4.1, 6, 'lower-is-better');
 		expect(t.empty).toBe(false);
 		// Track is the larger end plus 15 percent headroom: max(4.1, 6) * 1.15.
 		expect(t.markerFraction).toBeCloseTo(6 / (6 * 1.15), 10);
@@ -37,19 +37,19 @@ test.describe('the target bar', () => {
 	});
 
 	test('past the target reads as past, whichever way better is', () => {
-		expect(targetBar(7.2, 6, 'lower-is-better', 'x').band).toBe('past');
-		expect(targetBar(0.03, 0.05, 'higher-is-better', 'x').band).toBe('past');
-		expect(targetBar(0.09, 0.05, 'higher-is-better', 'x').band).toBe('good');
+		expect(targetGeometry(7.2, 6, 'lower-is-better').band).toBe('past');
+		expect(targetGeometry(0.03, 0.05, 'higher-is-better').band).toBe('past');
+		expect(targetGeometry(0.09, 0.05, 'higher-is-better').band).toBe('good');
 	});
 
 	test('within a tenth of the target is a warning, not a pass', () => {
 		// 5.6 against 6 is 6.7 percent away - inside the near band.
-		expect(targetBar(5.6, 6, 'lower-is-better', 'x').band).toBe('near');
-		expect(targetBar(5.0, 6, 'lower-is-better', 'x').band).toBe('good');
+		expect(targetGeometry(5.6, 6, 'lower-is-better').band).toBe('near');
+		expect(targetGeometry(5.0, 6, 'lower-is-better').band).toBe('good');
 	});
 
 	test('a value nobody measured draws nothing', () => {
-		expect(targetBar(null, 6, 'lower-is-better', 'x').empty).toBe(true);
+		expect(targetGeometry(null, 6, 'lower-is-better').empty).toBe(true);
 	});
 });
 
@@ -162,7 +162,6 @@ test.describe('the sparkline', () => {
 
 test.describe('every chart in the vocabulary', () => {
 	const built = [
-		targetBar(4, 6, 'lower-is-better', 'x').option,
 		waterfall(10, [{ label: 'a', delta: 2 }]).option,
 		stacked(['a'], [{ label: 's', token: '--chart-1', values: [1] }]).option
 	];
