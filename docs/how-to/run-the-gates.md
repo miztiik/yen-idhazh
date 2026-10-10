@@ -85,6 +85,25 @@ A source edit during compilation cannot certify the old output. Browser
 tests refuse an unrecorded, wrong-mode or stale build. Preview never adopts an
 existing server. `PREVIEW_PORT` remains the override for a port collision.
 
+### Native host codec checks
+
+The `rust` group runs the pinned host crate and its named Python native-file
+parity tests. Prepare Rust 1.95.0 with `clippy` and `rustfmt` before running it.
+The launcher refuses missing toolchains/components rather than downloading them
+inside tests. Locked dependency preparation/build precedes offline
+fmt, clippy and Cargo tests. CI does the same before the full backend suite.
+
+```powershell
+npm --prefix frontend run test:changed -- --group rust --python <python-executable>
+```
+
+Native tests write under `backend/var/`, never the production ledger. The Python
+parity checks read both the Rust test harness's actual files and the native
+fixture command's actual files. Missing binaries or evidence fail. On Windows
+the launcher locates MSVC BuildTools and calls its environment setup and Cargo
+in the same `cmd.exe` process. Build/test scratch roots are project-owned;
+machine-wide gate seats retain their original shared location.
+
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.

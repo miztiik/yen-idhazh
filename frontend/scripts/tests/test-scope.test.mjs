@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -10,6 +9,87 @@ import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+function tmpdir() {
+	const path = resolve(FRONTEND, '../backend/var/checks/scope-tests');
+	mkdirSync(path, { recursive: true });
+	return path;
+}
+
+test('native Rust and its actual file fixture select focused checks without browser preparation', () => {
+	for (const path of ['backend/rust/host-telemetry/src/codec/parquet.rs',
+		'backend/rust/host-telemetry/rust-toolchain.toml', 'backend/rust/host-telemetry/Cargo.lock',
+		'tests/fixtures/host-events/file-parity.json', 'backend/tests/contracts/test_rust_host_file_parity.py']) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend']);
+		assert.equal(selected.rust, true);
+		assert.equal(selected.contracts, false);
+		assert.deepEqual(selected.backendFiles, ['backend/tests/contracts/test_rust_host_file_parity.py']);
+		assert.equal(ciAnswer([path], true).browser, false);
+		assert.equal(ciAnswer([path], true).modelAbsent, false);
+		assert.equal(ciAnswer([path], true).robots, false);
+	}
+});
+
+test('isolated host contracts and verification have finite consumers; unknowns stay broad', () => {
+	for (const path of ['backend/idhazh/contracts/host_events.py',
+		'backend/idhazh/contracts/host_output.py', 'backend/idhazh/telemetry/host_output_verify.py',
+		'backend/idhazh/telemetry/host_parquet_admission.py', 'config/host-telemetry-experiment.json']) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend']);
+		assert.equal(selected.rust, true);
+		assert.equal(selected.contracts, false);
+		assert.ok(selected.backendFiles.includes('backend/tests/contracts/test_rust_host_file_parity.py'));
+	}
+	const transport = selectPaths(['backend/idhazh/telemetry/host_event_files.py']);
+	assert.equal(transport.rust, false);
+	assert.deepEqual(transport.backendFiles, ['backend/tests/test_host_event_files.py']);
+	for (const path of ['backend/rust/new-crate/src/lib.rs', 'config/host-unknown.json',
+		'backend/idhazh/contracts/host-unknown.py', 'tests/fixtures/host-events/unknown.json']) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend', ...FRONTEND_GROUPS]);
+		assert.equal(selected.backendFiles, null);
+		assert.equal(selected.rust, true);
+	}
+});
+
+test('every extracted window spec is explicitly registered and selected', () => {
+	const inventory = groupedSpecs(join(FRONTEND, 'tests')).console;
+	for (const name of [
+		'console-judgement-window-spans', 'console-judgement-agreement-readout',
+		'console-judgement-agreement-marks', 'console-judgement-day-labels',
+		'console-judgement-record-window', 'console-machine-window', 'console-machine-day-labels',
+		'console-pipelines-window', 'console-pipelines-day-labels', 'console-model-window',
+		'console-voices-window', 'console-window-readout'
+	]) {
+		assert.ok(inventory.includes(`${name}.spec.ts`), name);
+		for (const separator of ['/', '\\']) {
+			const path = ['frontend', 'tests', `${name}.spec.ts`].join(separator);
+			assert.deepEqual(selectPaths([path]).groups, ['console'], path);
+			assert.equal(ciAnswer([path], true).console, true, path);
+		}
+	}
+});
+
+test('real Judgement evidence checks keep their appropriate explicit tiers', () => {
+	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
+	assert.ok(inventory.logic.includes('judgement-evidence.spec.ts'));
+	assert.ok(inventory.console.includes('console-judgement-evidence.spec.ts'));
+	assert.deepEqual(selectPaths(['frontend/tests/judgement-evidence.spec.ts']).groups, ['logic']);
+	assert.deepEqual(selectPaths([String.raw`frontend\tests\console-judgement-evidence.spec.ts`]).groups, ['console']);
+});
+
+test('a window helper edit selects all its console consumers under either path convention', () => {
+	for (const name of ['controls', 'readout', 'judgement-fixtures', 'machine-spans', 'client-render', 'server-panels']) {
+		for (const separator of ['/', '\\']) {
+			const path = ['frontend', 'tests', 'support', 'console-window', `${name}.ts`].join(separator);
+			const selection = selectPaths([path]);
+			assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
+			assert.equal(selection.reasons[0].reason, 'shared window controls and focused route window consumers', path);
+			assert.equal(ciAnswer([path], true).console, true, path);
+			assert.equal(ciAnswer([path], true).panels, true, path);
+		}
+	}
+});
 
 test('every extracted window spec is explicitly registered and selected', () => {
 	const inventory = groupedSpecs(join(FRONTEND, 'tests')).console;

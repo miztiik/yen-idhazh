@@ -189,6 +189,7 @@
 		data-windowed="merged-stories"
 		data-panel-question="How many published stories were merged?"
 		data-model-rule="no"
+		data-model-rule-name="merged-stories"
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-merge-state={inputDays === null ? 'missing' : panelState}

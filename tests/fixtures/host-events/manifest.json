@@ -1,0 +1,74 @@
+{
+  "version": "2026-10-10",
+  "date": "2026-10-10",
+  "run_id": "2026-10-10-17",
+  "attempt": 1,
+  "job": "work",
+  "shard": 0,
+  "git_sha": "b48fd3235a926504f61066e579d908644f7c564b",
+  "session_id": "11111111-1111-4111-8111-111111111111",
+  "operator_emitter_id": "operator",
+  "monitor_emitter_id": "monitor",
+  "boot_id": "22222222-2222-4222-8222-222222222222",
+  "event_root": "backend/var/host-events/2026-10-10-17/1/work/0/11111111-1111-4111-8111-111111111111",
+  "output_roots": ["experiment-output/state"],
+  "named_inputs": [
+    {"name": "cpuinfo", "source": "proc.cpuinfo", "relative_path": "captures/cpuinfo.txt"},
+    {"name": "clock", "source": "clock.log", "relative_path": "captures/server.log"}
+  ],
+  "workers": [
+    {
+      "emitter_id": "worker-0",
+      "target": {"pid": 200, "start_ticks": 900},
+      "server": {"pid": 100, "start_ticks": 800}
+    },
+    {
+      "emitter_id": "worker-1",
+      "target": {"pid": 300, "start_ticks": 950},
+      "server": {"pid": 100, "start_ticks": 800}
+    }
+  ],
+  "windows": [
+    {"window_id": "33333333-3333-4333-8333-333333333333", "item_id": "fixture-01", "emitter_id": "worker-0"},
+    {"window_id": "44444444-4444-4444-8444-444444444444", "item_id": "fixture-02", "emitter_id": "worker-1"}
+  ],
+  "cpu_target": {"pid": 100, "start_ticks": 800},
+  "cpu_target_role": "model_server",
+  "controls": {
+    "memory_profiling_enabled": true,
+    "resource_interval_seconds": 0.0,
+    "job_sample_interval_seconds": 15.0,
+    "memcpy_enabled": false,
+    "memcpy_probe_mib": 64,
+    "memcpy_passes": 3
+  },
+  "limits": {
+    "max_manifest_bytes": 65536,
+    "max_command_bytes": 65536,
+    "max_result_bytes": 262144,
+    "max_files": 64,
+    "max_session_events": 128,
+    "max_session_bytes": 8388608,
+    "max_read_bytes": 16777216,
+    "max_reads": 512,
+    "max_workers": 8,
+    "max_windows": 16,
+    "max_concurrent_windows": 2,
+    "retry_window_ms": 5000,
+    "poll_ms": 50,
+    "readiness_timeout_ms": 10000,
+    "ack_timeout_ms": 5000,
+    "drain_timeout_ms": 5000
+  },
+  "capture_limits": {
+    "max_proc_text_bytes": 262144,
+    "max_sysfs_text_bytes": 65536,
+    "max_cpu_id": 4095,
+    "max_cpu_ids": 4096,
+    "max_cgroup_ancestors": 64,
+    "max_mount_entries": 256,
+    "max_processes": 256,
+    "max_log_bytes": 1048576,
+    "max_snapshot_retries": 1
+  }
+}

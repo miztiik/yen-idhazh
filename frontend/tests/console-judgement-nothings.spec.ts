@@ -84,6 +84,7 @@ for (const [id, name] of PANELS) {
 		for (const markup of [empty, absent]) {
 			expect(markup).toContain('data-panel-question=');
 			expect(markup).toContain('data-model-rule="no"');
+			expect(markup).toContain(`data-model-rule-name="${id}"`);
 			expect(markup.match(/data-comparison=/g)).toHaveLength(1);
 			expect(markup).toMatch(/data-comparison="[^"]+ against [^"]+"/);
 			expect(markup).toMatch(/data-readout-(?:none|records|columns)=/);

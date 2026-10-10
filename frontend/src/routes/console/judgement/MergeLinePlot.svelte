@@ -221,6 +221,7 @@
 		data-windowed="merge-line"
 		data-panel-question="Where did the calculated merge line sit?"
 		data-model-rule="no"
+		data-model-rule-name="merge-line"
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-line-domain={`${corridor[0]},${corridor[1]}`}
