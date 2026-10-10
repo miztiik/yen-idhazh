@@ -32,7 +32,15 @@ test.describe('route-owned console configuration', () => {
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
 		expect(routes.machine.judged).toEqual(['platform-mix']);
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
-		for (const id of ['model', 'voices', 'judgement'] as const) {
+		const judgementPanels = [
+			'merged-stories', 'merge-line', 'judge-agreement',
+			'record-gates', 'verdict-split', 'holdout-margin'
+		];
+		expect(routes.judgement.panel_groups).toEqual([
+			{ id: 'judgement', title: '', panels: judgementPanels }
+		]);
+		expect(routes.judgement.judged).toEqual(judgementPanels);
+		for (const id of ['model', 'voices'] as const) {
 			expect(routes[id].panel_groups).toEqual([]);
 			expect(routes[id].judged).toEqual([]);
 		}
