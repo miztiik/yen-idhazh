@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-10
 
-**Status**: Row 1 is merged in PR #1529. Row 2's chart contracts and authorized integration repair are implemented on `feat/console-chart-contracts`, ready for PR checks and merge. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED.
+**Status**: Row 1 is merged in PR #1529. Rows 2, 3a and 3 are implemented; their chart-contract and Judgement pull requests are awaiting CI and merge. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -15,6 +15,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 **Latest user direction.** Implementation is authorized by the original task, not by a new approval round. Stop size, performance and timing measurements, and baseline-picture work. Do not run measurement harnesses, collect before/after readings, create or refresh picture baselines, or hold a row for a missing measurement. This overrides older measurement and picture-comparison requirements below, including section 2.10 and ESCALATE trigger 3. Correctness tests, missing/empty-data checks and integrated browser smoke remain mandatory. Existing test timeouts remain in force; a timeout is a correctness failure to investigate, not permission to start a benchmark.
 
 **Chart integration authorized, 2026-10-10.** The owner extended row 2 to `frontend/tests/tokens.spec.ts` and `frontend/tests/support/judgement-route.ts`: classify `--chart-spread-mix` as a numeric fraction without a Tailwind utility, and add the three actual chart dependencies to the existing private-build inventory. Keep the independent value checks, the bounded inventory and all existing assertions.
+
+**Owner direction, 2026-10-10.** Row 3 may repair the outgoing Pipelines page's shared-config access and update its renamed reader references in the three shared docs listed in its scope. Visual and colour improvements are approved. Bring concrete speed improvements for a shell UI with no prerender to the owner before changing that architecture; the existing measurement suspension remains in force.
+
+**Structural repair approved, 2026-10-10.** The owner selected A3 after Fowler and Susan's consultation. Row 3a completes route ownership of the shared window tests before row 3 retains existing read-state information and unknown counts through Judgement. This replaces the proposed five-literal exception. Both are ordered Level 3 changes, not new persisted contracts or a no-prerender change. Keep real zero and partial evidence, independent exact expectations, and every existing route and assertion.
 
 | Field | Value |
 | --- | --- |
@@ -55,7 +59,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Each route gets its own console file, gate drivers and test expectations | - | A | DONE | p52-route-ownership (`feat/console-route-ownership`) | Read from merge | Owner and file workers |
 | 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | READY: implemented; PR checks and merge pending | p52-chart-contracts (`feat/console-chart-contracts`) | Read from merge | Fowler; Susan S1-S6 |
-| 3 | Judgement carries its ids and gates, and its readers are named for the judge | 1 | B | PENDING | - | - | - |
+| 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | READY: implemented; PR checks and merge pending | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Fowler and owner |
+| 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | READY: implemented; PR checks and merge pending | p52-judgement (`feat/console-judgement-panels`) | Read from merge | Susan, Fowler and owner |
 | 4 | Every panel's question is declared before it is drawn, and the door is measured at the console's real volume | 2 | C | PENDING | - | - | - |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | PENDING | - | - | - |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
@@ -200,6 +205,8 @@ export const EXPECT: RouteExpect | null = { /* typed-out literals */ }; // null:
 - When `RouteId` gains a member, `npm run check` fails until every `index.ts` names it, because SvelteKit's `tsconfig.json` includes `tests/`.
 - Judgement's entry in `NAMED_ABSENCES` moves to `console-expect/console-nav/judgement.ts`. Routes that intentionally draw no `Chart.svelte` declare `null` expectations for `console-chart-pending` and `console-chart-lifetime`; rows 6 and 9 update their own expectation files when moving the last chart. A route still expected to draw charts must fail if its charts vanish, never infer a skip from the rendered page.
 
+**Window-test ownership amendment, 2026-10-10.** Row 3a moves each route's detailed window fixtures, case tables and execution out of `console-window.spec.ts` into that route's focused specs and helpers. The shared spec retains common window arithmetic, control and surface-coverage checks, and cross-route navigation. Expectation files contain independent typed literals only, never executable callbacks or values derived from production copy. The new specs are explicitly registered; helper-only changes select their checks. The amendment covers this shared spec, not an audit of the other sixteen.
+
 **Gate drivers**, one module a route:
 
 ```ts
@@ -230,9 +237,9 @@ export const BY_ROUTE: Readonly<Record<RouteId, { readonly DRIVERS: typeof DRIVE
 
 | File | Rows that edit it, in order |
 | --- | --- |
-| the seventeen cross-route spec bodies | 1, 4 (they import `test` from `door-page`), 11; `console-band.spec.ts` also 5 and 10 |
+| the seventeen cross-route spec bodies | 1, 4 (they import `test` from `door-page`), 11; `console-band.spec.ts` also 5 and 10; `console-window.spec.ts` also 3a (owner-approved extraction) |
 | `console-expect/<spec>/<route>.ts`, `panel-drivers/<route>.ts`, `config/console/<route>.json` | 1, then that route's row (machine: 9, preserving the shipped `platform-mix`) |
-| `console-expect/<spec>/index.ts`, `panel-drivers/index.ts`, `route-console.ts`, `frontend/tests/support/panel-gates.ts` | 1 (`console-built-page`'s folder: 4) |
+| `console-expect/<spec>/index.ts`, `panel-drivers/index.ts`, `route-console.ts`, `frontend/tests/support/panel-gates.ts` | 1 (`console-built-page`'s folder: 4); `console-window` expectations also 3a (remove route-specific execution contracts) |
 | `frontend/src/routes/console/+layout.svelte`, `frontend/vite.config.ts`, `frontend/src/app.d.ts` | 1, 4 |
 | `frontend/tests/panel-sufficiency.spec.ts` | 1, 2, 4 |
 | `frontend/tests/panel-captures.spec.ts` | 1, 4, 6 |
@@ -801,6 +808,8 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 
 ### Row #3 - Judgement carries its ids and gates, and its readers are named for the judge
 
+- **Authorized repair, 2026-10-10:** use the existing `consoleKnobs()` boundary for Pipelines' shared configuration so the outgoing component does not read Judgement's page-data shape during navigation. Update only the renamed reader references in `docs/architecture/contracts/ledger-registry.md`, `docs/architecture/contracts/persistence.md` and `docs/concepts/growing-reads.md`. These four files extend this row's ownership; later rows retain their other changes.
+- **Evidence repair authorized, 2026-10-10:** retain the existing `RecordRead` beside fitted lines, marked pairs, derived holdout readings and the selected committed holdout score. Carry it through the page and affected panels without inventing another state vocabulary. Preserve unknown pair denominators as `null`; do not add them as zeros or suppress a usable independent reading. Show useful partial rows and their existing lost-day, set-aside and reach information. Empty results do not prove that no job ran, fitted or scored. This is an internal reader/page/panel boundary repair, with no new producer, persisted field, dataset publication or runtime fetch.
 - **Scope:** section 2.7's Judgement table: ids, frames where missing, gate attributes, driver entries (`BUILD_TIME` holds all six), expectations, `judged` entries and words (section 2.7b); `frontend/tests/console-judgement-nothings.spec.ts` for its six build-time panels; panel 15's heading deleted, with its entry in `console-expect/console-nav/judgement.ts`; the Judgement tab description becomes `Which stories the day merged, and where the judge and a person disagreed.` in `band.ts`, the band producer and `newest-day.json`; console.md's Judgement section rewritten. `frontend/src/lib/server/similarity-ledger.ts` becomes `content-similarity-judge.ts` and `similarity-holdout.ts` becomes `content-similarity-holdout.ts`: neither is named for the judge or the ledger it reads.
 - **Files touched:**
   - `frontend/src/routes/console/judgement/+page.svelte`, `frontend/src/routes/console/judgement/+page.server.ts`, `HoldoutMargin.svelte`, `JudgeAgreement.svelte`, `MergedStoriesPanel.svelte`, `MergeLinePlot.svelte`, `RecordGates.svelte`, `VerdictSplit.svelte` in that folder
@@ -809,6 +818,12 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   - `frontend/src/lib/console/band.ts`, `backend/idhazh/telemetry/publish/console_band.py`, `tests/fixtures/contracts/console-band/newest-day.json` (the tab description)
   - `frontend/tests/merge-line.spec.ts` and every Judgement spec the search finds
   - `docs/architecture/publishing/console.md`
+  - `frontend/src/routes/console/+page.svelte` (shared-config access only), `docs/architecture/contracts/ledger-registry.md`, `docs/architecture/contracts/persistence.md`, `docs/concepts/growing-reads.md` (renamed reader references only; owner-authorized repair)
+  - `frontend/src/lib/server/content-similarity-judge.ts`, `frontend/src/lib/server/content-similarity-holdout.ts`, `frontend/src/lib/console/merge-line.ts`, `frontend/src/lib/console/holdout.ts`, and a focused Judgement evidence-note helper (reuse the existing `RecordRead` and exported note functions; do not change the shared vocabulary)
+  - The direct consumers and independent tests of those internal reader results and nullable denominators, found through a named importer search at dispatch. Record the resulting bounded inventory before editing; these tightly coupled adaptations belong to this approved repair, not another route migration.
+  - **Confirmed dependent inventory:** `ledger-rows.spec.ts`, `similarity-ledgers.spec.ts`, `merge-line.spec.ts`, `holdout.spec.ts`, `holdout-domain.spec.ts`, `console-judgement-holdout.spec.ts`, extracted Judgement window/day/record specs; new `judgement-evidence.spec.ts` and `console-judgement-evidence.spec.ts`; `support/judgement-route.ts` fixed module inputs and named evidence options, and `support/ledger-lifecycle.ts` native SQL null fixture support. Their named registration, selection tests and ownership inventory are adapted with them. No new persisted field or producer is required.
+  - `recording.ts` delegates set-aside folder lookup to the existing family-folder map for the new judge-ledger caller. Its read and record state vocabularies do not change; plain-ledger paths stay the same. The existing absent-route assertion in `console-judgement-verdict.spec.ts` follows the retained unavailable read rather than expecting an empty successful read.
+  - Direct geometry consumers `console-judgement-line.spec.ts`, `console-judgement-agreement.spec.ts` and Judgement's static cases in `panel-sufficiency.spec.ts` use the existing real private route builder for successful empty or populated evidence, while missing-source checks stay separate. Their geometry and timeout assertions are unchanged. No data is seeded into the shared canary.
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/test_console_payloads_producer.py`. The browser smoke on `/console/judgement/` at 390, 768 and 1440 in both themes: zero new `[error]`, zero new `404`, and the page still renders with its data absent. CI runs the full suite.
 - **Oracle:** every Judgement panel is judged and green on gates 1, 2, 3, 5 and 6, and on gate 8's `quiet` and `missing` through its nothings spec; `git grep -n -e similarity-ledger -e similarity-holdout -- frontend docs backend` finds history and nothing else; every console tab strip shows the new Judgement description. It cannot settle whether the Judgement panels answer the owner's question; they keep today's drawing.
 - **Decisions:**
@@ -824,6 +839,16 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
   | 1 | Fold this row into row 1 | Row 1 would move pixels, and every route row would wait on the Judgement work | One pull request saved | Jony |
+
+---
+
+### Row #3a - Each route owns its detailed window tests
+
+- **Scope:** complete the known ownership defect in `frontend/tests/console-window.spec.ts` for every route it currently tests. Move route-specific factories, cases, real-component compilation and assertions into focused route-owned specs and helpers. Keep genuinely shared window, readout, control, declared surface-coverage and cross-route navigation assertions. Preserve all existing cases, applicability, presets, widths, themes and exact checks; separate structural moves from evidence and copy changes.
+- **Files touched:** `frontend/tests/console-window.spec.ts`; its `support/console-expect/console-window/index.ts` and route files as needed to remove route-specific execution contracts; focused route-owned window specs under `frontend/tests/`; bounded helpers under `frontend/tests/support/console-window/`; `frontend/tests/console-route-scope.spec.ts`; `frontend/scripts/test-groups.ts`, `test-scope.ts`, `tests/test-scope.test.mjs`; `docs/architecture/publishing/console.md`, `docs/reference/test-selection.md`; this plan. Reuse `support/server-render.ts` rather than inventing another compiler or registration framework.
+- **Bounded extraction inventory:** focused specs `console-judgement-window-spans`, `console-judgement-agreement-readout`, `console-judgement-agreement-marks`, `console-judgement-day-labels`, `console-judgement-record-window`, `console-machine-window`, `console-machine-day-labels`, `console-pipelines-window`, `console-pipelines-day-labels`, `console-model-window`, `console-voices-window`, `console-window-readout`; helpers `controls`, `readout`, `judgement-fixtures`, `machine-spans`, `client-render`, `server-panels` under `support/console-window/`. Only Pipelines' window expectation file and the shared index change; no other route expectation needs execution fields. The three approved reader-reference doc edits accompany structural name coherence.
+- **Oracle:** map every original case to its destination and retain its assertions. The shared runner still covers its complete `BY_ROUTE` declarations, including explicit null applicability. A named spec or helper edit is selected, and deleting an expected surface fails. Route-only changes need no shared-spec edit. No production-derived expected words, callback registry, silent skips, broad fallbacks or new tools.
+- **Delivery:** ordered structural commits, then row 3's evidence and corresponding exact-copy contract changes. Existing baseline failures may remain during an unchanged structural move; no candidate merges red. Correctness and integrated browser smoke remain mandatory, with no measurements or baseline pictures. This owner-approved scope does not include the other sixteen shared specs, publishing datasets, or changing prerender.
 
 ---
 

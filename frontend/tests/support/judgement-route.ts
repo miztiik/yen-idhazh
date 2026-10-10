@@ -6,13 +6,14 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import {
-	appendFileSync, copyFileSync, mkdirSync,
+	appendFileSync, copyFileSync, mkdirSync, readFileSync,
 	realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publishedSite } from './published-site';
 import { buildLedger } from './ledger-lifecycle';
+import { cachedParquetAddon, parquetAddon } from '../../scripts/duckdb-addon';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const INPUTS = [
@@ -114,6 +115,7 @@ const INPUTS = [
 	'src/lib/console/explorer/type-family.ts',
 	'src/lib/console/explorer/utc-instant.ts',
 	'src/lib/console/holdout.ts',
+	'src/lib/console/judgement-evidence.ts',
 	'src/lib/console/merge-line.ts',
 	'src/lib/console/recording.ts',
 	'src/lib/console/route-console.ts',
@@ -155,8 +157,8 @@ const INPUTS = [
 	'src/lib/server/payload.ts',
 	'src/lib/server/publication.ts',
 	'src/lib/server/recorded-line.ts',
-	'src/lib/server/similarity-holdout.ts',
-	'src/lib/server/similarity-ledger.ts',
+	'src/lib/server/content-similarity-holdout.ts',
+	'src/lib/server/content-similarity-judge.ts',
 	'src/lib/server/window-day.ts',
 	'src/lib/theme.ts',
 	'src/routes/+error.svelte',
@@ -190,9 +192,13 @@ function stageModules(frontend: string): void {
 	}
 }
 
-export async function judgementRoute(report: string): Promise<{
+export async function judgementRoute(
+	report: string,
+	options: { scoreRecord?: 'populated'; evidence?: 'absent' | 'empty' | 'unknown-denominators' | 'missing-gate' } = {}
+): Promise<{
 	origin: string;
 	inputs: string[];
+	staticRoot: string;
 	close: () => Promise<void>;
 }> {
 	mkdirSync(report, { recursive: true });
@@ -212,7 +218,11 @@ export async function judgementRoute(report: string): Promise<{
 		rmSync(root, { recursive: true });
 	};
 	try {
-		const site = publishedSite(join(root, 'public'), { published: ['2030-06-15'] });
+		const absent = options.evidence === 'absent';
+		const site = publishedSite(join(root, 'public'), { published: absent ? [] : ['2030-06-15'] });
+		const state = join(root, 'state');
+		mkdirSync(state, { recursive: true });
+		if (!absent) {
 		writeFileSync(join(site.digest, '2030', '06', '15', 'run.json'), JSON.stringify({
 			date: '2030-06-15',
 			runs: [
@@ -220,10 +230,9 @@ export async function judgementRoute(report: string): Promise<{
 				{ run_id: '2030-06-15-1', completed_at: '2030-06-15T12:00:00Z', same_story_floor_applied: 0.945 }
 			]
 		}));
-		const state = join(root, 'state');
 		await buildLedger(state, {
 			ledger: 'fitted-thresholds', pinned: '2030-06-15',
-			days: [{ ago: 1, rows: 1 }],
+			days: options.evidence === 'empty' ? [{ ago: 0, state: 'empty' }] : [{ ago: 1, rows: 1 }],
 			columns: {
 				run_id: '2030-06-14-1', previous: 0.95, proposed: 0.952,
 				after_damping: 0.952, applied: 0.952, clamp_kind: 'none',
@@ -231,7 +240,12 @@ export async function judgementRoute(report: string): Promise<{
 				max_up_step: 0.01, pairs_in_band: 10, pairs_judged: 10,
 				pairs_usable: 10, disagreement_rate: 0, unclear_rate: 0,
 				negatives_on_record: 5, above_line_on_record: 5,
-				days_on_record: 1, cosine_weight: 1
+				days_on_record: 1,
+				cosine_weight: options.evidence === 'unknown-denominators' ? null : 1,
+				...(options.evidence === 'unknown-denominators' ? { pairs_judged: null } : {}),
+				...(options.evidence === 'missing-gate' ? {
+					negatives_on_record: null, disagreement_rate: 0.5, held_reason: 'judge_unstable'
+				} : {})
 			}
 		});
 		for (const ledger of ['holdout-pairs', 'merge-line-holdout-scores'] as const) {
@@ -239,9 +253,37 @@ export async function judgementRoute(report: string): Promise<{
 				ledger, pinned: '2030-06-15', days: [{ ago: 0, state: 'empty' }]
 			});
 		}
+		if (options.scoreRecord === 'populated') {
+			const tuning = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'idhazh.json'), 'utf8'))
+				.assemble.same_story.adaptive_dedup_threshold;
+			const judge = join(state, 'content-similarity-judge');
+			mkdirSync(judge, { recursive: true });
+			writeFileSync(join(judge, 'score-distribution.json'), JSON.stringify({
+				band_low: tuning.band_low, band_high: tuning.band_high,
+				bin_width: tuning.bin_width, counted_dates: ['2030-06-14'],
+				slots: [
+					{ bin_low: 0.91, same_count: 1, different_count: 2, unclear_count: 0 },
+					{ bin_low: 0.95, same_count: 3, different_count: 4, unclear_count: 0 }
+				]
+			}));
+		}
+		}
+		writeFileSync(join(report, 'evidence.json'), JSON.stringify({
+			digestDays: absent ? [] : ['2030-06-15'],
+			fittedDays: absent || options.evidence === 'empty' ? [] : ['2030-06-14'],
+			scoreRecord: absent ? null : options.scoreRecord ?? null,
+			holdoutPairs: [], holdoutScores: []
+		}));
 		const frontend = join(root, 'frontend');
 		stageModules(frontend);
 		const inputs = [...INPUTS];
+		const addon = await parquetAddon();
+		const home = join(root, 'node-home');
+		const address = new URL(addon.url);
+		const cached = join(home, '.duckdb', 'extensions', address.host, ...address.pathname.split('/').filter(Boolean));
+		mkdirSync(dirname(cached), { recursive: true });
+		writeFileSync(cached, cachedParquetAddon(addon));
+		writeFileSync(join(report, 'addon.json'), JSON.stringify({ source: addon.file, requested: address.pathname }));
 		copyFileSync(join(FRONTEND, 'package.json'), join(frontend, 'package.json'));
 		copyFileSync(join(FRONTEND, 'tsconfig.json'), join(frontend, 'tsconfig.json'));
 		mkdirSync(join(frontend, 'static'), { recursive: true });
@@ -277,7 +319,8 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 		const runner = join(frontend, 'judgement-preview.mjs');
 		writeFileSync(runner, `
 			import { build, preview } from 'vite';
-			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))} });
+			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))},
+				logLevel: 'warn', build: { reportCompressedSize: false } });
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 			console.log('JUDGEMENT_ORIGIN=' + server.resolvedUrls.local[0]);
 			process.stdin.resume();
@@ -285,7 +328,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 		`, 'utf8');
 		child = spawn(process.execPath, [runner], {
 			cwd: frontend,
-			env: { ...process.env, DIGEST_ROOT: site.digest, STATE_ROOT: state,
+			env: { ...process.env, HOME: home, USERPROFILE: home, DIGEST_ROOT: site.digest, STATE_ROOT: state,
 				TELEMETRY_ROOT: site.telemetry, BASE_PATH: '' },
 			stdio: ['pipe', 'pipe', 'pipe']
 		});
@@ -314,7 +357,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			});
 		});
 		writeFileSync(join(report, 'build.json'), `${JSON.stringify(ready)}\n`);
-		return { ...ready, inputs, close };
+		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close };
 	} catch (error) {
 		await close();
 		throw error;

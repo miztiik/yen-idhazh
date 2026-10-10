@@ -30,6 +30,7 @@
 
 import type { LedgerFault, LedgerName, SetAsideFiles } from '../data/ledger';
 import { coveredDays, type HeldPeriod } from '../data/slice';
+import { ledgerFolder } from '../data/slice-reader';
 import { dayMonth, MONTHS, shortDate } from '../format';
 import { nameSpan } from './span-words';
 
@@ -438,7 +439,7 @@ export function noRecordSentence(
 /** Where a person reads the files a ledger's packing set aside: the packing
  * moves a file it cannot read there and never deletes it, and no step reads it. */
 function setAsideFolder(ledger: LedgerName): string {
-	return `state/raw/${ledger}/set-aside/`;
+	return `state/raw/${ledgerFolder(ledger)}/set-aside/`;
 }
 
 /** Files a ledger's packing set aside unread, and where a person reads them; null when none were.

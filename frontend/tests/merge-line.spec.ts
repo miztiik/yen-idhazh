@@ -290,10 +290,10 @@ test.describe('the judge, and what the record still needs', () => {
 		]);
 	});
 
-	test('a record with nothing in it still draws three bars at zero', () => {
-		// The panel's best day, not its worst. A panel that waits for data before
-		// it draws anything teaches an operator the measurement does not exist.
-		const needs = gateNeeds(null, {
+	test('a supplied zero-count record has three gate readings at zero', () => {
+		const needs = gateNeeds(judgeDay('2030-06-14', {
+			negativesOnRecord: 0, daysOnRecord: 0, aboveLineOnRecord: 0
+		}), {
 			minimumNegatives: 200,
 			minimumDays: 10,
 			minimumAboveLine: 30
@@ -323,7 +323,7 @@ test.describe('the judge, and what the record still needs', () => {
 		expect(gateNeeds(findNewestRow(rows, '2030-06-15'), gates).map((need) => need.value)).toEqual([
 			120, 6, 12
 		]);
-		// No row by then is a record that never held one, which keeps its three zeros.
+		// Without a recorded row the component has no measured bars to draw.
 		expect(findNewestRow(rows, '2030-06-11')).toBeNull();
 		expect(findNewestRow([], '2030-06-15')).toBeNull();
 	});
@@ -332,19 +332,19 @@ test.describe('the judge, and what the record still needs', () => {
 		const zeros = { negativesOnRecord: 0, daysOnRecord: 0, aboveLineOnRecord: 0 };
 
 		expect(describeEarlierRow(judgeDay('2030-06-14'), 1)).toBe(
-			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+			'The bars show what the record held on 14 Jun 2030, before this one day. No later judge row was returned for this window.'
 		);
 		expect(describeEarlierRow(judgeDay('2030-06-01'), 7)).toBe(
-			'The bars show what the record held on 1 Jun 2030, before these 7 days. No run has recorded anything since.'
+			'The bars show what the record held on 1 Jun 2030, before these 7 days. No later judge row was returned for this window.'
 		);
 		expect(
 			describeEarlierRow(judgeDay('2030-06-14', { ...zeros, heldReason: 'inputs_changed' }), 1)
 		).toBe(
-			'The record was started again on 14 Jun 2030, before this one day. No run has recorded anything since.'
+			'The record was started again on 14 Jun 2030, before this one day. No later judge row was returned for this window.'
 		);
 		// Zeros alone do not prove the record was started again.
 		expect(describeEarlierRow(judgeDay('2030-06-14', zeros), 1)).toBe(
-			'The bars show what the record held on 14 Jun 2030, before this one day. No run has recorded anything since.'
+			'The bars show what the record held on 14 Jun 2030, before this one day. No later judge row was returned for this window.'
 		);
 	});
 
@@ -399,6 +399,9 @@ test.describe('the judge, and what the record still needs', () => {
 		// decision the evidence cannot carry. The counts still print elsewhere.
 		expect(rateWithDenominator(1, 4, 5)).toBeNull();
 		expect(rateWithDenominator(1, 20, 5)).toBe('5% of 20 pairs');
+		expect(rateWithDenominator(0, 0, 0)).toBeNull();
+		expect(rateWithDenominator(null, null, 5)).toBeNull();
+		expect(describeUnclear(null, null, 5)).toBe('the count of pairs whose readings agreed is unavailable');
 	});
 
 	test('a disagreed share that rounds away prints under one, and a zero stays a zero', () => {

@@ -33,13 +33,15 @@
 	import { countDays, nameSpan } from '$lib/console/span-words';
 
 	let {
-		days,
+		days: inputDays,
+		evidence = [],
 		dates,
 		gates,
 		viewport,
 		readoutMaxShare
 	}: {
-		days: JudgeDay[];
+		days: JudgeDay[] | null;
+		evidence?: string[];
 		/** Every date the window spans, including the ones nothing recorded. */
 		dates: string[];
 		gates: { minimumNegatives: number; minimumDays: number; minimumAboveLine: number };
@@ -49,6 +51,7 @@
 	} = $props();
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
+	const days = $derived(inputDays ?? []);
 	const drawn = $derived(
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
@@ -103,21 +106,39 @@
 					{ label: 'Square', value: square.state, swatch: fill(square.state) }
 				])
 			},
-			notMeasured: 'no run recorded anything.',
+			notMeasured: 'no judge row was returned for this day.',
 			resting: 'last'
 		})
 	);
 </script>
 
 <Panel
+	id="record-gates"
 	title="What the record still needs"
 	note={`Three counts have to be reached before the line may move at all. ${windowDays === 1 ? `The square is what the record did with ${nameSpan(windowDays)}.` : 'The squares are one a day: what the record did with that day.'}`}
 >
 	<div
 		data-windowed="record-gates"
+		data-panel-question="Does the record hold enough evidence to move the line?"
+		data-model-rule="no"
+		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
-		data-gates-met={met ? 'yes' : 'no'}
+		data-gates-met={standing === null ? undefined : met ? 'yes' : 'no'}
+		data-readout-none={inputDays === null
+			? 'the gate counts are unavailable, so there is no day to read; agreed with Susan'
+			: undefined}
 	>
+		<p class="comparison" data-comparison="Each gate's recorded count against the count it needs.">
+			Each gate's recorded count against the count it needs.
+		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
+		{#if inputDays === null}
+			<p class="lede" data-lede data-empty="missing">The record's gate counts are unavailable for {nameSpan(windowDays)}.</p>
+		{:else}
+		<p class="lede" data-lede>
+			{standing === null ? 'No gate counts were returned for this window.' : `${needs.filter((need) => need.value >= need.target).length} of ${needs.length} gates passed`}
+		</p>
+		{#if standing !== null}
 		<div class="bars">
 			{#each needs as need (need.label)}
 				<TargetBar
@@ -130,6 +151,7 @@
 				/>
 			{/each}
 		</div>
+		{/if}
 
 		<!-- The squares wrap onto several lines, so a pointer reads the square
 		     under it rather than the nearest one across; one tab stop for all. -->
@@ -142,6 +164,7 @@
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div
 				class="strip"
+				data-chart-type="tileStrip"
 				data-counted-strip
 				data-counted-squares={squares.length}
 				tabindex="0"
@@ -188,8 +211,8 @@
 				<span data-gates-state="earlier">{describeEarlierRow(standing, windowDays)}</span>
 			{:else if newest === null}
 				<span data-gates-state="empty"
-					>Nothing was judged in {nameSpan(windowDays)}. The three bars are what the record needs
-					before a line may be fitted at all.</span
+					>No gate counts were returned for {nameSpan(windowDays)}. The record needs readings,
+					days counted and pairs above the line before a line may be fitted.</span
 				>
 			{:else}
 				{#if !met}
@@ -200,7 +223,7 @@
 						{grouped(needs[2].target)} pairs above the line.</span
 					>
 				{:else if silent > 0}
-					<span data-gates-state="stale">Nothing has been counted for {countDays(silent)}.</span>
+					<span data-gates-state="stale">No judge row was returned for the latest {countDays(silent)}.</span>
 				{:else}
 					<span data-gates-state="met"
 						>The record has what it needs. These three bars stay so a record that empties is
@@ -212,14 +235,26 @@
 				<span data-counted-fitted={fitted}
 					>{fitted > 0
 						? `A line was fitted on ${fitted} of ${countDays(windowDays)}.`
-						: `No line was fitted in ${nameSpan(windowDays)}.`}</span
+						: `No fitted line was returned for ${nameSpan(windowDays)}.`}</span
 				>
 			{/if}
 		</p>
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.lede {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		color: var(--color-text);
+	}
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	.bars {
 		display: grid;
 		gap: var(--space-3);

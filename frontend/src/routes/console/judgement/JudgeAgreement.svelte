@@ -55,9 +55,10 @@
 		rateWithDenominator,
 		wholePercent,
 		type AgreementLimits,
-		type JudgeDay
+		type JudgeDay as RecordedJudgeDay
 	} from '$lib/console/merge-line';
 	import { countDays, nameSpan } from '$lib/console/span-words';
+	type JudgeDay = Pick<RecordedJudgeDay, 'date' | 'disagreementRate' | 'unclearRate' | 'pairsJudged' | 'pairsUsable' | 'heldReason'>;
 
 	/** One day's dots and strip words, for a day that read a pair. */
 	interface Reading {
@@ -68,7 +69,9 @@
 	}
 
 	let {
-		days,
+		days: inputDays,
+		evidence = [],
+		complete = true,
 		limits,
 		viewport,
 		height,
@@ -77,7 +80,9 @@
 		readoutMaxShare,
 		attemptsFloor
 	}: {
-		days: JudgeDay[];
+		days: JudgeDay[] | null;
+		evidence?: string[];
+		complete?: boolean;
 		limits: AgreementLimits;
 		viewport: TimeWindow;
 		height: number;
@@ -92,13 +97,16 @@
 	let selected = $state<number | null>(null);
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
+	const days = $derived(inputDays ?? []);
 	const drawn = $derived(
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
 	/** Only the days a shard actually read something. A day with nothing judged has
 	 * no rate, and a zero on the line would say the judge agreed with itself
 	 * perfectly on a day it was never asked. */
-	const read = $derived(drawn.filter((day) => day.pairsJudged > 0));
+	const read = $derived(drawn.filter((day) =>
+		day.pairsJudged === null || day.pairsUsable === null || day.pairsJudged > 0 || day.pairsUsable > 0
+	));
 	/** Every day of the window, oldest first, once at least one day read a pair.
 	 * None while no day did: the sentence already says so, and a strip of
 	 * columns that would all print the same empty line says it again at each
@@ -112,8 +120,8 @@
 
 	/** Whether a share is a measurement: the pairs it is taken over reach the
 	 * floor. One rule for which shares draw a dot and which the axis nices from. */
-	function reachesFloor(pairs: number): boolean {
-		return pairs >= attemptsFloor;
+	function reachesFloor(pairs: number | null): boolean {
+		return pairs !== null && pairs > 0 && pairs >= attemptsFloor;
 	}
 	/** Every share that draws a dot, which joins the two marks in the set the
 	 * axis is niced from. */
@@ -159,12 +167,14 @@
 	 */
 	function readingsOf(day: JudgeDay): { disagreed: string; unclear: string; name: string } {
 		const date = dayMonth(day.date);
-		const disagreedCount = day.disagreementRate * day.pairsJudged;
+		const disagreedCount = day.pairsJudged === null ? null : day.disagreementRate * day.pairsJudged;
 		const disagreed =
 			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor, limits.disagreementMax) ??
-			`${grouped(Math.round(disagreedCount))} of ${formatPairs(day.pairsJudged)}`;
+			(disagreedCount === null
+				? 'the count of pairs read twice is unavailable'
+				: `${grouped(Math.round(disagreedCount))} of ${formatPairs(day.pairsJudged!)}`);
 		const unclear = describeUnclear(
-			day.unclearRate * day.pairsUsable,
+			day.pairsUsable === null ? null : day.unclearRate * day.pairsUsable,
 			day.pairsUsable,
 			attemptsFloor,
 			limits.unclearMax
@@ -173,7 +183,9 @@
 			disagreed,
 			unclear,
 			name:
-				day.pairsUsable === 0
+				day.pairsJudged === null || day.pairsUsable === null
+					? `${date}: Disagreed with the second reading: ${disagreed}. Could not tell: ${unclear}.`
+					: day.pairsUsable === 0
 					? `${date}: ${disagreed} disagreed with the second reading. Could not tell: ${unclear}.`
 					: `${date}: ${disagreed} disagreed with the second reading, and ${unclear} could not tell.`
 		};
@@ -183,7 +195,7 @@
 	 * are under the floor: there it is not a measurement, and a dot at its height
 	 * would place a share the strip calls too few to report. The axis is niced
 	 * from every drawn share, so no share can fall above it. */
-	function heightOf(share: number, pairs: number): number | null {
+	function heightOf(share: number, pairs: number | null): number | null {
 		if (!reachesFloor(pairs)) return null;
 		return px(yAxis.scale(share));
 	}
@@ -335,15 +347,17 @@
 
 	/** How many pairs the window read altogether: what the disagreed share is
 	 * taken over, printed beside it. */
-	const judged = $derived(read.reduce((total, day) => total + day.pairsJudged, 0));
+	const judged = $derived(!complete || read.some((day) => day.pairsJudged === null)
+		? null : read.reduce((total, day) => total + day.pairsJudged!, 0));
 	const disagreed = $derived(
-		read.reduce((total, day) => total + day.disagreementRate * day.pairsJudged, 0)
+		judged === null ? null : read.reduce((total, day) => total + day.disagreementRate * day.pairsJudged!, 0)
 	);
 	/** How many of them got two readings that agreed, from each day's own count:
 	 * what "could not tell" is taken over, printed beside it. */
-	const agreed = $derived(read.reduce((total, day) => total + day.pairsUsable, 0));
+	const agreed = $derived(!complete || read.some((day) => day.pairsUsable === null)
+		? null : read.reduce((total, day) => total + day.pairsUsable!, 0));
 	const unclear = $derived(
-		read.reduce((total, day) => total + day.unclearRate * day.pairsUsable, 0)
+		agreed === null ? null : read.reduce((total, day) => total + day.unclearRate * day.pairsUsable!, 0)
 	);
 	const disagreeShare = $derived(
 		rateWithDenominator(disagreed, judged, attemptsFloor, limits.disagreementMax)
@@ -353,8 +367,8 @@
 	 * why a day was held: the run first checks whether the record holds enough
 	 * to fit on, so a day held for that can carry a share past its mark. A share
 	 * is past its mark when it is above it, the test the run holds a day on. */
-	const disagreedPast = $derived(judged > 0 && disagreed / judged > limits.disagreementMax);
-	const unclearPast = $derived(agreed > 0 && unclear / agreed > limits.unclearMax);
+	const disagreedPast = $derived(judged !== null && disagreed !== null && judged > 0 && disagreed / judged > limits.disagreementMax);
+	const unclearPast = $derived(agreed !== null && unclear !== null && agreed > 0 && unclear / agreed > limits.unclearMax);
 	/** The disagreed share against its mark, for the sentences that judge that
 	 * share alone. The words are Reader's. */
 	function describeVerdict(
@@ -370,7 +384,7 @@
 		return `The ${shown}% that ${reading} is ${numerator / denominator > mark ? 'past' : 'inside'} its mark`;
 	}
 	const disagreedVerdict = $derived(
-		describeVerdict(disagreed, judged, limits.disagreementMax, 'disagreed')
+		disagreed === null || judged === null || judged === 0 ? '' : describeVerdict(disagreed, judged, limits.disagreementMax, 'disagreed')
 	);
 	/** Where the sentence prints both shares, the verdict on the two: the state
 	 * it names and the words that close the sentence. The words are Reader's. */
@@ -381,7 +395,7 @@
 		if (unclearPast)
 			return {
 				state: 'unclear-past',
-				said: `${describeVerdict(unclear, agreed, limits.unclearMax, 'could not tell')}.`
+				said: `${describeVerdict(unclear!, agreed!, limits.unclearMax, 'could not tell')}.`
 			};
 		return { state: 'inside', said: 'Both rates are inside the marks.' };
 	});
@@ -403,6 +417,9 @@
 	const floorNote = $derived.by(() => {
 		const readings = drawnMarks.map((mark) => mark.reading);
 		const leftOut = readings.some((one) => one.disagreeY === null || one.unclearY === null);
+		if (leftOut && readings.some((one) => one.day.pairsJudged === null || one.day.pairsUsable === null)) {
+			return `A dot needs a known count of at least ${formatPairs(attemptsFloor)} for its own reading. Known daily counts remain in the readout.`;
+		}
 		if (!leftOut || disagreeShare === null) return null;
 		const fewer = `fewer than ${formatPairs(attemptsFloor)}`;
 		const rule = `A day has no "disagreed" dot if ${fewer} were read twice, and no "could not tell" dot if ${fewer} agreed.`;
@@ -444,22 +461,42 @@
 </script>
 
 <Panel
+	id="judge-agreement"
 	title="Whether the judge agrees with itself"
 	note={`Every pair is read twice, with the two summaries swapped. A "disagreed" dot shows how often a pair's two readings disagreed. A "could not tell" dot shows how often the pairs whose two readings agreed could not tell. When a day's rate is past its own dashed mark, the run does not move the merge line that day.`}
 >
 	<div
 		data-windowed="judge-agreement"
+		data-panel-question="Did the judge agree with its own second reading?"
+		data-model-rule="no"
+		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-agreement-domain={`${corridor[0]},${corridor[1]}`}
 		data-agreement-days={read.length}
 		data-readout-columns={count > 0 ? count : undefined}
 		data-readout-none={count > 0
 			? undefined
-			: 'no pair has been read twice, so there is no column to read; agreed with Susan'}
+			: 'no judge readings were returned, so there is no column to read; agreed with Susan'}
 	>
+		<p class="comparison" data-comparison="The judge's two readings against each other, and each rate against its own limit.">
+			The judge's two readings against each other, and each rate against its own limit.
+		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
+		{#if inputDays === null}
+			<p class="lede" data-lede data-empty="missing">The judge's numbers are unavailable for {nameSpan(windowDays)}.</p>
+		{:else}
+		<p class="lede" data-lede>
+			{read.length === 0
+				? 'No judge readings were returned for this window.'
+				: judged === null || disagreed === null
+					? 'The count of pairs read twice is unavailable for this window.'
+					: `${disagreeShare ?? `${grouped(Math.round(disagreed))} of ${formatPairs(judged)}`} disagreed with the judge's own second reading`}
+		</p>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
+				data-chart-type="dateSeries"
+				data-chart-name="The judge's two readings"
 				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
@@ -599,8 +636,15 @@
 		<p class="agreement-note">
 			{#if read.length === 0}
 				<span data-agreement-state="none"
-					>No pair was read twice in {nameSpan(windowDays)}, so there is nothing to compare.</span
+					>No judge readings were returned for {nameSpan(windowDays)}, so there is nothing to compare.</span
 				>
+			{:else if judged === null || agreed === null}
+				<span data-agreement-state="unavailable-count"
+					>In {nameSpan(windowDays)}, disagreed with the second reading:
+					{disagreeShare ?? (judged === null || disagreed === null
+						? 'the count of pairs read twice is unavailable'
+						: `${grouped(Math.round(disagreed))} of ${formatPairs(judged)}`)}.
+					Could not tell: {unclearSaid}. Known daily counts remain in the readout.</span>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
 					>{formatPairs(judged)}
@@ -634,10 +678,22 @@
 		{#if floorNote !== null}
 			<p class="floor-note" data-agreement-floor-note>{floorNote}</p>
 		{/if}
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.lede {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		color: var(--color-text);
+	}
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	.agreement-note {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-sm);
