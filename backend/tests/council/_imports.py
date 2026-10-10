@@ -17,6 +17,7 @@ MODULE_NAMES = (
     "idhazh.contracts.article",
     "idhazh.contracts.base",
     "idhazh.contracts.call_cost",
+    "idhazh.contracts.chart_evidence",
     "idhazh.contracts.collection_prune",
     "idhazh.contracts.council_run_record",
     "idhazh.contracts.counterfactual_score",
