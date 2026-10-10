@@ -17,10 +17,12 @@ assemble is still writing into.
 from __future__ import annotations
 
 from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
 KIND = TaskKind.RETENTION
+OWNED_LEDGERS = (LedgerName.DIGEST_FRAGMENTS,)
 
 
 def run(context: TaskContext) -> Pass:
@@ -28,7 +30,6 @@ def run(context: TaskContext) -> Pass:
     from datetime import date, timedelta
 
     from idhazh import day_partition, ledger
-    from idhazh.contracts.ledger_name import LedgerName
     from idhazh.gardener import named_trees, retention_files
 
     first_kept = retention_files.first_kept_day(

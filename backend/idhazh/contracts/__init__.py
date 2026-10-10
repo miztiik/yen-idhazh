@@ -67,6 +67,7 @@ from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.publication_inventory import PublicationInventory
+from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.qualification import (
     QualificationReport,
     QualificationSamples,
@@ -159,6 +160,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublicRunDay,
     PublicTelemetryRow,
     PublicationInventory,
+    PublicationReceipt,
     QualificationReport,
     QualificationSamples,
     QualificationShard,

@@ -21,9 +21,9 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.registry import tenants
-from idhazh.council.session import shard_width
+from idhazh.council.session import VENUE_LEDGERS as VENUE_LEDGER_NAMES
+from idhazh.council.session import publication_paths, shard_width
 from idhazh.ledger import staging
 
 #: How many jobs one repository may have running at once. GitHub's number, not
@@ -36,11 +36,8 @@ PLATFORM_JOB_CEILING: Final = 20
 #: so a move of the tree moves these with it. The record says which units ran;
 #: the host row says which machine ran them, and neither belongs to a tenant -
 #: a list of one tenant's paths would commit neither.
-COUNCIL_LEDGER: Final = staging.staged_path(LedgerName.COUNCIL_RUN_RECORDS)
-VENUE_LEDGERS: Final = (
-    COUNCIL_LEDGER,
-    staging.staged_path(LedgerName.HOST_FINGERPRINT),
-)
+VENUE_LEDGERS: Final = tuple(staging.staged_path(which) for which in VENUE_LEDGER_NAMES)
+COUNCIL_LEDGER: Final = VENUE_LEDGERS[0]
 
 
 def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]]:
@@ -72,14 +69,7 @@ def committed_paths(config_dir: Path) -> tuple[str, ...]:
     no tenant writes nothing at all and names nothing, which is what keeps the
     commit step skipped.
     """
-    council = config.load(config_dir).app.council
-    hosted = tenants(council.tenants)
-    if not hosted:
-        return ()
-    staged = [*VENUE_LEDGERS]
-    for host in hosted:
-        staged += [path for path in host.committed_paths if path not in staged]
-    return tuple(staged)
+    return publication_paths(config.load(config_dir).app.council)
 
 
 def _parallel(count: int) -> int:

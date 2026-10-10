@@ -594,6 +594,18 @@ deletion that names a folder is refused before anything stages. A write a
 `.gitignore` pattern matches is not staged unless `main` already holds it - the
 rule `git add` keeps - so the second check names it.
 
+**A result confirms a change; it does not grant permission.** The runner also
+hands the publisher the independently declared owned folders. Ledger tasks
+declare `OWNED_LEDGERS` beside their module; a compaction already declares its
+`ledger` in config. Their paths come from the existing ledger registry, and
+config's `owns` must fit those paths. Collection folders and non-ledger
+retention folders remain declared by config. No task may claim `state/`,
+`state/raw/` or `state/compact/` outright. The runner declares its own
+`GARDENER` and `HOST_FINGERPRINT` venue ledgers beside itself, and reports use
+the task's declared `appends_to`. Before fetching or staging, the publisher
+refuses any exact write or deletion outside these claims. A task's returned
+path cannot widen them.
+
 **`idhazh gardener run-task` never pushes.** It runs the same tasks and writes
 the same record into the checkout, and stops there, so running a task on a
 developer's machine cannot reset their branch or push to main. It takes the

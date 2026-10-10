@@ -284,15 +284,21 @@ over every path the night's tenants named. Two processes never share a path.
 `fail-fast` is off. **A unit that dies costs its own work and nothing else** -
 the settle runs anyway and keeps everything the surviving units produced.
 
-**The venue spells no ledger path.** A list of one tenant's paths is a list that
-never commits a second tenant's output, so the paths come back from
-`committed_paths` on each tenant supply independent permission to
-`backend/utilities/council_publish.py`, which observes completed writes per
-tenant and the venue's record separately, then calls the shared publisher.
+**Writers declare their paths beside themselves.** Tenant paths come back from
+`committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
+`HOST_FINGERPRINT` beside its session; their staging paths come from the ledger
+registry. The collecting utility uses these independent declarations and returns
+without a record or push when no tenant is registered.
+
+**A declared directory is not permission to sweep it.** As the collecting job
+finishes atomic writes, `council_publish.py` records exact paths and byte digests
+per tenant and for the venue. Only those confirmed writes are offered to
+`publish_to_repo.py`; the private candidate excludes unrelated staged and local
+files. Receipts confirm bytes, never permission. Different bytes at an immutable
+UUID are refused, and mutable files require an unchanged baseline.
+
 There is one collecting job for any number of judges or shards. A tenant/date
 failure does not suppress earlier completed bytes or later tenants/dates.
-An empty venue writes no row and makes no commit. Immutable UUID collisions
-with different bytes are refused; mutable files require an unchanged baseline.
 Sparse input discovery uses each tenant's separately declared named inputs,
 periods and indexes, never the number of judges or an archive checkout.
 
