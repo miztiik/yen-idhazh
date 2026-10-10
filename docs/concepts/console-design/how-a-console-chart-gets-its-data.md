@@ -101,6 +101,9 @@ word-count spellings are not new columns.
 promise for a query's range. A changed window replaces that ask. The query door
 still owns fetched files, index validation and the signed engine add-on.
 An unavailable reach names no invented day and starts no slice.
+Explicit Refresh starts a new opaque read session. The panel memo drops its
+answers on the next ask, even when the selected days have not changed; an older
+reply cannot discard or replace the new session's answer.
 
 ### 6. A panel degrades; it never white-screens
 

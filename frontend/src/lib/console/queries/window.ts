@@ -3,6 +3,7 @@ import type {
 	DateStamp, LedgerName, LedgerReach, Predicate, SliceOptions, SliceResult
 } from '../../data/ledger';
 import { isDay } from '../../data/slice-shapes';
+import { readSession } from '../../data/read-session';
 
 export interface PanelQuery {
 	readonly name: string;
@@ -72,6 +73,7 @@ export function rangeFor(
 
 /** The real browser door, or its disk twin in a correctness test. */
 export interface PanelDoor {
+	readonly currentSession?: () => symbol;
 	readonly reach: (ledger: LedgerName) => Promise<LedgerReach>;
 	readonly rows: (ledger: LedgerName, options: SliceOptions) => Promise<SliceResult>;
 }
@@ -86,6 +88,7 @@ export interface QueryWindow {
 /** One held range per query name, not an accumulating map of every past range. */
 export function createQueryWindow(door: PanelDoor): QueryWindow {
 	const held = new Map<string, { from: DateStamp; to: DateStamp; answer: Promise<SliceResult> }>();
+	let session = door.currentSession?.();
 	return {
 		async routeReach(ledgers) {
 			const entries = await Promise.all([...new Set(ledgers)].map(async (ledger) =>
@@ -94,6 +97,11 @@ export function createQueryWindow(door: PanelDoor): QueryWindow {
 			return { through: days.sort()[0] ?? null, ledgers: Object.fromEntries(entries) };
 		},
 		sliceOnce(query, range) {
+			const current = door.currentSession?.();
+			if (current !== session) {
+				held.clear();
+				session = current;
+			}
 			const previous = held.get(query.name);
 			if (previous?.from === range.from && previous.to === range.to) return previous.answer;
 			const forget = (answer: Promise<SliceResult>) => {
@@ -121,6 +129,7 @@ export function createQueryWindow(door: PanelDoor): QueryWindow {
 }
 
 const page = createQueryWindow({
+	currentSession: readSession,
 	reach: async (ledger) => (await import('../../data/ledger')).ledgerReach(ledger),
 	rows: async (ledger, options) => {
 		const { slice } = await import('../../data/ledger');

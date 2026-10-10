@@ -18,6 +18,7 @@ import type { Row, SliceResult } from '../src/lib/data/ledger';
 import type { LedgerReach } from '../src/lib/data/ledger-reach';
 import { reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { buildRows } from './support/ledger-lifecycle';
+import { readSession, renewReadSession } from '../src/lib/data/read-session';
 
 const PRESETS = [3, 7, 30] as const;
 
@@ -244,6 +245,45 @@ test('missing and unreachable slices are retried using real repaired files, not 
 	expect((await repaired).rows).toHaveLength(1);
 	expect(reader.sliceOnce(slowerOnSameWorkQuery, range)).toBe(repaired);
 	expect((await reader.routeReach(['item-health'])).through).toBe('2026-09-25');
+});
+
+test('an explicit new read session invalidates same-endpoint answers and preserves new promises against old completions', async ({}, info) => {
+	const root = info.outputPath('refreshed-rows');
+	await writeWindowLedgers(root);
+	const door = diskDoor(root);
+	const range = windowRange(1, '2026-09-26', '2026-09-24');
+	let release: () => void = () => { throw new Error('no held read'); };
+	let hold = false;
+	let waiting = false;
+	const reader = createQueryWindow({
+		...door,
+		currentSession: readSession,
+		rows: async (ledger, options) => {
+			const rows = await door.rows(ledger, options);
+			if (hold) await new Promise<void>((resolve) => { release = resolve; waiting = true; });
+			return rows;
+		}
+	});
+	const first = reader.sliceOnce(slowerOnSameWorkQuery, range);
+	expect((await first).rows[0].cpu_model).toBe('machine-b');
+	await buildRows(root, 'item-health', [{ covers: '2026-09-26', rows: [item('2026-09-26', 'refreshed-machine')] }]);
+	expect(reader.sliceOnce(slowerOnSameWorkQuery, range)).toBe(first);
+	renewReadSession();
+	const refreshed = reader.sliceOnce(slowerOnSameWorkQuery, range);
+	expect(refreshed).not.toBe(first);
+	expect((await refreshed).rows[0].cpu_model).toBe('refreshed-machine');
+
+	reader.retryAsks();
+	hold = true;
+	const old = reader.sliceOnce(slowerOnSameWorkQuery, range);
+	await expect.poll(() => waiting).toBe(true);
+	hold = false;
+	renewReadSession();
+	const newSession = reader.sliceOnce(slowerOnSameWorkQuery, range);
+	await newSession;
+	release();
+	await old;
+	expect(reader.sliceOnce(slowerOnSameWorkQuery, range)).toBe(newSession);
 });
 
 test('rejected promises preserve the real I/O error and do not poison a later ask', async ({}, info) => {
