@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 The operator console reads ten datasets. Nine of them are projected out of
 `state/`, so each one crosses from a ledger into the site and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -144,6 +144,14 @@ day the run is publishing, and every projection's body stays in its own module
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | one month of the item-health and host-fingerprint ledgers, through `ledger.load_days` |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
+
+Each run-days record copies the manifest's `chart_evidence` without recomputing
+or pooling it. Missing historical evidence stays null. The exact counts,
+denominator and weighted rates are defined once in
+[Where every drawn figure came from](where-every-drawn-figure-came-from.md#the-two-rates-and-why-both).
+`run_days.read_shard` validates the monthly JSON through `PublicRunDay`; the
+frontend's existing `loadManifests` reader exposes the same evidence as
+`chartEvidence`. Neither path needs a new chart or an extra source read.
 
 `scores.py` and `feed_health.py` were two more rows of that table until
 2026-09-16. They folded a month of `state/scores/` and `state/feed-health/` into

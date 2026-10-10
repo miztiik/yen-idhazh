@@ -124,6 +124,7 @@ def build_day(digest_root: Path, date_stamp: str) -> PublicRunDay | None:
             prefiltered=run.items_prefiltered,
             charts_drafted=run.charts_drafted,
             decision_ms=run.decision_ms,
+            chart_evidence=run.chart_evidence,
         )
         for run in manifest.runs
     ]

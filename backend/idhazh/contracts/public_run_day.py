@@ -35,6 +35,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
+from idhazh.contracts.chart_evidence import ChartEvidence
 
 #: Nothing is forbidden, because nothing on this shape can carry it.
 #:
@@ -86,6 +87,10 @@ class PublicRunRecord(Model):
             "reads as a stage that was free rather than one that is missing."
         ),
     )
+    chart_evidence: ChartEvidence | None = Field(
+        default=None,
+        description="The run manifest's exact figure totals and rates; null means unmeasured.",
+    )
 
 
 class PublicRunDay(Contract):
@@ -93,6 +98,11 @@ class PublicRunDay(Contract):
 
     __schema_stem__: ClassVar[str] = "public-run-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Run records carry chart_evidence totals and rates from the manifest.",
+            why="The monthly report must retain the evidence the run measured.",
+        ),
         ChangelogEntry(
             version="2026-09-09",
             change="Initial shape: the day's run records and the site size the last run measured.",

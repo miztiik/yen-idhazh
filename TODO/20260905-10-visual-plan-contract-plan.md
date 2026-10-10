@@ -1,6 +1,6 @@
 # 10 - A plan that cannot draw a number the article did not state
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-10-10
 **Level**: 5 (a persisted contract, and the rule that decides what a reader is allowed to be shown)
 
 **Chain**: previous [`20260905-09-pin-the-runtime-plan.md`](20260905-09-pin-the-runtime-plan.md) | next the two-call summariser plan (delivered, removed from TODO/).
@@ -31,12 +31,15 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | Every role is a key, and an unused one is empty | 1 | B | DONE #533 | yi-j02-roles | #533 | worker |
 | 3 | The validator refuses | 2 | C | DONE #535 | yi-j03-validator | #535 | worker |
 | 4 | A number the article did not write, and the four ways code may reach one | 3 | D | DONE #537 | yi-j04-derived | #537 | worker |
+| 5 | Report evidence from the chart figures this run published | 4 | E | DONE | chart-evidence-reporting | Read from merge | owner |
 
-**Every row is closed. The substance is distilled into
+**Every row is closed, including weighted production reporting. The substance is distilled into
 [`docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md)
 and [`docs/concepts/design-system.md`](../docs/concepts/design-system.md), which
-are the pages that own it.** Two follow-ups below need a home before this
-plan-doc is deleted.
+are the pages that own it.** The reporting contract is in
+[Where every drawn figure came from](../docs/architecture/publishing/where-every-drawn-figure-came-from.md#the-two-rates-and-why-both)
+and [Console Payloads](../docs/architecture/publishing/console-payloads.md#the-producers).
+The parent session owns final distillation and deletion.
 
 ### Row 4 - the four functions, and the stamp that became three
 
@@ -73,14 +76,13 @@ unit only ever multiplies, so no rounding decision hides inside a mark. The line
 is scale, not spelling: `tonne` to `t` moves no number and is formatting; `kt`
 to `t` is a different number and carries the chain.
 
-**`derived_value_rate` and `trusted_data_ratio` ship as computations with
-bounded tests and are deliberately not wired.** Nothing resolves a plan into
-figures on the daily path until plan 12's compiler exists, so the run manifest
-is named as their home rather than given two columns nobody writes. Both are
-needed and they measure different things: the first is the narrowness alarm -
-what share of a page's figures code computed - and the second is the correctness
-alarm - what share resolves at all. Both return nothing over an empty set,
-because a day whose planner drew no charts is not a perfect score.
+**The two rates now report from the compiler's numeric marks.** Decisions carry
+exact displayed, derived and source-reference counts. Assembly totals only
+this run's final rendered, uncollapsed charts, then divides once. The run
+manifest and the monthly public run-days record carry the same evidence.
+Historical unknown stays separate from measured no charts. No model call or
+second resolution was added. `trusted_data_ratio` measures source-reference
+membership, not numeric correctness.
 
 ESCALATE trigger 2 is now mechanical rather than a paragraph:
 `backend/idhazh/contracts/derived.py` raises at import if `DerivedFunction` and

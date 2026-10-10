@@ -31,6 +31,7 @@ from types import MappingProxyType
 from typing import Final, Literal
 
 from idhazh import atomic_write, ledger, publication
+from idhazh.chart_evidence import published_chart_evidence
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
@@ -2377,6 +2378,9 @@ def build_manifest(
         items_decided=len(decisions or []),
         items_prefiltered=prefiltered,
         charts_drafted=sum(1 for decision in (decisions or []) if decision.drafted_chart),
+        chart_evidence=published_chart_evidence(
+            [item for item in day.items if run_that_wrote(item) == run_n], decisions or []
+        ),
         decision_ms=sum(timed) if timed else None,
         verticals=[
             VerticalCount(
