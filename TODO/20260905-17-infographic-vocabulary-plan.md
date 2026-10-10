@@ -135,4 +135,4 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md) - the previous plan.
 - [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md) - the next plan.
-- [`20260905-07-better-summaries-plan.md`](20260905-07-better-summaries-plan.md) - where the new-fact rate this plan gates on was built.
+- [Summary metrics](../docs/concepts/summary-metrics.md) - current evaluation; the old `new_fact_rate` is retired.

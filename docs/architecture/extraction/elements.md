@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-10
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -793,5 +793,4 @@ behaviour is byte-identical until the second call lands.
 - [../publishing/visuals.md](../publishing/visuals.md) - the picture, which is decided from this table.
 - [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
-- [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.
 - [../summarize/prompt.md](../summarize/prompt.md) - the second call that reads this table, and why it is shaped as it is.
