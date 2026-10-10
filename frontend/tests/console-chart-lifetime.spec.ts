@@ -2,6 +2,8 @@ import { expect, test, type Page } from './support/browser';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-chart-lifetime';
 
 /**
  * THE ORACLE for a chart's lifetime: when it draws, what it draws after
@@ -43,7 +45,6 @@ import { fileURLToPath } from 'node:url';
 
 const DESKTOP = { width: 1440, height: 900 };
 const NARROWER = { width: 1100, height: 900 };
-const ROUTE = '/console/machine/';
 /** The engine is a lazy chunk over the network, so first paint is not instant. */
 const DRAWN = 20_000;
 
@@ -178,11 +179,15 @@ async function heldCount(page: Page): Promise<number> {
 /** Where the read-against-written chart sits among the engine hosts, or -1
  * where the panel drew none. Recomputed after a window change, because the set
  * of drawn charts can change with the data a span holds. */
-async function readWriteHost(page: Page): Promise<number> {
-	return page.evaluate(() => {
-		const host = document.querySelector('[data-read-write-unit] [data-chart]');
+async function readWriteHost(page: Page, selector: string): Promise<number> {
+	return page.evaluate((selector) => {
+		const host = document.querySelector(selector);
 		return host === null ? -1 : [...document.querySelectorAll('[data-chart]')].indexOf(host);
-	});
+	}, selector);
+}
+
+async function openCharts(page: Page, href: string): Promise<void> {
+	await page.goto(href);
 }
 
 /** Pick a window preset and wait for the control to report it, which is the
@@ -219,11 +224,17 @@ function chunkHolding(marker: string): string {
 	return `**/${found[0]}`;
 }
 
+for (const { id, href: ROUTE, label } of BAND_UNREAD.routes) {
+	const expected = BY_ROUTE[id];
+	if (expected === null) continue;
+	const destination = BAND_UNREAD.routes.find((route) => route.id === expected.leaveTo);
+	if (destination === undefined) throw new Error(`No route address for ${expected.leaveTo}`);
+	test.describe(label, () => {
 test('THE ORACLE: a chart nine screens down waits, and draws when a reader comes to it', async ({
 	page
 }) => {
 	await page.setViewportSize(DESKTOP);
-	await page.goto(ROUTE);
+	await openCharts(page, ROUTE);
 	await page.locator('[data-chart]').first().waitFor({ timeout: DRAWN });
 	// The page is complete before any of this: the server drew every chart, so
 	// what is being deferred is the tooltip and the redraw, never the picture.
@@ -260,7 +271,7 @@ test('THE ORACLE: after a theme change and a resize the marks match a chart draw
 	context
 }) => {
 	await page.setViewportSize(DESKTOP);
-	await page.goto(ROUTE);
+	await openCharts(page, ROUTE);
 	const index = await comeTo(page, 0);
 	const before = await settledMarks(page, index);
 	expect(before.length, 'the chart drew nothing to compare').toBeGreaterThan(4);
@@ -288,7 +299,7 @@ test('THE ORACLE: after a theme change and a resize the marks match a chart draw
 	// leaves the chart at the old size differs from it.
 	const fresh = await context.newPage();
 	await fresh.setViewportSize(NARROWER);
-	await fresh.goto(ROUTE);
+	await openCharts(fresh, ROUTE);
 	await comeTo(fresh, index);
 	expect(await theme(fresh), 'the second page did not open in the theme just chosen').toBe(
 		await theme(page)
@@ -301,20 +312,22 @@ test('THE ORACLE: after a theme change and a resize the marks match a chart draw
 
 test('THE ORACLE: a control that changes a chart changes the drawn chart', async ({ page }) => {
 	await page.setViewportSize(DESKTOP);
-	await page.goto(ROUTE);
+	await openCharts(page, ROUTE);
 
-	const control = page.locator('[data-shape-switch="cost-shape"]');
+	const control = page.locator(`[data-shape-switch="${expected.shape.control}"]`);
 	await control.scrollIntoViewIfNeeded();
-	const index = await hostFor(page, 'cost-shape');
+	await expect.poll(() => hostFor(page, expected.shape.control), { timeout: DRAWN })
+		.toBeGreaterThanOrEqual(0);
+	const index = await hostFor(page, expected.shape.control);
 	expect(index, 'the counterfactual panel draws no engine chart').toBeGreaterThanOrEqual(0);
 	await comeTo(page, index);
 
-	await expect(control).toHaveAttribute('data-shape', 'daily');
+	await expect(control).toHaveAttribute('data-shape', expected.shape.initial);
 	const bars = await settledMarks(page, index);
 	expect(bars.length, 'the chart drew nothing to compare').toBeGreaterThan(4);
 
-	await control.locator('[data-shape-option="running"]').click();
-	await expect(control, 'the switch did not move').toHaveAttribute('data-shape', 'running');
+	await control.locator(`[data-shape-option="${expected.shape.next}"]`).click();
+	await expect(control, 'the switch did not move').toHaveAttribute('data-shape', expected.shape.next);
 	const lines = await settledMarks(page, index);
 
 	expect(
@@ -328,7 +341,7 @@ test('THE ORACLE: a control that changes a chart changes the drawn chart', async
 
 test('THE ORACLE: a chart that leaves the page releases its instance', async ({ page }) => {
 	await page.setViewportSize(DESKTOP);
-	await page.goto(ROUTE);
+	await openCharts(page, ROUTE);
 	await page.locator('[data-chart]').first().waitFor({ timeout: DRAWN });
 
 	// Read the whole route the way a reader does, so every chart on it draws and
@@ -356,8 +369,8 @@ test('THE ORACLE: a chart that leaves the page releases its instance', async ({ 
 	// document, and a move inside the page keeps the first one. A count of
 	// navigation entries cannot, because it is 1 after either.
 	const opened = await page.evaluate(() => performance.timeOrigin);
-	await page.locator('a[href$="/console/model/"]').first().click();
-	await page.waitForURL('**/console/model/**');
+	await page.locator(`a[href$="${destination.href}"]`).first().click();
+	await page.waitForURL(`**${destination.href}**`);
 	expect(
 		await page.evaluate(() => performance.timeOrigin),
 		'the link reloaded the page, so the count was reset rather than kept'
@@ -398,7 +411,7 @@ test('THE ORACLE: the page is complete with the engine gone, and nothing is thro
 		const caught = (error: Error) => thrown.push(String(error));
 		page.on('pageerror', caught);
 
-		await page.goto(ROUTE);
+		await openCharts(page, ROUTE);
 		// A service worker serves these from its own cache, and `route` never sees a
 		// request it fulfils - so the block would report a pass while the engine
 		// loaded from disk.
@@ -447,7 +460,7 @@ test('THE ORACLE: a window change redraws the chart in place, it does not remoun
 	// are gone. If that reactive push breaks, the page and the drawn chart part
 	// ways on every window change and nothing here would have caught it.
 	await page.setViewportSize(DESKTOP);
-	await page.goto(ROUTE);
+	await openCharts(page, ROUTE);
 	// Hydrated is the control able to change its own span: disabled in the
 	// prerendered document, enabled on mount.
 	await expect(
@@ -458,7 +471,7 @@ test('THE ORACLE: a window change redraws the chart in place, it does not remoun
 	// Start at the widest span, where the read-against-written chart has the most
 	// runs to draw, and come to it so the engine has drawn it.
 	await setWindow(page, WIDEST);
-	let index = await readWriteHost(page);
+	let index = await readWriteHost(page, expected.window.hostSelector);
 	expect(
 		index,
 		'the read-against-written panel drew no engine chart at the widest span'
@@ -472,7 +485,7 @@ test('THE ORACLE: a window change redraws the chart in place, it does not remoun
 	// Move to the narrowest span. The chart is never torn down: it stays the same
 	// live instance and is handed the new span's option in place.
 	await setWindow(page, NARROWEST);
-	index = await readWriteHost(page);
+	index = await readWriteHost(page, expected.window.hostSelector);
 	expect(
 		index,
 		'the read-against-written panel drew no engine chart at the narrowest span'
@@ -511,3 +524,5 @@ test('THE ORACLE: a window change redraws the chart in place, it does not remoun
 		wide
 	);
 });
+	});
+}

@@ -2,6 +2,10 @@ import { expect, test, type BrowserContext, type Page, type Request } from './su
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Manifest } from 'vite';
+import { BAND_UNREAD } from '../src/lib/console/band';
+
+const PIPELINES_HREF = BAND_UNREAD.routes.find((route) => route.id === 'pipelines')!.href;
+const MACHINE_HREF = BAND_UNREAD.routes.find((route) => route.id === 'machine')!.href;
 
 /**
  * How many round trips a reader waits through before the console has its rows.
@@ -158,7 +162,7 @@ async function coldMachine(page: Page, context: BrowserContext, serialWaits: boo
 			};
 		});
 	}
-	await page.goto('/console/machine/');
+	await page.goto(MACHINE_HREF);
 	const panel = page.locator('[data-windowed="machine-fleet"]');
 	await expect(panel).toHaveAttribute('data-fleet-state', 'ready');
 	await expect(panel.locator('[data-fleet-placements]')).toHaveAttribute('data-fleet-placements', /^[1-9]\d*$/);
@@ -213,7 +217,7 @@ for (const held of ['data', 'engine'] as const) {
 			await route.fulfill({ response });
 		});
 		try {
-			await page.goto('/console/machine/');
+			await page.goto(MACHINE_HREF);
 			await expect.poll(() => heldResponses).toBeGreaterThan(0);
 			await expect.poll(() => held === 'data' ? engineStarted : dataFinished,
 				{ message: `the other branch must progress before ${held} responses are released` }).toBeGreaterThan(0);
@@ -248,7 +252,7 @@ test('a cold console load settles inside four serial round trips', async ({ page
 	// fetch from reading as a shorter chain than a working one.
 	page.on('requestfailed', record);
 
-	await page.goto('/console/');
+	await page.goto(PIPELINES_HREF);
 	// The count and not the flag: `data-telemetry-fetching` reads `no` before the
 	// first fetch starts as well as after the last one lands.
 	await page.waitForFunction(
@@ -271,7 +275,7 @@ test('a cold console load settles inside four serial round trips', async ({ page
 
 	expect(
 		chain.length,
-		`a cold /console/ load took ${chain.length} serial round trips, over the ${MAX_HOPS} ` +
+		`a cold ${PIPELINES_HREF} load took ${chain.length} serial round trips, over the ${MAX_HOPS} ` +
 			`the design allows at console.default_window_days=${CONFIG.console.default_window_days}.\n` +
 			'Each telemetry month is fetched after the one before it, so the usual cause is a\n' +
 			'wider default window or a payload that moved out of the document and landed\n' +
@@ -284,7 +288,7 @@ test('the verdict band costs a cold load no round trip of its own', async ({ pag
 	const asked: string[] = [];
 	page.on('request', (request) => asked.push(new URL(request.url()).pathname));
 
-	await page.goto('/console/');
+	await page.goto(PIPELINES_HREF);
 	await page.waitForSelector('[data-console-band]');
 
 	expect(

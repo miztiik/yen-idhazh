@@ -7,8 +7,10 @@ import type { Manifest } from 'vite';
 import { readoutOf } from '../src/lib/charts/readout';
 import { serverCompiler } from './support/server-render';
 import { chartsReady } from './support/charts-ready';
-import { chooseExplorerQuestion, expectAnswer, openExplorer, runExplorer, serveBuilt } from './support/explorer-answer';
+import { chooseExplorerQuestion, expectAnswer, runExplorer, serveBuilt } from './support/explorer-answer';
 import { everyDay } from './support/ledger-lifecycle';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-readout';
 
 /**
  * Every console chart says whether it has a column to hover, and says it in
@@ -27,17 +29,30 @@ import { everyDay } from './support/ledger-lifecycle';
  * below fails on a chart that declares neither.
  */
 
-const ROUTES = [
-	'/console/',
-	'/console/model/',
-	'/console/machine/',
-	'/console/judgement/'
-] as const;
+const ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.columns).map(
+	(route) => route.href
+);
 // Every console route. The pointer, keyboard and tap blocks below read an
 // `svg` column chart and run on the four that draw one; the partition, the
 // title rule and the moved-words rule seed on marks as well as on drawings, so
-// they reach `/console/voices/`, whose two day matrices are `<div>` grids.
-const ALL_ROUTES = [...ROUTES, '/console/voices/'] as const;
+// they reach Voices, whose two day matrices are `<div>` grids.
+const ALL_ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.partition).map(
+	(route) => route.href
+);
+const RECORD_ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.records).map(
+	(route) => route.href
+);
+const FLEET_ROUTES = BAND_UNREAD.routes.flatMap((route) => {
+	const selector = BY_ROUTE[route.id]?.fleetReady;
+	return selector ? [{ href: route.href, selector }] : [];
+});
+const FETCHED_ROUTES = BAND_UNREAD.routes.filter((route) => BY_ROUTE[route.id]?.fetchedRows).map(
+	(route) => route.href
+);
+const EXPLORERS = BAND_UNREAD.routes.flatMap((route) => {
+	const expected = BY_ROUTE[route.id]?.explorerShape;
+	return expected ? [{ href: route.href, ...expected }] : [];
+});
 const DESKTOP = { width: 1440, height: 1000 };
 const PHONE = { width: 390, height: 844 };
 
@@ -257,8 +272,9 @@ function significant(name: string): string[] {
 async function open(page: Page, route: string, size = DESKTOP): Promise<void> {
 	await page.setViewportSize(size);
 	await page.goto(route);
-	if (route === '/console/machine/') {
-		await expect(page.locator('[data-windowed="machine-fleet"]')).toHaveAttribute('data-fleet-state', 'ready');
+	const fleet = FLEET_ROUTES.find((entry) => entry.href === route);
+	if (fleet) {
+		await expect(page.locator(fleet.selector)).toHaveAttribute('data-fleet-state', 'ready');
 	}
 	await chartsReady(page);
 }
@@ -269,19 +285,26 @@ function dayOf(owner: Locator): Locator {
 }
 
 test.describe('the readout is the default', () => {
-	test('THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip', async ({ page, context }) => {
-		// The question carries its own rows; the ledger it names is built and served, so it has a day to read.
-		const pinned = '2030-06-15';
-		await serveBuilt(context, test.info().outputPath('state'), { ledger: 'summary-quality-evals', pinned, days: everyDay(0, 0) });
-		await openExplorer(page, pinned);
-		await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
-		await runExplorer(page);
-		await expectAnswer(page, 'table');
-		const panel = page.locator('[data-console-panel-id="data-explorer-shape"]');
-		await expect(panel.locator('[data-chart-type="dateSeries"]')).toHaveCount(1);
-		await expect(panel.locator('[data-readout-columns], [data-readout-records], [data-readout-none]')).toHaveCount(1);
-		await expect(panel.locator('[title], title')).toHaveCount(0);
-	});
+	for (const EXPLORER of EXPLORERS) {
+		test('THE ORACLE: the Data explorer shape panel declares its readout and has no native tooltip', async ({ page, context }) => {
+			// The question carries its own rows; the ledger it names is built and served, so it has a day to read.
+			const pinned = '2030-06-15';
+			await serveBuilt(context, test.info().outputPath('state'), { ledger: 'summary-quality-evals', pinned, days: everyDay(0, 0) });
+			await page.clock.setFixedTime(`${pinned}T12:00:00Z`);
+			await page.goto(EXPLORER.href, { waitUntil: 'domcontentloaded' });
+			await expect(page.locator(EXPLORER.askPanel)).toBeVisible();
+			await expect(page.locator(EXPLORER.ledgersRegion)).toBeVisible();
+			await expect.poll(() => page.locator(EXPLORER.ledgerNames).count()).toBeGreaterThan(0);
+			await expect(page.getByRole('button', { name: /^Run$/ })).toBeEnabled({ timeout: 60_000 });
+			await chooseExplorerQuestion(page, ['summary-quality-evals'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3), (DATE '2026-08-19', 5), (DATE '2026-08-20', 8)) AS t(date, rows)");
+			await runExplorer(page);
+			await expectAnswer(page, 'table');
+			const panel = page.locator(EXPLORER.shapePanel);
+			await expect(panel.locator(`[data-chart-type="${EXPLORER.chartType}"]`)).toHaveCount(1);
+			await expect(panel.locator('[data-readout-columns], [data-readout-records], [data-readout-none]')).toHaveCount(1);
+			await expect(panel.locator('[title], title')).toHaveCount(0);
+		});
+	}
 
 	for (const route of ALL_ROUTES) {
 		// One load per route: the five checks below read the same settled page,
@@ -441,7 +464,7 @@ test.describe('the readout is the default', () => {
 		expect(withReasons.size, 'no chart on the console states why it has none').toBeGreaterThan(2);
 	});
 
-	for (const route of ['/console/', '/console/machine/', '/console/voices/'] as const) {
+	for (const route of RECORD_ROUTES) {
 		test(`the keyboard steps and clears a record strip on ${route}`, async ({ page }) => {
 			await open(page, route);
 			const owners = page.locator('[data-surface="operator"] [data-readout-records]');
@@ -594,7 +617,7 @@ test.describe('the readout is the default', () => {
 				// chart that SAYS it has not drawn is skipped: a hand-written one
 				// carries no such attribute and its marks are always there, so
 				// skipping on a missing attribute would skip every chart on
-				// `/console/model/` and pass nothing.
+				// Summaries and pass nothing.
 				if ((await owner.getAttribute('data-chart-drawn')) === 'no') {
 					// It may be drawing right now - the scroll above is what the
 					// engine was waiting for. `data-chart-drawn` turns `yes` when the
@@ -665,49 +688,51 @@ test.describe('the readout is the default', () => {
 		}
 	});
 
-	test('THE ORACLE: a strip over fetched rows arrives with its payload and not before', async ({
-		page
-	}) => {
-		// The other half of the promise above, and the one that stops this pair
-		// being weakened into nothing. A chart drawn from fetched rows may print
-		// no column before the fetch lands - and it MUST print one after, or the
-		// move from the document to the network cost the reader the numbers.
-		//
-		// The service worker is unregistered and every cache dropped first. It
-		// serves the month shard from `idhazh-days` otherwise, so the blocked case
-		// reports a page that works and proves nothing (agent-notes.md).
-		await page.goto('/console/');
-		await page.evaluate(async () => {
-			for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
-			for (const name of await caches.keys()) await caches.delete(name);
+	for (const FETCHED_ROUTE of FETCHED_ROUTES) {
+		test('THE ORACLE: a strip over fetched rows arrives with its payload and not before', async ({
+			page
+		}) => {
+			// The other half of the promise above, and the one that stops this pair
+			// being weakened into nothing. A chart drawn from fetched rows may print
+			// no column before the fetch lands - and it MUST print one after, or the
+			// move from the document to the network cost the reader the numbers.
+			//
+			// The service worker is unregistered and every cache dropped first. It
+			// serves the month shard from `idhazh-days` otherwise, so the blocked case
+			// reports a page that works and proves nothing (agent-notes.md).
+			await page.goto(FETCHED_ROUTE);
+			await page.evaluate(async () => {
+				for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
+				for (const name of await caches.keys()) await caches.delete(name);
+			});
+
+			let blocked = 0;
+			await page.route('**/telemetry/*.csv', (route) => {
+				blocked += 1;
+				return route.abort();
+			});
+			await page.goto(FETCHED_ROUTE);
+			await expect
+				.poll(() => blocked, { message: 'no month shard was requested, so the block proved nothing' })
+				.toBeGreaterThan(0);
+			await expect(page.locator('[data-console-standing]')).toHaveAttribute(
+				'data-console-standing',
+				'unreachable'
+			);
+
+			const absent = page.locator('[data-readout-fetched] [data-readout-day]');
+			expect(await absent.count(), 'a strip printed a column with no rows behind it').toBe(0);
+			// And the panel does NOT say the ledger holds no failure, because a blocked
+			// month is not an empty one. It holds its reserved shape and
+			// the sentence above the panels names the month that did not arrive.
+			await expect(page.locator('[data-mix-empty]')).toHaveCount(0);
+			await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(1);
+
+			await page.unroute('**/telemetry/*.csv');
+			await page.goto(FETCHED_ROUTE);
+			const strip = page.locator('[data-readout-fetched] [data-readout-day]').first();
+			await expect(strip).toHaveCount(1);
+			await expect(strip, 'the strip arrived empty').not.toHaveText(/^\s*$/);
 		});
-
-		let blocked = 0;
-		await page.route('**/telemetry/*.csv', (route) => {
-			blocked += 1;
-			return route.abort();
-		});
-		await page.goto('/console/');
-		await expect
-			.poll(() => blocked, { message: 'no month shard was requested, so the block proved nothing' })
-			.toBeGreaterThan(0);
-		await expect(page.locator('[data-console-standing]')).toHaveAttribute(
-			'data-console-standing',
-			'unreachable'
-		);
-
-		const absent = page.locator('[data-readout-fetched] [data-readout-day]');
-		expect(await absent.count(), 'a strip printed a column with no rows behind it').toBe(0);
-		// And the panel does NOT say the ledger holds no failure, because a blocked
-		// month is not an empty one. It holds its reserved shape and
-		// the sentence above the panels names the month that did not arrive.
-		await expect(page.locator('[data-mix-empty]')).toHaveCount(0);
-		await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(1);
-
-		await page.unroute('**/telemetry/*.csv');
-		await page.goto('/console/');
-		const strip = page.locator('[data-readout-fetched] [data-readout-day]').first();
-		await expect(strip).toHaveCount(1);
-		await expect(strip, 'the strip arrived empty').not.toHaveText(/^\s*$/);
-	});
+	}
 });

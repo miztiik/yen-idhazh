@@ -1,4 +1,6 @@
 import { expect, test, type Page } from './support/browser';
+import { BAND_UNREAD } from '../src/lib/console/band';
+import { BY_ROUTE } from './support/console-expect/console-chart-pending';
 
 /**
  * What stands in a browser-drawn chart's box until a mark lands there, and what
@@ -29,15 +31,12 @@ import { expect, test, type Page } from './support/browser';
 
 const DESKTOP = { width: 1440, height: 900 };
 /** A short window puts the draw line high. At a desktop's height the first
- * browser-drawn chart on `/console/` sits about two hundred pixels past the
+ * browser-drawn chart on Pipelines sits about two hundred pixels past the
  * line, where a platform's fonts can decide which side of it the chart lands;
  * at this height it sits several hundred past, and the case reads the same
  * charts on any machine. */
 const SHORT = { width: 1440, height: 600 };
 const PHONE = { width: 360, height: 900 };
-const ROUTE = '/console/';
-/** The route where every chart has a server picture. */
-const MACHINE = '/console/machine/';
 /** The engine and the chart library are network fetches, so a draw is not
  * instant. */
 const DRAWN = 20_000;
@@ -117,11 +116,20 @@ async function refuse(page: Page, marker: string): Promise<Set<string>> {
 	return refused;
 }
 
+async function openCharts(page: Page, href: string): Promise<void> {
+	await page.goto(href);
+}
+
+for (const { id, href: ROUTE, label } of BAND_UNREAD.routes) {
+	const expected = BY_ROUTE[id];
+	if (expected === null) continue;
+	test.describe(label, () => {
+if (expected.browserDrawn) {
 test('THE ORACLE: a chart below the draw line keeps its sentence until a mark lands', async ({
 	page
 }) => {
 	await page.setViewportSize(SHORT);
-	await page.goto(ROUTE);
+	await openCharts(page, ROUTE);
 
 	const far = await chartsBelowTheDrawLine(page);
 	for (const one of far) {
@@ -180,7 +188,7 @@ test('THE ORACLE: a chart whose script never arrives says it did not load', asyn
 	]) {
 		const said = new Map<string, string>();
 		const refused = await refuse(page, subject.marker);
-		await page.goto(`${ROUTE}?refused=${encodeURIComponent(subject.marker)}`);
+		await openCharts(page, `${ROUTE}?refused=${encodeURIComponent(subject.marker)}`);
 		await expect(page.locator('figure[data-chart-drawn]').first()).toBeAttached({ timeout: DRAWN });
 
 		if (subject.what === 'the engine module') {
@@ -243,7 +251,9 @@ test('THE ORACLE: a chart whose script never arrives says it did not load', asyn
 	expect(module.get(label), `${label}: the two failures were said two ways`).toBe(words);
 	expect(thrown, 'a failed download threw at the reader').toEqual([]);
 });
+}
 
+if (expected.serverPictures) {
 test('a chart the server drew keeps its picture, and no sentence, when the chart library never arrives', async ({
 	page
 }) => {
@@ -254,9 +264,9 @@ test('a chart the server drew keeps its picture, and no sentence, when the chart
 	// server picture.
 	await page.setViewportSize(DESKTOP);
 	const refused = await refuse(page, '_echarts_instance_');
-	await page.goto(`${MACHINE}?refused=library`);
+	await openCharts(page, `${ROUTE}?refused=library`);
 	const first = page.locator('.chart-host').first();
-	await expect(first, `${MACHINE} draws no chart`).toBeAttached({ timeout: DRAWN });
+	await expect(first, `${ROUTE} draws no chart`).toBeAttached({ timeout: DRAWN });
 	await first.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
 	await expect(
 		page.locator('[data-chart="failed"]').first(),
@@ -278,7 +288,9 @@ test('a chart the server drew keeps its picture, and no sentence, when the chart
 	}
 	await page.unroute(BUILT_SCRIPTS);
 });
+}
 
+if (expected.browserDrawn) {
 test.describe('the console before its JavaScript runs', () => {
 	test.use({ javaScriptEnabled: false, viewport: PHONE });
 
@@ -289,7 +301,7 @@ test.describe('the console before its JavaScript runs', () => {
 		// ever say, so a promise that the chart is on its way is false for the
 		// whole visit. The promise sits in its own element, the page's
 		// `<noscript>` rule hides it, and the words a reader can use stay.
-		await page.goto(ROUTE);
+		await openCharts(page, ROUTE);
 		const figures = page.locator('figure[data-chart-drawn="no"]');
 		const count = await figures.count();
 		let read = 0;
@@ -311,3 +323,6 @@ test.describe('the console before its JavaScript runs', () => {
 		expect(read, 'no browser-drawn chart is on screen without a script, so this case read nothing').toBeGreaterThan(0);
 	});
 });
+}
+	});
+}

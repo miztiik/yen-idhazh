@@ -39,6 +39,7 @@
 	import WindowStatus from '$lib/components/WindowStatus.svelte';
 	import { stripRoutes } from '$lib/console/band';
 	import { consoleChromeOf } from '$lib/console/chrome';
+	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import {
 		completenessOf,
 		completenessSentence,
@@ -46,7 +47,6 @@
 	} from '$lib/console/completeness';
 	import { stickStrip } from '$lib/console/strip';
 	import { provideWindowSlot, type WindowSource } from '$lib/console/window-slot';
-	import type { ConsoleConfig, ConsolePanelGroup } from '$lib/server/config';
 
 	let { data, children } = $props();
 
@@ -68,35 +68,25 @@
 	const routeData = $derived(
 		page.data as {
 			chrome?: unknown;
-			console?: ConsoleConfig;
-			panelGroups?: ConsolePanelGroup[];
 		}
 	);
 	const chrome = $derived(consoleChromeOf(routeData));
 	const workbench = $derived(chrome === 'workbench');
 
-	// Every console route loads the console knobs, so the configured window is on
-	// the page before any route script runs. A route that failed to load has none,
-	// and then there is no window to hold and no control to draw.
-	const configured = $derived(routeData.console);
+	const configured = consoleKnobs();
 
-	/** The tabs the strip draws. The band carries every route; the Data explorer tab
-	 * waits for `console.data_explorer_tab`, and a route that loaded no knobs
-	 * keeps it hidden. */
+	/** The tabs the strip draws, from the band's route list. */
 	const strip = $derived(stripRoutes(data.routes));
 	const windowSource = $derived<WindowSource | null>(
-		handed ??
-			(configured === undefined
-				? null
-				: {
-						days: configured.default_window_days,
-						presets: configured.window_presets,
-						busy: false,
-						ready: false,
-						statusLine: null,
-						monthsFor: () => 0,
-						onChange: () => {}
-					})
+		handed ?? {
+			days: configured.default_window_days,
+			presets: configured.window_presets,
+			busy: false,
+			ready: false,
+			statusLine: null,
+			monthsFor: () => 0,
+			onChange: () => {}
+		}
 	);
 
 	/** The reader's clock, which only a browser has. Null in the prerendered
@@ -125,14 +115,12 @@
 	});
 
 	const completeness = $derived(
-		configured === undefined
-			? null
-			: completenessOf(data.band.finishedAt, now, configured.completeness_grace_days)
+		completenessOf(data.band.finishedAt, now, configured.completeness_grace_days)
 	);
 
 	/** The route's named groups, which are its jump links. A route with no
 	 * groups, or one untitled group, has nothing to jump between. */
-	const contents = $derived((routeData.panelGroups ?? []).filter((group) => group.title !== ''));
+	const contents = $derived(routeConsole(active).panel_groups.filter((group) => group.title !== ''));
 </script>
 
 <section class="py-6" data-surface="operator" data-console-route={active} data-console-chrome={chrome}>
