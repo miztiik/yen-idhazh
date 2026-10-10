@@ -4,9 +4,9 @@
 
 ## What is implemented
 
-The isolated candidate contracts, native Rust codecs and read-only verifier do
-not change production collectors or shared ledger readers. Rust renders real
-files, but host collection and persistence are not implemented at this increment.
+The isolated contracts, native Rust storage and read-only verifier do not change
+production collectors or shared ledger readers. Rust now renders and atomically
+files real host records. Host collection is not implemented at this increment.
 The corrected host row removes the legacy CPU count and frequency columns.
 The candidate reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
@@ -65,6 +65,64 @@ The Rust test harness and `codec-fixture` executable generate named files under
 fixture executable serves these cross-language tests, not production collection.
 Missing native binaries or harness evidence fail rather than skip.
 
+## Raw-file storage
+
+`ledger/store.rs` prepares every day group through the real codecs before the
+first target write. It accepts one corrected whole host row per day, keeps the
+row's ranked identity, and rejects a conflicting day or invocation. Empty
+batches and paused or retired raw families write nothing, including maintenance
+jobs. Nested trial prefixes change only the outer path.
+
+The store exposes its immutable plan before publication. The plan names each
+file, actual write clock and expected canonical hash. A changed probe, target
+or clock event uses the successor predicate and a strictly later actual
+millisecond. The clock helper waits only within its caller's deadline; it never
+invents a timestamp. Identical retries retain the original plan.
+
+`fs/atomic.rs` stages bytes beside the destination. Basic replacement uses a
+rename. Immutable raw publication uses a no-clobber hard link from the staged
+file, then removes only its own temporary file. This keeps concurrent writers
+from replacing a conflicting UUID filename. Unsupported hard links fail.
+Identical complete bytes are an idempotent retry.
+
+Paths validate the raw day grammar and reject traversal, reserved device names,
+escaping symlinks and Windows junctions. A leaf file cannot be a symlink.
+Containment assumes operator-controlled directories; it does not promise safety
+against hostile concurrent directory swaps or power-loss durability.
+
+Publication is atomic per file, not per batch. A later I/O error reports the
+earlier completed files and their actual whole-byte hashes. The native
+`storage-fixture` and Cargo harness file multiple days in all four codec settings;
+Python independently verifies those exact bytes, without re-encoding.
+
+## Completed-file evidence and recovery
+
+`receipts.rs` retains the immutable event plan before the first raw publication.
+After each completed file it writes an immutable cumulative snapshot named
+`<event>.completed-<count>.json`. The existing publication receipt shape keeps
+the wrapper invocation distinct from the raw row's logical producer.
+
+Recovery reads only that retained plan, its planned files and at most one
+receipt name per planned file. It checks actual native bytes, metadata and rows.
+A lost later receipt cannot erase an earlier completion. An existing complete
+planned file with no receipt is recoverable; a promised missing file, foreign
+identity, changed bytes or a later snapshot that drops earlier writes is refused.
+Evidence roots cannot alias the target, reserved state/raw roots or escaping
+symlinks/junctions.
+
+Recovery may write missing evidence snapshots, but does not publish target files.
+An explicit retry files only the same immutable plan. The Python verifier is
+read-only. It rejects a receipt that omits an already completed planned file,
+including publication between two receipt snapshots. Its `--receipt-only`
+output is the validated existing `PublicationReceipt` shape; downstream
+publisher permissions remain independent.
+
+The real `receipts-fixture` process exits at named filesystem checkpoints.
+Native and Python tests restart it across plan, publication and receipt stages.
+Generated-repository tests run existing publisher scope, changed-byte and Git
+filter checks against those same native files, without staging or pushing them
+in this repository.
+
 Rust 1.95.0 and all dependencies are pinned/locked. On Windows, a clean cached
 offline all-target development build took 152.040 seconds; the development
 fixture executable was 23,662,080 bytes. These are not Linux production costs
@@ -90,6 +148,13 @@ or a named refusal. It neither collects nor publishes.
 Fowler ruled that disjoint modules can be written in parallel after their tested
 prerequisite contracts. The owner integrates one whole row before main merges;
 dependent leaf branches are not independent release units.
+
+Fowler approved sharing compilation of the nine fixed native contract
+expressions when repeated receipt validation made local recovery checks costly.
+Each expression has one standard-library initialization slot. Unknown expressions
+remain uncached. The predicates, error results and every validation call remain;
+the registry cannot grow from input. Original-result and concurrent-reuse tests
+hold this structural change separately from receipt behaviour.
 
 A forged compressed-string fixture exposed allocation before an old
 post-decode check. Bounded actual-page admission fixes that boundary. Apache

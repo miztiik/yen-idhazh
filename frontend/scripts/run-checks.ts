@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { assertBuild, buildEnvironment, changedInputNote, inputFingerprint, REPO, writeRecord } from './build-state.ts';
 import type { BuildMode, BuildRecord } from './build-state.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from './test-groups.ts';
-import { RUST_PARITY_TEST, selectionForChange } from './test-scope.ts';
+import { RUST_TESTS, selectionForChange } from './test-scope.ts';
 import type { Selection, TestGroup } from './test-scope.ts';
 import { playwrightCounts, pytestCounts, requireExecuted } from './test-results.ts';
 import type { TestCounts } from './test-results.ts';
@@ -70,13 +70,13 @@ export function selection(root: string, opts: Options): Selection {
 		selected.groups = [...new Set(asked)] as TestGroup[];
 		selected.backendFiles = null;
 		selected.rust = asked.includes('backend');
-		if (opts.groups.length === 1 && opts.groups[0] === 'rust') selected.backendFiles = [RUST_PARITY_TEST];
+		if (opts.groups.length === 1 && opts.groups[0] === 'rust') selected.backendFiles = [...RUST_TESTS];
 		selected.tooling = opts.groups.includes('all');
 		selected.reasons = [{ path: 'explicit selection', groups: selected.groups, reason: 'requested groups or specs' }];
 	}
 	if (selected.backendFiles?.some((file) => !existsSync(join(root, file)))) selected.backendFiles = null;
 	selected.rust ||= selected.groups.includes('backend') &&
-		(selected.backendFiles === null || selected.backendFiles.includes(RUST_PARITY_TEST));
+		(selected.backendFiles === null || selected.backendFiles.some((file) => RUST_TESTS.includes(file)));
 	return selected;
 }
 
