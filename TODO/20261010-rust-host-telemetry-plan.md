@@ -63,7 +63,7 @@ Table D - authoritative execution queue
 | D1 | 1 | Approve corrected design and documentation only | - | A | DONE | rust-host-profiling-investigation | - | Fowler |
 | D2 | 2 | Declare exchanges and a read-only host-output verifier | 1 | B | DONE | rust-host-telemetry-delivery | - | owner; disjoint exchange/verifier workers |
 | D10 | 10 | Render compatible host files through tested Rust codecs | 2 | C | DONE | rust-d10-native-codecs | - | rust-d10-native-codecs |
-| D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | PENDING | - | - | - |
+| D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | DONE | rust-d11-storage | - | owner; disjoint identity/path and atomic workers |
 | D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | PENDING | - | - | - |
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | PENDING | - | - | - |
 | D4 | 4 | Produce window and job resource events in Rust | 3 | D | PENDING | - | - | - |
@@ -703,6 +703,8 @@ Table AG - Row 10 rejected alternatives
 - **Scope:** Ship the identity/path/envelope/atomic/store modules using the real codecs, with raw-host-only persistence and exact failure/identity tests.
 - **Files touched:**
   - `backend/rust/host-telemetry/src/lib.rs`
+  - `backend/rust/host-telemetry/src/contracts/host.rs` (forward existing UUID helpers to the single identity implementation)
+  - `backend/rust/host-telemetry/src/bin/storage-fixture.rs` (real stored-file cross-language fixture consumer)
   - `backend/rust/host-telemetry/src/ledger/identity.rs`
   - `backend/rust/host-telemetry/src/ledger/filenames.rs`
   - `backend/rust/host-telemetry/src/ledger/paths.rs`
@@ -717,6 +719,10 @@ Table AG - Row 10 rejected alternatives
   - `backend/rust/host-telemetry/tests/store.rs`
   - `backend/tests/test_rust_host_store_parity.py`
   - `tests/fixtures/host-events/storage-parity.json`
+  - `frontend/scripts/test-scope.ts`
+  - `frontend/scripts/run-checks.ts`
+  - `frontend/scripts/tests/test-scope.test.mjs`
+  - `frontend/scripts/tests/run-checks.test.mjs`
   - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
 - **Acceptance gates - local:** Each listed module's Cargo tests and selected Python fixture parity; create actual files in generated roots. Cover empty/multiple-day input, invalid last group, identity collisions, wrong root, paused families, file conflicts, rename failures and partial completion.

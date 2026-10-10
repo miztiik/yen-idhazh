@@ -92,7 +92,11 @@ fn raw_segments(relative_path: &str) -> Result<Vec<&str>> {
 fn descend(parent: &Path, part: &str, boundary: &Path, directory: bool) -> Result<PathBuf> {
     let candidate = parent.join(part);
     match fs::symlink_metadata(&candidate) {
-        Ok(_) => {
+        Ok(original) => {
+            require(
+                directory || !original.file_type().is_symlink(),
+                "raw file destination cannot be a symlink",
+            )?;
             // Canonicalization follows both Unix symlinks and Windows junctions.
             // A dangling link is an error, not a missing directory to create.
             let resolved = fs::canonicalize(&candidate)

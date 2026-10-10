@@ -300,7 +300,14 @@ fn directory_link(target: &Path, link: &Path) {
                 "Windows refused directory symlink creation (native error 1314: required \
                  privilege not held). Testing a real directory junction instead."
             );
-            let quote = |path: &Path| path.to_str().unwrap().replace('\'', "''");
+            let quote = |path: &Path| {
+                // Windows PowerShell's junction constructor does not accept the
+                // verbatim prefix returned by std::fs::canonicalize.
+                path.to_str()
+                    .unwrap()
+                    .trim_start_matches(r"\\?\")
+                    .replace('\'', "''")
+            };
             let command = format!(
                 "$ErrorActionPreference = 'Stop'; New-Item -ItemType Junction \
                  -Path '{}' -Target '{}' | Out-Null",

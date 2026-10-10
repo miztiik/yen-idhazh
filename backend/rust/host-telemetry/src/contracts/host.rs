@@ -400,33 +400,4 @@ pub fn job_text(job: ServerJob) -> String {
         .expect("string enum")
         .to_owned()
 }
-pub fn host_unit_id(covers: &str, run: &str, job: ServerJob, shard: i64) -> Result<Uuid> {
-    day(covers)?;
-    run_id(run)?;
-    nonnegative(shard)?;
-    let namespace = Uuid::new_v5(&Uuid::NAMESPACE_URL, b"github.com/miztiik/yen-idhazh");
-    Ok(Uuid::new_v5(
-        &namespace,
-        format!(
-            "host-fingerprint|{covers}|{run}|{}|{shard}|{HOST_PRODUCER}",
-            job_text(job)
-        )
-        .as_bytes(),
-    ))
-}
-pub fn host_file_id(unit: Uuid, attempt: i64, written_at_ms: i64) -> Result<Uuid> {
-    use sha2::{Digest, Sha256};
-    require(unit.get_version_num() == 5, "unit must be UUID5")?;
-    positive(attempt)?;
-    nonnegative(written_at_ms)?;
-    let digest = Sha256::digest(format!("{unit}|{attempt}|{written_at_ms}").as_bytes());
-    let a = u16::from_be_bytes(digest[..2].try_into().map_err(|_| "digest")?) & 0xfff;
-    let b = u64::from_be_bytes(digest[2..10].try_into().map_err(|_| "digest")?) & ((1 << 62) - 1);
-    Ok(Uuid::from_u128(
-        ((written_at_ms as u128 & ((1 << 48) - 1)) << 80)
-            | (8 << 76)
-            | ((a as u128) << 64)
-            | (2 << 62)
-            | b as u128,
-    ))
-}
+pub use crate::ledger::filenames::{file_id as host_file_id, unit_id as host_unit_id};

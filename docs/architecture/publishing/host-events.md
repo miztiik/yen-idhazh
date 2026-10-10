@@ -4,9 +4,9 @@
 
 ## What is implemented
 
-The isolated candidate contracts, native Rust codecs and read-only verifier do
-not change production collectors or shared ledger readers. Rust renders real
-files, but host collection and persistence are not implemented at this increment.
+The isolated contracts, native Rust storage and read-only verifier do not change
+production collectors or shared ledger readers. Rust now renders and atomically
+files real host records. Host collection is not implemented at this increment.
 The corrected host row removes the legacy CPU count and frequency columns.
 The candidate reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
@@ -64,6 +64,36 @@ The Rust test harness and `codec-fixture` executable generate named files under
 `backend/var/`; Python reads those same files and their physical receipts. The
 fixture executable serves these cross-language tests, not production collection.
 Missing native binaries or harness evidence fail rather than skip.
+
+## Raw-file storage
+
+`ledger/store.rs` prepares every day group through the real codecs before the
+first target write. It accepts one corrected whole host row per day, keeps the
+row's ranked identity, and rejects a conflicting day or invocation. Empty
+batches and paused or retired raw families write nothing, including maintenance
+jobs. Nested trial prefixes change only the outer path.
+
+The store exposes its immutable plan before publication. The plan names each
+file, actual write clock and expected canonical hash. A changed probe, target
+or clock event uses the successor predicate and a strictly later actual
+millisecond. The clock helper waits only within its caller's deadline; it never
+invents a timestamp. Identical retries retain the original plan.
+
+`fs/atomic.rs` stages bytes beside the destination. Basic replacement uses a
+rename. Immutable raw publication uses a no-clobber hard link from the staged
+file, then removes only its own temporary file. This keeps concurrent writers
+from replacing a conflicting UUID filename. Unsupported hard links fail.
+Identical complete bytes are an idempotent retry.
+
+Paths validate the raw day grammar and reject traversal, reserved device names,
+escaping symlinks and Windows junctions. A leaf file cannot be a symlink.
+Containment assumes operator-controlled directories; it does not promise safety
+against hostile concurrent directory swaps or power-loss durability.
+
+Publication is atomic per file, not per batch. A later I/O error reports the
+earlier completed files and their actual whole-byte hashes. The native
+`storage-fixture` and Cargo harness file multiple days in all four codec settings;
+Python independently verifies those exact bytes, without re-encoding.
 
 Rust 1.95.0 and all dependencies are pinned/locked. On Windows, a clean cached
 offline all-target development build took 152.040 seconds; the development
