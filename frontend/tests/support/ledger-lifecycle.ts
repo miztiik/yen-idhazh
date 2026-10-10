@@ -45,7 +45,7 @@ export type BuiltDay =
 
 /** The one value a chosen column holds in every row of a built ledger. A whole number is written
  *  as `BIGINT`, any other number as `DOUBLE`, a text as `VARCHAR`, and true or false as `BOOLEAN`. */
-export type BuiltCell = number | string | boolean;
+export type BuiltCell = number | string | boolean | null;
 
 export interface BuiltLedger {
 	ledger: LedgerName;
@@ -92,6 +92,7 @@ function quoted(name: string): string {
 
 /** A chosen column's value as a literal of the type the value names. */
 function literal(value: BuiltCell): string {
+	if (value === null) return 'NULL';
 	if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
 	if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`;
 	if (!Number.isFinite(value)) throw new Error(`${value} is not a number a file can hold`);

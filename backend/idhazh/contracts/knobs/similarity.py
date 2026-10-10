@@ -3,7 +3,7 @@
 The `similarity` block of `config/idhazh.json`. Its one knob is read by both
 readers of the holdout marks: `idhazh.similarity.holdout.marked_pairs`, which
 the scoring verb calls, and the Judgement route's build-time read in
-`frontend/src/lib/server/similarity-holdout.ts`. So a read of the marks opens a
+`frontend/src/lib/server/content-similarity-holdout.ts`. So a read of the marks opens a
 fixed number of days however long the ledger grows (Guardrail #12).
 """
 

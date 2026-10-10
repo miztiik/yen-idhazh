@@ -150,7 +150,7 @@ ROUTES: Final[tuple[tuple[RouteId, str, str, str], ...]] = (
         RouteId.JUDGEMENT,
         "Judgement",
         "/console/judgement/",
-        "What the model made of each article, and where we disagreed.",
+        "Which stories the day merged, and where the judge and a person disagreed.",
     ),
     (
         RouteId.VOICES,

@@ -1,3 +1,9 @@
-/** Judgement has no grouped Panel frame or run-square fixture check here. */
+/** Judgement draws six named panels in one untitled group. */
 import type { RouteExpect } from './index';
-export const EXPECT: RouteExpect | null = null;
+export const EXPECT: RouteExpect = {
+	layout: null,
+	groups: null,
+	verdict: null,
+	runSquares: false,
+	prerender: true
+};

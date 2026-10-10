@@ -1,4 +1,4 @@
-/** What words and named absence must Judgement keep? */
+/** What words must the six Judgement panels keep? */
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	id: 'judgement',
@@ -6,7 +6,7 @@ export const EXPECT: RouteExpect = {
 	path: '/console/judgement/',
 	title: 'Judgement \u2014 Console',
 	hasBand: true,
-	namedAbsence: { id: 'judgement', path: '/console/judgement/' },
+	namedAbsence: null,
 	carryTo: 'model',
 	fallbackDescription: null,
 	machinePanels: null

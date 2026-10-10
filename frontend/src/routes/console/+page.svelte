@@ -56,6 +56,7 @@
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import { describeHeldPart } from '$lib/console/held-part-note';
 	import { describePromptCacheSubtitle } from '$lib/console/prompt-cache-subtitle';
+	import { consoleKnobs } from '$lib/console/route-console';
 	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
@@ -108,16 +109,17 @@
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
 
 	let { data } = $props();
+	const knobs = consoleKnobs();
 
 	/** Where the operator's choice of window is kept between visits. It is the
 	 * same key all three console routes read, so the span follows him across the
 	 * strip rather than resetting on every click. */
 	const WINDOW_KEY = 'idhazh:console-window';
 
-	const presets = $derived(data.console.window_presets);
+	const presets = knobs.window_presets;
 
 	// svelte-ignore state_referenced_locally
-	let windowDays = $state(data.console.default_window_days);
+	let windowDays = $state(knobs.default_window_days);
 	/** The day every window on this route ends on, the site's newest published
 	 * day. The server places it once, so the first viewport, every preset and
 	 * the reductions it took for each preset name the same days. */
@@ -126,7 +128,7 @@
 	/** The window the page opens on, computed once so the first viewport and the
 	 * first fetch agree on which months are wanted. */
 	// svelte-ignore state_referenced_locally
-	const opening = defaultWindow(windowDay, data.console);
+	const opening = defaultWindow(windowDay, knobs);
 	/** The telemetry this session holds, as revision-owned month shards.
 	 *
 	 * **It starts empty and every row in it arrives by fetch.** The server used
@@ -144,7 +146,7 @@
 	 * touch, so the open window is always in hand and memory does not climb with
 	 * a long session's panning. */
 	// svelte-ignore state_referenced_locally
-	const monthCap = monthCeiling(data.console.max_window_days);
+	const monthCap = monthCeiling(knobs.max_window_days);
 	/** Months a fetch is in flight for, so a second widen started before the
 	 * first settles does not ask for the same file twice. Not reactive: nothing
 	 * on the page reads it, and `flying` below is what drives the busy note. */
@@ -276,7 +278,7 @@
 	 * quiet sentence, because widening is the only move an empty window offers. */
 	const widen = $derived(
 		wideningPreset(windowDays, presets, data.months, (days) =>
-			windowOfDays(windowDay, days, data.console.today_anchor)
+			windowOfDays(windowDay, days, knobs.today_anchor)
 		)
 	);
 	/** What every waiting panel says. One sentence per state, written once, so
@@ -314,7 +316,7 @@
 			shimmer = false;
 			return;
 		}
-		const timer = setTimeout(() => (shimmer = true), data.console.shimmer_after_ms);
+		const timer = setTimeout(() => (shimmer = true), knobs.shimmer_after_ms);
 		return () => clearTimeout(timer);
 	});
 
@@ -331,7 +333,7 @@
 	 */
 	function show(days: number, remember = true) {
 		windowDays = days;
-		viewport = windowOfDays(windowDay, days, data.console.today_anchor);
+		viewport = windowOfDays(windowDay, days, knobs.today_anchor);
 		if (remember && typeof localStorage !== 'undefined') {
 			localStorage.setItem(WINDOW_KEY, String(days));
 		}
@@ -347,7 +349,7 @@
 	function monthsFor(days: number): number {
 		return monthsToLoad(
 			hold,
-			windowOfDays(windowDay, days, data.console.today_anchor),
+			windowOfDays(windowDay, days, knobs.today_anchor),
 			data.months
 		).length;
 	}
@@ -394,9 +396,9 @@
 	/** The chart drawing's own rule, read from config rather than written into a
 	 * component. An operator moves a threshold in `config/appearance.json`. */
 	const thresholds = $derived({
-		ruleDays: data.console.chart_rule_days,
-		minutesTarget: data.console.chart_minutes_target,
-		coveragePct: data.console.chart_coverage_pct
+		ruleDays: knobs.chart_rule_days,
+		minutesTarget: knobs.chart_minutes_target,
+		coveragePct: knobs.chart_coverage_pct
 	});
 	/** The chart-drawing days inside the open window. The rule reads them and so do
 	 * the rows behind the disclosure: a table under a control that ignored it
@@ -415,7 +417,7 @@
 	 * cards can never cover two different sets of days. It follows the preset
 	 * rather than a pan for the same reason the reduction does. */
 	const extractionSpan = $derived(
-		windowOfDays(windowDay, windowDays, data.console.today_anchor)
+		windowOfDays(windowDay, windowDays, knobs.today_anchor)
 	);
 	/** Whether the extractor's yield is falling, which is the direction the
 	 * cards' own lines tell the operator to read and the cards cannot show. */
@@ -682,7 +684,7 @@
 	<!-- Beside the line above, and for the same reason: the article and score
 	     records are read when the site is built, and every panel built on one
 	     of them is empty, or stops early, for one reason the record owns. -->
-	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? data.recordNotes[String(data.console.default_window_days)] ?? []} />
+	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? data.recordNotes[String(knobs.default_window_days)] ?? []} />
 
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
 	     another route that explains its own numbers. -->
@@ -874,7 +876,7 @@
 				<Chart
 					svg=""
 					option={perArticle.option}
-					width={data.console.chart_width}
+					width={knobs.chart_width}
 					height={220}
 					label={siteCostLabel(windowDays)}
 					readout={costColumns}
@@ -933,8 +935,8 @@
 			     nothing was planned on days whose rows were never read. -->
 			<Reserved
 				panelState={!ready ? 'loading' : mixTotals.failures > 0 ? 'ready' : telemetryState}
-				height={data.console.chart_height}
-				width={data.console.chart_width}
+				height={knobs.chart_height}
+				width={knobs.chart_width}
 				name="failure-mix"
 				label="Failures by stage"
 			>
@@ -947,8 +949,8 @@
 					<div data-mix-empty={mixTotals.planned === 0 ? 'none' : 'clean'}>
 						<EmptyState
 							drawing={emptyState('quiet', failureMixAbsent(windowDays, mixTotals.planned))}
-							height={data.console.chart_height}
-							width={data.console.chart_width}
+							height={knobs.chart_height}
+							width={knobs.chart_width}
 							name="failure-mix"
 							label="Failures by stage"
 						/>
@@ -1001,8 +1003,8 @@
 			     stands until the page has read its window, for the same reason. -->
 			<Reserved
 				panelState={!ready ? 'loading' : timed ? 'ready' : telemetryState}
-				height={data.console.chart_height}
-				width={data.console.chart_width}
+				height={knobs.chart_height}
+				width={knobs.chart_width}
 				name="time-split"
 				label="Mean milliseconds an item spent in each step"
 			>
@@ -1014,8 +1016,8 @@
 					<div data-time-split-empty={rowsInView.length === 0 ? 'none' : 'untimed'}>
 						<EmptyState
 							drawing={emptyState('quiet', timeSplitAbsent(windowDays, rowsInView.length))}
-							height={data.console.chart_height}
-							width={data.console.chart_width}
+							height={knobs.chart_height}
+							width={knobs.chart_width}
 							name="time-split"
 							label="Mean milliseconds an item spent in each step"
 						/>
@@ -1083,8 +1085,8 @@
 				grid={data.grid}
 				window={viewport}
 				floorPct={data.floorPct}
-				height={data.console.chart_height}
-				width={data.console.chart_width}
+				height={knobs.chart_height}
+				width={knobs.chart_width}
 				tickDensity={data.chart.tick_density}
 				readoutMaxShare={data.chart.readout_max_share}
 				bind:selected={runAt}
@@ -1098,7 +1100,7 @@
 		{rows}
 		window={viewport}
 		panelState={!ready ? 'loading' : telemetryState}
-		config={data.console}
+		config={knobs}
 		bands={data.summarizeBands}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
@@ -1112,8 +1114,8 @@
 	<StageTimings
 		days={data.timingDays}
 		span={viewport}
-		height={data.console.chart_height}
-		width={data.console.chart_width}
+		height={knobs.chart_height}
+		width={knobs.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 		modelChanges={data.modelChanges}
@@ -1154,11 +1156,11 @@
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="empty">
 					Nothing timed the reading of a prompt in {nameSpan(cost.days)}.
 				</p>
-			{:else if cost.reading.n < data.console.min_attempts_for_rate}
+			{:else if cost.reading.n < knobs.min_attempts_for_rate}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="thin">
 					{grouped(cost.reading.n)}
 					{cost.reading.n === 1 ? 'prompt was' : 'prompts were'} timed in {nameSpan(cost.days)}. Too
-					few to give a middle or a slowest one in twenty - {data.console.min_attempts_for_rate}
+					few to give a middle or a slowest one in twenty - {knobs.min_attempts_for_rate}
 					needed. The fastest took {asSeconds(cost.reading.fastest)} and the slowest {asSeconds(
 						cost.reading.slowest
 					)}.
@@ -1177,8 +1179,8 @@
 						noun="prompt"
 						nouns="prompts"
 						noRuleReason="one distribution over the window, with no day axis to place a boundary on"
-						width={data.console.chart_width}
-						height={data.console.chart_height}
+						width={knobs.chart_width}
+						height={knobs.chart_height}
 						readoutMaxShare={data.chart.readout_max_share}
 					/>
 					<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-item-cost-reading="readout">
@@ -1195,11 +1197,11 @@
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-writing="empty">
 					Nothing timed the writing of a summary in {nameSpan(cost.days)}.
 				</p>
-			{:else if cost.writing.n < data.console.min_attempts_for_rate}
+			{:else if cost.writing.n < knobs.min_attempts_for_rate}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-writing="thin">
 					{grouped(cost.writing.n)}
 					{cost.writing.n === 1 ? 'summary was' : 'summaries were'} timed in {nameSpan(cost.days)}.
-					Too few to give a middle or a slowest one in twenty - {data.console.min_attempts_for_rate}
+					Too few to give a middle or a slowest one in twenty - {knobs.min_attempts_for_rate}
 					needed. The fastest took {asSeconds(cost.writing.fastest)} and the slowest {asSeconds(
 						cost.writing.slowest
 					)}.
@@ -1216,8 +1218,8 @@
 						subject="Time to write one summary"
 						verb="written"
 						noRuleReason="one distribution over the window, with no day axis to place a boundary on"
-						width={data.console.chart_width}
-						height={data.console.chart_height}
+						width={knobs.chart_width}
+						height={knobs.chart_height}
 						readoutMaxShare={data.chart.readout_max_share}
 					/>
 					<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-item-cost-writing="readout">
@@ -1458,7 +1460,7 @@
 					<Chart
 						svg=""
 						option={flow.option}
-						width={data.console.chart_width}
+						width={knobs.chart_width}
 						height={FLOW_HEIGHT}
 						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 						noReadout="a flow between stages, so there is no column two branches share, and every stage and every branch prints its count and share beside its node; agreed with Susan"
@@ -1673,7 +1675,7 @@
 						<Chart
 							svg=""
 							option={yieldTrend.option}
-							width={data.console.chart_width}
+							width={knobs.chart_width}
 							height={220}
 							label={extractionLabel(windowDays)}
 							readout={yieldColumns}

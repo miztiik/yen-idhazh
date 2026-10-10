@@ -251,11 +251,11 @@ export function holdoutNote(
 ): string {
 	switch (state) {
 		case 'no-marks':
-			return 'No pair has been marked by hand yet, so there is nothing to hold the line against.';
+			return 'No scored pair marked as two stories was returned, so there is no measured margin.';
 		case 'no-fit':
 			return (
-				`${marked} ${marked === 1 ? 'pair is' : 'pairs are'} marked by hand. No day has ` +
-				'fitted a line yet, so the rule below is the line the newest day was built with.'
+				`${marked} ${marked === 1 ? 'pair is' : 'pairs are'} marked by hand. No fitted line was ` +
+				'returned in the loaded window, so the rule below is the line the newest day was built with.'
 			);
 		case 'violation': {
 			const count = margin.violations;
@@ -285,7 +285,7 @@ export function holdoutNote(
 export function weightsNote(weights: ScoreWeights): string {
 	const under = `Scored at ${weights.cosineWeight} on the cosine`;
 	return weights.fittedOn === null
-		? `${under}, the weight in the committed config. No day has fitted a line yet.`
+		? `${under}, the weight in the committed config.`
 		: `${under}, the weight on the newest fitted day, ${weights.fittedOn}.`;
 }
 
@@ -316,7 +316,7 @@ export interface ScoredHoldout {
 export function scoredNote(scored: ScoredHoldout | null): string {
 	if (scored === null) {
 		return (
-			'The line has not been scored against these marks. ' +
+			'No committed holdout score was returned in the loaded window. ' +
 			'Run idhazh score-merge-line-holdout to write that reading down.'
 		);
 	}
@@ -389,7 +389,7 @@ export function belowLine(scores: readonly number[], applied: number): number {
 export function agreedNote(scores: readonly number[], applied: number): string {
 	const at = scoreRange(scores);
 	if (at === null) {
-		return 'No pair has been read as one story yet, so there is no second population to draw.';
+		return 'No scored pair marked as one story was returned, so there is no second population to draw.';
 	}
 	const below = belowLine(scores, applied);
 	return (

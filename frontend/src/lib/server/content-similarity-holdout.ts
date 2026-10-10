@@ -25,13 +25,13 @@
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
  * to bundle it for a browser, the same place and for the same reason as
- * `similarity-ledger.ts`.
+ * `content-similarity-judge.ts`.
  */
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// Relative, not `$lib`, for the reason in `similarity-ledger.ts`: the browser
+// Relative, not `$lib`, for the reason in `content-similarity-judge.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
 import { windowOfDays, type TimeWindow } from '../charts/viewport';
 import {
@@ -45,9 +45,11 @@ import { FILED_DAY_COLUMN } from '../data/slice-query';
 import { sliceFromDisk } from './ledger-disk';
 import { datedFirst, windowRows } from './ledger-rows';
 import { DIGEST_ROOT, STATE_ROOT } from './payload';
+import type { RecordRead } from '../console/recording';
 
 /** Every mark the day tree could answer for, and every one it could not. */
 export interface HoldoutReading {
+	read: RecordRead;
 	marks: HoldoutMark[];
 	skipped: HoldoutSkip[];
 	/** How many marks were read, scored or not. */
@@ -124,6 +126,10 @@ export function markReach(day: string, reachDays: number): TimeWindow {
 
 /** One row of the hand marks as text cells, keyed by column name. */
 type MarkRow = Record<string, string>;
+export interface MarkedReading {
+	rows: MarkRow[];
+	read: RecordRead;
+}
 
 /** Every packed mark inside `reach`, once a pair, each with the mark it was given last.
  *
@@ -137,7 +143,7 @@ type MarkRow = Record<string, string>;
  * No packed file is an ordinary state - nobody has harvested a mark yet, or the
  * gardener has not packed the first one - and it reads as no mark.
  */
-export async function markedPairs(reach: TimeWindow, root: string = STATE_ROOT): Promise<MarkRow[]> {
+export async function markedPairs(reach: TimeWindow, root: string = STATE_ROOT): Promise<MarkedReading> {
 	const asked = [FILED_DAY_COLUMN, ...HOLDOUT_PAIR_COLUMNS];
 	const table = await windowRows(root, 'holdout-pairs', reach, HOLDOUT_PAIR_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'holdout-pairs', { columns: asked, from: start, to: end })
@@ -148,7 +154,7 @@ export async function markedPairs(reach: TimeWindow, root: string = STATE_ROOT):
 		const held = kept.get(pair);
 		if (held === undefined || (row.marked_on ?? '') >= (held.marked_on ?? '')) kept.set(pair, row);
 	}
-	return [...kept.values()];
+	return { rows: [...kept.values()], read: table.read };
 }
 
 /** The identity a holdout row and a published item are joined on.
@@ -222,9 +228,9 @@ export async function holdoutReading(
 	stateRoot: string = STATE_ROOT,
 	digestRoot: string = DIGEST_ROOT
 ): Promise<HoldoutReading> {
-	const rows = await markedPairs(reach, stateRoot);
+	const { rows, read } = await markedPairs(reach, stateRoot);
 	if (rows.length === 0) {
-		return { marks: [], skipped: [], marked: 0, daysOpened: 0 };
+		return { marks: [], skipped: [], marked: 0, daysOpened: 0, read };
 	}
 
 	// The cover is worked out before the first day is opened (Guardrail #12):
@@ -274,7 +280,7 @@ export async function holdoutReading(
 			score: pairScore(cosineInt8(left.vector, right.vector), weights)
 		});
 	}
-	return { marks, skipped, marked: rows.length, daysOpened: dates.size };
+	return { marks, skipped, marked: rows.length, daysOpened: dates.size, read };
 }
 
 /** The newest committed reading of the line against the marks in `window`, or null for none.
@@ -288,10 +294,15 @@ export async function holdoutReading(
  * Bounded by the same window every other read on this route takes: the packed
  * days inside it and no more (Guardrail #12).
  */
+export interface HoldoutScoreReading {
+	score: MergeLineHoldoutScore | null;
+	read: RecordRead;
+}
+
 export async function mergeLineHoldoutScore(
 	window: TimeWindow,
 	root: string = STATE_ROOT
-): Promise<MergeLineHoldoutScore | null> {
+): Promise<HoldoutScoreReading> {
 	const table = await windowRows(root, 'merge-line-holdout-scores', window, HOLDOUT_SCORE_COLUMNS, (start, end) =>
 		sliceFromDisk(root, 'merge-line-holdout-scores', {
 			columns: [...datedFirst(HOLDOUT_SCORE_COLUMNS)],
@@ -304,7 +315,13 @@ export async function mergeLineHoldoutScore(
 		const date = (row.date ?? '').trim();
 		const runId = (row.run_id ?? '').trim();
 		const line = Number(row.applied_line);
-		if (date === '' || runId === '' || !Number.isFinite(line)) continue;
+		const required = [
+			'applied_line', 'merged_and_one_story', 'merged_and_two_stories',
+			'apart_and_one_story', 'apart_and_two_stories', 'pairs_unresolved', 'labelled_two_story_pairs'
+		] as const;
+		if (date === '' || runId === '' || required.some((key) =>
+			(row[key] ?? '').trim() === '' || !Number.isFinite(Number(row[key]))
+		)) continue;
 		// Date first, then run: two runs of one date both scored the line, and the
 		// later one read the later tree.
 		if (newest !== null && `${newest.date}${newest.runId}` >= `${date}${runId}`) continue;
@@ -313,13 +330,13 @@ export async function mergeLineHoldoutScore(
 			runId,
 			appliedLine: line,
 			labeller: (row.labeller ?? '').trim(),
-			mergedAndOneStory: Number(row.merged_and_one_story ?? 0),
-			mergedAndTwoStories: Number(row.merged_and_two_stories ?? 0),
-			apartAndOneStory: Number(row.apart_and_one_story ?? 0),
-			apartAndTwoStories: Number(row.apart_and_two_stories ?? 0),
-			pairsUnresolved: Number(row.pairs_unresolved ?? 0),
-			labelledTwoStoryPairs: Number(row.labelled_two_story_pairs ?? 0)
+			mergedAndOneStory: Number(row.merged_and_one_story),
+			mergedAndTwoStories: Number(row.merged_and_two_stories),
+			apartAndOneStory: Number(row.apart_and_one_story),
+			apartAndTwoStories: Number(row.apart_and_two_stories),
+			pairsUnresolved: Number(row.pairs_unresolved),
+			labelledTwoStoryPairs: Number(row.labelled_two_story_pairs)
 		};
 	}
-	return newest;
+	return { score: newest, read: table.read };
 }

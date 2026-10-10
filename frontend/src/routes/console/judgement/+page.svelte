@@ -1,22 +1,11 @@
 <script lang="ts">
-	/** What the model made of each article - the route, and the first fact on it.
-	 *
-	 * **The panel and the named absence sit side by side on purpose.** The strip
-	 * took a fourth and a fifth tab on 2026-09-12 and this route opened empty
-	 * behind one of them, so it answered 200 and printed an absence saying what
-	 * was still missing. `Stories the day merged` is the first figure to land
-	 * here, and it does not close that absence: it counts what a day folded
-	 * together, and the absence is about the desk and the lenses the model chose.
-	 * So the figure is drawn and the absence is still named.
-	 *
-	 * The control governs the panels below it, which is why the route has one now
-	 * and had none before. Nothing here is fetched: every span the control can
-	 * draw is already in this document, so a preset costs no request.
-	 */
+	/** Which stories the day merged, and what the judge and hand marks can tell us. */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { consoleKnobs } from '$lib/console/route-console';
 	import { markedApart, scoreRange } from '$lib/console/holdout';
+	import { judgementEvidence } from '$lib/console/judgement-evidence';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
@@ -26,15 +15,16 @@
 	import VerdictSplit from './VerdictSplit.svelte';
 
 	let { data } = $props();
+	const console = consoleKnobs();
 
 	/** The same key the other four console routes read, so the operator's choice
 	 * of span follows him between them rather than resetting on every click. */
 	const WINDOW_KEY = 'idhazh:console-window';
 
-	const presets = $derived(data.console.window_presets);
+	const presets = console.window_presets;
 
 	// svelte-ignore state_referenced_locally
-	let windowDays = $state(data.console.default_window_days);
+	let windowDays = $state(console.default_window_days);
 	/** False until a browser has run this page. The control cannot do anything
 	 * before that, so it says so rather than pretending. */
 	let ready = $state(false);
@@ -60,13 +50,22 @@
 	}
 
 	const viewport = $derived(
-		windowOfDays(data.windowDay, windowDays, data.console.today_anchor)
+		windowOfDays(data.windowDay, windowDays, console.today_anchor)
 	);
 
 	/** Where the pairs a person read as two stories sit, for the one chart on
 	 * this route that has a date axis to draw the line walking into them. */
 	const apartSpan = $derived(markedApart(data.holdout.marks));
 	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
+	const rejectedJudgeRows = $derived(data.rejectedJudgeRows.filter((row) => row.date >= viewport.start && row.date <= viewport.end));
+	const judgeNotes = $derived([
+		...judgementEvidence(data.fittedRead, viewport, data.readSpan, 'judge'),
+		...rejectedJudgeRows.map((row) => row.rates
+			? `The judge's rate readings on ${row.date} are unavailable. They cannot support a complete window verdict.`
+			: `The calculated-line or gate readings on ${row.date} are unavailable. Valid judge-rate readings remain visible.`)
+	]);
+	const markNotes = $derived(judgementEvidence(data.holdout.read, data.holdout.reach, data.holdout.reach, 'marks'));
+	const scoreNotes = $derived(judgementEvidence(data.holdout.scoredRead, data.readSpan, data.readSpan, 'scores'));
 </script>
 
 <svelte:head>
@@ -87,18 +86,19 @@
 	<MergedStoriesPanel
 		days={data.merges}
 		{viewport}
-		height={data.console.chart_height}
-		width={data.console.chart_width}
+		height={console.chart_height}
+		width={console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
 	<MergeLinePlot
-		days={data.lines}
+		days={data.fittedRead.state === 'read' ? data.lines : null}
+		evidence={judgeNotes}
 		knobs={data.similarity}
 		{viewport}
-		height={data.console.chart_height}
-		width={data.console.chart_width}
+		height={console.chart_height}
+		width={console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 		builtWith={data.builtWith}
@@ -108,21 +108,24 @@
 	/>
 
 	<JudgeAgreement
-		days={data.judge}
+		days={data.fittedRead.state === 'read' ? data.judgeRates : null}
+		complete={!rejectedJudgeRows.some((row) => row.rates)}
+		evidence={judgeNotes}
 		limits={{
 			disagreementMax: data.similarity.disagreement_max,
 			unclearMax: data.similarity.unclear_max
 		}}
 		{viewport}
-		height={data.console.chart_height}
-		width={data.console.chart_width}
+		height={console.chart_height}
+		width={console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
-		attemptsFloor={data.console.min_attempts_for_rate}
+		attemptsFloor={console.min_attempts_for_rate}
 	/>
 
 	<RecordGates
-		days={data.judge}
+		days={data.fittedRead.state === 'read' ? data.judge : null}
+		evidence={judgeNotes}
 		dates={data.span}
 		gates={{
 			minimumNegatives: data.similarity.minimum_negatives,
@@ -134,61 +137,29 @@
 	/>
 
 	<VerdictSplit
+		evidence={judgeNotes}
 		record={data.record}
 		applied={data.builtWith}
 		discardShare={data.similarity.discard_share}
-		axisMultiple={data.console.precision_axis_multiple}
-		width={data.console.chart_width}
+		axisMultiple={console.precision_axis_multiple}
+		width={console.chart_width}
 		figures={data.figures}
 	/>
 
 	<HoldoutMargin
-		marks={data.holdout.marks}
-		agreedScores={data.holdout.agreedScores}
+		marks={data.holdout.read.state === 'read' ? data.holdout.marks : null}
+		agreedScores={data.holdout.read.state === 'read' ? data.holdout.agreedScores : null}
+		evidence={[...markNotes, ...scoreNotes]}
 		skipped={data.holdout.skipped}
 		marked={data.holdout.marked}
 		applied={data.builtWith}
 		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
-		fitted={data.lines.length > 0}
+		fitted={data.lines.some((row) => row.heldReason === 'none')}
 		weights={data.holdout.weights}
 		scored={data.holdout.scored}
-		height={data.console.chart_height}
-		width={data.console.chart_width}
+		height={console.chart_height}
+		width={console.chart_width}
 		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
-	<h2 class="console-h2">What the model made of each article</h2>
-
-	<div class="console-panel" data-console-empty="judgement">
-		<p class="empty-lead">
-			This route will carry what the model made of each article: the desk and the
-			lenses it chose, how sure it was of each, and every article where its answer
-			and ours differ.
-		</p>
-		<p class="empty-note">
-			The panel above counts what a day folded together, which is a fact about what
-			shipped. What the model chose is not drawn here yet: it does not record the
-			desk and lenses it picked or how sure it was, and the panels that would draw
-			them are not built. Until both arrive, what the checker doubted is on
-			Summaries.
-		</p>
-	</div>
 </div>
-
-<style>
-	/* The lead carries the weight of the absence, and the note under it is the
-	   secondary voice every console panel uses for a caveat (design-system.md). */
-	.empty-lead {
-		margin: 0;
-		font-size: var(--text-base);
-		line-height: var(--leading-base);
-		color: var(--color-text);
-	}
-
-	.empty-note {
-		margin: var(--space-3) 0 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
-	}
-</style>

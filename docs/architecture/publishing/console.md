@@ -100,6 +100,17 @@ from config or the band: it records what the page must show, not what the page
 already uses. A chart-lifetime or chart-pending expectation is null when the
 route draws no legacy `Chart.svelte`.
 
+The shared window spec owns arithmetic, controls, declared surface coverage,
+daily disclosure rules and actual cross-route navigation. It generates route
+coverage from the exhaustive `BY_ROUTE` literals. An absent expected surface
+fails; an explicit null remains inapplicable. Detailed telemetry, judge,
+Hardware and Voices fixtures and execution belong to focused route window
+specs. Agreement readouts, marks, day labels and cumulative record bars answer
+separate questions. Expectation files contain typed data, not callbacks.
+The shared navigation check may use Hardware's small content-span observer;
+it does not own Hardware fixtures or component compilation.
+The ownership guard checks this execution boundary as well as quoted addresses.
+
 Each `frontend/tests/support/panel-drivers/<route>.ts` exports `DRIVERS` and
 `BUILD_TIME`. Drivers put fetched panels into the states declared by
 `Nothing` in `panel-gates.ts`. `BUILD_TIME` names judged panels that make no
@@ -141,27 +152,89 @@ Preserve protected copy such as `What the model did` on Summaries. The
 [summary-page checks](../../../frontend/tests/console-model.spec.ts) hold labels
 and stable addresses together. An approved copy change updates both.
 
-## Judgement distinguishes counts from model verdicts
+## Judgement distinguishes published merges from judging evidence
 
-`Stories the day merged` counts recorded grouping outcomes. Daily columns show
-stories merged behind another; each column's dot shows the largest group,
-including its retained story. Both count stories and share an axis.
+The tab says: `Which stories the day merged, and where the judge and a person
+disagreed.` Six panels form one untitled group, in this order:
 
-Use the recorded `same_story_as` decision. Do not repeat the similarity or
-classification decision in the browser. Derive display counts through shared
-logic and bounded browser reads, not a server-loader scan of published days.
+- `merged-stories` counts the published `same_story_as` decisions. Daily columns
+  count stories merged behind another; dots count the largest group, including
+  its retained story. The merge share stays in words with its denominator.
+- `merge-line` compares each nightly calculated line with its proposal. The
+  recorded line the newest day used is a separate fact. Neither a calculation
+  nor a pair above a threshold proves a published merge.
+- `judge-agreement` compares the judge's first reading with its own second
+  reading, with the summaries swapped. Disagreement and uncertainty keep their
+  own denominators and limits. A day below the reporting floor keeps its counts
+  but draws no rate dot.
+- `record-gates` compares each recorded count with the count needed to fit a
+  line. Its day strip keeps days without rows. Missing counts are not zero bars.
+- `verdict-split` separates pairs called one story from pairs called two stories,
+  on each side of the merge line. Its cells say eligible, not merged.
+- `holdout-margin` compares pairs a person marked apart with the merge line.
+  It keeps the score-range strip for pairs marked one story, the margin, and
+  the separate committed scoring result. See the
+  [holdout drawing rule](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
 
-Show the merge share in text with its denominator, not as a rate line on an axis
-that either flattens small shares or exaggerates noise. A nonzero share that
-rounds below one percent prints `<1`, not `0`.
+All six keep their build-time reads. The digest days and the content-similarity
+judge's records are not published ledgers. `content-similarity-judge.ts` and
+`content-similarity-holdout.ts` stay under `frontend/src/lib/server/`; the browser
+must not import them. Reads keep their existing window and holdout-reach bounds.
+The browser changes the window over those inlined results, without a fetch.
 
-Counts do not answer which desk or lenses a model chose. Name absent evidence
-until those records actually exist; adding one panel must not hide another
-unanswered question. A navigation tab must lead to a real route, even when that
-route can only explain what is missing. The holdout comparison follows the
-[chart rules](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
+Each panel has a stable id, one leading figure or sentence, a visible comparison,
+a named question, a chart type, and a readout declaration. Each declines the
+summary-settings rule because it draws the judge's record, not how summaries
+are written. All six are judged and listed in the route's `BUILD_TIME`.
+
+The component boundary keeps absent evidence as `null` and supplied empty
+evidence as an empty array or a zero-count record. Missing evidence prints an
+unavailable sentence without measured zeros. Fitted rows and hand-mark rows
+retain their existing `RecordRead` alongside the rows. Derived holdout marks keep
+the same mark read; the committed holdout selection keeps `{ score, read }`.
+The page carries each read once with its loaded span or mark reach. Successful
+empty results say no rows were returned, not that no run, fit or scoring happened.
+Required blank measurements are not converted to zero.
+
+Judge-rate readings are retained independently of calculated-line and gate
+measurements. A missing gate count must not discard a valid bad judge reading
+and make the remaining window look healthy. Rejected measurements are named
+by day; unusable rate rows prevent a complete window verdict. The newest run
+is selected before validating its measurements, never replaced by an older
+valid run merely because its newer record is incomplete.
+
+Unavailable windowed panels still name the selected span. Geometry checks use
+the existing private route builder's real populated or successful-empty records;
+missing-source checks remain separate. A missing plot fails a geometry assertion,
+not a reason to skip it. The shared canary is not filled with invented judge data.
+
+Each rate needs its own known denominator. Unknown contributions make that
+window total unknown, not zero; the independent reading and known daily counts
+remain usable. A real zero with an adequate denominator is still a measured zero.
+No denominator means no rate dot. No gate row means no measured bars; a real
+zero-count row still draws all three bars and their targets. Earlier cumulative
+rows retain their dates and do not prove that nothing ran afterwards.
+
+Useful partial rows remain visible. Lost-day notes are narrowed to the displayed
+span. Set-aside counts describe the loaded input, not a newly inferred count for
+the preset. `lastRows` is a packed period, never an exact last execution date.
+Unreadable diagnostics are not rendered as paths, links or markup. Weight
+provenance names the config when the selected fitted row contains no weight.
+Real generated ledger and route tests cover these distinctions without a
+fabricated fetch, another archive read or another state vocabulary.
+
+The old per-article desk and lens heading and its named absence are removed.
+These panels do not promise classification evidence they cannot show.
 
 ## Design rationale
+
+Judgement keeps its existing questions and drawings. The agreement chart has
+no human verdict input, so calling it agreement with a person would mislabel
+evidence. Its leading disagreement share and comparison describe the two real
+readings; the hand-marked comparison remains in `holdout-margin`. Likewise, the
+merge-line drawing receives calculated lines, not individual pair scores, so
+its leading figure is the newest calculated line, not an invented pair count.
+These limits preserve the drawings without presenting absent evidence as fact.
 
 | Alternative | Why not |
 | --- | --- |

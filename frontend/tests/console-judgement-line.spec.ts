@@ -6,10 +6,8 @@
  * a day nothing was fitted on, and a sentence counting a different slice from
  * the chart above it.
  *
- * **The canary build has never fitted a line**, so this file's baseline state is
- * K1 - the state that proves the design. A panel that only worked once there
- * were rows would open as a blank box for the first ten days of the feature's
- * life, which is exactly when somebody is watching it.
+ * The successful-empty private read tests its full rule axis. A missing source
+ * is tested independently and never passed off as a successful empty read.
  */
 
 import { expect, test, type Page } from './support/browser';
@@ -23,16 +21,24 @@ import { windowOfDays } from '../src/lib/charts/viewport';
 import { findBuiltLine } from '../src/lib/console/applied-line';
 import { readRecordedLine } from '../src/lib/server/recorded-line';
 import type { LineDay } from '../src/lib/console/merge-line';
+import { judgementRoute } from './support/judgement-route';
+
+let emptyOrigin = '';
+let emptyRoute: Awaited<ReturnType<typeof judgementRoute>>;
+test.beforeAll(async ({}, info) => {
+	test.setTimeout(180_000);
+	emptyRoute = await judgementRoute(info.outputPath('empty-line-route'), { evidence: 'empty' });
+	emptyOrigin = emptyRoute.origin;
+});
+test.afterAll(async () => { await emptyRoute?.close(); });
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8'));
-const APPEARANCE = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8'));
-
-/** Read from the committed config rather than typed in. A test carrying its own
- * copy of a knob passes when the knob moves and the page does not follow it. */
-const TUNING = CONFIG.assemble.same_story.adaptive_dedup_threshold;
-const FLOOR: number = CONFIG.assemble.same_story.floor_min;
-const PRESETS: number[] = APPEARANCE.console.window_presets;
+function tuning() {
+	return JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).assemble.same_story.adaptive_dedup_threshold;
+}
+function appearance() {
+	return JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8'));
+}
 
 const ROUTE = '/console/judgement/';
 const PANEL = '[data-windowed="merge-line"]';
@@ -57,7 +63,7 @@ const CONFIG_WORDS = [
  * measured the column. Reading before that measures the wrong chart. */
 async function open(page: Page, width = 1440): Promise<void> {
 	await page.setViewportSize({ width, height: 1000 });
-	await page.goto(ROUTE);
+	await page.goto(`${emptyOrigin}${ROUTE.slice(1)}`);
 	await chartsReady(page);
 }
 
@@ -70,7 +76,7 @@ test.describe('the corridor is the config band', () => {
 		await open(page);
 
 		expect(await domain(page), 'the axis followed the data instead of the config').toBe(
-			`${TUNING.band_low},${TUNING.band_high}`
+			`${tuning().band_low},${tuning().band_high}`
 		);
 
 		// The labels, not just the attribute. The attribute is what this file
@@ -80,8 +86,8 @@ test.describe('the corridor is the config band', () => {
 			.locator(`${PANEL} [data-tick="y"]`)
 			.allTextContents();
 		const numbers = ticks.map(Number);
-		expect(Math.min(...numbers)).toBeCloseTo(TUNING.band_low, 3);
-		expect(Math.max(...numbers)).toBeCloseTo(TUNING.band_high, 3);
+		expect(Math.min(...numbers)).toBeCloseTo(tuning().band_low, 3);
+		expect(Math.max(...numbers)).toBeCloseTo(tuning().band_high, 3);
 	});
 
 	test('the corridor does not move when the window moves', async ({ page }) => {
@@ -90,7 +96,7 @@ test.describe('the corridor is the config band', () => {
 
 		// The radio is visually hidden inside its label, so the label is what a
 		// reader presses and what this presses.
-		for (const preset of PRESETS) {
+		for (const preset of appearance().console.window_presets) {
 			await page.locator(`[data-window-preset="${preset}"]`).click();
 			await page.waitForTimeout(250);
 			expect(
@@ -184,16 +190,16 @@ test.describe('the sentences count what the chart drew', () => {
 
 		// K1 is the state that proves the design: a full axis, a labelled
 		// corridor, and the line in force - never a blank box with an apology.
-		expect(await domain(page)).toBe(`${TUNING.band_low},${TUNING.band_high}`);
+		expect(await domain(page)).toBe(`${tuning().band_low},${tuning().band_high}`);
 		expect(Number(await page.locator(`${PANEL} [data-line-rule]`).getAttribute('data-line-rule')))
-			.toBeCloseTo(FLOOR, 3);
+			.toBeCloseTo(0.937, 3);
 		await expect(page.locator('[data-line-state="no-days"]')).toContainText(
-			'No line was fitted in'
+			'No calculated line was returned for'
 		);
 
 		const box = await page.locator(`${PANEL} svg`).boundingBox();
 		expect(box?.height, 'the panel is a different height with no data').toBeCloseTo(
-			APPEARANCE.console.chart_height,
+			appearance().console.chart_height,
 			0
 		);
 	});
