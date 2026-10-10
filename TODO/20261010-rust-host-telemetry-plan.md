@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-10
 
-**Level**: 5 for corrected CPU semantics, versioned fingerprints, exchanges, reader migration and historical rewriting ([CLAUDE.md section 6](../CLAUDE.md#6-correction-levels)). Fowler approves the design and documentation only; implementation and adoption remain separately gated.
+**Level**: 5 for corrected CPU semantics, versioned fingerprints, exchanges, reader migration and historical rewriting ([CLAUDE.md section 6](../CLAUDE.md#6-correction-levels)). Fowler resolves architectural ambiguity; the user's unattended delivery authorization includes implementation, adoption and historical migration after their evidence gates pass.
 
 ## 0. Operating contract
 
@@ -11,21 +11,21 @@ Table A - operating contract
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Replace Python host collection and raw host-file production with independently tested, modular Rust processes, corrected CPU measurements and versioned fingerprints, without losing readable history or changing ledger ownership. |
-| A2 | Hard scope - in | Table E inventories instruments. Build Table AC's real modules with Table AN's replacement schema and Table AO's identity rules from the outset; expose a true memory off switch; test isolated Rust output against unchanged Python references for unchanged behaviour and independent fixtures for corrections; migrate backend/frontend consumers; dry-run then, after later user approval, rewrite inventoried historical files once; cut over and remove superseded collectors. |
+| A2 | Hard scope - in | Table E inventories instruments. Build Table AC's real modules with Table AN's replacement schema and Table AO's identity rules from the outset; expose a true memory off switch; test isolated Rust output against unchanged Python references for unchanged behaviour and independent fixtures for corrections; migrate backend/frontend consumers; dry-run then, after D16's evidence gate, rewrite inventoried historical files once; cut over and remove superseded collectors. |
 | A3 | Hard scope - out | Table B prices exclusions. |
-| A4 | ESCALATE triggers | Table C. The user settled the design and authorized implementation, PRs and merges on 2026-10-10. Fowler is the plan approval and architectural ambiguity authority. Implementation permission does not bypass D16's later evidence-based cutover and historical-write decisions. |
+| A4 | ESCALATE triggers | Table C. On 2026-10-10 at 21:39 UTC the user authorized unattended delivery of the full plan, including PRs, merges, production cutover and the scoped historical migration, without waiting for another user decision. This supersedes the earlier wait-for-approval requirement, not correctness, backup, quiet-window or observation gates. Fowler resolves architectural ambiguity; unrelated data and git-history rewrites remain outside scope. |
 | A5 | Chosen strategy | Fowler: Parallel Change and Expand-Migrate-Contract at the reader boundary, then explicit single-writer cutover. The first adopted implementation is corrected Rust, not a compatibility-first release. YAML owns process lifetime; Rust writes raw host records; Python owns full item-health, shared compaction and publishing. No bindings or cross-language in-process calls. |
 | A6 | Execution | Autonomous orchestrator per [execute-a-plan.md](../docs/how-to/execute-a-plan.md). Parallel N = 4; actual dispatch follows dependencies and disjoint file lists, not an assumed four-way split. Measuring rows run alone. |
 | A7 | Status | Implementation authorized on 2026-10-10. Design row D1 is DONE (Fowler, 2026-10-10); implementation, evidence, adoption and maintenance rows advance through Table D. Source inspected at `2d9648936`; reconcile callers against the execution checkout and merge newer trunk changes only when needed. No Rust evidence or speed claim exists yet. |
 | A8 | Worktree placement | New worktrees go under the repository sibling `../yen-idhazh.worktrees/`. The plan checkout is `rust-host-profiling-investigation`; do not edit shared main. Paths in tracked documents remain relative. |
 | A9 | Ownership | After cutover Rust alone writes the migrated raw host ledger. Python remains the complete item-health writer and the shared compact-ledger/publishing owner. A Python host verifier reads Rust files and receipts without re-encoding, copying or re-filing them. Cross-language communication is serialized; normal calls between Rust modules are allowed. |
 | A10 | Documentation | This page alone records the approved future design. Do not edit authoritative behaviour docs during authoring. Each implementation row updates its named living docs only when its behaviour lands; closure distils and removes this plan. |
-| A11 | Next execution sequence | After a separate instruction to implement: 1 -> 2 -> 10 -> 11 -> 12 -> 3 -> 4 -> 15 -> 5 -> (13 + 14) -> 6 -> 8 -> 16 -> 7 -> 17 -> 9. Rows 13/14 are one schema-and-consumer merge unit with one owner; neither merges or becomes DONE alone. D16 requires later user cutover and exact historical-inventory decisions based on evidence; cutover permission alone does not authorize D17. |
+| A11 | Next execution sequence | 1 -> 2 -> 10 -> 11 -> 12 -> 3 -> 4 -> 15 -> 5 -> (13 + 14) -> 6 -> 8 -> 16 -> 7 -> 17 -> 9. Rows 13/14 are one schema-and-consumer merge unit with one owner; neither merges or becomes DONE alone. D16 records the existing user authority, verified evidence and exact bounded historical manifest before cutover or maintenance. Do not wait for a new user confirmation. |
 | A12 | Modularity | One Cargo crate, with the questions, Python counterparts and per-module tests in Table AC. The CLI only routes commands, codecs only handle logical schemas/bytes, and producers never mint paths or envelopes. No empty modules, catch-all implementation files or extra crates without a concrete consumer. |
 | A13 | Ambiguity and evolution | Consult the Fowler custom advisor when ambiguity changes the implementation. Prefer structural fixes and narrow, reusable contract boundaries that support long-term evolution; do not substitute a local workaround or speculative framework for the requested capability. |
 | A14 | Implemented delivery partition | Fowler, 2026-10-10: parallelize disjoint modules within the active row after its real prerequisite checkpoint. Leaf worktrees explicitly depend on that candidate; the owner integrates them into one row PR, owns shared scaffolding and this Reckoner, and serializes expensive gates. Do not merge dependent leaf PRs independently into main or claim four ready rows. |
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan; parallel N = 4 subject to dependencies and disjoint file lists; measuring rows run alone; consult Fowler on architectural ambiguity; AUTO-merge on green gates within the implementation scope authorized on 2026-10-10; honor Table C and D16.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan; parallel N = 4 subject to dependencies and disjoint file lists; measuring rows run alone; consult Fowler on architectural ambiguity; AUTO-merge on green gates and deliver the full plan under the unattended authorization of 2026-10-10; honor Table C and D16's evidence gate.
 
 Table B - exclusions and their cost
 
@@ -44,7 +44,7 @@ Table C - stop conditions
 
 | ID | Trigger | Required response |
 | --- | --- | --- |
-| C1 | D16 has not recorded the later production decision | Continue the authorized implementation, isolated evidence, reader migration and inactive integration. Do not cut over production writers or apply historical maintenance until the corresponding D16 permission exists. Fowler's approval is not user adoption permission. |
+| C1 | D16 has not verified the required production and maintenance evidence | Continue independent authorized work. Do not cut over production writers or apply historical maintenance until the corresponding evidence is verified and its scope recorded. User permission already exists under A4; do not introduce another approval wait. |
 | C2 | A change exceeds the settled Tables AN/AO schema, source, null or identity semantics | Pause for Level 5 scope consultation. Implement the already approved CPU/schema/fingerprint migration without reopening the user's settled design. |
 | C3 | Per-item boundaries cannot be supplied without changes beyond the later event adapter | Name the required changes and cost; do not substitute job-wide samples or pretend YAML can infer the boundary. |
 | C4 | The experiment requires a production push, deploy, state write, credentials or external model/feed service | Redesign the experiment or obtain explicit authorization; no automatic workflow dispatch during authoring. |
@@ -52,7 +52,7 @@ Table C - stop conditions
 | C6 | Unchanged-field comparison needs wider tolerances, altered memory populations or hidden reference calls to pass | Report the difference; never relax bounds after seeing Rust results or add dummy Python processes. Corrected CPU/hash fields use independent fixtures, not a blanket Python-parity gate. |
 | C7 | A scope change, unresolved advisor conflict or cost overrun fires the execution contract | Follow [handle-scope-change.md](../docs/how-to/handle-scope-change.md). |
 | C8 | A Rust file needs false Python provenance or Python re-encoding to pass a reader | Stop. Use the isolated candidate oracle, then Row 13's finite writer/container/version mapping. Verify the same native Rust bytes throughout. |
-| C9 | Historical inventory expands, a source hash changes, an unknown schema appears or an output/receipt/view cannot reconcile | Stop maintenance before replacing the affected batch. Refresh the bounded manifest and dry-run; obtain approval for changed write scope. Never scan/rewrite git history or delete unread source data. |
+| C9 | Historical inventory expands, a source hash changes, an unknown schema appears or an output/receipt/view cannot reconcile | Stop the affected maintenance batch, not independent work. Refresh the bounded manifest and dry-run within the authorized host-ledger scope; consult Fowler on ambiguity and never apply unresolved candidates. A change outside that scope still requires a user decision. Never scan/rewrite git history or delete unread source data. |
 
 ## 1. Status Reckoner
 
@@ -73,7 +73,7 @@ Table D - authoritative execution queue
 | D14 | 14 | Migrate contracted backend and frontend consumers | 5 | F | PENDING | - | - | - |
 | D6 | 6 | Add inactive event emitters at real production boundaries | 13, 14 | F | PENDING | - | - | - |
 | D8 | 8 | Expose and test the independent memory off control | 6 | G | PENDING | - | - | - |
-| D16 | 16 | Record later user cutover and historical-write decisions | 8, 5, 14, 15 | H | PENDING | - | - | - |
+| D16 | 16 | Verify evidence and record unattended adoption authority | 8, 5, 14, 15 | H | PENDING | - | - | - |
 | D7 | 7 | Switch instrumented producers through events | 16 | I | PENDING | - | - | - |
 | D17 | 17 | Rewrite the approved historical manifest once | 7, 15, 16 | J | PENDING | - | - | - |
 | D9 | 9 | Remove superseded collectors and temporary duplication | 7, 8, 17 | K | PENDING | - | - | - |
@@ -417,7 +417,7 @@ Table V - Row 6 rejected alternatives
 
 ## 8. Row #7 - Switch instrumented producers through events
 
-- **Scope:** After D16 explicitly permits cutover, adopt the corrected Rust implementation through events with one raw host writer and exact publishing receipts in a dedicated reversible behavioural change.
+- **Scope:** After D16 verifies cutover evidence under A4's authorization, adopt the corrected Rust implementation through events with one raw host writer and exact publishing receipts in a dedicated reversible behavioural change.
 - **Files touched:**
   - `.github/workflows/digest.yml`
   - `.github/workflows/measure.yml`
@@ -447,7 +447,7 @@ Table V - Row 6 rejected alternatives
   - `docs/reference/host-metrics.md`
   - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
-- **Acceptance gates - local:** D16 cutover approval, Rows 13/14 readers/consumers and Row 8 controls must be complete. Reconcile callers under C5; test real native-file receipts, enabled integration latency, true memory-off across every family and absence of competing host writers. No automatic workflow dispatch.
+- **Acceptance gates - local:** D16 cutover evidence, Rows 13/14 readers/consumers and Row 8 controls must be complete. Reconcile callers under C5; test real native-file receipts, enabled integration latency, true memory-off across every family and absence of competing host writers. Do not dispatch a publishing workflow merely as a repeatable test gate.
 - **Acceptance gates - CI:** Existing full suites, named workflow coverage tests, contract/Arrow/CSV/frontend checks and fixture pipeline. Observe next authorized scheduled run for each migrated family; do not trigger a publishing workflow merely to certify this row.
 - **Oracle:** Every named instrumented family produces AN/AO-corrected host records and unchanged-scope resource results through one writer with verified receipts; fixtures cannot establish an unobserved scheduled family's live timing.
 
@@ -979,7 +979,7 @@ Table AR - Row 15 decisions
 | AR2 | Default is dry-run. Candidate model/reader is Row 2's isolated AN model until Row 13 consolidates it. Use Python maintenance codecs only for HISTORICAL conversion; never re-encode new Rust files to pass compatibility tests. Report exact dropped legacy values and preserved legitimate average/hash/identity data. | AN11; H12; user maintenance boundary. |
 | AR3 | Raw replacement preserves path/file_id, original allocation clock, unit/attempt/job/shard/covers/producer lineage and row rank, because AO6 does not hash payload. It is a one-time existing-file conversion, not normal `persist`. Restamp schemas, canonical digest and actual Python codec/engine; the original identity/git revision remains historical lineage, while the maintenance receipt/manifest records converting revision/time and original provenance/bytes. Preserve compact period paths/row identities and update footer digests/index rows/bytes without changing loss/set-aside/expiry markers. | Direct filename/persist/index predicates; no content-addressing assumption. |
 | AR4 | Reconcile every manifested raw and compact physical file, INCLUDING superseded probe/attempt files; retain whole-row settlement/key cardinality, clocks and duplicates' ranking. Rebuild only affected bounded machine/console derived views with the migrated consumer code. Receipts containing rewritten paths acquire replacement physical hashes under a maintenance invocation; retain old invocation receipts as historical evidence in the migration bundle, never misrepresent them as current-byte proof. | User explicit raw/compact/metadata/keys/receipts/views requirement. |
-| AR5 | Dry-run reports source/output hashes, original-versus-normalized identities/keys, all null mappings, retained averages, changed index/view bytes, source retirement/backup policy and estimated batch cost. Stop on ambiguous original provenance or unreconciled dependency. Present this exact manifest/report to D16; authorization is tied to its hash and scope. | Fowler; user later write approval. |
+| AR5 | Dry-run reports source/output hashes, original-versus-normalized identities/keys, all null mappings, retained averages, changed index/view bytes, source retirement/backup policy and estimated batch cost. Stop on ambiguous original provenance or unreconciled dependency. D16 records and verifies this exact manifest/report under A4's unattended authority; apply is tied to its hash and scope. | Fowler; user unattended authorization, 2026-10-10. |
 | AR6 | D15's initial fixture dry-run precedes D5. After the combined Rows 13/14 delivery, repeat the dry-run against actual migrated consumers to freeze view/receipt bytes and the bounded historical manifest before D16. Isolated evidence never calls an unimplemented future consumer or writes managed history. Use closed, explicitly inventoried periods; later files require fresh scope review, not automatic inclusion. | Execution dependencies; Fowler. |
 
 Table AS - Row 15 rejected alternatives
@@ -987,32 +987,32 @@ Table AS - Row 15 rejected alternatives
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | AS1 | Leave history migrate-on-read forever | Conflicts with the settled one-time replacement-schema rewrite. Read migration is a transition/safety net, not the final maintenance outcome. | Another explicit user decision; current plan includes D17. | User, 2026-10-10. |
-| AS2 | Rewrite archives during evidence collection or infer missing topology/frequency from today's machine | Violates isolated evidence and invents history. | Explicit later write approval plus original historical measurements; current facts cannot substitute. | User; AN11. |
+| AS2 | Rewrite archives during evidence collection or infer missing topology/frequency from today's machine | Violates isolated evidence and invents history. | Complete D16's evidence gate under existing authorization; only original historical measurements can supply missing facts. | User; AN11. |
 
-## 17. Row #16 - Record later user cutover and historical-write decisions
+## 17. Row #16 - Verify evidence and record unattended adoption authority
 
-- **Scope:** Present isolated correctness/resource evidence and dry-run inventory, then record explicit user permissions separately for production cutover and the exact one-time historical rewrite.
+- **Scope:** Verify isolated correctness/resource evidence and dry-run inventory, then record A4's existing user authority with separate readiness decisions for production cutover and the exact one-time historical rewrite.
 - **Files touched:** `TODO/20261010-rust-host-telemetry-plan.md`.
-- **Acceptance gates - local:** Evidence contains crate revision/toolchain, independent CPU/hash vectors, unchanged-field comparisons/noise, memory-off no-read proofs, event latency/failure coverage, native file/receipt validation, combined consumer tests and D15's bounded dry-run hash. Record user decision/date/scope; absence of either permission blocks its corresponding write row.
-- **Acceptance gates - CI:** None; green suites and Fowler design approval cannot replace this user decision.
-- **Oracle:** Explicit recorded permissions match the supplied evidence and exact production/maintenance scope; this cannot itself prove collector correctness or perform any write.
+- **Acceptance gates - local:** Evidence contains crate revision/toolchain, independent CPU/hash vectors, unchanged-field comparisons/noise, memory-off no-read proofs, event latency/failure coverage, native file/receipt validation, combined consumer tests and D15's bounded dry-run hash. Record A4's authorization date, verified evidence, exact manifest hash and scope. An unresolved evidence defect blocks only its dependent write, not other independent delivery.
+- **Acceptance gates - CI:** No separate application suite; verify prerequisite merge-candidate results and the actual isolated workflow evidence. A green status alone cannot replace the missing measurements or maintenance manifest.
+- **Oracle:** Recorded readiness matches verified evidence and exact production/maintenance scope under the user's unattended authorization; this cannot itself collect missing evidence or perform any write.
 
 Table AT - Row 16 decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| AT1 | This is the only planned later adoption decision; do not ask again for already settled CPU/hash/memory design. The user may approve cutover and the exact history manifest together, approve cutover only and postpone history, request evidence repair or reject adoption. D17 stays pending until its explicit permission exists. | User, 2026-10-10; Fowler delegated design-only authority. |
+| AT1 | The user superseded the earlier later-approval requirement with full unattended delivery permission at 21:39 UTC on 2026-10-10. Proceed with cutover and the scoped historical rewrite once their evidence passes; do not ask again for authorization or settled CPU/hash/memory design. Fowler resolves ambiguity, but cannot waive truthfulness or invent observations. | User, 2026-10-10; A4. |
 | AT2 | Performance is evidence, not an invented mandatory speedup. Acceptable semantics, bounded instrumentation, truthful provenance and working controls are required; wider-than-effect noise is reported with instrument cost. Do not hide correction differences under a parity verdict. | Guardrail #10; intended capability. |
 
 Table AU - Row 16 rejected alternatives
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| AU1 | Treat the documentation commit, D1 or workflow green status as adoption/history permission | Confuses design approval with irreversible data effects. | The explicit later user decision required here; no advisor override. | User. |
+| AU1 | Treat the documentation commit, D1 or workflow green status alone as sufficient adoption/history evidence | Confuses a design or status with actual correctness and maintenance readiness. | A4 supplies explicit user permission; the prerequisite evidence and exact manifest remain required here. | User. |
 
 ## 18. Row #17 - Rewrite the approved historical manifest once
 
-- **Scope:** After explicit D16 historical-scope approval, apply D15's validated manifest once with source-byte backups, fail-safe resumability and complete raw/compact/index/receipt/view reconciliation.
+- **Scope:** After D16 verifies historical readiness under A4's authorization, apply D15's exact validated manifest once with source-byte backups, fail-safe resumability and complete raw/compact/index/receipt/view reconciliation.
 - **Files touched:**
   - `backend/utilities/migrate_host_fingerprints.py`
   - `backend/idhazh/contracts/host_migration.py`
@@ -1028,7 +1028,7 @@ Table AV - Row 17 decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| AV1 | Apply requires explicit manifest hash/scope approval and an operator-controlled writer/compactor/publisher quiet window. Prepare destination-local files, source backups and an immutable transaction journal in a task-owned maintenance root. Validate every staged file before the first replacement; compare source hashes again immediately before each rename. No original is deleted before a verified backup exists. | Fowler process safety; D16 historical permission. |
+| AV1 | Apply requires D16's recorded manifest hash/scope under A4's authorization and an operator-controlled writer/compactor/publisher quiet window. Prepare destination-local files, source backups and an immutable transaction journal in a task-owned maintenance root. Validate every staged file before the first replacement; compare source hashes again immediately before each rename. No original is deleted before a verified backup exists. | Fowler process safety; user unattended authorization. |
 | AV2 | Atomicity is per-file only. Keep publishers out until a bounded batch's raw/compact dependencies, index rows/bytes and views reconcile. Journal planned/replaced/verified states plus expected old/new hashes; on restart accept exact old or exact new bytes, refuse a third state, complete the batch or restore all affected source/index/view bytes. A cancelled batch never publishes mixed authoritative views. No power-loss durability claim. | AE8/AE9; real filesystem constraints. |
 | AV3 | Preserve original rank/keys and v1 identity, not misleading CPU values. Current corrected Rust output is outside the legacy rewrite set and is read as produced. Maintenance uses Python shared codecs with truthful new provenance; it does not resurrect Python CPU collectors or alter git history. | AN11/AO; user ownership. |
 | AV4 | Closure verifies manifested physical files, compact/index lineage and expiry/loss markers, receipts, regenerated views and unchanged settled counts/clocks. Record exact completion/rollback bundle and approval in this plan until distillation. Keep read migration for older external fixtures/backups; final managed history is replacement-schema data, not indefinitely untouched legacy files. | User history outcome; section 11. |

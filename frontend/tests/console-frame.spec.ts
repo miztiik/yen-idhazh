@@ -1,4 +1,4 @@
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

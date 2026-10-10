@@ -1,0 +1,465 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "published_at": "2026-08-20T05:00:00Z",
+      "time_source": "first_seen",
+      "item_started_at": "2026-08-20T06:00:03Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-18T06:00:00Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-18T06:00:03Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-18T06:00:06Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-19T06:00:00Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-19T06:00:03Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-19T06:00:04Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-20T06:00:00Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-20T06:00:00Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-20T06:00:03Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-20T06:00:04Z",
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": "2026-08-20T06:00:07Z",
+      "outcome": "failed"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    },
+    {
+      "published_at": null,
+      "time_source": null,
+      "item_started_at": null,
+      "outcome": "ok"
+    }
+  ],
+  "first": "2026-08-07",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

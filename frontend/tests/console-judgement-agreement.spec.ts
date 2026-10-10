@@ -11,7 +11,7 @@
  * private route in `console-judgement-verdict` checks all three policy bars.
  */
 
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

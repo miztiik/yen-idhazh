@@ -489,7 +489,9 @@ test('with no script the console says its panels are empty rather than leaving t
 	// for the reader who never runs a line of our code.
 	const document = await (await page.request.get('/console/')).text();
 	expect(document).toContain('data-console-noscript');
-	expect(document).toContain('month files a browser fetches');
+	const notes = [...document.matchAll(/<p\b[^>]*data-console-noscript[^>]*>([\s\S]*?)<\/p>/g)];
+	expect(notes).toHaveLength(1);
+	expect(notes[0][1].replace(/\s+/g, ' ').trim()).toBe('Panels drawn from the published record need JavaScript; with it off they keep their shape and stay empty.');
 
 	// And it is hidden from everyone else. `<noscript>` does that itself; this
 	// is the check that nothing overrode it.

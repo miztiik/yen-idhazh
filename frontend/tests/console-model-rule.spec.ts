@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 
 import { modelRules } from '../src/lib/charts/frame';
 import { pipelineChanges } from '../src/lib/server/model-work';

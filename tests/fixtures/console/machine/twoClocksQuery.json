@@ -1,0 +1,63 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "machine_job": null,
+      "machine_shard": 0,
+      "prefill_ms": 79100,
+      "input_tokens": 942,
+      "cached_tokens": 0
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-1",
+      "machine_job": null,
+      "machine_shard": 1,
+      "prefill_ms": 7120,
+      "input_tokens": 975,
+      "cached_tokens": 900
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_shard": 0,
+      "prefill_ms": 64000,
+      "input_tokens": 1700,
+      "cached_tokens": 100
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_shard": 0,
+      "prefill_ms": 8883,
+      "input_tokens": 999,
+      "cached_tokens": 900
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_shard": 0,
+      "prefill_ms": null,
+      "input_tokens": null,
+      "cached_tokens": null
+    },
+    {
+      "date": "2026-08-20",
+      "run_id": "2026-08-20-2",
+      "machine_job": null,
+      "machine_shard": 1,
+      "prefill_ms": 82146,
+      "input_tokens": 1337,
+      "cached_tokens": 383
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

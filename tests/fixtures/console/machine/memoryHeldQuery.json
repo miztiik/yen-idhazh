@@ -1,0 +1,81 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-01",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_bytes": 6484000000,
+      "llama_rss_bytes": 12279600000,
+      "python_rss_bytes": 1734400000,
+      "llama_rss_anon_bytes": null,
+      "python_rss_anon_bytes": null,
+      "os_swap_total_bytes": null,
+      "os_swap_free_bytes": null
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-02",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_bytes": 7395000000,
+      "llama_rss_bytes": 12280500000,
+      "python_rss_bytes": 1734500000,
+      "llama_rss_anon_bytes": null,
+      "python_rss_anon_bytes": null,
+      "os_swap_total_bytes": null,
+      "os_swap_free_bytes": null
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-03",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_bytes": 8606000000,
+      "llama_rss_bytes": 12281400000,
+      "python_rss_bytes": 1734600000,
+      "llama_rss_anon_bytes": null,
+      "python_rss_anon_bytes": null,
+      "os_swap_total_bytes": null,
+      "os_swap_free_bytes": null
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-04",
+      "os_mem_total_bytes": 16766410752,
+      "os_mem_available_bytes": 3417000000,
+      "llama_rss_bytes": 12282300000,
+      "python_rss_bytes": 1734700000,
+      "llama_rss_anon_bytes": null,
+      "python_rss_anon_bytes": null,
+      "os_swap_total_bytes": null,
+      "os_swap_free_bytes": null
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-05",
+      "os_mem_total_bytes": null,
+      "os_mem_available_bytes": null,
+      "llama_rss_bytes": null,
+      "python_rss_bytes": null,
+      "llama_rss_anon_bytes": null,
+      "python_rss_anon_bytes": null,
+      "os_swap_total_bytes": null,
+      "os_swap_free_bytes": null
+    },
+    {
+      "date": "2026-08-20",
+      "item_id": "ai-09",
+      "os_mem_total_bytes": null,
+      "os_mem_available_bytes": null,
+      "llama_rss_bytes": 12286800000,
+      "python_rss_bytes": 1735200000,
+      "llama_rss_anon_bytes": null,
+      "python_rss_anon_bytes": null,
+      "os_swap_total_bytes": null,
+      "os_swap_free_bytes": null
+    }
+  ],
+  "first": "2026-08-20",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}
