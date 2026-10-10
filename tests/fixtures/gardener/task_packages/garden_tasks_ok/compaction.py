@@ -24,7 +24,9 @@ def run(context: TaskContext) -> Pass:
     if not context.policy.dry_run:
         target = context.repo_root / written
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f"compacted on {context.today.isoformat()}\n", encoding="ascii")
+        target.write_text(
+            f"compacted on {context.today.isoformat()}\n", encoding="ascii", newline="\n"
+        )
     nothing = Pass(
         collection=folder,
         since=None,

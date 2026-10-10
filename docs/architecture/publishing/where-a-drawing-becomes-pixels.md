@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-09
 
 The reader's browser draws the chart and the pipeline never draws one. This page
 holds that ruling, what it cost and what it bought, where the marks are
@@ -70,8 +70,8 @@ text re-fetched off the open web - so a source page that moved between two runs'
 puts two different blobs on one path. That is rarer than the clip-path counter was and exactly
 as expensive: run `32869125768` cost eight workers, a day of summaries and the day's digest.
 A rare catastrophic failure with the control deleted is worse than a frequent one, because
-nobody will have it in mind when it fires. `drop_raced_assets.py` keeps the job and changed
-only what it lists
+nobody will have it in mind when it fires. The ASSEMBLE publication policy
+keeps the asset already committed for that item and rebuilds the derived day
 ([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)).
 
 **What the reading page now carries, measured rather than estimated** (Guardrail #8). Two d3

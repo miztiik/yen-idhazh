@@ -21,7 +21,7 @@ from typing import Final
 
 from pydantic import ValidationError
 
-from idhazh import assemble, telemetry
+from idhazh import assemble, completed_writes, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
@@ -30,7 +30,6 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
-    PAYLOAD_SUFFIX,
     VisualDecision,
     VisualKind,
     VisualState,
@@ -108,6 +107,7 @@ def write_bytes_atomic(path: Path, payload: bytes) -> None:
         with handle:
             handle.write(payload)
         Path(handle.name).replace(path)
+        completed_writes.record(path, payload)
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise
@@ -164,59 +164,6 @@ def write_charts_from_decisions(
         if drawn.item_id != item.item_id:
             raise ValueError(f"{item.item_id}: the decision carries the chart of {drawn.item_id}")
         write_bytes_atomic(target, spec.encode("utf-8"))
-
-
-def drop_raced_assets(
-    *, public_root: Path, items_dir: Path, published: Iterable[str]
-) -> list[str]:
-    """Delete this run's copy of any published file the tip already holds.
-
-    A run takes about three hours and the day is refreshed five times, so a
-    second run compiles while the first is still summarizing and neither
-    checkout can see what the other has not pushed yet. Git cannot rebase two
-    adds of one path when the two blobs differ, and run `32869125768` lost a
-    finished day right there.
-
-    Since the path is the item's id, a path both sides hold is **one story
-    compiled twice** - never two stories under one name. So there is nothing to
-    choose between: the tip's copy is published and a reader may already hold
-    that address, and `assemble.build_day` keeps the tip's item over ours in any
-    case, which makes our file the one nothing will reference. Dropping it is
-    what lets the rebase apply.
-
-    The decision payload is left alone on purpose. It still names the right path,
-    the tip's file is sitting at that path after the rebase, and rewriting it to
-    point somewhere else is how an item ends up with a picture that is not
-    filed under its own name.
-
-    **The renderer going did not retire this** (Fowler, 2026-09-13). Vega's
-    process-global clip-path counter made two renders of one item differ
-    reliably, and that cause left with the renderer - so an item compiled twice
-    from unchanged inputs now writes identical bytes, which git merges without
-    a conflict. The race itself stays, because the compiled marks come from a
-    plan and an element table derived from text re-fetched off the open web: a
-    source page that moved between two runs' fetches puts two different blobs on
-    one path. That is rarer than the counter was and exactly as expensive, which
-    is an argument for keeping the control rather than against it.
-
-    `published` names what the tip holds, relative to `public_root`. Returns the
-    paths it dropped, so the run log can name them.
-    """
-    already = set(published)
-    dropped: list[str] = []
-    for decision_path in sorted(items_dir.glob(f"*{PAYLOAD_SUFFIX}")):
-        decision = VisualDecision.read(decision_path)
-        relpath = decision.data_path
-        if relpath is None or relpath not in already:
-            continue
-        source = public_root / relpath
-        # A payload naming a file this checkout does not hold cannot collide
-        # with anything: nothing here would commit that path.
-        if not source.is_file():
-            continue
-        source.unlink()
-        dropped.append(relpath)
-    return dropped
 
 
 def render_planned_visual(
@@ -286,9 +233,7 @@ def render_planned_visual(
                 "failure_detail": f"the data file could not be written: {type(error).__name__}",
             }
         )
-    return planned.model_copy(
-        update={"visual_state": VisualState.RENDERED, "data_path": relpath}
-    )
+    return planned.model_copy(update={"visual_state": VisualState.RENDERED, "data_path": relpath})
 
 
 def _log_render_failed(planned: VisualDecision, *, error: OSError, run_id: str | None) -> None:

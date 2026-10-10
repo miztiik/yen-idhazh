@@ -239,6 +239,7 @@ def a_venue(
     package: str,
     slugs: Mapping[str, tuple[int, tuple[str, ...]]],
     quiet_neighbour: str = "",
+    source: str = TENANT_SOURCE,
 ) -> None:
     """Write a package of tenants under `root`, one subpackage a slug.
 
@@ -253,7 +254,7 @@ def a_venue(
         inside.mkdir(parents=True, exist_ok=True)
         (inside / "__init__.py").write_text("", encoding="utf-8", newline="\n")
         (inside / "tenant.py").write_text(
-            TENANT_SOURCE.format(
+            source.format(
                 slug=slug, shard_count=shard_count, committed_paths=repr(committed_paths)
             ),
             encoding="utf-8",

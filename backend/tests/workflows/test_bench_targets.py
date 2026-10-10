@@ -56,10 +56,8 @@ from ._harness import (
     BUDGETS_EMIT_STEP,
     BUDGETS_JOB,
     COMMIT_PROGRAM,
-    COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     FINGERPRINT_BENCH_JOB,
-    FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
     MEASUREMENT_TARGETS,
     MODELS_POINTER_KEY,
@@ -76,6 +74,7 @@ from ._harness import (
     _mapping,
     _needs,
     _normalize_condition,
+    _publication_scopes,
     _script,
     _stage_invocations,
     _step,
@@ -247,7 +246,9 @@ def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
     )
 
     dependants = sorted(
-        name for name in jobs if BENCH_RAW_JOB in _needs(workflow, str(name)) and name != BENCH_RAW_JOB
+        name
+        for name in jobs
+        if BENCH_RAW_JOB in _needs(workflow, str(name)) and name != BENCH_RAW_JOB
     )
     assert dependants == [BENCH_SERVER_JOB], (
         "only the server case waits on the speed case; a new dependant needs the same clause"
@@ -286,9 +287,10 @@ def test_the_server_case_asks_for_the_raw_case_only_when_there_is_one() -> None:
     ran = f"{BENCH_RAW_JOB_EXPRESSION}.result == 'success'"
 
     for step in _steps(workflow, BENCH_SERVER_JOB):
-        reads_raw = str(step.get("uses", "")).startswith("actions/download-artifact") or str(
-            step.get("name") or ""
-        ) == BENCH_EMIT_STEP
+        reads_raw = (
+            str(step.get("uses", "")).startswith("actions/download-artifact")
+            or str(step.get("name") or "") == BENCH_EMIT_STEP
+        )
         if not reads_raw:
             continue
         condition = _normalize_condition(step.get("if"), f"{step.get('name') or step.get('uses')}")
@@ -299,7 +301,7 @@ def test_the_server_case_asks_for_the_raw_case_only_when_there_is_one() -> None:
         f"{BENCH_RAW_JOB_EXPRESSION}.result == 'skipped'"
     )
     script = _script(told, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_SPEED_SKIP_STEP}")
-    assert 'GITHUB_STEP_SUMMARY' in script
+    assert "GITHUB_STEP_SUMMARY" in script
     assert BENCH_SPEED_INPUT in script and BENCH_SPEED_KNOB in script, (
         "the note says the two ways to get the missing half back"
     )
@@ -322,7 +324,9 @@ def test_whether_the_speed_case_runs_is_config_and_the_form_may_overrule_it() ->
 
     step = _step(workflow, "models", "id", "speed")
     script = _script(step, "measure.yml/models/speed")
-    assert BENCH_SPEED_MODULE in script, "the workflow asks the module rather than spelling the rule"
+    assert BENCH_SPEED_MODULE in script, (
+        "the workflow asks the module rather than spelling the rule"
+    )
     assert '"$GITHUB_OUTPUT"' in script, "the answer has to be an output or no job can read it"
 
     # The committed default, and the one the form can set over it.
@@ -468,11 +472,11 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     assert len(production_files) == 1, "the production probe's row landed off its own day"
     assert written == {*bench_files, *production_files}, "a probe row landed outside both days"
 
-    staged = COMMIT_STAGED_PATHS["bench"]
+    staged = _publication_scopes("bench")
     assert len(staged) == 1 and bench_files[0].startswith(f"{staged[0]}/"), (
         f"the bench commits {staged}, which does not hold the file its probe wrote"
     )
-    for path in COMMIT_STAGED_PATHS["plan"] + COMMIT_STAGED_PATHS["work"]:
+    for path in _publication_scopes("plan") + _publication_scopes("work"):
         assert not path.startswith(f"{BENCH_LEDGER_ROOT}/"), (
             f"a production job stages {path}, which is under the bench's own tree"
         )
@@ -500,6 +504,10 @@ def test_a_bench_whose_probe_wrote_nothing_says_so_and_stages_nothing(tmp_path: 
     step = _step(_load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", COMMIT_STEPS["bench"])
     body = _script(step, COMMIT_STEPS["bench"])
     staged, settings = _commit_call("bench")
+    assert staged == ["land", "measure"]
+    from utilities.record_publish import POLICIES
+
+    staged = list(POLICIES["measure"][1])
     (folder,) = staged
     asked = [words for line in body.splitlines() if "-d" in (words := line.split())]
     assert len(asked) == 1 and folder in asked[0], (
@@ -540,7 +548,7 @@ def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:
 
     step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_FINGERPRINT_STEP)
     script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_FINGERPRINT_STEP}")
-    assert FINGERPRINT_COMMAND in script
+    assert "python backend/utilities/record_publish.py run measure fingerprint" in script
     words = shlex.split(script)
     assert words[words.index("--config") + 1] == BENCH_CANDIDATE_CONFIG
     assert words[words.index(FINGERPRINT_JOB_FLAG) + 1] == FINGERPRINT_BENCH_JOB
@@ -625,7 +633,9 @@ def _one_repeat(items: Path, *, count: int) -> list[dict[str, object]]:
             ),
             encoding="utf-8",
         )
-        summary = HOSTILE_SUMMARY if index == count - 1 else f"What happened, in our words: {index}."
+        summary = (
+            HOSTILE_SUMMARY if index == count - 1 else f"What happened, in our words: {index}."
+        )
         payload = {
             "item_id": item_id,
             "output_digest": f"{index:064d}",
@@ -789,9 +799,7 @@ def test_each_repeats_prompts_and_replies_are_kept_under_their_own_case(
     root = tmp_path / "runtime-sweep" / CAPTURES_DIRNAME
     assert sorted(entry.name for entry in root.iterdir()) == ["head_off-1", "n_max_4-1"]
     for label in ("head_off", "n_max_4"):
-        body = json.loads(
-            (root / f"{label}-1" / "item-0.summary.json").read_text(encoding="utf-8")
-        )
+        body = json.loads((root / f"{label}-1" / "item-0.summary.json").read_text(encoding="utf-8"))
         assert body["prompt"] == f"{label} asked"
         assert body["reply"] == f"{label} answered"
     assert not written.exists(), "moved, so the next repeat cannot inherit these files"
@@ -814,9 +822,7 @@ def test_a_job_that_runs_a_script_importing_idhazh_installs_it_first() -> None:
     workflow = _load_workflows()["measure.yml"]
     for job_name in _mapping(workflow["jobs"], "measure.yml jobs"):
         bodies: list[str] = [
-            body
-            for step in _steps(workflow, job_name)
-            if isinstance(body := step.get("run"), str)
+            body for step in _steps(workflow, job_name) if isinstance(body := step.get("run"), str)
         ]
         utilities = {
             match

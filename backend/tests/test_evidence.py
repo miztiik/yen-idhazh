@@ -144,9 +144,7 @@ class TestARowNobodyCanJudgeIsRefused:
         red on the day the last one ages out of retention, which is a date on the
         calendar rather than a change anybody made.
         """
-        found = evidence.look_up(
-            evidence.index(tmp_path), a_queue_row() | {"source_digest": ""}
-        )
+        found = evidence.look_up(evidence.index(tmp_path), a_queue_row() | {"source_digest": ""})
 
         assert found.item is None
         assert found.refusal == evidence.NO_DIGEST
@@ -217,8 +215,8 @@ class TestPathsThatLeaveTheProcess:
         assert ":" not in spelled
         assert not spelled.startswith("/")
 
-    def test_a_package_outside_the_repository_keeps_no_drive_letter(self, tmp_path: Path) -> None:
-        spelled = evidence.posix_relpath(tmp_path / "downloaded", base=REPO_ROOT)
+    def test_a_package_outside_the_repository_keeps_no_drive_letter(self) -> None:
+        spelled = evidence.posix_relpath(REPO_ROOT.parent / "downloaded", base=REPO_ROOT)
 
         assert spelled == "downloaded"
         assert "\\" not in spelled
@@ -239,7 +237,9 @@ class TestTheArticleBodyIsNeverCommitted:
         assert "name: evidence-${{ matrix.shard }}" in workflow
         assert "path: backend/var/evidence/${{ needs.plan.outputs.date }}/" in workflow
         for line in workflow.splitlines():
-            if "commit_and_push.py" in line or line.strip().startswith("state/"):
+            if ("digest_publish.py" in line and " run " not in line) or line.strip().startswith(
+                "state/"
+            ):
                 assert "evidence" not in line, "an uncommittable path reached the commit step"
 
 
@@ -252,9 +252,7 @@ class TestWhatALabellerSees:
         item = an_item()
         monkeypatch.setattr("builtins.input", lambda *_: "n")
 
-        answer = label_queue._prompt(
-            a_queue_row(), evidence.Evidence(item, None), index=1, total=1
-        )
+        answer = label_queue._prompt(a_queue_row(), evidence.Evidence(item, None), index=1, total=1)
         shown = capsys.readouterr().out
 
         assert answer == (LabelVerdict.SUPPORTED, LabelTag.NONE)
@@ -295,4 +293,3 @@ class TestWhatALabellerSees:
         for forbidden in ('"--from-file"', '"--model"', "sys.stdin", "readlines("):
             assert forbidden not in source
         assert source.count("labels.append(") == 1
-

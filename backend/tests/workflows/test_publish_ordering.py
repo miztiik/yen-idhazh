@@ -235,7 +235,13 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     commits = [
         index
         for index, step in enumerate(steps)
-        if COMMIT_PROGRAM_CALL[1] in str(step.get("run", ""))
+        if any(
+            program in str(step.get("run", ""))
+            for program in (
+                COMMIT_PROGRAM_CALL[1],
+                "backend/utilities/record_publish.py land",
+            )
+        )
     ]
     gate = next(
         index
@@ -251,9 +257,12 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
         "a rebuild that fails quietly leaves the gate reading the stale build again"
     )
 
-    assert "if" in steps[rebuilt[0]], (
-        "an unconditional rebuild pays for the race on every run, raced or not"
-    )
+    if filename == "digest.yml":
+        assert "if" not in steps[rebuilt[0]], (
+            "the final build must use the actual published inputs on every run"
+        )
+        assert "Read the actual published inputs" in names
+        return
     condition = _normalize_condition(
         steps[rebuilt[0]].get("if"), f"{filename}/{job_name} rebuild condition"
     )
@@ -261,7 +270,7 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
         # Either the step's own `id`, so the condition reads what it reported,
         # or the condition that decides whether it commits at all - which is how
         # a job with one commit step and a dispatch switch says the same thing.
-        named = str(steps[index].get("id") or steps[index].get("if") or "")
+        named = str(steps[index].get("if") or steps[index].get("id") or "")
         assert named and named in condition, (
             f"{steps[index].get('name')} can rewrite the checkout, so the rebuild's "
             "condition has to name it"

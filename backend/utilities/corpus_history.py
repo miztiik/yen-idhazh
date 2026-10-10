@@ -97,7 +97,7 @@ REMOTE: Final = "origin"
 BRANCH: Final = "main"
 
 #: The one identity every commit in this repository carries. The same two values
-#: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
+#: `backend/utilities/publication_git.py` sets, which a test holds in step.
 COMMITTER_NAME: Final = "miztiik"
 COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 

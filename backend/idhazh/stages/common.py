@@ -98,7 +98,7 @@ CAPTURES_DIRNAME: Final = "captures"
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 
 
-PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
+PUBLIC_ROOT: Path = config.REPO_ROOT / "frontend" / "public" / "digest"
 
 
 CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
@@ -477,9 +477,7 @@ def _canary_article(
     url = str(payload["source_url"])
     raw = str(payload["raw_text"])
     body = sanitize(raw)
-    seen, truncated, cut_at = extract.truncate_to_tokens(
-        body, extract_config.truncation_cap_tokens
-    )
+    seen, truncated, cut_at = extract.truncate_to_tokens(body, extract_config.truncation_cap_tokens)
     words = len(seen.split())
     source_words = len(body.split())
     # `extract` reads four shape signals here, and two of them cannot apply. One
@@ -552,9 +550,7 @@ def _one_call(
         body = error.read().decode("utf-8", errors="replace")
         completion = None
         no_reply = (
-            FailureCode.CONTEXT_EXCEEDED
-            if is_context_exceeded(body)
-            else FailureCode.MODEL_REFUSED
+            FailureCode.CONTEXT_EXCEEDED if is_context_exceeded(body) else FailureCode.MODEL_REFUSED
         )
     except TimeoutError:
         completion = None
@@ -575,9 +571,7 @@ def _one_call(
     return summary, completion, seconds
 
 
-def _run_canaries(
-    settings: config.Settings, *, endpoint: str
-) -> list[CanaryObservation]:
+def _run_canaries(settings: config.Settings, *, endpoint: str) -> list[CanaryObservation]:
     """Every planted attack, through the live candidate.
 
     The unit suite proves these against recorded completions. It cannot prove
@@ -642,16 +636,8 @@ def _item_payloads(
             continue
         yield _ItemPayload(
             planned=item,
-            article=(
-                Article.read(article_path)
-                if article_exists
-                else None
-            ),
-            summary=(
-                Summary.read(summary_path)
-                if summary_exists
-                else None
-            ),
+            article=(Article.read(article_path) if article_exists else None),
+            summary=(Summary.read(summary_path) if summary_exists else None),
             # The row the shard sealed for this item, which the census prefers to
             # rebuilding one (`telemetry.census_row`). Read here rather than at
             # each census call site so one place knows where an item's payloads
@@ -757,10 +743,7 @@ def published_days(root: Path) -> list[Path]:
     from idhazh.publication import read_inventory
 
     inventory = read_inventory(root.parent)
-    return [
-        assemble.day_dir(root, value) / "digest.json"
-        for value in reversed(inventory.dates)
-    ]
+    return [assemble.day_dir(root, value) / "digest.json" for value in reversed(inventory.dates)]
 
 
 def _load_plan(date: str, run_id: str | None = None, *, state_dir: Path | None = None) -> RunPlan:

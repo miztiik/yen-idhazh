@@ -39,7 +39,6 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
 from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import (
-    PAYLOAD_SUFFIX,
     VisualDecision,
     VisualKind,
     VisualState,
@@ -47,7 +46,6 @@ from idhazh.contracts.visual_decision import (
 from idhazh.render.chart import CompileError, compile_bar
 from idhazh.render.write import (
     asset_relpath,
-    drop_raced_assets,
     render_planned_visual,
     write_charts_from_decisions,
 )
@@ -272,7 +270,9 @@ class TestPublishedData:
         for mark in data.marks:
             assert (mark.element_id is None) != (mark.derived is None)
             if mark.element_id is not None:
-                assert mark.element_id in known, f"{mark.mark_id} names an element the article lacks"
+                assert mark.element_id in known, (
+                    f"{mark.mark_id} names an element the article lacks"
+                )
             else:
                 assert mark.derived is not None
                 assert set(mark.derived.inputs) <= known
@@ -555,100 +555,6 @@ class TestAssetPaths:
             asset_relpath("2026-08-22", "india-0000000002")
             == "digest/2026/08/22/india-0000000002.json"
         )
-
-
-DATE = "2026-08-22"
-
-
-def _published(tmp_path: Path, item_id: str, relpath: str) -> Path:
-    """One published visual on disk, plus the decision payload that says where it is."""
-    file = tmp_path / "public" / relpath
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(f'{{"item_id": "{item_id}"}}', encoding="utf-8", newline="\n")
-    decision = _decision(VisualKind.CHART, '{"marks":[]}').model_copy(
-        update={
-            "item_id": item_id,
-            "data_path": relpath,
-            "visual_state": VisualState.RENDERED,
-        }
-    )
-    path = tmp_path / "items" / f"{item_id}{PAYLOAD_SUFFIX}"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(decision.to_json(), encoding="utf-8", newline="\n")
-    return path
-
-
-def _drop(tmp_path: Path, published: list[str]) -> list[str]:
-    return drop_raced_assets(
-        public_root=tmp_path / "public",
-        items_dir=tmp_path / "items",
-        published=published,
-    )
-
-
-class TestDropRacedAssets:
-    """Two runs of one day overlap, and neither checkout sees the other's push.
-
-    Run `32869125768` on 2026-08-25: eight workers and a visual planner finished,
-    then the rebase hit `CONFLICT (add/add)` on four chart paths and the day was
-    lost. A path names one item, so a path both sides hold is one story compiled
-    twice - and the published copy is the one that stays.
-
-    **The renderer going did not retire this** (Fowler, 2026-09-13). It removed
-    one cause of two runs writing different bytes and left the other: the marks
-    come from a plan and an element table derived from text re-fetched off the
-    open web, so a source page that moved between two fetches still puts two
-    different blobs on one path.
-    """
-
-    def test_a_path_the_other_run_published_gives_up_this_run_s_copy(
-        self, tmp_path: Path
-    ) -> None:
-        _published(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.json")
-
-        dropped = _drop(tmp_path, [f"{DAY}/ai-0000000001.json"])
-
-        assert dropped == [f"{DAY}/ai-0000000001.json"]
-        assert not (tmp_path / "public" / DAY / "ai-0000000001.json").exists()
-
-    def test_a_path_the_tip_does_not_hold_is_left_alone(self, tmp_path: Path) -> None:
-        """This run's own file is what publishes the item. Dropping it loses the picture."""
-        _published(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.json")
-
-        dropped = _drop(tmp_path, [f"{DAY}/energy-0000000002.json"])
-
-        assert dropped == []
-        assert (tmp_path / "public" / DAY / "ai-0000000001.json").is_file()
-
-    def test_the_decision_payload_is_left_naming_the_path_it_named(
-        self, tmp_path: Path
-    ) -> None:
-        """After the rebase the tip's file is sitting there, so the pointer is right."""
-        payload = _published(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.json")
-
-        _drop(tmp_path, [f"{DAY}/ai-0000000001.json"])
-
-        assert VisualDecision.read(payload).data_path == f"{DAY}/ai-0000000001.json"
-
-    def test_a_payload_naming_a_file_this_checkout_lacks_drops_nothing(
-        self, tmp_path: Path
-    ) -> None:
-        """Nothing here would commit that path, so it cannot collide with anything."""
-        payload = _published(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.json")
-        (tmp_path / "public" / DAY / "ai-0000000001.json").unlink()
-
-        assert _drop(tmp_path, [f"{DAY}/ai-0000000001.json"]) == []
-        assert payload.is_file()
-
-    def test_an_item_decided_to_nothing_has_no_path_to_drop(self, tmp_path: Path) -> None:
-        decision = _decision(VisualKind.NONE, None)
-        items = tmp_path / "items"
-        items.mkdir(parents=True)
-        (items / f"energy-01{PAYLOAD_SUFFIX}").write_text(
-            decision.to_json(), encoding="utf-8", newline="\n"
-        )
-
-        assert _drop(tmp_path, [f"{DAY}/energy-01.json"]) == []
 
 
 #: A day whose story `ai-01` names one chart and whose other stories name none.

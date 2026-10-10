@@ -60,7 +60,10 @@ def test_backfill_and_report_receive_the_same_named_days() -> None:
     assert env["DAYS"] == "${{ inputs.days }}"
     body = str(repairing["run"])
     assert 'args+=(--day "$day")' in body
-    assert 'python -m idhazh backfill-vectors "${args[@]}"' in body
+    assert (
+        'python backend/utilities/record_publish.py run backfill backfill-vectors "${args[@]}"'
+        in body
+    )
     assert 'python3 backend/utilities/backfill_report.py "${args[@]}"' in body
     assert 'python -m idhazh check-publication "${args[@]}"' in body
 

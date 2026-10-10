@@ -140,7 +140,7 @@ refuses.
 
 What the push does with a block, and why a `digest.json` two runs both computed
 used to lose the day, is
-[in committing.md](committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them).
+[in committing.md](committing.md#the-caller-owns-recovery-policy).
 
 Authority: Jony and Fowler, converged, 2026-09-22.
 

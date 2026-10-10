@@ -136,7 +136,7 @@ jobs:
 
       # Checkout uses the trigger commit; refresh state before planning writes it.
       - name: Take the run state from the tip, not from the trigger commit
-        run: python3 backend/utilities/take_state_from_the_tip.py state
+        run: python3 backend/utilities/take_state_from_the_tip.py state --date "${{ steps.decide.outputs.date }}"
 
       # github.run_id gives every shard the same unique execution identity.
       # A blank article limit (every scheduled run) plans the full day.
@@ -154,7 +154,7 @@ jobs:
             fi
             LIMIT=(--article-limit "$DISPATCH_ARTICLE_LIMIT")
           fi
-          python -m idhazh plan \
+          python backend/utilities/digest_publish.py run plan \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -164,7 +164,7 @@ jobs:
       - name: What machine this job drew
         run: |
           set -euo pipefail
-          python -m idhazh fingerprint \
+          python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -196,7 +196,7 @@ jobs:
       - name: What this job cost
         run: |
           set -euo pipefail
-          python -m idhazh job-clock \
+          python backend/utilities/digest_publish.py run job-clock \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -206,17 +206,14 @@ jobs:
 
           # Persist seen and health records even if workers fail later.
           # A failed push must not prevent the plan artifact from reaching workers.
-          # Stage state as a directory so absent collections do not fail a fresh clone.
       - name: Commit what the plan saw
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
-          NOTHING_STAGED_MESSAGE: "nothing new to record"
-          PUSH_FAILED_MESSAGE: "could not push what the plan saw"
         run: >-
-          python backend/utilities/commit_and_push.py
-          state
-          frontend/public/publication.json
+          python backend/utilities/digest_publish.py plan
+          --date "${{ steps.decide.outputs.date }}"
+          --execution "${{ github.run_id }}" --commit "${{ github.sha }}"
 
       # Hand this day's run plans on even after a failed push; fail here if the plan
       # stage wrote none. Later jobs pick their own run's plan by --execution.
@@ -274,7 +271,7 @@ jobs:
       - name: What machine this job drew
         run: |
           set -euo pipefail
-          python -m idhazh fingerprint \
+          python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -324,7 +321,7 @@ jobs:
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
         run: |
-          python -m idhazh work \
+          python backend/utilities/digest_publish.py run work \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --shard ${{ matrix.shard }} \
@@ -341,7 +338,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          python -m idhazh record \
+          python backend/utilities/digest_publish.py run record \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -379,7 +376,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python -m idhazh job-clock \
+          python backend/utilities/digest_publish.py run job-clock \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -395,12 +392,12 @@ jobs:
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
-          NOTHING_STAGED_MESSAGE: "nothing measured to record"
-          PUSH_FAILED_MESSAGE: "could not push what this shard measured"
           SHARD: ${{ matrix.shard }}
         run: >-
-          python backend/utilities/commit_and_push.py
-          state
+          python backend/utilities/digest_publish.py work
+          --date "${{ needs.plan.outputs.date }}"
+          --execution "${{ github.run_id }}" --commit "${{ github.sha }}"
+          --shard "${{ matrix.shard }}"
 
       - name: Prompt cache log summary
         if: always()
@@ -516,7 +513,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python -m idhazh fingerprint \
+          python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -531,7 +528,7 @@ jobs:
 
       - name: Assemble and publish
         run: |
-          python -m idhazh assemble \
+          python backend/utilities/digest_publish.py run assemble \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -541,7 +538,7 @@ jobs:
         # Harvest while downloaded item text is available.
         # The stage enforces finetune.harvest_every_days; failure must not block publication.
         continue-on-error: true
-        run: python -m idhazh harvest --date "${{ needs.plan.outputs.date }}"
+        run: python backend/utilities/digest_publish.py run harvest --date "${{ needs.plan.outputs.date }}"
 
       - uses: actions/setup-node@v7
         with:
@@ -573,15 +570,6 @@ jobs:
         run: python -m idhazh published-columns --site-tree build
 
       # Read rebuild-owned paths from their shared declaration.
-      # Use a step output: a job-wide refresh value would affect unrelated commits.
-      - id: derived
-        name: Say which committed paths a rebuild owns
-        env:
-          DAY_DIR: ${{ needs.plan.outputs.day_dir }}
-        run: |
-          set -euo pipefail
-          python -m idhazh derived-paths --day-dir "$DAY_DIR" >> "$GITHUB_OUTPUT"
-
       # Record elapsed time before committing; commit and push time are excluded,
       # as they are for plan and work. No server log or counters: assemble stands
       # no model server up, so those two readings are not its to take.
@@ -589,7 +577,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python -m idhazh job-clock \
+          python backend/utilities/digest_publish.py run job-clock \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -597,37 +585,24 @@ jobs:
             --shard 0 \
             --job-started-at "${JOB_STARTED_AT:-}"
 
-      # After a rejected push, regenerate derived files against the new tip.
-      # Refresh named files only; do not discard this run's rendered charts.
-      # Drop duplicate charts only when that item's chart is already published.
-      # Replay corpus and state rows; they record this run rather than derive from the tip.
+      # Preserve completed raw/artifacts; rebuild derived outputs on fresh main.
+      # Corpus replay rolls the actual incoming rows into the newest window.
       - name: Commit the day
         id: commit_day
         env:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
-          NOTHING_STAGED_MESSAGE: "nothing changed"
-          PUSH_FAILED_MESSAGE: "could not push the day"
-          REFRESH_PATHS: ${{ steps.derived.outputs.refresh_paths }}
-          REGENERATE_COMMAND: >-
-            python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
-            --execution ${{ github.run_id }}
-            --commit ${{ github.sha }} --runner ubuntu-latest
-          DROP_RACED_ASSETS_COMMAND: >-
-            python backend/utilities/drop_raced_assets.py
-            --date ${{ needs.plan.outputs.date }}
         run: >-
-          python backend/utilities/commit_and_push.py
-          frontend/public/digest frontend/public/publication.json
-          frontend/public/telemetry frontend/public/assist/index
-          frontend/public/source-health.json frontend/public/console
-          frontend/public/run-days frontend/public/day-metrics
-          frontend/public/machine
-          frontend/public/run-timeline state corpus
+          python backend/utilities/digest_publish.py assemble
+          --date "${{ needs.plan.outputs.date }}"
+          --execution "${{ github.run_id }}" --commit "${{ github.sha }}"
 
-      # A push retry can change source data after the first build.
-      # Rebuild only then, so the bundle gate measures the tree that was pushed.
+      # Materialize only published named inputs; HEAD/index remain code-pinned.
+      - name: Read the actual published inputs
+        env:
+          PUBLISHED_TIP: ${{ steps.commit_day.outputs.candidate }}
+        run: python backend/utilities/digest_publish.py published-inputs --tip "$PUBLISHED_TIP"
+
       - name: Rebuild the site against the tree that was pushed
-        if: steps.commit_day.outputs.rebased == 'true'
         working-directory: frontend
         run: npm run build
 

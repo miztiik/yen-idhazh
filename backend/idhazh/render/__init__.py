@@ -15,7 +15,6 @@ from __future__ import annotations
 from idhazh.render.chart import CompiledChart, CompileError, compile_bar
 from idhazh.render.write import (
     asset_relpath,
-    drop_raced_assets,
     render_planned_visual,
     write_charts_from_decisions,
 )
@@ -25,7 +24,6 @@ __all__ = [
     "CompiledChart",
     "asset_relpath",
     "compile_bar",
-    "drop_raced_assets",
     "render_planned_visual",
     "write_charts_from_decisions",
 ]

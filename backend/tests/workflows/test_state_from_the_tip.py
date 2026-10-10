@@ -1,132 +1,93 @@
-"""Does the plan job fold the segment ledger origin has, or the one its trigger had?
+"""Does a bounded import preserve code, the shared index, sparse patterns and foreign work?"""
 
-`actions/checkout` restores the commit a run was triggered at. The run then
-waits for a runner, and another run may commit under `state/` the whole time,
-so nothing bounds the distance between those two moments. Every step in between
-that only APPENDS survives a stale base, because a rebase applies two appends
-whole. The catch-up fold does not: it derives a day head from the segment ledger,
-so a stale ledger makes it re-fold rows another run has already folded and
-rewrite a head that run has already written. Two derived versions of one file is
-the one shape a rebase cannot settle.
-"""
-
-from __future__ import annotations
-
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from gardener._garden import an_origin, git, quiet_git, write
 
-from ._harness import (
-    TAKE_STATE_MODULE,
-    _git,
-    _isolated_env,
-    _scripted_origin,
-    _write,
-)
+from utilities.publication_git import Repository
+from utilities.publication_request import IntegrityError
+from utilities.take_state_from_the_tip import take_inputs
 
-pytestmark = pytest.mark.workflow
-
-#: One waiting segment and the day head its rows name. A segment is named for
-#: one shard of one run, which is why a rebase never has to settle one - and why
-#: a checkout that still holds a drained copy is invisible until the fold reads
-#: it.
-SEGMENT = "state/segments/scores/2026-09-21-35645482100-1-work-03.csv"
-HEAD = "state/scores/2026/09/21.csv"
-OUTSIDE = "docs/unrelated.md"
+OLD = "state/raw/item-health/2026/09/21/old.jsonl"
+NEW = "state/compact/item-health/daily/2026/09/21.parquet"
+INPUTS = ("state/raw/item-health/2026/09/21", NEW)
 
 
-def _take_the_state(
-    runner: Path, env: dict[str, str], *args: str
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(TAKE_STATE_MODULE), *args],
-        cwd=runner,
-        env=env,
-        capture_output=True,
-        text=True,
+def stale_checkout(tmp_path: Path) -> tuple[Path, Path, str, str]:
+    origin, repo = an_origin(
+        tmp_path, {OLD: "completed source\n", NEW: "old head\n", "outside": "original\n"}
     )
-
-
-def _a_stale_checkout(tmp_path: Path, env: dict[str, str]) -> tuple[Path, str, str]:
-    """A runner pinned to a commit the run ahead of it has already folded past.
-
-    The runner's commit holds a segment nobody has folded. The commit after it,
-    which only origin has, is that run's assemble: the segment is drained, the
-    head carries its row, and a file outside `state` moved in the same commit.
-    """
-    origin, runner = _scripted_origin(tmp_path, env, ["state"])
-    _write(runner / SEGMENT, "url_key,score\nitem-a,7\n")
-    _write(runner / HEAD, "url_key,score\n")
-    _git(runner, env, "add", "state")
-    _git(runner, env, "commit", "-m", "the commit this run was triggered at")
-    _git(runner, env, "push", "origin", "main")
-    trigger = _git(runner, env, "rev-parse", "HEAD").strip()
-
+    trigger = git(repo, "rev-parse", "HEAD").strip()
     ahead = tmp_path / "ahead"
-    _git(tmp_path, env, "clone", str(origin), str(ahead))
-    (ahead / SEGMENT).unlink()
-    _write(ahead / HEAD, "url_key,score\nitem-a,7\n")
-    _write(ahead / OUTSIDE, "the run ahead edited this\n")
-    _git(ahead, env, "add", "state", "docs")
-    _git(ahead, env, "commit", "-m", "the run ahead folds and pushes")
-    _git(ahead, env, "push", "origin", "main")
-    return runner, trigger, _git(ahead, env, "rev-parse", "HEAD").strip()
+    git(tmp_path, "clone", "--quiet", str(origin), str(ahead))
+    (ahead / OLD).unlink()
+    write(ahead / NEW, "fresh head\n")
+    write(ahead / "outside", "foreign commit\n")
+    git(ahead, "add", "--all")
+    git(ahead, "commit", "--quiet", "-m", "named source advances")
+    git(ahead, "push", "--quiet", "origin", "HEAD:main")
+    return origin, repo, trigger, git(ahead, "rev-parse", "HEAD").strip()
 
 
-def test_a_segment_the_run_ahead_drained_is_gone_before_the_fold_can_read_it(
+def test_source_proven_deletion_and_named_import_do_not_change_head_or_index(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The file that starts the double fold, and the head that ends it.
-
-    Restoring the tip's `state` on its own would leave the drained segment
-    sitting there - git writes what the tip HAS and says nothing about what it
-    does not. That one file is the whole failure: the fold reads it, folds a row
-    the tip already folded, and writes a head that disagrees with the tip's.
-    """
-    env = _isolated_env(tmp_path)
-    runner, _, tip = _a_stale_checkout(tmp_path, env)
-
-    result = _take_the_state(runner, env, "state")
-
-    assert result.returncode == 0, result.stderr
-    assert not (runner / SEGMENT).exists()
-    assert (runner / HEAD).read_text(encoding="ascii") == "url_key,score\nitem-a,7\n"
-    assert _git(runner, env, "ls-files", "--", SEGMENT).strip() == ""
-    assert _git(runner, env, "rev-parse", f"{tip}:{HEAD}").strip() == _git(
-        runner, env, "hash-object", HEAD
-    ).strip()
+    quiet_git(tmp_path, monkeypatch)
+    _, repo, trigger, fresh = stale_checkout(tmp_path)
+    write(repo / "foreign-staged", "keep this\n")
+    git(repo, "add", "foreign-staged")
+    write(repo / "state/raw/unrelated/local", "keep foreign state\n")
+    before = (repo / ".git/index").read_bytes()
+    assert take_inputs(repo, INPUTS) == fresh
+    assert not (repo / OLD).exists()
+    assert (repo / NEW).read_bytes() == b"fresh head\n"
+    assert (repo / "outside").read_bytes() == b"original\n"
+    assert (repo / "state/raw/unrelated/local").read_bytes() == b"keep foreign state\n"
+    assert (repo / ".git/index").read_bytes() == before
+    assert git(repo, "rev-parse", "HEAD").strip() == trigger
+    assert git(repo, "rev-parse", "refs/worktree/publication-input-state").strip() == fresh
+    # An imported deletion is baseline data, not a change to the checkout's index.
+    assert OLD in git(repo, "ls-files", "--", OLD)
 
 
-def test_the_code_the_job_runs_stays_on_the_commit_that_triggered_it(
+@pytest.mark.parametrize("staged", [False, True])
+def test_a_foreign_named_change_is_refused_before_any_import(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    staged: bool,
 ) -> None:
-    """Only the named path moves, and the job's own history does not move at all.
-
-    A job that took the tip whole would change its own behaviour halfway
-    through: the run would be reading feeds with one build and committing with
-    another, and no log line would say which. Moving HEAD would also hand the
-    commit step a base it never read.
-    """
-    env = _isolated_env(tmp_path)
-    runner, trigger, _ = _a_stale_checkout(tmp_path, env)
-
-    result = _take_the_state(runner, env, "state")
-
-    assert result.returncode == 0, result.stderr
-    assert _git(runner, env, "rev-parse", "HEAD").strip() == trigger
-    assert (runner / OUTSIDE).read_text(encoding="ascii") == "seed\n"
+    quiet_git(tmp_path, monkeypatch)
+    _, repo, _, _ = stale_checkout(tmp_path)
+    write(repo / NEW, "foreign input\n")
+    if staged:
+        git(repo, "add", NEW)
+    index = (repo / ".git/index").read_bytes()
+    with pytest.raises(IntegrityError, match="foreign"):
+        take_inputs(repo, INPUTS)
+    assert (repo / OLD).exists()
+    assert (repo / NEW).read_bytes() == b"foreign input\n"
+    assert (repo / ".git/index").read_bytes() == index
 
 
-def test_the_path_to_take_is_required(tmp_path: Path) -> None:
-    """A workflow edit that drops the argument must stop the job, not empty a tree.
+def test_a_failed_blob_download_leaves_the_complete_previous_input_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    _, repo, _, _ = stale_checkout(tmp_path)
+    original = Repository.blob
 
-    Without the guard the `git rm -r` below it runs over an empty pathspec, and
-    git reads that as the whole repository.
-    """
-    env = _isolated_env(tmp_path)
-    _, runner = _scripted_origin(tmp_path, env, ["state"])
+    def fail(self: Repository, oid: str, *, fetches: bool = False) -> bytes:
+        data = original(self, oid, fetches=fetches)
+        if data == b"fresh head\n":
+            raise OSError("named download failed")
+        return data
 
-    assert _take_the_state(runner, env).returncode == 2
-    assert _take_the_state(runner, env, "state", "corpus").returncode == 2
+    monkeypatch.setattr(Repository, "blob", fail)
+    with pytest.raises(OSError, match="download failed"):
+        take_inputs(repo, INPUTS)
+    assert (repo / OLD).read_bytes() == b"completed source\n"
+    assert (repo / NEW).read_bytes() == b"old head\n"
+    assert not list((repo / "backend/var/publication").glob("inputs-*"))

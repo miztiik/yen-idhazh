@@ -84,8 +84,8 @@ COUNCIL_VERBS: Final = ("council-prepare", "council-settle", "council-shard")
 
 #: The one commit call the night makes, and the guard that keeps it off a night
 #: with nothing to stage.
-COMMIT_STEP: Final = "Commit what the night's tenants wrote"
-COMMIT_PROGRAM: Final = "backend/utilities/commit_and_push.py"
+COMMIT_STEP: Final = "Settle and publish every completed tenant output"
+COMMIT_PROGRAM: Final = "backend/utilities/council_publish.py"
 
 #: What a unit's output travels in, and what a date's selection travels in.
 METRICS_ARTIFACT: Final = "council-metrics-"
@@ -534,15 +534,13 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     environment = step.get("env")
 
     assert len(calls) == 1, "one collecting job, one push"
-    assert "$COMMITTED_PATHS" in calls[0]
+    assert '"${asked[@]}"' in calls[0]
     assert isinstance(environment, dict)
-    assert environment["COMMITTED_PATHS"] == "${{ needs.draw.outputs.committed_paths }}"
+    assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
     assert not re.search(r"\bstate/\S+", calls[0]), (
         "a ledger path spelled here is a path a second tenant's output never reaches"
     )
-    assert _normalize_condition(step["if"], "the commit step") == (
-        "needs.draw.outputs.committed_paths != ''"
-    )
+    assert "if" not in step, "the collecting utility handles an empty venue without a commit"
 
 
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:
@@ -577,14 +575,14 @@ def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
     one, so the second push would race the first. One job, a loop over the dates
     the planning job named, one push.
     """
-    settle = _step(_judges(), "save_council_results", "name", "Settle each date")
+    settle = _step(_judges(), "save_council_results", "name", COMMIT_STEP)
     environment = settle.get("env")
     script = _script(settle, "the settle step")
 
     assert isinstance(environment, dict)
     assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
     assert "while read" in script, "the dates are looped rather than taken one at a time"
-    assert "idhazh council-settle" in script
+    assert COMMIT_PROGRAM in script
     assert '--commit "${{ github.sha }}"' in script
 
 
@@ -597,9 +595,9 @@ def test_the_one_commit_message_names_every_date_the_night_settled() -> None:
     environment = _step(_judges(), "save_council_results", "name", COMMIT_STEP).get("env")
 
     assert isinstance(environment, dict)
-    assert environment["COMMIT_MESSAGE"] == (
-        "council: ${{ join(fromJSON(needs.draw.outputs.dates), ' ') }}"
-    )
+    assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
+    source = (REPO_ROOT / "backend" / "utilities" / "council_publish.py").read_text(encoding="utf-8")
+    assert '"council: " + " ".join(dates)' in source
 
 
 def test_the_night_mints_one_name_and_publishes_it_to_the_later_jobs() -> None:
@@ -673,7 +671,7 @@ def test_every_verb_that_writes_a_row_is_handed_the_same_name() -> None:
             "judge",
             f"needs.draw.outputs.{RUN_ID_OUTPUT}",
         ),
-        "Settle each date": ("save_council_results", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
+        COMMIT_STEP: ("save_council_results", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
     }
     for step_name, (job_name, expression) in sorted(carried.items()):
         environment = _step(_judges(), job_name, "name", step_name).get("env")

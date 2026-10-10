@@ -10,6 +10,7 @@ from conftest import REPO_ROOT
 MODULE_NAMES = (
     "idhazh",
     "idhazh.atomic_write",
+    "idhazh.completed_writes",
     "idhazh.config",
     "idhazh.contracts.app_config",
     "idhazh.contracts.appearance_config",

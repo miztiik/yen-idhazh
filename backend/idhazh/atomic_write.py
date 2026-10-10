@@ -15,6 +15,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from idhazh import completed_writes
+
 
 def write_atomic(path: Path, text: str) -> None:
     """Temp-then-rename, so a file either exists complete or does not exist."""
@@ -26,6 +28,7 @@ def write_atomic(path: Path, text: str) -> None:
         with handle:
             handle.write(text)
         Path(handle.name).replace(path)
+        completed_writes.record(path, text.encode("utf-8"))
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise
@@ -43,6 +46,7 @@ def write_atomic_bytes(path: Path, data: bytes) -> None:
         with handle:
             handle.write(data)
         Path(handle.name).replace(path)
+        completed_writes.record(path, data)
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise

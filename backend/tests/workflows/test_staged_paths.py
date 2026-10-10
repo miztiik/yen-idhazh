@@ -12,8 +12,6 @@ from typing import cast
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger
-
 from ._harness import (
     COMMIT_PROGRAM,
     COMMIT_STEPS,
@@ -30,11 +28,11 @@ from ._harness import (
     SUBSTITUTED_DAY_DIR,
     TOLERATED,
     _artifact_upload,
-    _commit_call,
     _job,
     _load_workflows,
     _mapping,
     _normalize_condition,
+    _publication_scopes,
     _script,
     _step,
     _steps,
@@ -106,33 +104,26 @@ def test_the_review_tree_is_an_artifact_and_no_commit_step_can_reach_it() -> Non
 
     staged: list[str] = []
     for label in COMMIT_STEPS:
-        paths, settings = _commit_call(label)
+        paths = _publication_scopes(label)
         staged += paths
-        staged += [settings.get("REFRESH_PATHS", "")]
     assert staged, "no commit step declares a staged path, so this test proves nothing"
     for value in staged:
         assert "review" not in value, f"a commit step stages the review tree: {value}"
 
 
-def test_the_corpus_is_committed_but_never_rebuilt() -> None:
-    """The window records what a run saw. It is not derived from origin's tip.
-
-    So it is staged by the commit step and deliberately absent from the refresh
-    set: on a lost race the answer is to replay this run's rows onto the new
-    base, which is what the rebase already does, and never to run a producer
-    again over articles the new checkout cannot see.
-    """
-    staged, settings = _commit_call("assemble")
-
-    assert "corpus" in staged
-    assert "corpus" not in settings["REFRESH_PATHS"].split()
-    assert "corpus" not in settings["REGENERATE_COMMAND"].split()
+def test_the_corpus_is_rolled_from_completed_incoming_rows_not_union_merged() -> None:
+    named = _publication_scopes("assemble")
+    assert {"corpus/corpus.jsonl", "corpus/corpus.meta.json"} <= set(named)
+    source = read_text(REPO_ROOT / "backend/utilities/digest_assemble.py")
+    assert "corpus.roll(" in source and "corpus.census(" in source
+    assert "stage_harvest(" not in source
 
 
-def test_the_plan_stages_the_state_root_not_selected_ledger_files() -> None:
-    """Compaction can write new heads and delete segments in the same run."""
-    named, _ = _commit_call("plan")
-    assert named == [ledger.STATE_DIRNAME, "frontend/public/publication.json"]
+def test_the_plan_declares_ledgers_without_blanket_state_authority() -> None:
+    named = _publication_scopes("plan")
+    assert "frontend/public/publication.json" in named
+    assert not {"state", "state/raw", "state/compact"} & set(named)
+    assert any(path.startswith("state/raw/") for path in named)
 
 
 def test_the_corpus_is_not_union_merged() -> None:
@@ -240,9 +231,7 @@ def test_the_prune_only_clones_the_whole_history_when_it_is_due() -> None:
         "the history job checks out main as the shards left it, not the run's own commit"
     )
     gated = [
-        _normalize_condition(step["if"], "history step condition")
-        for step in steps
-        if "if" in step
+        _normalize_condition(step["if"], "history step condition") for step in steps if "if" in step
     ]
     assert gated.count("steps.due.outputs.due == 'true'") == len(gated) - 1
     for step in steps:
