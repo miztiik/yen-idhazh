@@ -64,7 +64,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Fowler and owner |
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Susan, Fowler and owner |
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | IMPLEMENTED: final integration and delivery pending | p52-panel-queries (`feat/console-panel-queries`) | Read from merge | Owner and disjoint contract, canary and guard workers |
-| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | PENDING | - | - | - |
+| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | Read from merge | p52-row5-band-completion |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5 | E | PENDING | - | - | - |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
