@@ -1,4 +1,4 @@
-//! Where may a declared raw host file go inside a named filesystem workspace?
+//! Where may named raw host and evidence files go inside a filesystem workspace?
 
 use crate::contracts::file_envelope::Format;
 use crate::contracts::host::{Result, day, rel_path, require};
@@ -95,7 +95,7 @@ fn descend(parent: &Path, part: &str, boundary: &Path, directory: bool) -> Resul
         Ok(original) => {
             require(
                 directory || !original.file_type().is_symlink(),
-                "raw file destination cannot be a symlink",
+                "file destination cannot be a symlink",
             )?;
             // Canonicalization follows both Unix symlinks and Windows junctions.
             // A dangling link is an error, not a missing directory to create.
@@ -120,6 +120,40 @@ fn descend(parent: &Path, part: &str, boundary: &Path, directory: bool) -> Resul
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(candidate),
         Err(_) => Err(format!("cannot inspect path component {part}")),
     }
+}
+
+/// Resolve one named evidence document, never a directory listing.
+#[allow(
+    dead_code,
+    reason = "The raw-path fixture also compiles this source as its own module."
+)]
+pub fn resolve_document(workspace: &Path, relative_path: &str) -> Result<PathBuf> {
+    resolve_named(workspace, relative_path, false)
+}
+
+#[allow(
+    dead_code,
+    reason = "The raw-path fixture also compiles this source as its own module."
+)]
+pub fn resolve_directory(workspace: &Path, relative_path: &str) -> Result<PathBuf> {
+    resolve_named(workspace, relative_path, true)
+}
+
+fn resolve_named(workspace: &Path, relative_path: &str, directory: bool) -> Result<PathBuf> {
+    let parts = segments(relative_path)?;
+    let workspace = fs::canonicalize(workspace)
+        .map_err(|_| "workspace must be an existing resolvable directory")?;
+    require(workspace.is_dir(), "workspace must be a directory")?;
+    let mut resolved = workspace.clone();
+    for (index, part) in parts.iter().enumerate() {
+        resolved = descend(
+            &resolved,
+            part,
+            &workspace,
+            directory || index + 1 != parts.len(),
+        )?;
+    }
+    Ok(resolved)
 }
 
 /// Resolve existing components without creating missing descendants.

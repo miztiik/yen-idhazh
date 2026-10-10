@@ -64,7 +64,7 @@ Table D - authoritative execution queue
 | D2 | 2 | Declare exchanges and a read-only host-output verifier | 1 | B | DONE | rust-host-telemetry-delivery | - | owner; disjoint exchange/verifier workers |
 | D10 | 10 | Render compatible host files through tested Rust codecs | 2 | C | DONE | rust-d10-native-codecs | - | rust-d10-native-codecs |
 | D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | DONE | rust-d11-storage | - | owner; disjoint identity/path and atomic workers |
-| D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | PENDING | - | - | - |
+| D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | DONE | rust-d12-receipts | - | owner; native receipt/recovery leaf |
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | PENDING | - | - | - |
 | D4 | 4 | Produce window and job resource events in Rust | 3 | D | PENDING | - | - | - |
 | D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | PENDING | - | - | - |
@@ -749,13 +749,20 @@ Table AI - Row 11 rejected alternatives
 - **Files touched:**
   - `backend/rust/host-telemetry/src/lib.rs`
   - `backend/rust/host-telemetry/src/receipts.rs`
+  - `backend/rust/host-telemetry/src/contracts/host.rs`
+  - `backend/rust/host-telemetry/src/contracts/patterns.rs` (bounded unchanged-predicate compilation, Fowler)
+  - `backend/rust/host-telemetry/src/bin/receipts-fixture.rs`
   - `backend/rust/host-telemetry/src/ledger/store.rs`
+  - `backend/rust/host-telemetry/src/ledger/paths.rs`
   - `backend/rust/host-telemetry/tests/receipts.rs`
   - `backend/idhazh/telemetry/host_output_verify.py`
   - `backend/utilities/verify_host_output.py`
   - `backend/tests/test_host_output_verify.py`
   - `backend/tests/test_rust_host_receipts.py`
   - `tests/fixtures/host-events/publication-parity.json`
+  - `frontend/scripts/test-scope.ts`
+  - `frontend/scripts/tests/test-scope.test.mjs`
+  - `frontend/scripts/tests/run-checks.test.mjs`
   - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
 - **Acceptance gates - local:** Rust receipt/recovery tests and selected Python read-only/publisher-boundary tests. Verify forged/stale/foreign receipts, canonical-versus-physical hashes, publication-between-receipts failure and immutable retry plan.

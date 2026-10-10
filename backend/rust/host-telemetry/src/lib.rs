@@ -4,10 +4,12 @@ pub mod contracts {
     pub mod events;
     pub mod file_envelope;
     pub mod host;
+    mod patterns;
     pub mod write_plan;
 }
 pub mod canonical_json;
 pub mod config;
+pub mod receipts;
 pub mod ledger {
     pub mod envelope;
     pub mod filenames;
