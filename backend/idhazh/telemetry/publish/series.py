@@ -39,6 +39,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
+from idhazh.atomic_write import write_atomic_bytes
 from idhazh.month_partition import (
     expired_months,
     month_files,
@@ -179,8 +180,7 @@ def write_if_changed(path: Path, payload: bytes) -> bool:
     """
     if path.exists() and path.read_bytes() == payload:
         return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
+    write_atomic_bytes(path, payload)
     return True
 
 

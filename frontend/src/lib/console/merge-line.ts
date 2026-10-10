@@ -245,11 +245,11 @@ export interface JudgeDay {
 	unclearRate: number;
 	/** How many pairs a judging shard actually read. The denominator of
 	 * `disagreementRate`, so a panel can print it in the same sentence. */
-	pairsJudged: number;
+	pairsJudged: number | null;
 	/** How many of those got two readings that agreed: the denominator of
 	 * `unclearRate`. The fitted row's own count, never worked out from the
 	 * disagreed share, so every figure on a panel names one agreed count. */
-	pairsUsable: number;
+	pairsUsable: number | null;
 	negativesOnRecord: number;
 	aboveLineOnRecord: number;
 	daysOnRecord: number;
@@ -340,7 +340,7 @@ export function findNewestRow(rows: readonly JudgeDay[], through: string): Judge
 }
 
 /** The note for a window that holds no row while an earlier day does: the day
- * the bars stand on, the window they are not from, and that nothing ran since.
+ * the bars stand on, and the window that returned no later row.
  *
  * "Started again" is said only where that row says so. A row of zeros alone does
  * not prove it, so it takes the plain words. The words are Reader's.
@@ -350,7 +350,7 @@ export function describeEarlierRow(row: JudgeDay, windowDays: number): string {
 		row.heldReason === 'inputs_changed'
 			? 'The record was started again'
 			: 'The bars show what the record held';
-	return `${what} on ${shortDate(row.date)}, before ${nameSpan(windowDays)}. No run has recorded anything since.`;
+	return `${what} on ${shortDate(row.date)}, before ${nameSpan(windowDays)}. No later judge row was returned for this window.`;
 }
 
 /** What one square on the strip says about one date. */
@@ -394,7 +394,7 @@ export function countedDays(
 	});
 	return dates.map((date) => {
 		const row = byDate.get(date);
-		if (row === undefined) return square(date, 'silent', 'no run recorded anything.');
+		if (row === undefined) return square(date, 'silent', 'no judge row was returned for this day.');
 		if (row.heldReason === 'none') return square(date, 'fitted', 'a line was fitted.');
 		if (!gatesMet) return square(date, 'filling', 'the record was still filling.');
 		return square(date, 'held', `nothing was fitted. ${heldInWords(row.heldReason)}.`);
@@ -438,12 +438,12 @@ export function silentTail(squares: readonly FoldSquare[]): number {
  * and one did.
  */
 export function rateWithDenominator(
-	numerator: number,
-	denominator: number,
+	numerator: number | null,
+	denominator: number | null,
 	floor: number,
 	mark?: number
 ): string | null {
-	if (denominator < floor) return null;
+	if (numerator === null || denominator === null || denominator === 0 || denominator < floor) return null;
 	return `${wholePercent(numerator, denominator, mark)}% of ${grouped(denominator)} pairs`;
 }
 
@@ -456,11 +456,12 @@ export function rateWithDenominator(
  * words are Reader's.
  */
 export function describeUnclear(
-	unclear: number,
-	agreed: number,
+	unclear: number | null,
+	agreed: number | null,
 	floor: number,
 	mark?: number
 ): string {
+	if (unclear === null || agreed === null) return 'the count of pairs whose readings agreed is unavailable';
 	if (agreed === 0) return 'not counted, no pair agreed';
 	if (agreed < floor) return `${grouped(Math.round(unclear))} of the ${grouped(agreed)} that agreed`;
 	return `${wholePercent(unclear, agreed, mark)}% of the ${grouped(agreed)} that agreed`;

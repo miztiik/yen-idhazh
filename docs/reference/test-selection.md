@@ -90,6 +90,20 @@ files are also console-owned inputs. Editing their literals or drivers alone
 runs console and panel checks on a pull request, just as editing the original
 spec did; other shared test helpers retain their existing selection.
 
+The bounded `tests/support/console-window/` helpers are also console-owned.
+Both Windows and normalized paths select logic, console, panel and publishing
+checks, so changing only a fixture or compiler helper cannot leave its
+consumers untested. Focused window specs are named in `test-groups.ts`; the
+console-name fallback does not register a spec. Each new spec has an explicit
+registration test. Config and fixture inputs load inside tests or their helpers,
+not when a module is imported.
+
+Judgement evidence tests are explicitly split between logic and browser groups.
+The logic checks run the real packed readers and render actual Svelte components.
+The browser checks stage the existing fixed source inventory and real generated
+ledgers. Static geometry consumers use that same private builder; unavailable and
+empty source states keep independent exact expectations.
+
 **The route-ownership guard is a logic spec.**
 `frontend/tests/console-route-scope.spec.ts` is registered in the explicit
 inventory in `frontend/scripts/test-groups.ts`. A change confined to this spec

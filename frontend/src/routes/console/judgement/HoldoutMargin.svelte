@@ -56,8 +56,9 @@
 	} from '$lib/console/holdout';
 
 	let {
-		marks,
-		agreedScores,
+		marks: inputMarks,
+		evidence = [],
+		agreedScores: inputAgreedScores,
 		skipped,
 		marked,
 		applied,
@@ -74,11 +75,12 @@
 		 * further: they set no floor, so two addresses and two headlines a row of
 		 * them would be weight in a prerendered document for nothing the panel
 		 * draws. */
-		marks: HoldoutMark[];
+		marks: HoldoutMark[] | null;
+		evidence?: string[];
 		/** Every score a person read as one story, and nothing else about them.
 		 * 196 numbers is 1.7 KB; the same rows with their addresses and headlines
 		 * are 88 KB, for a strip that draws three of them. */
-		agreedScores: number[];
+		agreedScores: number[] | null;
 		skipped: HoldoutSkip[];
 		/** How many rows the file holds, scored or not. */
 		marked: number;
@@ -107,6 +109,9 @@
 	const STRIP_ROW = 130;
 
 	let measured = $state<number | null>(null);
+	const marks = $derived(inputMarks ?? []);
+	const agreedScores = $derived(inputAgreedScores ?? []);
+	const absent = $derived(inputMarks === null || inputAgreedScores === null);
 
 	const outcome = $derived(holdoutMargin(applied, marks));
 	// Not `state`: Svelte reads `$state` as an auto-subscription to a local of
@@ -271,7 +276,7 @@
 		});
 		return built.length > 0
 			? recordsOf(built)
-			: [factsOf('Nothing has been marked yet, so there is no pair to read', [], 'not recorded')];
+			: [factsOf('No scored hand marks were returned, so there is no pair to read', [], 'not recorded')];
 	});
 
 	/** The point a pointer, a tap or a key has picked, or null for the first. */
@@ -279,27 +284,44 @@
 </script>
 
 <Panel
+	id="holdout-margin"
 	title="The pairs a person marked apart"
 	note="Every pair somebody read as two different stories sets a floor the merge line has to stay above. The dots are those pairs, the rule is the line, and the tinted zone is as far as the line may fall in one day."
 	{tone}
 >
 	<div
 		data-holdout
-		data-holdout-state={reading}
+		data-panel-question="How much room does the line leave above pairs a person marked apart?"
+		data-model-rule="no"
+		data-model-rule-name="holdout-margin"
+		data-model-rule-none="the judge's record, not how summaries are written"
+		data-holdout-state={absent ? 'missing' : reading}
 		data-holdout-tone={tone}
-		data-readout-records={records.length}
+		data-readout-records={absent ? undefined : records.length}
+		data-readout-none={absent
+			? 'the hand-marked pairs are unavailable, so there is no pair to read; agreed with Susan'
+			: undefined}
 		data-holdout-domain={`${domain[0].toFixed(4)},${domain[1].toFixed(4)}`}
 		data-holdout-zone={`${zone[0].toFixed(4)},${zone[1].toFixed(4)}`}
 		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin)}
 		data-holdout-violations={outcome.violations}
 		data-holdout-reach={`${reach.today},${reach.tomorrow},${reach.dayAfter}`}
 	>
+		<p class="comparison" data-comparison="Each hand-marked pair's score against the merge line.">
+			Each hand-marked pair's score against the merge line.
+		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
+		{#if absent}
+			<p class="headline" data-empty="missing">
+				<span class="figure" data-lede>The hand-marked pairs are unavailable.</span>
+			</p>
+		{:else}
 		<p class="headline" data-holdout-headline>
 			{#if outcome.margin === null}
-				<span class="figure" data-holdout-figure>-</span>
-				<span class="words">of room, because nothing is marked yet</span>
+				<span class="figure" data-lede data-holdout-figure>-</span>
+				<span class="words">of room; no scored pairs marked apart were returned</span>
 			{:else}
-				<span class="figure" data-holdout-figure>{marginDistance(outcome.margin)}</span>
+				<span class="figure" data-lede data-holdout-figure>{marginDistance(outcome.margin)}</span>
 				<span class="words"
 					>{violated
 						? 'below the closest pair a person marked as two stories'
@@ -322,6 +344,7 @@
 			     them in reading order, Escape returns to the first. -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
+				data-chart-type="distribution"
 				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
@@ -431,7 +454,7 @@
 					data-holdout-row-label="apart"
 				>
 					{apartAt === null
-						? 'Nothing has been read as two stories yet'
+						? 'No scored pairs marked two stories were returned'
 						: `read as two stories: ${apartAt.min.toFixed(4)} to ${apartAt.max.toFixed(4)}`}
 				</text>
 
@@ -497,7 +520,7 @@
 					data-holdout-strip-label
 				>
 					{agreedAt === null
-						? 'Nothing has been read as one story yet'
+						? 'No scored pairs marked one story were returned'
 						: `read as one story: ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}, middle ${agreedAt.median.toFixed(4)}, ${agreedBelow} below the line`}
 				</text>
 
@@ -571,7 +594,9 @@
 			hint="Point at a dot, an edge chip or the strip below them to read it. Left and Right step through them, Escape returns to the first."
 		/>
 
-		<p class="reading" data-holdout-note>{holdoutNote(outcome, reading, marked, applied)}</p>
+		<p class="reading" data-holdout-note>
+			{marked === 0 ? 'No hand marks were returned. This does not show whether a person has marked a pair.' : holdoutNote(outcome, reading, marked, applied)}
+		</p>
 		<p class="reading" data-holdout-agreed={agreedScores.length}>
 			{agreedNote(agreedScores, applied)}
 		</p>
@@ -581,13 +606,6 @@
 			{/if}
 		{/each}
 		<p class="under" data-holdout-weights>{weightsNote(weights)}</p>
-		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
-			{scoredNote(scored)}
-		</p>
-		{#if skips !== null}
-			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>
-		{/if}
-
 		{#if apart.length > 0}
 			<details class="detail" data-holdout-table>
 				<summary>Every pair a person marked as two stories</summary>
@@ -617,10 +635,22 @@
 				</p>
 			</details>
 		{/if}
+		{/if}
+		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
+			{scoredNote(scored)}
+		</p>
+		{#if skips !== null}
+			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	.headline {
 		display: flex;
 		flex-wrap: wrap;

@@ -48,7 +48,8 @@
 	import { nameSpan } from '$lib/console/span-words';
 
 	let {
-		days,
+		days: inputDays,
+		evidence = [],
 		knobs,
 		viewport,
 		height,
@@ -59,7 +60,8 @@
 		markedApart
 	}: {
 		/** Every day the record fitted a row for, oldest first. */
-		days: LineDay[];
+		days: LineDay[] | null;
+		evidence?: string[];
 		/** The band a fitted line may take, off `config/idhazh.json`. */
 		knobs: { band_low: number; band_high: number };
 		viewport: TimeWindow;
@@ -85,6 +87,7 @@
 	let selected = $state<number | null>(null);
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
+	const days = $derived(inputDays ?? []);
 	const drawn = $derived(
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
@@ -208,6 +211,7 @@
 </script>
 
 <Panel
+	id="merge-line"
 	title="Where the merge line sits"
 	note={drawn.length === 0
 		? `The dashed rule shows the line ${ruleDay} was built with. The scale is the whole range a fitted line may take.${holdoutZone === null || markedApart === null ? '' : ` The tinted strip shows the part of the score range inside this plot for ${markedApart.count} pairs a person marked as two stories. Their scores run from ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}.`}`
@@ -215,17 +219,33 @@
 >
 	<div
 		data-windowed="merge-line"
+		data-panel-question="Where did the calculated merge line sit?"
+		data-model-rule="no"
+		data-model-rule-name="merge-line"
+		data-model-rule-none="the judge's record, not how summaries are written"
 		data-window-days={windowDays}
 		data-line-domain={`${corridor[0]},${corridor[1]}`}
 		data-line-days={drawn.length}
 		data-readout-columns={count > 0 ? count : undefined}
 		data-readout-none={count > 0
 			? undefined
-			: 'no day has fitted a line, so there is no column to read; agreed with Susan'}
+			: 'no calculated line was returned, so there is no column to read; agreed with Susan'}
 	>
+		<p class="comparison" data-comparison="Each calculated line against its proposal and the line the newest day used.">
+			Each calculated line against its proposal and the line the newest day used.
+		</p>
+		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
+		{#if inputDays === null}
+			<p class="lede" data-lede data-empty="missing">The calculated merge lines are unavailable for {nameSpan(windowDays)}.</p>
+		{:else}
+		<p class="lede" data-lede>
+			{drawn.length === 0 ? 'No calculated merge lines were returned for this window.' : `${reads(drawn[drawn.length - 1].applied)} was the newest calculated line`}
+		</p>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
+				data-chart-type="dateSeries"
+				data-chart-name="Calculated merge lines"
 				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
@@ -416,7 +436,7 @@
 		<p class="line-note">
 			{#if drawn.length === 0}
 				<span data-line-state="no-days"
-					>No line was fitted in {nameSpan(windowDays)}. The rule is the line {ruleDay} was built
+					>No calculated line was returned for {nameSpan(windowDays)}. The rule is the line {ruleDay} was built
 					with, and the scale is the whole range a fitted line may take.</span
 				>
 			{:else}
@@ -426,10 +446,22 @@
 				{/if}
 			{/if}
 		</p>
+		{/if}
 	</div>
 </Panel>
 
 <style>
+	.lede {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		color: var(--color-text);
+	}
+	.comparison {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
 	/* The secondary voice every console panel uses for a caveat under a chart
 	   (design-system.md). */
 	.line-note {

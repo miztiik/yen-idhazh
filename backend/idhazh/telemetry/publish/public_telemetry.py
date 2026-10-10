@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger, month_partition
+from idhazh.atomic_write import write_atomic_bytes
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
@@ -120,8 +121,7 @@ def _encode(rows: list[PublicTelemetryRow]) -> bytes:
 
 
 def _write(path: Path, rows: list[PublicTelemetryRow]) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(_encode(rows))
+    write_atomic_bytes(path, _encode(rows))
     return len(rows)
 
 
@@ -135,8 +135,7 @@ def _write_if_changed(path: Path, rows: list[PublicTelemetryRow]) -> bool:
     payload = _encode(rows)
     if path.exists() and path.read_bytes() == payload:
         return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
+    write_atomic_bytes(path, payload)
     return True
 
 
