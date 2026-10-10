@@ -300,8 +300,9 @@ than with what the pipeline keeps.
 **A compaction takes only what fits what is left of `max_downloaded_mb`.**
 Each step reads its periods' sizes off the listing before anything is
 downloaded and stops at the first period that does not fit, at `ceiling` for a
-later wake, or `failed` by name when that period alone is larger than the
-whole budget ([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)).
+later wake, or `failed` with fault `manual-action` by name when that period
+alone is larger than the whole budget
+([ledger-compaction.md](ledger-compaction.md#one-pass-in-order)).
 The shard's other tasks that download do not choose by the budget yet, so the
 check after its tasks stays: over `max_downloaded_mb` the shard still runs its
 tasks and lands its record, then exits 1, and the message calls it what it is,
