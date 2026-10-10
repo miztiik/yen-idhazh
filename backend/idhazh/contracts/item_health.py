@@ -455,11 +455,8 @@ class FailureCode(StrEnum):
     HTTP_SERVER_ERROR = "http_server_error"
     NETWORK_ERROR = "network_error"
     NO_TEXT = "no_text"
-    #: The item reached extract with no headline - the feed carried none, or the
-    #: one it carried was whitespace. Separate from `no_text` because the fix is
-    #: a different one: `no_text` sends an operator to the extractor or the page,
-    #: and this sends them to the feed. Reusing `no_text` would also file a feed
-    #: metadata fault under the extractor in the source-health yield.
+    #: Historical extraction refusal for an absent source headline. Kept so old
+    #: failures remain readable; new extractions let the summarizer name the body.
     NO_TITLE = "no_title"
     TOO_SHORT = "too_short"
     NOT_PROSE = "not_prose"

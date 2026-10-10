@@ -47,6 +47,7 @@ export const SERVER_JOB = [
 	'run-tasks',
 	'history',
 	'save_council_results',
+	'collect',
 	'operator'
 ] as const;
 

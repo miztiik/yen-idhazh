@@ -13,10 +13,12 @@ Nothing drops the day folders here, because the pass this replaced never did.
 from __future__ import annotations
 
 from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
 KIND = TaskKind.RETENTION
+OWNED_LEDGERS = (LedgerName.TRACES,)
 
 
 def run(context: TaskContext) -> Pass:
@@ -24,7 +26,6 @@ def run(context: TaskContext) -> Pass:
     from datetime import timedelta
 
     from idhazh import ledger, telemetry
-    from idhazh.contracts.ledger_name import LedgerName
     from idhazh.gardener import named_trees, retention_files
 
     first_kept = retention_files.first_kept_day(

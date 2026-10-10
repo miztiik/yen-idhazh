@@ -631,36 +631,17 @@ def to_article_with_source(
             "",
         )
 
-    # Last, because every other reason is the more useful one to record. An item
-    # with no body and no headline is a `no_text` item; this is the one that read
-    # fine and has nothing to head it with.
-    #
     # The feed's headline first, then the page's own. Order is the control here:
     # the page is the more attacker-controlled of the two strings, so it is read
     # only when the source we chose said nothing, and it can never displace a
     # headline we were given (Guardrail #11).
     #
-    # `Article` refuses an ok payload with no title, so building one here raised
-    # out of the per-item loop and took the whole shard with it. A headline
-    # neither the feed nor the page carries is one article's data being thin,
-    # which degrades that article and no other (`CLAUDE.md` section 1a).
+    # An absent source headline does not block the summary's generated title.
     title = item.title if (item.title or "").strip() else None
     title_source = TitleSource.FEED if title is not None else None
     if title is None:
         title = page_headline(html)
         title_source = TitleSource.PAGE if title is not None else None
-    if title is None:
-        return Extracted(
-            _failed(
-                item,
-                status=ArticleStatus.EXTRACT_FAILED,
-                detail="neither the feed nor the page carries a headline we will publish",
-                fetched_at=fetched_at,
-                failure_code=FailureCode.NO_TITLE,
-            ),
-            "",
-        )
-
     return Extracted(
         Article(
             version=Article.schema_version(),

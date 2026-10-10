@@ -1,6 +1,6 @@
 # 23 - What an article is about, decided by reading it
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-10-10
 **Level**: 5 (a persisted contract, the published vocabulary, the call structure and the trust boundary)
 
 **Chain**: previous the two-call summariser plan (delivered, removed from TODO/).
@@ -648,6 +648,8 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 ## 9a. Row #P5 - Which distribution the runtime reports at a masked token
 
+- **The general probability-mode question is already measured:** [`../docs/reference/benchmarks/which-probabilities-the-server-returns.md`](../docs/reference/benchmarks/which-probabilities-the-server-returns.md) records the configured weights returning probabilities before the grammar mask, with `post_sampling_probs: false`. `backend/utilities/measure_probability_mode.py` reproduces that reading for a three-word grammar. This row still owes the classification grammar's legal token ids and probabilities, captured replies, and the tested reader that refuses an unknown mode. Reuse the existing instrument where it fits; do not repeat the general mode investigation as though no reading exists.
+
 - **Scope:** One measurement on a developer machine, against the model row #7b will call, deciding whether row #9's confidence column can be a measurement at all. Two requests, same article, same prompt, same grammar, same seed, differing in one field: `n_probs: 40` with `post_sampling_probs: false`, then the same with `true`. **`n_probs` is 40 rather than 5 because 5 cannot answer the question.** A grammar-legal set at a branching position holds the whole-word token for every label plus a one-letter token for every distinct first letter, which is already 9 candidates for `article_kind` alone (row #9), and a top-5 window truncates the set before the classifier can see whether the returned mass sums to 1.0 over the legal continuations - which is the single reading that separates the two modes. 40 is an over-provision on purpose: it costs one field on two requests and a truncated window costs the whole run. The article is one a person has already labelled and was genuinely unsure about, taken from row #P2's dev split, because a clear-cut article cannot tell the two modes apart. **Record which reply carries a distribution over the model's own next-token candidates and which carries one renormalised over the grammar-legal continuations only.**
 - **The second reading, and it is why this row is worth two requests rather than one.** At the **first position where the grammar admits more than one continuation**, dump the whole legal token set with its ids and its probabilities, and commit it beside the mode finding. Row #9's product is over exactly that set at exactly those positions, so the set is the thing it has to be right about - and row #9's own measurement says a one-letter token sits in it beside the whole-word ones. **A run that names the mode and does not dump the set leaves row #9 building its arithmetic on a shape nobody has looked at.**
 - **Files touched:** `backend/utilities/measure_label_logprobs.py`, `backend/tests/test_label_logprobs.py`, `backend/tests/test_marks.py`, `tests/fixtures/logprobs/two-modes.json`, `docs/reference/benchmarks/<YYYY-MM-DD>-label-logprob-mode.md`, `docs/reference/pipeline-cost.md`
@@ -939,6 +941,8 @@ Today that re-render is the element table, and the pipeline already pays for it.
 ---
 
 ## 14. Row #8 - Call 1 labels: desk, lenses, article kind
+
+- **Outstanding prompt-loop check:** `backend/utilities/prompt_loop.py` still builds a single-call request with `summarize.build_request` and replaces its system prompt. Production uses `classify.calls` through `stages/two_calls.py`, with both jobs in the shared system turn. The offline loop does not measure that production sequence. Before this row closes, decide whether to update the loop for the production path or keep it explicitly as a single-call instrument. Record the decision and any required follow-up here; do not treat a prompt-loop result as evidence about the two-call path.
 
 - **Scope:** The labelling half of call 1. It returns a desk, a lens list and an article kind, each drawn from the committed vocabulary of row #2, in the same reply as the elements. Recorded only - nothing on this row renders. It also builds the **self-consistency sampler** and ships it at `classification.self_consistency_n` of 1, where it makes one call and the vote is a pass-through.
 - **Files touched:** `backend/idhazh/classify/labels.py`, `backend/idhazh/classify/consistency.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/prompts/classify_labels.txt`, `backend/idhazh/contracts/article.py`, `backend/idhazh/contracts/{digest_day,digest_view}.py`, `backend/idhazh/contracts/app_config.py`, `config/taxonomy.json`, `config/idhazh.json`, `schemas/{article,digest-day,digest-view,app-config}.schema.json`, ``backend/tests/test_classify.py`, `backend/tests/contracts/``, `tests/fixtures/canaries/desk-instruction.json`, `tests/fixtures/canaries/opinion-instruction.json`, `tests/fixtures/canaries/announcement-on-a-report.json`, `tests/fixtures/planner/label-reply-illegal-value.json`, `tests/fixtures/planner/three-samples-two-agree.json`, `docs/concepts/classification.md`
@@ -1696,7 +1700,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 ## See also
 
-- [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
+- [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - resume unfinished work, check each row against the code, and update its own Reckoner.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans: what can start today, the critical path, and the cross-plan file collisions no plan's own group check can see. **Seven of its nine waves run through this plan**, and its longest pole is row #P1 here.
 - The two-call summariser plan - the plan this one spawned from, now delivered and removed from TODO/.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the five month-sharded ledgers section 0 puts out of scope, planned. **Its row #1 creates `backend/idhazh/day_partition.py`, which rows #14, #16, #17 and #21 here depend on** (section 0.1).

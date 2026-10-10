@@ -33,10 +33,12 @@ from __future__ import annotations
 import uuid
 
 from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
 KIND = TaskKind.RETENTION
+OWNED_LEDGERS = (LedgerName.ITEM_HEALTH_SUMMARY,)
 
 
 def run(context: TaskContext) -> Pass:
@@ -49,7 +51,6 @@ def run(context: TaskContext) -> Pass:
     from idhazh.contracts.item_health import ItemHealthRow
     from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
     from idhazh.contracts.knobs.gardener import ForeverWindow, RetentionPolicy
-    from idhazh.contracts.ledger_name import LedgerName
     from idhazh.gardener import named_trees, retention_files
     from idhazh.telemetry.publish import public_telemetry
 

@@ -49,7 +49,7 @@ class ArticleStatus(StrEnum):
 
 
 class TitleSource(StrEnum):
-    """Which stranger's string the published headline came from.
+    """Which source supplied the article's optional headline.
 
     Both are untrusted, and they are not trusted equally. The feed is a source
     somebody chose and the page is whoever answered the address, so the feed is
@@ -58,7 +58,7 @@ class TitleSource(StrEnum):
     path is then held to a tighter bound than the feed path and refused over it
     rather than cut. So this field records the outcome of a trust decision
     rather than provenance alone: `page` says the more attacker-controlled of
-    the two strings is the one on the page.
+    the two strings supplied the article headline.
     """
 
     FEED = "feed"
@@ -70,6 +70,11 @@ class Article(Contract):
 
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Successful articles may carry body text without a source headline.",
+            why="The summarizer generates its own headline from the body.",
+        ),
         ChangelogEntry(
             version="2026-09-22",
             change="Added corroborated_word_count; FailureCode gained contaminated.",
@@ -84,11 +89,6 @@ class Article(Contract):
             version="2026-09-15T20:00",
             change="The embedded failure vocabulary gained model_refused.",
             why="It follows item-health-row, where the vocabulary is declared.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T12:00",
-            change="title_source records a trust decision, not provenance alone.",
-            why="A page headline and a feed headline are not equally trustworthy.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -146,7 +146,10 @@ class Article(Contract):
     )
     rank_score: float = Field(ge=0.0)
 
-    title: UntrustedLine | None = None
+    title: UntrustedLine | None = Field(
+        default=None,
+        description="Untrusted source headline, absent when neither source supplies one.",
+    )
     title_source: TitleSource | None = Field(
         default=None,
         description=(
@@ -156,7 +159,8 @@ class Article(Contract):
             "attacker-controlled string, and the page path is held to a tighter bound "
             "and refused over it rather than cut. So this is the outcome of a trust "
             "decision, not provenance alone. Null on a failed payload, which publishes "
-            "no headline, and on an ok payload written before the field existed."
+            "no headline, on an ok payload with no source headline, and on an ok "
+            "payload written before the field existed."
         ),
     )
     text: str | None = Field(default=None, description="Sanitized text. Never republished.")
@@ -224,8 +228,10 @@ class Article(Contract):
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
         if self.status is ArticleStatus.OK:
-            if not self.text or self.title is None:
-                raise ValueError("an ok article carries title and text")
+            if not self.text:
+                raise ValueError("an ok article carries text")
+            if self.title is None and self.title_source is not None:
+                raise ValueError("an article without a source headline names no title_source")
             if self.failure_detail is not None:
                 raise ValueError("an ok article carries no failure_detail")
             if self.failure_code not in {

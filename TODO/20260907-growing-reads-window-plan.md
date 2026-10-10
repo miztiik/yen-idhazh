@@ -1,6 +1,6 @@
 # Every Read Over A Growing Collection Carries A Window
 
-**Last Updated**: 2026-09-07
+**Last Updated**: 2026-10-10
 **Level**: 5 (a persisted contract, a partition layout, a repo-wide rule, and a reader-facing guarantee that gains a switch)
 
 Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): one worktree-isolated worker per row, personas consulted on ambiguity, AUTO-merge on green gates, parallel N = 3. Honour the ESCALATE triggers in section 0.
@@ -11,7 +11,7 @@ Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): o
 | --- | --- |
 | Why this plan exists | Guardrail #12 refuses a cost that rises when nobody wrote any code, and names review as the only control. Review is a person remembering to ask. This plan makes the question mechanical: a read over a growing collection declares what it covers, and `-1` is how a person says out loud that they chose not to bound it. |
 | Hard scope - in | The rule, its inventory of 21 reads, and every row below. `state/published.csv` becomes a day tree and is the worked example. |
-| Hard scope - out | The two reads [the constant-cost plan](20260906-constant-cost-reads-plan.md) owns - telemetry publication (its row 19) and source health (its row 20). Every frontend and browser read, which is that plan's ranks 1 and 10. Content fingerprints and semantic dedup. Deleting any committed row from any ledger. |
+| Hard scope - out | Telemetry publication and source health, whose bounded producers are documented in [console payloads](../docs/architecture/publishing/console-payloads.md#the-producers). Every frontend and browser read, tracked by the [growth research](20260906-data-growth-research.md). Content fingerprints and semantic dedup. Deleting any committed row from any ledger. |
 | ESCALATE triggers | (a) Any row that would delete a committed row. (b) Any row that would ship a finite window - **every window here ships at `-1` or is bounded by construction**. (c) Row 7 running while a scheduled digest is in flight. (d) Any row that cannot hold its Oracle without weakening a guarantee. (e) A finite window less than or equal to `collect.seen_window_days`. |
 | Chosen strategy | State the rule, take the inventory, convert one surface end to end as the worked example, then the rest. Ship every horizon switched off so the machinery lands and turning it on is a config edit a person makes on evidence. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3.` |
@@ -127,7 +127,9 @@ Three reasons survive, none of them speed or size.
 | 20 | The corpus harvest | Rolling window, capped at 2,000 rows, every 7 days | Bounded by design | 11 states the bound |
 | 21 | `contracts.base.Contract.read` | One payload, never a collection | **Cannot be bounded and does not grow with history.** A validator cannot skip what it has not read | 11 states the bound |
 
-Two more - telemetry publication and source health - belong to [the constant-cost plan](20260906-constant-cost-reads-plan.md), rows 19 and 20 there.
+Two more - telemetry publication and source health - were bounded separately;
+[console payloads](../docs/architecture/publishing/console-payloads.md#the-producers)
+names their current producers and inputs.
 
 ## 1 - Status Reckoner
 
@@ -394,11 +396,11 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 - **No finding is closed by shipping `-1`.** Every read still opens what it opened before, except rows 8 to 16 which are exact rather than windowed. What lands is the layout, the knob and the declaration. Closing a finding is a person setting a finite value on evidence.
 - **The lookup key is still not the partition key** for the published ledger. Fowler's objection stands. A key-ordered index remains the answer if this ever becomes a measured cost - and after row 2, it very likely will not.
 - **Nothing is ever pruned** from the published ledger. 365 files a year, kept for ever. A cover buys read time, never bytes.
-- **The frontend and the browser are untouched.** Those are ranks 1 and 10 of the audit and belong to [the constant-cost plan](20260906-constant-cost-reads-plan.md).
+- **The frontend and the browser are untouched by this plan.** Their remaining growth findings belong to the [growth research](20260906-data-growth-research.md), which records the separately delivered reductions.
 
 ## See also
 
 - [../docs/reference/data-growth.md](../docs/reference/data-growth.md) - finding 1 and the Indexed State package this plan takes a slice of.
 - [../docs/concepts/partitions.md](../docs/concepts/partitions.md) - the pattern, the freeze rule, and the four cases an append-only layout gets wrong.
 - [../docs/architecture/sources/freshness.md](../docs/architecture/sources/freshness.md) - why publishing twice is prevented by a record rather than a window.
-- [20260906-constant-cost-reads-plan.md](20260906-constant-cost-reads-plan.md) - ranks 1 and 10 of the same audit, in flight.
+- [Console payloads](../docs/architecture/publishing/console-payloads.md) - the separately bounded telemetry producers and browser inputs.

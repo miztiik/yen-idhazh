@@ -76,6 +76,15 @@ def a_shard(*, written: set[str] | None = None, deleted: set[str] | None = None)
         record_path=RECORD,
         written_paths=frozenset({RECORD, *(written or set())}),
         deleted_paths=frozenset(deleted or set()),
+        owned_prefixes=frozenset(
+            {
+                "state/raw/gardener",
+                "state/old",
+                "state/dir",
+                "state/newdir",
+                "state/compact/council-run-records",
+            }
+        ),
         message=MESSAGE,
     )
 
@@ -135,6 +144,28 @@ def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
         publication_git.COMMITTER_NAME,
         publication_git.COMMITTER_EMAIL,
     )
+
+
+@pytest.mark.parametrize("deleting", [False, True])
+def test_a_task_result_does_not_grant_an_undeclared_change_permission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, deleting: bool
+) -> None:
+    origin, checkout = a_checkout(tmp_path, monkeypatch)
+    tip = git(origin, "rev-parse", "main")
+    if deleting:
+        (checkout / "README.md").unlink()
+        shard = a_shard(deleted={"README.md"})
+    else:
+        write(checkout / "README.md", "outside the task and venue declarations\n")
+        shard = a_shard(written={"README.md"})
+
+    pushed, said = landed(shard, checkout)
+
+    assert pushed.exit_code == EXIT_INTEGRITY
+    assert any("outside its declared" in line for line in said)
+    assert git(origin, "rev-parse", "main") == tip
+    assert on_origin(origin, RECORD) is None
+    assert on_origin(origin, "README.md") == "seed\n"
 
 
 def test_running_it_twice_leaves_the_tree_running_it_once_left(
@@ -560,6 +591,7 @@ def test_a_shard_names_its_record_among_its_writes_and_never_both_writes_and_del
             record_path=RECORD,
             written_paths=frozenset(),
             deleted_paths=frozenset(),
+            owned_prefixes=frozenset({"state/raw/gardener"}),
             message=MESSAGE,
         )
     with pytest.raises(ValidationError, match="both written and deleted"):

@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-10
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -174,11 +174,10 @@ becoming a second channel for fetched prose.
 
 ### The page's own headline is the second untrusted string, and it is asked second
 
-An item whose feed carried no headline is refused with `no_title`. The page had
-already been fetched and already been parsed, and its title was thrown away, so
-the item was being refused beside the string that answers it. `page_headline`
-reads it back: the feed's headline first, the page's own second, and `no_title`
-only when neither names the story.
+`page_headline` supplies the source headline when the feed carries none.
+Read the feed's headline first and the page's own second. If neither yields a
+usable headline, keep the source title and `title_source` absent. An acceptable
+body still reaches summarization, which generates its own title from the body.
 
 Three rules bound it. **Order is a control.** The page is the more
 attacker-controlled of the two strings, so it is read only when the source we
@@ -188,8 +187,8 @@ same sanitizer, the same whitespace rule. One cleaner, not two. **And it is held
 to a tighter bound.** A feed headline is written for a headline slot, so past
 `discover.TITLE_MAX_CHARS` - 500 characters - it is cut and the first 500 still
 name the story. Nothing bounds a page `<title>` but whoever wrote the page, so
-past `extract.PAGE_TITLE_MAX_CHARS` - 200 characters - it is **refused** and the
-item lands as `no_title`. Cutting it would leave a nonsense headline rather than
+past `extract.PAGE_TITLE_MAX_CHARS` - 200 characters - the headline is **refused**,
+without rejecting an acceptable body. Cutting it would leave a nonsense headline rather than
 a safe one, and 200 characters of somebody's instruction is not a headline. A
 page headline the cleaner empties is refused the same way.
 
@@ -197,10 +196,11 @@ The title stays a value on the payload; identity is recomputed from the address,
 so no filename can be steered by it, and **every prompt that carries a title
 puts it inside the untrusted fence** - the summarizer always did, and the label
 call was corrected on 2026-09-15 (see below). `Article.title_source` records
-which of the two the published headline came from. That is the outcome of a
+which of the two supplied the source headline, not the model-generated title.
+That is the outcome of a
 trust decision rather than provenance alone: the two paths are read in a fixed
 order and held to different bounds, so `page` says the more attacker-controlled
-of the two strings is the one we published.
+of the two strings supplied the source headline.
 
 ### The title is fenced in every prompt that carries it
 

@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 from pathlib import Path
 from types import ModuleType
@@ -190,6 +191,8 @@ def quiet_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
+    if sys.platform == "win32":
+        (home / "gitconfig").write_text("[core]\n\tlongpaths = true\n", encoding="ascii")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / "gitconfig"))

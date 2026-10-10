@@ -250,6 +250,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install the collector
+        run: pip install --quiet -e .
+
       - uses: actions/download-artifact@v4
         with:
           pattern: reading-*
@@ -266,17 +269,12 @@ jobs:
           REUSE_PAIRS: ${{ inputs.reuse_pairs }}
         run: |
           set -euo pipefail
-          mkdir -p "$SET_DIRECTORY/logs"
-          cp downloaded/logs/*.log "$SET_DIRECTORY/logs/" 2>/dev/null || true
-          cp pair-build.log "$SET_DIRECTORY/logs/" 2>/dev/null || true
           keep=()
           if [[ "$REUSE_PAIRS" == "true" ]]; then
             keep+=(--preserve-existing)
           fi
-          python3 backend/utilities/compare_summary_encoders.py collect \
-            --pairs "$SET_DIRECTORY/pairs.json" \
-            --readings-from downloaded/readings \
-            --out "$SET_DIRECTORY/readings" \
+          python3 backend/utilities/encoder_publish.py run \
+            --set-directory "$SET_DIRECTORY" \
             --commit "${{ github.sha }}" \
             --selected "$SELECTED" "${keep[@]}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -287,20 +285,16 @@ jobs:
 
       - name: Commit them
         if: inputs.commit_readings
+        env:
+          SELECTED: ${{ inputs.selected_encoders }}
         run: |
           set -euo pipefail
-          git config user.name 'miztiik'
-          git config user.email 'miztiik@users.noreply.github.com'
-          git add "$SET_DIRECTORY"
-          if git diff --cached --quiet; then
-            echo 'the readings did not change'
-            exit 0
-          fi
-          git commit -m 'Encoder readings, taken on the runner'
-          git pull --rebase --quiet
-          git push
+          python3 backend/utilities/encoder_publish.py land \
+            --set-directory "$SET_DIRECTORY" \
+            --selected "$SELECTED"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: encoder-comparison
           path: ${{ env.SET_DIRECTORY }}

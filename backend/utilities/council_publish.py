@@ -6,16 +6,19 @@ import argparse
 import dataclasses
 import json
 import sys
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from idhazh import config
+from idhazh import completed_writes, config
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import session
+from idhazh.council import run_identity, session
 from idhazh.council.registry import tenants
 from idhazh.council.tenancy import Tenant
-from utilities.council_matrix import COUNCIL_LEDGER
+from idhazh.telemetry import job_machine
+from utilities.council_matrix import VENUE_LEDGERS
 from utilities.publication_evidence import identified
 from utilities.publication_git import Repository
 from utilities.publication_inputs import materialize
@@ -25,7 +28,14 @@ from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 
 def settle_and_publish(
-    *, repo: Path, dates: tuple[str, ...], run_id: str, commit_sha: str, config_root: Path
+    *,
+    repo: Path,
+    dates: tuple[str, ...],
+    run_id: str,
+    commit_sha: str,
+    config_root: Path,
+    started_at: datetime | None = None,
+    clock: Callable[[], datetime] = job_machine.utc_now,
 ) -> int:
     settings = config.load(config_root)
     hosted = tenants(settings.app.council.tenants)
@@ -37,7 +47,7 @@ def settle_and_publish(
     permissions = tuple(
         dict.fromkeys(
             (
-                COUNCIL_LEDGER,
+                *VENUE_LEDGERS,
                 *(path for host in hosted for path in host.committed_paths),
             )
         )
@@ -49,7 +59,7 @@ def settle_and_publish(
 
     def completed(host: Tenant | None, evidence: dict[Path, str]) -> None:
         nonlocal integrity_failed
-        allowed = (COUNCIL_LEDGER,) if host is None else host.committed_paths
+        allowed = VENUE_LEDGERS if host is None else host.committed_paths
         confirmed: dict[str, str] = {}
         for target, digest in evidence.items():
             path = target.relative_to(repo).as_posix()
@@ -77,41 +87,60 @@ def settle_and_publish(
         receipts.append(target)
 
     receipts: list[Path] = []
-    for date in dates:
-        try:
-            for host in hosted:
-                inputs = getattr(host, "publication_inputs", None)
-                if inputs is None:
-                    sparse = (
-                        git.git("config", "--get", "core.sparseCheckout")
-                        if git.run("config", "--get", "core.sparseCheckout").returncode == 0
-                        else ""
+    with completed_writes.collect() as machine_evidence:
+        with job_machine.record(
+            date=run_identity.opened_on(run_id),
+            run_id=run_id,
+            settings=settings,
+            state_root=repo / "state",
+            commit_sha=commit_sha,
+            job=identity.job,
+            attempt=identity.attempt,
+            started_at=started_at,
+            clock=clock,
+        ) as machine_paths:
+            for date in dates:
+                try:
+                    for host in hosted:
+                        inputs = getattr(host, "publication_inputs", None)
+                        if inputs is None:
+                            sparse = (
+                                git.git("config", "--get", "core.sparseCheckout")
+                                if git.run("config", "--get", "core.sparseCheckout").returncode == 0
+                                else ""
+                            )
+                            if sparse.strip() == "true":
+                                raise IntegrityError(
+                                    "sparse tenant has no declared input paths", (host.judge_id,)
+                                )
+                        else:
+                            materialize(
+                                git,
+                                source,
+                                tuple(path for path in inputs(date=date) if path not in writes),
+                                repo,
+                                preserve_existing=True,
+                            )
+                    session.settle(
+                        settings.app.council,
+                        date=date,
+                        run_id=run_id,
+                        state_dir=repo / "state",
+                        commit_sha=commit_sha,
+                        completed=completed,
                     )
-                    if sparse.strip() == "true":
-                        raise IntegrityError(
-                            "sparse tenant has no declared input paths", (host.judge_id,)
-                        )
-                else:
-                    materialize(
-                        git,
-                        source,
-                        tuple(path for path in inputs(date=date) if path not in writes),
-                        repo,
-                        preserve_existing=True,
+                except Exception as error:
+                    if isinstance(error, IntegrityError):
+                        integrity_failed = error
+                    task_failed = True
+                    print(
+                        f"council {date}: task failure {type(error).__name__}: {error}",
+                        file=sys.stderr,
                     )
-            session.settle(
-                settings.app.council,
-                date=date,
-                run_id=run_id,
-                state_dir=repo / "state",
-                commit_sha=commit_sha,
-                completed=completed,
-            )
-        except Exception as error:
-            if isinstance(error, IntegrityError):
-                integrity_failed = error
-            task_failed = True
-            print(f"council {date}: task failure {type(error).__name__}: {error}", file=sys.stderr)
+    try:
+        completed(None, {path: machine_evidence[path] for path in machine_paths})
+    except IntegrityError as error:
+        integrity_failed = error
     if integrity_failed is not None:
         print(f"council: integrity-refused: {integrity_failed}", file=sys.stderr)
         return 2
@@ -133,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--date", action="append", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--job-started-at", type=int)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     args = parser.parse_args(argv)
@@ -142,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
         run_id=args.run_id,
         commit_sha=args.commit,
         config_root=args.config_root,
+        started_at=datetime.fromtimestamp(args.job_started_at, UTC)
+        if args.job_started_at is not None
+        else None,
     )
 
 

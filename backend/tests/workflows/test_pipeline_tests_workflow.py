@@ -1214,7 +1214,7 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(
     assert plan.run_id == f"{published['date']}-{seed}"
     assert [item.source_url for item in plan.items] == [c.url for c in drawn]
     assert [item.title for item in plan.items] == [c.title for c in drawn], (
-        "a planned item with no headline is refused by extract, so every runner reads zero items"
+        "the declared benchmark headline must reach the planned item"
     )
     assert published["item_ids"] == " ".join(item.item_id for item in plan.items)
     assert plan.feeds_read == 0, "this plan came off a config list, so no feed was asked"

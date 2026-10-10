@@ -178,6 +178,8 @@ class ServerJob(StrEnum):
     RUN_TASKS = "run-tasks"
     HISTORY = "history"
     SAVE_COUNCIL_RESULTS = "save_council_results"
+    # encoder-comparison.yml's single publisher; used by its publication receipt.
+    COLLECT = "collect"
     # A command a person runs on their own machine, outside any workflow.
     OPERATOR = "operator"
 

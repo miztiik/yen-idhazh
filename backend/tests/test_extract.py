@@ -1398,22 +1398,10 @@ def test_a_feed_that_named_nothing_publishes_under_the_page_s_own_headline(
     [(None, "carried no title element"), ("   ", "carried a title of three spaces")],
     ids=["absent", "whitespace"],
 )
-def test_an_item_no_one_named_degrades_rather_than_raising(
+def test_an_item_no_one_named_keeps_its_body_for_summarization(
     headline: str | None, what: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A feed entry with no headline used to kill the whole shard, not one item.
-
-    `Article` refuses an ok payload whose title is None, and this function used
-    to build one - so the refusal came out of the extractor as a ValueError, and
-    the per-item loop above it does not catch one. Both feed shapes reach here
-    from a real feed: `discover.clean_title` returns None for an absent headline
-    and for one that is only whitespace, and nothing between it and here fills
-    the gap.
-
-    The page is silent too, which is what is left once the fallback has asked
-    it. The body extracts and every other refusal has already declined, so the
-    missing headline is the only reason on the payload.
-    """
+    """A missing source headline does not discard an acceptable article body."""
     with _TitleSite({"/a": built_page(None)}) as site:
         _let_the_loopback_be_dialled(monkeypatch)
         item = planned_at(site.url("/a"), title=headline)
@@ -1424,24 +1412,17 @@ def test_an_item_no_one_named_degrades_rather_than_raising(
             fetched_at=FETCHED_AT,
         )
 
-    assert article.status is ArticleStatus.EXTRACT_FAILED, what
-    assert article.failure_code is FailureCode.NO_TITLE
-    assert (
-        article.failure_detail == "neither the feed nor the page carries a headline we will publish"
-    )
-    assert article.text is None
-    assert article.title_source is None, "nothing was published, so nothing is sourced"
+    assert article.status is ArticleStatus.OK, what
+    assert article.failure_code is None
+    assert article.text
+    assert article.title is None
+    assert article.title_source is None
 
 
-def test_a_headless_item_degrades_while_its_sibling_in_the_same_batch_publishes(
+def test_a_headless_item_and_its_named_sibling_both_keep_their_bodies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Degrade, do not fail - through the real per-item path, not around it.
-
-    Both items reach extraction with no feed headline. One page names itself and
-    one does not, so the batch carries both outcomes of the fallback at once, and
-    the refusal has to stay inside its own item.
-    """
+    """Source headline availability does not decide which body survives."""
     settings = config.load(CONFIG_DIR)
     pages = {
         "/silent": built_page(None),
@@ -1456,8 +1437,9 @@ def test_a_headless_item_degrades_while_its_sibling_in_the_same_batch_publishes(
         fetched = [common._fetch_one(item, settings, read_over_the_loopback) for item in items]
 
     silent, named = (one.article for one in fetched)
-    assert silent.status is ArticleStatus.EXTRACT_FAILED
-    assert silent.failure_code is FailureCode.NO_TITLE
+    assert silent.status is ArticleStatus.OK
+    assert silent.title is None
+    assert silent.text
     assert named.status is ArticleStatus.OK, "a sibling's thin data is not this item's failure"
     assert named.title == "Four countries approve offshore wind capacity"
     assert named.title_source is TitleSource.PAGE
@@ -1514,12 +1496,8 @@ def test_a_page_headline_past_its_bound_is_refused_rather_than_cut(
     Nothing bounds a page `<title>` but whoever wrote the page, so a title far
     past a headline's length is a payload rather than a headline. Cutting it
     would publish the first 200 characters of whatever it is and call that a
-    headline, and would put those 200 characters in front of a model. The item
-    is refused instead, with the reason on the payload (Guardrail #11).
-
-    The published headline is asserted absent as well as the status, because a
-    status check alone passes a build that refused the item and published the
-    string anyway.
+    headline, and would put those 200 characters in front of a model. The
+    headline is refused while the body remains available for summarization.
     """
     assert len(_LONG_HEADLINE) == 250, "this headline has to be past the page bound to prove it"
     assert len(_LONG_HEADLINE) > PAGE_TITLE_MAX_CHARS
@@ -1534,11 +1512,9 @@ def test_a_page_headline_past_its_bound_is_refused_rather_than_cut(
             fetched_at=FETCHED_AT,
         )
 
-    assert article.status is ArticleStatus.EXTRACT_FAILED
-    assert article.failure_code is FailureCode.NO_TITLE
-    assert (
-        article.failure_detail == "neither the feed nor the page carries a headline we will publish"
-    )
+    assert article.status is ArticleStatus.OK
+    assert article.failure_code is None
+    assert article.text
     assert article.title is None, "refused, so nothing was published under it"
     assert article.title_source is None
 
@@ -1569,7 +1545,7 @@ def test_the_same_headline_from_a_feed_still_publishes_whole(
     assert len(_LONG_HEADLINE) <= TITLE_MAX_CHARS, "a feed headline is cut at 500, not at 250"
 
 
-def test_a_page_whose_headline_is_only_whitespace_is_refused_rather_than_published(
+def test_a_page_with_a_blank_headline_keeps_only_its_body(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An empty headline is not a headline, whichever of the two said it."""
@@ -1583,8 +1559,11 @@ def test_a_page_whose_headline_is_only_whitespace_is_refused_rather_than_publish
             fetched_at=FETCHED_AT,
         )
 
-    assert article.status is ArticleStatus.EXTRACT_FAILED
-    assert article.failure_code is FailureCode.NO_TITLE
+    assert article.status is ArticleStatus.OK
+    assert article.failure_code is None
+    assert article.title is None
+    assert article.title_source is None
+    assert article.text
 
 
 def test_the_page_is_only_read_for_a_headline_and_never_for_a_body() -> None:

@@ -46,6 +46,7 @@ import logging
 import sys
 import time
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -64,6 +65,7 @@ from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.council import run_identity as council_identity
 from idhazh.council import session as council_session
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
@@ -102,6 +104,7 @@ from idhazh.telemetry import (
     cli as telemetry_cli,
 )
 from idhazh.telemetry import (
+    job_machine,
     silicon,
 )
 
@@ -715,13 +718,33 @@ def _dispatch(
         # Beside its siblings: it runs after every shard has reported and calls
         # no model of its own. It is also the one council verb that writes under
         # `state/`, so it is the one that is handed the root.
-        council_session.settle(
-            settings.app.council,
-            date=args.date or _today(),
-            run_id=_council_run(parser, args.stage, args.run_id),
-            state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
-            commit_sha=args.commit,
+        night = _council_run(parser, args.stage, args.run_id)
+        state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
+        # Instrument the command without adding telemetry imports to the venue.
+        # Every date uses the same night and job-start stamp.
+        machine = (
+            job_machine.record(
+                date=council_identity.opened_on(night),
+                run_id=night,
+                settings=settings,
+                state_root=state_dir,
+                commit_sha=args.commit,
+                job=ServerJob.SAVE_COUNCIL_RESULTS,
+                started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
+                if args.job_started_at
+                else None,
+            )
+            if settings.app.council.tenants
+            else contextlib.nullcontext()
         )
+        with machine:
+            council_session.settle(
+                settings.app.council,
+                date=args.date or _today(),
+                run_id=night,
+                state_dir=state_dir,
+                commit_sha=args.commit,
+            )
         return 0
 
     if args.stage == "council-shard":

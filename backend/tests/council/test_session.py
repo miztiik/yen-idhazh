@@ -20,7 +20,9 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
@@ -177,6 +179,33 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     empty = _config_registering(tmp_path)
 
     assert cli.main([verb, "--date", A_DATE, "--run-id", A_RUN, "--config", str(empty)]) == 0
+    from idhazh.stages import common
+
+    assert not ledger.list_raw_files(common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, days={A_RUN[:10]})
+
+
+def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue: Path) -> None:
+    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
+    config_root = _config_registering(venue, A_SLUG)
+    state = venue / "state"
+    address = [
+        "--config", str(config_root), "--run-id", A_RUN,
+        "--state-root", str(state), "--commit", A_SHA,
+    ]
+
+    for judged in (A_DATE, "2026-09-19"):
+        assert cli.main(["council-settle", "--date", judged, *address]) == 0
+
+    rows = ledger.load_days(
+        state, LedgerName.HOST_FINGERPRINT, [A_RUN[:10]], model=HostFingerprintRow
+    )
+    assert len(rows) == 1
+    (row,) = rows
+    assert row.job is ServerJob.SAVE_COUNCIL_RESULTS
+    assert row.run_id == A_RUN
+    assert row.fingerprint is not None
+    assert row.job_seconds is not None
+    assert row.memcpy_probe_mib == 0 and row.memcpy_gib_s is None
 
 
 @pytest.mark.parametrize("verb", [*COUNCIL_VERBS, "council-shard"])

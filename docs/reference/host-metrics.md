@@ -1,10 +1,9 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-10
 
-Every column of the host fingerprint, what it means, and what it is for. One row
-a job, by every job that draws its own runner - written in two halves, one at job
-start and one at job end.
+Every column of the host fingerprint, what it means, and what it is for.
+The producer records one row per instrumented job, or per shard of that job.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -29,7 +28,7 @@ set is still operator-only: the console reads it at build time under
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
 | Ledger | `state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run, packed under `state/compact/host-fingerprint/` by its production compaction; `state/raw/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch, packed under `state/compact/pipeline-tests/host-fingerprint/` by `compact-trial-host-fingerprint` |
 | Files | one raw file per write, `<file_id>.parquet` in the day directory, a name the ledger door mints so no second writer takes it. The probe and the clock of one job are one writer, so the clock's file replaces the probe's |
-| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job files its own row through `ledger.persist`, and nothing else writes the ledger |
+| Producer | [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py), through the two CLI verbs or [`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py). All writes use `ledger.persist` |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
@@ -67,9 +66,8 @@ for both steps of one job, so both files belong to one work unit and the later
 one is read.
 
 **`assemble` took the probe from 2026-09-17 and the clock only from 2026-10-08.**
-For those three weeks it wrote the one job that never closed its row: a machine
-with no wall clock, which reads as a job that cost nothing rather than as a job
-nobody timed. It takes no server log and no counters file, because it stands no
+Its earlier rows name a machine but leave elapsed time unknown, not zero.
+It takes no server log and no counters file, because it stands no
 model server up - `model_load_ms` and the two prompt cells stay empty for it, and
 that is the reading rather than a gap. A probing job that never clocks itself now
 fails `backend/tests/workflows/test_worker_ledgers.py` instead of filing half a
@@ -90,11 +88,44 @@ strings, which made a machine reading something only the two workflows that open
 with a plan stage could take - `digest.yml` and `measure.yml`. A gardener wake or
 a council night reached a plan nothing had written and failed the step.
 
-**What a workflow still owes to carry the probe** is a `ServerJob` member for its
-job's own id, and a commit step that stages `state/`, because a row nobody
-commits dies with its runner. `run-tasks`, `history` and `save_council_results`
-are already members, so the gardener's two task jobs and the council's settle job
-need no code change to start recording a machine.
+**The gardener and council now record their committing jobs.** Each gardener
+`run-tasks` shard probes before its tasks and clocks afterwards. Both files are
+named among that shard's exact writes, so its existing publisher includes them
+without staging all of `state/`. It uses the settings, attempt and clock handed
+to the runner, not a second load of the default configuration.
+
+The council's `save_council_results` job probes around the full date loop in
+`council_publish.settle_and_publish`. Its observer records both machine files
+in exact publication receipts. Independent venue permissions include the host
+ledger; tenant permissions do not. The row uses the day the council run opened,
+not each date it judged.
+Repeated date settlements therefore read as one machine for that collecting
+job. The workflow passes one start stamp for the whole job. A night with no
+tenant writes neither a council record nor a machine record.
+
+This does not measure the gardener's planning or history-rewrite job, nor the
+council's planning and judging jobs. The collecting job's processor is not the
+processor that ran a council judging shard. Instrument I/O failures log a
+missing reading; they do not hide work failures. Paused or retired families
+still reject new host rows.
+
+**Memory-copy measurements are opt-in per job.** Set
+`observability.host_fingerprint_bandwidth_jobs` in `config/idhazh.json`.
+The default is `["runtime"]`: the bench job alone. Use `[]` to disable the
+copy for every job, or add `work`, `run-tasks` or `save_council_results` to
+enable it there. Machine identity and timing still record when the copy is off.
+An unselected job has `memcpy_probe_mib=0` and an empty `memcpy_gib_s`. The
+existing buffer floor also disables copying when it is zero. The default
+change leaves older measurements intact and adds no persisted column.
+
+To instrument another job, use
+[`job_machine.record`](../../backend/idhazh/telemetry/job_machine.py) around its
+real work, with already loaded settings, its run identity, attempt and UTC
+start clock. It returns both exact written paths, including the closing clock
+on work failure. Observe those writes and declare the host ledger separately
+when adopting [the publisher](../architecture/publishing/committing.md).
+Leave the job out of `host_fingerprint_bandwidth_jobs` unless it must measure
+memory copying. Do not claim that one collecting machine measured other jobs.
 
 **A workflow that mints its own run name hands it over with `--run-id`.** The
 council names a night once and gives that name to every verb that writes a row,

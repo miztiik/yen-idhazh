@@ -1,6 +1,6 @@
 # Data Growth Research And Planning Handover
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-10-10
 
 Status: research only. No implementation is authorized by this document. The
 155 findings describe source revision `76c2d27cbfb7ba9d868e0747dea366b2223e408f`.
@@ -10,7 +10,7 @@ Do not execute the numbered findings as a queue.
 
 ## Closed by the Constant-Cost Reads plan
 
-The [Constant-Cost Reads plan](20260906-constant-cost-reads-plan.md) closed 43 of
+The completed Constant-Cost Reads work addressed 43 of
 these findings between 2026-09-06 and 2026-09-08. Each row names the finding, the
 plan row that took it, and the merged PR that closed it. This is recorded
 alongside the research and does not overwrite it (`CLAUDE.md` section 5): the
@@ -53,6 +53,18 @@ row 6 did the `(date, item_id)` lookup half (#454) and row 23 did the title-map
 half (#500). **Finding 112** is a `Keep` (necessary local presentation work); it
 sits inside the audited 93-113 range but was never in this plan's scope, and
 nothing here closes it.
+
+**Finding 84 remains pending; its page design is a proposal, not shipped
+behaviour or implementation approval.** The proposal uses `ui.archive_page_size`
+stories per page, fetches a deep link's target page directly, and keys page
+navigation and hide-read state by the day's revision. It bounds retained page
+bytes using `ui.offline_bytes_kept`, limits each page with `max_body_bytes`, and
+evicts the oldest page when the retained-byte ceiling is reached. Those existing
+knobs do not currently bound a reading page's whole-day download or memory.
+Preserving instant whole-day substring filtering would require a separate
+revision-owned local index and its download; otherwise filtering would cover only
+loaded pages or wait for more downloads. A later execution plan must settle that
+choice and the byte and navigation contracts before changing the served payload.
 
 **Two plan rows close no finding, but the 43 above rest on them.** Row 1 set
 every tunable the plan needed in one contract and its schema - the 1/7/14/30/90-day

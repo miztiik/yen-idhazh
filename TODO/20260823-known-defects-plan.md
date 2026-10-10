@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-10
 
-**Thirty-six defects are open.** Five of them need evidence or a ruling before any code
+**The open defects have named owners below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -141,6 +141,36 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 68 | The merge line's hold has no floor on its pair count, so one pair can hold a run | 2 | **OPEN - reasoned, not measured; whether one pair may hold a run is Andre's to rule** |
 | 69 | A re-run of a day that predates fragments may record a line it did not use | 5 | **OPEN - reasoned, not measured; measure the preserved day and its run record before any contract decision** |
 | 70 | The raw-listing test does not check the value included in the built site | 2 | **OPEN - check the real build on generated data against written-out days** |
+| 71 | The canary uses one model, so the model-swap plots have no browser parity case | 2 | **OPEN - record a model swap in the canary and check the drawn points** |
+| 72 | A chart test excludes all reader pages when the worktree name contains console | 1 | **OPEN - filter the build-relative console route segment, not the absolute path** |
+
+## 72 - A chart test excludes all reader pages when the worktree name contains console (OPEN)
+
+`frontend/tests/charts.spec.ts` filters absolute HTML paths with
+`!path.includes('console')` in its reading-route chart-module check. A worktree
+whose name contains that word loses every reader page from the check and fails
+the nonempty assertion. Match the console route segment relative to `BUILD`
+instead. A regression case must use a generated build path with `console` in
+its parent name and retain reader pages while excluding console pages.
+
+Verified against main on 2026-10-10 while retiring the completed read-cost plan.
+This is a test-only fix; no reader behaviour needs to change.
+
+## 71 - The canary uses one model, so the model-swap plots have no browser parity case (OPEN)
+
+`backend/utilities/build_canary_day.py` writes the same summarizer model into
+every run and the same model id into score rows. The model route derives swap
+rows only when adjacent days name different models. Its `modelDays` and
+`modelSwaps` plot preparation therefore has no model-swap browser case.
+The canary's changing prompts exercise pipeline-change rules, not model swaps.
+
+Record two model identities across the canary days, then check the model route's
+drawn points, swap dates and readouts against the fixture at more than one window
+size. Preserve the settings-change fixture and account for other browser specs
+that consume the same canary. This changes shared test data, not production
+models or their selection policy.
+
+Verified against main on 2026-10-10 while retiring the completed read-cost plan.
 
 ## 70 - The raw-listing test does not check the value included in the built site (OPEN)
 

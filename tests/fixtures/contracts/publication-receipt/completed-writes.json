@@ -1,0 +1,14 @@
+{
+  "identity": {
+    "attempt": 1,
+    "git_sha": "0000000000000000000000000000000000000000",
+    "job": "save_council_results",
+    "producer": "council.session",
+    "run_id": "2026-09-27-18012345678",
+    "shard": 0
+  },
+  "version": "2026-10-09",
+  "writes": {
+    "state/paper/result.json": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+  }
+}

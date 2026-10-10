@@ -1,6 +1,6 @@
 # What the Pipeline Costs to Run
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-10
 
 Where current runtime measurements live and how to use them when sizing work. This page does not keep a history of production runs or duplicate model readings.
 
@@ -75,6 +75,14 @@ python backend/utilities/measure_budgets.py check
 Retake model-dependent readings in CI when the subject changes. Do not copy a value from this page into a gate or silently shorten content to make a context window fit.
 
 ## What to measure next
+
+The user deferred further work on the reported two-call slowdown and adoption
+of two simultaneous model requests per worker. Neither deferral is a finding
+that the current cost is acceptable or that concurrency helps. Reopening either
+needs a current measurement using the active model and runtime, matched inputs,
+and named runner hardware. Historical readings from a retired model do not
+settle these questions. The `parallel-summarization` case in
+`config/pipeline-tests.json` remains disabled.
 
 Keep an open measurement in the active plan only when it changes the next decision. Name the question, inputs, method and cost. Do not carry a permanent table of resolved questions, retired jobs or experiments nobody will run.
 

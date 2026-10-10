@@ -1,6 +1,7 @@
 """Does the real collecting publisher retain earlier and later completed tenant work?"""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -8,9 +9,12 @@ from gardener._garden import an_origin, git, on_origin, quiet_git
 
 from idhazh import ledger
 from idhazh.contracts.council_run_record import CouncilRunRecord
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.council import registry, session
 from utilities.council_publish import settle_and_publish
+from utilities.publication_git import Repository
 
 from ._config import copy_config
 from ._tenants import TENANT_SOURCE, a_venue, forget
@@ -46,7 +50,7 @@ def test_many_tenants_and_later_dates_survive_a_failure(
         tmp_path,
         {
             "seed": "seed\n",
-            "config/push-retry.json":             '{"deadline_seconds":{"default":300},"base_step_seconds":0.001,'
+            "config/push-retry.json": '{"deadline_seconds":{"default":300},"base_step_seconds":0.001,'
             '"ceiling_seconds":0.001,"ceiling_after":1}\n',
         },
     )
@@ -70,6 +74,8 @@ def test_many_tenants_and_later_dates_survive_a_failure(
                 run_id="2026-10-09-123",
                 commit_sha=git(repo, "rev-parse", "HEAD").strip(),
                 config_root=configuration(tmp_path, slugs),
+                started_at=datetime(2026, 10, 9, 23, 59, tzinfo=UTC),
+                clock=lambda: datetime(2026, 10, 10, 0, 2, tzinfo=UTC),
             )
             == 1
         )
@@ -84,6 +90,33 @@ def test_many_tenants_and_later_dates_survive_a_failure(
         )
         assert len(rows) == 5
         assert sum(row.date == "2026-10-09" for row in rows) == 3
+        receipts = [
+            PublicationReceipt.read(path)
+            for path in (repo / "backend" / "var" / "council" / "publication").iterdir()
+        ]
+        evidence = {path: digest for receipt in receipts for path, digest in receipt.writes.items()}
+        machine = {
+            path: digest
+            for path, digest in evidence.items()
+            if path.startswith("state/raw/host-fingerprint/")
+        }
+        assert len(machine) == 2, "both probe and closing clock must have receipts"
+        remote = Repository(origin)
+        for path in machine:
+            entry = remote.entry("main", path)
+            assert entry is not None, "a receipted machine write was never pushed"
+            assert remote.blob(entry.oid) == (repo / path).read_bytes()
+            assert "/2026/10/09/" in path, "machine belongs to opened night, not settled date"
+        host_rows = ledger.load_days(
+            repo / "state",
+            LedgerName.HOST_FINGERPRINT,
+            ["2026-10-08", "2026-10-09", "2026-10-10"],
+            model=HostFingerprintRow,
+        )
+        assert len(host_rows) == 1, "many dates and tenants still draw one collecting machine"
+        assert host_rows[0].job_seconds == 180
+        assert host_rows[0].memcpy_probe_mib == 0
+        assert host_rows[0].memcpy_gib_s is None
     finally:
         forget(package)
 
