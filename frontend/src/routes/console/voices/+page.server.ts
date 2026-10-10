@@ -6,7 +6,6 @@ import { windowDay } from '$lib/server/window-day';
 import {
 	feedResults,
 	latestDate,
-	reliabilityPublished,
 	sourceHealthView,
 	type FeedResult,
 	type SourceHealthRow,
@@ -27,7 +26,8 @@ import {
 	type Reliability
 } from '$lib/feed-health';
 import { retiring } from '$lib/server/source-retiring';
-import { shareMarks, targetMarks, type TargetMarks } from '$lib/charts/targetbar';
+import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
+import { standing } from '$lib/console/voices/ranking-discount';
 
 export const prerender = true;
 
@@ -37,106 +37,7 @@ export type { CapPoint, LengthRange, SourceCut, SourceCuts } from '$lib/server/m
 export type { FeedDay, FeedDayOutcome, Reliability };
 export type { YieldDay } from '$lib/server/source-retiring';
 
-/** One feed's standing with the ranker, as the page draws it.
- *
- * `factor` is what the run applied and `reads` is what it was reduced over.
- * They travel together because a factor with no denominator is not a
- * measurement: a feed nobody asked scores the same 1.0 as a feed that never
- * missed, and the page has to be able to tell those apart.
- *
- * `marks` is computed here rather than in the browser, so the bar is on the
- * page before any script runs - the same trade the feed-failure bars take.
- */
-export interface FeedStanding {
-	sourceId: string;
-	title: string;
-	vertical: string;
-	/** The multiplier, in the range the floor and 1.0 bound. */
-	factor: number;
-	/** Evidence-bearing reads behind it. Zero means the factor is a default. */
-	reads: number;
-	/** True when the ranker has taken this feed as far down as it goes. */
-	onTheFloor: boolean;
-	/** Null where `reads` is zero - there is no bar to draw over no evidence. */
-	marks: TargetMarks | null;
-}
-
-/** What the ranking did about the record, ready to draw. */
-export interface Standing {
-	headline: string;
-	floor: number;
-	windowDays: number;
-	/** Worst first, then by id, so two builds over one view draw one order. */
-	feeds: FeedStanding[];
-	/** Feeds the row cap left out, and how many of those are on the floor. */
-	hidden: number;
-	hiddenOnTheFloor: number;
-	/** Feeds with no evidence behind their factor, over how many were counted. */
-	unmeasured: number;
-	counted: number;
-	generatedAt: string;
-	runId: string;
-}
-
-/** The ranking factor per feed, from the view the pipeline published.
- *
- * Read and never re-derived. `telemetry.source_health.feed_reliability` reduced
- * these rows when the run happened; reducing them again in a page would be a
- * second answer to one question, and the day the two disagreed neither would be
- * worth drawing (`docs/architecture/sources/health.md`).
- *
- * Retired addresses are left out. Their factor is whatever the window still
- * holds from before we stopped asking, so drawing it would put a bar on a feed
- * no run will ever ask again.
- *
- * **Null for a view written before the reliability fields existed**, which is
- * the read-side migration this panel owes (`CLAUDE.md` section 11). A view the
- * pipeline wrote yesterday carries no `reliability`, no `reliability_reads`, no
- * floor, no window and no headline; the page has to draw its named absence for
- * that rather than die, and a build that dies takes the census and the failure
- * list down with it. It is one guard rather than five optional fields because
- * the five arrived together and no run can write a subset of them.
- *
- * Not exported. SvelteKit allows a `+page.server.ts` to export `load` and a
- * short list of options and nothing else, so an exported helper here fails the
- * build rather than a lint - which is what took `site`, `browser` and
- * `whole-day` red on this branch. The route next door keeps `sourceHealth` the
- * same way.
- */
-function standing(view: SourceHealthView | null, rows: number): Standing | null {
-	if (view === null || !reliabilityPublished(view)) return null;
-	const live = view.sources.filter((row) => !row.retired);
-	const ranked = live
-		.map((row) => ({
-			sourceId: row.source_id,
-			title: row.title,
-			vertical: row.vertical,
-			factor: row.reliability,
-			reads: row.reliability_reads,
-			onTheFloor: row.reliability_reads > 0 && row.reliability <= view.reliability_floor,
-			// Higher is better here, so the fill runs from nothing up to 1.0 and the
-			// mark sits on the floor the ranker will not discount past.
-			marks: row.reliability_reads > 0 ? shareMarks(row.reliability, view.reliability_floor) : null
-		}))
-		.sort(
-			(a, b) =>
-				a.factor - b.factor || b.reads - a.reads || a.sourceId.localeCompare(b.sourceId)
-		);
-	const drawn = ranked.slice(0, rows);
-	const hidden = ranked.slice(drawn.length);
-	return {
-		headline: view.headline_sentence,
-		floor: view.reliability_floor,
-		windowDays: view.reliability_window_days,
-		feeds: drawn,
-		hidden: hidden.length,
-		hiddenOnTheFloor: hidden.filter((feed) => feed.onTheFloor).length,
-		unmeasured: ranked.filter((feed) => feed.reads === 0).length,
-		counted: ranked.length,
-		generatedAt: view.generated_at,
-		runId: view.run_id
-	};
-}
+export type { FeedStanding, Standing } from '$lib/console/voices/ranking-discount';
 
 /** One feed the pipeline is having trouble reading, and how near a rest it is. */
 export interface FeedTrouble {
