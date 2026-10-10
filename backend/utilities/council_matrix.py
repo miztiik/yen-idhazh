@@ -22,12 +22,23 @@ from typing import Final
 
 from idhazh import config
 from idhazh.council.registry import tenants
+from idhazh.council.session import VENUE_LEDGERS as VENUE_LEDGER_NAMES
 from idhazh.council.session import publication_paths, shard_width
+from idhazh.ledger import staging
 
 #: How many jobs one repository may have running at once. GitHub's number, not
 #: ours: past it a job waits its turn, and lowering it would be a throttle
 #: nobody asked for (CLAUDE.md Guardrail #2).
 PLATFORM_JOB_CEILING: Final = 20
+
+#: The venue's own ledgers, staged by the collecting job alongside whatever the
+#: tenants named. Built from each ledger's registry prefix rather than spelled,
+#: so a move of the tree moves these with it. The record says which units ran;
+#: the host row says which machine ran them, and neither belongs to a tenant -
+#: a list of one tenant's paths would commit neither.
+VENUE_LEDGERS: Final = tuple(staging.staged_path(which) for which in VENUE_LEDGER_NAMES)
+COUNCIL_LEDGER: Final = VENUE_LEDGERS[0]
+
 
 def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]]:
     """Every unit of work the night fans out to, tenant by tenant, date by date.

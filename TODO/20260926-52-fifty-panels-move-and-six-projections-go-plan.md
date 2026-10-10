@@ -30,7 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Changes to the query door itself: a column-shaped result, a "newest N days" ask, a structured aggregate | Rows 6 to 9 use the [shipped query reader and page cache](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md). Row 4 says whether that is fast enough | This plan's owner, handed the reading by ESCALATE trigger 3 |
 | New questions beyond Susan's verdicts | None today | A later Susan pass |
 | `failed_field` (verdict 27) | It stays in `UNREAD_CELLS`, empty on every committed row | A row that gives it a writer or deletes the column |
-| A page where an operator types a question | Nothing here | [`20260928-55-one-page-queries-every-ledger-plan.md`](20260928-55-one-page-queries-every-ledger-plan.md), which starts after row 1 |
+| A page where an operator types a question | Nothing here; the Data explorer is delivered | [The written-question reader](../docs/architecture/publishing/how-the-query-door-answers-a-written-question.md), delivered by #1201 and the Data explorer PRs |
 
 ### The intent this plan serves
 
@@ -751,6 +751,8 @@ Each knob lives in its route's `knobs` (section 2.2) unless named otherwise. A v
 
 ### Row #2 - The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout
 
+- **Already carried by plan 55 row 20:** optional readouts for PartsOfOne, TileStrip and Flow; explorer-only native tooltip removal; caller part colours (K2), tile thresholds only with readings (K3), caller tile-state words (K4), and an opt-in shared Flow count verdict for a truthful fallback lede. Every other caller keeps its defaults.
+
 - **Scope:** section 2.5 and the colour table of section 2.4. **No pixel moves**, except that dark `--chart-6` takes its re-tuned value, and no route row edits `frontend/src/lib/charts/d3/` or a shared chart component this row changes afterwards. The settings line's data is row 5's; this row declares `ModelRule` in `frontend/src/lib/charts/d3/model-rule.ts` and makes `dateSeries` take it.
 - **Files touched:**
   - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (adapt the shipped caller to the chart props, preserving its host-only rule declaration)
@@ -1085,7 +1087,7 @@ The placeholder's section "The shape this plan is expected to take", which plan 
 - [The query reader](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md) - query, reach, cache and publication behavior.
 - [The chart vocabulary](../docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md) and [chart and readout rules](../docs/concepts/console-design/the-rules-every-console-chart-obeys.md) - the drawing contracts.
 - [The design system](../docs/concepts/design-system.md) and [run the gates](../docs/how-to/run-the-gates.md) - sufficiency, panel pictures and browser setup.
-- [`20260928-55-one-page-queries-every-ledger-plan.md`](20260928-55-one-page-queries-every-ledger-plan.md) - the sixth console route, which starts after row 1.
+- [The Data explorer](../docs/how-to/query-a-ledger-from-the-console.md) - the delivered sixth console route; its shared chart slice is #1503.
 - [`../docs/concepts/telemetry-intent.md`](../docs/concepts/telemetry-intent.md) - N2 to N8.
 - [`../docs/concepts/console-design/how-a-console-chart-gets-its-data.md`](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) - the rules every panel here is built to.
 - [`../docs/architecture/publishing/console-payloads.md`](../docs/architecture/publishing/console-payloads.md) - what the console reads today, and the projections this plan deletes.

@@ -204,7 +204,7 @@ def test_equal_writer_identities_gather_check_and_place_under_separate_case_root
         path.as_posix()
         for name in roots
         for path in (
-            state / TRIAL_STATE_PREFIX / name,
+            state / ledger.paths.RAW_DIRNAME / "traces" / TRIAL_STATE_PREFIX / name,
             state / ledger.paths.RAW_DIRNAME / TRIAL_STATE_PREFIX / name,
         )
     ]

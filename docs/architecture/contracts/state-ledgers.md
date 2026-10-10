@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-08
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -54,7 +54,7 @@ The console reads the feed record at build time from its packed files under `sta
 
 ## The gardener
 
-`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock, the instant the shard finished working, and `cone_bytes`, what the folders the shard owns weighed at the commit it checked out, beside `downloaded_bytes`, what the shard downloaded for its tasks to read - both empty on a row a hand run wrote, because a hand run weighs nothing. A row of `workflow-runs` or `workflow-artifacts` also carries `handled_through`, the newest UTC day its walk has handled every member through; every other task's row leaves it empty. A row of a pass that stopped for a fault names it in `fault`, one closed word, and `recovered` lists every fault a pass recorded instead of stopping, one note a period or member; both are empty on a row written before 2026-10-07 ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-record)).
+`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock, the instant the shard finished working, and `cone_bytes`, what the folders the shard owns weighed at the commit it checked out, beside `downloaded_bytes`, what the shard downloaded for its tasks to read - both empty on a row a hand run wrote, because a hand run weighs nothing. A row of `workflow-runs` or `workflow-artifacts` also carries `handled_through`, the newest UTC day its walk has handled every member through; every other task's row leaves it empty. A row of a pass that stopped for a fault names it in `fault`, one closed word, and `recovered` lists every fault a pass recorded instead of stopping, one note a period or member; both are empty on a row written before 2026-10-07. The 2026-10-09 contract adds `manual-action` as a failed fault for the eight named compaction refusals; older rows read unchanged, `raised` stays the word for defects and unclassified failures, and the existing deferred faults stay green ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-record)).
 
 Two tasks read it: `workflow-runs` and `workflow-artifacts` each read their own rows of the last `mark_lookback_days` UTC days, by named day, to find where their last walk stopped ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#the-collection-tasks)). It files at the `raw-and-compact` grain; what `prefix` means for that grain, and which builders refuse it, is [ledger-registry.md](ledger-registry.md#a-ledger-under-the-two-roots).
 
@@ -66,7 +66,7 @@ Its read carries `collect.published_window_days`, and the committed config sets 
 
 Size it from the ceiling. A run plans at most `run.safety_ceiling_per_run` items, which the committed config sets to 80, and the schedule fires five times a day - so a day writes at most 400 rows and a year at most about 146,000.
 
-The whole read holds one month's rows and the answer at a time, whatever the history holds. `backend/tests/test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` doubles the months held and checks that the peak stays flat. The read times measured on 2026-09-08 were of the CSV day files this ledger no longer keeps, so they are not repeated here; git history holds them. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
+The whole read folds one held month into the answer before it reads the next, whatever the history holds. `backend/tests/test_ledger.py::test_the_unbounded_cover_reads_one_held_month_at_a_time` builds six months and checks that the unbounded path asks for each held month. This is a behavior check, not a peak-memory measurement. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
 ## The item-health summary keeps a month but files through the door
 

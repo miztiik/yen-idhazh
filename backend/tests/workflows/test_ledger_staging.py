@@ -1,15 +1,16 @@
 """Is every ledger the pipeline commits wired into the run that writes it?
 
-Two halves of one question. A ledger the writing job never stages is deleted with
-the runner, and a keyed ledger nothing settles keeps every row a retried job wrote
-twice. Both failures are silent: the pipeline logs a row it wrote, the step that
-would have carried it says nothing, and the next reader sees a shorter file than
-the run produced.
+A ledger the writing job never stages is deleted with the runner. The failure is
+silent: the pipeline logs a row it wrote, the step that would have carried it says
+nothing, and the next reader sees fewer rows than the run produced. A retried
+job's second write needs no settlement here: the ledger door keeps the higher
+attempt of each work unit when a reader asks.
 
-`state/host-fingerprint` was the first half. It was written from the day the probe
-shipped and staged by nothing, so every row went to the bin with the runner.
+`state/host-fingerprint` was the first ledger this caught. It was written from the
+day the probe shipped and staged by nothing, so every row went to the bin with the
+runner.
 
-Both halves used to be derived from the package's own source with `ast` and
+The check used to be derived from the package's own source with `ast` and
 `inspect`: every `*.py` under `idhazh` was read and parsed on every call, because a
 hand-written list of ledger names is the thing that went missing in the first
 place. That walk cost more every time the package grew, and OWNER RULING
@@ -33,22 +34,18 @@ Guardrail #12).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from pathlib import Path
-from types import MappingProxyType
 from typing import Final
 
 import pytest
 
-from idhazh import ledger
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.staging import REGISTRY, staged_path
+from utilities.digest_publish import permissions
 
 from ._harness import (
     COMMIT_JOBS,
     COMMIT_STEPS,
     COMMIT_WORKFLOWS,
-    SUBSTITUTED_DATE,
     _commit_call,
 )
 
@@ -63,11 +60,6 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 # run.
 TRIAL_WORKFLOW: Final = "measure.yml"
 
-#: A ledger's CSV settlement key, declared by hand beside the places `keyed_paths`
-#: names it. Door ledgers use `ledger.keys._DOOR_SHAPES` instead. Empty: the judge's
-#: fitted line, the last ledger settled after a merge, moved to the door.
-LEDGER_KEYS: Final[Mapping[LedgerName, tuple[str, ...]]] = MappingProxyType({})
-
 
 def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     """(Workflow, job) -> commit label -> the paths that label stages.
@@ -79,7 +71,11 @@ def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     for label, workflow in COMMIT_WORKFLOWS.items():
         if workflow == TRIAL_WORKFLOW:
             continue
-        calls.setdefault((workflow, COMMIT_JOBS[label]), {})[label] = _commit_call(label)[0]
+        argv = _commit_call(label)[0]
+        assert argv[0] == label, "the workflow must select its own concrete digest policy"
+        calls.setdefault((workflow, COMMIT_JOBS[label]), {})[label] = list(
+            permissions(label, date="2026-10-09")
+        )
     return calls
 
 
@@ -161,36 +157,4 @@ def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
     assert credited == set(commit_calls), (
         f"the {sorted(set(commit_calls) - credited)} job commits and this test charged "
         "it with no ledger at all, so nothing above was checked for it."
-    )
-
-
-def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None:
-    """A keyed ledger outside the registry keeps every row a retried job wrote twice.
-
-    `LEDGER_KEYS` and `keyed_paths` are compared as equal mappings rather than as a
-    subset, so a ledger `keyed_paths` registers that `LEDGER_KEYS` does not name -
-    or the reverse - fails here rather than only showing up the day a retried run
-    duplicates a row.
-
-    `keyed_paths` is asked for one named date, so it returns that day's cover
-    instead of globbing the tree, and this test reads no committed file.
-    """
-    registered: dict[LedgerName, tuple[str, ...]] = {}
-    for entry in ledger.keyed_paths(Path("state"), date=SUBSTITUTED_DATE):
-        path = entry.path.as_posix()
-        found = next(
-            (name for name in LedgerName if _covers(staged_path(name), path)), None
-        )
-        assert found is not None, (
-            f"{path} is registered for settlement and matches no ledger the registry "
-            "declares, so nothing can say which writer fills it."
-        )
-        registered[found] = entry.key
-
-    assert registered == dict(LEDGER_KEYS), (
-        f"keyed_paths() registers {sorted(name.value for name in registered)} and "
-        f"LEDGER_KEYS names {sorted(name.value for name in LEDGER_KEYS)}. Add the missing "
-        "ledger to LEDGER_KEYS in this file and to keyed_paths() in "
-        "backend/idhazh/ledger/settle.py, in the same commit, or remove the one that no "
-        "longer belongs in both."
     )

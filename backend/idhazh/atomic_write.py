@@ -15,7 +15,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from idhazh import file_writes
+from idhazh import completed_writes
 
 
 def write_atomic(path: Path, text: str) -> None:
@@ -28,7 +28,7 @@ def write_atomic(path: Path, text: str) -> None:
         with handle:
             handle.write(text)
         Path(handle.name).replace(path)
-        file_writes.written(path, text.encode("utf-8"))
+        completed_writes.record(path, text.encode("utf-8"))
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise
@@ -46,7 +46,7 @@ def write_atomic_bytes(path: Path, data: bytes) -> None:
         with handle:
             handle.write(data)
         Path(handle.name).replace(path)
-        file_writes.written(path, data)
+        completed_writes.record(path, data)
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise

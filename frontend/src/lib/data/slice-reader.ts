@@ -146,15 +146,16 @@ export type FaultMet =
 	| { fault: Extract<LedgerFault, 'day-missing'>; day: DateStamp };
 
 /** The one console line a fault gets: `[ledger] <fault> <ledger> <path>: <what is
- *  wrong>. <what fixes it>.` The path is the committed one, so an operator can
- *  open it, and the line names no span, so every panel that meets one fault on
+ *  wrong>.` A remedy follows only when the fault identifies one. The path is
+ *  the committed one, so an operator can open it, and the line names no span,
+ *  so every panel that meets one fault on
  *  a page prints the same line. */
 export function faultLine(ledger: LedgerName, met: FaultMet): string {
 	const line = (path: string, words: string): string => `${LOG_PREFIX} ${met.fault} ${ledger} state/${path}: ${words}`;
 	if (met.fault === 'not-packed') {
 		return line(
 			indexPath(ledger, 'daily'),
-			'it is not there: this record is not packed, or not published. Turn on whichever is off, or wait for the next upkeep run.'
+			'This record is not packed yet.'
 		);
 	}
 	if (met.fault === 'index-missing') {

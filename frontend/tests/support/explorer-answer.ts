@@ -34,12 +34,27 @@ export async function serveBuilt(context: BrowserContext, root: string, ...ledge
 }
 
 export async function runExplorer(page: Page) {
-	await page.getByRole('button', { name: /^Run$/ }).click();
-	await page.waitForFunction(() => {
-		const panel = document.querySelector('[data-console-panel-id="data-explorer-rows"]');
-		const state = panel?.querySelector('[data-state]')?.getAttribute('data-state');
-		return panel?.querySelector('[data-explorer-answer]') !== null || (state !== null && state !== undefined && state !== 'loading');
-	}, undefined, { timeout: 60_000 });
+	// Watch before the click: a refused question can finish before the click returns.
+	const run = await page.evaluateHandle(() => {
+		const button = document.querySelector('.run-button');
+		if (button === null) throw new Error('The Data explorer has no Run button.');
+		let started = false;
+		let finished = false;
+		const observer = new MutationObserver((records) => {
+			started ||= button.getAttribute('aria-busy') === 'true' || records.some((record) => record.oldValue === 'true');
+			finished = started && button.getAttribute('aria-busy') === 'false';
+			if (finished) observer.disconnect();
+		});
+		observer.observe(button, { attributes: true, attributeFilter: ['aria-busy'], attributeOldValue: true });
+		return { finished: () => finished, disconnect: () => observer.disconnect() };
+	});
+	try {
+		await page.getByRole('button', { name: /^Run$/ }).click();
+		await page.waitForFunction((run) => run.finished(), run, { timeout: 60_000 });
+	} finally {
+		await run.evaluate((run) => run.disconnect());
+		await run.dispose();
+	}
 }
 
 /** Fail unless the answer panel shows `state`, so the checks after it read the answer they need. */

@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -209,7 +209,7 @@ reads are here and not how many. These are `backend/`'s;
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 | `gardener_publish.Checkout.committed_folders`, which names task folders | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: a wake whose checkout is empty for a named task folder can only ask the commit |
-| the `trials` task's walk of each folder the listing hands it | files under the declared case trace folders, currently `state/pipeline-tests/<case>/traces/` | only those trace folders, and its window reports old files. The configured policy is report-only. Trial ledger files remain outside those trace folders |
+| the `trials` task's walk of each folder the listing hands it | files under the declared case trace folders, currently `state/raw/traces/pipeline-tests/<case>/` | only those trace folders, and its window reports old files. The configured policy is report-only. Trial ledger files remain outside those trace folders |
 | the compaction's listing of a ledger's days, `raw_files.raw_days` | the day folder names under `state/raw/<ledger>/`, never a file's contents | the raw days not compacted yet. A live compaction empties them as it goes, so it names about two raw days. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
 
 ### Unbounded, and it says so
@@ -234,7 +234,6 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.writer.records` | every row of the eval ledger, through `ledger.load_ledger_rows` | each caller's question is about every measurement the ledger holds: `label_queue.py` draws from the whole ledger, `reband_scores.py` re-bands every row, and `grader_length_bias.py` joins every row. Each is an operator pass, off the daily path |
 | `data_wrangler.py refill`'s score read, `measure_ledgers.py`, and `server_memory_mark.py` when it names no day | every row of the ledger each one reads, through `ledger.load_ledger_rows` | each is an operator verb whose question is the whole history; none runs on the daily path |
 | `pipeline_test_state_verifier.refusals` | the raw days, compact periods and indexes under the roots, ledgers and UTC months a caller names | it is a proof command for a migration or trial cutover. The caller names each root, each ledger and each month, so another committed trial root or another month on disk adds no read until the command names it. The command validates stored files through the door's raw and compact checkers rather than walking `state/` to discover cases |
-| `backend/utilities/ledger_migration/csv_files.py` | only CSV days in the named months of each named ledger, under the folder the `CSV_LEDGERS` table declares, in each named state root: `state/` and any named trial case root | a migration moves every day in those months, once, and a CSV file that lands later is moved by running it again. Packing reads only the named periods under roots selected by their production or trial compaction declarations. The table, the program and its tests are deleted when no ledger is left on CSV: every entry in `config/ledgers.json` is `raw-and-compact`, and `--check` finds no CSV file under any root |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on
@@ -411,6 +410,7 @@ the last day there was.
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
 | `ledger-rows.itemHealthRows`, `ledger-rows.evalRows`, `ledger-rows.feedHealthRows`, `host-fingerprint.machineRecord`, `similarity-holdout.mergeLineHoldoutScore`, `similarity-ledger.fittedLines` | the ledger's compact indexes, then the packed days of the item-health, summary-quality-evals, feed-health, host-fingerprint, merge-line holdout score or fitted merge line ledger inside the window the caller hands over, through the query door's `sliceFromDisk`. Never a raw file. A span that reaches a packed year reads that year's whole file | the window: a console route hands over its widest preset, 90 days that end on the site's newest published day, and no day before it is read, even when the packed days in it hold no row. `yearly.json` grows by one entry a year, and a year file is kept for ever: a published ledger that packs years ships one more file a year to the site |
 | `payload.feedResults` | through `ledger-rows.feedHealthRows` above | the same window |
+| `recorded-line.readRecordedLine` | the one `run.json` of the date it is handed, opened by name | one file. The Judgement route hands it the newest published day. The file gains one record for each build of that day - 7 to 12 a day on 6 to 8 Oct 2026 - and nothing as the archive grows |
 | `similarity-holdout.holdoutReading` | the packed holdout marks inside the reach, through `similarity-holdout.markedPairs` and the query door's `sliceFromDisk`, then one published day payload for each distinct date those marks name | `similarity.holdout_reach_days`, 730 days that end on the site's newest published day, then the marks inside it - see below |
 | `machine-counters.loadMachineCounters` | the machine and census records through `machineRecord` and `itemHealthRows` above, and the run manifests through `loadManifests` | the window it is handed, for all three |
 | `payload.dayMetrics` | one record a date | the dates handed in |

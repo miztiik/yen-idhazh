@@ -14,6 +14,91 @@ import { everyDay } from './support/ledger-lifecycle';
 /** The UTC day every test here pins as the page's today. A built ledger's days count back from it. */
 const PINNED = '2030-06-15';
 
+async function saveWindowQuestion(page: Page, name: string) {
+	await page.getByRole('button', { name: /^Save$/ }).click();
+	await page.getByLabel('Name', { exact: true }).fill(name);
+	await page.getByRole('button', { name: /^Keep$/ }).click();
+}
+
+async function storedWindows(page: Page) {
+	return page.evaluate(() => {
+		type WindowEntry = { days: number; from?: string; end?: string };
+		return {
+			saved: JSON.parse(localStorage.getItem('yen-idhazh:data-explorer:saved') ?? '[]') as WindowEntry[],
+			history: JSON.parse(localStorage.getItem('yen-idhazh:data-explorer:history') ?? '[]') as WindowEntry[]
+		};
+	});
+}
+
+test('a preset run and saved question keep no dates, and reopen on the next UTC day', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(6, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+	await page.locator('[data-window-preset="7"]').click();
+	await saveWindowQuestion(page, 'Seven days');
+	await runExplorer(page);
+	const kept = await storedWindows(page);
+	for (const entry of [kept.saved[0], kept.history[0]]) {
+		expect(entry.days).toBe(7);
+		expect(entry).not.toHaveProperty('from');
+		expect(entry).not.toHaveProperty('end');
+	}
+
+	await openExplorer(page, '2030-06-16');
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-10');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-16');
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+	await page.locator('.saved-chip .example').filter({ hasText: 'Seven days' }).click();
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-16');
+});
+
+test('a custom span keeps its dates without marking a tile, and pressing its length ends today', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(7, 0) });
+	await openExplorer(page, PINNED);
+	await chooseExplorerQuestion(page, ['published'], 'SELECT count(*) AS rows FROM "published"');
+	await page.getByLabel('From (UTC)', { exact: true }).fill('2030-06-08');
+	await page.getByLabel('To (UTC)', { exact: true }).fill('2030-06-14');
+	await expect(page.locator('[data-window-control] input:checked')).toHaveCount(0);
+	await saveWindowQuestion(page, 'Exact dates');
+	await runExplorer(page);
+	const kept = await storedWindows(page);
+	for (const entry of [kept.saved[0], kept.history[0]]) {
+		expect(entry).toMatchObject({ days: 7, from: '2030-06-08', end: '2030-06-14' });
+	}
+	const address = new URL(page.url());
+	expect(address.searchParams.get('from')).toBe('2030-06-08');
+	expect(address.searchParams.get('end')).toBe('2030-06-14');
+	expect(address.searchParams.has('days')).toBe(false);
+
+	await openExplorer(page, '2030-06-16');
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-08');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-14');
+	await expect(page.locator('[data-window-control] input:checked')).toHaveCount(0);
+	await page.locator('[data-window-preset="7"]').click();
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-10');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-16');
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+});
+
+test('an older kept run with exact dates preserves them and leaves the matching preset pressable', async ({ page, context }) => {
+	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(7, 0) });
+	await openExplorer(page, PINNED);
+	await page.evaluate(() => {
+		localStorage.setItem('yen-idhazh:data-explorer:history', JSON.stringify([{
+			id: '2030-06-14T12:00:00Z', askedAt: '2030-06-14T12:00:00Z',
+			statement: 'SELECT count(*) AS rows FROM "published"', ledgers: ['published'],
+			days: 7, from: '2030-06-08', end: '2030-06-14', rows: 1, ms: 1
+		}]));
+	});
+	await openExplorer(page, PINNED);
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue('2030-06-14');
+	await expect(page.locator('[data-window-control] input:checked')).toHaveCount(0);
+	await page.locator('[data-window-preset="7"]').click();
+	await expect(page.getByLabel('From (UTC)', { exact: true })).toHaveValue('2030-06-09');
+	await expect(page.getByLabel('To (UTC)', { exact: true })).toHaveValue(PINNED);
+	await expect(page.locator('[data-window-preset="7"] input')).toBeChecked();
+});
+
 type Box = { left: number; top: number; right: number; bottom: number };
 
 /** The window's own edges and the boxes of the named regions, in one frame. */
@@ -34,6 +119,23 @@ async function measure(page: Page, regions: readonly string[]) {
 			regions: Object.fromEntries(names.map((name) => [name, read(document.querySelector(`[data-workbench-region="${name}"]`))]))
 		};
 	}, regions);
+}
+
+/** How tall the page is at the top of `view`: the window's height, or at 1024 x 768, where the
+ *  window is shorter than the workbench's floor, the question at its own height and the answer at
+ *  the page's `--result-floor` under it, so the page scrolls by exactly the difference. */
+async function pageHeight(page: Page, view: { width: number; height: number }): Promise<number> {
+	if (view.width !== 1024) return view.height;
+	return page.evaluate(() => {
+		const workbench = document.querySelector('.workbench') as HTMLElement;
+		const floor = document.createElement('div');
+		floor.style.cssText = 'position: absolute; inset-inline-start: 0; inline-size: 0; block-size: var(--result-floor)';
+		workbench.append(floor);
+		const resultFloor = floor.getBoundingClientRect().height;
+		floor.remove();
+		const ask = document.querySelector('[data-console-panel-id="data-explorer-ask"]') as HTMLElement;
+		return workbench.getBoundingClientRect().top + window.scrollY + ask.getBoundingClientRect().height + resultFloor;
+	});
 }
 
 for (const view of [
@@ -63,7 +165,11 @@ for (const view of [
 		await page.setViewportSize(view);
 		await openExplorer(page, PINNED);
 		const at = await measure(page, ['ledgers', 'columns', 'answer']);
-		expect(at.scrollHeight, 'the page scrolls under a workbench that fits the window').toBe(view.height);
+		// From 1440 x 900 the window holds the workbench. At 1024 x 768 it is shorter than the
+		// workbench's floor, so the page scrolls by exactly that difference (row 26 decision 7).
+		const tall = await pageHeight(page, view);
+		if (view.width !== 1024) expect(at.scrollHeight, 'the page scrolls under a workbench that fits the window').toBe(view.height);
+		else expect(Math.abs(at.scrollHeight - tall), `the page is ${at.scrollHeight} px tall, not the workbench's floor, ${tall} px`).toBeLessThan(1);
 
 		// A rail at each side, and one tabbed result region along the window's foot.
 		const { ledgers, columns, answer } = at.regions;
@@ -71,7 +177,7 @@ for (const view of [
 		expect(columns.right).toBeCloseTo(view.width, 0);
 		expect(answer.left).toBeCloseTo(0, 0);
 		expect(answer.right).toBeCloseTo(view.width, 0);
-		expect(answer.bottom).toBeCloseTo(view.height, 0);
+		expect(answer.bottom).toBeCloseTo(tall, 0);
 	});
 }
 
@@ -130,7 +236,11 @@ for (const view of [
 				rowsInside: rows.length === 3 && rows.every((row) => inside(row.getBoundingClientRect(), columnBox))
 			};
 		});
-		expect(at.scrollHeight, 'the wide answer stretched the page').toBe(view.height);
+		// At 1024 x 768 the window is shorter than the workbench's floor, so the page is the floor's
+		// height there, and a wide answer still adds nothing to it (row 26 decision 7).
+		const tall = await pageHeight(page, view);
+		if (view.width !== 1024) expect(at.scrollHeight, 'the wide answer stretched the page').toBe(view.height);
+		else expect(Math.abs(at.scrollHeight - tall), `the wide answer made the page ${at.scrollHeight} px tall, not the workbench's floor, ${tall} px`).toBeLessThan(1);
 		expect(at.headingInside, 'the column rail heading is cut').toBe(true);
 		expect(at.columnBoxRows, 'the column box is shorter than five rows').toBeGreaterThanOrEqual(5);
 		expect(at.rowsInside, 'a column row is not visible inside the scroll box').toBe(true);
@@ -300,7 +410,9 @@ test('the chart tab action line holds still and the drawing scrolls in its own b
 	await serveBuilt(context, test.info().outputPath('state'), { ledger: 'published', pinned: PINNED, days: everyDay(0, 0) });
 	await page.setViewportSize({ width: 1024, height: 768 });
 	await openExplorer(page, PINNED);
-	await chooseExplorerQuestion(page, ['published'], "SELECT * FROM (VALUES (DATE '2026-08-18', 3, 5), (DATE '2026-08-19', 5, 4), (DATE '2026-08-20', 8, 9)) AS t(date, a, b)");
+	// A ranked list of thirty rows is longer than its box, and a list still scrolls inside the
+	// drawing; a plot never does now, because the region keeps the room a plot needs (row 26).
+	await chooseExplorerQuestion(page, ['published'], "SELECT 'name ' || i::VARCHAR AS name, 1000 - i AS rows FROM range(0, 30) AS t(i)");
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	await page.getByRole('tab', { name: 'Chart' }).click();

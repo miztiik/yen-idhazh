@@ -25,6 +25,8 @@ export interface PartsOptions {
 	/** Every part's name, in the order they sit on a row. */
 	order: readonly string[];
 	overlapping?: boolean;
+	/** Caller colours in part order; omitted callers keep the categorical ramp. */
+	tokens?: readonly ChartToken[];
 }
 
 export interface PartSegment {
@@ -67,6 +69,7 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 		throw new RangeError(`A row splits into at most ${hues} parts, one hue each; the order names ${opts.order.length}.`);
 	}
 	const place = new Map(opts.order.map((label, index) => [label, index]));
+	const chooseToken = (index: number): ChartToken => opts.tokens?.[index] ?? hueOf(index);
 	if (place.size !== opts.order.length) throw new Error('The order names one part twice.');
 
 	const measured = rows.map((row) => {
@@ -101,7 +104,7 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 					return {
 						label: part.label,
 						value: part.value,
-						token: hueOf(part.index),
+						token: chooseToken(part.index),
 						start: percentOf(at / max),
 						size: percentOf(part.value / max)
 					};
@@ -110,6 +113,6 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 		}),
 		max,
 		overlapping,
-		key: opts.order.map((label, index) => ({ label, token: hueOf(index) }))
+		key: opts.order.map((label, index) => ({ label, token: chooseToken(index) }))
 	};
 }

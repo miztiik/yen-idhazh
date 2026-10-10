@@ -1,6 +1,8 @@
 import { megabytes } from '$lib/assist/session';
 import type { FetchCost } from '$lib/data/ledger';
+import { daysBetween } from '$lib/data/slice';
 import { plural as countNoun, shortDate } from '$lib/format';
+import { explorerMissingSentence } from '$lib/console/waiting';
 
 export type ExplorerStatusState =
 	| 'idle'
@@ -21,11 +23,13 @@ export type ExplorerStatusInput = {
 	files?: number;
 	bytes?: number;
 	ledgers?: number;
-	days?: number;
+	readFrom?: string | null;
+	readTo?: string | null;
 	firstRun?: boolean;
 	ms?: number | null;
 	read?: FetchCost | null;
 	ledger?: string;
+	published?: boolean;
 	through?: string;
 	linkNotices?: readonly string[];
 	notice?: string | null;
@@ -64,13 +68,17 @@ export function statusSentence(input: ExplorerStatusInput): string {
 		case 'refused':
 			return 'Did not run. The reason is where the answer would be.';
 		case 'missing':
-			return `Did not run. ${input.ledger ?? 'This ledger'} is not on this site yet.`;
+			return `Did not run. ${explorerMissingSentence(input.ledger ?? 'This ledger', input.published ?? false, false)}`;
 		case 'unreachable-engine':
 			return 'Did not run. The query engine did not start.';
 		case 'unreachable-files':
 			return 'Did not run. The ledger files could not be fetched.';
 		case 'idle': {
-			const prefix = `Run reads ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(input.days ?? 0, 'UTC day')}.`;
+			const from = input.readFrom;
+			const to = input.readTo;
+			const days = from && to ? daysBetween(from, to).length : 0;
+			const dates = days === 1 && to ? `: ${shortDate(to)}` : days > 1 && from && to ? `, from ${shortDate(from)} through ${shortDate(to)}` : '';
+			const prefix = `Run will read ${plural(input.files ?? 0, 'file')}, ${size(input.bytes ?? 0)} from ${plural(input.ledgers ?? 0, 'ledger')} over ${plural(days, 'UTC day')}${dates}.`;
 			const engine = input.firstRun ? ' It also starts the query engine.' : '';
 			const empty = input.ledger !== undefined && input.through !== undefined ? ` Nothing in ${input.ledger} after ${shortDate(input.through)}.` : '';
 			return `${prefix}${engine}${empty}`;

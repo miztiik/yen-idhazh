@@ -17,7 +17,7 @@ what a knob is at all is [../config.md](../config.md).
 | `attempts` | `6` | How many times one shard may try to push. If every try fails and main did not move, main refused the push, and the shard exits 3. If main moved, other writers are landing, and the shard warns and exits 0 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
 | `task_names` | Named list in the file | The declarations to read under `config/gardener/`. Empty means no tasks. Missing named files and repeated names are refused. |
-| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes. A shard checks out only its code and config, so this is the day and month folders its tasks read. A compaction takes only the periods that fit what is left of it and stops at `ceiling` at the first that does not, or fails by name on a period larger than the whole of it. A shard that downloads more anyway runs its tasks, lands its record and exits 1, because a task downloaded without choosing by the budget. The number is an estimate. Reset it from what the wakes that did not stop at it downloaded, because one that stopped at it records the budget rather than what it needed ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
+| `max_downloaded_mb` | `128` | The most file content one shard may download for its tasks, in megabytes of 1024 x 1024 bytes. A shard checks out only its code and config, so this is the day and month folders its tasks read. A compaction takes only periods that fit what is left of it and stops at `ceiling` at the first that does not, or ends `failed` with fault `manual-action` when a period is larger than the whole budget. A shard that downloads more anyway runs its tasks, lands its record and exits 1, because a task downloaded without choosing by the budget. The number is an estimate. Reset it from what the wakes that did not stop at it downloaded, because one that stopped at it records the budget rather than what it needed ([why 128](../../architecture/publishing/idhazh-gardener.md#what-a-shard-downloads)) |
 | `first_ledger_year` | `"2026"` | The UTC year, as `YYYY`, from which a compaction looks for year and month files when one of a ledger's indexes is absent and is rebuilt from the files in the year folders it names ([ledger-compaction.md](../../architecture/publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing)). No folder from before it is named, because no ledger holds a row from before it: the repository was created on 2026-08-20. Required, with no default, so the loader refuses a file that leaves it out |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
@@ -145,7 +145,7 @@ declarations: no finite expiry and pruning disabled.
 | # | Key | What it sets |
 | --- | --- | --- |
 | 1 | `dry_run` | Whether a pass changes any file. `true` reports every path a live pass would write and delete, and changes nothing |
-| 2 | `month_deletes_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it, and packs those days and months like the rest; the pass's record counts the files a live pass would drop at that wake in `selected` and not in `deleted`. `false` lets the window delete them |
+| 2 | `month_deletes_dry_run` | Whether a live pass only reports what `monthly_window` would delete. `true` keeps every month file past the window and every raw day in a month past it. A raw day in a closed month past the keep line stays where it is; the other packing steps still run. The pass's record counts the files a live pass would drop at that wake in `selected` and not in `deleted`. `false` lets the window delete them |
 | 3 | `daily_keep_days` | How many days after a UTC month ends it is absorbed into its month file. At least 31 |
 | 4 | `monthly_window` | How long a month file survives once its month is absorbed: `{unit: months, value}`, `{unit: days, value}` or `{unit: forever}` |
 | 5 | `monthly_keep_days` | How many whole days after a UTC year ends its month files are packed into one year file. `null` packs no year. Set, it needs a `monthly_window` of forever and at least `daily_keep_days` plus 32 |
@@ -331,11 +331,7 @@ ledger's months.** For `item-health` that is the `full-grain` series of
 Five cases: a bounded floor against a bounded pair compares; a bounded floor
 against a pair kept forever passes; a floor kept forever against a bounded pair is
 refused, because a person chose never to delete that ledger; forever against
-forever passes; and a ledger no task ever limited has no floor. How long a moved
-ledger's CSV was kept is not a declaration: `CSV_LEDGERS` in
-`backend/utilities/ledger_migration/csv_layouts.py` records it, and its test holds every
-moved ledger's committed compaction to it, so no retired retention task stays
-behind owning a folder nothing writes.
+forever passes; and a ledger no task ever limited has no floor.
 
 **A cleanup age lives in the declaration of the task that deletes by
 it.** Eleven keys left `config/idhazh.json` - the ledger ages, the trial window,

@@ -65,6 +65,7 @@
 		observeWidth
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { indexedRuns } from '$lib/charts/indexed-runs';
 	import ChartReadout from './ChartReadout.svelte';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
@@ -312,19 +313,12 @@
 	 * alternate days used to draw nothing at all, because only a one-day window
 	 * got dots. */
 	function runs(key: Stage['key']): Point[][] {
-		const paths: Point[][] = [];
-		let current: Point[] = [];
-		calendar.forEach((date, index) => {
-			const ms = at(date, key);
-			if (ms !== null && ms > 0) {
-				current.push({ x: x(index), y: y(ms) });
-			} else if (current.length > 0) {
-				paths.push(current);
-				current = [];
-			}
-		});
-		if (current.length > 0) paths.push(current);
-		return paths;
+		const values = calendar.map((date) => at(date, key));
+		return indexedRuns(values, (ms) => ms !== null && ms > 0)
+			.map((run) => run.flatMap((index) => {
+				const ms = values[index];
+				return ms === null ? [] : [{ x: x(index), y: y(ms) }];
+			}));
 	}
 
 	/** The days a stage was measured at zero. They sit on the baseline rule,
@@ -368,7 +362,8 @@
 	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
+		{calendar.length === 1 ? 'Median time per item for this one day.' : 'Median per item, each day.'}
+		Each gridline is ten times the one below, so the same slowdown looks
 		the same at 40 ms and at 100 s.
 		{#if coverageNote}
 			<!-- One sentence for the whole chart, above the plot. It was one note per

@@ -53,9 +53,11 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    crash_trace,
     ledger,
     path_classes,
 )
+from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.run import RunConfig
@@ -342,6 +344,7 @@ def _planned(date: str, execution: int | None) -> RunPlan:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
         # The one verb whose rest-of-line belongs to somebody else. Its
@@ -579,11 +582,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
-    logging.basicConfig(
-        level=settings.app.logging.level.value,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        stream=sys.stderr,
-    )
+    configure_command_logging(settings.app.logging.level.value)
     # One place, once, before any stage opens a ledger. A trial run exercises
     # production's code path and must not be readable as a production day, and
     # the only way to guarantee that for every ledger at once is to overlay
@@ -719,11 +718,10 @@ def _dispatch(
         # Beside its siblings: it runs after every shard has reported and calls
         # no model of its own. It is also the one council verb that writes under
         # `state/`, so it is the one that is handed the root.
-        from idhazh.council import publication
-
         night = _council_run(parser, args.stage, args.run_id)
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        identity = council_session._identify_writer(run_id=night, commit_sha=args.commit)
+        # Instrument the command without adding telemetry imports to the venue.
+        # Every date uses the same night and job-start stamp.
         machine = (
             job_machine.record(
                 date=council_identity.opened_on(night),
@@ -739,13 +737,7 @@ def _dispatch(
             if settings.app.council.tenants
             else contextlib.nullcontext()
         )
-        # The receipt must cover the probe and the closing clock as well as tenant writes.
-        with publication.record(
-            state_dir=state_dir,
-            identity=identity,
-            prefixes=council_session.publication_paths(settings.app.council),
-            destination=publication.receipt_path(identity),
-        ), machine:
+        with machine:
             council_session.settle(
                 settings.app.council,
                 date=args.date or _today(),

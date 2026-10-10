@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -343,6 +343,12 @@ and the panel never changes size. A tap selects a record and leaves it
 selected, because a thumb cannot hover. Such a chart carries
 `data-readout-records` with the count.
 
+Voices' source strip rests on the first judged source's newest recorded day.
+If no source is judged, it uses the first unjudged source's newest recorded
+day. This is the newest day of that source, not the newest day across all
+sources. Escape and a mouse leaving return to the same record; an empty or
+absent record offers no square readout.
+
 **No chart mark carries a `title` attribute or an SVG `<title>`.** A native
 tooltip needs a mouse held still over the mark: a thumb cannot raise it, a
 keyboard cannot raise it, and on a 7 px square it covers the neighbours being
@@ -400,11 +406,16 @@ that draws the population cannot draw the distance.
 
 **So the axis is the line and one day's legal fall, never the band.** It runs
 from two days' fall below the line to one day's fall above it. The line is the
-one the newest published day was built with. With
-`adaptive_dedup_threshold.enabled` off, that is `floor_min`. With it on, it is
-the newest line a fit applied in the days a build looks back over, or
-`floor_min` if no fit applied one
+one the newest published day was built with: the line its last build wrote into
+that day's run record. Where the record holds none - a day built before 18 Sep
+2026, or a record the site build cannot read - the rule a build follows works
+it out. With `adaptive_dedup_threshold.enabled` off, that is `floor_min`. With
+it on, it is the newest line a fit applied in the days a build looks back over,
+or `floor_min` if no fit applied one
 ([autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md#what-chose-094-measured-on-the-cosine-alone)).
+The record comes first because the nightly fit files its row after most of that
+day's builds ran, so the rule alone can name a line no build used. The merge
+line's rule and the verdict split are drawn at the same line.
 The fall cap is off `config/idhazh.json`, so the window is the same width every
 day and two days of this panel compare. The cap is not a score
 in the config: it is `max_down_bins` slots of `bin_width`, and the contract

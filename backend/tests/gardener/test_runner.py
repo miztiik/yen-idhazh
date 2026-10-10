@@ -422,7 +422,7 @@ def test_a_task_whose_service_is_down_is_deferred_and_the_shard_stays_green(
 def test_a_task_whose_code_is_wrong_fails_and_its_sibling_still_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A code defect is the one stop that turns the shard red, and it still lands its record.
+    """A code defect turns the shard red, and it still lands its record.
 
     Its event is an error naming the exception's type and never what it said.
     """
@@ -448,6 +448,70 @@ def test_a_task_whose_code_is_wrong_fails_and_its_sibling_still_runs(
     assert (defect.error, defect.next) == ("KeyError", report.WHY[GardenerFault.RAISED])
     assert defect.where is not None and defect.where.startswith("idhazh.gardener.runner:")
     assert "created_at" not in defect.model_dump_json(), "the exception's text reached a line"
+
+
+def test_a_missing_yearly_index_needs_manual_action_and_lands_the_failed_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """THE ORACLE: the real runner preserves an established tree and records the refusal."""
+    indexes = {
+        f"state/compact/gardener/index/{period.value}.json": CompactIndex(
+            version=CompactIndex.schema_version(),
+            ledger=LedgerName.GARDENER,
+            period=period,
+            entries=[],
+        ).to_json()
+        for period in (Period.DAILY, Period.MONTHLY)
+    }
+    ledger_files = {
+        **indexes,
+        "state/compact/gardener/monthly/2025/08.parquet": "already packed\n",
+        "state/raw/gardener/2026/09/20/held.jsonl": "already filed\n",
+    }
+    origin, checkout, _ = a_garden(tmp_path, monkeypatch, "runner", ledger_files)
+    settings = config.load_gardener(
+        a_config(checkout, CONFIG_DIR / "gardener" / "compact-gardener.json")
+    )
+    said: list[str] = []
+
+    with caplog.at_level(logging.INFO, logger=event_log.__name__):
+        outcome = gardener_publish.run_and_land(
+            ("compact-gardener",),
+            settings=settings,
+            repo_root=checkout,
+            run_id=RUN_ID,
+            attempt=1,
+            shard=0,
+            clock=lambda: WAKE,
+            say=said.append,
+        )
+
+    assert outcome.exit_code == EXIT_TASK_FAILED, said
+    row = rows_of(outcome.record)["compact-gardener"]
+    assert (row.stopped_because, row.fault.value if row.fault else None) == (
+        StopReason.FAILED,
+        "manual-action",
+    )
+    finished_record = next(
+        record
+        for record in caplog.records
+        if isinstance(event_log.payload(record), TaskFinished)
+    )
+    finished = event_log.payload(finished_record)
+    assert isinstance(finished, TaskFinished)
+    assert (finished.outcome, finished_record.levelno) == (TaskOutcome.FAILED, logging.ERROR)
+    assert (finished.error, finished.next) == (
+        "ManualActionError",
+        "a known refusal needs a person's action before the next wake can continue",
+    )
+    assert outcome.record is not None and outcome.record.is_file()
+    recorded = outcome.record.relative_to(checkout).as_posix()
+    landed = git(origin, "--git-dir=.", "ls-tree", "-r", "--name-only", "main").splitlines()
+    assert recorded in landed, "the failed task's record did not land"
+    assert {
+        path: git(origin, "--git-dir=.", "show", f"main:{path}") for path in ledger_files
+    } == ledger_files, "the refusal changed an existing ledger file"
+    assert "state/compact/gardener/index/yearly.json" not in landed
 
 
 def finished_levels(caplog: pytest.LogCaptureFixture) -> dict[str, tuple[TaskOutcome, int]]:
@@ -612,7 +676,7 @@ def test_a_named_trial_root_selects_its_period_and_ignores_unconfigured_children
 ) -> None:
     """Only a configured trial root and a named date are in the pass's listing."""
     stray = (
-        "state/pipeline-tests/production-settings/traces/"
+        "state/raw/traces/pipeline-tests/production-settings/"
         "2026/06/25/2026-06-25.txt"
     )
     checkout, settings = a_garden_with_the_complement(
@@ -688,9 +752,9 @@ def test_trials_owns_only_its_configured_roots(tmp_path: Path) -> None:
 
     owns = settings.tasks["trials"].owns
     assert set(owns) == {
-        "state/pipeline-tests/production-settings/traces",
-        "state/pipeline-tests/no-visual-plan/traces",
-        "state/pipeline-tests/parallel-summarization/traces",
+        "state/raw/traces/pipeline-tests/production-settings",
+        "state/raw/traces/pipeline-tests/no-visual-plan",
+        "state/raw/traces/pipeline-tests/parallel-summarization",
     }
     sweeps = runner.owner_of("trials", settings.tasks)
     assert all(sweeps(folder) and sweeps(f"{folder}/x.csv") for folder in owns)
@@ -708,7 +772,7 @@ PACKING: Final = "compact-visual-prunes"
 FIRST_WAKE: Final = datetime(2026, 9, 23, 0, 40, tzinfo=UTC)
 LATER_WAKE: Final = datetime(2026, 10, 24, 0, 40, tzinfo=UTC)
 
-#: The level each ending is logged at: a defect is an error, a deferred task a warning.
+#: The level each ending is logged at: a failure is an error, a deferred task a warning.
 LEVEL: Final = {TaskOutcome.FAILED: logging.ERROR, TaskOutcome.DEFERRED: logging.WARNING}
 
 
@@ -755,7 +819,7 @@ def a_ledger_ending(
     match word:
         case TaskOutcome.FAILED:
             # A folder inside a raw day: there is no file to move aside, so the
-            # day is refused, raised, for a person.
+            # day is refused for manual action.
             write(root / "state/raw/visual-prunes/2026/09/20/sub/stray.txt", "stray\n")
             return a_compaction(root), FIRST_WAKE, None
         case TaskOutcome.DEFERRED:
@@ -787,7 +851,7 @@ def test_each_way_a_task_can_end_is_said_once_after_what_it_was_planned_with(
     The task says what it runs with before it runs, and how it ended after, in
     that order and once each; both are read off the records, never the text.
     How it ended agrees with the row the shard writes, and the level it is
-    logged at is an error only for a code defect.
+    logged at is an error for either failed fault.
     """
     root = tmp_path / "checkout"
     settings, wake, named = a_ledger_ending(word, root)
@@ -819,7 +883,48 @@ def test_each_way_a_task_can_end_is_said_once_after_what_it_was_planned_with(
         row.fault,
         row.resume_from,
     )
+    if word is TaskOutcome.FAILED:
+        assert row.fault is GardenerFault.MANUAL_ACTION
     assert ended.periods is not None, "a compaction says what it did, period by period"
     assert outcome.exit_code == (EXIT_TASK_FAILED if word is TaskOutcome.FAILED else EXIT_OK)
     if word is TaskOutcome.EMPTY:
         assert planned.absent == ["state/raw/visual-prunes", "state/compact/visual-prunes"]
+
+
+def test_empty_retention_range_keeps_operator_intent_separate_from_scheduled_window(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    declaration = CONFIG_DIR / "gardener" / "digest-fragments.json"
+    settings = config.load_gardener(a_config(tmp_path, declaration))
+    named = ("2024-08-01", "2024-08-02")
+
+    def run(
+        run_id: str, period_range: tuple[str, str] | None
+    ) -> tuple[TaskPlanned, TaskFinished]:
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger=event_log.__name__):
+            runner.run(
+                ("digest-fragments",),
+                settings=settings,
+                repo_root=tmp_path,
+                run_id=run_id,
+                attempt=1,
+                shard=0,
+                git_sha="a" * 40,
+                committed_folders=None,
+                cone_bytes=None,
+                listing=None,
+                period_range=period_range,
+                clock=lambda: WAKE,
+            )
+        planned = the_event(caplog.records, TaskPlanned)
+        finished = the_event(caplog.records, TaskFinished)
+        return planned, finished
+
+    named_planned, named_finished = run(RUN_ID, named)
+    scheduled_planned, scheduled_finished = run("2026-09-27-18012345679", None)
+
+    assert named_planned.operator_range == named
+    assert named_finished.outcome is TaskOutcome.OUTSIDE_RANGE
+    assert scheduled_planned.operator_range is None
+    assert scheduled_finished.outcome is TaskOutcome.NOT_DUE

@@ -140,7 +140,7 @@ refuses.
 
 What the push does with a block, and why a `digest.json` two runs both computed
 used to lose the day, is
-[in committing.md](committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them).
+[in committing.md](committing.md#the-caller-owns-recovery-policy).
 
 Authority: Jony and Fowler, converged, 2026-09-22.
 
@@ -194,7 +194,7 @@ The engineering half is driven by arithmetic rather than preference. Segmented d
 
 ### Two kinds of row, and only one of them deduplicates
 
-`idhazh.ledger.extend_ledger_file`, the CSV append every state ledger once used, wrote every row it was handed, and a read kept every one. The eval ledger's reader keeps one row per address, words and scorer version a day. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
+The CSV append every state ledger once used wrote every row it was handed, and a read kept every one. The eval ledger's reader keeps one row per address, words and scorer version a day. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
 
 So the blind path stayed blind until the last ledger left it, and each caller that owns a repeat is named next to it. The seen and published ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a row two runs file for one address costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, the published ledger held 2,097 rows and 2,097 distinct addresses in the flat file it has since moved off.
 

@@ -287,32 +287,20 @@ the settle runs anyway and keeps everything the surviving units produced.
 **Writers declare their paths beside themselves.** Tenant paths come back from
 `committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
 `HOST_FINGERPRINT` beside its session; their staging paths come from the ledger
-registry. The combined declarations reach the commit step as one job output. A
-night with no tenant registered stages nothing, and the step is skipped: `git
-add` with no path is an error rather than a no-op. A ledger that files through
-the door is named by its folder under `state/raw/`, because the collecting job
-writes only raw files and the gardener packs them later. On a night that files
-nothing there, no exact file from that folder is staged.
+registry. The collecting utility uses these independent declarations and returns
+without a record or push when no tenant is registered.
 
 **A declared directory is not permission to sweep it.** As the collecting job
-finishes atomic writes, it records their exact paths and byte digests in
-`backend/var/council/<run_id>/publication-<attempt>.json`. Each tenant is held to
-its own paths, and a raw file must carry this attempt's writer identity and its
-canonical ledger path. The named receipt survives a later tenant's failure and
-accumulates the dates of one attempt, without reading the committed archive.
-It confirms bytes; only declarations grant permission.
+finishes atomic writes, `council_publish.py` records exact paths and byte digests
+per tenant and for the venue. Only those confirmed writes are offered to
+`publish_to_repo.py`; the private candidate excludes unrelated staged and local
+files. Receipts confirm bytes, never permission. Different bytes at an immutable
+UUID are refused, and mutable files require an unchanged baseline.
 
-**The shared publisher stages exact confirmed files, not those directories.**
-With `PUBLICATION_RECEIPT` set, `commit_and_push.py` refuses every tracked,
-untracked or already staged modification outside the declarations or absent
-from the receipt, before committing or pushing. It checks the named files'
-digests and the exact staged set, so a sibling tenant or shard cannot ride
-along. Each retry checks the commit's paths and confirms its bytes again, so a
-clean text merge cannot silently alter a receipted output. The existing
-rebase-and-push retries remain; council does not adopt the
-gardener's separate publisher. The collecting loop settles each distinct date,
-continues after a failed date, and still offers completed writes for publication
-while preserving the failure status.
+There is one collecting job for any number of judges or shards. A tenant/date
+failure does not suppress earlier completed bytes or later tenants/dates.
+Sparse input discovery uses each tenant's separately declared named inputs,
+periods and indexes, never the number of judges or an archive checkout.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the
@@ -556,7 +544,7 @@ that action runs is a commit call all the same.
 
 **It is not about a merge conflict.** The council used to argue this as many
 writers racing into one union-merged day file. That premise died on 2026-09-19
-when `merge=union` left the judged-pairs ledger, and quoting it today invites a
+when the union merge driver left the judged-pairs ledger, and quoting it today invites a
 reader to retire the guard along with it. The conflict that segments exist to
 solve - more than one job committing into one ledger file - is priced in
 [its own rationale below](#design-rationale-the-councils-own-path-not-a-segment-per-writer),
@@ -630,9 +618,9 @@ the only memory risk in the design. Carmack, 2026-09-21.
 
 ## Design rationale: the council's own path, not a segment per writer
 
-The digest pipeline gives every writer its own segment inside the day, at
-`state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
-council does not, and one reason survives.
+The digest pipeline gives every writer its own file inside the day, a raw file
+the ledger door names under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`. The council
+does not need one per unit, and one reason survives.
 
 **A segment solves a conflict this workflow does not have.** It exists for the
 case where more than one job commits into one ledger file - the digest pipeline

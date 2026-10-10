@@ -14,16 +14,18 @@ from enum import StrEnum
 
 
 class GardenerFault(StrEnum):
-    """Why one pass stopped: a code defect, or a cause outside the code that something else settles.
+    """Why one pass stopped: a defect, a named refusal, or a cause a later wake settles.
 
-    `raised` ends a pass `failed`, the one stop that turns the job red. Every
-    other word ends it `deferred`: the next wake, or a person, settles it, and
-    the job stays green.
+    `raised` and `manual-action` end a pass `failed` and turn the job red.
+    Every other word ends it `deferred`, and the job stays green.
     """
 
     #: A code defect: an error no other word names, including any answer from
     #: GitHub that refuses the request itself. A person reads the log.
     RAISED = "raised"
+    #: A named refusal the task recognizes but cannot settle itself. The log
+    #: and task record name it, and a person acts before the task can continue.
+    MANUAL_ACTION = "manual-action"
     #: GitHub's API did not answer: a 429 or 5xx, or a connection that failed or
     #: timed out. Nothing inside a wake asks again; the next wake does.
     API_UNAVAILABLE = "api-unavailable"

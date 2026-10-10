@@ -28,6 +28,7 @@ from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import (
     FileListing,
     FileNotFetchedError,
@@ -174,7 +175,7 @@ def test_the_listing_a_compaction_task_is_given_names_every_mark_its_pass_reads(
 def test_an_index_that_describes_another_ledger_is_refused_by_name(tmp_path: Path) -> None:
     an_index(tmp_path, Period.DAILY, [], which=LedgerName.ITEM_HEALTH)
 
-    with pytest.raises(ValueError) as refused:
+    with pytest.raises(ManualActionError) as refused:
         read_marks(state(tmp_path), WHICH, listed(tmp_path))
 
     assert str(refused.value) == "daily.json does not describe the visual-prunes daily period"
@@ -285,7 +286,7 @@ def test_a_file_whose_envelope_names_another_day_is_refused_and_never_adopted(
     written = a_packed_day(tmp_path, "2026-09-25", rows=1)
     shutil.copyfile(written, written.with_name("26.parquet"))
 
-    with pytest.raises(ValueError) as refused:
+    with pytest.raises(ManualActionError) as refused:
         adopt(listed(tmp_path), state(tmp_path), WHICH, Period.DAILY, "2026-09-26")
 
     assert str(refused.value) == (

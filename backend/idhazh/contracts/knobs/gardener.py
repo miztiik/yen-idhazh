@@ -442,11 +442,11 @@ class CompactionPolicy(_Declared):
     month_deletes_dry_run: bool = Field(
         description=(
             "True keeps every file monthly_window would delete - each month file past "
-            "it and each raw day in a month past it - and packs those days and months "
-            "like the rest. The record counts the files kept in selected and not in "
-            "deleted, so selected minus deleted is what turning the window live would "
-            "take. False lets the window delete them. With dry_run true a pass changes "
-            "nothing either way."
+            "it and each raw day in a month past it. A raw day in a closed month past "
+            "the keep line stays where it is; the other packing steps still run. The "
+            "record counts the files kept in selected and not in deleted, so selected "
+            "minus deleted is what turning the window live would take. False lets the "
+            "window delete them. With dry_run true a pass changes nothing either way."
         )
     )
     monthly_keep_days: int | None = Field(

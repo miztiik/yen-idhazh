@@ -33,7 +33,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
-#: The two names a task module holds, and all it holds.
+#: The mandatory names a task module holds; OWNED_LEDGERS optionally declares ledger ownership.
 KIND_NAME: Final = "KIND"
 RUN_NAME: Final = "run"
 

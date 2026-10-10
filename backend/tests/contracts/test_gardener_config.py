@@ -515,7 +515,7 @@ def test_trials_owns_only_configured_pipeline_test_trace_roots() -> None:
     )
 
     assert policy.owns == [
-        f"state/{TRIAL_STATE_PREFIX}/{test_case.id}/traces"
+        f"state/raw/traces/{TRIAL_STATE_PREFIX}/{test_case.id}"
         for test_case in tests.test_cases
     ]
     assert "state" not in policy.owns
@@ -1098,12 +1098,7 @@ def test_finite_yearly_retention_checks_the_published_console_floor(tmp_path: Pa
 def test_a_retention_task_that_kept_an_old_tree_sets_no_floor_on_its_compaction(
     tmp_path: Path,
 ) -> None:
-    """A task that owned a moved ledger's CSV tree runs nothing, so it bounds nothing.
-
-    How long the CSV was kept is `CSV_LEDGERS` in
-    `backend/utilities/ledger_migration/csv_layouts.py`, whose own test holds every moved
-    ledger's committed compaction to it.
-    """
+    """A task that owned a moved ledger's CSV tree runs nothing, so it bounds nothing."""
     config_dir = a_garden(
         tmp_path,
         visual_prunes=a_retention(["state/visual-prunes"], MONTHS, "retired"),

@@ -25,7 +25,7 @@ from ._task import committed_folders, declared, run_task
 pytestmark = pytest.mark.contract
 
 NAME: Final = "trials"
-TRIAL: Final = "pipeline-tests/production-settings"
+TRIAL: Final = "raw/traces/pipeline-tests/production-settings"
 TODAY: Final = date(2026, 9, 15)
 
 
@@ -34,9 +34,8 @@ def a_tree(root: Path, *, days: dict[str, list[str]]) -> Path:
     state = root / ledger.STATE_DIRNAME
     for ledger_name, dates in days.items():
         for written in dates:
-            day = state / TRIAL / "traces" / written[:4] / written[5:7] / written[8:10]
+            day = state / TRIAL / written[:4] / written[5:7] / written[8:10]
             day.mkdir(parents=True, exist_ok=True)
-            day.parent.mkdir(parents=True, exist_ok=True)
             day.joinpath(f"{ledger_name}.jsonl").write_text("{}\n", encoding="utf-8")
     return state
 
@@ -70,10 +69,10 @@ def test_a_trial_day_past_the_window_goes_and_a_recent_one_stays(tmp_path: Path)
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert sorted(outcome.taken) == [
-        "state/pipeline-tests/production-settings/traces/2026/06/11/item-health.jsonl",
-        "state/pipeline-tests/production-settings/traces/2026/06/12/seen.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/11/item-health.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
     ]
-    assert (state / TRIAL / "traces" / "2026" / "09" / "10" / "seen.jsonl").is_file()
+    assert (state / TRIAL / "2026" / "09" / "10" / "seen.jsonl").is_file()
 
 
 def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
@@ -83,9 +82,9 @@ def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
 
     assert outcome.dry_run, "trials ships in dry run"
     assert outcome.taken == (
-        "state/pipeline-tests/production-settings/traces/2026/06/12/seen.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
     )
-    assert (state / TRIAL / "traces" / "2026" / "06" / "12" / "seen.jsonl").is_file()
+    assert (state / TRIAL / "2026" / "06" / "12" / "seen.jsonl").is_file()
 
 
 def test_a_day_dated_ahead_of_today_is_kept(tmp_path: Path) -> None:
@@ -104,19 +103,19 @@ def test_a_tree_that_was_never_written_is_not_an_error(tmp_path: Path) -> None:
 
 def test_a_trace_a_trial_run_really_writes_is_read(tmp_path: Path) -> None:
     """The trace uses the exact dated path a pipeline-test run writes."""
-    a_file(tmp_path, "traces/2026/06/12/40000000001-00.jsonl")
+    a_file(tmp_path, "2026/06/12/40000000001-00.jsonl")
 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert outcome.taken == (
-        "state/pipeline-tests/production-settings/traces/2026/06/12/40000000001-00.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/40000000001-00.jsonl",
     )
 
 
 def test_a_c1_case_traces_root_dates_files_below_the_traces_folder(tmp_path: Path) -> None:
     """A date-like case slug is outside the folder the task owns, so it cannot date a file."""
     case = "case-2026-09-10"
-    root = tmp_path / ledger.STATE_DIRNAME / "pipeline-tests" / case / "traces"
+    root = tmp_path / ledger.STATE_DIRNAME / "raw" / "traces" / "pipeline-tests" / case
     old = root / "2026" / "06" / "12" / "40000000001-00.jsonl"
     new = root / "2026" / "09" / "10" / "40000000002-00.jsonl"
     old.parent.mkdir(parents=True, exist_ok=True)
@@ -129,16 +128,18 @@ def test_a_c1_case_traces_root_dates_files_below_the_traces_folder(tmp_path: Pat
         tmp_path,
         today=TODAY,
         dry_run=False,
-        owns=[f"state/pipeline-tests/{case}/traces"],
+        owns=[f"state/raw/traces/pipeline-tests/{case}"],
     )
 
-    assert outcome.taken == (f"state/pipeline-tests/{case}/traces/2026/06/12/40000000001-00.jsonl",)
+    assert outcome.taken == (
+        f"state/raw/traces/pipeline-tests/{case}/2026/06/12/40000000001-00.jsonl",
+    )
     assert new.is_file()
 
 
 def test_a_file_whose_path_spells_no_day_is_kept_rather_than_refused(tmp_path: Path) -> None:
     """An odd trace path must not cost the whole pass."""
-    stray = a_file(tmp_path, "traces/notes.txt")
+    stray = a_file(tmp_path, "notes.txt")
 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
@@ -152,12 +153,15 @@ def test_an_emptied_trial_root_is_taken_away_with_its_last_file(tmp_path: Path) 
 
     run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
-    assert not (tmp_path / ledger.STATE_DIRNAME / TRIAL / "traces").exists()
+    assert not (tmp_path / ledger.STATE_DIRNAME / TRIAL).exists()
 
 
 def test_trial_ledger_files_are_left_to_compaction(tmp_path: Path) -> None:
-    """The trace task does not claim raw ledger files under the case root."""
-    raw = a_file(tmp_path, "raw/item-health/2026/06/11/fixture.parquet")
+    """The trace task does not claim raw ledger files, which live under a
+    different top-level root (`state/raw/pipeline-tests/...`) entirely."""
+    raw = tmp_path / ledger.STATE_DIRNAME / "raw" / "pipeline-tests" / "production-settings" / "item-health" / "2026" / "06" / "11" / "fixture.parquet"
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    raw.write_text("{}\n", encoding="utf-8")
 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
@@ -173,7 +177,7 @@ def test_a_declared_ledger_is_never_a_trial_tree_however_old_its_rows(tmp_path: 
     outcome = run_task(NAME, tmp_path, today=TODAY, dry_run=False)
 
     assert outcome.taken == (
-        "state/pipeline-tests/production-settings/traces/2026/06/12/seen.jsonl",
+        "state/raw/traces/pipeline-tests/production-settings/2026/06/12/seen.jsonl",
     )
     assert ledger_day.is_file(), "a declared ledger is not a trial trace"
 
@@ -182,9 +186,9 @@ def test_an_unconfigured_state_root_is_not_claimed_by_trials(tmp_path: Path) -> 
     """The task only owns roots named in its declaration, not new state children."""
     state = tmp_path / ledger.STATE_DIRNAME
     (state / "unconfigured").mkdir(parents=True)
-    (state / TRIAL / "traces").mkdir(parents=True)
+    (state / TRIAL).mkdir(parents=True)
     tasks = declared()
 
     folders = runner.folders_of(NAME, tasks, tmp_path, committed_folders(tmp_path, tasks))
 
-    assert folders.walk == (f"{ledger.STATE_DIRNAME}/{TRIAL}/traces",)
+    assert folders.walk == (f"{ledger.STATE_DIRNAME}/{TRIAL}",)

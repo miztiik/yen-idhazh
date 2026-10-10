@@ -117,7 +117,7 @@
 
 <Panel
 	title="What the judge said about the line"
-	note="Every judged pair, split by whether its score cleared the line the day was built with and by what the judge said about it."
+	note="Every judged pair, split by whether its score cleared the line the newest day was built with and by what the judge said about it."
 >
 	<div
 		data-verdict-split

@@ -1,4 +1,4 @@
-"""Which exact writer-owned files may the council's collecting job commit?"""
+"""Which exact bytes did a completed producer write?"""
 
 from __future__ import annotations
 
@@ -11,17 +11,15 @@ from idhazh.contracts.file_envelope import WriterIdentity
 
 
 class PublicationReceipt(Contract):
-    """One run's confirmed writes, not permission to write a directory."""
+    """Evidence of completed writes, never authority to publish their paths."""
+
+    identity: WriterIdentity
+    writes: dict[RelPath, Sha256] = Field(default_factory=dict)
 
     __schema_stem__: ClassVar[str] = "publication-receipt"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-09",
-            change="Declare exact completed publication writes.",
-            why="A declared directory must not sweep in another writer's files.",
+            version="2026-10-09", change="Declare exact completed-write evidence.",
+            why="Publication checks completed bytes independently of declared permissions.",
         ),
-    )
-    identity: WriterIdentity
-    writes: dict[RelPath, Sha256] = Field(
-        description="Repository-relative files and the SHA-256 of the exact bytes written."
     )

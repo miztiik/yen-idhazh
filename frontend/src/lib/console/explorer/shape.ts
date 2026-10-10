@@ -93,6 +93,43 @@ export type DistributionShape = {
 	comparison: string;
 };
 
+export type PartsShape = {
+	kind: 'chart';
+	type: 'partsOfOne';
+	option: 'Side by side';
+	icon: 'shape-side-by-side';
+	labelColumn: string;
+	barColumns: readonly string[];
+	rowsDrawn: number;
+	moreRows: number;
+	mainFigure: { label: string; value: number; column: string };
+	comparison: string;
+};
+
+export type TilesShape = {
+	kind: 'chart';
+	type: 'tileStrip';
+	option: 'Which days';
+	icon: 'shape-days';
+	dateColumn: string;
+	markColumn: string;
+	rowsWithNoDay: number;
+	comparison: string;
+};
+
+export type FlowShape = {
+	kind: 'chart';
+	type: 'flow';
+	option: 'Flow';
+	icon: 'shape-flow';
+	stageColumn: string;
+	arrivedColumn: string;
+	wentOnColumn: string;
+	droppedColumns: readonly string[];
+	mainFigure: string;
+	comparison: string;
+};
+
 export type NoShapeCode =
 	| 'no-number'
 	| 'not-picked'
@@ -104,11 +141,16 @@ export type NoShapeCode =
 	| 'lines-all-null'
 	| 'repeated-name'
 	| 'below-zero'
-	| 'all-zero';
+	| 'all-zero'
+	| 'all-zero-at-cap'
+	| 'too-few-bars'
+	| 'marks-all-null'
+	| 'null-count'
+	| 'no-arrivals';
 
 export type NoShape = { kind: 'none'; reason: string; code: NoShapeCode };
 
-export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | NoShape;
+export type ExplorerShape = DateSeriesShape | RankedListShape | PairedScatterShape | DistributionShape | PartsShape | TilesShape | FlowShape | NoShape;
 
 /** The columns the reader picked, by chart and then by role, kept on the page for as long as it is
  *  open. Never saved with a question and never carried in a link. */
@@ -129,7 +171,10 @@ const NEEDS: Record<ExplorerChartType, string> = {
 	dateSeries: 'Nothing here to draw: Over time needs a date or timestamp column for Date, and a number column for Lines.',
 	rankedList: 'Nothing here to draw: Ranked needs a number column to rank by, and one more column for Name.',
 	pairedScatter: 'Nothing here to draw: Paired needs two number columns, one for Across and one for Up.',
-	distribution: 'Nothing here to draw: Spread needs a number column for Values.'
+	distribution: 'Nothing here to draw: Spread needs a number column for Values.',
+	partsOfOne: 'Nothing here to draw: Side by side needs two number columns for Bars, and one more column for Name.',
+	tileStrip: 'Nothing here to draw: Which days needs a date or timestamp column for Date, and a true/false column to mark the days.',
+	flow: 'Nothing here to draw: Flow needs two number columns, one for Arrived and one for Went on, and one more column for Stage.'
 };
 
 /** Said after a chart's needs when the answer has no date or timestamp column for it. */
@@ -230,6 +275,11 @@ function datedRowsOf(rows: readonly Row[], dateColumn: string | undefined): read
 	return dateColumn === undefined ? rows : rows.filter((row) => dayValue(row[dateColumn]) !== null);
 }
 
+/** The rows a date chart leaves out because `dateColumn` gives them no day. */
+function rowsWithNoDayIn(rows: readonly Row[], dateColumn: string): number {
+	return rows.length - datedRowsOf(rows, dateColumn).length;
+}
+
 /** The page's own column for one role (Table A), given the roles before it, which a later role's
  *  choice may depend on: the date chart's lines are read from the rows with a day, and the ranked
  *  list ranks by a number that does not name its rows. */
@@ -237,9 +287,14 @@ function defaultFor(type: ExplorerChartType, role: RoleId, held: Partial<Record<
 	const numbers = namesOf(columns, isNumber);
 	const texts = namesOf(columns, (family) => family === 'text');
 	const one = (name: string | undefined): string[] => (name === undefined ? [] : [name]);
-	if (type === 'dateSeries' && role === 'date') return one(namesOf(columns, isDay)[0]);
+	if ((type === 'dateSeries' || type === 'tileStrip') && role === 'date') return one(namesOf(columns, isDay)[0]);
+	if (type === 'tileStrip' && role === 'markIf') return one(namesOf(columns, (family) => family === 'truth')[0]);
 	if (type === 'dateSeries' && role === 'lines') return lineSplit(numbers, datedRowsOf(rows, held.date?.[0]), bounds.seriesFloorShare).usable.slice(0, SERIES_TOKENS.length);
-	if (type === 'rankedList' && role === 'name') return one(texts[0] ?? columns.find((column) => !isNumber(classifyType(column.type)))?.name ?? columns[0]?.name);
+	if ((type === 'rankedList' || type === 'partsOfOne' || type === 'flow') && (role === 'name' || role === 'stage')) return one(texts[0] ?? columns.find((column) => !isNumber(classifyType(column.type)))?.name ?? columns[0]?.name);
+	if (type === 'partsOfOne' && role === 'bars') return numbers.filter((name) => name !== held.name?.[0]).slice(0, SERIES_TOKENS.length);
+	if (type === 'flow' && role === 'arrived') return one(numbers.find((name) => name !== held.stage?.[0]));
+	if (type === 'flow' && role === 'wentOn') return one(numbers.find((name) => name !== held.stage?.[0] && name !== held.arrived?.[0]));
+	if (type === 'flow' && role === 'dropped') return numbers.filter((name) => name !== held.stage?.[0] && name !== held.arrived?.[0] && name !== held.wentOn?.[0]).slice(0, SERIES_TOKENS.length);
 	if (type === 'rankedList' && role === 'rankBy') return one(numbers.find((name) => name !== held.name?.[0]));
 	if (type === 'pairedScatter' && role === 'across') return one(numbers[0]);
 	if (type === 'pairedScatter' && role === 'up') return one(numbers[1]);
@@ -279,34 +334,43 @@ function unfilled(type: ExplorerChartType, roles: readonly RoleState[]): NoShape
 	return { kind: 'none', code: 'unfilled', reason: noDay ? `${NEEDS[type]} ${DATES_ARE_TEXT}` : NEEDS[type] };
 }
 
-function dateSeriesShape(roles: readonly RoleState[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
-	const dateColumn = chosenOf(roles, 'date')[0];
-	const lines = roles.find((state) => state.role.id === 'lines');
-	if (dateColumn === undefined || lines === undefined || lines.options.length === 0) return unfilled('dateSeries', roles);
+/** Why a chosen date column cannot place one mark per UTC day. */
+function findDayRefusal(dateColumn: string, rows: readonly Row[], purpose: string): NoShape | null {
 	const unplaceable = firstUnplaceableDay(rows, dateColumn);
 	if (unplaceable !== null) {
 		return {
 			kind: 'none',
 			code: 'unplaceable-day',
-			reason: `Nothing here to draw: the column "${dateColumn}" holds ${unplaceable}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question to draw it over time.`
+			reason: `Nothing here to draw: the column "${dateColumn}" holds ${unplaceable}, and the chart can show only days from year 1 to year 9999. Keep only those days in the question ${purpose}.`
 		};
 	}
 	const datedRows = datedRowsOf(rows, dateColumn);
-	const rowsWithNoDay = rows.length - datedRows.length;
+	const rowsWithNoDay = rowsWithNoDayIn(rows, dateColumn);
 	if (datedRows.length === 0 && rowsWithNoDay > 0) {
 		return {
 			kind: 'none',
 			code: 'no-day',
-			reason: `Nothing here to draw: the column "${dateColumn}" holds only null. Give "${dateColumn}" a date in the question to draw it over time.`
+			reason: `Nothing here to draw: the column "${dateColumn}" holds only null. Give "${dateColumn}" a date in the question ${purpose}.`
 		};
 	}
 	if (hasSeveralRowsPerUtcDay(datedRows, dateColumn)) {
 		return {
 			kind: 'none',
 			code: 'several-rows-per-day',
-			reason: `Nothing here to draw: the answer has several rows a UTC day in "${dateColumn}". Group by day in the question to draw it over time.`
+			reason: `Nothing here to draw: the answer has several rows a UTC day in "${dateColumn}". Group by day in the question ${purpose}.`
 		};
 	}
+	return null;
+}
+
+function dateSeriesShape(roles: readonly RoleState[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	const dateColumn = chosenOf(roles, 'date')[0];
+	const lines = roles.find((state) => state.role.id === 'lines');
+	if (dateColumn === undefined || lines === undefined || lines.options.length === 0) return unfilled('dateSeries', roles);
+	const refusal = findDayRefusal(dateColumn, rows, 'to draw it over time');
+	if (refusal !== null) return refusal;
+	const datedRows = datedRowsOf(rows, dateColumn);
+	const rowsWithNoDay = rowsWithNoDayIn(rows, dateColumn);
 	const seriesColumns = lines.chosen;
 	if (seriesColumns.length === 0) return { kind: 'none', code: 'no-line-checked', reason: 'Nothing here to draw: Over time needs a column checked under Lines.' };
 	if (datedRows.every((row) => seriesColumns.every((column) => numericValue(row, column) === null))) {
@@ -421,16 +485,91 @@ function distributionShape(roles: readonly RoleState[], rows: readonly Row[], bo
 	};
 }
 
+/** The naming and magnitude checks shared by charts that measure from zero. */
+function findMagnitudeRefusal(columns: readonly Column[], rows: readonly Row[], nameColumn: string, numbers: readonly string[]): NoShape | null {
+	const names = new Set<string>();
+	for (const row of rows) {
+		const name = printed(columns, row, nameColumn);
+		if (names.has(name)) return { kind: 'none', code: 'repeated-name', reason: `Nothing here to draw: "${name}" is in more than one row of "${nameColumn}", and each row here needs its own name. Group by "${nameColumn}" in the question to draw it.` };
+		names.add(name);
+	}
+	for (const row of rows) {
+		for (const column of numbers) {
+			if ((numericValue(row, column) ?? 0) < 0) return { kind: 'none', code: 'below-zero', reason: `Nothing here to draw: "${column}" holds ${printed(columns, row, column)}, below zero, and this chart measures from zero.` };
+		}
+	}
+	return null;
+}
+
+function derivePartsShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
+	const labelColumn = chosenOf(roles, 'name')[0];
+	const bars = roles.find((state) => state.role.id === 'bars');
+	const barColumns = bars?.chosen ?? [];
+	if (labelColumn === undefined || (bars?.options.filter((one) => one.value !== labelColumn).length ?? 0) < 2) return unfilled('partsOfOne', roles);
+	if (barColumns.length < 2) return { kind: 'none', code: 'too-few-bars', reason: 'Nothing here to draw: Side by side needs two columns checked under Bars.' };
+	const refusal = findMagnitudeRefusal(columns, rows, labelColumn, barColumns);
+	if (refusal !== null) return refusal;
+	if (rows.every((row) => barColumns.every((column) => (numericValue(row, column) ?? 0) === 0))) return { kind: 'none', code: 'all-zero', reason: 'Nothing here to draw: every bar you checked is 0 or null on every row.' };
+	const drawn = rows.slice(0, bounds.rankMax);
+	if (drawn.every((row) => barColumns.every((column) => (numericValue(row, column) ?? 0) === 0))) {
+		const prefix = drawn.length === 1 ? 'the first row' : `the first ${drawn.length} rows`;
+		return { kind: 'none', code: 'all-zero-at-cap', reason: `Nothing here to draw: every bar you checked is 0 or null in ${prefix}. The remaining rows are in the table.` };
+	}
+	let mainFigure = { label: '', value: 0, column: barColumns[0] };
+	for (const row of drawn) for (const column of barColumns) {
+		const value = numericValue(row, column);
+		if (value !== null && value > mainFigure.value) mainFigure = { label: printed(columns, row, labelColumn), value, column };
+	}
+	return { kind: 'chart', type: 'partsOfOne', option: 'Side by side', icon: 'shape-side-by-side', labelColumn, barColumns, rowsDrawn: drawn.length, moreRows: rows.length - drawn.length, mainFigure, comparison: 'each bar against the longest bar' };
+}
+
+/** A true/false cell from the engine, which returns cells as text. NULL never becomes false. */
+export function readTruthValue(row: Row, column: string): boolean | null {
+	const value = row[column];
+	if (value === true || value === 'true') return true;
+	if (value === false || value === 'false') return false;
+	return null;
+}
+
+function deriveTilesShape(roles: readonly RoleState[], rows: readonly Row[]): ExplorerShape {
+	const dateColumn = chosenOf(roles, 'date')[0];
+	const markColumn = chosenOf(roles, 'markIf')[0];
+	if (dateColumn === undefined || markColumn === undefined) return unfilled('tileStrip', roles);
+	const refusal = findDayRefusal(dateColumn, rows, 'to mark it day by day');
+	if (refusal !== null) return refusal;
+	if (datedRowsOf(rows, dateColumn).every((row) => readTruthValue(row, markColumn) === null)) return { kind: 'none', code: 'marks-all-null', reason: `Nothing here to draw: "${markColumn}" is null on every day.` };
+	return { kind: 'chart', type: 'tileStrip', option: 'Which days', icon: 'shape-days', dateColumn, markColumn, rowsWithNoDay: rowsWithNoDayIn(rows, dateColumn), comparison: 'each UTC day against the other days in the span' };
+}
+
+function deriveFlowShape(roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[]): ExplorerShape {
+	const stageColumn = chosenOf(roles, 'stage')[0];
+	const arrivedColumn = chosenOf(roles, 'arrived')[0];
+	const wentOnColumn = chosenOf(roles, 'wentOn')[0];
+	const droppedColumns = chosenOf(roles, 'dropped');
+	if (stageColumn === undefined || arrivedColumn === undefined || wentOnColumn === undefined) return unfilled('flow', roles);
+	const numbers = [arrivedColumn, wentOnColumn, ...droppedColumns];
+	const refusal = findMagnitudeRefusal(columns, rows, stageColumn, numbers);
+	if (refusal !== null) return refusal;
+	for (const row of rows) for (const column of numbers) {
+		if (numericValue(row, column) === null) return { kind: 'none', code: 'null-count', reason: `Nothing here to draw: "${column}" is null at the stage "${printed(columns, row, stageColumn)}", and a flow needs every count.` };
+	}
+	if ((numericValue(rows[0] ?? {}, arrivedColumn) ?? 0) === 0) return { kind: 'none', code: 'no-arrivals', reason: `Nothing here to draw: nothing arrived at the first stage, "${printed(columns, rows[0] ?? {}, stageColumn)}".` };
+	return { kind: 'chart', type: 'flow', option: 'Flow', icon: 'shape-flow', stageColumn, arrivedColumn, wentOnColumn, droppedColumns, mainFigure: `${printed(columns, rows[rows.length - 1], wentOnColumn)} of ${printed(columns, rows[0], arrivedColumn)} went through every stage`, comparison: 'what each stage let through against what arrived at it' };
+}
+
 /** What `type` draws with the columns its roles hold: a chart, or the one reason it cannot. */
 export function chartShape(type: ExplorerChartType, roles: readonly RoleState[], columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds): ExplorerShape {
 	if (type === 'dateSeries') return dateSeriesShape(roles, rows, bounds);
 	if (type === 'rankedList') return rankedListShape(roles, columns, rows, bounds);
 	if (type === 'pairedScatter') return pairedScatterShape(roles, rows, bounds);
+	if (type === 'partsOfOne') return derivePartsShape(roles, columns, rows, bounds);
+	if (type === 'tileStrip') return deriveTilesShape(roles, rows);
+	if (type === 'flow') return deriveFlowShape(roles, columns, rows);
 	return distributionShape(roles, rows, bounds);
 }
 
 function fills(roles: readonly RoleState[]): boolean {
-	return roles.every((state) => !state.role.needed || state.chosen.length > 0);
+	return roles.every((state) => !state.role.needed || state.chosen.length >= (state.role.id === 'bars' ? 2 : 1));
 }
 
 /** The chart the Chart tab shows for an answer: the reader's type when there is one, else the
@@ -460,7 +599,7 @@ export function chartNotes(shape: ExplorerShape, bounds: ExplorerShapeBounds, ca
 				: `${shape.flatColumns.length} number columns are left out: each is under ${share}% of "${largest}", so each would draw flat.`
 		);
 	}
-	if (shape.type === 'dateSeries' && shape.rowsWithNoDay > 0) {
+	if ((shape.type === 'dateSeries' || shape.type === 'tileStrip') && shape.rowsWithNoDay > 0) {
 		notes.push(
 			shape.rowsWithNoDay === 1
 				? `1 row holds null in the column "${shape.dateColumn}", so the chart does not draw it. It is in the table.`
@@ -469,6 +608,26 @@ export function chartNotes(shape: ExplorerShape, bounds: ExplorerShapeBounds, ca
 	}
 	if (capped) notes.push(`Drawn from the first ${plural(maxRows, 'row', 'rows')}.`);
 	return notes;
+}
+
+/** The columns one role of the date chart can take, in the answer's order. */
+function dateChartColumns(id: RoleId, columns: readonly Column[]): string[] {
+	const role = chartKind('dateSeries').roles.find((one) => one.id === id);
+	return role === undefined ? [] : roleOptions(role, columns).map((option) => option.value);
+}
+
+/** How many of the notes under a drawn chart this answer can give, whatever chart and columns the
+ *  reader picks: the room the foot keeps. It reads the answer alone - its columns, its rows and
+ *  whether it stopped at its cap - with the tests the notes themselves are written from, so it may
+ *  count a note that never shows but never misses one that can: a number column the page's own
+ *  lines leave out as flat under some column the `Date` role can take, a row with no day in some
+ *  such column, and the cap. */
+export function countChartNotes(columns: readonly Column[], rows: readonly Row[], bounds: ExplorerShapeBounds, capped: boolean): number {
+	const dateColumns = dateChartColumns('date', columns);
+	const numbers = dateChartColumns('lines', columns);
+	const flat = dateColumns.some((dateColumn) => lineSplit(numbers, datedRowsOf(rows, dateColumn), bounds.seriesFloorShare).flat.length > 0);
+	const noDay = dateColumns.some((dateColumn) => rowsWithNoDayIn(rows, dateColumn) > 0);
+	return [flat, noDay, capped].filter(Boolean).length;
 }
 
 /** One UTC day on the date chart's axis, and the answer's row for it: `null` on a lost day. */

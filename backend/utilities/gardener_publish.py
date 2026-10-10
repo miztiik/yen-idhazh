@@ -81,12 +81,11 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import logging
 import os
-import random
 import subprocess
 import sys
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -95,6 +94,8 @@ from types import ModuleType
 from typing import Final
 
 from idhazh.config import GardenerSettings
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.gardener_events import (
     ShardPublished,
     ShardStop,
@@ -102,6 +103,7 @@ from idhazh.contracts.gardener_events import (
     TaskOutcome,
 )
 from idhazh.contracts.knobs.gardener import GardenerConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import cli as gardener_cli
 from idhazh.gardener import event_log, github_collections, ownership, run_summary, runner
@@ -117,7 +119,6 @@ from idhazh.gardener.file_listing import (
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
-    EXIT_PUSH_REFUSED,
     EXIT_TASK_FAILED,
     MEANS,
     Outcome,
@@ -125,10 +126,16 @@ from idhazh.gardener.outcome import (
     worst,
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
+from utilities.publication_git import Repository
+from utilities.publication_request import Delete, IntegrityError, PublicationRequest, Write
+from utilities.publish_to_repo import Status
+from utilities.publish_to_repo import publish as publish_request
+from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 #: The one identity every commit in this repository carries. The same two values
-#: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
+#: `backend/utilities/publication_git.py` sets, which a test holds in step.
 COMMITTER_NAME: Final = "miztiik"
 COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 
@@ -143,29 +150,9 @@ GITHUB_ACTIONS_ENV: Final = "GITHUB_ACTIONS"
 #: The file GitHub's runner shows on the job's page as the step's summary.
 STEP_SUMMARY_ENV: Final = "GITHUB_STEP_SUMMARY"
 
-#: The longest one wait between two tries, in seconds.
-MAX_BACKOFF_SECONDS: Final = 8
-
 #: Git's switch that stops a partial clone downloading an object it lacks. Every
 #: call here sets it but the one that widens the checkout for a task.
 NO_LAZY_FETCH_ENV: Final = "GIT_NO_LAZY_FETCH"
-
-#: Git's switch that points a command at an index file other than the checkout's.
-INDEX_FILE_ENV: Final = "GIT_INDEX_FILE"
-
-#: The index file each try builds its commit in, inside the checkout's git folder.
-COMMIT_INDEX: Final = "gardener-commit.index"
-
-#: What every command on that index runs under. The checkout is sparse, and git
-#: applies its patterns to any index it reads - which reads files the clone never
-#: downloaded, and with lazy fetching off, fails. The commit's index is whole.
-_A_WHOLE_INDEX: Final = ("-c", "core.sparseCheckout=false", "-c", "index.sparse=false")
-
-#: How git spells no object at all: an index line carrying it takes a path out.
-_NO_OBJECT: Final = "0" * 40
-
-#: The mode of a plain file, which is every file a task writes.
-_PLAIN_FILE: Final = "100644"
 
 #: Leave headroom below Windows' 32K process command-line limit.
 _MAX_PATHSPEC_CHARACTERS: Final = 16_000
@@ -202,28 +189,22 @@ class Checkout:
         *args: str,
         stdin: str | None = None,
         fetches: bool = False,
-        index: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """One git command, with lazy fetching off unless it is a named fetch.
 
         A command handed `index` reads and writes that index file instead of the
         checkout's, as a whole index.
         """
-        env = dict(os.environ)
-        if not fetches:
-            env[NO_LAZY_FETCH_ENV] = "1"
-        if index is not None:
-            env[INDEX_FILE_ENV] = str(index)
-            args = (*_A_WHOLE_INDEX, *args)
-        return subprocess.run(
-            ["git", *args],
-            cwd=self._repo,
-            input=stdin,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=env,
-            check=False,
+        done = Repository(self._repo).run(
+            *args,
+            data=stdin.encode("utf-8") if stdin is not None else None,
+            fetches=fetches,
+        )
+        return subprocess.CompletedProcess(
+            done.args,
+            done.returncode,
+            done.stdout.decode("utf-8"),
+            done.stderr.decode("utf-8"),
         )
 
     def git(
@@ -231,10 +212,9 @@ class Checkout:
         *args: str,
         stdin: str | None = None,
         fetches: bool = False,
-        index: Path | None = None,
     ) -> str:
         """Run one command and hand back what it printed, or raise with what it said."""
-        done = self._run(*args, stdin=stdin, fetches=fetches, index=index)
+        done = self._run(*args, stdin=stdin, fetches=fetches)
         if done.returncode != 0:
             raise RuntimeError(f"git {' '.join(args)} failed: {done.stderr.strip()}")
         return done.stdout
@@ -253,64 +233,6 @@ class Checkout:
         # Keep existing ancestry for push hooks; shallow callers fetch only new commits.
         self.git("fetch", "--quiet", REMOTE, BRANCH)
         return self.git("rev-parse", "--verify", f"{REMOTE}/{BRANCH}").strip()
-
-    def changed_on_main(self, paths: Sequence[str]) -> list[str]:
-        """Which of these paths differ between the commit this checkout is at and `origin/main`.
-
-        Trees only, so a partial clone downloads nothing: it holds every tree of
-        both commits. Rename detection is off, so each path is judged by its own
-        entry. The names are taken literally, as `ls-tree` takes them, in groups
-        below Windows' process limit.
-        """
-        listed: set[str] = set()
-        for batch in _pathspec_batches(paths):
-            listed.update(
-                self.git(
-                    "--literal-pathspecs",
-                    "diff-tree",
-                    "-r",
-                    "--no-renames",
-                    "--name-only",
-                    "-z",
-                    "HEAD",
-                    f"{REMOTE}/{BRANCH}",
-                    "--",
-                    *batch,
-                ).split("\0")
-            )
-        return sorted(listed - {""})
-
-    def remote_blob(self, path: str) -> str | None:
-        """The object `origin/main` holds at this path, or None when it holds nothing there."""
-        done = self._run("rev-parse", "--verify", "--quiet", f"{REMOTE}/{BRANCH}:{path}")
-        return done.stdout.strip() if done.returncode == 0 else None
-
-    def local_blob(self, path: str) -> str | None:
-        """The object this checkout's file at this path would be, or None when there is none."""
-        if not (self._repo / path).is_file():
-            return None
-        return self.git("hash-object", "--", path).strip()
-
-    def staged_names(self, index: Path) -> set[str]:
-        """Every path the next commit would change against `origin/main`, a deletion as itself.
-
-        Rename detection is off. A shard that deletes a file and writes one much
-        like it - a fold replacing a day's one writer file with its settled file -
-        is a pair git would otherwise report as one move, naming only the new
-        path, so the deletion would read as unstaged and the shard would refuse
-        to land. Detecting it would also read both files, and the clone may hold
-        neither.
-        """
-        listed = self.git(
-            "diff-index",
-            "--cached",
-            "--name-only",
-            "--no-renames",
-            "-z",
-            f"{REMOTE}/{BRANCH}",
-            index=index,
-        )
-        return set(listed.split("\0")) - {""}
 
     def committed_folders(self, owned: Sequence[str]) -> frozenset[str]:
         """Which exact configured folders the commit holds, without listing their children."""
@@ -358,91 +280,6 @@ class Checkout:
             fetches=True,
         )
 
-    def ignored(self, paths: Sequence[str]) -> set[str]:
-        """Which of these paths a `.gitignore` pattern matches, whatever the index holds."""
-        if not paths:
-            return set()
-        done = self._run(
-            "check-ignore",
-            "--no-index",
-            "-z",
-            "--stdin",
-            stdin="".join(f"{path}\0" for path in paths),
-        )
-        # 0 names at least one ignored path and 1 names none; anything else failed.
-        if done.returncode not in (0, 1):
-            raise RuntimeError(f"git check-ignore failed: {done.stderr.strip()}")
-        return set(done.stdout.split("\0")) - {""}
-
-    def stage(self, written: Sequence[str], deleted: Sequence[str]) -> Path:
-        """The next commit's index: `origin/main`'s tree, these writes set, these deletions out.
-
-        Built in a file of its own each try, so the checkout's sparse index is
-        never expanded and nothing is read but trees and the written files. A
-        write git ignores is left out the way `git add` leaves it out, unless
-        `origin/main` already holds it, and so is a write with no file on disk;
-        the checks after name either one.
-        """
-        named = Path(self.git("rev-parse", "--git-path", COMMIT_INDEX).strip())
-        index = named if named.is_absolute() else self._repo / named
-        self.git("read-tree", f"{REMOTE}/{BRANCH}", index=index)
-        ignored = self.ignored(written)
-        staged = [
-            path
-            for path in written
-            if (self._repo / path).is_file()
-            and (path not in ignored or self.remote_blob(path) is not None)
-        ]
-        blobs = (
-            self.git(
-                "hash-object", "-w", "--stdin-paths", stdin="".join(f"{path}\n" for path in staged)
-            ).split()
-            if staged
-            else []
-        )
-        lines = [
-            f"{_PLAIN_FILE} {blob}\t{path}\0" for blob, path in zip(blobs, staged, strict=True)
-        ]
-        lines += [f"0 {_NO_OBJECT}\t{path}\0" for path in deleted]
-        if lines:
-            self.git("update-index", "-z", "--index-info", stdin="".join(lines), index=index)
-        return index
-
-    def commit(self, index: Path, message: str) -> str:
-        """A commit of that index on top of `origin/main`, under the repository's one identity.
-
-        `--missing-ok`, because the index names every file `origin/main` holds and
-        the clone holds few of them: checking that each one exists would
-        download it.
-        """
-        tree = self.git("write-tree", "--missing-ok", index=index).strip()
-        return self.git(
-            "-c",
-            f"user.name={COMMITTER_NAME}",
-            "-c",
-            f"user.email={COMMITTER_EMAIL}",
-            "commit-tree",
-            tree,
-            "-p",
-            f"{REMOTE}/{BRANCH}",
-            "-m",
-            message,
-        ).strip()
-
-    def push(self, commit: str) -> bool:
-        """Whether `main` took this commit, sent as whole objects rather than as deltas.
-
-        A delta is computed against a file the remote holds, and for a file the
-        clone never downloaded that means downloading it first; with lazy
-        fetching off, the push would fail instead.
-        """
-        return self.git_ok("push", "--quiet", "--no-thin", REMOTE, f"{commit}:refs/heads/{BRANCH}")
-
-
-def sleep_with_jitter(attempt: int, *, sleep: Callable[[float], None] = time.sleep) -> None:
-    """Wait a random time before try `attempt + 1`, longer after each loss, never past the cap."""
-    sleep(random.uniform(0, min(2 ** (attempt - 1), MAX_BACKOFF_SECONDS)))
-
 
 def _refuse_a_directory(shard: Shard, repo: Path) -> str | None:
     """A write or a deletion names one file. A folder here would stand for everything under it."""
@@ -452,31 +289,9 @@ def _refuse_a_directory(shard: Shard, repo: Path) -> str | None:
     return None
 
 
-def _what_staging_missed(shard: Shard, checkout: Checkout, index: Path) -> str | None:
-    """The three checks over what was staged, or None when the index is exactly the shard."""
-    staged = checkout.staged_names(index)
-    stray = sorted(staged - shard.written_paths - shard.deleted_paths)
-    if stray:
-        return f"{', '.join(stray)} staged, and this shard neither wrote nor deleted it"
-    for path in sorted(shard.written_paths - staged):
-        mine = checkout.local_blob(path)
-        if mine is None or mine != checkout.remote_blob(path):
-            return f"{path} was written and did not stage"
-    for path in sorted(shard.deleted_paths - staged):
-        if checkout.remote_blob(path) is not None:
-            return f"{path} was deleted, did not stage, and {REMOTE}/{BRANCH} still holds it"
-    return None
-
-
 @dataclass(frozen=True, slots=True)
 class PushOutcome:
-    """What one shard's push loop came to: its exit code, and how the commit came to rest.
-
-    `landing` is None when the loop refused the shard itself - a folder named as
-    a file, a record two runs claimed, or a staging check that failed - and then
-    it names no try. `stale_paths` are the paths main changed after the shard's
-    commit, sorted, and only a `stale` landing names them.
-    """
+    """Gardener's exit convention, separate from producer failure."""
 
     exit_code: int
     landing: ShardLanding | None = None
@@ -489,14 +304,12 @@ def publish(
     *,
     attempts: int,
     repo: Path,
+    identity: WriterIdentity,
+    write_permissions: tuple[str, ...],
+    delete_permissions: tuple[str, ...],
     say: Callable[[str], None] = print,
 ) -> PushOutcome:
-    """Land this shard on main, trying again on a newer tip, `attempts` times at most.
-
-    It hands back how the commit came to rest, as its word from `ShardLanding`
-    and the try it came to rest on, and says only the refusals no landing word
-    names. The shard's `shard-published` event says the rest once.
-    """
+    """Apply independently declared ownership through the shared publisher."""
     outside = sorted(
         path
         for path in shard.written_paths | shard.deleted_paths
@@ -505,40 +318,70 @@ def publish(
     if outside:
         say(f"shard {shard.index}: {outside[0]} is outside its declared owned paths")
         return PushOutcome(exit_code=EXIT_INTEGRITY)
-    refused = _refuse_a_directory(shard, repo)
-    if refused is not None:
-        say(f"shard {shard.index}: {refused}")
-        return PushOutcome(exit_code=EXIT_INTEGRITY)
-    checkout = Checkout(repo)
-    written, deleted = sorted(shard.written_paths), sorted(shard.deleted_paths)
-    compared = sorted((shard.written_paths | shard.deleted_paths) - {shard.record_path})
-    base = ""
-    for attempt in range(1, attempts + 1):
-        base = checkout.fetch()
-        landed = checkout.remote_blob(shard.record_path)
-        if landed is not None:
-            if landed == checkout.local_blob(shard.record_path):
-                return PushOutcome(EXIT_OK, ShardLanding.ALREADY_ON_MAIN, attempt)
-            say(
-                f"shard {shard.index}: {shard.record_path} is on {BRANCH} with other bytes, "
-                "so two runs claimed one record"
+    git = Repository(repo)
+    try:
+        refused = _refuse_a_directory(shard, repo)
+        if refused is not None:
+            raise IntegrityError(refused)
+        source = git.git("rev-parse", "HEAD").strip()
+        git.prime(source, set(shard.written_paths) | set(shard.deleted_paths))
+        writes = {
+            path: Write(
+                hashlib.sha256((repo / path).read_bytes()).hexdigest(),
+                git.entry(source, path),
+                path == shard.record_path,
             )
-            return PushOutcome(exit_code=EXIT_INTEGRITY)
-        stale = checkout.changed_on_main(compared)
-        if stale:
-            return PushOutcome(EXIT_OK, ShardLanding.STALE, attempt, tuple(stale))
-        index = checkout.stage(written, deleted)
-        missed = _what_staging_missed(shard, checkout, index)
-        if missed is not None:
-            say(f"shard {shard.index}: {missed}")
-            return PushOutcome(exit_code=EXIT_INTEGRITY)
-        if checkout.push(checkout.commit(index, shard.message)):
-            return PushOutcome(EXIT_OK, ShardLanding.LANDED, attempt)
-        if attempt < attempts:
-            sleep_with_jitter(attempt)
-    if checkout.fetch() != base:
-        return PushOutcome(EXIT_OK, ShardLanding.LOST, attempts)
-    return PushOutcome(EXIT_PUSH_REFUSED, ShardLanding.REFUSED, attempts)
+            for path in shard.written_paths
+        }
+        deletions: dict[str, Delete] = {}
+        for path in shard.deleted_paths:
+            baseline = git.entry(source, path)
+            if baseline is None:
+                raise IntegrityError("deletion was not listed in the source", (path,))
+            deletions[path] = Delete(baseline, not (repo / path).exists())
+        request = PublicationRequest(
+            identity,
+            shard.message,
+            source,
+            write_permissions,
+            delete_permissions,
+            writes,
+            deletions,
+        )
+        result = publish_request(
+            request,
+            repo=repo,
+            retry=load_retry(repo / DEFAULT_CONFIG)
+            if (repo / DEFAULT_CONFIG).is_file()
+            else load_retry(Path(__file__).resolve().parents[2] / DEFAULT_CONFIG),
+            max_pushes=attempts,
+        )
+    except (OSError, ValueError, RuntimeError) as error:
+        say(f"shard {shard.index}: {error}")
+        return PushOutcome(EXIT_INTEGRITY)
+    if result.status is Status.INTEGRITY_REFUSED:
+        say(f"shard {shard.index}: {result.detail}: {', '.join(result.refusal_paths)}")
+        return PushOutcome(EXIT_INTEGRITY)
+    if result.status is Status.PREPARATION_FAILURE:
+        # A failed fetch is a shard failure, not a rejected push with a verified base.
+        raise RuntimeError(result.detail)
+    if result.status in (Status.STALE, Status.LOST):
+        code = EXIT_OK
+    elif result.status is Status.REFUSED:
+        code = 3
+    else:
+        code = result.exit_code
+    landing = (
+        ShardLanding(result.status.value)
+        if result.status.value in {word.value for word in ShardLanding}
+        else None
+    )
+    return PushOutcome(
+        code,
+        landing,
+        max(1, result.push_count),
+        result.refusal_paths if result.status is Status.STALE else (),
+    )
 
 
 def read_the_listing(
@@ -826,7 +669,35 @@ def _run_and_land(
         return dataclasses.replace(ran, exit_code=code), run.published(
             code, ran=ran, stopped=ShardStop.CHECK_REFUSED
         )
-    pushed = publish(ran.landing, attempts=settings.config.attempts, repo=repo_root, say=say)
+    pushed = publish(
+        ran.landing,
+        attempts=settings.config.attempts,
+        repo=repo_root,
+        say=say,
+        identity=WriterIdentity(
+            run_id=run.run_id,
+            attempt=run.attempt,
+            job=ServerJob.RUN_TASKS,
+            shard=shard,
+            producer="gardener.runner",
+            git_sha=sha,
+        ),
+        write_permissions=tuple(
+            sorted(
+                {
+                    *owned,
+                    staging.staged_path(LedgerName.GARDENER),
+                    staging.staged_path(LedgerName.HOST_FINGERPRINT),
+                    *(
+                        staging.staged_path(which)
+                        for name in names
+                        for which in settings.tasks[name].appends_to
+                    ),
+                }
+            )
+        ),
+        delete_permissions=tuple(owned),
+    )
     code = worst(ran.exit_code, pushed.exit_code)
     stopped = None if pushed.landing is not None else ShardStop.CHECK_REFUSED
     return dataclasses.replace(ran, exit_code=code), run.published(

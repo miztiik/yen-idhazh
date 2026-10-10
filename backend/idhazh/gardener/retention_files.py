@@ -1,7 +1,7 @@
 """How does a retention task take files from its own folders, one at a time, under its ceiling?
 
-Every retention task walks files - a day file, a writer's segment, a trace, a
-published picture. Which files are old enough is each task's own question, and
+Every retention task walks files - a published month copy, a digest fragment,
+a trace, a published picture. Which files are old enough is each task's own question, and
 it is answered in the task. What they share is here: each file is one member of
 `one_at_a_time.take`, named by its repository path, dated by the day it records,
 and deleted with any empty folder it leaves behind.
@@ -21,16 +21,15 @@ that keeps for ever takes nothing at all.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
 from idhazh import month_partition
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.gardener_events import TaskOutcome
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
-from idhazh.gardener import named_trees
 from idhazh.gardener.context import TaskContext
-from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.one_at_a_time import Collection, Member, Pass, take
 from idhazh.gardener.one_at_a_time import Window as Span
 
@@ -65,10 +64,10 @@ def first_kept_day(
 
 
 def first_kept_month(window: Window, today: date) -> str | None:
-    """The oldest `YYYY-MM` a month-grain ledger keeps whole. None keeps every month.
+    """The oldest `YYYY-MM` a window keeps whole. None keeps every month.
 
-    A window of days on such a ledger keeps the whole month its oldest day falls
-    in, so a month is still taken whole or not at all.
+    A window of days keeps the whole month its oldest day falls in, so a month
+    is still taken whole or not at all.
     """
     if isinstance(window, ForeverWindow):
         return None
@@ -85,28 +84,6 @@ def owned_tree(context: TaskContext, tree: Path) -> Path | None:
     """
     relative = tree.relative_to(context.repo_root).as_posix()
     return tree if relative in context.owned_folders else None
-
-
-def whole_months_before(
-    listing: FileListing, tree: Path | None, first_month: str | None
-) -> list[Aged]:
-    """Every file of every month older than `first_month`, month by month, oldest first.
-
-    For a ledger that files by day under a window counted in months: a month
-    goes whole or not at all, because `named_trees.shards_by_month` groups the
-    files each month holds.
-    """
-    from idhazh import day_shards
-
-    if tree is None or first_month is None:
-        return []
-    by_month = named_trees.shards_by_month(listing, tree)
-    return [
-        Aged(path=path, day=day_shards.date_of(path))
-        for month in sorted(by_month)
-        if month < first_month
-        for path in by_month[month]
-    ]
 
 
 def first_day_of(month: str | None) -> date | None:
@@ -135,6 +112,11 @@ def take_files(
     it there, so a summary that will not read back stops the pass with those
     files still in place.
     """
+    idle_outcome = (
+        TaskOutcome.OUTSIDE_RANGE
+        if context.operator_range is not None
+        else TaskOutcome.NOT_DUE
+    )
     if first_kept is None:
         return Pass(
             collection=collection,
@@ -149,6 +131,7 @@ def take_files(
             bytes_freed=0,
             stopped_because=StopReason.EXHAUSTED,
             resume_from=None,
+            idle_outcome=idle_outcome,
         )
     root = context.repo_root
 
@@ -177,9 +160,12 @@ def take_files(
             span = Span(since=first_day, until=last_day)
         else:
             span = Span(since=start, until=end)
-    return take(
-        Collection(name=collection, listing=lambda: aged, describe=describe, delete=delete),
-        window=span,
-        ceiling=context.policy.max_deletes_per_run,
-        dry_run=context.policy.dry_run,
+    return replace(
+        take(
+            Collection(name=collection, listing=lambda: aged, describe=describe, delete=delete),
+            window=span,
+            ceiling=context.policy.max_deletes_per_run,
+            dry_run=context.policy.dry_run,
+        ),
+        idle_outcome=idle_outcome,
     )

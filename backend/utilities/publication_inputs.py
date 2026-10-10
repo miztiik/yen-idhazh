@@ -1,66 +1,113 @@
-"""Which changed files are confirmed writes inside a job's declared publication paths?"""
+"""How are bounded named inputs materialized from one chosen data tree?"""
 
 from __future__ import annotations
 
-import hashlib
-import os
-import subprocess
 from collections.abc import Sequence
+from datetime import date, timedelta
 from pathlib import Path
 
-from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council.publication import inside
+from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.ledger import paths
+from utilities.publication_git import Repository
+from utilities.publication_request import PLAIN_MODE, IntegrityError, relative, safe_file
 
 
-def confirmed_paths(
-    prefixes: Sequence[str], *, receipt_path: Path, changed: set[str]
-) -> tuple[str, ...]:
-    """Check the changed names, then read only the receipt's named output files.
-
-    The receipt confirms bytes. The caller's declarations grant permission.
-    Neither can stand in for the other.
-    """
-    receipt = PublicationReceipt.from_json(receipt_path.read_text(encoding="utf-8"))
-    writer = receipt.identity
-    for variable, expected in (
-        ("GITHUB_JOB", writer.job.value),
-        ("GITHUB_RUN_ATTEMPT", str(writer.attempt)),
-        ("SHARD", str(writer.shard)),
-        ("GITHUB_RUN_ID", writer.run_id.rsplit("-", 1)[-1]),
-    ):
-        actual = os.environ.get(variable)
-        if actual and actual != expected:
-            raise ValueError(f"{variable} does not match the publication receipt's writer")
-    outside = sorted(path for path in changed | receipt.writes.keys() if not inside(path, prefixes))
-    if outside:
-        raise ValueError(f"{outside[0]} is outside the declared publication paths")
-    unconfirmed = sorted(changed - receipt.writes.keys())
-    if unconfirmed:
-        raise ValueError(f"{unconfirmed[0]} has no completed write in this job's receipt")
-    root = Path.cwd().resolve()
-    for path, expected_digest in receipt.writes.items():
-        held = Path(path)
-        if not held.resolve().is_relative_to(root) or held.is_symlink() or not held.is_file():
-            raise ValueError(f"{path} is not a confirmed regular file")
-        if hashlib.sha256(held.read_bytes()).hexdigest() != expected_digest:
-            raise ValueError(f"{path} changed after its publication write was recorded")
-    return tuple(sorted(changed))
-
-
-def validate_git_blobs(receipt_path: Path, *, revision: str) -> None:
-    """Check the bytes Git will publish, not just the working files.
-
-    An empty revision selects the index. HEAD selects the committed tree,
-    including a tree changed by replay after a rejected push.
-    """
-    receipt = PublicationReceipt.from_json(receipt_path.read_text(encoding="utf-8"))
-    for path, expected_digest in receipt.writes.items():
-        blob = subprocess.run(
-            ["git", "cat-file", "blob", f"{revision}:{path}"],
-            capture_output=True,
-            check=False,
+def ledger_window(which: LedgerName, *, through: str, days: int) -> tuple[str, ...]:
+    """Raw days, exact compact periods and three named indexes, never a ledger walk."""
+    state = Path("state")
+    raw = paths.raw_root(state, which)
+    asked: set[str] = {
+        paths.compact_index_path(state, which, period).as_posix() for period in Period
+    }
+    coverage: dict[Period, set[str]] = {period: set() for period in Period}
+    end = date.fromisoformat(through)
+    for offset in range(days):
+        stamp = (end - timedelta(days=offset)).isoformat()
+        asked.add((raw / stamp.replace("-", "/")).as_posix())
+        for period, covers in (
+            (Period.DAILY, stamp),
+            (Period.MONTHLY, stamp[:7]),
+            (Period.YEARLY, stamp[:4]),
+        ):
+            coverage[period].add(covers)
+    for period, periods in coverage.items():
+        if not periods:
+            continue
+        sample_date = min(periods)
+        sample = paths.compact_path(state, which, period, sample_date)
+        sample_parts = (
+            sample_date.split("-")
+            if period is not Period.YEARLY
+            else [
+                sample_date,
+                sample_date,
+            ]
         )
-        if blob.returncode != 0:
-            raise ValueError(f"{path} has no confirmed Git blob in {revision or 'the index'}")
-        if hashlib.sha256(blob.stdout).hexdigest() != expected_digest:
-            raise ValueError(f"{path} Git blob differs from its confirmed publication bytes")
+        if sample.with_suffix("").parts[-len(sample_parts) :] != tuple(sample_parts):
+            raise IntegrityError("compact period layout changed; update the bounded input policy")
+        root = sample.parents[len(sample_parts) - 1]
+        for covers in periods:
+            parts = covers.split("-") if period is not Period.YEARLY else [covers, covers]
+            held = root.joinpath(*parts)
+            asked.update(held.with_suffix(suffix).as_posix() for suffix in (".parquet", ".json"))
+    return tuple(sorted(asked))
+
+
+def named_entries(
+    git: Repository,
+    tree: str,
+    inputs: Sequence[str],
+) -> dict[str, tuple[str, str, str]]:
+    """Tree entries under concrete bounded inputs, batched below argv limits."""
+    inputs = tuple(dict.fromkeys(inputs))
+    for asked in inputs:
+        relative(asked)
+    entries: dict[str, tuple[str, str, str]] = {}
+    batch: list[str] = []
+    size = 0
+    batches: list[list[str]] = []
+    for asked in inputs:
+        if size + len(asked) > 16000 and batch:
+            batches.append(batch)
+            batch, size = [], 0
+        batch.append(asked)
+        size += len(asked) + 1
+    if batch:
+        batches.append(batch)
+    for batch in batches:
+        for line in git.git("ls-tree", "-r", "-z", tree, "--", *batch).split("\0"):
+            if not line:
+                continue
+            metadata, path = line.split("\t", 1)
+            mode, kind, oid = metadata.split()
+            entries[path] = mode, kind, oid
+    git.prime(tree, set(inputs) | set(entries))
+    for asked in inputs:
+        git.parents_safe(tree, asked)
+    return entries
+
+
+def materialize(
+    git: Repository,
+    tree: str,
+    inputs: Sequence[str],
+    destination: Path,
+    *,
+    preserve_existing: bool = False,
+) -> tuple[str, ...]:
+    """Fetch only blobs named by bounded inputs; missing materialization is an error."""
+    written: list[str] = []
+    entries = named_entries(git, tree, inputs)
+    for path, (mode, kind, oid) in entries.items():
+        if mode != PLAIN_MODE or kind != "blob":
+            raise IntegrityError("input is not a plain data file", (path,))
+        git.parents_safe(tree, path)
+        target = safe_file(destination, path, exists=False)
+        data = git.blob(oid, fetches=True)
+        if preserve_existing and target.exists() and target.read_bytes() != data:
+            raise IntegrityError("named input has foreign local changes", (path,))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        written.append(path)
+    return tuple(written)

@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-09
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -200,8 +200,10 @@ state commits cost nothing here, and `digest.yml` and `backfill.yml` run
 
 A contract change selects both languages and re-reads every committed day,
 because the shape a day is read through is the only thing that can invalidate a
-frozen one. There is no export step and nothing to compare: the three tests that
-bind the frontend's hand copies run inside the backend group.
+frozen one. There is no export step and nothing to compare: the frontend hand
+copies are held by the binding tests listed in the
+[contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
+which run inside the backend group.
 
 ## Direct backend checks
 
@@ -407,7 +409,7 @@ anywhere has to be repointed.
 
 | Selector | What it holds |
 | --- | --- |
-| `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the three tests that bind the frontend's hand copies |
+| `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the frontend binding tests listed in the [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) |
 | `-m visual` | The picture's gate and ladder, its validator, the compiler that turns a plan into published marks, and the planted attacks aimed at the picture |
 | `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
 | `-m slow` | Every module whose average test runs over a second |
@@ -487,8 +489,9 @@ Run all three from the repository root. Each must be clean.
 
 **There is no schema export and no drift gate.** Both went on 2026-09-23 with
 the two generated trees they checked. What the frontend copies by hand is held
-in step by three tests in `backend/tests/contracts/`, which `pytest` above runs
-([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+in step by the tests listed in the
+[contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
+which `pytest` above runs.
 
 **There is no shell linter either.** `shellcheck` went on 2026-09-23 with
 `.github/scripts/`, the last shell this repository shipped as a file, and
@@ -904,6 +907,10 @@ or the committed data (owner ruling, 2026-10-05). The canary keeps only the
 explorer checks that do not depend on what it holds: layout, notices and
 browser storage.
 
+`runExplorer` watches the Run button before clicking it, then waits for that
+run to finish. A fast refusal can finish before the click returns. Watching
+after the click can miss it; checking only the answer can accept an older run.
+
 **Find a test that depends on what the canary holds by moving the canary day.**
 Set `DATE` in `backend/utilities/build_canary_day.py` to a later day, run the
 specs with `npm run test:changed -- --spec <name>`, which builds the canary
@@ -1113,5 +1120,5 @@ precisely when an operator needs it.
 - [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
 - [../reference/test-selection.md](../reference/test-selection.md) - why a pull request runs only some of these, what that gives up, and what was rejected.
 - [../reference/ci-environment.md](../reference/ci-environment.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the three tests that replaced the drift gate.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#what-holds-the-copy-in-step) - the frontend binding tests and what each holds.
 - [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.

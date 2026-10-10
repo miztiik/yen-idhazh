@@ -34,12 +34,13 @@ tree.
 
 **A task that stops still has a row, and the row says why.** Every error a task
 meets is read once for what it means (`error_cause`). A code defect ends its row
-`failed` with the fault `raised`; a cause outside the code - GitHub's API that
-did not answer, or a period that waits for a later wake or a person - ends it
-`deferred` with a word that names it. Its siblings still run either way, and
-what it had already done is on the row, because the core carries it out of any
-stop part way. **Only a failed row, or a shard over its download budget, makes
-the shard exit 1**; a deferred one leaves the exit code as it was.
+`failed` with the fault `raised`; an explicit refusal only a person can settle
+ends it `failed` with `manual-action`. A cause outside the code - GitHub's API
+that did not answer, or a period waiting for a later wake or a named repair -
+ends it `deferred` with a word that names it. Its siblings still run either
+way, and what it had already done is on the row, because the core carries it
+out of any stop part way. **Only a failed row, or a shard over its download
+budget, makes the shard exit 1**; a deferred one leaves the exit code as it was.
 
 **Every task is handed the folders it walks, judged against the commit.** A
 folder the commit holds is walked whether the checkout holds it or not, because
@@ -609,9 +610,10 @@ def run(
     them starts git; None for the last two means nobody could read the commit.
     `listing` is the files under every folder the tasks own or read; None lists
     them off the disk here. What the tasks downloaded is read off it once they
-    have run. `period_range` is a range a person named for one task: the task
-    reads it in place of the window `scheduled_range` builds for a scheduled
-    wake. A compaction has no such window, so a named range only limits the
+    have run. `period_range` is the effective range the task may read: the
+    range a person named, or the window `scheduled_range` builds for a
+    scheduled wake. `operator_range` keeps only the range a person named. A
+    compaction has no scheduled window, so a named range only limits the
     periods its steps choose.
     """
     refused = history_tasks_among(names, settings.tasks)
@@ -624,6 +626,7 @@ def run(
     if period_range is not None and len(names) != 1:
         say("a named period range runs one task, not a shard")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    operator_range = period_range
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
         bound = preflight(settings.tasks, registry.discover(package, settings.tasks))
@@ -703,9 +706,10 @@ def run(
                     owned_folders=resolved[name].walk,
                     listing=listing.within(covered[name]),
                     first_ledger_year=settings.config.first_ledger_year,
+                    operator_range=operator_range,
                     period_range=period_ranges[name],
                 )
-                event_log.emit(_planned(name, context, resolved[name], period_range))
+                event_log.emit(_planned(name, context, resolved[name], operator_range))
                 done = _run_one(name, bound[name], context)
                 finished.append(_said_finished(done))
                 _refuse_a_path_outside(done, settings.tasks, bound[name].owned_ledgers)

@@ -186,6 +186,9 @@ export type FetchCost = { files: number; bytes: number; alreadyHeld: number; ms:
 export type SpanCost = {
 	files: number;
 	bytes: number;
+	/** Inclusive UTC bounds estimated for the answer, or null when no ledger reads a day. */
+	readFrom: DateStamp | null;
+	readTo: DateStamp | null;
 	unpackedDays: readonly DateStamp[];
 	cut: readonly CutDays[];
 	through: Readonly<Partial<Record<LedgerName, DateStamp>>>;
@@ -232,9 +235,11 @@ export type UnansweredDays = { tier: 'archive'; ledger: LedgerName; before: Date
 /** `readFrom` is the first UTC day an answer with rows read: the window's first day, unless every
  *  selected ledger's answer starts later, because its earlier days were cut or the repository could
  *  not give them; then the earliest day one of them starts on. `cut` and `unanswered` name each such
- *  ledger, in the order chosen. */
+ *  ledger, in the order chosen. `readTo` is the last UTC day it read: each ledger's answer ends on
+ *  the earlier of the window's last day and the newest day that ledger lists, and `readTo` is the
+ *  latest such end of a ledger that read a day of the window. */
 export type AskResult =
-	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; unpackedDays: readonly DateStamp[]; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
+	| { state: 'ok'; columns: readonly Column[]; rows: Row[]; capped: boolean; read: FetchCost; readFrom: DateStamp; readTo: DateStamp; unpackedDays: readonly DateStamp[]; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
 	| { state: 'quiet'; columns: readonly Column[]; read: FetchCost; cut: readonly CutDays[]; unanswered: readonly UnansweredDays[]; gaps: readonly SpanGap[] }
 	| { state: 'missing'; ledger: LedgerName }
 	| { state: 'unreachable'; ledger: LedgerName | null; at: DateStamp | null; fault: AskFault }

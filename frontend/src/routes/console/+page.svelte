@@ -1097,6 +1097,7 @@
 	<Viewport
 		{rows}
 		window={viewport}
+		panelState={!ready ? 'loading' : telemetryState}
 		config={data.console}
 		bands={data.summarizeBands}
 		tickDensity={data.chart.tick_density}

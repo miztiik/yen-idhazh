@@ -46,8 +46,7 @@ the live pass carries out.
 **What it reads (Guardrail #12).** The three compact indexes and the names of
 the ledger's raw day folders, through `ledger.held_days`, to say how many days
 lie outside the range: a names-only read of the whole ledger, the one
-`docs/concepts/growing-reads.md` lists, and the CSV half's walk of a whole day
-tree is the same question. Everything else is bounded by the range: the
+`docs/concepts/growing-reads.md` lists. Everything else is bounded by the range: the
 envelope of each raw file in it, and each compact file that holds a day the pass
 takes.
 
@@ -164,8 +163,8 @@ def take_days(
 ) -> one_at_a_time.Pass:
     """Take up to `ceiling` days of the range out of this ledger, oldest first; say what changed.
 
-    The record is the one the CSV half returns: `taken` is every file deleted,
-    or that would be, and `written` every file rewritten. `identity` is the
+    `taken` is every file deleted, or that would be, and `written` every file
+    rewritten. `identity` is the
     writer every rebuilt file's envelope names, on a dry run too, because a dry
     run builds each file it reports.
     """
