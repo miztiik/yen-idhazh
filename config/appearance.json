@@ -20,6 +20,7 @@
     "bandwidth_min_kinds": 3,
     "chart_coverage_pct": 5.0,
     "chart_height": 220,
+    "tile_min_px": 6,
     "chart_minutes_target": 6.0,
     "chart_rule_days": 14,
     "chart_width": 760,

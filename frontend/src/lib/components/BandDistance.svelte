@@ -51,6 +51,7 @@
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { dayMonth, plural } from '$lib/format';
 	import RankedList from './RankedList.svelte';
+	import { rankedGeometry } from '$lib/charts/d3/rankedList';
 
 	let {
 		points,
@@ -553,7 +554,7 @@
 		<div class="mt-3">
 			<RankedList
 				caption="Summaries furthest from their target band"
-				{ranked}
+				geometry={rankedGeometry(ranked)}
 				maxText="{grouped(ranked.max)} words outside the band"
 				measured={placed.length > 0}
 				unmeasuredNote="Nothing in this window recorded both an article length and a summary length."

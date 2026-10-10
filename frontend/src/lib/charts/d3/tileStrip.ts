@@ -52,6 +52,28 @@ export interface TileGeometry {
 	worst: Tile | null;
 }
 
+export interface TileWindow {
+	tiles: Tile[];
+	offset: number;
+	earlier: Record<TileState, number>;
+	overflow: string | null;
+}
+
+/** Only the newest days that fit; the count below still accounts for every day. */
+export function tileWindow(geometry: TileGeometry, width: number, minPx?: number, gapPx = 2): TileWindow {
+	if (minPx !== undefined && (!Number.isFinite(minPx) || minPx <= 0)) throw new Error('tile_min_px must be positive.');
+	const count = minPx === undefined ? geometry.tiles.length : Math.max(1, Math.floor((width + gapPx) / (minPx + gapPx)));
+	const offset = Math.max(0, geometry.tiles.length - count);
+	const earlier: Record<TileState, number> = { fired: 0, quiet: 0, absent: 0 };
+	for (const tile of geometry.tiles.slice(0, offset)) earlier[tile.state] += 1;
+	return {
+		tiles: geometry.tiles.slice(offset),
+		offset,
+		earlier,
+		overflow: offset === 0 ? null : `${offset} earlier days: ${earlier.fired} fired, ${earlier.quiet} quiet, ${earlier.absent} not recorded.`
+	};
+}
+
 /** The strip, or null where there are no days or nothing was recorded on any. */
 export function tileStrip(tiles: readonly TileInput[], opts: TileOptions = {}): TileGeometry | null {
 	if (opts.thresholds === undefined && tiles.some((tile) => tile.reading !== undefined)) {

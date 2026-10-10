@@ -11,9 +11,8 @@
  * say everywhere else on the page.
  */
 
-import type { EChartsOption } from 'echarts';
 import { percentOf } from './rank';
-import { paint, type ChartToken, type Polarity } from './theme';
+import type { Polarity } from './theme';
 
 /** Which side of the target is the good side. The same property of the same
  * measure the movement colour reads, so a bar and a delta on one figure cannot
@@ -48,14 +47,6 @@ export interface TargetGeometry {
 export interface TargetMarks extends TargetGeometry {
 	valuePercent: string;
 	markerPercent: string;
-}
-
-export interface TargetBar {
-	option: EChartsOption;
-	/** Where the marker sits along the track, 0 to 1. The oracle recomputes it. */
-	markerFraction: number;
-	band: TargetBand;
-	empty: boolean;
 }
 
 /** How close counts as near. Inside 10 percent of the target is the warning
@@ -125,60 +116,5 @@ export function shareMarks(factor: number, floor: number): TargetMarks {
 		markerFraction: floor,
 		valuePercent: percentOf(factor),
 		markerPercent: percentOf(floor)
-	};
-}
-
-export function targetBar(
-	value: number | null,
-	target: number,
-	sense: TargetSense,
-	label: string
-): TargetBar {
-	const geometry = targetGeometry(value, target, sense);
-	if (geometry.empty || value === null) {
-		return { option: {}, markerFraction: 0, band: 'good', empty: true };
-	}
-
-	const { track, markerFraction, band } = geometry;
-	const token: ChartToken = band === 'past' ? '--band-low' : band === 'near' ? '--band-medium' : '--band-high';
-
-	return {
-		markerFraction,
-		band,
-		empty: false,
-		option: {
-			animation: false,
-			grid: { left: 0, right: 0, top: 6, bottom: 6, containLabel: false },
-			tooltip: {
-				trigger: 'item',
-				formatter: () =>
-					`${label}<br/>${value.toFixed(2)} against a target of ${target.toFixed(2)}`
-			},
-			xAxis: { type: 'value', max: track, show: false },
-			yAxis: { type: 'category', data: [label], show: false },
-			series: [
-				{
-					type: 'bar',
-					barWidth: 14,
-					itemStyle: { color: paint(token), borderRadius: 7 },
-					data: [value],
-					markLine: {
-						silent: true,
-						symbol: 'none',
-						// The target is a line across the track, not a second bar. A bar
-						// beside a bar invites the reader to compare lengths and forget
-						// which one is the limit.
-						lineStyle: { color: paint('--chart-marker'), width: 2, type: 'solid' },
-						label: {
-							formatter: target.toFixed(target < 10 ? 1 : 0),
-							position: 'end',
-							color: paint('--color-text-tertiary'),
-							fontSize: 11
-						},
-						data: [{ xAxis: target }]
-					}
-				}
-			]
-		}
 	};
 }
