@@ -183,9 +183,42 @@ const INPUTS = [
 	'svelte.config.js',
 	'vite.config.ts'
 ] as const;
+// Row 8 uses the same bounded private publication/build, with these exact additional inputs.
+const VOICES_INPUTS = [
+	'src/lib/charts/run-history.ts',
+	'src/lib/components/PanelGroup.svelte',
+	'src/lib/components/RouteStatus.svelte',
+	'src/lib/console/query-state.ts',
+	'src/lib/console/queries/voices.ts',
+	'src/lib/console/queries/window.ts',
+	'src/lib/server/source-retiring.ts',
+	'src/lib/console/voices/record.ts',
+	'src/lib/console/voices/source-health.ts',
+	'src/lib/console/voices/feeds-failed.ts',
+	'src/lib/console/voices/fetch-time.ts',
+	'src/lib/console/voices/retiring.ts',
+	'src/lib/console/voices/source-cuts.ts',
+	'src/lib/console/voices/ranking-discount.ts',
+	'src/lib/console/voices/why-chosen.ts',
+	'src/lib/console/voices/watchlist.ts',
+	'src/lib/console/voices/VoicesPanel.svelte',
+	'src/lib/console/voices/RecordFrame.svelte',
+	'src/lib/console/voices/SourceHealthPanel.svelte',
+	'src/lib/console/voices/FeedsFailedPanel.svelte',
+	'src/lib/console/voices/FeedTiles.svelte',
+	'src/lib/console/voices/FetchTimePanel.svelte',
+	'src/lib/console/voices/RetiringPanel.svelte',
+	'src/lib/console/voices/SourceCutsPanel.svelte',
+	'src/lib/console/voices/RankingDiscountPanel.svelte',
+	'src/lib/console/voices/WhyChosenPanel.svelte',
+	'src/lib/console/voices/WatchlistPanel.svelte',
+	'src/lib/components/SourceCutRange.svelte',
+	'src/routes/console/voices/+page.server.ts',
+	'src/routes/console/voices/+page.svelte'
+] as const;
 
-function stageModules(frontend: string): void {
-	for (const name of INPUTS) {
+function stageModules(frontend: string, voices = false): void {
+	for (const name of [...INPUTS, ...(voices ? VOICES_INPUTS : [])]) {
 		const source = join(FRONTEND, name);
 		const target = join(frontend, name);
 		mkdirSync(dirname(target), { recursive: true });
@@ -195,11 +228,16 @@ function stageModules(frontend: string): void {
 
 export async function judgementRoute(
 	report: string,
-	options: { scoreRecord?: 'populated'; evidence?: 'absent' | 'empty' | 'unknown-denominators' | 'missing-gate' } = {}
+	options: {
+		scoreRecord?: 'populated'; evidence?: 'absent' | 'empty' | 'unknown-denominators' | 'missing-gate';
+		voices?: (state: string, publishedRoot: string) => Promise<void>;
+		voicesWait?: boolean;
+	} = {}
 ): Promise<{
 	origin: string;
 	inputs: string[];
 	staticRoot: string;
+	release: () => void;
 	close: () => Promise<void>;
 }> {
 	mkdirSync(report, { recursive: true });
@@ -223,6 +261,7 @@ export async function judgementRoute(
 		const site = publishedSite(join(root, 'public'), { published: absent ? [] : ['2030-06-15'] });
 		const state = join(root, 'state');
 		mkdirSync(state, { recursive: true });
+		if (options.voices) await options.voices(state, join(root, 'public'));
 		if (!absent) {
 		writeFileSync(join(site.digest, '2030', '06', '15', 'run.json'), JSON.stringify({
 			date: '2030-06-15',
@@ -276,8 +315,8 @@ export async function judgementRoute(
 			holdoutPairs: [], holdoutScores: []
 		}));
 		const frontend = join(root, 'frontend');
-		stageModules(frontend);
-		const inputs = [...INPUTS];
+		stageModules(frontend, options.voices !== undefined);
+		const inputs = [...INPUTS, ...(options.voices ? VOICES_INPUTS : [])];
 		const addon = await parquetAddon();
 		const home = join(root, 'node-home');
 		const address = new URL(addon.url);
@@ -323,9 +362,20 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))},
 				logLevel: 'warn', build: { reportCompressedSize: false } });
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
+			let held = ${JSON.stringify(options.voicesWait ?? false)};
+			const pending = [];
+			if (held) server.middlewares.stack.unshift({ route: '', handle: (request, response, next) => {
+				if (held && request.url?.includes('/state/compact/item-health/index/')) pending.push(next);
+				else next();
+			} });
 			console.log('JUDGEMENT_ORIGIN=' + server.resolvedUrls.local[0]);
 			process.stdin.resume();
-			process.stdin.on('data', () => server.httpServer.close(() => process.exit(0)));
+			process.stdin.on('data', (bytes) => {
+				if (bytes.toString().trim() === 'release') {
+					held = false;
+					for (const next of pending.splice(0)) next();
+				} else server.httpServer.close(() => process.exit(0));
+			});
 		`, 'utf8');
 		child = spawn(process.execPath, [runner], {
 			cwd: frontend,
@@ -358,7 +408,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			});
 		});
 		writeFileSync(join(report, 'build.json'), `${JSON.stringify(ready)}\n`);
-		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close };
+		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close, release: () => child?.stdin?.write('release\n') };
 	} catch (error) {
 		await close();
 		throw error;

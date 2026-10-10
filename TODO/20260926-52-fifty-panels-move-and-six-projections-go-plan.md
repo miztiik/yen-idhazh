@@ -67,7 +67,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | PENDING | - | - | - |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5 | E | PENDING | - | - | - |
-| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
+| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | BLOCKED: shared Voices test ownership | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |

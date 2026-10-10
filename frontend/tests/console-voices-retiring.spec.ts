@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/door-page';
 import type { SourceHealthRow, SourceHealthView } from '../src/lib/server/payload';
 import { retiring } from '../src/lib/server/source-retiring';
 

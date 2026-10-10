@@ -19,7 +19,7 @@
  * It runs against the canary build. See `frontend/scripts/build-canary.mjs`.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 import { labelGutter, MAX_GUTTER_SHARE, ROW_PITCH_MIN, rowPitch } from '../src/lib/charts/frame';
 
 const PLOT = '[data-source-cuts="range"]';

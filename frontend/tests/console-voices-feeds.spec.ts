@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
@@ -11,22 +11,12 @@ import {
 	type FeedEvent,
 	type FeedRead
 } from '../src/lib/feed-health';
-import { axisLabels, denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
+import { denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
 
 /**
- * The feed section answers one question: which feed is about to be dropped.
- *
- * It used to answer a different one. It sorted by every failure the ledger ever
- * held, so a feed that failed twelve times last month and answered this morning
- * led a feed one run from being rested - and it printed that same total beside
- * the word "rested", which is a number the pipeline never used to rest anything.
- *
- * So the oracle here is not "does a bar appear". It is that the count is the run
- * of failures `discover._rests` counts - pinned below over rows written by hand,
- * and over the fixture the pipeline's own test reads - that the page rests and
- * names exactly what that rule rests, and that the marker on the bar lands on the
- * quarantine threshold read out of `config/idhazh.json` - the file the pipeline
- * itself reads. A bar drawn to the wrong scale looks perfectly fine.
+ * Pure producer feed rules remain pinned independently. The approved route
+ * draws failed source-days rather than the old quarantine countdown: real
+ * feed/article tiles retain nulls, state words, native colours and readouts.
  */
 
 const repo = resolve(process.cwd(), '..');
@@ -37,40 +27,6 @@ const QUARANTINE_AFTER = (
 		collect: { availability_strikes_before_rest: number };
 	}
 ).collect.availability_strikes_before_rest;
-
-/** How many failing feeds the section draws before its tail sentence. Read
- * from the file the page reads it from, so a cap that starts biting this
- * fixture does not turn the oracle below into a false red. */
-const FEED_ROWS =
-	(
-		JSON.parse(readFileSync(join(repo, 'config', 'appearance.json'), 'utf8')) as {
-			console?: { feed_rows?: number };
-		}
-	).console?.feed_rows ?? 10;
-
-/** The most date labels an axis may carry, from the file the page reads it
- * from. Not a copy. */
-function tickDensity(): number {
-	return (
-		JSON.parse(readFileSync(join(repo, 'config', 'appearance.json'), 'utf8')) as {
-			chart: { tick_density: number };
-		}
-	).chart.tick_density;
-}
-
-/** Every row the section drew, with the numbers it published about itself. */
-async function drawn(page: Page) {
-	return page.locator('[data-feed]').evaluateAll((rows) =>
-		rows.map((row) => ({
-			feedId: row.getAttribute('data-feed') ?? '',
-			streak: Number(row.getAttribute('data-feed-streak')),
-			failures: Number(row.getAttribute('data-feed-failures')),
-			track: Number(row.getAttribute('data-feed-track')),
-			resting: row.getAttribute('data-feed-resting') === 'yes',
-			rested: row.querySelector('[data-rested]') !== null
-		}))
-	);
-}
 
 test.describe('the quarantine rule, without a browser', () => {
 	test('a failure count is a run of failures, not a lifetime total', () => {
@@ -277,343 +233,77 @@ test.describe('the strip geometry, without a browser', () => {
 	});
 });
 
-test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ page }) => {
+test('the approved redraw is a tile record, not a second quarantine decision', async ({ page }) => {
 	await page.goto('/console/voices/');
-
-	const rows = await drawn(page);
-	// How the count and the rest are worked out is the pipeline's own loop, pinned
-	// above over rows written by hand. What the page owes is to draw every failing
-	// feed it counted, up to its cap, and to rest exactly what that loop rests.
-	const table = page.locator('[data-feeds="table"]');
-	const counted =
-		Number(await table.getAttribute('data-feeds-drawn')) +
-		Number(await table.getAttribute('data-feeds-hidden'));
-	expect(counted, 'the page counted no failing feed, so this oracle asserts nothing').toBeGreaterThan(0);
-	await expect(page.locator('[data-feed]'), 'the section drew no feed').toHaveCount(
-		Math.min(counted, FEED_ROWS)
-	);
-
-	for (const row of rows) {
-		// A feed rests only once its run of failures reaches the threshold the
-		// pipeline reads. A long enough run of skips lifts a rest, so the rule runs
-		// one way.
-		if (row.resting) {
-			expect(row.streak, `${row.feedId} rests short of the threshold`).toBeGreaterThanOrEqual(QUARANTINE_AFTER);
-		}
-		// The word, not just the colour.
-		expect(row.rested, `${row.feedId} is rested and does not say so`).toBe(row.resting);
-	}
-
-	// At least one feed must actually be past the threshold, and at least one
-	// must be short of it. An oracle that only ever sees one case is checking half
-	// a rule.
-	expect(rows.some((row) => row.resting), 'no rested feed is drawn').toBe(true);
-	expect(rows.some((row) => !row.resting), 'no healthy feed is drawn').toBe(true);
-});
-
-test('THE ORACLE: the marker sits on the quarantine threshold', async ({ page }) => {
-	await page.goto('/console/voices/');
-
-	const rows = await drawn(page);
-	expect(rows.length, 'nothing to measure').toBeGreaterThan(0);
-
-	const measured = await page.locator('[data-feed]').evaluateAll((nodes) =>
-		nodes.map((node) => {
-			const track = node.querySelector('[data-target-cell="track"]') as HTMLElement;
-			const marker = node.querySelector('[data-target-cell="marker"]') as HTMLElement;
-			const fill = node.querySelector('[data-target-cell="fill"]') as HTMLElement;
-			const box = track.getBoundingClientRect();
-			return {
-				feedId: node.getAttribute('data-feed') ?? '',
-				// The marker is 2px wide with a -1px start margin, so its centre is
-				// one pixel right of its own left edge.
-				marker: (marker.getBoundingClientRect().left + 1 - box.left) / box.width,
-				fill: fill.getBoundingClientRect().width / box.width
-			};
-		})
-	);
-
-	for (const seen of measured) {
-		const row = rows.find((candidate) => candidate.feedId === seen.feedId);
-		expect(row, `${seen.feedId} drew a bar and published no numbers`).toBeTruthy();
-		const published = row as NonNullable<typeof row>;
-		// Where the marker lands, back in failures. A bar scaled to anything else
-		// puts this number somewhere other than the rule.
-		const atMarker = seen.marker * published.track;
-		expect(
-			Math.abs(atMarker - QUARANTINE_AFTER),
-			`${seen.feedId} draws its rest at ${atMarker.toFixed(2)} failures, not ${QUARANTINE_AFTER}`
-		).toBeLessThan(0.05);
-		// And the fill is the count, on the same track.
-		const atFill = seen.fill * published.track;
-		expect(
-			Math.abs(atFill - published.streak),
-			`${seen.feedId} fills to ${atFill.toFixed(2)} against a count of ${published.streak}`
-		).toBeLessThan(0.05);
+	const panel = page.locator('[data-console-panel-id="feeds-failed"]');
+	await expect(panel.locator('[data-feeds="table"]')).toHaveCount(1);
+	await expect(panel.locator('[data-target-cell]')).toHaveCount(0);
+	const tiles = panel.locator('[data-tile-state]');
+	expect(await tiles.count()).toBeGreaterThan(0);
+	const labels = await tiles.evaluateAll((nodes) => nodes.map((node) => ({ state: node.getAttribute('data-tile-state'), label: node.getAttribute('aria-label') })));
+	expect(labels.some((tile) => tile.state === 'fired')).toBe(true);
+	for (const tile of labels) {
+		expect(['absent', 'quiet', 'fired']).toContain(tile.state);
+		expect(tile.label).toMatch(/^\d{4}-\d{2}-\d{2}: /);
 	}
 });
-
-test('the list is ranked by nearness to a rest, then by how much went wrong', async ({ page }) => {
+test('feed-only counts retain the native reliability partition without counting refused asks as clean', async ({ page }) => {
 	await page.goto('/console/voices/');
-
-	const rows = await drawn(page);
-	expect(rows.length, 'nothing to rank').toBeGreaterThan(1);
-
-	// Read off the page rather than typed here, so the rule is what is asserted
-	// and not one fixture's answer to it.
-	for (let index = 1; index < rows.length; index += 1) {
-		const above = rows[index - 1];
-		const below = rows[index];
-		const ordered =
-			above.streak > below.streak ||
-			(above.streak === below.streak &&
-				(above.failures > below.failures ||
-					(above.failures === below.failures && above.feedId <= below.feedId)));
-		expect(
-			ordered,
-			`${below.feedId} (${below.streak} in a row, ${below.failures} in total) sorts below ` +
-				`${above.feedId} (${above.streak} in a row, ${above.failures} in total)`
-		).toBe(true);
-	}
-});
-
-test('the strip follows the window while the count does not', async ({ page }) => {
-	await page.goto('/console/voices/');
-	const control = page.locator('[data-window-control] [data-window-preset="7"] input');
-	await expect(control).toBeEnabled();
-
-	const section = page.locator('[data-windowed="feed-outcomes"]');
-	const squares = () => page.locator('[data-feed-strip] [data-feed-day]');
-
-	const wideDays = await page.locator('[data-feed-axis]').count();
-	expect(wideDays, 'the strip drew no date axis').toBeGreaterThan(0);
-	const wideSquares = await squares().count();
-	const wideCounts = (await drawn(page)).map((row) => row.streak);
-
-	// The label is the target, not the 1px input inside it.
-	await page.locator('[data-window-preset="7"]').click();
-	await expect(section).toHaveAttribute('data-window-days', '7');
-
-	const narrowSquares = await squares().count();
-	expect(narrowSquares, 'the strip ignored the window').toBeLessThanOrEqual(wideSquares);
-	// The count is the pipeline's decision and cannot move with a control.
-	expect((await drawn(page)).map((row) => row.streak)).toEqual(wideCounts);
-});
-
-test('every square carries a sentence, not only a colour', async ({ page }) => {
-	await page.goto('/console/voices/');
-
-	const squares = page.locator('[data-feed-strip] [data-feed-day]');
-	const count = await squares.count();
-	expect(count, 'no square was drawn').toBeGreaterThan(0);
-
-	const labels = await squares.evaluateAll((nodes) =>
-		nodes.map((node) => ({
-			outcome: node.getAttribute('data-feed-outcome') ?? '',
-			label: node.getAttribute('aria-label') ?? ''
-		}))
-	);
-	for (const square of labels) {
-		expect(square.label.length, `a ${square.outcome} square says nothing`).toBeGreaterThan(0);
-	}
-	// The four states the ledger can produce, and no fifth invented one.
-	const seen = new Set(labels.map((square) => square.outcome));
-	for (const outcome of seen) {
-		expect(['answered', 'failed', 'refused', 'resting', 'none']).toContain(outcome);
-	}
-	expect(seen.has('failed'), 'the fixture drew no failed day').toBe(true);
-});
-
-/** Both themes, because the two ramps hold the SAME values in the dark theme.
- * Only the light one can tell a fill token from a band token - and a hardcoded
- * hex cannot equal the fill token in both themes at once, so running the pair
- * is also what proves the colour arrives through a custom property. */
-const THEMES = ['light', 'dark'] as const;
-
-/** The two outcomes that ARE a verdict, and the rung each one takes. Anything
- * this returns null for is not a verdict and may wear no ramp colour at all. */
-function rungOf(outcome: string): 'high' | 'low' | null {
-	if (outcome === 'answered') return 'high';
-	if (outcome === 'failed') return 'low';
-	return null;
-}
-
-for (const theme of THEMES) {
-	test(`the squares are painted from the fill ramp, ${theme}`, async ({ page }) => {
-		await page.addInitScript(`localStorage.setItem('idhazh:theme', '${theme}')`);
-		await page.goto('/console/voices/');
-		await expect
-			.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
-			.toBe(theme);
-
-		// Both sides are resolved by the browser off one probe element, so the
-		// token and the painted square arrive in the same notation and no colour
-		// parser has to be written or trusted.
-		const seen = await page.evaluate(() => {
-			const probe = document.createElement('span');
-			document.body.append(probe);
-			const resolved = (expression: string) => {
-				probe.style.backgroundColor = expression;
-				return getComputedStyle(probe).backgroundColor;
-			};
-			const fill = { high: resolved('var(--fill-high)'), low: resolved('var(--fill-low)') };
-			const band = { high: resolved('var(--band-high)'), low: resolved('var(--band-low)') };
-			probe.remove();
-			const painted = [...document.querySelectorAll('[data-feed-strip] [data-feed-outcome]')].map(
-				(node) => ({
-					outcome: node.getAttribute('data-feed-outcome') ?? '',
-					paint: getComputedStyle(node).backgroundColor
-				})
-			);
-			return { fill, band, painted };
-		});
-
-		expect(seen.painted.length, 'no square was drawn').toBeGreaterThan(0);
-
-		// Every outcome the LEDGER can produce is asserted, rather than a pair
-		// this row hoped for: the canary lists only feeds that failed at least
-		// once, and its one feed with a clean read also has two empty ones on the
-		// same day, so no listed feed there can draw an answered square.
-		const verdicts = seen.painted.filter((square) => rungOf(square.outcome) !== null);
-		expect(
-			verdicts.length,
-			`no verdict square was drawn, so this asserts nothing - outcomes seen: ${JSON.stringify([
-				...new Set(seen.painted.map((square) => square.outcome))
-			])}`
-		).toBeGreaterThan(0);
-
-		for (const square of verdicts) {
-			const rung = rungOf(square.outcome) as 'high' | 'low';
-			expect(square.paint, `a ${square.outcome} square is not painted --fill-${rung}`).toBe(
-				seen.fill[rung]
-			);
-		}
-
-		// The other half of the ruling: a polite refusal and a day nobody asked
-		// are not verdicts, so they wear neither ramp.
-		for (const square of seen.painted.filter((item) => rungOf(item.outcome) === null)) {
-			expect(
-				[seen.fill.high, seen.fill.low, seen.band.high, seen.band.low],
-				`a ${square.outcome} square is wearing a verdict colour`
-			).not.toContain(square.paint);
-		}
-
-		if (theme === 'light') {
-			// The bite. Put the band tokens back and this fails; in the dark theme
-			// it could not, because the two ramps agree there by design.
-			expect(
-				seen.fill.low,
-				'the light theme ramps are identical, so this proves nothing'
-			).not.toBe(seen.band.low);
-			for (const square of verdicts) {
-				const rung = rungOf(square.outcome) as 'high' | 'low';
-				expect(
-					square.paint,
-					`a ${square.outcome} square is still on the text-weight ramp`
-				).not.toBe(seen.band[rung]);
-			}
-		}
-	});
-}
-
-test('the date axis labels the same columns the squares sit in', async ({ page }) => {
-	await page.goto('/console/voices/');
-
-	const columns = await page
-		.locator('[data-feed-strip]')
-		.first()
-		.locator('[data-feed-day]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-day') ?? ''));
-	expect(columns.length, 'the strip drew no day').toBeGreaterThan(0);
-
-	// The axis is computed from the same dates the squares are, at the same pitch
-	// and the same ceiling, so an axis that drifted a column would show up as a
-	// label pointing at the wrong day.
-	const metrics = denseCellFor(ROW_STRIP_PX, columns.length);
-	const expected = axisLabels(columns, {
-		density: tickDensity(),
-		pitch: metrics.cell + metrics.gap
-	});
-	const drawnAxis = await page
-		.locator('[data-feed-axis]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				column: Number(node.getAttribute('data-feed-axis')),
-				text: (node.textContent ?? '').trim()
-			}))
-		);
-	expect(drawnAxis).toEqual(expected.map(({ column, text }) => ({ column, text })));
-});
-
-test('THE ORACLE: a source we were only ever refused by is in neither count', async ({
-	page
-}) => {
-	await page.goto('/console/voices/');
-
-	// Named, and named exactly: once each, in name order, and as many as the
-	// headline counts. A count with no names is a number an operator cannot act
-	// on, and a name in the wrong list is worse than no list. Which feeds are
-	// unread is the record's own rule, pinned over rows written in
-	// `console.spec.ts` ("a record with more failing feeds than the list draws is
-	// counted whole").
-	const named = await page
-		.locator('[data-feed-ineligible-name]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => node.getAttribute('data-feed-ineligible-name') ?? '')
-		);
-	// The claim only means something if the page names one.
-	expect(named.length, 'the page names no feed the pipeline left unread').toBeGreaterThan(0);
-	expect(new Set(named).size).toBe(named.length);
-	expect(named).toEqual([...named].sort((a, b) => a.localeCompare(b)));
-	await expect(page.locator('[data-feed-reliability]')).toHaveAttribute(
-		'data-feed-ineligible',
-		String(named.length)
-	);
-
-	// And it is in neither of the other two. This is the defect: until
-	// 2026-09-03 every one of these sat in the clean count, so the page reported
-	// a source that gave us no article at all as one that did not fail.
-	const clean = await page
-		.locator('[data-feed-clean-name]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-clean-name') ?? ''));
-	const listed = await page
-		.locator('[data-feed]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed') ?? ''));
-	expect(named.filter((feedId) => clean.includes(feedId))).toEqual([]);
-	expect(named.filter((feedId) => listed.includes(feedId))).toEqual([]);
-});
-
-test('the two counts still add up to the denominator beside them', async ({ page }) => {
-	await page.goto('/console/voices/');
-	const headline = page.locator('[data-feed-reliability]');
-	const attribute = async (name: string) => Number(await headline.getAttribute(name));
-	const clean = await attribute('data-feed-clean');
-	const checked = await attribute('data-feed-checked');
-	const unread = await attribute('data-feed-ineligible');
-
-	const listed = await page.locator('[data-feed]').count();
-	const hidden = Number(
-		await page.locator('[data-feeds="table"]').getAttribute('data-feeds-hidden')
-	);
-	// Clean plus broken is the denominator, always - and the feeds the pipeline
-	// did not read are outside it rather than quietly inside one of the two.
-	expect(clean + listed + hidden).toBe(checked);
+	const panel = page.locator('[data-console-panel-id="feeds-failed"]');
+	const headline = panel.locator('[data-feed-reliability]');
+	await expect(headline).toHaveCount(1);
+	const clean = Number(await headline.getAttribute('data-feed-clean'));
+	const failed = Number(await headline.getAttribute('data-feed-failed'));
+	const checked = Number(await headline.getAttribute('data-feed-checked'));
+	const unread = Number(await headline.getAttribute('data-feed-ineligible'));
+	expect(clean + failed).toBe(checked);
+	const names = await panel.locator('[data-feed-ineligible-name]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-ineligible-name')!));
+	expect(names.length).toBe(unread);
 	expect(unread).toBeGreaterThan(0);
+	expect(new Set(names).size).toBe(unread);
+	expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+	const cleanNames = await panel.locator('[data-feed-clean-name]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-clean-name')!));
+	expect(names.filter((id) => cleanNames.includes(id))).toEqual([]);
 });
-
-test('the matrix declares one strip for all its squares', async ({ page }) => {
+for (const theme of ['light', 'dark']) {
+	test(`three tile states use the chart token and real border geometry, ${theme}`, async ({ page }) => {
+		await page.addInitScript((value) => localStorage.setItem('idhazh:theme', value), theme);
+		await page.goto('/console/voices/');
+		const panel = page.locator('[data-console-panel-id="feeds-failed"]');
+		await expect(panel.locator('[data-tile-state="fired"]').first()).toBeVisible();
+		const reading = await panel.evaluate((root) => {
+			const probe = document.createElement('span');
+			probe.style.backgroundColor = 'var(--chart-1)';
+			document.body.append(probe);
+			const token = getComputedStyle(probe).backgroundColor;
+			probe.remove();
+			return { token, tiles: [...root.querySelectorAll('[data-tile-state]')].map((tile) => ({
+				state: tile.getAttribute('data-tile-state'), fill: getComputedStyle(tile).backgroundColor,
+				border: getComputedStyle(tile).borderTopStyle
+			})) };
+		});
+		for (const tile of reading.tiles) {
+			if (tile.state === 'fired') expect(tile.fill).toBe(reading.token);
+			else expect(tile.border).toBe(tile.state === 'quiet' ? 'solid' : 'dashed');
+		}
+	});
+}
+test('the actual feed row retains pointer, click, keyboard and Escape readings', async ({ page }) => {
 	await page.goto('/console/voices/');
-	const section = page.locator('[data-windowed="feed-outcomes"]');
-	test.skip((await section.count()) === 0, 'no feed has failed on the canary');
-
-	// Every square is one feed on one day, read in the one strip under the
-	// matrix. The declaration belongs to the matrix, not to each feed's row:
-	// sixty strips saying the same thing is the same strip sixty times.
-	const records = Number(await section.getAttribute('data-readout-records'));
-	expect(records).toBeGreaterThan(0);
-	expect(
-		await page
-			.locator('[data-feed-strip][data-readout-records], [data-feed-strip][data-readout-none]')
-			.count()
-	).toBe(0);
+	const panel = page.locator('[data-console-panel-id="feeds-failed"]');
+	const plot = panel.locator('ol[data-chart-type="tileStrip"]').first();
+	await expect(plot).toBeVisible();
+	const strip = plot.locator('..').locator('[data-readout-subject]');
+	const resting = await strip.innerText();
+	await plot.focus();
+	await plot.press('Home');
+	const first = await strip.innerText();
+	await plot.press('End');
+	await plot.press('Escape');
+	await expect(strip).toHaveText(resting);
+	const tile = plot.locator('[data-readout-at]').first();
+	await tile.hover();
+	await expect(strip).toHaveText(first);
+	await tile.click();
+	await expect(strip).toHaveText(first);
 });

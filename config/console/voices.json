@@ -1,5 +1,22 @@
 {
-  "panel_groups": [],
-  "judged": [],
-  "knobs": {}
+  "panel_groups": [
+    {
+      "id": "what-the-sources-supplied",
+      "title": "What the sources supplied",
+      "panels": ["source-health", "feeds-failed", "fetch-time", "retiring", "source-cuts"]
+    },
+    {
+      "id": "what-the-ranking-did",
+      "title": "What the ranking did",
+      "panels": ["ranking-discount", "why-chosen", "watchlist"]
+    }
+  ],
+  "judged": ["source-health", "feeds-failed", "fetch-time", "retiring", "source-cuts", "ranking-discount", "why-chosen", "watchlist"],
+  "knobs": {
+    "article_fails_marked": 1,
+    "article_fails_named": 3,
+    "why_chosen_rows": 20,
+    "watchlist_hits_marked": 1,
+    "watchlist_hits_named": 3
+  }
 }

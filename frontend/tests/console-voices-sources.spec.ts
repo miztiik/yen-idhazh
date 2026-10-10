@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 import { rangeMarks } from '../src/lib/charts/series';
 import { sourceCuts, SOURCE_CUT_ROWS } from '../src/lib/server/model-work';
 
@@ -257,7 +257,7 @@ test('source cut rows are ordered by their published counts, and the tail senten
 
 	const more = page.locator('[data-source-cuts-more]');
 	if ((await more.count()) > 0) {
-		expect(((await more.textContent()) ?? '').trim()).toMatch(/^\d+ more sources had \d+ cuts between them\.$/);
+		expect(((await more.textContent()) ?? '').trim()).toMatch(/^\d+ more sources hold \d+ cuts\. \d+ distinct articles lack a before or after length/);
 	}
 });
 
@@ -357,18 +357,18 @@ test('cut cost is counted as article losses with n, median and max', () => {
 	expect(cuts.cost).toEqual({ n: 6, median: 2354, max: 4000 });
 });
 
-test('the source cut cost sentence leads the section and agrees with its own numbers', async ({ page }) => {
+test('the approved cut-share lede leads, and its cost sentence retains n, median and max', async ({ page }) => {
 	await page.goto('/console/voices/');
 	await openWindow(page);
 
 	const cost = page.locator('[data-source-cuts-cost]');
 	if ((await cost.count()) === 0) {
-		await expect(page.locator('[data-windowed="source-cuts"]')).toContainText(/No article was cut short|Nothing has recorded/);
+		await expect(page.locator('[data-windowed="source-cuts"]')).toContainText(/No source's articles were cut short|No article has both lengths|Nothing recorded/);
 		return;
 	}
 	const text = ((await cost.textContent()) ?? '').replace(/\s+/g, ' ').trim();
 	const match =
-		/^(\d+) articles were cut short\. Half of them lost more than ([\d,]+) words each, and the longest lost ([\d,]+)\.$/.exec(
+		/^(\d+) articles were cut short\. The typical cut removed ([\d,]+) words; the largest removed ([\d,]+)\. The range shows original lengths on a log axis\.$/.exec(
 			text
 		);
 	expect(match, 'the cost sentence stopped printing n, median and max').not.toBeNull();
@@ -382,8 +382,8 @@ test('the source cut cost sentence leads the section and agrees with its own num
 	// be the smallest type, printed under the table.
 	const order = await page
 		.locator('[data-windowed="source-cuts"] p')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-source-cuts-cost') === ''));
-	expect(order[0], 'the cost sentence is no longer the first line of the section').toBe(true);
+		.evaluateAll((nodes) => nodes.map((node) => node.hasAttribute('data-lede')));
+	expect(order[0], 'the approved cut-share lede is no longer the first line of the section').toBe(true);
 });
 
 /** The seven days the unit cases below read, ending on the day their rows sit on. */
