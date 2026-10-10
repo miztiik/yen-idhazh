@@ -34,8 +34,8 @@ declare global {
 	/** `ledger.archive_base_url`: where Data explorer reads older packed ledgers whole. */
 	const __ARCHIVE_BASE_URL__: string;
 
-	/** Console knobs for the Data explorer route, injected by `vite.config.ts`. */
-	const __CONSOLE_CONFIG__: import('$lib/server/config').ConsoleConfig;
+	/** Shared knobs and each route's console file, injected by `vite.config.ts`. */
+	const __CONSOLE__: import('$lib/server/config').ConsoleDefine;
 
 	/** Data explorer route knobs, injected by `vite.config.ts`. */
 	const __EXPLORER_CONFIG__: import('$lib/server/config').ExplorerConfig;
