@@ -1,0 +1,39 @@
+{
+  "version": "2026-10-10",
+  "vectors": [
+    {
+      "name": "no-sourced-identity",
+      "facts": {"flags": ""},
+      "v1_preimage": "{\"cores\":null,\"cpu_family\":null,\"cpu_model\":null,\"cpu_model_number\":null,\"cpu_stepping\":null,\"cpu_vendor\":null,\"flags\":\"\",\"l3_cache_bytes\":null,\"threads\":null}",
+      "v1": "25bc45b1ccf28471",
+      "v2_preimage": "{\"cpu_family\":null,\"cpu_model\":null,\"cpu_model_number\":null,\"cpu_stepping\":null,\"cpu_vendor\":null,\"flags\":\"\",\"l3_cache_bytes\":null}",
+      "v2": null
+    },
+    {
+      "name": "ascii-escaped-model-and-legacy-counts",
+      "facts": {
+        "cpu_vendor": "GenuineIntel",
+        "cpu_family": 6,
+        "cpu_model_number": 143,
+        "cpu_stepping": 8,
+        "cpu_model": "Xeon \u00e9\n\"host\"",
+        "cores": 32,
+        "threads": 4,
+        "l3_cache_bytes": 67108864,
+        "flags": "avx2 avx512f"
+      },
+      "v1_preimage": "{\"cores\":32,\"cpu_family\":6,\"cpu_model\":\"Xeon \\u00e9\\n\\\"host\\\"\",\"cpu_model_number\":143,\"cpu_stepping\":8,\"cpu_vendor\":\"GenuineIntel\",\"flags\":\"avx2 avx512f\",\"l3_cache_bytes\":67108864,\"threads\":4}",
+      "v1": "6d3aef58c0e544e3",
+      "v2_preimage": "{\"cpu_family\":6,\"cpu_model\":\"Xeon \\u00e9\\n\\\"host\\\"\",\"cpu_model_number\":143,\"cpu_stepping\":8,\"cpu_vendor\":\"GenuineIntel\",\"flags\":\"avx2 avx512f\",\"l3_cache_bytes\":67108864}",
+      "v2": "a3eb1f0535c99b6a"
+    },
+    {
+      "name": "zero-family-is-a-sourced-identifier",
+      "facts": {"cpu_family": 0, "cores": 1, "threads": 1, "flags": ""},
+      "v1_preimage": "{\"cores\":1,\"cpu_family\":0,\"cpu_model\":null,\"cpu_model_number\":null,\"cpu_stepping\":null,\"cpu_vendor\":null,\"flags\":\"\",\"l3_cache_bytes\":null,\"threads\":1}",
+      "v1": "9382316b2a2bec37",
+      "v2_preimage": "{\"cpu_family\":0,\"cpu_model\":null,\"cpu_model_number\":null,\"cpu_stepping\":null,\"cpu_vendor\":null,\"flags\":\"\",\"l3_cache_bytes\":null}",
+      "v2": "3ca47982f7836358"
+    }
+  ]
+}

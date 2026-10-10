@@ -23,6 +23,7 @@ Table A - operating contract
 | A11 | Next execution sequence | After a separate instruction to implement: 1 -> 2 -> 10 -> 11 -> 12 -> 3 -> 4 -> 15 -> 5 -> (13 + 14) -> 6 -> 8 -> 16 -> 7 -> 17 -> 9. Rows 13/14 are one schema-and-consumer merge unit with one owner; neither merges or becomes DONE alone. D16 requires later user cutover and exact historical-inventory decisions based on evidence; cutover permission alone does not authorize D17. |
 | A12 | Modularity | One Cargo crate, with the questions, Python counterparts and per-module tests in Table AC. The CLI only routes commands, codecs only handle logical schemas/bytes, and producers never mint paths or envelopes. No empty modules, catch-all implementation files or extra crates without a concrete consumer. |
 | A13 | Ambiguity and evolution | Consult the Fowler custom advisor when ambiguity changes the implementation. Prefer structural fixes and narrow, reusable contract boundaries that support long-term evolution; do not substitute a local workaround or speculative framework for the requested capability. |
+| A14 | Implemented delivery partition | Fowler, 2026-10-10: parallelize disjoint modules within the active row after its real prerequisite checkpoint. Leaf worktrees explicitly depend on that candidate; the owner integrates them into one row PR, owns shared scaffolding and this Reckoner, and serializes expensive gates. Do not merge dependent leaf PRs independently into main or claim four ready rows. |
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan; parallel N = 4 subject to dependencies and disjoint file lists; measuring rows run alone; consult Fowler on architectural ambiguity; AUTO-merge on green gates within the implementation scope authorized on 2026-10-10; honor Table C and D16.
 
@@ -60,7 +61,7 @@ Table D - authoritative execution queue
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Approve corrected design and documentation only | - | A | DONE | rust-host-profiling-investigation | - | Fowler |
-| D2 | 2 | Declare exchanges and a read-only host-output verifier | 1 | B | PENDING | - | - | - |
+| D2 | 2 | Declare exchanges and a read-only host-output verifier | 1 | B | DONE | rust-host-telemetry-delivery | - | owner; disjoint exchange/verifier workers |
 | D10 | 10 | Render compatible host files through tested Rust codecs | 2 | C | PENDING | - | - | - |
 | D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | PENDING | - | - | - |
 | D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | PENDING | - | - | - |
@@ -219,10 +220,14 @@ Table L - Row 1 rejected alternatives
   - `backend/idhazh/contracts/host_output.py`
   - `backend/idhazh/telemetry/host_event_files.py`
   - `backend/idhazh/telemetry/host_output_verify.py`
+  - `backend/idhazh/telemetry/host_parquet_admission.py`
   - `backend/utilities/verify_host_output.py`
   - `backend/tests/contracts/test_host_events.py`
   - `backend/tests/contracts/test_host_output.py`
   - `backend/tests/test_host_output_verify.py`
+  - `backend/tests/test_host_event_files.py`
+  - `backend/tests/test_host_parquet_admission.py`
+  - `pyproject.toml`
   - `tests/fixtures/host-events/manifest.json`
   - `tests/fixtures/host-events/cpu-snapshots.json`
   - `tests/fixtures/host-events/fingerprint-versions.json`
@@ -241,6 +246,7 @@ Table M - Row 2 decisions
 | M2 | Verify the existing logical host producer/unit, attempt, payload and exact physical-file evidence; Rust producers/store perform actual enrichment/publication in later rows. | [silicon.py](../backend/idhazh/telemetry/silicon.py); H15. |
 | M3 | Use recorded inputs/generated files. Separate current container decoding and measurement validation from prospective envelope validation; preserve existing readers during the isolated experiment. | H13/H16; C8. |
 | M4 | Test declared schemas, versions and writer/container combinations explicitly; no unrestricted provenance regex or file-reencoding proxy. | Table AE; current `_opened` refusal. |
+| M5 | Admit actual Parquet pages before native row decoding. Bound page headers, bodies, dictionary cardinality and decoded bytes for the concrete flat raw-host profile; verify none, raw Snappy and Zstd against actual body sizes. Footer size claims and checks after Arrow allocation are not bounds. Maintain the original bytes for engine decoding. | Fowler, 2026-10-10; generated forged-footer compressed-string evidence exposed allocation before refusal. |
 
 Table N - Row 2 rejected alternatives
 
