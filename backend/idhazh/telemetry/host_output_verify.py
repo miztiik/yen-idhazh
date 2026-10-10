@@ -424,6 +424,14 @@ def verify_host_output(
         previous_plan = HostWritePlan.model_validate(previous_plan.model_dump(mode="json"))
         plan.validate_successor(previous_plan)
     root = _safe_path(workspace_root, workspace_root / Path(*target_root.split("/")))
+    for file in plan.files:
+        relative = f"{target_root}/{file.relative_path}"
+        if relative not in completion.receipt.writes:
+            try:
+                _safe_path(root, root / Path(*file.relative_path.split("/")))
+            except FileNotFoundError:
+                continue
+            raise ValueError("completed planned file is missing from receipt evidence")
     selected = [
         file
         for file in plan.files

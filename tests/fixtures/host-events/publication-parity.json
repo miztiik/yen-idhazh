@@ -1,0 +1,19 @@
+{
+  "source_fixture": "tests/fixtures/host-events/storage-parity.json",
+  "codecs": [
+    {"format": "json", "compression": "none"},
+    {"format": "parquet", "compression": "none"},
+    {"format": "parquet", "compression": "snappy"},
+    {"format": "parquet", "compression": "zstd"}
+  ],
+  "interruption_stages": [
+    "plan",
+    "before-file-0",
+    "after-file-0",
+    "before-receipt-0",
+    "after-receipt-0",
+    "after-file-1",
+    "before-receipt-1",
+    "after-receipt-1"
+  ]
+}

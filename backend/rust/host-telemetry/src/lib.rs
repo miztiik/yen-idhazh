@@ -9,6 +9,7 @@ pub mod contracts {
 }
 pub mod canonical_json;
 pub mod config;
+pub mod receipts;
 pub mod ledger {
     pub mod envelope;
     pub mod filenames;

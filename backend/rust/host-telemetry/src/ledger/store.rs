@@ -24,6 +24,29 @@ impl PreparedWrite {
     pub fn plan(&self) -> &HostWritePlan {
         &self.plan
     }
+
+    pub(crate) fn workspace(&self) -> &Path {
+        &self.workspace
+    }
+
+    pub(crate) fn rendered_bytes(&self) -> &[Vec<u8>] {
+        &self.bytes
+    }
+
+    /// Only an actual absent named destination is unfinished; all other errors refuse.
+    pub fn verify_existing(&self, index: usize) -> Result<Option<StoredFile>> {
+        let file = self
+            .plan
+            .files
+            .get(index)
+            .ok_or("planned file index out of bounds")?;
+        let path = paths::resolve(&self.workspace, &self.plan.target_root, &file.relative_path)?;
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+            Ok(_) => verify_file(&self.workspace, &self.plan, file, &self.bytes[index]).map(Some),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +60,12 @@ pub struct StoredFile {
 pub struct StoreFailure {
     pub message: String,
     pub completed: Vec<StoredFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishCheckpoint {
+    BeforeFilePublish(usize),
+    FilePublished(usize),
 }
 
 /// The epoch millisecond is read from the actual UTC clock, never advanced synthetically.
@@ -215,8 +244,19 @@ pub fn verify_file(
 }
 
 pub fn publish(prepared: &PreparedWrite) -> std::result::Result<Vec<StoredFile>, StoreFailure> {
+    publish_observed(prepared, &mut |_, _| Ok(()))
+}
+
+/// A retained observer may stop publication or persist evidence after each complete file.
+pub fn publish_observed(
+    prepared: &PreparedWrite,
+    observer: &mut impl FnMut(PublishCheckpoint, &[StoredFile]) -> Result<()>,
+) -> std::result::Result<Vec<StoredFile>, StoreFailure> {
     let mut completed = Vec::new();
-    for (file, bytes) in prepared.plan.files.iter().zip(&prepared.bytes) {
+    for (index, (file, bytes)) in prepared.plan.files.iter().zip(&prepared.bytes).enumerate() {
+        if let Err(message) = observer(PublishCheckpoint::BeforeFilePublish(index), &completed) {
+            return Err(StoreFailure { message, completed });
+        }
         let path = paths::resolve(
             &prepared.workspace,
             &prepared.plan.target_root,
@@ -235,7 +275,13 @@ pub fn publish(prepared: &PreparedWrite) -> std::result::Result<Vec<StoredFile>,
             verify_file(&prepared.workspace, &prepared.plan, file, bytes)
         });
         match result {
-            Ok(file) => completed.push(file),
+            Ok(file) => {
+                completed.push(file);
+                if let Err(message) = observer(PublishCheckpoint::FilePublished(index), &completed)
+                {
+                    return Err(StoreFailure { message, completed });
+                }
+            }
             Err(message) => {
                 // Publication can succeed before cleanup fails. Include that file if its
                 // complete bytes verify; still return the original I/O failure.

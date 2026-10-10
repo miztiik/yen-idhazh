@@ -95,6 +95,34 @@ earlier completed files and their actual whole-byte hashes. The native
 `storage-fixture` and Cargo harness file multiple days in all four codec settings;
 Python independently verifies those exact bytes, without re-encoding.
 
+## Completed-file evidence and recovery
+
+`receipts.rs` retains the immutable event plan before the first raw publication.
+After each completed file it writes an immutable cumulative snapshot named
+`<event>.completed-<count>.json`. The existing publication receipt shape keeps
+the wrapper invocation distinct from the raw row's logical producer.
+
+Recovery reads only that retained plan, its planned files and at most one
+receipt name per planned file. It checks actual native bytes, metadata and rows.
+A lost later receipt cannot erase an earlier completion. An existing complete
+planned file with no receipt is recoverable; a promised missing file, foreign
+identity, changed bytes or a later snapshot that drops earlier writes is refused.
+Evidence roots cannot alias the target, reserved state/raw roots or escaping
+symlinks/junctions.
+
+Recovery may write missing evidence snapshots, but does not publish target files.
+An explicit retry files only the same immutable plan. The Python verifier is
+read-only. It rejects a receipt that omits an already completed planned file,
+including publication between two receipt snapshots. Its `--receipt-only`
+output is the validated existing `PublicationReceipt` shape; downstream
+publisher permissions remain independent.
+
+The real `receipts-fixture` process exits at named filesystem checkpoints.
+Native and Python tests restart it across plan, publication and receipt stages.
+Generated-repository tests run existing publisher scope, changed-byte and Git
+filter checks against those same native files, without staging or pushing them
+in this repository.
+
 Rust 1.95.0 and all dependencies are pinned/locked. On Windows, a clean cached
 offline all-target development build took 152.040 seconds; the development
 fixture executable was 23,662,080 bytes. These are not Linux production costs
