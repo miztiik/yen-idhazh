@@ -26,6 +26,7 @@
 	 * is a value with no name on a phone.
 	 */
 	import TargetBar from './TargetBar.svelte';
+	import { rangeTrack } from './RankedList.svelte';
 	import { gib, seconds, type BoardRow, type RangeMark, type ShardBoardView } from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
 
@@ -358,11 +359,7 @@
 								role="img"
 								aria-label="Shard {row.shard} memory, {spread(row.memory, gib)}"
 							>
-								<span class="range-fill" style="inline-size: {row.memory.medianWidth}"></span>
-								{#if row.memory.max !== null}
-									<span class="range-notch" style="inset-inline-start: {row.memory.notchWidth}"
-									></span>
-								{/if}
+								{@render rangeTrack(row.memory)}
 							</span>
 							<span class="range-figure tabular-nums" data-shard-figure="memory">
 								{terse(row.memory, gib)}
@@ -381,12 +378,7 @@
 								role="img"
 								aria-label="Shard {row.shard} processor, {spread(row.cpu, percent, ' busy')}"
 							>
-								<span class="range-fill cpu-fill" style="inline-size: {row.cpu.medianWidth}"
-								></span>
-								{#if row.cpu.max !== null}
-									<span class="range-notch" style="inset-inline-start: {row.cpu.notchWidth}"
-									></span>
-								{/if}
+								{@render rangeTrack(row.cpu, '--chart-3', 'cpu-fill')}
 							</span>
 							<span class="range-figure tabular-nums" data-shard-figure="cpu-range">
 								{terse(row.cpu, percent, ' busy')}
@@ -417,12 +409,7 @@
 									' of the interval'
 								)}"
 							>
-								<span class="range-fill stolen-fill" style="inline-size: {row.stolen.medianWidth}"
-								></span>
-								{#if row.stolen.max !== null}
-									<span class="range-notch" style="inset-inline-start: {row.stolen.notchWidth}"
-									></span>
-								{/if}
+								{@render rangeTrack(row.stolen, '--chart-4', 'stolen-fill')}
 							</span>
 							<span
 								class="range-figure tabular-nums"
@@ -472,12 +459,7 @@
 								role="img"
 								aria-label="Shard {row.shard} queued, {spread(row.queue, seconds)}"
 							>
-								<span class="range-fill queue-fill" style="inline-size: {row.queue.medianWidth}"
-								></span>
-								{#if row.queue.max !== null}
-									<span class="range-notch" style="inset-inline-start: {row.queue.notchWidth}"
-									></span>
-								{/if}
+								{@render rangeTrack(row.queue, '--chart-5', 'queue-fill')}
 							</span>
 							<span class="range-figure tabular-nums" data-shard-figure="queue">
 								{terse(row.queue, seconds, ' queued')}
@@ -687,40 +669,6 @@
 		flex: 0 0 auto;
 		font-size: var(--text-xs);
 		color: var(--color-text-secondary);
-	}
-
-	.range-fill {
-		display: block;
-		block-size: 100%;
-		background: var(--chart-2);
-	}
-
-	.range-fill.cpu-fill {
-		background: var(--chart-3);
-	}
-
-	/* Its own hue, because the queue is not the memory or the processor reading
-	   it sits under and a shared colour would read as one series drawn twice. */
-	.range-fill.queue-fill {
-		background: var(--chart-5);
-	}
-
-	/* Its own hue again, and the reason is the one above turned round: a stolen
-	   share sits directly under the busy share, so drawing the two in one colour
-	   would read as one bar wrapping rather than as two readings. */
-	.range-fill.stolen-fill {
-		background: var(--chart-4);
-	}
-
-	/* The worst reading, as a mark across the track rather than a second bar. A
-	   bar beside a bar invites the reader to compare two lengths and lose which
-	   one is the extreme. */
-	.range-notch {
-		position: absolute;
-		inset-block: 0;
-		inline-size: 2px;
-		background: var(--chart-marker);
-		transform: translateX(-1px);
 	}
 
 	.cpu {

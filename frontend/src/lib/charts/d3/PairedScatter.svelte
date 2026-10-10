@@ -11,6 +11,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import type { ScatterGeometry } from './pairedScatter';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 
 	let {
 		geometry,
@@ -32,12 +33,20 @@
 	const TICK = 4;
 	/** A dot big enough to point at, small enough that neighbours stay apart. */
 	const DOT = 3;
+	let selected = $state<number | null>(null);
+	const records = $derived(geometry === null ? [] : recordsOf(geometry.marks.map((mark) => factsOf(
+		mark.label,
+		[{ label: 'X', value: mark.x, format: String }, { label: 'Y', value: mark.y, format: String }],
+		'No paired reading.'
+	))));
+	const resting = $derived(geometry === null ? 0 : geometry.marks.reduce((best, mark, index, marks) => mark.y > marks[best].y ? index : best, 0));
 </script>
 
 {#if geometry === null}
 	<EmptyState drawing={empty} {height} {width} {name} {label} />
 {:else}
 	{@const box = geometry.frame}
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<svg
 		class="paired-scatter"
 		viewBox="0 0 {box.width} {box.height}"
@@ -48,6 +57,8 @@
 		data-chart-type="pairedScatter"
 		data-chart-name={name}
 		data-readout-records={geometry.marks.length}
+		tabindex="0"
+		use:markReadout={{ count: records.length, walk: 'row', onSelect: (index) => selected = index }}
 	>
 		{#each geometry.y.ticks as tick (tick.value)}
 			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
@@ -76,15 +87,15 @@
 			{/if}
 		{/each}
 		{#each geometry.marks as mark, index (index)}
-			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)" aria-label={`${mark.label}: ${mark.x}, ${mark.y}`} />
+			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)" aria-label={`${mark.label}: ${mark.x}, ${mark.y}`} data-readout-at={index} />
 		{/each}
 	</svg>
-	{@const resting = geometry.marks.reduce((best, mark) => (mark.y > best.y ? mark : best), geometry.marks[0])}
-	{#if resting}
+	{@const shown = records[selected ?? resting]}
+	{#if shown}
 		<dl class="record-readout" data-readout={name} data-readout-shape="record">
-			<dt data-readout-subject>{resting.label}</dt>
-			<div data-readout-row="x"><dd>X</dd><dd>{resting.x}</dd></div>
-			<div data-readout-row="y"><dd>Y</dd><dd>{resting.y}</dd></div>
+			<dt data-readout-subject>{shown.subject}</dt>
+			<div data-readout-row="x"><dd>X</dd><dd>{shown.facts[0].value}</dd></div>
+			<div data-readout-row="y"><dd>Y</dd><dd>{shown.facts[1].value}</dd></div>
 		</dl>
 	{/if}
 {/if}

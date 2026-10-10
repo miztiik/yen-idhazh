@@ -51,7 +51,7 @@
 {#if geometry === null}
 	<EmptyState drawing={empty} {height} {width} {name} {label} />
 {:else if geometry.kind === 'stepped'}
-	<div class="stepped" data-chart-type="flow" data-chart-name={name} data-flow-shape="stepped" data-readout-records={readout === null ? undefined : records.length}>
+	<div class="stepped" data-chart-type="flow" data-chart-name={name} data-flow-shape="stepped" data-readout-records={readout === null ? undefined : records.length} data-readout-none={readout === null ? 'This kept flow prints its counts without a separate reading strip; agreed with Susan' : undefined}>
 		{#if geometry.note}<p class="stepped-note">{geometry.note}</p>{/if}
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<ol class="stepped-stages" aria-label={label} tabindex={readout === null ? undefined : 0} use:markReadout={{ count: records.length, walk: 'list', onSelect: (index) => selected = index }}>
@@ -84,12 +84,12 @@
 		data-chart-name={name}
 		data-flow-shape="diagram"
 		data-readout-records={readout === null ? undefined : records.length}
+		data-readout-none={readout === null ? 'This kept flow prints its counts without a separate reading strip; agreed with Susan' : undefined}
 		tabindex={readout === null ? undefined : 0}
 		use:markReadout={{ count: records.length, walk: 'row', onSelect: (index) => selected = index }}
 	>
 		{#each geometry.ribbons as ribbon, index (index)}
-			<path data-readout-at={readout === null ? undefined : records.findIndex((record) => record.subject === ribbon.from)} d={ribbon.path} fill="var(--chart-1)" fill-opacity={ribbon.drop ? LOST : CARRIED}>
-				{#if tooltips}<title>{ribbon.from} to {ribbon.to}: {grouped(ribbon.value)}</title>{/if}
+			<path data-readout-at={readout === null ? undefined : records.findIndex((record) => record.subject === ribbon.from)} d={ribbon.path} fill="var(--chart-1)" fill-opacity={ribbon.drop ? LOST : CARRIED} aria-label={`${ribbon.from} to ${ribbon.to}: ${grouped(ribbon.value)}`}>
 			</path>
 		{/each}
 		{#each geometry.nodes as node, index (index)}

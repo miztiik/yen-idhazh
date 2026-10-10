@@ -18,6 +18,8 @@
  */
 
 import type { EChartsOption } from 'echarts';
+import { rangeMark, type RangeMark } from './d3/rankedList';
+export type { RangeMark } from './d3/rankedList';
 import type { MachineRun, ShardCounters } from '$lib/server/machine-counters';
 import { dayMonth } from '../format';
 import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth } from './frame';
@@ -202,14 +204,6 @@ export type SwapState = 'measured' | 'none' | 'unrecorded';
  * between them IS the spread. Four figures each written as prose is four
  * sentences no two of which can be compared.
  */
-export interface RangeMark {
-	median: number | null;
-	max: number | null;
-	medianWidth: string;
-	notchWidth: string;
-	empty: boolean;
-}
-
 export interface ShardBoardView {
 	runId: string;
 	date: string;
@@ -270,26 +264,6 @@ function modelSeconds(shard: ShardCounters): number | null {
  * once instead of being decided panel by panel.
  */
 export const RATE_AXIS_RATIO_LIMIT = 20;
-
-/** A median and a maximum on one track, against a domain the caller owns. */
-function rangeMark(
-	middle: number | null,
-	highest: number | null,
-	scale: number
-): RangeMark {
-	if (middle === null && highest === null) {
-		return { median: null, max: null, medianWidth: '0%', notchWidth: '0%', empty: true };
-	}
-	const fraction = (value: number | null) =>
-		value === null || scale <= 0 ? 0 : Math.min(value / scale, 1);
-	return {
-		median: middle,
-		max: highest,
-		medianWidth: percentOf(fraction(middle)),
-		notchWidth: percentOf(fraction(highest)),
-		empty: false
-	};
-}
 
 function swapStateOf(total: number | null): SwapState {
 	if (total === null) return 'unrecorded';
