@@ -14,7 +14,7 @@ import math
 import re
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import date
+from datetime import date, datetime
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
@@ -141,6 +141,10 @@ class CorrectedHostFingerprintRow(Contract):
 
     @model_validator(mode="after")
     def _consistent_measurements(self) -> Self:
+        for name in ("measured_at", "cpu_target_measured_at"):
+            value = getattr(self, name)
+            if value is not None:
+                datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
         if (self.fingerprint is None) != (self.fingerprint_version is None):
             raise ValueError("fingerprint and fingerprint_version must be present together")
         if self.fingerprint_version == 2 and self.fingerprint != fingerprint_v2(self):
@@ -160,7 +164,9 @@ class CorrectedHostFingerprintRow(Contract):
                 if count is not None and count > logical:
                     raise ValueError(f"{name} cannot exceed cpu_logical_processors")
         if self.cpu_target_measured_at is not None and self.measured_at is not None:
-            if self.cpu_target_measured_at < self.measured_at:
+            if datetime.fromisoformat(self.cpu_target_measured_at) < datetime.fromisoformat(
+                self.measured_at
+            ):
                 raise ValueError("target capture cannot precede the original machine probe")
         return self
 

@@ -57,6 +57,21 @@ from idhazh.telemetry.silicon import fingerprint_of
 pytestmark = pytest.mark.contract
 
 BASE = {"date": "2026-10-10", "run_id": "2026-10-10-17", "shard": 0}
+
+
+@pytest.mark.parametrize("field", ("measured_at", "cpu_target_measured_at"))
+@pytest.mark.parametrize(
+    "stamp",
+    ("2026-02-30T12:00:00Z", "2026-10-10T25:99:99Z", "2026-10-10T12:60:00Z"),
+)
+def test_candidate_refuses_impossible_probe_and_target_instants(field: str, stamp: str) -> None:
+    payload = BASE | {field: stamp}
+    if field == "cpu_target_measured_at":
+        payload["cpu_quota_state"] = "unavailable"
+    with pytest.raises(ValueError):
+        CorrectedHostFingerprintRow.model_validate(payload)
+
+
 REMOVED = {"cores", "threads", "mhz_max", "mhz_at_probe"}
 ADDED = {
     "fingerprint_version",

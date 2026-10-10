@@ -22,7 +22,9 @@ from idhazh.contracts.host_events import (
     CaptureSource,
     CollectionControls,
     CpuDiagnostics,
+    HostCaptureLimits,
     HostEvent,
+    HostEventLimits,
     HostResultBody,
     HostSessionManifest,
     HostWindowCells,
@@ -45,6 +47,27 @@ def manifest_data() -> dict[str, Any]:
     value = json.loads((FIXTURES_DIR / "host-events" / "manifest.json").read_bytes())
     assert isinstance(value, dict)
     return value
+
+
+def test_committed_experiment_sections_validate_and_have_no_production_root() -> None:
+    from dataclasses import fields
+
+    from idhazh.telemetry.host_output_verify import VerificationLimits
+
+    config = json.loads(
+        (Path(__file__).resolve().parents[3] / "config" / "host-telemetry-experiment.json").read_bytes()
+    )
+    assert set(config) == {
+        "version", "controls", "limits", "capture_limits", "verification_limits"
+    }
+    assert config["version"] == host_events.HOST_EVENT_VERSION
+    assert CollectionControls.model_validate(config["controls"]).memory_profiling_enabled
+    HostEventLimits.model_validate(config["limits"])
+    HostCaptureLimits.model_validate(config["capture_limits"])
+    assert set(config["verification_limits"]) == {
+        field.name for field in fields(VerificationLimits)
+    }
+    VerificationLimits(**config["verification_limits"])
 
 
 def manifest(**changes: Any) -> HostSessionManifest:
