@@ -25,8 +25,8 @@ from idhazh import assemble
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.sources import SourceKind
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.fetch import FetchResult
 
 from ._builders import _work_stage, captured_article_fetch, plan
