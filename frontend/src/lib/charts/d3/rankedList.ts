@@ -11,6 +11,30 @@
  */
 import { percentOf, rank } from '../rank';
 
+/** A middle reading and its highest reading on one caller-owned track. */
+export interface RangeMark {
+	median: number | null;
+	max: number | null;
+	medianWidth: string;
+	notchWidth: string;
+	empty: boolean;
+}
+
+export function rangeMark(middle: number | null, highest: number | null, scale: number): RangeMark {
+	if (middle === null && highest === null) {
+		return { median: null, max: null, medianWidth: '0%', notchWidth: '0%', empty: true };
+	}
+	const fraction = (value: number | null) =>
+		value === null || scale <= 0 ? 0 : Math.min(value / scale, 1);
+	return {
+		median: middle,
+		max: highest,
+		medianWidth: percentOf(fraction(middle)),
+		notchWidth: percentOf(fraction(highest)),
+		empty: false
+	};
+}
+
 export interface RankedInput {
 	label: string;
 	value: number;
