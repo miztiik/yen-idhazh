@@ -21,12 +21,13 @@ that keeps for ever takes nothing at all.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
 from idhazh import month_partition
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.gardener_events import TaskOutcome
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Collection, Member, Pass, take
@@ -111,6 +112,11 @@ def take_files(
     it there, so a summary that will not read back stops the pass with those
     files still in place.
     """
+    idle_outcome = (
+        TaskOutcome.OUTSIDE_RANGE
+        if context.operator_range is not None
+        else TaskOutcome.NOT_DUE
+    )
     if first_kept is None:
         return Pass(
             collection=collection,
@@ -125,6 +131,7 @@ def take_files(
             bytes_freed=0,
             stopped_because=StopReason.EXHAUSTED,
             resume_from=None,
+            idle_outcome=idle_outcome,
         )
     root = context.repo_root
 
@@ -153,9 +160,12 @@ def take_files(
             span = Span(since=first_day, until=last_day)
         else:
             span = Span(since=start, until=end)
-    return take(
-        Collection(name=collection, listing=lambda: aged, describe=describe, delete=delete),
-        window=span,
-        ceiling=context.policy.max_deletes_per_run,
-        dry_run=context.policy.dry_run,
+    return replace(
+        take(
+            Collection(name=collection, listing=lambda: aged, describe=describe, delete=delete),
+            window=span,
+            ceiling=context.policy.max_deletes_per_run,
+            dry_run=context.policy.dry_run,
+        ),
+        idle_outcome=idle_outcome,
     )

@@ -614,6 +614,10 @@ fixed window is introduced, drain it once with a known inclusive range; the
 scheduled task does not scan the archive to discover it. The next scheduled
 wake returns to its fixed window.
 
+The runner keeps this operator range separate from the effective range the task
+reads. A scheduled task reads only its scheduled window, and `task-planned`
+shows `operator_range` only when a person supplied one.
+
 ## The collection tasks
 
 **Two tasks delete what GitHub keeps for this repository rather than what it
