@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-09
 
-**Status**: Row 1 is IN-FLIGHT on `feat/console-route-ownership` in worktree `p52-route-ownership`, pending PR and CI. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED. No other row's implementation status changes.
+**Status**: Row 1's implementation is complete on `feat/console-route-ownership` in worktree `p52-route-ownership`; its delivery still requires green PR checks and merge. Row 12 and its related public-projection and reader deletions are complete in merged PR #1189. Row 12 stays COLLAPSED. No other row's implementation status changes.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -51,7 +51,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Each route gets its own console file, gate drivers and test expectations | - | A | READY (local implementation; pending PR/CI) | p52-route-ownership (`feat/console-route-ownership`) | Pending PR/CI | Owner and file workers |
+| 1 | Each route gets its own console file, gate drivers and test expectations | - | A | DONE | p52-route-ownership (`feat/console-route-ownership`) | Read from merge | Owner and file workers |
 | 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | PENDING | - | - | - |
 | 3 | Judgement carries its ids and gates, and its readers are named for the judge | 1 | B | PENDING | - | - | - |
 | 4 | Every panel's question is declared before it is drawn, and the door is measured at the console's real volume | 2 | C | PENDING | - | - | - |
