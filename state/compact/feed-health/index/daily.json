@@ -67,7 +67,8 @@
     {"bytes": 16653,"covers": "2026-10-04","lost_days": [],"rows": 936,"set_aside": 0,"state": "packed"},
     {"bytes": 16689,"covers": "2026-10-05","lost_days": [],"rows": 624,"set_aside": 0,"state": "packed"},
     {"bytes": 17570,"covers": "2026-10-06","lost_days": [],"rows": 1560,"set_aside": 0,"state": "packed"},
-    {"bytes": 17121,"covers": "2026-10-07","lost_days": [],"rows": 1092,"set_aside": 0,"state": "packed"}
+    {"bytes": 17121,"covers": "2026-10-07","lost_days": [],"rows": 1092,"set_aside": 0,"state": "packed"},
+    {"bytes": 17526,"covers": "2026-10-08","lost_days": [],"rows": 1560,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "feed-health",
   "period": "daily",
