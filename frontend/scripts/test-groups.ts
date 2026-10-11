@@ -36,6 +36,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-shard-board', 'console-shell', 'console-site-size',
 		'console-telemetry-heal', 'console-throughput', 'console-timings', 'console-title',
 		'console-voices-cuts', 'console-voices-feeds', 'console-voices-retiring',
+		'console-voices-build-time', 'console-voices-ledgers', 'console-voices-nothings',
 		'console-voices-sources', 'console-voices', 'console-window-claims', 'console-window'
 	],
 	logic: [
