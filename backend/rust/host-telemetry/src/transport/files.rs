@@ -11,7 +11,23 @@ use std::{
 use uuid::Uuid;
 
 pub fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>> {
-    let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    match read_bounded_classified(path, maximum)? {
+        ReadOutcome::Present(raw) => Ok(raw),
+        ReadOutcome::Missing(error) => Err(error.to_string()),
+    }
+}
+enum ReadOutcome<T> {
+    Present(T),
+    Missing(std::io::Error),
+}
+fn read_bounded_classified(path: &Path, maximum: usize) -> Result<ReadOutcome<Vec<u8>>> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ReadOutcome::Missing(error));
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     require(
         metadata.is_file()
             && !metadata.file_type().is_symlink()
@@ -19,13 +35,24 @@ pub fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>> {
         "named file exceeds bound or is not regular",
     )?;
     let mut raw = Vec::new();
-    std::fs::File::open(path)
-        .map_err(|e| e.to_string())?
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ReadOutcome::Missing(error));
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    if let Err(error) = file
         .take(maximum.saturating_add(1) as u64)
         .read_to_end(&mut raw)
-        .map_err(|e| e.to_string())?;
+    {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            return Ok(ReadOutcome::Missing(error));
+        }
+        return Err(error.to_string());
+    }
     require(raw.len() <= maximum, "named file grew beyond bound")?;
-    Ok(raw)
+    Ok(ReadOutcome::Present(raw))
 }
 pub fn decode_event(raw: &[u8]) -> Result<HostEvent> {
     require(
@@ -265,6 +292,22 @@ impl FileTransport {
         )
     }
     pub fn read(&mut self, event_id: Uuid, direction: &str) -> Result<HostEvent> {
+        match self.read_classified(event_id, direction)? {
+            ReadOutcome::Present(event) => Ok(event),
+            ReadOutcome::Missing(error) => Err(error.to_string()),
+        }
+    }
+    pub fn read_listed_result(&mut self, event_id: Uuid) -> Result<Option<HostEvent>> {
+        match self.read_classified(event_id, "results")? {
+            ReadOutcome::Present(event) => Ok(Some(event)),
+            ReadOutcome::Missing(_) => Ok(None),
+        }
+    }
+    fn read_classified(
+        &mut self,
+        event_id: Uuid,
+        direction: &str,
+    ) -> Result<ReadOutcome<HostEvent>> {
         let path = self.path(event_id, direction)?;
         let cap = if direction == "inbox" {
             self.manifest.limits.max_command_bytes
@@ -272,7 +315,10 @@ impl FileTransport {
             self.manifest.limits.max_result_bytes
         };
         self.budget.reserve(cap as usize)?;
-        let raw = read_bounded(&path, cap as usize)?;
+        let raw = match read_bounded_classified(&path, cap as usize)? {
+            ReadOutcome::Present(raw) => raw,
+            ReadOutcome::Missing(error) => return Ok(ReadOutcome::Missing(error)),
+        };
         self.budget.used(raw.len());
         let event = decode_event(&raw)?;
         require(
@@ -280,7 +326,7 @@ impl FileTransport {
             "event filename identity mismatch",
         )?;
         self.identity(&event, direction)?;
-        Ok(event)
+        Ok(ReadOutcome::Present(event))
     }
     pub fn named(&self, name: &str) -> Result<PathBuf> {
         let input = self

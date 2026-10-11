@@ -26,7 +26,9 @@ pub fn await_result(
             if !seen.insert(id) {
                 continue;
             }
-            let event = files.read(id, "results")?;
+            let Some(event) = files.read_listed_result(id)? else {
+                continue;
+            };
             if event.reply_to.is_none()
                 && let EventBody::Fault(fault) = &event.body
             {

@@ -112,6 +112,41 @@ fn missing_ack_returns_explicit_unavailable_window_without_fallback() {
     );
     assert!(!root.join("fallback").exists());
 }
+
+#[test]
+fn listed_result_retired_before_read_is_skipped_without_hiding_present_errors() {
+    let root = resources::workspace("transport-retired-result-race");
+    let m = resources::manifest();
+    let retire_at = m.limits.retry_window_ms as u64;
+    let frame = resources::frames().remove(0);
+    let mut session = Session::new(m.clone()).unwrap();
+    let old_result = session.ready(&frame.captured_at, 0).unwrap();
+    let command = resources::command(EventKind::WorkerRegister, 0, 1);
+    let reply = session.handle(&command, &frame, 0).unwrap().remove(0);
+    let mut files = FileTransport::new(&root, m).unwrap();
+    files.publish(&old_result, "results").unwrap();
+    files.consume(&old_result).unwrap();
+    session.book.consume(old_result.event_id).unwrap();
+
+    assert!(files.ids("results").unwrap().contains(&old_result.event_id));
+    let retired = session.retire(retire_at);
+    assert!(retired.contains(&old_result.event_id));
+    files.remove_retired(&retired).unwrap();
+    assert_eq!(files.read_listed_result(old_result.event_id).unwrap(), None);
+    assert!(files.read(old_result.event_id, "results").is_err());
+
+    let malformed_id = uuid::Uuid::from_u128(42);
+    std::fs::write(files.path(malformed_id, "results").unwrap(), b"{}\n").unwrap();
+    assert!(files.read_listed_result(malformed_id).is_err());
+    std::fs::remove_file(files.path(malformed_id, "results").unwrap()).unwrap();
+
+    files.publish(&command, "inbox").unwrap();
+    files.publish(&reply, "results").unwrap();
+    let actual: HostEvent =
+        serde_json::from_value(await_result(&mut files, Some(&command)).unwrap()).unwrap();
+    assert_eq!(actual, reply);
+}
+
 #[test]
 fn filenames_reject_noncanonical_ids_and_traversal() {
     let root = resources::workspace("transport-paths");
