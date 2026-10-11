@@ -457,8 +457,30 @@ UUID are refused, and mutable files require an unchanged baseline.
 
 There is one collecting job for any number of judges or shards. A tenant/date
 failure does not suppress earlier completed bytes or later tenants/dates.
-Sparse input discovery uses each tenant's separately declared named inputs,
-periods and indexes, never the number of judges or an archive checkout.
+
+The collecting job starts with a shallow, blob-less sparse checkout of `config`,
+`backend` and `.github`, plus Git's root-level files. It keeps a sparse index.
+After checkout, `GIT_NO_LAZY_FETCH=1` stops Git from downloading missing objects
+implicitly; the collecting entrypoint sets it too. Planning and judging cells
+keep their full checkout, with unchanged model, dependency and cache steps.
+
+Before settlement, the shared `publication_inputs.materialize` reads each
+active judge's `publication_inputs(date=...)` from the checkout's fixed commit.
+It lists only those named paths, periods and indexes and explicitly fetches
+their blobs. No declaration means refusal on a sparse checkout. An absent path
+in that commit remains absent; a listed blob that cannot be fetched fails
+collection, rather than being treated as missing data. Imported bytes are not
+completed writes. Earlier outputs are not replaced when a later date names them.
+The publisher still builds its private candidate on fresh main and never reruns
+a judge.
+
+`backend/tests/council/test_sparse_publication.py` uses real local partial
+clones and Git packet traces. It checks exact requested blobs, unavailable
+undeclared and out-of-window blobs, missing optional paths and failed input
+fetches. Sparse and full checkouts of the same fixed base publish identical
+completed tenant bytes to separate origins. Venue records retain their own
+execution clocks and file identities; the test does not require a rerun to
+repeat them.
 
 **The collecting job hands each tenant the identity it files under.**
 `council.session.settle` builds one writer identity for the night: `run_id` the

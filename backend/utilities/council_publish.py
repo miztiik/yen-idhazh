@@ -194,14 +194,22 @@ def _publication_code(result: PublicationResult) -> CouncilExit:
 
 def main(argv: list[str] | None = None) -> int:
     event_lines.install_crash_printer()
-    report = run_summary.Report()
-    with event_log.capture() as events:
-        code = outcome.run(CouncilProgram.PUBLISH, lambda: _main(argv, report=report))
-    report.events = events
-    summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary:
-        report.write(Path(summary))
-    return code
+    previous = os.environ.get("GIT_NO_LAZY_FETCH")
+    os.environ["GIT_NO_LAZY_FETCH"] = "1"
+    try:
+        report = run_summary.Report()
+        with event_log.capture() as events:
+            code = outcome.run(CouncilProgram.PUBLISH, lambda: _main(argv, report=report))
+        report.events = events
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            report.write(Path(summary))
+        return code
+    finally:
+        if previous is None:
+            os.environ.pop("GIT_NO_LAZY_FETCH", None)
+        else:
+            os.environ["GIT_NO_LAZY_FETCH"] = previous
 
 
 def _main(argv: list[str] | None = None, *, report: run_summary.Report | None = None) -> int:

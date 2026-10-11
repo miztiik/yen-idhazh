@@ -47,6 +47,32 @@ pytestmark = pytest.mark.workflow
 FILENAME: Final = "llm-council.yml"
 
 
+def test_only_the_collector_checks_out_code_and_fetches_named_data() -> None:
+    workflow = _load_workflows()[FILENAME]
+    checkout = _step(workflow, "save_council_results", "uses", "actions/checkout@v6")
+    settings = checkout["with"]
+    assert isinstance(settings, dict)
+    assert (str(settings["fetch-depth"]), settings["filter"]) == ("1", "blob:none")
+    assert str(settings["sparse-checkout"]).splitlines() == ["config", "backend", ".github"]
+    disable = _step(
+        workflow,
+        "save_council_results",
+        "name",
+        "Keep collection sparse and disable implicit downloads",
+    )
+    script = _script(disable, "the collecting checkout")
+    assert "git config index.sparse true" in script
+    assert 'echo "GIT_NO_LAZY_FETCH=1" >> "$GITHUB_ENV"' in script
+    steps = _steps(workflow, "save_council_results")
+    assert (
+        steps.index(checkout)
+        < steps.index(disable)
+        < steps.index(_step(workflow, "save_council_results", "uses", "actions/setup-python@v7"))
+    )
+    for job in ("draw", "judge"):
+        assert "with" not in _step(workflow, job, "uses", "actions/checkout@v6")
+
+
 def test_collector_keeps_a_failed_or_cancelled_judging_job_red() -> None:
     step = _step(
         _load_workflows()[FILENAME],

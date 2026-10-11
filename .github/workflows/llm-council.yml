@@ -354,6 +354,18 @@ jobs:
         run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend
+            .github
+
+      - name: Keep collection sparse and disable implicit downloads
+        run: |
+          git config index.sparse true
+          echo "GIT_NO_LAZY_FETCH=1" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
         with:
