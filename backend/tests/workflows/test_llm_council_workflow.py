@@ -476,22 +476,43 @@ def test_what_a_night_wrote_outlives_the_run_that_wrote_it() -> None:
         assert int(str(settings["retention-days"])) == VERDICT_RETENTION_DAYS
 
 
-def test_reading_an_artifact_is_a_scope_the_permissions_block_grants() -> None:
+def test_each_job_holds_only_the_permissions_its_steps_use() -> None:
+    """Only the collecting job can write; judge code has a read-only token."""
+    workflow = _judges()
+    expected = {
+        "draw": {"contents": "read"},
+        "judge": {"contents": "read", "actions": "read"},
+        "save_council_results": {"contents": "write", "actions": "read"},
+    }
+    jobs = workflow.get("jobs")
+
+    assert "permissions" not in workflow, "permissions belong to jobs, not the whole night"
+    assert isinstance(jobs, dict)
+    assert set(jobs) == set(expected), "each council job needs its own permission check"
+    for name, permissions in expected.items():
+        assert _job(workflow, name).get("permissions") == permissions, (
+            f"{name} must hold only {permissions}"
+        )
+
+
+@pytest.mark.parametrize("job", ["judge", "save_council_results"])
+def test_reading_an_artifact_is_a_scope_the_permissions_block_grants(job: str) -> None:
     """A declared block sets every scope it does not list to none.
 
     So the read has to be named, and it is named read-only. The default
     credential carries it and reaches each download by hand: no stored token is
     introduced, and `contents: write` stays the only write the night has.
     """
-    granted = _judges().get("permissions")
+    workflow = _judges()
+    granted = _job(workflow, job).get("permissions")
     downloads = [
         step
-        for job in ("judge", "save_council_results")
-        for step in _steps(_judges(), job)
+        for step in _steps(workflow, job)
         if str(step.get("uses", "")).startswith("actions/download-artifact@")
     ]
 
-    assert granted == {"contents": "write", "actions": "read"}
+    assert isinstance(granted, dict)
+    assert granted["actions"] == "read"
     assert downloads, "nothing downloads an artifact"
     for step in downloads:
         settings = step.get("with")

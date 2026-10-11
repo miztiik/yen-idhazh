@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -238,17 +238,21 @@ The model entry, the temperature, the prompt and the grammar all reach a runner
 through a reviewed commit. A person approves the instrument at that commit, not
 at 22:00 on a runner.
 
-Two things the workflow needed for this, and neither is a stored secret.
-`permissions:` declares `actions: read` beside `contents: write`, because a
-declared block sets every scope it does not list to none and reading an artifact
-needs that one; the default credential carries it and reaches each download by
-hand. And **the uploads keep three nights instead of one**. One day expired
+Each job declares only the permissions its steps use. The planning job
+(`draw`) has `contents: read`. Judging cells (`judge`) have `contents: read`
+and `actions: read` for artifact downloads. Only the collecting job
+(`save_council_results`) has `contents: write`; it also has `actions: read`
+for its downloads. Each declared block sets every unlisted scope to none.
+Judge code runs beside fetched article text, so it must not hold a write token.
+The default credential reaches each download by hand; there is no stored token.
+`backend/tests/workflows/test_llm_council_workflow.py` holds this boundary.
+
+**The uploads keep three nights instead of one**. One day expired
 before the next scheduled run had even started, so a run that judged a whole
 night and then died before committing left its verdicts where nothing could
 reach them. A shard file is about 27 KB, so a week of four shards is under a
 megabyte. Nothing in the workflow reads across a run today - a dead night is
-repaired by judging its date again - so the scope keeps the cheaper recovery
-open rather than powering one that already exists.
+repaired by judging its date again.
 
 ## The matrix is a flat list of cells
 
