@@ -98,6 +98,11 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, SourceForm, Sources
+from idhazh.contracts.story_encoder_candidate import (
+    CandidateVectorState,
+    CandidateVectorUnit,
+    PinnedEncoderCandidate,
+)
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -129,6 +134,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     AppConfig,
     AppearanceConfig,
     Article,
+    CandidateVectorState,
+    CandidateVectorUnit,
     CollectionPruneRow,
     CompactIndex,
     ConsoleBand,
@@ -157,6 +164,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     MachineShardRow,
     MergeLineHoldoutScore,
     PipelineTestsConfig,
+    PinnedEncoderCandidate,
     PublicRunDay,
     PublicTelemetryRow,
     PublicationInventory,

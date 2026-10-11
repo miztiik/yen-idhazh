@@ -1,0 +1,33 @@
+{
+  "dimensions": 2,
+  "dtype": "float32",
+  "encode_options": {},
+  "legacy_model_revision": null,
+  "legacy_reading_sha256": "27056ac8a1cbcad6bdc4f2fd1dcb84268a8c84e97886691481613865a388e930",
+  "legacy_slug": "fixture-control",
+  "legacy_vector_revision": "6344cbeb7efd637d7a4668334d1e8a05cd964594bbe6705d676aeeb4fc6bab2b",
+  "legacy_vectors_reusable": false,
+  "max_sequence_length": 256,
+  "model_id": "fixture/model",
+  "model_options": {
+    "revision": "ffffffffffffffffffffffffffffffffffffffff"
+  },
+  "official_metadata": {
+    "checked_at": "2026-10-11T03:08:49Z",
+    "evidence_reference": null,
+    "evidence_sha256": "8008b97987b8600b4c56795c604cb9657cd13ba6df86d2c22fde5e7a2db80d54",
+    "final_url": null,
+    "finding": "Generated offline metadata fixture.",
+    "state": "read",
+    "url": "https://huggingface.co/api/models/fixture/model/revision/ffffffffffffffffffffffffffffffffffffffff?expand[]=sha"
+  },
+  "official_metadata_file": "vector-evidence/8008b97987b8600b4c56795c604cb9657cd13ba6df86d2c22fde5e7a2db80d54.json",
+  "prefix": "",
+  "provenance": "new-pinned-run-not-historical-proof",
+  "registered_at": "2026-10-11T03:08:49Z",
+  "revision": "ffffffffffffffffffffffffffffffffffffffff",
+  "roles": "symmetric-query-and-candidate",
+  "slug": "fixture-control-pinned-ffffffffffff",
+  "source_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "version": "2026-10-11"
+}

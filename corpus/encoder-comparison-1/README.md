@@ -1038,6 +1038,40 @@ which requires ST >= 6.1, Transformers >= 5.19 and compatible CPU image
 dependencies. That cost remains visible; no substitute model, TLS bypass,
 GPU, service or whole-archive re-encode is performed.
 
+When the historical MiniLM or GTE revision is unknown, a current official pin
+is **not** proof of the historical weights. The separate
+`idhazh.story_dataset.candidate_cli` path registers a **new** immutable
+`PinnedEncoderCandidate` from the exact saved reading and a dated, hash-checked
+official model metadata capture. Its distinct slug preserves the unknown old
+revision; it never changes the old reading or activates an old vector manifest.
+Its `CandidateVectorUnit` and `CandidateVectorState` contain only independently
+encoded new rows. Old control arrays cannot supply their coverage.
+
+```powershell
+& $Python -m idhazh.story_dataset.candidate_cli `
+  --source-root "$D" --root '<new candidate evidence root>' register `
+  --vectors '<exact portable snapshot.json>' --legacy-root "$D" `
+  --slug '<old control slug>' --pin '<official immutable revision>' `
+  --metadata '<captured official API response.json>' --check '<SourceCheck.json>'
+& $EncodingPython -m idhazh.story_dataset.candidate_cli `
+  --source-root "$D" --root '<new candidate evidence root>' encode `
+  --candidate '<hash-named candidate.json>' --ids '<bounded IDs.json>' `
+  --output '<new unit.npy>'
+& $Python -m idhazh.story_dataset.candidate_cli `
+  --source-root "$D" --root '<new candidate evidence root>' import `
+  --candidate '<hash-named candidate.json>' --unit '<unit.json>' `
+  --previous '<previous immutable candidate state.json>'
+```
+
+Omit `--previous` for the first unit only. Registration retains original options,
+prefix, dimensions, symmetric query/candidate roles, 256-token truncation and
+float32 arrays. Encoding requires a checked isolated ST >= 6.1,
+Transformers >= 5.19, Pillow and matching CPU torch/torchvision environment;
+it remains offline-only after exact official model acquisition. Candidate state
+imports copy vectors into hash-named evidence and recheck retained unit bytes.
+The new control must encode every article of the eventual common evaluation
+universe itself; combining it with unknown historical rows is prohibited.
+
 Fix the split before tuning:
 
 ```powershell
@@ -1046,10 +1080,14 @@ Fix the split before tuning:
 ```
 
 Every supported Event membership joins its article component; multi-Event
-articles connect all their Events. `split --frame <named-link-frame.json>` also
+articles connect all their Events. A known Event still connects its article
+when another membership, parent support or occurrence is unresolved. The whole
+connected component remains unknown-membership quarantined. Regression exposure
+also persists on exposed peers after a later correction removes the original
+link, and survives checkpoint replay. `split --frame <named-link-frame.json>` also
 joins every supplied link, including uncertain ones. Supply deliberate identity
-links, not a broad discovery frame unless that conservative quarantine cost is
-intended. Articles exposed in the old 935 frame, and their new linked components,
+links, never the broad discovery frame: discovery is not identity evidence.
+Articles exposed in the old 935 frame, and their new linked components,
 are quarantined from fresh confirmation. Unqualified rows are not silently
 excluded. A later edge crossing development and confirmation quarantines the
 whole component, never redraws a favorable split. Provisional unknown-membership
