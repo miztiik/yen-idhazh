@@ -15,6 +15,7 @@ const rewrite: Rewrite[] = [
 	['$lib/components/ShapeSwitch.svelte', './ShapeSwitch.server.mjs'],
 	['./RankedList.svelte', './RankedList.server.mjs'],
 	['./Sparkline.svelte', './Sparkline.server.mjs'],
+	['./FailureRuleRanking.svelte', './FailureRuleRanking.server.mjs'],
 	['./run-axis', '$lib/console/machine/run-axis'],
 	['./frame', '$lib/charts/frame'],
 	['./readout', '$lib/charts/readout'],
@@ -29,6 +30,7 @@ const files = [
 	['src/lib/components/ShapeSwitch.svelte', 'ShapeSwitch'],
 	['src/lib/components/RankedList.svelte', 'RankedList'],
 	['src/lib/components/Sparkline.svelte', 'Sparkline'],
+	['src/lib/components/FailureRuleRanking.svelte', 'FailureRuleRanking'],
 ] as const;
   const modules: [string, string][] = [];
   for (const [file,name] of files) modules.push([name, await compiled(file, name, rewrite)]);

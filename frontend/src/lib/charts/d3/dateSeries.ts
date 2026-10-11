@@ -52,10 +52,17 @@ export interface DateSeriesOptions {
 	rule: ModelRule;
 	rules?: readonly { at: number; label: string }[];
 	domain?: [number, number];
+	/** Non-negative stage durations stay intact; overlap is deducted beside the stack. */
+	reconciliation?: {
+		elapsed: SeriesInput;
+		overlap: SeriesInput;
+	};
 }
 
 /** Old callers keep their drawing; new chart options require a declared rule. */
-export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain'> & { rule?: never; rules?: never; domain?: never };
+export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain' | 'reconciliation'> & {
+	rule?: never; rules?: never; domain?: never; reconciliation?: never;
+};
 
 export interface PlacedPoint {
 	date: string;
@@ -119,6 +126,20 @@ export interface SeriesGeometry {
 	events: NonNullable<ReadoutInput['events']>;
 	readout: Readout;
 	rules: { at: number; label: string; y: number }[];
+	reconciliation?: {
+		elapsed: { label: string; token: ChartToken };
+		overlap: { label: string; token: ChartToken };
+		marks: {
+			date: string;
+			elapsed: number;
+			overlap: number;
+			top: number;
+			y: number;
+			x: number;
+			end: number;
+			bracket: number;
+		}[];
+	};
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -146,8 +167,22 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	const box = opts.frame;
 	const rule = checkedRule(opts.rule ?? LEGACY_MODEL_RULE);
 	const stacked = opts.stacked ?? false;
+	const reconciliation = opts.reconciliation;
+	if (reconciliation !== undefined && (!stacked || opts.padding <= 0 || opts.padding >= 1)) {
+		throw new Error('Elapsed reconciliation needs stacked durations with space between their bars.');
+	}
 	const readings = byDay(series);
-	const dates = [...new Set(readings.flatMap((days) => [...days.keys()]))].sort();
+	const extra = reconciliation === undefined ? [] : [reconciliation.elapsed, reconciliation.overlap];
+	for (const entry of extra) {
+		for (const point of entry.points) {
+			if (point.value !== null && (!Number.isFinite(point.value) || point.value < 0)) {
+				throw new Error(`"${entry.label}" needs a non-negative reading or null on ${point.date}.`);
+			}
+		}
+	}
+	const extraReadings = extra.length === 0 ? [] : byDay([...series, ...extra]).slice(series.length);
+	const allReadings = [...readings, ...extraReadings];
+	const dates = [...new Set(allReadings.flatMap((days) => [...days.keys()]))].sort();
 	const values = readings.flatMap((days) => [...days.values()].filter((value): value is number => value !== null));
 	if (values.length === 0) return null;
 	if (stacked && values.some((value) => value < 0)) {
@@ -174,10 +209,10 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		readout: readoutOf({
 			type: 'dateSeries',
 			columns: dates,
-			series: series.map((entry, index) => ({
+			series: [...series, ...extra].map((entry, index) => ({
 				label: entry.label,
 				swatch: entry.fill ?? `var(${entry.token})`,
-				values: dates.map((date) => readings[index].get(date) ?? null),
+				values: dates.map((date) => allReadings[index].get(date) ?? null),
 				format: String
 			})),
 			notMeasured: 'Not recorded.',
@@ -233,7 +268,22 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		.keys(keys)
 		.value((day, key) => day[key] ?? 0)(table);
 	const totals = layers.length === 0 ? [] : layers[layers.length - 1].map((span) => span[1]);
-	const axis = axisFor([0, ...totals]);
+	const reconciled = reconciliation === undefined ? [] : dates.flatMap((date, index) => {
+		const elapsed = extraReadings[0].get(date) ?? null;
+		const overlap = extraReadings[1].get(date) ?? null;
+		if (elapsed === null && overlap === null) return [];
+		if (elapsed === null || overlap === null || readings.some((days) => (days.get(date) ?? null) === null)) {
+			throw new Error(`Elapsed reconciliation needs every stage, elapsed and overlap reading on ${date}.`);
+		}
+		const total = totals[index] ?? 0;
+		// Means can differ by the floating-point rounding of their separate sums.
+		const tolerance = Number.EPSILON * Math.max(1, total, elapsed, overlap) * (series.length + 2);
+		if (Math.abs(total - overlap - elapsed) > tolerance) {
+			throw new Error(`Stacked durations minus overlap do not equal elapsed time on ${date}.`);
+		}
+		return [{ date, total, elapsed, overlap }];
+	});
+	const axis = axisFor([0, ...totals, ...reconciled.map((point) => point.elapsed)]);
 	const bars = layers.flatMap((layer, index) =>
 		layer.flatMap((span, at) => {
 			const value = table[at][layer.key];
@@ -263,5 +313,23 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	const joins = bars
 		.filter((bar) => bar.y > (highest.get(bar.date) ?? bar.y))
 		.map((bar) => ({ x: bar.x, y: bar.y, width: bar.width }));
-	return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines: [], bars, joins, ...metadata, rules: rules.map((named) => ({ ...named, y: axis.scale(named.at) })) };
+	return {
+		frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines: [], bars, joins,
+		...metadata, rules: rules.map((named) => ({ ...named, y: axis.scale(named.at) })),
+		...(reconciliation === undefined ? {} : {
+			reconciliation: {
+				elapsed: { label: reconciliation.elapsed.label, token: reconciliation.elapsed.token },
+				overlap: { label: reconciliation.overlap.label, token: reconciliation.overlap.token },
+				marks: reconciled.map((point) => {
+					const x = band(point.date) ?? box.left;
+					const end = x + band.bandwidth();
+					return {
+						date: point.date, elapsed: point.elapsed, overlap: point.overlap,
+						top: axis.scale(point.total), y: axis.scale(point.elapsed), x, end,
+						bracket: end + (band.step() - band.bandwidth()) / 2
+					};
+				})
+			}
+		})
+	};
 }

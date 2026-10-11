@@ -10,6 +10,7 @@ export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 const FILES: Record<FrontendGroup, readonly string[]> = {
 	console: [
 		'console-built-page', 'console-route-waiting',
+		'console-shared-contracts',
 		'console', 'console-article-cost', 'console-axis', 'console-band',
 		'console-chart-lifetime', 'console-chart-pending', 'console-charts-rule',
 		'console-chrome', 'console-cold-load', 'console-compression', 'console-coverage',
@@ -49,6 +50,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'holdout', 'holdout-domain', 'judgement-evidence', 'layout-overflow', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'indexed-runs', 'one-pass-reductions',
+		'duration-cohort',
 		'payload-ceilings',
 		'platform-mix', 'preview-port',
 		'processor-lost', 'prompt-reuse',
