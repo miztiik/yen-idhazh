@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 from typing import Final
 
@@ -48,11 +49,21 @@ def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]
     """
     council = config.load_council(config_dir)
     found: list[dict[str, object]] = []
-    for host in tenants(council.judge_names, council=council):
+    for name in council.judge_names:
+        logging.getLogger("idhazh").info(
+            "council judge=%s status=%s", name, council.declaration(name).lifecycle_status.value
+        )
+    for host in tenants(council.running(), council=council):
         width = shard_width(council, host)
         for date in dates:
             found += [
-                {"tenant": host.judge_id, "date": date, "shard": shard, "shards": width}
+                {
+                    "tenant": host.judge_id,
+                    "date": date,
+                    "shard": shard,
+                    "shards": width,
+                    "runs_model": council.declaration(host.judge_id).runs_model,
+                }
                 for shard in range(width)
             ]
     return found
@@ -102,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+    logging.basicConfig(level=config.load(args.config_root).app.logging.level.value)
 
     dates = tuple(dict.fromkeys(str(date) for date in args.date))
     matrix = cells(args.config_root, dates=dates)

@@ -26,6 +26,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import night_plan, registry, run_identity, session
 
 from . import _imports
+from ._config import write_declarations
 from ._imports import imported_at_import_time, module_file, static_routes
 from ._tenants import a_belated_venue, a_venue, forget, written
 
@@ -65,6 +66,7 @@ JUDGE_STAGE_MODULES: Final = (
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
+    "idhazh.contracts.knobs.content_similarity_judge",
     "idhazh.contracts.fitted_similarity_threshold",
     "idhazh.contracts.judge_call",
     "idhazh.contracts.merge_line_holdout_score",
@@ -229,7 +231,7 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     forget(A_VENUE)
 
 
-def _council(*slugs: str, repair_dates: int = 1) -> CouncilConfig:
+def _council(root: Path, *slugs: str, repair_dates: int = 1) -> CouncilConfig:
     """The committed council block with a tenant list this test decides.
 
     The knobs are the repository's own, so a night here is bounded by the clock
@@ -237,9 +239,14 @@ def _council(*slugs: str, repair_dates: int = 1) -> CouncilConfig:
     ride along are this test's.
     """
     committed = config.load_council(CONFIG_DIR)
-    return committed.model_copy(
+    council = committed.model_copy(
         update={"judge_names": tuple(slugs), "repair_dates_a_night": repair_dates}
     )
+    target = root / "config"
+    target.mkdir(exist_ok=True)
+    write_declarations(target, tuple(slugs))
+    council.bind_declarations(config.load_judge_declarations(target, council))
+    return council
 
 
 def _the_nights_record(state_root: Path, date: str) -> list[CouncilRunRecord]:
@@ -257,11 +264,11 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
     tonight, prepare and settle are no-ops that return cleanly, and the night
     leaves no phantom raw file behind. Six steps, none of them skipped.
     """
-    council = _council()
+    council = _council(venue)
     state_root = venue / "state"
 
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
-    hosted = registry.tenants(council.judge_names)
+    hosted = registry.tenants(council.running())
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
     prepared = session.prepare(council, date=TONIGHT, run_id=run_id)
     settled = session.settle(
@@ -293,9 +300,9 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
         behind_on=("2026-09-23", "2026-09-21"),
         shard_count=3,
     )
-    council = _council(A_SLUG, ANOTHER_SLUG, repair_dates=3)
+    council = _council(venue, A_SLUG, ANOTHER_SLUG, repair_dates=3)
 
-    hosted = registry.tenants(council.judge_names)
+    hosted = registry.tenants(council.running())
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
 
     assert [host.judge_id for host in hosted] == [A_SLUG, ANOTHER_SLUG]
@@ -317,12 +324,12 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
         slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))},
         poisoned_neighbour="a-broken-unrequested-tenant",
     )
-    council = _council(A_SLUG)
+    council = _council(venue, A_SLUG)
     state_root = venue / "state"
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
     opened = time.monotonic()
 
-    hosted = registry.tenants(council.judge_names)
+    hosted = registry.tenants(council.running())
     assert night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)[0] == TONIGHT
     session.prepare(council, date=TONIGHT, run_id=run_id)
     for shard in range(2):

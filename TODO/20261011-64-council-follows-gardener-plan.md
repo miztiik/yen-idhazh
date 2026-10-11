@@ -51,7 +51,7 @@ Table D - rows
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Judges carry a status and a model need | 10, 11 | B | PENDING | - | - | - |
+| 1 | Judges carry a status and a model need | 10, 11 | B | DONE | council-judge-status | - | Council judge status |
 | 2 | Each council job holds only the permissions its steps use | - | A | DONE | council-job-permissions | - | Council job permissions |
 | 3 | Council programs log one JSON event a line and exit with one vocabulary | 1 | C | PENDING | - | - | - |
 | 4 | The council refuses a bad judge set before any unit runs | 1, 3 | D | PENDING | - | - | - |

@@ -273,6 +273,7 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
         "watchlist.json",
         "appearance.json",
         "llm_council.json",
+        "judges/content-similarity-judge.json",
         pointer,
     ):
         destination = target / name

@@ -4,27 +4,29 @@ A slug in `judge_names` in `config/llm_council.json` names its package with
 hyphens replaced by underscores. Only that package's tenant module is imported,
 inside a function, so no module here carries a tenant in its import closure.
 
-Resolving is also when a tenant gets to refuse the night. The planning job
-resolves every registered slug before it can build its matrix, so a tenant that
+Resolving is also when an active tenant gets to refuse the night. The planning job
+resolves every active slug before it can build its matrix, so a tenant that
 cannot finish the work it would draw stops the run before any job restores a
 model's weights. The venue asks the question and reads no number behind it.
 
-A slug nothing declares is refused by name. Removing a tenant is a config edit
-and a directory delete; adding one is a directory and a config edit. Neither is
-a change to this file.
+A judge stops by its declaration's status; its name and file remain registered.
 """
 
 from __future__ import annotations
 
 import importlib
 from collections.abc import Sequence
+from pathlib import Path
 from types import ModuleType
 from typing import Final, cast
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.council import CouncilConfig, derive_judge_package_name
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import Grain, LedgerLifecycleStatus
 from idhazh.council.tenancy import Tenant
+from idhazh.ledger import paths, staging
 
 #: The package the council looks in. Read on every call rather than bound as a
 #: default, so the one name here is the one answer to where a tenant lives.
@@ -35,6 +37,8 @@ TENANT_PACKAGE: Final = "idhazh"
 TENANT_MODULE: Final = "tenant"
 
 TENANT_ATTRIBUTE: Final = "TENANT"
+
+VENUE_LEDGERS: Final = (LedgerName.COUNCIL_RUN_RECORDS, LedgerName.HOST_FINGERPRINT)
 
 #: What a tenant module calls the check it makes of its own night, read off the
 #: module the way the implementation is. Optional on purpose: a tenant whose work
@@ -114,6 +118,30 @@ def tenant(
             f"{module_name} declares judge_id '{found.judge_id}'."
         )
     _refuse_a_night_this_tenant_cannot_finish(module, app, council)
+    committed = (
+        *(staging.staged_path(which) for which in VENUE_LEDGERS),
+        *found.committed_paths,
+    )
+    for family in paths._CONFIG.families:
+        if family.lifecycle_status is LedgerLifecycleStatus.ACTIVE:
+            continue
+        for held in family.ledgers:
+            addresses = [staging.staged_path(held.name)]
+            if held.grain is Grain.RAW_AND_COMPACT:
+                addresses.append(
+                    paths.compact_folder(Path(paths.STATE_DIRNAME), held.name).as_posix()
+                )
+            if any(
+                address == declared
+                or address.startswith(declared + "/")
+                or declared.startswith(address + "/")
+                for address in addresses
+                for declared in committed
+            ):
+                raise ValueError(
+                    f"active judge '{slug}' writes ledger '{held.name.value}' in "
+                    f"family '{family.name}', which is {family.lifecycle_status.value}"
+                )
     return found
 
 
@@ -124,7 +152,7 @@ def tenants(
     app: AppConfig | None = None,
     council: CouncilConfig | None = None,
 ) -> tuple[Tenant, ...]:
-    """Every tenant the council hosts, in the order the config names them.
+    """Every active tenant the council hosts, in registration order.
 
     An empty list is a legal night. The venue runs every step it always runs and
     judges nothing, which is what a room with no case heard in it looks like.

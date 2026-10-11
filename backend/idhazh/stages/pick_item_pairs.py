@@ -128,6 +128,9 @@ def stage_pick_item_pairs(
     """
     same_story = settings.app.assemble.same_story
     tuning = same_story.judging_knobs()
+    from idhazh.content_similarity_judge import settings as judge_settings
+
+    execution = judge_settings.load(settings.config_dir)
     shards = settings.council.shards
     window_hours = settings.app.assemble.same_story_window_hours
     stamp = scorer_inputs(settings)
@@ -164,7 +167,7 @@ def stage_pick_item_pairs(
     # The line the day was actually grouped at, so a pair the day never merged is
     # never counted as one. A fitted line replaces this floor once a run writes one.
     drawn = selection.select(
-        banded, line=same_story.floor_min, budget=tuning.pair_budget, date=date, stamp=stamp
+        banded, line=same_story.floor_min, budget=execution.pair_budget, date=date, stamp=stamp
     )
     rows = [
         _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)
@@ -177,7 +180,7 @@ def stage_pick_item_pairs(
         run_id,
         drawn.pairs_in_band,
         len(rows),
-        tuning.pair_budget,
+        execution.pair_budget,
         shards,
         draw_path.name,
     )

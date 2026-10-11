@@ -27,7 +27,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -77,6 +77,7 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *slugs: str) -> Path:
     """The loader's named config inputs, with the named slugs registered."""
     target = copy_config(root)
+    write_declarations(target, slugs)
     raw = json.loads(read_text(target / "llm_council.json"))
     raw["judge_names"] = list(slugs)
     (target / "llm_council.json").write_text(
@@ -302,8 +303,8 @@ def test_the_scratch_root_the_workflow_carries_is_the_one_the_council_names() ->
     would mean a unit writing where nothing collects from, and the run would look
     like a tenant that produced nothing.
     """
-    assert session.scratch_root(A_DATE).as_posix().endswith(
-        f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}"
+    assert (
+        session.scratch_root(A_DATE).as_posix().endswith(f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}")
     )
     assert not Path(session.COUNCIL_ROOT_RELPATH).is_absolute()
 
@@ -400,9 +401,7 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
             (EvaluationStep.EVALUATE_WORK_PART, 3),
         ]
     )
-    assert [row.work_part_index for row in ran] == [0, 1, 3], (
-        "the unit that died filed nothing"
-    )
+    assert [row.work_part_index for row in ran] == [0, 1, 3], "the unit that died filed nothing"
     assert {row.work_part_count for row in recorded} == {4}
     assert len(ran) < ran[0].work_part_count, "the pair is what an operator reads as a missing unit"
     assert {row.judge_id for row in recorded} == {A_SLUG}

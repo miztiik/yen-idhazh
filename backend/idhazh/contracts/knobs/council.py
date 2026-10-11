@@ -3,10 +3,28 @@
 from __future__ import annotations
 
 import keyword
+from enum import UNIQUE, StrEnum, verify
+from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, PrivateAttr, field_validator
 
 from idhazh.contracts.base import DateStamp, Model, Slug
+
+
+@verify(UNIQUE)
+class JudgeLifecycleStatus(StrEnum):
+    """Whether the council runs a judge; its ledger families have their own status."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    RETIRED = "retired"
+
+
+class JudgeDeclaration(Model):
+    """The two declaration keys the council reads from one judge's own file."""
+
+    lifecycle_status: JudgeLifecycleStatus
+    runs_model: bool = Field(strict=True)
 
 
 def derive_judge_package_name(slug: str) -> str:
@@ -19,6 +37,37 @@ def derive_judge_package_name(slug: str) -> str:
 
 class CouncilConfig(Model):
     """`config/llm_council.json`: the clocks, width, nights and judges of one night."""
+
+    _declarations: dict[str, JudgeDeclaration] = PrivateAttr(default_factory=dict)
+    _config_dir: Path | None = PrivateAttr(default=None)
+
+    def bind_declarations(
+        self, declarations: dict[str, JudgeDeclaration], *, config_dir: Path | None = None
+    ) -> None:
+        """Attach validated declarations without adding them to the council's file."""
+        self._declarations = declarations
+        self._config_dir = config_dir
+
+    @property
+    def config_dir(self) -> Path | None:
+        """The local source directory, never part of a serialized council config."""
+        return self._config_dir
+
+    def declaration(self, name: str) -> JudgeDeclaration:
+        """One registered judge's explicit declaration, or a refusal by name."""
+        if name not in self.judge_names or name not in self._declarations:
+            raise ValueError(
+                f"judge '{name}' has no loaded declaration in config/judges/{name}.json"
+            )
+        return self._declarations[name]
+
+    def running(self) -> tuple[str, ...]:
+        """The active judges, in registration order, before any code is imported."""
+        return tuple(
+            name
+            for name in self.judge_names
+            if self.declaration(name).lifecycle_status is JudgeLifecycleStatus.ACTIVE
+        )
 
     shard_timeout_minutes: int = Field(
         default=200,
@@ -133,6 +182,10 @@ class CouncilConfig(Model):
     @field_validator("judge_names")
     @classmethod
     def require_importable_judge_names(cls, names: tuple[Slug, ...]) -> tuple[Slug, ...]:
+        seen: set[str] = set()
         for name in names:
             derive_judge_package_name(name)
+            if name in seen:
+                raise ValueError(f"judge_names lists judge '{name}' twice")
+            seen.add(name)
         return names

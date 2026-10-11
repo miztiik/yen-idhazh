@@ -6,6 +6,10 @@ inherits nothing from the venue it runs in. The direction of the dependency is
 the whole point: registration points a judge at the council, never the council
 at a judge.
 
+Only active judges are hosted. Status and model need are declarations read
+before importing this protocol's implementation, not additional protocol members.
+A model-free judge declares runs_model false and restores no weights.
+
 Nothing here names a judge, and nothing here needs one to be declared,
 instantiated or type-checked.
 """

@@ -21,7 +21,7 @@ from conftest import read_text
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import night_plan, registry
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import a_belated_venue, forget
 
 A_VENUE = "a_belated_venue_package"
@@ -48,6 +48,7 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *, slugs: tuple[str, ...], **council: object) -> Path:
     """The loader's named config inputs, with those slugs registered."""
     target = copy_config(root)
+    write_declarations(target, slugs)
     raw = json.loads(read_text(target / "llm_council.json"))
     raw["judge_names"] = list(slugs)
     raw.update(council)

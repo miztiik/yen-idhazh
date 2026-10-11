@@ -64,6 +64,7 @@ def test_the_config_that_was_read_travels_with_the_run() -> None:
     assert {digest.path for digest in settings.digests} == {
         "config/idhazh.json",
         "config/llm_council.json",
+        *(f"config/judges/{name}.json" for name in settings.council.judge_names),
         # Named through the pointer, never spelled here: a swap moves it, and a
         # test that spelled the incumbent's filename would then be asserting
         # that the record still names a model the run did not read.
