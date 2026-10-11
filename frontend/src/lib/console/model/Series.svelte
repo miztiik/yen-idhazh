@@ -6,6 +6,7 @@
 	import type { ModelRule } from '../../charts/d3/model-rule';
 	import type { ChartConfig } from '../../server/config';
 	import { completeModelRule } from './model-rule';
+	import { shortDate } from '../../format';
 
 	let { series, rule, chart, name, stacked = false, rules = [], domain, note = 'No reading was recorded in this window.' }: {
 		series: readonly SeriesInput[]; rule: ModelRule; chart: ChartConfig; name: string;
@@ -18,7 +19,10 @@
 	const geometry = $derived(dateSeries(series, {
 		frame: box, stacked, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule: fullRule, rules, domain
 	}));
-	const readout = $derived(geometry?.readout ?? null);
+	const readout = $derived(geometry === null ? null : {
+		...geometry.readout,
+		columns: geometry.dates.map(shortDate)
+	});
 </script>
 
 <div use:observeWidth={(value) => (measured = value)}>

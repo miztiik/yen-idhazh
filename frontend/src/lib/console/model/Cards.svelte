@@ -8,6 +8,7 @@
 	import { cardColumns, cardValue, cardText, cardTrendDays } from './cards';
 	import type { ChartConfig } from '../../server/config';
 	import { completeModelRule } from './model-rule';
+	import { nameSpan } from '../span-words';
 	let { days, instruments, start, end, rule, checkerRule, chart, windowDays }: {
 		days: readonly (ModelDay & { determinismViolations: number | null })[] | null;
 		instruments: readonly { date: string; recorded: Readonly<Record<string, number | null>> }[];
@@ -56,7 +57,7 @@
 		<summary class="console-summary">{windowDays === 1 ? 'Show these figures for this one day' : `Show these figures day by day, over these ${windowDays} days`}</summary>
 		<div class="console-table" data-eval-panel="daily-figures" data-windowed="daily-figures" data-window-days={windowDays} data-model="table">
 			<table data-model-table>
-				<caption>One row per recorded day. Missing readings are not measured.</caption>
+				<caption>One row per recorded day in {nameSpan(windowDays)}. Missing readings are not measured.</caption>
 				<thead><tr><th scope="col">Day</th>{#each cardColumns as column}<th scope="col">{column.label}</th>{/each}
 					{#each extra as instrument}<th scope="col">{instrument.label}</th>{/each}</tr></thead>
 				<tbody>{#each ordered.toReversed() as day (day.date)}
@@ -80,6 +81,6 @@
 <style>
 	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--space-3); }
 	details { overflow-x: auto; }
-	table { border-collapse: collapse; font-size: var(--text-xs); }
-	th, td { padding: var(--space-2); text-align: right; white-space: nowrap; border-bottom: 1px solid var(--color-rule); }
+	table { inline-size: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+	th, td { padding: var(--space-2); text-align: right; overflow-wrap: anywhere; border-bottom: 1px solid var(--color-rule); }
 </style>
