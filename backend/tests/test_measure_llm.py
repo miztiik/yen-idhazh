@@ -123,7 +123,12 @@ def test_sha256_reads_the_actual_file(tmp_path: Path) -> None:
     assert sha256(file) == "f8ee3ff497d6e851aaaf1be3c1b7013665dc4ff1288dfb04bda5ce98645d4043"
 
 
-def test_external_paths_are_reduced_before_they_leave_the_process(tmp_path: Path) -> None:
+def test_external_paths_are_reduced_before_they_leave_the_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    working = tmp_path / "working"
+    working.mkdir()
+    monkeypatch.chdir(working)
     assert display_path(tmp_path / "model.gguf") == "model.gguf"
 
 

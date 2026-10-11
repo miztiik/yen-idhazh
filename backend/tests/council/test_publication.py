@@ -101,7 +101,7 @@ def test_many_tenants_and_later_dates_survive_a_failure(
             if path.startswith("state/raw/host-fingerprint/")
         }
         assert len(machine) == 2, "both probe and closing clock must have receipts"
-        remote = Repository(origin)
+        remote = Repository(origin, git_dir=origin)
         for path in machine:
             entry = remote.entry("main", path)
             assert entry is not None, "a receipted machine write was never pushed"

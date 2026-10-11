@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from conftest import FIXTURES_DIR, REPO_ROOT, read_text
+from fixture_git import command as fixture_git_command
 
 from idhazh import assemble
 from idhazh.contracts.digest_day import DigestDay
@@ -29,14 +30,14 @@ pytestmark = pytest.mark.workflow
 
 def _git(repo: Path, environment: dict[str, str], *args: str) -> str:
     result = subprocess.run(
-        [
-            "git",
+        fixture_git_command(
+            repo,
             "-c",
             "user.name=miztiik",
             "-c",
             "user.email=miztiik@users.noreply.github.com",
             *args,
-        ],
+        ),
         cwd=repo,
         env=environment,
         capture_output=True,
@@ -53,8 +54,7 @@ def _git_environment(tmp_path: Path) -> dict[str, str]:
         **{
             name: value
             for name, value in os.environ.items()
-            if not name.startswith("GIT_CONFIG_")
-            and name not in {"GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY"}
+            if name not in {"GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY"}
         },
         "HOME": str(home),
         "USERPROFILE": str(home),

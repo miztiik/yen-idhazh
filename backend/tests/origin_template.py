@@ -8,9 +8,9 @@ once for the session and every test copies it (CLAUDE.md section 13).
 from __future__ import annotations
 
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Final
+from uuid import uuid4
 
 #: Where a built origin lives, keyed by what it holds.
 _TEMPLATES: Final[dict[tuple[str, ...], Path]] = {}
@@ -32,7 +32,8 @@ def template(key: tuple[str, ...]) -> tuple[Path, bool]:
     root = _TEMPLATES.get(key)
     if root is not None:
         return root, False
-    root = Path(tempfile.mkdtemp(prefix="yen-idhazh-origin-"))
+    root = (Path(__file__).resolve().parents[1] / "var" / "origins" / uuid4().hex[:8])
+    root.mkdir(parents=True)
     _TEMPLATES[key] = root
     return root, True
 

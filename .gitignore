@@ -55,6 +55,13 @@ backend/bin/
 # rows under state/ - never the intermediates.
 backend/var/
 
+# Exact-byte local copies of saved encoder artifacts, not authored dataset labels.
+corpus/story-dataset-1/vector-evidence/
+corpus/story-dataset-1/state.sqlite3*
+corpus/story-dataset-1/workers/
+corpus/story-dataset-1/source-evidence/
+corpus/story-dataset-1/pairs-full-*.json
+
 # Scratch
 .tmp_*
 *.log

@@ -104,6 +104,15 @@ the launcher locates MSVC BuildTools and calls its environment setup and Cargo
 in the same `cmd.exe` process. Build/test scratch roots are project-owned;
 machine-wide gate seats retain their original shared location.
 
+Python Git fixtures also use short generated project-owned paths. A session
+discovery ceiling prevents an uninitialized child directory from finding the
+real checkout. Shared fixture helpers refuse uninitialized repositories and name
+their generated bare origin with Git's top-level `--git-dir`. This is the
+[documented explicit operation](https://git-scm.com/docs/git-config#Documentation/git-config.txt-safebareRepository),
+not a change to inherited `safe.bareRepository=explicit`. Never lower that
+security control to make fixture tests pass. Install this checkout's package in
+an isolated environment before tests that invoke its console entry point.
+
 Run records under `backend/var/checks/` hold the source fingerprint, selected
 groups and specs, exit status, step durations, test counts and queue/startup
 time separately. Logic and browser reports use separate output directories.

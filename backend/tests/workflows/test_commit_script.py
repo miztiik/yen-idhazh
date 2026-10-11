@@ -248,7 +248,7 @@ def test_non_repository_paths_never_reach_git(
     )
     assert result.status is Status.INTEGRITY_REFUSED
     assert result.push_count == 0
-    assert Repository(origin).entry("main", PATH) is None
+    assert Repository(origin, git_dir=origin).entry("main", PATH) is None
 
 
 def test_expired_deadline_does_not_count_a_candidate_as_a_push(
@@ -263,7 +263,7 @@ def test_expired_deadline_does_not_count_a_candidate_as_a_push(
     )
     assert result.status is Status.REFUSED
     assert result.push_count == 0
-    assert Repository(origin).entry("main", PATH) is None
+    assert Repository(origin, git_dir=origin).entry("main", PATH) is None
 
 
 @pytest.mark.parametrize("maximum,landed,pushes", [(2, False, 2), (4, True, 4)])
@@ -281,7 +281,7 @@ def test_real_rejections_count_actual_pushes_not_candidate_builds(
     result = publish(evidence(repo), repo=repo, retry=RETRY, max_pushes=maximum)
     assert result.push_count == pushes
     assert (result.status is Status.LANDED) is landed
-    assert (Repository(origin).entry("main", PATH) is not None) is landed
+    assert (Repository(origin, git_dir=origin).entry("main", PATH) is not None) is landed
 
 
 def test_clean_filters_cannot_change_confirmed_candidate_bytes(
@@ -298,7 +298,7 @@ def test_clean_filters_cannot_change_confirmed_candidate_bytes(
     result = publish(evidence(repo), repo=repo, retry=RETRY)
     assert result.status is Status.INTEGRITY_REFUSED
     assert result.push_count == 0
-    assert Repository(origin).entry("main", PATH) is None
+    assert Repository(origin, git_dir=origin).entry("main", PATH) is None
 
 
 @pytest.mark.parametrize("mode", ["120000", "160000"])
@@ -317,5 +317,5 @@ def test_symlink_and_submodule_source_entries_cannot_become_data_files(
     result = publish(evidence(repo), repo=repo, retry=RETRY)
     assert result.status is Status.INTEGRITY_REFUSED
     assert result.push_count == 0
-    entry = Repository(origin).entry("main", PATH)
+    entry = Repository(origin, git_dir=origin).entry("main", PATH)
     assert entry is not None and entry.mode == mode

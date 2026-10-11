@@ -77,12 +77,12 @@ def test_measure_publishes_the_real_native_probe_without_foreign_index(
     index = (repo / ".git/index").read_bytes()
     assert record_publish.land("measure", repo=repo) == 0
     assert (repo / ".git/index").read_bytes() == index
-    assert Repository(origin).entry("main", "foreign-staged") is None
+    assert Repository(origin, git_dir=origin).entry("main", "foreign-staged") is None
     for path in evidence:
         relative = path.relative_to(repo).as_posix()
-        entry = Repository(origin).entry("main", relative)
+        entry = Repository(origin, git_dir=origin).entry("main", relative)
         assert entry is not None
-        assert Repository(origin).blob(entry.oid) == path.read_bytes()
+        assert Repository(origin, git_dir=origin).blob(entry.oid) == path.read_bytes()
 
 
 @pytest.mark.parametrize("wrong_execution", [False, True])
@@ -157,6 +157,6 @@ def test_pipeline_collector_checks_executed_raw_identity_and_declared_case(
                 ).joinpath(*tail).as_posix()
             else:
                 relative = "/".join(("state", tier, "pipeline-tests", name, *tail))
-            entry = Repository(origin).entry("main", relative)
+            entry = Repository(origin, git_dir=origin).entry("main", relative)
             assert entry is not None
-            assert Repository(origin).blob(entry.oid) == path.read_bytes()
+            assert Repository(origin, git_dir=origin).blob(entry.oid) == path.read_bytes()
