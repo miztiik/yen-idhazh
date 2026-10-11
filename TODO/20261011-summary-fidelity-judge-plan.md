@@ -660,6 +660,8 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q27 | 2026-10-11 | The evaluation persona still calls a model judge a project non-goal, against CLAUDE.md section 1a (raised by the review, not the owner) | Proposed | P36 | The owner rules P36 |
 | Q28 | 2026-10-11 | Write the research record's formulas as math that GitHub renders, not invented ASCII such as sqrt | Done for the research record | Research record, commit fce0749 | This plan's section 4 and the review record still write math in ASCII; convert them when the owner asks |
 | Q29 | 2026-10-11 | What Display and Display only mean in the research record's table 5.1; what the redesign takes from the research, what it does not, and why | Answered | Research record, under table 5.1 (the terms); review record SP1 row s9 and section 4 of this plan (taken and not taken) | - |
+| Q30 | 2026-10-11 | Number the council plan 64 and commit it to main directly | Done | TODO/20261011-64-council-follows-gardener-plan.md, titled Plan 64 | - |
+| Q31 | 2026-10-11 | Find the ambiguities in plan 64 and ask about them in the CLAUDE.md options format | Asked | Seven questions: retired judges against row #4's refusals, the exit codes and their order, how a cell's events reach the job-page summary, row #8's record shape, a dispatch that names a paused judge, a judge with ledgers in two families, and P9 to P11 | The owner answers; the rulings land in plan 64's Table P |
 
 Table R - the review changes the owner approved on 2026-10-10, and where each lands now
 

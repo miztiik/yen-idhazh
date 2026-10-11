@@ -1,4 +1,4 @@
-# LLM council follows the gardener
+# Plan 64 - LLM council follows the gardener
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #8 changes a persisted shape and pauses for the owner; every other row states its own level.
