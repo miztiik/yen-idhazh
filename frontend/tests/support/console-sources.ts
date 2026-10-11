@@ -38,7 +38,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/components': [
 		'ArchiveSearch.svelte', 'BandDistance.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
 		'ConfidenceChip.svelte', 'ConsoleBand.svelte', 'ConsoleNav.svelte', 'DayNotice.svelte',
-		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte',
+		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte', 'FailureRuleRanking.svelte',
 		'FailurePanels.svelte', 'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
 		'MachineCard.svelte', 'MachineSplitGroup.svelte', 'MemoryBoard.svelte', 'MoreDays.svelte',
@@ -53,7 +53,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/console': [
 		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'daily-figures.ts',
-		'doubt-reasons.ts', 'eval-instruments.ts', 'extraction.ts', 'held-part-note.ts',
+		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'extraction.ts', 'failure-rules.ts', 'held-part-note.ts',
 		'holdout.ts', 'item-cost.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts', 'prompt-cache-subtitle.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
@@ -126,7 +126,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
 		'telemetry-row.ts', 'views.ts'
 	],
-	'tests/fixtures/panels': ['WitnessPanel.svelte'],
+	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte'],
 	'tests/support/console-window': [
 		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
 		'client-render.ts', 'server-panels.ts'
