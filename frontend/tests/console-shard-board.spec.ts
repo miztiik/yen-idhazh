@@ -22,10 +22,10 @@ const DATE = '2026-09-18';
 const RUN = '2026-09-18-1';
 const MIB = 1024 * 1024;
 
-const TEST_LIMITS: MachineLimits = {
+const TEST_LIMITS = {
 	contextWindow: 8192,
 	jobTimeoutSeconds: 3600
-};
+} satisfies MachineLimits;
 
 function measured(cell: string | null | undefined): number | null {
 	const text = (cell ?? '').trim();
