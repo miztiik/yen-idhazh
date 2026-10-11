@@ -72,7 +72,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | LOCAL READY: publication pending | p52-band-ledgers (`feat/console-band-ledgers`) | Read from merge | p52-row5-local-completion |
 | 6 | Pipelines asks the ledger | 5, 2b | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
-| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | IMPLEMENTED: local delivery; parent merge and CI pending | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
+| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | LOCALCANDIDATE: pending CI; private quiet/missing checks pass | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |

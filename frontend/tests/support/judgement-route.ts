@@ -6,7 +6,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import {
-	appendFileSync, copyFileSync, mkdirSync, readFileSync,
+	appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync,
 	realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -184,48 +184,6 @@ const INPUTS = [
 	'svelte.config.js',
 	'vite.config.ts'
 ] as const;
-// Voices uses the same bounded private publication/build, with these exact additional inputs.
-const VOICES_INPUTS = [
-	'src/lib/charts/run-history.ts',
-	'src/lib/components/PanelGroup.svelte',
-	'src/lib/components/RouteStatus.svelte',
-	'src/lib/console/query-state.ts',
-	'src/lib/console/queries/voices.ts',
-	'src/lib/console/queries/window.ts',
-	'src/lib/server/source-retiring.ts',
-	'src/lib/console/voices/record.ts',
-	'src/lib/console/voices/source-health.ts',
-	'src/lib/console/voices/feeds-failed.ts',
-	'src/lib/console/voices/fetch-time.ts',
-	'src/lib/console/voices/retiring.ts',
-	'src/lib/console/voices/source-cuts.ts',
-	'src/lib/console/voices/ranking-discount.ts',
-	'src/lib/console/voices/why-chosen.ts',
-	'src/lib/console/voices/watchlist.ts',
-	'src/lib/console/voices/VoicesPanel.svelte',
-	'src/lib/console/voices/RecordFrame.svelte',
-	'src/lib/console/voices/SourceHealthPanel.svelte',
-	'src/lib/console/voices/FeedsFailedPanel.svelte',
-	'src/lib/console/voices/FeedTiles.svelte',
-	'src/lib/console/voices/FetchTimePanel.svelte',
-	'src/lib/console/voices/RetiringPanel.svelte',
-	'src/lib/console/voices/SourceCutsPanel.svelte',
-	'src/lib/console/voices/RankingDiscountPanel.svelte',
-	'src/lib/console/voices/WhyChosenPanel.svelte',
-	'src/lib/console/voices/WatchlistPanel.svelte',
-	'src/lib/components/SourceCutRange.svelte',
-	'src/routes/console/voices/+page.server.ts',
-	'src/routes/console/voices/+page.svelte'
-] as const;
-
-function inputsFor(voices: boolean): string[] {
-	const shared = voices ? INPUTS.filter((name) =>
-		!name.startsWith('src/routes/console/judgement/') &&
-		!name.startsWith('src/routes/console/data-explorer/')
-	) : [...INPUTS];
-	return [...shared, ...(voices ? VOICES_INPUTS : [])];
-}
-
 function stageModules(frontend: string, inputs: readonly string[]): void {
 	for (const name of inputs) {
 		const source = join(FRONTEND, name);
@@ -325,8 +283,14 @@ export async function judgementRoute(
 			holdoutPairs: [], holdoutScores: []
 		}));
 		const frontend = join(root, 'frontend');
-		const inputs = inputsFor(options.voices !== undefined);
-		stageModules(frontend, inputs);
+		const inputs = options.voices
+			? ['.svelte-kit/output/server', '.svelte-kit/output/client/_app']
+			: [...INPUTS];
+		if (options.voices) {
+			// The browser launcher verifies this production build before any fixture uses it.
+			cpSync(join(FRONTEND, '.svelte-kit', 'output', 'server'), join(frontend, 'server'), { recursive: true });
+			cpSync(join(FRONTEND, '.svelte-kit', 'output', 'client', '_app'), join(frontend, 'static', '_app'), { recursive: true });
+		} else stageModules(frontend, inputs);
 		const addon = await parquetAddon();
 		const home = join(root, 'node-home');
 		const address = new URL(addon.url);
@@ -375,13 +339,14 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			copyFileSync(join(FRONTEND, 'static', file), join(frontend, 'static', file));
 		}
 		writeFileSync(join(report, 'inputs.json'), `${JSON.stringify(inputs, null, 2)}\n`);
-		const runner = join(frontend, 'judgement-preview.mjs');
-		writeFileSync(runner, `
+		const runner = options.voices
+			? join(FRONTEND, 'tests', 'support', 'voices-preview.mjs')
+			: join(frontend, 'judgement-preview.mjs');
+		if (!options.voices) writeFileSync(runner, `
 			import { build, preview } from 'vite';
 			import { createInterface } from 'node:readline';
 			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))},
-				logLevel: 'warn', build: { reportCompressedSize: false,
-					...${JSON.stringify(options.voices ? { minify: false, cssMinify: false } : {})} } });
+				logLevel: 'warn', build: { reportCompressedSize: false } });
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 			let held = ${JSON.stringify(options.voicesWait ?? false)};
 			const pending = [];
@@ -398,7 +363,7 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 				} else server.httpServer.close(() => process.exit(0));
 			});
 		`, 'utf8');
-		child = spawn(process.execPath, [runner], {
+		child = spawn(process.execPath, [runner, ...(options.voices ? [String(options.voicesWait ?? false)] : [])], {
 			cwd: frontend,
 			env: { ...process.env, HOME: home, USERPROFILE: home, DIGEST_ROOT: site.digest, STATE_ROOT: state,
 				TELEMETRY_ROOT: site.telemetry, BASE_PATH: '' },
