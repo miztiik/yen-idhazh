@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #8 changes a persisted shape and pauses for the owner; every other row states its own level.
-**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner approved P1 to P8 on 2026-10-11. The summary-fidelity-judge plan registers its judge paused and model-free in the entry shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. No row started.
+**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner approved P1 to P8 on 2026-10-11. Table T maps each of the gardener's strengths to the row that brings it; P9 to P11 add what no row covered and await the owner. The summary-fidelity-judge plan registers its judge paused and model-free in the entry shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. No row started.
 
 ## 0. Operating contract
 
@@ -332,7 +332,7 @@ Table M2 - rejected alternatives
 
 Owner requests that touch this plan are tracked, with their status, in Table Q of the summary-fidelity-judge plan (TODO/20261011-summary-fidelity-judge-plan.md).
 
-Table P - rulings the owner made on 2026-10-11
+Table P - owner rulings: P1 to P8 ruled on 2026-10-11; P9 to P11 pending
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -344,6 +344,64 @@ Table P - rulings the owner made on 2026-10-11
 | P6 | Publish council-run-records for the console | Approved | The gardener's own record is published; every cell is a closed word, a count or an instant | 9 |
 | P7 | Stale or lost publication stays red, exit 1 | Approved | No council step redoes every judge's work to recover a push (committing.md) | 3 |
 | P8 | Tenant modules import heavy libraries inside their functions | Approved | The planning job then never installs every judge's extras | 4 |
+| P9 | Row #1 gains a test that names the owner's decision beside every active judge, so a change that flips a judge to active without one fails | Pending; recommended: approve | The gardener holds the same rule with a test; E1.5 states it for judges with nothing holding it (Table T, T4) | 1 |
+| P10 | Row #1's llm-council.md edit carries the worked lifecycle example under Table T | Pending; recommended: approve | The owner asked for a lifecycle example (Table T, T3) | 1 |
+| P11 | A new B5: running one judge over a range of dates by hand, deferred until the owner wants a judge's history before its switch | Pending; recommended: approve | The gardener's run-task runs one task over a range and never pushes; the council has no equivalent (Table T, T12) | - |
+
+Table T - the gardener's strengths and the council row that brings each (Fowler, 2026-10-11; the owner asked which row brings lifecycle, logging, telemetry and the rest)
+
+| # | Gardener strength (source) | Word | Council today | Council plan | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| T1 | One declaration a unit; config never names a module (idhazh-gardener.md, What runs) | capability | slug resolves to the module that declares it | row 1 Judges carry a status and a model need; council B3 binding by name | Adapted |
+| T2 | The named list is the unit set (task_names) | flexibility | council.tenants | row 1 (ordered entries, each slug once) | Covered |
+| T3 | lifecycle_status active, paused, retired, no default; paused keeps its claim; retired stays as the record (knobs_gardener.py TaskLifecycleStatus) | lifecycle | none | row 1 (council E1.1, E1.2 and table E3) | Covered; worked example below this table; P10 puts it in llm-council.md |
+| T4 | A switch ships safe unless a named decision put it live, held by a test (LIVE_BY_DECISION, test_gardener_config.py; registrydoc) | lifecycle | none | council E1.5 states the rule; no test holds it | Not covered - add to row 1 |
+| T5 | dry_run with no default; every default reports and deletes nothing | lifecycle | - | council B1 (council P3: lands paused instead) | Deferred |
+| T6 | The loader refuses as one set, naming file and rule | capability | unknown slug refused | rows 1 and 4 | Covered |
+| T7 | Module refusals before any task: no module, unused module, kind mismatch, raising import, two modules one name; exit 2 | capability | sorted search | row 4 The council refuses a bad judge set before any unit runs | Covered |
+| T8 | Standard-library plan job before install, held to the typed planner by a test (gardener_shards.py) | capability | the planning job installs | council B2 | Deferred |
+| T9 | Round-robin split over sorted names | capability | per-tenant width on each cell | - | Not applicable |
+| T10 | owns, reads, appends_to; every touched path inside owns; no claim on state/ (gardener_publish.py) | commit | committed_paths, publication_inputs, broad roots refused | council S7; reads for judging cells in council B4 | Covered |
+| T11 | Each unit's own window and mark | flexibility | union of every tenant's dates | row 7 Each judge runs over its own outstanding dates | Covered |
+| T12 | Operator range for one named unit; a hand run never pushes (idhazh gardener run-task) | flexibility | a dispatched date runs every judge | row 7 lets a dispatched date name one judge; no range | Partial - B-item |
+| T13 | Download budget; cone_bytes and downloaded_bytes on every row | sparse, telemetry | none | council B4 | Deferred |
+| T14 | One JSON event a line, fixed vocabulary | logging | plain lines | row 3 Council programs log one JSON event a line and exit with one vocabulary | Covered |
+| T15 | Exceptions by type and place; the crash printer | logging | council_publish.py prints an exception's text | row 3 | Covered |
+| T16 | A log group per unit; an error annotation for a failed unit | logging | none | row 5 The collecting job writes the night's summary on its job page | Covered |
+| T17 | Job-page summary rendered from events alone | observability | none | row 5 | Covered |
+| T18 | Exit codes 0 to 3, worst code wins, a fixed sentence each | observability | ad hoc | row 3 | Covered |
+| T19 | Every stop says why: closed fault words; retryable faults stay green; recovered notes; sentences rendered at read time | observability | three outcomes; a raising unit files nothing | row 8 A unit that raises files a failed council record (failed, fault raised) | Partial - retryable words not covered |
+| T20 | One record per unit, always, through the door | telemetry | the venue files a row in a finally | row 8 | Covered |
+| T21 | Run identity, duration_ms, work_ended_at on each row | telemetry | run_id, started_at, seconds_spent, model_calls, tokens, model_seconds | existing | Covered; work_ended_at not applicable |
+| T22 | Host fingerprint beside the runner | telemetry | HOST_FINGERPRINT venue ledger; collecting job clock stamped | existing; per-cell machine rejected for model cells (llm-council.md) | Covered; no-model cells not covered |
+| T23 | The record is published | observability | not published | row 9 The council's record is published for the console | Covered |
+| T24 | Shared publisher, exact operations, landing words, never read git's error text (committing.md) | commit | already the shared publisher | council S12; council P7 keeps stale and lost red, exit 1 | Covered (differs by design) |
+| T25 | The commit loop lives outside the package | commit | council_publish.py under utilities | existing | Covered |
+| T26 | Least privilege per job | commit | contents write on every job | row 2 Each council job holds only the permissions its steps use | Covered |
+| T27 | Check out code and config only; list from the commit; fetch named folders; lazy fetch off | sparse | collecting job fetches declared inputs when sparse | row 6 The collecting job checks out code and config and fetches only named inputs; council B4 for judging cells | Covered and deferred |
+| T28 | Never list state/ itself; an undeclared folder is refused | sparse | the window is all a tenant is handed | existing | Covered |
+| T29 | Trial roots separate from production | flexibility | none | council B1 | Deferred |
+| T30 | Every knob bounded; no default for safety keys; a wrong-kind key refused by name | flexibility | council knobs in config | row 1 (none defaulted, unknown keys refused) | Covered |
+
+Not covered by any row: the named-decision test (T4) and the worked lifecycle example (T3) belong inside row #1 (P9, P10); running one judge over a range of dates by hand (T12) becomes B5 (P11); per-cell telemetry on no-model cells (T22) and retryable fault words (T19) have no consumer yet.
+
+One judge's council.tenants entry through its life, in row #1's shape (slug, lifecycle_status, runs_model; none defaulted, unknown keys refused, each slug once):
+
+```json
+{"slug": "summary-fidelity-judge", "lifecycle_status": "paused", "runs_model": false}
+{"slug": "summary-fidelity-judge", "lifecycle_status": "active", "runs_model": false}
+{"slug": "summary-fidelity-judge", "lifecycle_status": "paused", "runs_model": false}
+{"slug": "summary-fidelity-judge", "lifecycle_status": "retired", "runs_model": false}
+```
+
+Paused when the judge's tenant module lands; active only by the owner's named decision at its switch; paused again if a defect is found, its rows kept and only nights inside the repair window judged on its return; retired when replaced, its slug never reused. The committed list once the judge lands:
+
+```json
+"tenants": [
+  {"slug": "content-similarity-judge", "lifecycle_status": "active", "runs_model": true},
+  {"slug": "summary-fidelity-judge", "lifecycle_status": "paused", "runs_model": false}
+]
+```
 
 Table S - the gap review this plan rests on (Fowler, 2026-10-11)
 
