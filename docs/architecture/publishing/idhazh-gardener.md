@@ -389,7 +389,8 @@ for each is written by `report.py` and is not on the site.
 
 **Every line a task logs is one event: one line of JSON on stderr.** Each event
 is a model in `backend/idhazh/contracts/gardener_events.py`, and
-`backend/idhazh/gardener/event_log.py` writes it. `idhazh gardener` and
+`backend/idhazh/gardener/event_log.py` supplies gardener events to the shared
+writer in `backend/idhazh/event_lines.py`. `idhazh gardener` and
 `gardener_publish.py` install that module's one handler, at the level
 `config/idhazh.json` names. A line starts with three keys: `event`, the event's
 name; `at`, the UTC instant the line was made, to the millisecond, with a `Z`;
