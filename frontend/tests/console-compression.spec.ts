@@ -12,7 +12,8 @@ import {
 	type SummaryBand,
 	type TelemetryRow
 } from '../src/lib/charts/series';
-import { dayBefore, openServed } from './support/served-telemetry';
+import { dayBefore } from './support/served-telemetry';
+import { openRetained as openServed } from './support/retained-telemetry';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -48,7 +49,8 @@ const REPO = resolve(process.cwd(), '..');
  * rather than on a timeout means this cannot pass by being slow enough.
  */
 async function open(page: Page): Promise<void> {
-	await page.goto('/console/');
+	await openServed(page, ({ end }) => Array.from({ length: 8 }, (_, index) =>
+		published(end, `length-${index}`, 400, askedFor(400).target_words_min)));
 	// The count, not the flag. `data-telemetry-fetching` reads `no` before the
 	// first fetch starts as well as after the last one lands, so waiting on it
 	// alone would go straight through on an empty page.

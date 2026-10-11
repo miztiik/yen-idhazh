@@ -21,6 +21,15 @@
 
 import { expect, test, type Locator, type Page } from './support/door-page';
 import { coverage, SPARSE_COVERAGE } from '../src/lib/charts/frame';
+import { openRetained } from './support/retained-telemetry';
+import { telemetryRow } from './support/telemetry-row';
+import { dayBefore } from './support/served-telemetry';
+
+async function openCoverage(page: Page) {
+	await openRetained(page, ({ end }) => [0, 1].flatMap((ago) => Array.from({ length: 8 }, (_, index) =>
+		telemetryRow({ date: dayBefore(end, ago), item_id: `coverage-${ago}-${index}`,
+			source_words: 400, summary_words: 60, fetch_ms: 100, extract_ms: 20, summarize_ms: 600 }))));
+}
 
 /** Every chart that declares a coverage sentence, and what it draws a mark
  * with. The selectors name a mark on the plot, never the sentence - the whole
@@ -91,7 +100,7 @@ async function note(page: Page, name: string) {
 }
 
 test('THE ORACLE: a chart that measured part of its window says which part', async ({ page }) => {
-	await page.goto('/console/');
+	await openCoverage(page);
 
 	let sparse = 0;
 	for (const chart of CHARTS) {
@@ -158,7 +167,7 @@ test('THE ORACLE: a chart that measured part of its window says which part', asy
 });
 
 test('a pointer on an unmeasured column is told the day was not measured', async ({ page }) => {
-	await page.goto('/console/');
+	await openCoverage(page);
 
 	let checked = 0;
 	for (const chart of CHARTS) {

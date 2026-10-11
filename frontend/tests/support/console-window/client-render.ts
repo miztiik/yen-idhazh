@@ -54,10 +54,10 @@ const result = await build({
 });
 return result.outputFiles[0].text;
 }
-export async function drawClient(page: Page, browserCode: string, name: string, props: Record<string, unknown>) {
+export async function drawClient(page: Page, browserCode: string, name: string, props: Record<string, unknown>, styles: readonly string[] = []) {
 	await page.route('**/l34-generated-records', (route) => route.fulfill({
 		contentType: 'text/html',
-		body: '<!doctype html><html><body><main></main></body></html>'
+		body: `<!doctype html><html><head>${styles.map((href) => `<link rel="stylesheet" href="${href}">`).join('')}</head><body><main></main></body></html>`
 	}));
 	await page.goto('/l34-generated-records');
 	await page.addScriptTag({ content: browserCode });

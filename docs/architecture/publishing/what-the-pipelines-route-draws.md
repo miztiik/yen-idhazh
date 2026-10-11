@@ -66,6 +66,14 @@ percentages divide failed rows by recorded rows, since the declared slice carrie
 no article identity. Private payload shrinkage is a signed reading, not a zero
 bar. No unavailable value is filled with zero to get a gate through.
 
+Retained telemetry components keep independent real-input correctness cases
+off-route; those fixtures do not restore compression, source rankings or item
+details to Pipelines. Populated native panel gates use packed declared records
+with explicit feed timestamps and measured clocks. The ordinary canary's
+inferred article timestamp is not treated as a measured age. With scripts
+disabled, native frames explicitly say the article record needs JavaScript;
+private published-day marks remain in the document.
+
 The flag count keeps the newest recorded boolean for each distinct article;
 null cells cannot replace a flag, and conflicting booleans on its latest
 recorded day stay unknown in any row order. Counts remain exactly the recorded

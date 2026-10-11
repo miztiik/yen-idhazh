@@ -1,6 +1,8 @@
 import { expect, test, type Page } from './support/door-page';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-chart-pending';
+import { settled } from './support/pipelines-ledgers';
+import { DRIVERS, stateSelector } from './support/panel-drivers/pipelines';
 
 /**
  * What stands in a browser-drawn chart's box until a mark lands there, and what
@@ -124,6 +126,42 @@ for (const { id, href: ROUTE, label } of BAND_UNREAD.routes) {
 	const expected = BY_ROUTE[id];
 	if (expected === null) continue;
 	test.describe(label, () => {
+if (expected.nativeLedger) {
+	test('native chart frames keep the actual ledger wait until the index arrives', async ({ page }) => {
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => release = resolve);
+		await page.route('**/state/compact/item-health/index/*.json', async (route) => {
+			await held;
+			await route.fallback();
+		});
+		try {
+			await openCharts(page, ROUTE);
+			await expect(page.locator(stateSelector('stage-timings', 'loading'))).toBeVisible();
+			await expect(page.locator('[data-timing="plot"]')).toHaveCount(0);
+		} finally { release(); }
+		await settled(page);
+		await expect(page.locator('[data-timing="plot"]')).toBeAttached();
+		await expect(page.locator(stateSelector('stage-timings', 'loading'))).toHaveCount(0);
+	});
+	test('a refused native record says unreachable rather than promising a chart', async ({ page }) => {
+		await DRIVERS['stage-timings'].unreachable(page);
+		await openCharts(page, ROUTE);
+		await settled(page);
+		await expect(page.locator(stateSelector('stage-timings', 'unreachable'))).toBeVisible();
+		await expect(page.locator('[data-timing="plot"]')).toHaveCount(0);
+	});
+	test.describe('native frames before JavaScript', () => {
+		test.use({ javaScriptEnabled: false, viewport: PHONE });
+		test('native frames say the record needs JavaScript while private published marks remain', async ({ page }) => {
+			await openCharts(page, ROUTE);
+			await expect(page.locator('[data-reserved="stage-timings"]')).toBeVisible();
+			await expect(page.locator('[data-native-script-required]')).toBeVisible();
+			await expect(page.locator('[data-native-script-required]')).toContainText('JavaScript');
+			await expect(page.locator('[data-published-bar]').first()).toBeAttached();
+			await expect(page.locator('[data-timing="plot"]')).toHaveCount(0);
+		});
+	});
+}
 if (expected.browserDrawn) {
 test('THE ORACLE: a chart below the draw line keeps its sentence until a mark lands', async ({
 	page

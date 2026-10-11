@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { failureLoad } from '../src/lib/charts/glance';
 import { failureSeries, type TelemetryRow } from '../src/lib/charts/series';
-import { dayBefore, items, openServed } from './support/served-telemetry';
+import { dayBefore, items } from './support/served-telemetry';
+import { openRetained as openServed } from './support/retained-telemetry';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -182,7 +183,7 @@ test('drawn rate lines stop at gaps, keep measured zero and leave singleton dots
 test('every rate the chart prints carries its denominator in the same sentence', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await openServed(page, ({ end }) => items(end, 'retained', 'publish', 'ok', 8));
 
 	const section = page.locator('[data-failure-panels]');
 	await expect(section, 'the failure surface is gone, so nothing below is tested').toBeVisible();

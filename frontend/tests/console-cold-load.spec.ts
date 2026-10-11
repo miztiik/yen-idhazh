@@ -257,9 +257,8 @@ test('a cold console load settles inside four serial round trips', async ({ page
 	// first fetch starts as well as after the last one lands.
 	await page.waitForFunction(
 		() =>
-			Number(
-				document.querySelector('[data-telemetry-rows]')?.getAttribute('data-telemetry-rows') ?? 0
-			) > 0,
+			document.querySelector('[data-console-panels="pipelines"]')?.getAttribute('data-route-state') === 'ok'
+				&& document.querySelector('[data-timing="plot"]') !== null,
 		undefined,
 		{ timeout: 20_000 }
 	);

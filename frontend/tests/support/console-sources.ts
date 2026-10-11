@@ -131,10 +131,10 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
 		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
 		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'pipelines-ledgers.ts', 'published-site.ts', 'published.ts',
-		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
+		'range-host.ts', 'reduction-input.ts', 'retained-telemetry.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
 		'telemetry-row.ts', 'views.ts'
 	],
-	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte'],
+	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte', 'RetainedTelemetry.svelte'],
 	'tests/support/console-window': [
 		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
 		'client-render.ts', 'server-panels.ts'

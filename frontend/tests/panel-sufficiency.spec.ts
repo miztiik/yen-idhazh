@@ -39,6 +39,7 @@ import {
 import { serverCompiler } from './support/server-render';
 import { explorerConfig } from '../src/lib/server/config';
 import { judgementRoute } from './support/judgement-route';
+import { populatedPanels } from './support/panel-drivers/pipelines';
 
 const judgementTest = browserTest.extend<object, { judgement: Awaited<ReturnType<typeof judgementRoute>> }>({
 	judgement: [async ({}, use, info) => {
@@ -358,6 +359,7 @@ test.describe('the judged panels', () => {
 				const { judged } = panels.routes.find((one) => one.key === route)!;
 				test.info().annotations.push({ type: 'judged panels', description: `${judged.length}: ${judged.join(', ') || 'none yet'}` });
 				test.skip(judged.length === 0, `config/console/${route}.json judges no panels`);
+				if (route === 'pipelines') await populatedPanels(page, test.info().workerIndex);
 				if (route === 'data-explorer') await settledExplorer(page, width, theme);
 				else await opened(page, origin ? `${origin}${address.slice(1)}` : address, width, theme);
 				for (const id of judged) {
@@ -406,7 +408,9 @@ test.describe('the judged panels', () => {
 							await expect(panel, `the page draws no panel with the id ${id}`).toHaveCount(1);
 							await showPanel(page, id);
 							await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
-							const selector = route === 'data-explorer'
+							const selector = state !== 'refused' && BY_ROUTE[route].stateSelector
+								? BY_ROUTE[route].stateSelector!(id, state)
+								: route === 'data-explorer'
 								? state === 'loading' ? '.shimmer, [data-state="loading"]' : `[data-state="${state}"]`
 								: state === 'loading' ? '[data-panel-state="loading"]' : `[data-empty-state="${state}"]`;
 							await expect(panel.locator(selector)).toHaveCount(1);

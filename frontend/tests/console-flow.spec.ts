@@ -160,7 +160,8 @@ test('THE ORACLE: at 390 the flow is a list, and it carries what the diagram dre
 		node.scrollIntoView({ behavior: 'instant', block: 'center' });
 	});
 	await page.locator('[data-flow="chart"] svg').waitFor({ state: 'attached', timeout: 15_000 });
-	await page.waitForTimeout(1200);
+	await chartsReady(page);
+	await expect(page.locator('[data-flow-shape="diagram"]')).toBeVisible();
 
 	const wide = await flowLabels(page);
 	expect(wide, 'the console drew no flow at all, so nothing here is tested').not.toBeNull();
@@ -190,8 +191,8 @@ test('THE ORACLE: at 390 the flow is a list, and it carries what the diagram dre
 	// Every value the diagram printed, as a number, so the two shapes can be
 	// compared rather than eyeballed.
 	const fromDiagram = drawn
-		.flatMap((text) => text.match(/[\d,]+\s+\(\d+%\)/g) ?? [])
-		.map((one) => Number(one.split(/\s+/)[0].replace(/,/g, '')))
+		.flatMap((text) => text.match(/[\d,]+$/g) ?? [])
+		.map((one) => Number(one.replace(/,/g, '')))
 		.sort((a, b) => a - b);
 	expect(fromDiagram.length, 'no diagram label carried a count').toBeGreaterThan(0);
 
@@ -199,18 +200,16 @@ test('THE ORACLE: at 390 the flow is a list, and it carries what the diagram dre
 	await page.setViewportSize(PHONE);
 	await page.waitForTimeout(600);
 
-	await expect(page.locator('[data-flow="chart"]')).toBeHidden();
-	const list = page.locator('[data-flow-steps]');
+	await expect(page.locator('[data-flow-shape="diagram"]')).toHaveCount(0);
+	const list = page.locator('[data-flow-shape="stepped"]');
 	await expect(list).toBeVisible();
-	await expect(list.locator('[data-flow-step]')).toHaveCount(4);
+	await expect(list.locator('.stepped-stages > li')).toHaveCount(4);
 
 	const fromList = await page
-		.locator('[data-flow-step-value], [data-flow-lost-value]')
+		.locator('.stepped-count, .stepped-drops > li')
 		.evaluateAll((nodes) =>
 			nodes.map((node) =>
-				Number(
-					node.getAttribute('data-flow-step-value') ?? node.getAttribute('data-flow-lost-value')
-				)
+				Number((node.textContent?.match(/([\d,]+)\s+\(\d+%\)/)?.[1] ?? '').replace(/,/g, ''))
 			)
 		);
 	expect(
@@ -220,13 +219,12 @@ test('THE ORACLE: at 390 the flow is a list, and it carries what the diagram dre
 
 	// And the branch values still add back to the inflow, read off the page.
 	const stages = await page
-		.locator('[data-flow-step]')
+		.locator('.stepped-stages > li')
 		.evaluateAll((nodes) =>
 			nodes.map((node) => ({
-				value: Number(node.querySelector('[data-flow-step-value]')?.getAttribute('data-flow-step-value')),
-				lost: Number(
-					node.querySelector('[data-flow-lost-value]')?.getAttribute('data-flow-lost-value') ?? 0
-				)
+				value: Number((node.querySelector('.stepped-count')?.textContent?.match(/([\d,]+)\s+\(/)?.[1] ?? '').replace(/,/g, '')),
+				lost: [...node.querySelectorAll('.stepped-drops > li')].reduce((total, drop) =>
+					total + Number((drop.textContent?.match(/([\d,]+)\s+\(/)?.[1] ?? '').replace(/,/g, '')), 0)
 			}))
 		);
 	for (const [index, stage] of stages.entries()) {
@@ -244,17 +242,17 @@ for (const size of [PHONE, NARROW]) {
 		await page.goto('/console/');
 		await chartsReady(page);
 
-		const list = page.locator('[data-flow-steps]');
+		const list = page.locator('[data-flow-shape="stepped"]');
 		await expect(list).toBeVisible();
 
 		// Nothing runs past the column it is in, and no two lines of the list sit
 		// on top of each other. That is the whole of "it survives a phone".
 		const bad = await page.evaluate(() => {
-			const root = document.querySelector('[data-flow-steps]');
+			const root = document.querySelector('[data-flow-shape="stepped"]');
 			if (root === null) return ['no list'];
 			const frame = root.getBoundingClientRect();
 			const problems: string[] = [];
-			const rows = [...root.querySelectorAll('p')];
+			const rows = [...root.querySelectorAll('.stepped-name, .stepped-count, .stepped-drops > li')];
 			for (const row of rows) {
 				const rect = row.getBoundingClientRect();
 				if (rect.right > frame.right + 0.5 || rect.left < frame.left - 0.5) {
@@ -279,7 +277,7 @@ for (const size of [PHONE, NARROW]) {
 		// Every count is beside the name of what it counts. A number on its own
 		// line is the defect the diagram had, in a different shape.
 		const named = await list
-			.locator('[data-flow-step], [data-flow-lost]')
+			.locator('.stepped-stages > li, .stepped-drops > li')
 			.evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
 		expect(named.length).toBeGreaterThan(0);
 		for (const text of named) {
@@ -292,10 +290,11 @@ test('the diagram comes back above the breakpoint', async ({ page }) => {
 	// The pair is a swap, not a deletion. A width that can hold the diagram gets
 	// it, and the list is not drawn beside it - two shapes of one flow on one
 	// screen is two answers to one question.
-	await page.setViewportSize({ width: BREAKPOINT + 2, height: 900 });
+	await page.setViewportSize(DESKTOP);
 	await page.goto('/console/');
 	await chartsReady(page);
 
 	await expect(page.locator('[data-flow="chart"]')).toBeVisible();
-	await expect(page.locator('[data-flow-steps]')).toBeHidden();
+	await expect(page.locator('[data-flow-shape="diagram"]')).toBeVisible();
+	await expect(page.locator('[data-flow-shape="stepped"]')).toHaveCount(0);
 });

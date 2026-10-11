@@ -4,6 +4,7 @@ import { modelRules } from '../src/lib/charts/frame';
 import { pipelineChanges } from '../src/lib/server/model-work';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-model-rule';
+import { chartsReady } from './support/charts-ready';
 
 /**
  * The model-change rule, and the judgement behind it.
@@ -79,6 +80,7 @@ interface Declared {
  */
 async function declaredOn(page: Page, route: string): Promise<Declared[]> {
 	await page.goto(route);
+	await chartsReady(page);
 	return page.locator('[data-model-rule]').evaluateAll(
 		(nodes, at) =>
 			nodes.map((node) => {

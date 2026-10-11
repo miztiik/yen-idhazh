@@ -172,7 +172,7 @@ test('THE ORACLE: chrome reads top to bottom - title, strip, completeness, band,
 			completeness: at('[data-console-completeness]'),
 			band: at('[data-console-band]'),
 			status: at('[data-window-status]'),
-			content: at('[data-surface="operator"] .console-h2')
+			content: at('[data-surface="operator"] .panel-title, [data-surface="operator"] .console-h2')
 		};
 	});
 	for (const [name, top] of Object.entries(order)) {
@@ -408,9 +408,9 @@ test(`THE ORACLE: the band is the first payload the console asks for on ${href}`
 	// pass by the band being the only payload in the list.
 	await page.waitForFunction(
 		() =>
-			Number(
-				document.querySelector('[data-telemetry-rows]')?.getAttribute('data-telemetry-rows') ?? 0
-			) > 0,
+			document.querySelector('[data-console-panels][data-route-state]') !== null
+				? document.querySelector('[data-console-panels][data-route-state]')?.getAttribute('data-route-state') !== 'loading'
+				: Number(document.querySelector('[data-telemetry-rows]')?.getAttribute('data-telemetry-rows') ?? 0) > 0,
 		undefined,
 		{ timeout: 20_000 }
 	);

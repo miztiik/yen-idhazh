@@ -168,6 +168,7 @@
 </script>
 
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
+<noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
 <WindowControlSource days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
 	ready={mounted} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
@@ -183,7 +184,7 @@
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
 					<Panel {id} title={titles[id]} wide verdict={id === 'at-a-glance'}>
-						<div data-windowed={id === 'run-timeline' ? undefined : id} data-window-days={id === 'run-timeline' ? undefined : windowDays}
+						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
 							data-panel-state={mounted && reach === null && ['at-a-glance', 'site-cost-per-item', 'chart-drawing'].includes(id) ? 'loading' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />

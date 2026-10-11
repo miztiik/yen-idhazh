@@ -14,7 +14,7 @@ import { publishedCharts, telemetryMonths, telemetryRows } from '../src/lib/serv
 import { reliability, resultLabel, type FeedRecord } from '../src/lib/feed-health';
 import { days } from './support/consecutive-days';
 import { publishedSite } from './support/published-site';
-import { openServed } from './support/served-telemetry';
+import { openRetained } from './support/retained-telemetry';
 import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
 
@@ -1246,28 +1246,23 @@ function everyDayOf(month: string): string {
 	);
 }
 
-test('the telemetry viewport renders the published projection', async ({ page }) => {
-	// Every month the page asks for is answered with a shard the test writes, one
-	// row on every day of it, so the window the page opens on holds one row a day.
-	const asked: string[] = [];
-	await page.route('**/telemetry/*.csv', (route) => {
-		const month = /\/telemetry\/(\d{4}-\d{2})\.csv$/.exec(new URL(route.request().url()).pathname)?.[1];
-		if (month === undefined) return route.fulfill({ status: 404 });
-		asked.push(month);
-		return route.fulfill({ status: 200, contentType: 'text/csv', body: everyDayOf(month) });
-	});
-	await page.goto(routeHref('pipelines'));
+test('the retained telemetry viewport renders real independent projection rows', async ({ page }) => {
+	// The retained real component gets one independent row on every visible day.
+	const { window } = await openRetained(page, (opened) =>
+		daysInWindow(opened).map((date) => telemetryRow({ date, run_id: `${date}-1`, item_id: 'served',
+			source_words: 400, summary_words: 60 })));
 
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-band-distance]')).toBeVisible();
 
-	await expect(page.locator('[data-viewport-control]')).toContainText(`${DEFAULT_WINDOW_DAYS} rows in view`);
-	expect(asked.length, 'the page asked for no month, so it drew no served row').toBeGreaterThan(0);
+	await expect(page.locator('[data-viewport-control]')).toContainText(`${daysInWindow(window).length} rows in view`);
+	await expect(page.locator('[data-telemetry-rows]')).toHaveAttribute('data-telemetry-rows', String(daysInWindow(window).length));
 });
 
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
-	await page.goto(routeHref('pipelines'));
+	await openRetained(page, ({ end }) => Array.from({ length: FAILURE_LIST_MAX + 4 }, (_, item) =>
+		telemetryRow({ date: end, item_id: `failed-${item}`, outcome: 'failed', code: 'timeout' })));
 
 	// The rows sit behind a disclosure, so the control that reaches them is what
 	// has to work before anything about them can be read.
@@ -1277,10 +1272,8 @@ test('the failed-item list is capped, states its scope, and offers the rest', as
 
 	const rows = page.locator('[data-failure-list="rows"] tbody tr');
 	const empty = page.locator('[data-failure-list="empty"]');
-	if ((await empty.count()) === 1) {
-		await expect(empty).toBeVisible();
-		return;
-	}
+	await expect(empty).toHaveCount(0);
+	await expect(rows).toHaveCount(FAILURE_LIST_MAX);
 
 	// Whatever the fixture holds, the list never renders more than the cap.
 	expect(await rows.count()).toBeLessThanOrEqual(FAILURE_LIST_MAX);
@@ -1330,7 +1323,7 @@ test('the candle reads out its day and every series at that column', async ({ pa
 test('keyboard alone pans the viewport and steps its window through the presets', async ({
 	page
 }) => {
-	await page.goto(routeHref('pipelines'));
+	await openRetained(page, () => []);
 
 	const viewport = page.locator('[data-viewport-control]');
 	await viewport.focus();
@@ -1370,11 +1363,11 @@ test('keyboard alone pans the viewport and steps its window through the presets'
 
 test('panning to a month with no rows leaves a visible gap', async ({ page }) => {
 	// One row on every day of the window the page opens on, and none before it.
-	const { window } = await openServed(page, (opened) =>
+	const { window } = await openRetained(page, (opened) =>
 		daysInWindow(opened).map((date) => telemetryRow({ date, run_id: `${date}-1`, item_id: 'served' }))
 	);
 	const viewport = page.locator('[data-viewport-control]');
-	await expect(viewport).toContainText(new RegExp(`(^|\\D)${DEFAULT_WINDOW_DAYS}\\s+rows in view`));
+	await expect(viewport).toContainText(new RegExp(`(^|\\D)${daysInWindow(window).length}\\s+rows in view`));
 	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
 
 	// Back, one pan at a time, until the window ends before the first day served.
@@ -1406,8 +1399,8 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	// table all still draw. The rows are behind a disclosure now, so what has to
 	// survive is the control that reaches them and the scope sentence it carries -
 	// not the table itself.
-	await expect(page.locator('[data-failure-toggle]')).toBeVisible();
-	await expect(page.locator('[data-failure-scope]')).toContainText('in this window.');
+	await expect(page.locator('[data-console-panel-id="failure-mix"]')).toBeVisible();
+	await expect(page.locator('[data-console-panels="pipelines"]')).not.toHaveAttribute('data-route-state', 'loading');
 	await expect(page.getByText(BY_ROUTE.pipelines!.stageHeading!)).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	// The daily rows are behind a disclosure now, so what has to survive is the

@@ -12,7 +12,8 @@ import {
 } from '../src/lib/charts/series';
 import { rank, tailSentence, type Rankable, type RankedDisplay } from '../src/lib/charts/rank';
 import type { TimeWindow } from '../src/lib/charts/viewport';
-import { items, openServed } from './support/served-telemetry';
+import { items } from './support/served-telemetry';
+import { openRetained as openServed } from './support/retained-telemetry';
 import { telemetryRow } from './support/telemetry-row';
 
 /**
@@ -468,7 +469,7 @@ test.describe('THE ORACLE: sources ranked by the articles their failures cost', 
 
 test.describe('the failure section on the page', () => {
 	test('the two rankings sit above the rows they explain', async ({ page }) => {
-		await page.goto('/console/');
+		await openServed(page, () => builtRows());
 
 		const order = await page.evaluate(() => {
 			const seen = ['[data-failure-ledger]', '[data-source-losses]', '[data-failure-list]'].map(
@@ -489,7 +490,7 @@ test.describe('the failure section on the page', () => {
 	test('the item rows start shut, and the summary says how many are behind it', async ({
 		page
 	}) => {
-		await page.goto('/console/');
+		await openServed(page, () => builtRows());
 
 		// The rows are the only child of this page that can outgrow the screen.
 		// Uncapped and open they measured 7,824px against 800 rows and put the

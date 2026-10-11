@@ -16,6 +16,7 @@ export type PanelDrivers = Readonly<Record<BasicNothing, Driver>> &
 export interface RouteDrivers {
 	readonly DRIVERS: Readonly<Record<string, PanelDrivers>>;
 	readonly BUILD_TIME: readonly string[];
+	readonly stateSelector?: (id: string, state: BasicNothing) => string;
 }
 
 export const BY_ROUTE: Readonly<Record<RouteId, RouteDrivers>> = {

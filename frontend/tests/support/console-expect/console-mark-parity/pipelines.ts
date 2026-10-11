@@ -11,7 +11,8 @@ export const EXPECT: RouteExpect = {
 			attrs: ['data-stage-mark', 'data-stage-zero']
 		},
 		{
-			name: 'band distance',
+			name: 'retained band distance',
+			retainedTelemetry: true,
 			root: '[data-band-distance]',
 			domainAttr: 'data-band-domain',
 			frame: '[data-band-distance] svg',

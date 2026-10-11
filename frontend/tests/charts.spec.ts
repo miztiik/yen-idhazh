@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chartFlow } from '../src/lib/charts/chart-flow';
 import { SENTINEL_PATTERN, paint } from '../src/lib/charts/theme';
+import { chartsReady } from './support/charts-ready';
 
 /**
  * A chart on this site has to be two things at once, and the two pull apart.
@@ -49,9 +50,7 @@ test.describe('the prerendered chart', () => {
 		const html = readFileSync(join(BUILD, 'console', 'index.html'), 'utf8');
 
 		expect(html).toContain('data-flow="chart"');
-		expect(html, 'the stepped list is what carries the flow without a script').toContain(
-			'data-flow-steps'
-		);
+		expect(html, 'the private flow geometry must be in the prerendered document').toContain('data-flow-shape="diagram"');
 		for (const label of ['Reached', 'Asked the model', 'Drafted', 'Published']) {
 			expect(html).toContain(label);
 		}
@@ -61,21 +60,22 @@ test.describe('the prerendered chart', () => {
 		}
 		// And every one of them carries its number, so the list is the flow and
 		// not a key to a picture nothing has drawn.
-		expect(html).toContain('data-flow-step-value');
-		expect(html).toContain('data-flow-lost-value');
+		const diagram = html.slice(html.indexOf('data-flow="chart"')).split('</svg>')[0];
+		expect(diagram).toMatch(/<path[^>]+aria-label="[^"]+: [\d,]+"/);
+		expect(diagram).toMatch(/<text[^>]*>Reached [\d,]+<\/text>/);
 	});
 
 	test('colour leaves as a token, so both themes work before any script runs', () => {
 		const html = readFileSync(join(BUILD, 'console', 'index.html'), 'utf8');
-		const flow = html.slice(html.indexOf('data-flow-steps'));
+		const flow = html.slice(html.indexOf('data-flow="chart"')).split('</svg>')[0];
 
 		// Each stage names a custom property rather than a hex. This is the whole
 		// reason a theme change costs nothing and does not need JavaScript. The
 		// swatches on the stepped list carry the tokens the diagram's bands used
 		// to, so the two shapes stay one palette.
-		for (const token of ['--chart-1', '--chart-2', '--chart-3', '--chart-4']) {
-			expect(flow).toContain(`var(${token})`);
-		}
+		expect(flow).toContain('var(--chart-1)');
+		expect(flow).toContain('fill-opacity="0.55"');
+		expect(flow).toContain('fill-opacity="0.28"');
 	});
 
 	test('no sentinel colour reaches a reader on any page', () => {
@@ -249,13 +249,10 @@ test.describe('the live chart', () => {
 		// come to. Before that the marks on screen are the server's, and those
 		// follow the theme through a custom property without being repainted at
 		// all - which is the whole point of them, and not what this test is about.
-		const host = page.locator('[data-flow="chart"] [data-chart]');
+		await chartsReady(page);
+		const host = page.locator('[data-flow="chart"] [data-flow-shape="diagram"]');
 		await host.scrollIntoViewIfNeeded();
-		await expect(host, 'the flow diagram never came alive').toHaveAttribute(
-			'data-chart',
-			'live',
-			{ timeout: 20_000 }
-		);
+		await expect(host, 'the real flow diagram never drew').toBeVisible();
 		const fills = await page.evaluate(async () => {
 			const read = () =>
 				[
@@ -263,7 +260,7 @@ test.describe('the live chart', () => {
 						'[data-flow="chart"] svg path, [data-flow="chart"] svg rect, [data-flow="chart"] svg polygon'
 					)
 				]
-					.map((node) => node.getAttribute('fill') ?? '')
+					.map((node) => getComputedStyle(node).fill)
 					.filter((fill) => fill !== '' && fill !== 'none');
 			const set = async (theme: string) => {
 				document.documentElement.setAttribute('data-theme', theme);

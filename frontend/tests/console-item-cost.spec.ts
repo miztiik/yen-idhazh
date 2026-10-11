@@ -9,6 +9,9 @@ import { telemetryRows } from '../src/lib/server/payload';
 import { windowDay } from '../src/lib/server/window-day';
 import { publishedSite } from './support/published-site';
 import { ONE_DAYS, spanSaid } from './support/span-said';
+import { openRetained } from './support/retained-telemetry';
+import { telemetryRow } from './support/telemetry-row';
+import { dayBefore } from './support/served-telemetry';
 
 /**
  * What one item cost the model, checked against answers written out here rather
@@ -502,36 +505,31 @@ async function drawn(page: Page) {
 		return {
 			days: Number(node.getAttribute('data-window-days')),
 			says: (node.textContent ?? '').replace(/\s+/g, ' ').trim(),
-			reading: histogram('reading-the-prompt'),
-			writing: histogram('writing-the-summary')
+			reading: histogram('item-reading'),
+			writing: histogram('item-writing')
 		};
 	});
 }
 
-test.describe('the section on the built console', () => {
-	test('THE ORACLE: the share is carried by figures, and no track is drawn', async ({ page }) => {
-		// The two-segment track that used to draw this share was one flat bar on
-		// no time axis, and the note under it told the reader not to read its
-		// direction. It is asserted gone through the named state that replaced it
-		// rather than through a sentence: a panel holds exactly one carrier for
-		// this share, and a rebuilt track either takes that name - and fails the
-		// value - or stands beside it and fails the count.
-		await page.goto('/console/');
-		const panel = page.locator('[data-console-panel="How much of each prompt was already in memory"]');
+async function openNativeCost(page: Page) {
+	await openRetained(page, ({ end }) => Array.from({ length: 8 }, (_, ago) =>
+		Array.from({ length: 8 }, (_, item) => telemetryRow({
+			date: dayBefore(end, ago), item_id: `cost-${ago}-${item}`,
+			prefill_ms: 1000, decode_ms: 4000, input_tokens: 100, cached_tokens: 10, output_tokens: 40
+		}))).flat());
+}
+
+test.describe('the real native item-cost component', () => {
+	test('THE ORACLE: native cost retains the measured clock and sends prompt reuse to Hardware', async ({ page }) => {
+		await openNativeCost(page);
+		const panel = page.locator('[data-windowed="item-cost"]');
 		await expect(panel).toBeVisible();
 
 		const carrier = panel.locator('[data-item-cost-share]');
-		await expect(carrier, 'the share has no carrier, or has grown a second one').toHaveCount(1);
-		await expect(carrier).toHaveAttribute('data-item-cost-share', 'figures');
-
-		// The counts the row kept. Each is a printed figure inside that carrier.
-		for (const name of [
-			'data-item-cost-read-tokens',
-			'data-item-cost-reused-tokens',
-			'data-item-cost-reused-pct'
-		]) {
-			await expect(carrier.locator(`[${name}]`), `${name} left the panel`).toHaveCount(1);
-		}
+		await expect(carrier, 'the retired prompt-share carrier returned').toHaveCount(0);
+		await expect(panel.locator('[data-item-cost-pairs]')).toContainText('Prompt reuse is on');
+		await expect(panel.getByRole('link', { name: 'Hardware' })).toHaveAttribute('href', '/console/machine/');
+		await expect(panel.locator('[data-item-cost-lead]')).toHaveText('4.00 seconds to write one summary.');
 	});
 
 	test('the section draws the window the control set, and every item it counted is in a bar', async ({
@@ -541,21 +539,20 @@ test.describe('the section on the built console', () => {
 		// so the day count it prints has to be the one the control set. Which rows
 		// each window counts is the oracle above, on a site the test builds; what is
 		// left on the built console is that the page draws what it was handed.
-		await page.goto('/console/');
+		await openNativeCost(page);
 		await hydrated(page);
 		for (const preset of PRESETS) {
 			await setWindow(page, preset);
 			const marks = await drawn(page);
 			expect(marks.days, 'the section is drawing a window the control did not set').toBe(preset);
-			expect(marks.says, `the section never says it is showing ${preset} days`).toMatch(
-				spanSaid(preset)
-			);
 			expect(marks.says, 'the section says "1 days"').not.toMatch(ONE_DAYS);
 			for (const [name, shown] of [
 				['reading', marks.reading],
 				['writing', marks.writing]
 			] as const) {
-				if (shown === null) continue;
+				expect(shown, `${name} has no positive cohort`).not.toBeNull();
+				if (shown === null) throw new Error(`${name} has no positive cohort`);
+				expect(shown.n).toBe(Math.min(preset, 8) * 8);
 				// A count outside every bar is a chart quietly showing fewer items than
 				// it says it counted.
 				const barred = shown.bars.reduce((total, n) => total + n, 0);
@@ -568,14 +565,14 @@ test.describe('the section on the built console', () => {
 		// Reading and writing cost different amounts per token and are acted on
 		// differently. One "model seconds" chart would hide which of them moved,
 		// so the section carries two charts or it carries none.
-		await page.goto('/console/');
+		await openNativeCost(page);
 		const section = page.locator('[data-windowed="item-cost"]');
 		await expect(
-			section.locator('[data-histogram="reading-the-prompt"]'),
+			section.locator('[data-histogram="item-reading"]'),
 			'the reading clock lost its own chart'
 		).toHaveCount(1);
 		await expect(
-			section.locator('[data-histogram="writing-the-summary"]'),
+			section.locator('[data-histogram="item-writing"]'),
 			'the writing clock lost its own chart'
 		).toHaveCount(1);
 		// `data-histogram-n` and not `data-histogram`: the component writes the
@@ -591,57 +588,37 @@ test.describe('the section on the built console', () => {
 		// summary, so "5 summaries read in 32 to 64 seconds" names the wrong thing.
 		// Two of the three were caught by reading the built page; the third was
 		// only visible in a screenshot.
-		await page.goto('/console/');
-		const chart = page.locator('[data-histogram="reading-the-prompt"]');
+		await openNativeCost(page);
+		const chart = page.locator('[data-histogram="item-reading"]');
 		const label = (await chart.locator('svg').getAttribute('aria-label')) ?? '';
 		const said = `${await chart.innerText()} ${label}`.toLowerCase();
 		expect(said, 'the reading chart never says what it is counting').toContain('prompt');
 		expect(said, 'the reading chart still calls a prompt a summary').not.toContain('summar');
 	});
 
-	test('the share is printed and never drawn as a trend, and the page says why', async ({
+	test('paired clock counts follow the window without restoring the retired prompt-share trend', async ({
 		page
 	}) => {
-		// A longer article lowers the share while the part already in memory stays
-		// put, so a falling line would read as the cache getting worse when the
-		// articles merely got longer. The note says so only where its own two
-		// figures bear it out, and the oracle above holds which words each pair of
-		// figures gets. Left here is the page against itself: in every window the
-		// control offers, the note names that window and is the note its own two
-		// figures call for, whatever the canary holds.
-		await page.goto('/console/');
+		await openNativeCost(page);
 		await hydrated(page);
-		const note = page.locator('[data-item-cost-share-note]');
+		const note = page.locator('[data-item-cost-pairs]');
 		for (const preset of PRESETS) {
 			await setWindow(page, preset);
 			await expect(note, `no note under the share at ${preset} days`).toHaveCount(1);
 			const said = (await note.innerText()).replace(/\s+/g, ' ').trim();
-			const named =
-				/middle item had ([\d,]+) tokens (?:already )?in memory, and the most any item had was ([\d,]+) tokens/.exec(
-					said
-				);
-			expect(named, `the note names no middle and largest item: ${said}`).not.toBeNull();
-			const [middle, largest] = [named?.[1], named?.[2]].map((figure) =>
-				Number((figure ?? '').replace(/,/g, ''))
-			);
-			expect(said, `the note at ${preset} days is not the one its two figures call for`).toBe(
-				describeHeldPart({ days: preset, reusedMedian: middle, reusedWidest: largest })
-			);
+			const pairs = Math.min(preset, 8) * 8;
+			expect(said).toContain(`Reading: ${pairs} paired clocks and fresh-token counts; writing: ${pairs} paired clocks and output counts.`);
+			await expect(page.locator('[data-item-cost-share-note], [data-item-cost-share]')).toHaveCount(0);
 		}
 	});
 
-	test('a figure the ledger cannot answer prints a dash, never a zero', async ({ page }) => {
-		// Every figure in this section is a count or a whole percent, and a zero
-		// standing in for an absence is the one number nobody checks.
-		await page.goto('/console/');
-		const values = await page
-			.locator('[data-windowed="item-cost"] .cost-figure-value')
-			.allInnerTexts();
-		expect(values.length, 'the figures are gone - the scan is broken').toBeGreaterThan(3);
-		for (const text of values) {
-			expect(text.trim(), `"${text}" is neither a count, a percent nor a dash`).toMatch(
-				/^(-|\d[\d,]*%?)$/
-			);
-		}
+	test('unmeasured native clocks have no bars and unknown cache is never counted as zero', async ({ page }) => {
+		await openRetained(page, ({ end }) => [telemetryRow({ date: end, input_tokens: 100 })]);
+		const section = page.locator('[data-windowed="item-cost"]');
+		await expect(section.locator('[data-item-cost-lead]')).toHaveText('No summary-writing clock was measured.');
+		await expect(section.locator('[data-item-cost="item-reading"]')).toHaveText('No prompt clock was measured.');
+		await expect(section.locator('[data-item-cost="item-writing"]')).toHaveText('No summary clock was measured.');
+		await expect(section.locator('[data-histogram-n]')).toHaveCount(0);
+		await expect(section.locator('[data-item-cost-pairs]')).toContainText('1 prompts have no recorded cache count and are not treated as read whole.');
 	});
 });

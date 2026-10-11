@@ -2,6 +2,6 @@
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	readout: true,
-	handWritten: { id: 'failure-rate', rateSuffix: ' rate' },
+	handWritten: { id: 'failure-mix', rateSuffix: 'Summarize' },
 	engineSeries: null, keyboard: null, shape: null, recording: null, recordingLines: null
 };

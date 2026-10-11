@@ -37,6 +37,8 @@
  */
 
 import { expect, test, type Page } from './support/door-page';
+import { openRetained } from './support/retained-telemetry';
+import { telemetryRow } from './support/telemetry-row';
 import { buildSwap, pair, renderSwap, swapFixture, timedPair } from './support/model-swap';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE, type Chart } from './support/console-expect/console-mark-parity';
@@ -134,7 +136,12 @@ async function settled(page: Page, chart: Chart): Promise<Drawn> {
 for (const chart of CHARTS) {
 	test(`${chart.name}: the drawn marks survive a window change and a resize`, async ({ page }) => {
 		await page.setViewportSize(WIDE);
-		await page.goto(chart.route);
+		if (chart.retainedTelemetry) {
+			await openRetained(page, ({ end }) => [0, 1, 3].map((ago) => telemetryRow({
+				date: new Date(Date.parse(`${end}T00:00:00Z`) - ago * 86_400_000).toISOString().slice(0, 10),
+				item_id: `length-${ago}`, source_words: 400, summary_words: 60 + ago
+			})));
+		} else await page.goto(chart.route);
 		await expect(page.locator(chart.root).first(), `${chart.name} never drew`).toBeVisible();
 
 		// The extent the split publishes. Absent on the tree before this row, so

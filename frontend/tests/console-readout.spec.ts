@@ -689,6 +689,7 @@ test.describe('the readout is the default', () => {
 	});
 
 	for (const FETCHED_ROUTE of FETCHED_ROUTES) {
+		const native = BY_ROUTE[BAND_UNREAD.routes.find((route) => route.href === FETCHED_ROUTE)!.id]?.fetchedRecord;
 		test('THE ORACLE: a strip over fetched rows arrives with its payload and not before', async ({
 			page
 		}) => {
@@ -707,7 +708,8 @@ test.describe('the readout is the default', () => {
 			});
 
 			let blocked = 0;
-			await page.route('**/telemetry/*.csv', (route) => {
+			const pattern = native?.pattern ?? '**/telemetry/*.csv';
+			await page.route(pattern, (route) => {
 				blocked += 1;
 				return route.abort();
 			});
@@ -715,12 +717,10 @@ test.describe('the readout is the default', () => {
 			await expect
 				.poll(() => blocked, { message: 'no month shard was requested, so the block proved nothing' })
 				.toBeGreaterThan(0);
-			await expect(page.locator('[data-console-standing]')).toHaveAttribute(
-				'data-console-standing',
-				'unreachable'
-			);
+			if (native) await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'unreachable');
+			else await expect(page.locator('[data-console-standing]')).toHaveAttribute('data-console-standing', 'unreachable');
 
-			const absent = page.locator('[data-readout-fetched] [data-readout-day]');
+			const absent = page.locator(`${native?.strip ?? '[data-readout-fetched]'} [data-readout-day]`);
 			expect(await absent.count(), 'a strip printed a column with no rows behind it').toBe(0);
 			// And the panel does NOT say the ledger holds no failure, because a blocked
 			// month is not an empty one. It holds its reserved shape and
@@ -728,9 +728,9 @@ test.describe('the readout is the default', () => {
 			await expect(page.locator('[data-mix-empty]')).toHaveCount(0);
 			await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(1);
 
-			await page.unroute('**/telemetry/*.csv');
+			await page.unroute(pattern);
 			await page.goto(FETCHED_ROUTE);
-			const strip = page.locator('[data-readout-fetched] [data-readout-day]').first();
+			const strip = page.locator(`${native?.strip ?? '[data-readout-fetched]'} [data-readout-day]`).first();
 			await expect(strip).toHaveCount(1);
 			await expect(strip, 'the strip arrived empty').not.toHaveText(/^\s*$/);
 		});
