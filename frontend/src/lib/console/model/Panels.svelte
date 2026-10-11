@@ -133,7 +133,7 @@
 			<tbody>{#each lengths as run}<tr data-run-compression={run.runId}><th>{run.runId}</th><td data-instrument="compression">{run.compression === null ? 'not measured' : `${Math.round(run.compression * 100)}%`}</td></tr>{/each}</tbody>
 		</table>
 		<p>{RECORDED.find((i) => i.id === 'compression')?.note}</p><p>Nothing acts on these numbers.</p>
-		{#if 'changes' in lengthRule && lengthRule.note !== null}<p data-model-rule-empty={lengthRule.changes.length ? undefined : 'summary-length'}>{lengthRule.note}</p>{/if}
+		{#if 'changes' in lengthRule && lengthRule.note !== null}<p data-model-rule-empty={lengthRule.changes.length ? undefined : 'summary-length'} data-model-rule-unread="summary-length">{lengthRule.note}</p>{/if}
 	</div>
 {:else if id === 'model-change'}
 	<p data-lede>{swap === null ? 'The published record holds no model change to compare.' : swap.lede}</p>

@@ -113,6 +113,9 @@ test('the score-only checker rule and every-change rule retain distinct dated me
 	if ('declined' in score || 'declined' in every) throw new Error('Recorded rules were declined.');
 	expect(score.changes.map((c) => c.date)).toEqual(['2026-08-26', '2026-08-29']);
 	expect(every.changes.map((c) => c.date)).toEqual(['2026-08-23', '2026-08-24', '2026-08-26', '2026-08-29', '2026-09-24']);
+	expect(settingsRules(shell, { from: '2026-08-20', to: '2026-08-20' }, 'none', 'this one day')).toEqual({
+		changes: [], note: 'Nothing changed about how the summaries are written inside this one day.'
+	});
 });
 
 test('the integrated Summaries route reads the native record and keeps all panels in declared order', async ({ page }) => {
@@ -171,7 +174,7 @@ test('a quiet native window still names lost days and unread files', async ({ pa
 	mkdirSync(root, { recursive: true });
 	for (const ledger of ['item-health', 'summary-quality-evals'] as const) {
 		await buildLedger(root, { ledger, pinned: '2026-08-20',
-			days: [{ ago: 2, state: 'lost', setAside: 2 }, { ago: 0, state: 'empty' }] });
+			days: [{ ago: 2, state: 'lost', setAside: 2 }, { ago: 1, state: 'empty' }, { ago: 0, state: 'empty' }] });
 		await serveToPage(context, root, ledger);
 	}
 	await page.goto('/console/model/');

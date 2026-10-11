@@ -325,6 +325,8 @@
 		data-model-rule={declaration?.value}
 		data-model-rule-name={rule === undefined ? undefined : 'model-throughput'}
 		data-model-rule-none={declaration?.none}
+		data-model-rule-from={rule === undefined ? undefined : calendar[0]}
+		data-model-rule-to={rule === undefined ? undefined : calendar.at(-1)}
 		data-readout-columns={readout.columns.length}
 	>
 		<!-- The measured element is this one, not the card: the card's padding and
@@ -391,7 +393,7 @@
 				{#each boundaries as boundary (boundary.date)}
 					<line x1={boundary.x} x2={boundary.x} y1={box.top} y2={box.bottom}
 						stroke="var(--color-text-tertiary)" stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
-						data-model-rule-line data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
+						data-model-rule-line={boundary.date} data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
 				{/each}
 				{#if rule !== undefined && windowMedian !== null}
 					<line x1={box.left} x2={box.right} y1={y.scale(windowMedian)} y2={y.scale(windowMedian)}
@@ -546,7 +548,7 @@
 			</p>
 		{/if}
 		{#if fullRule !== undefined && 'changes' in fullRule && fullRule.note !== null}
-			<p data-model-rule-empty={fullRule.changes.length === 0 ? 'model-throughput' : undefined} data-model-rule-note={fullRule.changes.length ? 'model-throughput' : undefined}>{fullRule.note}</p>
+			<p data-model-rule-empty={fullRule.changes.length === 0 ? 'model-throughput' : undefined} data-model-rule-unread="model-throughput" data-model-rule-note={fullRule.changes.length ? 'model-throughput' : undefined}>{fullRule.note}</p>
 		{/if}
 	</div>
 {/if}

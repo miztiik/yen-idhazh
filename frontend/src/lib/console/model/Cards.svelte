@@ -52,9 +52,9 @@
 	<p data-model-cards-note data-model-newest={newest?.date} data-window-days={windowDays}>The cards show the newest measured day in this window. A missing reading is not measured, not zero.</p>
 	<p data-comparison="each card's newest day against its last 14 days">Each card's newest day against its last 14 days.</p>
 	<p>Nothing acts on these numbers.</p>
-	<details data-model-table-control data-daily-figures="model" data-window-days={windowDays}>
-		<summary>{windowDays === 1 ? 'Show these figures for this one day' : `Show these figures day by day, over these ${windowDays} days`}</summary>
-		<div data-eval-panel="daily-figures" data-windowed="daily-figures" data-window-days={windowDays} data-model="table">
+	<details class="console-disclosure" data-model-table-control data-daily-figures="model" data-window-days={windowDays}>
+		<summary class="console-summary">{windowDays === 1 ? 'Show these figures for this one day' : `Show these figures day by day, over these ${windowDays} days`}</summary>
+		<div class="console-table" data-eval-panel="daily-figures" data-windowed="daily-figures" data-window-days={windowDays} data-model="table">
 			<table data-model-table>
 				<caption>One row per recorded day. Missing readings are not measured.</caption>
 				<thead><tr><th scope="col">Day</th>{#each cardColumns as column}<th scope="col">{column.label}</th>{/each}

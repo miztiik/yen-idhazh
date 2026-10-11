@@ -7,6 +7,7 @@
 	import * as queries from '$lib/console/queries/model';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { nameSpan } from '$lib/charts/series';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
@@ -32,8 +33,8 @@
 	const first = $derived(reach === null ? null : Object.values(reach.ledgers).flatMap((r) => r?.state === 'ok' ? [r.first] : []).sort()[0] ?? null);
 	const span = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
 	const shell = $derived(data);
-	const cardRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'none'));
-	const checkerRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'every'));
+	const cardRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'none', nameSpan(windowDays)));
+	const checkerRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'every', nameSpan(windowDays)));
 	const recording = $derived(data.recordingNotes[String(windowDays)]);
 	const measurementOff = $derived(data.measurementOff[String(windowDays)]);
 	onMount(() => {

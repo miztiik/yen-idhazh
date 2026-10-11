@@ -25,6 +25,6 @@
 	<DateSeries {geometry} {readout} empty={emptyState('quiet', note)} {name} label={name}
 		width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} />
 </div>
-{#if 'changes' in fullRule && fullRule.note !== null}
+{#if geometry === null && 'changes' in fullRule && fullRule.note !== null}
 	<p data-model-rule-empty={fullRule.changes.length === 0 ? name : undefined} data-model-rule-note={name}>{fullRule.note}</p>
 {/if}

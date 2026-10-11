@@ -2,6 +2,7 @@ import * as queries from '../queries/model';
 import type { PanelQuery, Range } from '../queries/window';
 import type { ConsoleShell } from '../band';
 import { settingsRules } from '../settings-moved';
+import { nameSpan } from '../../charts/series';
 
 export const panelQueries: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'model-throughput': [queries.modelThroughputQuery], 'call-ending': [queries.callEndingQuery],
@@ -23,5 +24,5 @@ export function modelRuleFor(id: string, shell: ConsoleShell, range: Range) {
 		return { declined: 'One ranking or distribution pools the window and has no dated change position.' } as const;
 	}
 	if (id === 'model-change') return { declined: 'This panel compares the two sides of the model change itself.' } as const;
-	return settingsRules(shell, { from: range.from, to: range.to }, id === 'faithfulness' ? 'score' : 'none');
+	return settingsRules(shell, { from: range.from, to: range.to }, id === 'faithfulness' ? 'score' : 'none', nameSpan(range.days));
 }
