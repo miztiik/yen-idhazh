@@ -311,12 +311,19 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     does. What is asserted is that the venue handed it a deadline it never asked
     for, and filed its own row on the way out.
     """
-    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))})
+    a_venue(
+        venue,
+        package=A_VENUE,
+        slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))},
+        poisoned_neighbour="a-broken-unrequested-tenant",
+    )
     council = _council(A_SLUG)
     state_root = venue / "state"
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
     opened = time.monotonic()
 
+    hosted = registry.tenants(council.judge_names)
+    assert night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)[0] == TONIGHT
     session.prepare(council, date=TONIGHT, run_id=run_id)
     for shard in range(2):
         result = session.run_shard(

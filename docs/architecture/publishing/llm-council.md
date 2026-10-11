@@ -82,19 +82,20 @@ file changes neither which judges run nor what work fits inside a night.
 else can be built, every gate can pass, and a config naming no slug still runs a
 night that plans tonight, fans out to no cell and commits nothing.
 
-A slug resolves to the module that declares it: the council reads the directory
-listing of its own package, finds each subpackage that has a `tenant` module in
-it, and imports one until a declared slug matches. **Every one of those imports
-happens inside a function**, so no council module carries a judge in its import
-closure - and a package with no `tenant` module is never imported at all, so one
-tenant's broken import cannot hide another tenant's slug.
+A slug names its package with hyphens replaced by underscores. The council
+imports exactly `idhazh.<package>.tenant`, checks that its required `TENANT`
+declares the requested `judge_id`, then asks that module whether its work fits
+the night. No directory is listed and no neighboring package is imported.
+The config loader refuses a slug whose derived package is not a Python
+identifier or is a keyword. Imports stay inside the resolver, so no council
+module carries a judge in its import closure.
 
 Three things follow, and each is the reason a simpler design was refused.
 
 - **No list in Python.** A map from slug to module would make adding a judge a
   code change, and it would be a roster of who may exist - which is what the
   central judge identifier was deleted for.
-- **A slug nothing declares is refused by name.** Skipping it would run every
+- **A missing module or a different declared slug is refused by name.** Skipping it would run every
   step, report nothing wrong, and judge less than the config asked for.
 - **Removing a judge is a config edit and a directory delete.** Never a router
   edit.
@@ -103,9 +104,8 @@ Three things follow, and each is the reason a simpler design was refused.
 
 A tenant module may declare
 `refuse_a_night_this_tenant_cannot_finish`, and the resolver calls it on the
-tenant that answered to the slug - on that one and on no other. A tenant nobody
-registered cannot stop a night it is not in, even though the search has to import
-it to read its slug.
+tenant that answered to the slug - on that one and on no other. An unrequested
+tenant is never imported and cannot stop a night it is not in.
 
 **The planning job resolves every registered slug before it can build its
 matrix**, so a refusal lands there: before the matrix exists, before any job is

@@ -618,7 +618,9 @@ def test_the_router_no_longer_carries_a_judges_stage() -> None:
     spelled in the router's own tuple, which is how the four judge verbs
     survived the first cut. Both halves are held here.
     """
-    found = _judge_modules_reached("idhazh.cli", JUDGE_STAGE_MODULES)
+    found = _judge_modules_reached(
+        "idhazh.cli", ("idhazh.content_similarity_judge", *JUDGE_STAGE_MODULES)
+    )
 
     assert found == [], f"the router still imports {found}"
     assert not [verb for verb in cli.STAGES if verb.startswith("judge")]

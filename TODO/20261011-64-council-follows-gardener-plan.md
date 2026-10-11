@@ -61,7 +61,7 @@ Table D - rows
 | 8 | A unit that raises files a failed council record | 3 | D | PENDING | - | - | - |
 | 9 | The council's record is published for the console | 8 | E | PENDING | - | - | - |
 | 10 | The council reads its own config file | - | A | DONE | symmetrical-broccoli | - | Council config file |
-| 11 | The council finds each judge by its slug | - | A | PENDING | - | - | - |
+| 11 | The council finds each judge by its slug | - | A | DONE | council-judge-lookup | - | Council judge lookup |
 
 ## 2. Rows
 

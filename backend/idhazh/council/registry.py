@@ -1,10 +1,8 @@
 """Which tenants is the council hosting, and where does a slug lead?
 
-A slug in `judge_names` in `config/llm_council.json` is all the venue is told. What stands
-behind it is found by asking each package that declares a tenant what its own
-slug is, and every one of those imports happens inside a function - so no module
-here carries a tenant in its import closure and nothing here lists who may
-exist.
+A slug in `judge_names` in `config/llm_council.json` names its package with
+hyphens replaced by underscores. Only that package's tenant module is imported,
+inside a function, so no module here carries a tenant in its import closure.
 
 Resolving is also when a tenant gets to refuse the night. The planning job
 resolves every registered slug before it can build its matrix, so a tenant that
@@ -19,24 +17,21 @@ a change to this file.
 from __future__ import annotations
 
 import importlib
-import pkgutil
 from collections.abc import Sequence
-from pathlib import Path
 from types import ModuleType
 from typing import Final, cast
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.contracts.knobs.council import CouncilConfig, derive_judge_package_name
 from idhazh.council.tenancy import Tenant
 
 #: The package the council looks in. Read on every call rather than bound as a
 #: default, so the one name here is the one answer to where a tenant lives.
 TENANT_PACKAGE: Final = "idhazh"
 
-#: The module name a package declares a tenant in, and the name it binds the
-#: implementation to. A package without that module is not a tenant and is never
-#: imported, which is what keeps the search off every other subpackage.
+#: The declaration module and implementation attribute are the tenancy protocol's
+#: fixed import address, not a roster of judge packages.
 TENANT_MODULE: Final = "tenant"
 
 TENANT_ATTRIBUTE: Final = "TENANT"
@@ -47,27 +42,6 @@ TENANT_ATTRIBUTE: Final = "TENANT"
 #: asked nothing. It is not an eighth member of the protocol because the protocol
 #: is what a tenant presents while it runs, and this is asked before it does.
 TENANT_FIT_CHECK: Final = "refuse_a_night_this_tenant_cannot_finish"
-
-
-def _declaring_modules(package: str) -> tuple[str, ...]:
-    """Every module under `package` that could declare a tenant, in a fixed order.
-
-    Read off the directory listing rather than by importing each subpackage: a
-    package that declares no tenant is never executed, so one tenant's broken
-    import cannot hide another tenant's slug.
-    """
-    root = importlib.import_module(package)
-    locations = getattr(root, "__path__", None)
-    if locations is None:
-        return ()
-    found: list[str] = []
-    for entry in pkgutil.iter_modules(list(locations)):
-        if not entry.ispkg:
-            continue
-        inside = [str(Path(location) / entry.name) for location in locations]
-        if any(module.name == TENANT_MODULE for module in pkgutil.iter_modules(inside)):
-            found.append(f"{package}.{entry.name}.{TENANT_MODULE}")
-    return tuple(sorted(found))
 
 
 def _declared(module_name: str) -> tuple[ModuleType, Tenant]:
@@ -122,20 +96,25 @@ def tenant(
     config asked for, which is the failure a typo in a slug list produces.
     """
     root = package or TENANT_PACKAGE
-    declared: list[str] = []
-    for module_name in _declaring_modules(root):
+    module_name = f"{root}.{derive_judge_package_name(slug)}.{TENANT_MODULE}"
+    try:
         module, found = _declared(module_name)
-        if found.judge_id == slug:
-            _refuse_a_night_this_tenant_cannot_finish(module, app, council)
-            return found
-        declared.append(found.judge_id)
-    known = ", ".join(declared) if declared else "none"
-    raise SystemExit(
-        f"judge_names in config/llm_council.json names '{slug}' and no package "
-        f"under {root}/ declares it. "
-        f"The tenants that do declare themselves: {known}. Either the slug is a typo "
-        f"or the tenant's own {TENANT_MODULE} module is not in this checkout."
-    )
+    except ModuleNotFoundError as exc:
+        if exc.name is None or not (
+            exc.name == module_name or module_name.startswith(f"{exc.name}.")
+        ):
+            raise
+        raise SystemExit(
+            f"judge_names in config/llm_council.json names '{slug}', but its "
+            f"declaration module {module_name} is not in this checkout."
+        ) from exc
+    if found.judge_id != slug:
+        raise SystemExit(
+            f"judge_names in config/llm_council.json names '{slug}', but "
+            f"{module_name} declares judge_id '{found.judge_id}'."
+        )
+    _refuse_a_night_this_tenant_cannot_finish(module, app, council)
+    return found
 
 
 def tenants(
