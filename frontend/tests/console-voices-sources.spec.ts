@@ -379,12 +379,14 @@ test('the approved cut-share lede leads, and its cost sentence retains n, median
 		Number(max.replace(/,/g, ''))
 	);
 
-	// It leads the section now. It is the most useful line on it and it used to
-	// be the smallest type, printed under the table.
-	const order = await page
-		.locator('[data-windowed="source-cuts"] p')
-		.evaluateAll((nodes) => nodes.map((node) => node.hasAttribute('data-lede')));
-	expect(order[0], 'the approved cut-share lede is no longer the first line of the section').toBe(true);
+	// The header names the comparison and grain; the cut-share finding leads
+	// the body, rather than being printed under the table.
+	const body = page.locator('[data-windowed="source-cuts"] > .panel-body');
+	await expect(body).toHaveCount(1);
+	expect(
+		await body.evaluate((node) => node.firstElementChild?.matches('p[data-lede]') ?? false),
+		'the approved cut-share lede is no longer the first line of the panel body'
+	).toBe(true);
 });
 
 /** The seven days the unit cases below read, ending on the day their rows sit on. */

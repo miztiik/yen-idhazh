@@ -117,7 +117,7 @@
 	function monthsFor(): number { return 0; }
 </script>
 
-<svelte:head><title>Voices - Console - {data.ui.site_title}</title></svelte:head>
+<svelte:head><title>Voices &mdash; Console &mdash; {data.ui.site_title}</title></svelte:head>
 <RouteStatus route="voices" {answers} days={windowDays} through={reach?.through ?? null} shimmerAfterMs={console.shimmer_after_ms} onRetry={() => void ask(true)}>
 	<WindowControlSource days={windowDays} presets={console.window_presets} {monthsFor} {busy} {ready}
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through: reach?.through ?? null }} onChange={show}/>
