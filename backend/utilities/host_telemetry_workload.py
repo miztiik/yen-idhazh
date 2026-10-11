@@ -122,6 +122,7 @@ def worker(workspace: Path, day: str, run_id: str, git_sha: str, attempt: int) -
                     workspace / f"reference/samples-{sequence}/sample-0.json",
                     compare.worker_timeout_seconds,
                     native.limits.poll_ms,
+                    child=sample,
                 )
             started, cpu = time.perf_counter(), time.process_time()
             digest = execute_work(buffer, compare)
@@ -218,9 +219,19 @@ def child_cpu() -> float:
     raise ValueError("reference child CPU measurements require Linux")
 
 
-def wait_for(path: Path, timeout: float, poll_ms: int) -> None:
+def wait_for(
+    path: Path,
+    timeout: float,
+    poll_ms: int,
+    *,
+    child: subprocess.Popen[bytes] | None = None,
+) -> None:
     deadline = time.monotonic() + timeout
     while not path.exists():
+        if child is not None and child.poll() is not None:
+            raise ValueError(
+                f"required evidence {path.name}: producer exited with code {child.returncode}"
+            )
         if time.monotonic() >= deadline:
             raise ValueError(f"required evidence did not arrive: {path.name}")
         time.sleep(poll_ms / 1000)

@@ -230,7 +230,13 @@ def compare_cell(name: str, left: Scalar, right: Scalar, bound: float = 0.0) -> 
     )
 
 
-def verify_result(workspace: Path, name: str, session: EvidenceSession) -> HostResultBody:
+def verify_result(
+    workspace: Path,
+    name: str,
+    session: EvidenceSession,
+    *,
+    previous_plan: HostWritePlan | None = None,
+) -> HostResultBody:
     native, _, _ = settings()
     event = read_model(resolve(workspace, name), HostEvent, native.limits.max_result_bytes)
     if not isinstance(event.body, HostResultBody) or event.reply_to is None:
@@ -288,6 +294,7 @@ def verify_result(workspace: Path, name: str, session: EvidenceSession) -> HostR
         target_root=session.roots.native,
         publication_identity=expected_identity,
         limits=native.verification_limits,
+        previous_plan=previous_plan,
     )
     if not verified.complete or len(verified.files) != 1:
         raise ValueError("required native completion evidence is absent")
@@ -623,4 +630,10 @@ def verify_host_chain(
         or last.body.previous_result_id != events[0].event_id
     ):
         raise ValueError("probe-to-clock predecessor or independent ordering evidence differs")
-    return verify_result(workspace, probe, session), verify_result(workspace, clock, session)
+    probe_result = verify_result(workspace, probe, session)
+    probe_plan = read_model(
+        resolve(workspace, f"{session.host_manifest.event_root}/writes/{first.event_id}.plan.json"),
+        HostWritePlan,
+        session.host_manifest.limits.max_result_bytes,
+    )
+    return probe_result, verify_result(workspace, clock, session, previous_plan=probe_plan)

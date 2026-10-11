@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import pytest
@@ -13,6 +15,16 @@ from idhazh.contracts.host_events import HostEvent
 from idhazh.contracts.host_evidence import WorkloadRequest, WorkloadResult
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.fixture
+def evidence_workspace() -> Iterator[Path]:
+    from idhazh.telemetry.host_evidence_inputs import ROOT
+
+    root = ROOT / "backend/var"
+    root.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix="d5-test-", dir=root) as directory:
+        yield Path(directory)
 
 
 @pytest.mark.parametrize("mode", ["reference", "native_only", "stop"])
@@ -372,6 +384,16 @@ def test_read_only_verifier_consumes_actual_native_cli_bytes_without_python_dele
     first, last = verify_host_chain(tmp_path, result_name, clock_name, session)
     assert first.cpu == last.cpu and first.row.fingerprint == last.row.fingerprint
     assert last.row.job_seconds == 42 and first.row.job_seconds is None
+    from idhazh.contracts.host_output import HostWritePlan
+    from idhazh.telemetry.host_evidence_inputs import read_model
+
+    clock_plan = read_model(
+        tmp_path / f"{model.event_root}/writes/{clock_command.event_id}.plan.json",
+        HostWritePlan,
+        262144,
+    )
+    with pytest.raises(ValueError, match="strictly later clock"):
+        verify_result(tmp_path, result_name, session, previous_plan=clock_plan)
     retained = tmp_path / f"{model.event_root}/commands/{clock_command.event_id}.json"
     raw = read_bytes(retained, 65536)
     declared = read_bytes(tmp_path / "clock.json", 65536)
@@ -393,17 +415,17 @@ def test_read_only_verifier_consumes_actual_native_cli_bytes_without_python_dele
         (tmp_path / "clock.json").write_bytes(declared)
 
 
-def test_live_certification_is_not_a_windows_fixture_success(tmp_path: Path) -> None:
+def test_live_certification_is_not_a_windows_fixture_success(evidence_workspace: Path) -> None:
     import platform
 
     from idhazh.telemetry.host_evidence_comparison import compare
 
     if platform.system() != "Linux":
         with pytest.raises(ValueError, match="another operating system"):
-            compare(tmp_path, probe="probe.json", clock="clock.json")
+            compare(evidence_workspace, probe="probe.json", clock="clock.json")
     else:
         with pytest.raises(FileNotFoundError):
-            compare(tmp_path, probe="probe.json", clock="clock.json")
+            compare(evidence_workspace, probe="probe.json", clock="clock.json")
 
 
 def test_real_native_replay_population_reconciles_and_refuses_nonpython_counts(
@@ -519,7 +541,7 @@ def test_empty_logs_are_valid_artifacts_but_inventory_growth_is_bounded(tmp_path
 
 
 def test_real_partial_worker_cleanup_refuses_reused_identity_and_verifies_exit(
-    tmp_path: Path,
+    evidence_workspace: Path,
 ) -> None:
     import platform
     import subprocess
@@ -547,12 +569,12 @@ def test_real_partial_worker_cleanup_refuses_reused_identity_and_verifies_exit(
         with pytest.raises(ValueError, match="reused"):
             stop_partial(target.model_copy(update={"start_ticks": target.start_ticks + 1}))
         assert child.poll() is None
-        write_document(tmp_path / "worker-launched.json", target)
-        cleanup(tmp_path)
+        write_document(evidence_workspace / "worker-launched.json", target)
+        cleanup(evidence_workspace)
         child.wait(timeout=native.limits.drain_timeout_ms / 1000)
         assert child.returncode is not None
         assert read_model(
-            tmp_path / "cleanup.json", CleanupEvidence, native.limits.max_result_bytes
+            evidence_workspace / "cleanup.json", CleanupEvidence, native.limits.max_result_bytes
         ).targets == (target,)
     finally:
         if child.poll() is None:
@@ -560,7 +582,7 @@ def test_real_partial_worker_cleanup_refuses_reused_identity_and_verifies_exit(
             child.wait(timeout=native.limits.drain_timeout_ms / 1000)
 
 
-def test_full_linux_yaml_stages_or_explicit_windows_refusal(tmp_path: Path) -> None:
+def test_full_linux_yaml_stages_or_explicit_windows_refusal(evidence_workspace: Path) -> None:
     import os
     import platform
 
@@ -574,7 +596,7 @@ def test_full_linux_yaml_stages_or_explicit_windows_refusal(tmp_path: Path) -> N
     from utilities.host_telemetry_session import cleanup, drain, invoke, prepare, start, workload
 
     native, _, _ = settings()
-    workspace = tmp_path / "live"
+    workspace = evidence_workspace / "live"
     if os.environ.get("IDHAZH_D5_LIVE_TEST") != "1":
         if platform.system() != "Linux":
             with pytest.raises(ValueError, match="requires Linux"):
@@ -583,14 +605,16 @@ def test_full_linux_yaml_stages_or_explicit_windows_refusal(tmp_path: Path) -> N
                     git_sha="0" * 40,
                     run_number="1",
                     attempt=1,
-                    compile_file=tmp_path / "missing.json",
-                    gates=tmp_path / "missing.xml",
+                    compile_file=evidence_workspace / "missing.json",
+                    gates=evidence_workspace / "missing.xml",
                 )
         else:
             # Routine gates do not create a second live trial or invent missing build evidence.
             with pytest.raises(FileNotFoundError):
                 read_model(
-                    tmp_path / "missing.json", CommandMeasurement, native.limits.max_result_bytes
+                    evidence_workspace / "missing.json",
+                    CommandMeasurement,
+                    native.limits.max_result_bytes,
                 )
         return
     assert platform.system() == "Linux"
@@ -677,6 +701,49 @@ def test_full_linux_yaml_stages_or_explicit_windows_refusal(tmp_path: Path) -> N
     finally:
         if workspace.is_dir():
             cleanup(workspace)
+
+
+def test_recorded_population_keeps_memory_when_executable_is_unavailable(tmp_path: Path) -> None:
+    from test_host_event_resource_parity import prepare, write_frame
+
+    from idhazh.telemetry.host_evidence_inputs import settings
+    from utilities.host_telemetry_reference import sample_population
+
+    _, replay = prepare(tmp_path / "resources", memory=True, periodic=True)
+    frame = replay["frames"][0]
+    proc = tmp_path / "proc"
+    write_frame(proc, frame)
+    first_pid = frame["population"]["value"][0]["target"]["pid"]
+    (proc / str(first_pid) / "cmdline").write_bytes(
+        b"/usr/bin/python\0-u\0-m\0idhazh\0secret-not-exported\0"
+    )
+    native, comparison, _ = settings()
+    sample = sample_population(
+        tmp_path / "capture", native, comparison, "2026-10-10T12:00:00Z", proc=proc
+    )
+    assert {row.pid for row in sample.rollcall} == {
+        process["target"]["pid"] for process in frame["population"]["value"]
+    }
+    assert sample.record.python_procs == 3
+    assert sample.record.python_vmrss_kb == 350
+    assert sample.record.python_vmhwm_kb == 420
+    assert all(row.exe is None for row in sample.rollcall)
+    assert all(row.args is None or "secret-not-exported" not in row.args for row in sample.rollcall)
+    assert (tmp_path / f"capture/{first_pid}/cmdline").read_bytes() == (
+        b"/usr/bin/python\0-u\0-m\0idhazh"
+    )
+
+
+def test_missing_evidence_refuses_an_exited_producer_without_waiting(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    from utilities.host_telemetry_workload import wait_for
+
+    child = subprocess.Popen([sys.executable, "-c", "raise SystemExit(7)"])
+    child.wait(timeout=30)
+    with pytest.raises(ValueError, match="producer exited with code 7"):
+        wait_for(tmp_path / "missing.json", 120, 50, child=child)
 
 
 def test_configuration_refuses_missing_bounds_reserved_overrides_and_nonendpoint_cadence() -> None:

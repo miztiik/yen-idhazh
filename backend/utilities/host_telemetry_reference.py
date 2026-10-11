@@ -56,14 +56,18 @@ def process_cost(target: ProcessTarget, native: NativeSettings) -> tuple[float, 
 
 
 def snapshot_population(
-    destination: Path, native: NativeSettings, compare: ComparisonSettings
+    destination: Path,
+    native: NativeSettings,
+    compare: ComparisonSettings,
+    *,
+    proc: Path = Path("/proc"),
 ) -> tuple[ProcessTarget, ...]:
     """Copy one bounded real population; no replacement or dummy processes."""
     destination.mkdir(parents=True, exist_ok=False)
     cap = native.capture_limits.max_proc_text_bytes
-    (destination / "meminfo").write_bytes(read_bytes(Path("/proc/meminfo"), cap))
+    (destination / "meminfo").write_bytes(read_bytes(proc / "meminfo", cap))
     entries: list[int] = []
-    with os.scandir("/proc") as stream:
+    with os.scandir(proc) as stream:
         for index, entry in enumerate(stream):
             if index >= compare.max_process_entries:
                 raise ValueError("live process inventory exceeds its entry cap")
@@ -73,33 +77,51 @@ def snapshot_population(
         raise ValueError("live process inventory exceeds its process cap")
     population: list[ProcessTarget] = []
     for pid in sorted(entries):
-        source = Path("/proc") / str(pid)
+        source = proc / str(pid)
         try:
-            before = identity(pid, native)
+            before = identity(pid, native, proc)
             comm = read_bytes(source / "comm", cap)
             if not comm.strip().startswith(b"python"):
                 continue
             status = read_bytes(source / "status", cap)
-            cmdline = read_bytes(source / "cmdline", cap)
-            executable = (source / "exe").readlink()
-            if identity(pid, native) != before:
+            try:
+                cmdline = read_bytes(source / "cmdline", cap)
+            except (FileNotFoundError, ProcessLookupError, PermissionError):
+                cmdline = None
+            if cmdline is not None:
+                argv = [part for part in cmdline.split(b"\0") if part]
+                cmdline = b"\0".join(argv[: memory_sampler.ARGV_FIELDS.stop])
+            # Executable visibility does not decide the legacy memory population.
+            try:
+                executable = (source / "exe").readlink()
+            except (FileNotFoundError, ProcessLookupError, PermissionError):
+                executable = None
+            if identity(pid, native, proc) != before:
                 raise ValueError("Python population PID changed during capture")
         except (FileNotFoundError, ProcessLookupError):
             continue
         target = destination / str(pid)
         target.mkdir()
-        for name, raw in (("comm", comm), ("status", status), ("cmdline", cmdline)):
+        for name, raw in (("comm", comm), ("status", status)):
             (target / name).write_bytes(raw)
-        (target / "exe").symlink_to(executable)
+        if cmdline is not None:
+            (target / "cmdline").write_bytes(cmdline)
+        if executable is not None:
+            (target / "exe").symlink_to(executable)
         population.append(before)
     return tuple(population)
 
 
 def sample_population(
-    destination: Path, native: NativeSettings, compare: ComparisonSettings, now: str
+    destination: Path,
+    native: NativeSettings,
+    compare: ComparisonSettings,
+    now: str,
+    *,
+    proc: Path = Path("/proc"),
 ) -> ReferenceSample:
     try:
-        population = snapshot_population(destination, native, compare)
+        population = snapshot_population(destination, native, compare, proc=proc)
         cgroup = destination / "cgroup-current.txt"
         for source in memory_sampler.CGROUP_CURRENT_PATHS:
             try:

@@ -243,7 +243,12 @@ def prepare(
     write_json(workspace / "native-config.json", effective)
     write_json(workspace / "inputs/metadata.json", {})
     (workspace / "inputs/start.txt").write_bytes((now() + "\n").encode("ascii"))
-    wait_for(workspace / "worker.json", compare.worker_timeout_seconds, native.limits.poll_ms)
+    wait_for(
+        workspace / "worker.json",
+        compare.worker_timeout_seconds,
+        native.limits.poll_ms,
+        child=child,
+    )
     ready = read_model(workspace / "worker.json", ProcessTarget, native.limits.max_result_bytes)
     if ready != target:
         raise ValueError("worker readiness does not identify the launched child")
