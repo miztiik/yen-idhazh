@@ -431,6 +431,26 @@ def test_live_certification_is_not_a_windows_fixture_success(evidence_workspace:
             compare(evidence_workspace, probe="probe.json", clock="clock.json")
 
 
+def test_real_native_window_timeout_retains_incomplete_evidence(tmp_path: Path) -> None:
+    from test_host_event_resource_parity import event, prepare, run
+
+    from idhazh.contracts.host_events import HostEvent, WindowResultBody
+    from idhazh.telemetry.host_evidence_inputs import write_document
+    from utilities.host_telemetry_session import receive_acknowledgement
+
+    root = tmp_path / "timeout"
+    manifest, _ = prepare(root, memory=True, periodic=False)
+    command = HostEvent.model_validate(event(manifest, "window.end", 0, 3))
+    write_document(root / "end.json", command)
+    result = run(root, "event-wait", "--command", "end.json")
+    assert result.returncode == 0, result.stderr.decode()
+    body = WindowResultBody.model_validate_json(result.stdout)
+    assert body.status == "incomplete"
+    with pytest.raises(ValueError, match=r"window.result.*incomplete.*timed_out"):
+        receive_acknowledgement(root, "observed/timeout.json", result.stdout, "window.result")
+    assert (root / "observed/timeout.json").read_bytes() == result.stdout
+
+
 def test_real_native_replay_population_reconciles_and_refuses_nonpython_counts(
     tmp_path: Path,
 ) -> None:

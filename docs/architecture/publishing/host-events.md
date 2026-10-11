@@ -348,6 +348,10 @@ exercise explicit refusals, not live Linux certification.
 Response waits check the recorded worker identity and surface bounded worker and
 sampler logs when it stops. The dedicated Linux tests retain their task-owned
 workspace under the uploaded test directory, including failed-stage diagnostics.
+Incomplete native timeout replies are retained as received and fail the required
+acknowledgement; they are never accepted as healthy windows. The live monitor
+retires validated, consumed events after their retry window before admitting the
+next sample, keeping active windows protected and shutdown capacity reserved.
 
 Local delivery alone leaves D5 in flight. A report never authorizes adoption or
 history replacement, asserts a general speedup, or substitutes for the exact

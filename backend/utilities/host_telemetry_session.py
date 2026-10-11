@@ -11,9 +11,16 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from pydantic import TypeAdapter
+
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import Compression, Format
-from idhazh.contracts.host_events import HostEvent, HostSessionManifest, ProcessTarget
+from idhazh.contracts.host_events import (
+    HostEvent,
+    HostSessionManifest,
+    ProcessTarget,
+    WindowResultBody,
+)
 from idhazh.contracts.host_evidence import (
     EVIDENCE_VERSION,
     CleanupEvidence,
@@ -96,6 +103,22 @@ def invoke(workspace: Path, verb: str, *args: str, manifest: str = "manifest.jso
     if child.returncode:
         raise ValueError(f"native {verb} failed: {raw.decode('ascii', 'replace')}")
     return raw
+
+
+def receive_acknowledgement(workspace: Path, name: str, raw: bytes, expected: str) -> HostEvent:
+    native, _, _ = settings()
+    retain_native(resolve(workspace, name), raw, native.limits.max_result_bytes)
+    reply: HostEvent | WindowResultBody = TypeAdapter(HostEvent | WindowResultBody).validate_json(
+        raw
+    )
+    if isinstance(reply, WindowResultBody):
+        reasons = ", ".join(sorted({value.reason.value for value in reply.unavailable}))
+        raise ValueError(
+            f"native {expected} acknowledgement unavailable: {reply.status} ({reasons})"
+        )
+    if reply.kind != expected:
+        raise ValueError(f"required {expected} acknowledgement is absent: {reply.kind}")
+    return reply
 
 
 def request(workspace: Path, sequence: int, mode: str) -> WorkloadResult:
@@ -443,16 +466,13 @@ def workload(workspace: Path) -> None:
         started = time.perf_counter()
         invoke(workspace, "event-send", "--command", name)
         raw = invoke(workspace, "event-wait", "--command", name)
-        result = HostEvent.model_validate_json(raw)
-        acks.append(time.perf_counter() - started)
         expected = {
             "worker.register": "worker.registered",
             "window.begin": "window.begun",
             "window.end": "window.result",
         }[command.kind]
-        if result.kind != expected:
-            raise ValueError("required healthy acknowledgement is absent")
-        retain_native(workspace / f"observed/{index}.json", raw, native.limits.max_result_bytes)
+        receive_acknowledgement(workspace, f"observed/{index}.json", raw, expected)
+        acks.append(time.perf_counter() - started)
         if command.kind == "window.begin":
             window_index = (index - 1) // 2
             paired.append(

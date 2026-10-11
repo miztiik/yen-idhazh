@@ -384,6 +384,8 @@ Table R - Row 4 rejected alternatives
   - `backend/utilities/host_telemetry_session.py`
   - `backend/utilities/host_telemetry_reference.py`
   - `backend/utilities/host_telemetry_measurement.py`
+  - `backend/rust/host-telemetry/src/monitor/runner.rs`
+  - `backend/rust/host-telemetry/tests/job_samples.rs`
   - `frontend/scripts/test-scope.ts`
   - `frontend/scripts/tests/test-scope.test.mjs`
   - `backend/tests/workflows/_harness.py`
@@ -396,6 +398,7 @@ Table R - Row 4 rejected alternatives
 
 - **Integration ruling:** Fowler found that standalone probe/clock results and resource-monitor results cannot restart one emitter's sequence in the same session (H1/H9). D5 generates a host-invocation manifest for both probe/clock and a separate resource manifest, with distinct session IDs/event roots but identical declared job identity, actual worker/CPU target and effective controls. Native raw output and probe-to-clock predecessor receipts remain one chain. This repairs local routing without native collector edits or relaxed ordering.
 - **Local implementation boundary:** Comparison config declares finite build/output/workload limits before any live observation. Actual checkout/toolchain/executable bytes, retained triggering commands, native result/completion/predecessor links and ordered resource ACK/drain evidence are verified. Generated recorded tests retain original native output; legacy population HWM fallback remains unchanged. Local delivery is not a Linux evidence or D16 readiness stamp.
+- **Live lifecycle reconciliation:** Linux run `38175875066` reached the native monitor with the declared five-second sample cadence and five-second immutable retry retention. Already-consumed initial samples were still retained when the next sample was admitted, because the live loop retired expired events only after collection. Correct retirement ordering in the native runner; preserve the finite pending/session bounds, reserved shutdown capacity and original sample artifacts. D5 remains incomplete until the repaired live run passes.
 
 Table S - Row 5 decisions
 
