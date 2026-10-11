@@ -296,7 +296,7 @@ from idhazh import config
 from idhazh.telemetry.publish.console_band import build
 settings = config.load(Path(sys.argv[1]))
 band = build(generated_at="2030-06-15T23:00:00Z", days=[], feeds=[],
-    health_rows=[], record=None, machine_rows=[], months=[],
+    health_rows=[], record=None, machine_rows=[],
     run=settings.app.run, collect=settings.app.collect)
 target = Path(sys.argv[2])
 target.parent.mkdir(parents=True, exist_ok=True)
