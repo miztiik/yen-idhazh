@@ -292,6 +292,7 @@ fn replay(
     files.publish(&ready, "results")?;
     let mut events = vec![ready];
     let mut schedule = SampleSchedule::new();
+    let mut consumed = HashSet::new();
     let mut last_frame = &recorded.frames[0];
     let mut last_ms = 0;
     let run = (|| -> Result<()> {
@@ -302,47 +303,57 @@ fn replay(
             if session.stopped {
                 break;
             }
-            if let Some(command) = &action.event {
-                files.publish(command, "inbox")?;
-                let command = files.read(command.event_id, "inbox")?;
-                let mut staged = session.clone();
-                match staged.handle(&command, frame, action.at_ms) {
-                    Ok(replies) => {
-                        files.publish_batch(&replies, "results")?;
-                        session = staged;
-                        events.extend(replies);
-                    }
-                    Err(error) => {
-                        let fault = session.protocol_fault(
-                            &error,
-                            Some(command.event_id),
-                            &frame.captured_at,
-                            action.at_ms,
-                        )?;
-                        files.publish(&fault, "results")?;
-                        if error.code == ProtocolFaultCode::Bounds {
-                            return Err(error.to_string());
+            with_retired_consumed(
+                &mut session,
+                &mut files,
+                &mut consumed,
+                action.at_ms,
+                |session, files| {
+                    if let Some(command) = &action.event {
+                        files.publish(command, "inbox")?;
+                        let command = files.read(command.event_id, "inbox")?;
+                        let mut staged = session.clone();
+                        match staged.handle(&command, frame, action.at_ms) {
+                            Ok(replies) => {
+                                files.publish_batch(&replies, "results")?;
+                                *session = staged;
+                                events.extend(replies.iter().cloned());
+                                for event in std::iter::once(&command).chain(replies.iter()) {
+                                    files.consume(event)?;
+                                    session
+                                        .book
+                                        .consume(event.event_id)
+                                        .map_err(|error| error.to_string())?;
+                                }
+                            }
+                            Err(error) => {
+                                let fault = session.protocol_fault(
+                                    &error,
+                                    Some(command.event_id),
+                                    &frame.captured_at,
+                                    action.at_ms,
+                                )?;
+                                files.publish(&fault, "results")?;
+                                if error.code == ProtocolFaultCode::Bounds {
+                                    return Err(error.to_string());
+                                }
+                                events.push(fault);
+                            }
                         }
-                        events.push(fault);
+                    } else {
+                        session.tick(frame, action.at_ms)?;
                     }
-                }
-            } else {
-                session.tick(frame, action.at_ms)?;
-            }
-            if !session.stopped {
-                schedule.collect(
-                    &mut session,
-                    &mut files,
-                    &mut artifacts,
-                    frame,
-                    action.at_ms,
-                )?;
-            }
-            if session.stopped
-                && let Some(artifacts) = &mut artifacts
-            {
-                artifacts.write_peak(&frame.cgroup_peak)?;
-            }
+                    if !session.stopped {
+                        schedule.collect(session, files, &mut artifacts, frame, action.at_ms)?;
+                    }
+                    if session.stopped
+                        && let Some(artifacts) = &mut artifacts
+                    {
+                        artifacts.write_peak(&frame.cgroup_peak)?;
+                    }
+                    Ok(())
+                },
+            )?;
         }
         require(session.stopped, "replay lacks explicit monitor.stop/drain")?;
         Ok(())
