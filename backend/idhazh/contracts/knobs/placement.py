@@ -247,49 +247,6 @@ class SimilarityThresholdConfig(Model):
             "step_change_multiple carries a value measured from fourteen written rows."
         ),
     )
-    pair_budget: int = Field(
-        default=200,
-        ge=1,
-        description=(
-            "How many pairs a day may be judged. 200 pairs over the council's committed "
-            "four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s "
-            "on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 "
-            "minutes at the measured average of 94.53 s "
-            "(docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a "
-            "job-timeout question before it is a quality one, and this judge refuses a "
-            "value that does not fit the window the council leaves a unit to work in - "
-            "checked when the council resolves this judge, not when config is read, "
-            "because the per-pair cost is this judge's own measurement."
-        ),
-    )
-    flush_every_pairs: int = Field(
-        default=1,
-        ge=1,
-        description=(
-            "How many pairs a judging shard finishes before it writes its verdict file "
-            "again. Every pair, because the file holds one shard's slice of pair_budget - "
-            "50 rows at the committed numbers - and rewriting 50 rows is not measurable "
-            "beside a pair that costs 110.98 s. It buys the case the cadence exists for: a "
-            "shard that stops on its clock, or dies, still leaves every pair it had "
-            "already judged. Counted in pairs because a pair is the unit this judge stops "
-            "between. Raise it only if a run ever shows the rewrite costing anything."
-        ),
-    )
-    judge_temperature: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=2.0,
-        description=(
-            "How far the judge's sampler may stray from the likeliest word. 0.0, because "
-            "every pair is read twice with the two summaries swapped and the two readings "
-            "are then compared: at 0.0 a disagreement is position bias, which is the thing "
-            "disagreement_max gates on. Above 0.0 the same pair can answer differently with "
-            "nothing swapped at all, so the comparison measures sampling noise instead and "
-            "the gate stops meaning what its own name says. It sits here rather than on "
-            "models.summarizer.sampling because that entry pins its temperature for writing "
-            "summaries, which is a different job on the same weights."
-        ),
-    )
     minimum_negatives: int = Field(
         default=200,
         ge=1,

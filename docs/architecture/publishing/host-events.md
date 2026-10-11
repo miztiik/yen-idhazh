@@ -268,6 +268,147 @@ expected target root/invocation, named plan/completion files and explicit
 verification limits. It returns verified physical hashes and completeness,
 or a named refusal. It neither collects nor publishes.
 
+## Bounded historical inventory and dry-run
+
+`utilities.migrate_host_fingerprints` now prepares real replacement candidates
+without writing historical files. It is a maintenance codec, not a CPU collector.
+The unchanged Python collectors and production readers remain unchanged.
+
+Supply a `HistoryManifest` from `idhazh.contracts.host_migration`. Its schema is
+available through `HistoryManifest.json_schema()`. The manifest requires:
+
+- `version: "2026-10-11"`, a UTC `converted_at`, and the maintenance `invocation`
+  with producer `utilities.migrate_host_fingerprints` and the converting git SHA.
+- Inclusive `range_start` and `range_end`, both before the conversion day.
+- A finite `roots` list. Each root names its `state_root`, production or trial
+  `kind`, and tier-first host `prefix`. Production uses `["host-fingerprint"]`;
+  a trial adds its explicitly named segments before that final segment.
+- `closed_periods`, naming each root, exact `covers` and `daily`, `monthly` or
+  `yearly` grain. Every indexed entry, including empty and lost periods, must be
+  included. A complete month or year must fit inside the operator's range.
+- `sources`, naming every selected physical `path`, root, kind, exact original
+  SHA-256 and byte count. Raw, compact, raw-index and set-aside sources name
+  their closed period. Compact files, indexes, views and receipts declare their
+  exact source-path `dependencies`; raw files have no dependencies.
+- An `isolated_root` under `backend/var/`, outside all historical state roots.
+
+Source kinds are `raw`, `compact`, `raw_index`, `compact_index`, `view`, `receipt`
+and `set_aside`. The tool never discovers files recursively. An operator pins a
+named source list, including every selected probe, clock and superseded attempt,
+before running it. Unlisted later files require a fresh manifest. Completeness
+means this exact manifest was reconciled, not that all history was discovered.
+
+From `backend/`, with the repository's Python development environment:
+
+```powershell
+python -m utilities.migrate_host_fingerprints `
+  --workspace-root (Resolve-Path ..).Path `
+  --manifest backend/var/history-manifest.json
+```
+
+The command defaults to dry-run. `--apply` fails explicitly: application is not
+implemented here. The manifest and all source paths resolve under the supplied
+workspace; persisted paths remain relative and POSIX-separated.
+
+The command reads exactly two repository-owned configuration files, resolved
+from the utility's location, not the operator's workspace or environment.
+`history_migration_limits` in `config/host-history-migration.json` caps roots,
+closed periods, manifest bytes and the complete bundle. It contains no copied
+verification defaults. `verification_limits` in
+`config/host-telemetry-experiment.json` caps files, individual and aggregate source
+bytes, rows, footer/decode bytes, JSON depth and Thrift items. Every source read
+is bounded and hash-checked.
+`HistoryLimits` validates the combined effective inputs before reading history.
+Missing files or invalid bounds refuse the dry-run without source or config
+writes. The shared experiment file retains only native settings; Rust still
+rejects unknown sections and does not read the migration-only file.
+The full batch and existing retry targets validate before any bundle is created.
+Physical root and file identities reject case aliases and repeated hard-linked
+sources or destinations. Existing ancestors also establish separation when the
+isolated directory does not yet exist. Original path labels are not rewritten;
+distinct case-sensitive roots stay distinct. Symlinks and junctions are refused.
+Missing destination names follow the existing parent's case rules. On Windows,
+those rules come from read-only directory attributes, not universal lowercasing.
+The Windows API branch uses an explicit platform check; Linux does not load
+Windows-only APIs.
+Missing or unreadable sources, hash drift, unknown/mixed schemas, unsafe paths,
+receipt disagreement and incomplete compact/index dependencies fail by name.
+Present set-aside files receive `unresolved`, never a successful skipped-file
+diagnosis. Lost periods remain lost; empty periods remain empty.
+An index loss day that also has compact rows is a contradiction, not a marker
+to repair. Loss, expiry and set-aside markers remain exact, including periods
+with only unread files set aside and no surviving rows.
+
+JSONL and bounded flat historical Parquet use the existing maintenance codecs.
+Parquet admits actual V1 page bodies and finite dictionaries before Arrow decodes
+rows; none, Snappy and Zstd retain their actual compression. Unsupported page
+profiles fail, rather than weakening decode bounds. No new Rust output is
+re-encoded: already corrected files are explicitly excluded from replacement.
+Footer row counts must equal the bounded row-group sum before page decoding,
+and the actual decoded row count afterward. Contradictions refuse the entire
+source batch without a bundle or historical writes.
+
+Each legacy candidate preserves its path, UUID5 work unit, UUID8 file identity,
+allocation clock, attempts and original producer/git lineage. The canonical row
+digest is checked before the shared legacy normalizer runs. Historical hashes
+retain algorithm 1 only when present; legitimate positive observed averages
+survive. The exact discarded old counts/frequencies and every null field are
+reported. Old counts and maximum frequencies never become corrected readings.
+Both original and normalized unions pass the existing whole-row settlement
+function; keys, winners, attempts and cardinality must agree.
+When compact input dependencies are declared, they must cover the complete
+original `built_from` count and settle to the same rows, including discarded
+legacy CPU values. Partial or contradictory input claims fail. Compact-only
+history instead records no surviving inputs and retains its original count;
+that does not claim recovery or independent proof of retired source bytes.
+
+The immutable bundle lives at `<isolated_root>/<scope_hash>/<evidence_hash>/`.
+It contains the manifest, report, verified raw/compact/index candidate bytes and
+retained original receipts. The report records original/replacement envelopes,
+physical and canonical hashes, identities/keys, nulls, averages, index changes,
+source dependencies and estimated read/candidate bytes. `scope_hash` binds the
+entire operator manifest. `evidence_hash` binds the validated report and limits;
+the derived bundle path and the hash itself are excluded from that preimage.
+Exact partial retries reuse bytes. Different bytes at a candidate path fail.
+
+Console view inputs use the retained `ConsoleBand` contract, including its known
+historical schema dates. The retired `frontend/public/machine/*.csv` projection
+has no current reader contract and is refused before any bundle write. This
+refusal does not retire source bytes or make a manifested file reconciled.
+An affected historical batch remains blocked until its exact dependencies are
+resolved; unrelated validated batches can proceed.
+The report is published last. New evidence generations do not overwrite old ones.
+This is per-file atomic visibility, not a multi-file or power-loss guarantee.
+The read estimate counts the two source passes; manifest/retry-target reads and
+bundle verification are additional I/O. The candidate estimate includes the
+manifest and candidate receipt but excludes the final report; the enforced
+bundle byte cap includes every artifact, including that report.
+
+`candidate-maintenance-receipt.json` gives the replacement target paths and
+candidate physical hashes under the maintenance invocation. It is a planned
+receipt shape, not proof that historical paths already hold those bytes.
+Old invocation receipts remain historical evidence. No source is retired;
+future application must verify original-byte backups and a writer/compactor/
+publisher quiet window before replacing any source.
+
+The initial reader mode is `candidate_reader`. Raw, compact and index candidates
+can be `candidate_complete`. Actual published `machine/<YYYY-MM>.csv` and
+`console/band.json` sources are validated through their existing contracts, but
+their replacements and associated receipts are explicitly `deferred`. There are
+no fabricated future-consumer calls or copied views described as rebuilt.
+`historical_readiness` remains `blocked`, even for a complete fixture inventory.
+After shared schemas and consumers migrate, the same closed manifest must run
+against those actual consumers, freeze view/receipt bytes in a new evidence
+generation, and satisfy the historical evidence gate before application.
+
+The artifact-only workflow can run these bounded, generated-file tests before
+its verdict; no test scans committed archives or installs tools:
+
+```powershell
+python -m pytest -n 0 tests/contracts/test_host_migration.py `
+  tests/test_host_fingerprint_migration.py
+```
+
 ## Design rationale
 
 Fowler ruled that disjoint modules can be written in parallel after their tested
@@ -289,6 +430,14 @@ Snappy decoding; shared Python ledger codecs remain unchanged.
 Production cutover and historical replacement are authorized for unattended
 delivery after their evidence/readiness gates. Contracts and green tests alone
 do not establish that evidence or permit skipping backups and quiet windows.
+
+Fowler ruled on 2026-10-11 that the initial historical fixture dry-run must not
+pull future consumer migration forward or invent its output. Explicit deferred
+view and receipt statuses retain that dependency while real file and index
+candidates complete now. The later migrated-consumer rerun costs one bounded
+reconciliation pass and is required before historical readiness, not a new
+permission request. The page stays whole: these controls govern the same
+host-event output and evidence boundary, not a separate maintenance subsystem.
 
 ## See also
 

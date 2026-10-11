@@ -570,7 +570,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help=(
             "Which registered tenant `council-shard` runs a shard of, by the slug "
-            "`council.tenants` names. One cell of the matrix is one tenant: two sharing "
+            "`judge_names` in config/llm_council.json names. One cell of the matrix is "
+            "one tenant: two sharing "
             "a job would each be handed the whole span the venue meant for one of them."
         ),
     )
@@ -606,8 +607,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ledger.use_registry(ledger.overlay_registry(trial_segments))
             )
             logging.getLogger(__name__).warning(
-                "trial run: every ledger goes to state/<tier>/%s and no published "
-                "series reads it",
+                "trial run: every ledger goes to state/<tier>/%s and no published series reads it",
                 Path(*trial_segments).as_posix(),
             )
         return _dispatch(parser, args, settings)
@@ -708,7 +708,7 @@ def _dispatch(
         # own config and handing a date to whatever answers to a slug. Starting a
         # fetcher here would read every host's robots.txt for nothing.
         council_session.prepare(
-            settings.app.council,
+            settings.council,
             date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
         )
@@ -734,12 +734,12 @@ def _dispatch(
                 if args.job_started_at
                 else None,
             )
-            if settings.app.council.tenants
+            if settings.council.judge_names
             else contextlib.nullcontext()
         )
         with machine:
             council_session.settle(
-                settings.app.council,
+                settings.council,
                 date=args.date or _today(),
                 run_id=night,
                 state_dir=state_dir,
@@ -758,7 +758,7 @@ def _dispatch(
                 "spend a whole runner deciding it had nothing to do"
             )
         council_session.run_shard(
-            settings.app.council,
+            settings.council,
             slug=args.tenant,
             date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),

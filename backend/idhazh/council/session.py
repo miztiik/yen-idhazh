@@ -36,6 +36,7 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import metrics_sink
 from idhazh.council.deadline import run_shard_under_the_clock
+from idhazh.council.registry import VENUE_LEDGERS as VENUE_LEDGERS
 from idhazh.council.registry import tenant, tenants
 from idhazh.council.tenancy import ShardResult, Tenant
 from idhazh.ledger import staging
@@ -63,12 +64,11 @@ OUTCOMES_DIRNAME: Final = "outcomes"
 #: How a recorded instant is spelled. The contract pins the shape, and this is
 #: the one place a council row is stamped with it.
 STARTED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
-VENUE_LEDGERS: Final = (LedgerName.COUNCIL_RUN_RECORDS, LedgerName.HOST_FINGERPRINT)
 
 
 def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
     """The venue's and hosted tenants' declarations, never a blanket state claim."""
-    hosted = tenants(council.tenants)
+    hosted = tenants(council.running(), council=council)
     if not hosted:
         return ()
     if any(
@@ -262,7 +262,9 @@ def run_shard(
     invocation, so two tenants sharing a job would each be handed the whole span
     the venue meant for one of them.
     """
-    host = tenant(slug)
+    if slug not in council.running():
+        raise ValueError(f"judge '{slug}' is not active in this council")
+    host = tenant(slug, council=council)
     return _recorded(
         host.judge_id,
         unit=f"shard {shard} of {shards}",
@@ -286,9 +288,9 @@ def run_shard(
 
 def _hosted(council: CouncilConfig, date: DateStamp) -> tuple[Tenant, ...]:
     """The tenants this night hosts, said out loud so an empty night is readable."""
-    hosted = tenants(council.tenants)
+    hosted = tenants(council.running(), council=council)
     if not hosted:
-        _log.info("no tenant is registered, so %s is a night the council hosts nobody", date)
+        _log.info("no judge is active, so %s is a night the council hosts nobody", date)
     return hosted
 
 

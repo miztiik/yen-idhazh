@@ -260,7 +260,9 @@ def decode_settings(settings: config.Settings) -> Mapping[str, Any]:
     instead would agree with config and disagree with what went out, which is the
     one case worth seeing.
     """
-    tuning = settings.app.assemble.same_story.judging_knobs()
+    from idhazh.content_similarity_judge import settings as judge_settings
+
+    tuning = judge_settings.load(settings.config_dir)
     return entry_of(settings).sampling | {"temperature": tuning.judge_temperature}
 
 

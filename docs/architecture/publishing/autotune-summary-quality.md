@@ -1,15 +1,15 @@
 # Autotuning summary quality: the metrics and the loop
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-10-11
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
 in the loop.
 
 **Status: design of record, not deployed behaviour.** Faithfulness (HHEM) ships today and is defined
 on [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice). Coverage,
-coherence, fluency and the autotuning loop below are the target design, implemented by
-[../../../TODO/20260918-36-summary-quality-autotune-plan.md](../../../TODO/20260918-36-summary-quality-autotune-plan.md),
-which reuses the `LLM-COUNCIL` workflow and the `Fit` pattern from the same-story similarity judge
+coherence, fluency and the autotuning loop below are the target design. Plan 36 was to build it; on 2026-10-11 the owner moved plan 36 into
+[plan 65](../../../TODO/20261011-65-summary-fidelity-judge-plan.md), which decides, question by question, what of this design is built. The design
+reuses the `LLM-COUNCIL` workflow and the `Fit` pattern from the same-story similarity judge
 ([autotune-content-similarity.md](autotune-content-similarity.md)).
 
 ## The four metrics
@@ -207,4 +207,4 @@ sample.
 - [../../concepts/summary-metrics.md](../../concepts/summary-metrics.md) - what one number about one summary means, and what it cannot see.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the merge line that already fits itself: the `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - where the next-day council sits in the two loops.
-- [../../../TODO/20260918-36-summary-quality-autotune-plan.md](../../../TODO/20260918-36-summary-quality-autotune-plan.md) - the plan that builds this, and names this page its design of record.
+- [../../../TODO/20261011-65-summary-fidelity-judge-plan.md](../../../TODO/20261011-65-summary-fidelity-judge-plan.md) - plan 65, which took over plan 36 on 2026-10-11; its Table RE says what it takes from this page and what it leaves.

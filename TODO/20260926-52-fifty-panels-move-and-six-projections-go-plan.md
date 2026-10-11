@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 
-**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is locally ready and awaits publication. Rows 5 to 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
+**Status**: Rows 1, 2, 3a, 3 and 4 are merged in #1529, #1537, #1538 and #1542. Shared-support row 2b is merged in #1546. Row 5 is implemented and awaiting final delivery. Rows 6 to 11 still require delivery. Row 12 and its related public-projection and reader deletions are complete in merged #1189 and stay COLLAPSED.
 
 **Level**: 5 (CLAUDE.md section 6). Rows 5 and 10 change a persisted payload every console document carries. The route rows are Level 3: each crosses code and published data on one route. **Authorizing this plan is the design consultation section 6 asks of rows 5 and 10.** Row 12's approved deletion is carried by #1189.
 
@@ -63,7 +63,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Each route gets its own console file, gate drivers and test expectations | - | A | DONE | p52-route-ownership (`feat/console-route-ownership`) | Read from merge | Owner and file workers |
 | 2 | The ranked list draws a range and a floor, the date series carries the settings line, and every type carries its readout | 1 | B | DONE | p52-chart-contracts (`feat/console-chart-contracts`) | #1537 | Fowler; Susan S1-S6 |
-| 2b | Shared charts retain rule meaning, identity-free rankings and signed clock reconciliation | 2 | B | LOCAL READY: publication pending | p52-shared-support (`feat/console-shared-support`) | Read from merge | Owner |
+| 2b | Shared charts retain rule meaning, identity-free rankings and signed clock reconciliation | 2 | B | DONE | p52-shared-support (`feat/console-shared-support`) | #1546 | Owner |
 | 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Fowler and owner |
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Susan, Fowler and owner |
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | DONE | p52-panel-queries (`feat/console-panel-queries`) | #1542 | Owner and disjoint contract, canary and guard workers |

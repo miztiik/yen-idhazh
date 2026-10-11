@@ -1,8 +1,8 @@
 # Summary-fidelity judge: the hard look (review record, 2026-10-11)
 
-**Record**: the two reviews the owner asked for on 2026-10-11 - "a hard look at what matters, how we measure it, and what is measured and judged upon" - after ruling that the judge must judge summary quality across the digest, not per site. Andre (evaluation) designed what is judged, the test and the composite, on the 50 daily records under state/day-metrics/ and the research record TODO/20261011-summary-quality-metrics-research-record.md. Fowler (architecture) reviewed the structure, the split with plan 36 and the council plan's coverage of the gardener's strengths. Both are advice; the owner's rulings are in the plan's Table P (TODO/20261011-summary-fidelity-judge-plan.md).
+**Record**: the two reviews the owner asked for on 2026-10-11 - "a hard look at what matters, how we measure it, and what is measured and judged upon" - after ruling that the judge must judge summary quality across the digest, not per site. Andre (evaluation) designed what is judged, the test and the composite, on the 50 daily records under state/day-metrics/ and the research record TODO/20261011-summary-quality-metrics-research-record.md. Fowler (architecture) reviewed the structure, the split with plan 36 and the council plan's coverage of the gardener's strengths. Both are advice; the owner's rulings are in Table P of plan 65 (TODO/20261011-65-summary-fidelity-judge-plan.md).
 
-Paths beginning review/, hardlook/ or council_src/ name the reviewers' working copies of the repository files of the same name (for example hardlook/plan36.md is TODO/20260918-36-summary-quality-autotune-plan.md); the analysis code is not committed.
+Paths beginning review/, hardlook/ or council_src/ name the reviewers' working copies of the repository files of the same name (for example hardlook/plan36.md is plan 36, TODO/20260918-36-summary-quality-autotune-plan.md until 2026-10-11 and Section 5 of plan 65 since); the analysis code is not committed.
 
 ---
 
