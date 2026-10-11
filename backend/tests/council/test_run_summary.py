@@ -294,8 +294,8 @@ def test_event_transport_write_failure_is_not_silently_ignored(tmp_path: Path) -
             event_lines.emit(unit(), logger=logger, force=True)
     finally:
         logger.removeHandler(handler)
-        handler.stream = None
-        handler.close()
+        with pytest.raises(ValueError):
+            handler.close()
 
 
 @pytest.mark.parametrize("defect", ["wrong-run", "duplicate", "contradictory", "truncated"])
