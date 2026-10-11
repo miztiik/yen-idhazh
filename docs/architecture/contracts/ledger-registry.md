@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -122,7 +122,7 @@ The first row is what the registry is for. The claim used to be a hand-written P
   - A compaction declaration, `config/gardener/compact-<folder>.json`, where `<folder>` is its prefix with each `/` written `-`. `compaction_task` in `backend/idhazh/config.py` builds that name, and `test_a_compaction_and_a_door_ledger_come_together` refuses a door ledger without one.
   - That task's name in `task_names` of `config/idhazh_gardener.json`. The gardener loads only the declarations named there.
   - The owner-approved retention in that declaration: live packing (`dry_run` false, `compact_after_days` 1), `daily_keep_days` 45, `monthly_keep_days` 93, a `monthly_window` of `forever`, and yearly expiry after 36 calendar months (`yearly_keep_months` 36, `yearly_prune_enable` true). `test_every_ledger_uses_the_approved_live_retention_chain` holds every compaction to it.
-  - Its entry in the named-decision tables of `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - so `LIVE_BY_DECISION` names the owner's decision beside each switch that runs live. A switch ships in dry run unless a named decision put it live, so a declaration missing from both tables is refused.
+  - Its entry in `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - which `test_every_ledger_uses_the_approved_live_retention_chain` reads, so a compaction missing from both is refused. A switch ships in dry run, and the commit that turns one live names the owner's decision in its message; no test holds that list (owner ruling, 2026-10-11).
 
 **Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. The next write of new rows into it is skipped with one warning, and its old rows are read and aged as before: its compaction keeps packing them, and its yearly expiry keeps deleting what is older than its window.
 

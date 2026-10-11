@@ -310,10 +310,10 @@ class ObservabilityConfig(Model):
             "full-grain shard goes, so a reader keeps every cause breakdown and every "
             "stratum and loses the per-attempt row and its join key. Fourteen matches "
             "the two ledgers it is read beside; a shorter one would leave a day whose "
-            "failures are still readable and whose refused pictures are not. It is NOT "
-            "in full_grain_months() yet, and the reason is that no console read opens "
-            "one of these shards today - the panels that will are their own plan, and "
-            "the window joins that check in the same commit as the first of them."
+            "failures are still readable and whose refused pictures are not. No console "
+            "read opens one of these shards today - the panels that will are their own "
+            "plan, and the retention-window check joins in the same commit as the first "
+            "of them."
         ),
     )
     visual_aggregate_keep_months: int | None = Field(
@@ -324,43 +324,6 @@ class ObservabilityConfig(Model):
             "never, on the same argument as the other two aggregates: the fold is the "
             "only record that a gate ever refused anything, and it is kilobytes. Set, "
             "it must sit ABOVE visuals_full_grain_months."
-        ),
-    )
-    public_run_days_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/run-days/ keeps a month of day rows. Fourteen "
-            "because the console reaches 367 inclusive days and those days can fall in "
-            "fourteen month shards, which is the same reason the gardener's feed-health "
-            "task keeps fourteen months. It has no state ledger to be paired with: the "
-            "source is the committed day payloads themselves, whose retention is the "
-            "archive's, and this row is a reduction of two of them to counts."
-        ),
-    )
-    public_day_metrics_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/day-metrics/ keeps a month of day records. "
-            "Fourteen on the same argument as public_run_days_keep_months. The source "
-            "under state/day-metrics/ has no age of its own - a day record is a few "
-            "kilobytes and it is the only place a band count or an extraction census "
-            "survives once the day's items are folded - so this bounds the published "
-            "copy without claiming to bound the ledger."
-        ),
-    )
-    public_machine_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/machine/ keeps a month of machine rows. "
-            "Fourteen on the same argument. The shard is folded from the "
-            "item-health and host-fingerprint ledgers, so it may not outlive "
-            "either source: a published month whose source months are gone cannot be "
-            "rebuilt. config.load_gardener refuses a declaration governing the "
-            "host-fingerprint ledger - its compaction - that keeps less than this, on "
-            "the argument the telemetry copy makes for its own pair."
         ),
     )
     public_run_timeline_keep_months: int = Field(
@@ -439,40 +402,6 @@ class ObservabilityConfig(Model):
         would believe they had moved a window that did not move.
         """
         return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
-
-    def full_grain_months(self) -> Mapping[str, int]:
-        """Every published window here that has to outlive what a console read can select.
-
-        The console fetches these copies: a published shard deleted while a
-        window preset still reaches it blanks the panel that draws it, and it
-        does so silently, because a month with no file is indistinguishable from
-        a month with no runs. The windows of the ledgers behind them are the
-        gardener's, and `config.load_gardener` holds those to the same read.
-        """
-        return MappingProxyType(
-            {
-                "public_run_days_keep_months": self.public_run_days_keep_months,
-                "public_day_metrics_keep_months": self.public_day_metrics_keep_months,
-                "public_machine_keep_months": self.public_machine_keep_months,
-            }
-        )
-
-    def refuse_windows_shorter_than(self, shards: int, *, window_days: int) -> None:
-        """Refuse a config that would delete a shard a console read still opens.
-
-        Checked against the shards the window selects rather than against the
-        window's own length, because a month is not thirty days and the old
-        `months * 30` comparison passed a value that is one shard short.
-        """
-        short = {
-            name: months for name, months in self.full_grain_months().items() if months < shards
-        }
-        if short:
-            spelled = ", ".join(f"observability.{name} is {value}" for name, value in short.items())
-            raise ValueError(
-                f"a {window_days}-day read can select {shards} month shards, so every "
-                f"full-grain window must keep at least {shards}: {spelled}"
-            )
 
     @model_validator(mode="after")
     def _a_summary_outlives_the_rows_it_replaces(self) -> Self:

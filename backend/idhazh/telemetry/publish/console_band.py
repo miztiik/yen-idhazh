@@ -15,9 +15,8 @@ cutover would look like a pipeline change rather than a plumbing one.
 **Where each fact comes from, and why.** A number is taken from the ledger that
 owns it, never re-derived from a wider one:
 
-- the runs, the site size and the day's article count come from the run-day
-  shards this run just wrote, because re-reducing five months of day payloads is
-  exactly the walk those shards exist to remove (Guardrail #12);
+- the runs and site size come from native manifests; published-item counts come
+  from each day's state day-metrics record, never from `digest.json`;
 - the feed trouble comes from the feed-health ledger through `discover.settled`,
   `discover.streak` and `discover.resting`, because those are the reducers the
   pipeline itself rested a feed by, and a page that ran its own would contradict
@@ -26,8 +25,7 @@ owns it, never re-derived from a wider one:
   own day-metrics record, each keyed to the newest day the manifests hold;
 - the free-swap pair comes from that same item-health day, which is the only
   place either cell is recorded;
-- the machine facts come from `frontend/public/machine/`, the published fold of
-  the item-health and host-fingerprint ledgers, whose read `machine` declares;
+- the machine facts come from native work-job host-fingerprint rows;
 - the compaction lag comes from the fold this run already ran, handed in by the
   caller. It is never a listing taken here, because the fold runs first and the
   directory is empty by the time this file is written.
@@ -41,6 +39,7 @@ it (Guardrail #6).
 from __future__ import annotations
 
 import math
+from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -49,8 +48,11 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import assemble, day_partition, discover, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.console_band import (
+    BandCheckerMoved,
     BandRun,
+    BandSettingsMoved,
     BandSize,
     BandVerdict,
     BandWorst,
@@ -61,22 +63,21 @@ from idhazh.contracts.console_band import (
 )
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
-from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files, months_between, oldest_month_kept
 from idhazh.telemetry.publish import (
     day_metrics,
-    machine,
     public_telemetry,
-    run_days,
     series,
+    settings_moved,
 )
 
 #: The 1 GB Pages ceiling (`CLAUDE.md` Guardrail #2). A constant and not a knob, for
@@ -256,7 +257,20 @@ def middle_of(values: Sequence[float]) -> float | None:
     return (ordered[middle - 1] + ordered[middle]) / 2
 
 
-def site_cost(days: Sequence[PublicRunDay]) -> tuple[float | None, int]:
+@dataclass(frozen=True)
+class BandDay:
+    """Native runs and the published-item count from their day's state record."""
+
+    date: str
+    runs: Sequence[RunRecord]
+    published_items: int
+
+    @property
+    def site_bytes(self) -> int:
+        return self.runs[-1].site_bytes
+
+
+def site_cost(days: Sequence[BandDay]) -> tuple[float | None, int]:
     """What one more published article costs, as a median over the record.
 
     A day's cost is its own bytes minus the previous day's, over the articles it
@@ -315,17 +329,17 @@ def worst_of(candidates: Sequence[Candidate]) -> Candidate | None:
     return ranked[0] if ranked else None
 
 
-def run_health(run: PublicRunRecord, floor_pct: float) -> Health:
+def run_health(run: RunRecord, floor_pct: float) -> Health:
     """The same rule the run strip colours a square by, and the same floor CI
     opens an issue on - so a red square, an open issue and this sentence agree."""
     if run.status == "failed":
         return Health.RED
-    attempted = run.succeeded + run.failed
+    attempted = run.items_succeeded + run.items_failed
     if attempted == 0:
         return Health.AMBER
-    if (run.succeeded / attempted) * 100 < floor_pct:
+    if (run.items_succeeded / attempted) * 100 < floor_pct:
         return Health.RED
-    if run.failed > 0 or run.status != "completed" or run.source_list_stale:
+    if run.items_failed > 0 or run.status != "completed" or run.source_list_stale:
         return Health.AMBER
     return Health.GREEN
 
@@ -379,7 +393,7 @@ def feed_trouble(rows: Sequence[FeedHealthRow], quarantine_after: int) -> FeedTr
 
 
 def pipelines_candidates(
-    newest: PublicRunDay | None,
+    newest: BandDay | None,
     feeds: FeedTrouble,
     *,
     floor_pct: float,
@@ -581,7 +595,7 @@ def model_candidates(day: BandModel | None) -> list[Candidate]:
 class MachineFacts:
     """The band's slice of the host rows, and only that slice.
 
-    The Hardware route draws the whole picture from the published machine series.
+    The Hardware route draws the whole picture from native host records.
     What the band needs is four numbers, so four are derived here rather than
     the twenty the route draws.
 
@@ -1024,7 +1038,7 @@ def _rate(tokens: float | None, seconds: float | None) -> float | None:
 def build(
     *,
     generated_at: str,
-    days: Sequence[PublicRunDay],
+    days: Sequence[BandDay],
     feeds: Sequence[FeedHealthRow],
     health_rows: Sequence[Mapping[str, str]],
     record: DayMetrics | None,
@@ -1038,10 +1052,12 @@ def build(
     compaction_lag_days: int = 0,
     rows_uncompacted: int = 0,
     covers_through: str | None = None,
+    settings_changes: BandSettingsMoved | None = None,
+    checker_changes: BandCheckerMoved | None = None,
 ) -> ConsoleBand:
     """The whole band, from rows a caller read. Pure, so a fixture drives it.
 
-    `days` is newest last, the order the run-day shards hold. Everything the
+    `days` is newest last, each from a native manifest. Everything the
     band says about "the newest day" is keyed to the newest of these, so the
     verdict, the size, the worst fact and the carries cannot name two different
     days.
@@ -1137,10 +1153,12 @@ def build(
         compaction_lag_days=compaction_lag_days,
         rows_uncompacted=rows_uncompacted,
         covers_through=covers_through,
+        settings_moved=settings_changes,
+        checker_moved=checker_changes,
     )
 
 
-def _verdict(newest: PublicRunDay | None, floor_pct: float) -> BandVerdict:
+def _verdict(newest: BandDay | None, floor_pct: float) -> BandVerdict:
     """Counts first, then what is wrong with them.
 
     An operator who reads only the first clause still knows whether the day
@@ -1154,9 +1172,9 @@ def _verdict(newest: PublicRunDay | None, floor_pct: float) -> BandVerdict:
             runs=[],
             more_runs=0,
         )
-    planned = sum(run.planned for run in newest.runs)
-    succeeded = sum(run.succeeded for run in newest.runs)
-    failed = sum(run.failed for run in newest.runs)
+    planned = sum(run.items_planned for run in newest.runs)
+    succeeded = sum(run.items_succeeded for run in newest.runs)
+    failed = sum(run.items_failed for run in newest.runs)
     verdicts = [run_health(run, floor_pct) for run in newest.runs]
     if Health.RED in verdicts:
         health = Health.RED
@@ -1188,8 +1206,8 @@ def _verdict(newest: PublicRunDay | None, floor_pct: float) -> BandVerdict:
 
 
 def _size(
-    ordered: Sequence[PublicRunDay],
-    newest: PublicRunDay | None,
+    ordered: Sequence[BandDay],
+    newest: BandDay | None,
 ) -> BandSize:
     """The committed tree against the 1 GB Pages cap.
 
@@ -1237,7 +1255,7 @@ def _size(
 
 
 def _carries(
-    newest: PublicRunDay | None,
+    newest: BandDay | None,
     model: BandModel | None,
     health_rows: Sequence[Mapping[str, str]],
     feeds: FeedTrouble,
@@ -1314,16 +1332,17 @@ def publish(
     Returns the path when the band changed and None when it did not. The reads
     are:
 
-    - the newest `shard_months(widest)` run-day shards, for the runs, the size
-      and the article counts;
+    - native manifest discovery over the named months, including the whole
+      planning month; then the widest span's native manifests and state
+      day-metrics records, for the runs, size and published-item counts;
     - the feed-health days the widest span reaches, through `ledger.load_health`,
       which opens the files of the newest days the ledger holds and no others;
     - the newest day's item-health rows through `ledger.load_days`, which opens
       that one day's files, and its day-metrics record, one file;
     - the host rows for the days the widest span reaches, through
       `ledger.load_days`, which opens the files of those days and no others;
-    - the newest day's run manifest, one file, for the shard count each of that
-      day's runs planned.
+    - the same manifests' inputs and native eval versions over that span, with
+      one independent walkback per kind of at most one equal-length span.
 
     `sources` is the run's own source-health view, handed over by the caller
     that already built it rather than read again here - it is one row per
@@ -1340,33 +1359,81 @@ def publish(
     """
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
-    day_root = series.series_root(digest_root, run_days.DIRNAME)
-    available = series.published_months(
-        digest_root,
-        run_days.DIRNAME,
-        run_days.SUFFIX,
-        months_between(oldest_month_kept(today, months), today.isoformat()[:7]),
+    oldest = date.fromisoformat(f"{oldest_month_kept(today, months)}-01")
+    discovery_end = today.replace(day=monthrange(today.year, today.month)[1])
+    newest_date = next(
+        (
+            stamp
+            for stamp in day_partition.days_in_window(
+                discovery_end.isoformat(), (discovery_end - oldest).days
+            )
+            if (assemble.day_dir(digest_root, stamp) / "run.json").is_file()
+        ),
+        None,
     )
-    days: list[PublicRunDay] = []
-    for month in available[-months:]:
-        days.extend(run_days.read_shard(day_root / f"{month}{run_days.SUFFIX}"))
-    days.sort(key=lambda row: row.date)
-    newest_date = days[-1].date if days else None
     # The window is anchored on the newest day found and never on today: a clock
     # anchor answers with nothing at all for a corpus that stopped publishing
     # three months ago.
     anchor = newest_date or today.isoformat()
+    stamps = day_partition.days_in_window(anchor, widest - 1)
+    first = stamps[-1]
+    manifests: dict[str, RunManifest] = {}
+    records: dict[str, DayMetrics] = {}
+    days: list[BandDay] = []
+    for stamp in reversed(stamps):
+        source = assemble.day_dir(digest_root, stamp) / "run.json"
+        if not source.is_file():
+            continue
+        manifest = RunManifest.read(source)
+        manifests[stamp] = manifest
+        record_path = day_metrics.day_metrics_path(state_root, stamp)
+        metrics = DayMetrics.read(record_path) if record_path.is_file() else None
+        if metrics is not None:
+            records[stamp] = metrics
+        days.append(BandDay(
+            date=stamp, runs=manifest.runs,
+            published_items=0 if metrics is None else metrics.items_published,
+        ))
+    input_days: dict[str, list[PipelineInputs]] = {
+        stamp: [row.inputs for row in manifest.runs if row.inputs is not None]
+        for stamp, manifest in manifests.items()
+    }
+    versions = {
+        stamp: [
+            row.get("scorer_version", "")
+            for row in day_metrics.read_score_rows(state_root, stamp)
+        ]
+        for stamp in stamps
+    }
+    # Each kind has its own predecessor: an absent setting day is not an absent
+    # checker day. Neither walk may reach farther than one additional span.
+    for earlier in reversed(day_partition.days_before(date.fromisoformat(first), widest)):
+        stamp = earlier.isoformat()
+        source = assemble.day_dir(digest_root, stamp) / "run.json"
+        if source.is_file():
+            inputs = [
+                row.inputs for row in RunManifest.read(source).runs
+                if row.inputs is not None
+            ]
+            if inputs:
+                input_days[stamp] = inputs
+                break
+    for earlier in reversed(day_partition.days_before(date.fromisoformat(first), widest)):
+        stamp = earlier.isoformat()
+        held = [
+            row.get("scorer_version", "")
+            for row in day_metrics.read_score_rows(state_root, stamp)
+        ]
+        if any(held):
+            versions[stamp] = held
+            break
     feeds = ledger.load_health(state_root, today=anchor, within_days=widest)
     health_rows = (
         []
         if newest_date is None
         else day_metrics.read_health_rows(state_root, newest_date)
     )
-    record = None
-    if newest_date is not None:
-        record_path = day_metrics.day_metrics_path(state_root, newest_date)
-        if record_path.is_file():
-            record = DayMetrics.read(record_path)
+    record = records.get(newest_date) if newest_date is not None else None
     machine_rows = _machine_rows(state_root, within_days=widest, anchor=anchor)
     band = build(
         generated_at=generated_at,
@@ -1375,7 +1442,11 @@ def publish(
         health_rows=health_rows,
         record=record,
         machine_rows=machine_rows,
-        planned_shards=_planned_shards(digest_root, newest_date),
+        planned_shards={
+            row.run_id: row.shards
+            for row in (() if newest_date is None else manifests[newest_date].runs)
+            if row.shards is not None
+        },
         months=fetchable_months(
             digest_root,
             telemetry_root,
@@ -1393,6 +1464,8 @@ def publish(
         compaction_lag_days=compaction_lag_days,
         rows_uncompacted=rows_uncompacted,
         covers_through=covers_through,
+        settings_changes=settings_moved.inputs_moved(input_days, first),
+        checker_changes=settings_moved.checker_moved(versions, first),
     )
     target = band_path(digest_root)
     payload = band.to_json().encode("utf-8")
@@ -1406,53 +1479,21 @@ def _within(day: str, anchor: str, window_days: int) -> bool:
     ).days < window_days and day <= anchor
 
 
-#: Every month series the console asks for by name, as (directory, suffix).
-#:
-#: Telemetry is not here. It predates `series` and owns its own root,
-#: which the canary keeps under `state/` rather than beside these four - so it is
-#: a parameter of `fetchable_months` instead of a row of this table.
-FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
-    (run_days.DIRNAME, run_days.SUFFIX),
-    (day_metrics.PUBLIC_DIRNAME, day_metrics.PUBLIC_SUFFIX),
-    (machine.DIRNAME, machine.SUFFIX),
-)
-
-
 def fetchable_months(
     digest_root: Path,
     telemetry_root: Path | None = None,
     *,
     months: Iterable[str],
 ) -> list[str]:
-    """Every month a shard the console fetches exists for, oldest first.
+    """Only telemetry's named months, oldest first, with no row file opened.
 
-    The union across all five series and not the run-day months alone. A
-    console that took one series for the list would never ask for a month the
-    others hold on their own - and they can differ, because each is pruned by
-    its own `observability.public_*_keep_months` and the canary's telemetry is
-    projected over a wider span than its run-days.
-
-    Telemetry is the one that matters most: the console holds no row until a
-    telemetry shard lands, so a month missing from this list is a month of the
-    page that never fills. It is a parameter because it predates
-    `series` and owns its own root - the canary keeps it under
-    `state/`. Unnamed, it is looked for beside the digest root like the other
-    four, which is where the real tree has it. It is never taken from
-    `public_telemetry`'s module default: a tree under test would then answer
-    with the repository's own months.
-
-    Five directory listings and no file opened, and each directory is bounded
-    by its own retention knob, so this costs the same on any size of archive
-    (`CLAUDE.md` Guardrail #12).
+    The native ledgers have their own indexes. The canary's telemetry root is
+    handed in because it lives under state instead of beside the digest.
     """
-    found: set[str] = set()
-    for dirname, suffix in FETCHED_SERIES:
-        found.update(series.published_months(digest_root, dirname, suffix, months))
     shards = telemetry_root or series.series_root(
         digest_root, public_telemetry.PUBLIC_TELEMETRY_DIRNAME
     )
-    found.update(path.stem for path in month_files(shards, ".csv", months))
-    return sorted(found)
+    return sorted(path.stem for path in month_files(shards, ".csv", months))
 
 
 def _machine_rows(
@@ -1465,8 +1506,7 @@ def _machine_rows(
     first attempt's, and one shard of one run is one host. Every other job writes
     a host row too, and they are not this slice: the plan and assemble jobs run
     one shard each, so pooling them into a shard count would answer about a
-    matrix nobody dispatched. `machine.PUBLISHED_JOB` carries the same reason for
-    the published series.
+    matrix nobody dispatched.
 
     The days of `within_days`, which is `max(console.window_presets)`, so the
     cost is set by a committed knob and not by how much the archive has
@@ -1478,30 +1518,5 @@ def _machine_rows(
         for row in ledger.load_days(
             state_root, LedgerName.HOST_FINGERPRINT, days, model=HostFingerprintRow
         )
-        if row.job == machine.PUBLISHED_JOB
+        if row.job == ServerJob.WORK
     ]
-
-
-def _planned_shards(digest_root: Path, newest_date: str | None) -> dict[str, int]:
-    """Each of the newest day's runs, by id, to the shard count it planned.
-
-    One file, and it is the manifest rather than the host rows on purpose: the
-    plan decided this number before any work job existed, so it is the one
-    reading that can disagree with how many of them answered. A run whose
-    manifest predates the cell is absent here, which is unknown - not zero.
-
-    The newest day only. The band reports on the newest run and refuses the rest
-    or says nothing about them, so reading a manifest a day is 90 file opens to
-    answer a question about one (Guardrail #12).
-    """
-    if newest_date is None:
-        return {}
-    source = assemble.day_dir(digest_root, newest_date) / "run.json"
-    if not source.is_file():
-        return {}
-    manifest = RunManifest.read(source)
-    return {
-        record.run_id: record.shards
-        for record in manifest.runs
-        if record.shards is not None
-    }

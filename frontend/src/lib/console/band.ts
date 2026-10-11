@@ -104,18 +104,40 @@ export interface ConsoleBandFacts {
 	};
 }
 
+export interface SettingsMove {
+	date: string;
+	inputs: string[];
+}
+
+export interface BandSettingsMoved {
+	compared_from: string | null;
+	changes: SettingsMove[];
+}
+
+export interface CheckerMove {
+	date: string;
+	score_moved: boolean;
+}
+
+export interface BandCheckerMoved {
+	compared_from: string | null;
+	changes: CheckerMove[];
+}
+
 export interface ConsoleShell {
 	band: ConsoleBandFacts;
 	routes: ConsoleRoute[];
 	/** One sentence per route pointing at the panel another route owns. */
 	carries: Record<RouteId, string>;
-	/** Every month the archive holds a shard for, newest last.
+	/** Every month a telemetry shard exists for, newest last.
 	 *
 	 * It rides on the band because a page cannot ask for a month until it knows
 	 * which months exist, and a list fetched on its own would be a fifth serial
 	 * hop before the first row of data (Carmack, 2026-09-08).
 	 */
 	months: string[];
+	settingsMoved: BandSettingsMoved | null;
+	checkerMoved: BandCheckerMoved | null;
 	/** False when no band payload could be read. The page prints a named absence
 	 * rather than a verdict it does not have. */
 	read: boolean;
@@ -210,6 +232,8 @@ export const BAND_UNREAD: ConsoleShell = {
 	})),
 	carries: blankCarries(),
 	months: [],
+	settingsMoved: null,
+	checkerMoved: null,
 	read: false
 };
 
@@ -223,6 +247,29 @@ function count(value: unknown): number | null {
 
 function healthOf(value: unknown): Health {
 	return HEALTHS.includes(value as Health) ? (value as Health) : 'amber';
+}
+
+function dateStamp(value: unknown): value is string {
+	if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+	const parsed = new Date(`${value}T00:00:00Z`);
+	return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function readChanges<T extends SettingsMove | CheckerMove>(
+	value: unknown, valid: (change: Record<string, unknown>) => boolean
+): { compared_from: string | null; changes: T[] } | null {
+	if (value === null || typeof value !== 'object') return null;
+	const raw = value as Record<string, unknown>;
+	if (raw.compared_from !== null && !dateStamp(raw.compared_from)) return null;
+	if (!Array.isArray(raw.changes)) return null;
+	let previous = '';
+	for (const change of raw.changes) {
+		if (change === null || typeof change !== 'object' || !dateStamp(change.date)) return null;
+		if (raw.compared_from === null || change.date < raw.compared_from || change.date <= previous) return null;
+		if (!valid(change)) return null;
+		previous = change.date;
+	}
+	return { compared_from: raw.compared_from as string | null, changes: raw.changes as T[] };
 }
 
 /** The published band as the components read it, or the named absence.
@@ -296,6 +343,13 @@ export function readBand(payload: unknown): ConsoleShell {
 			ROUTE_IDS.map((id) => [id, text(byId.get(id)?.carries, NO_CARRY)])
 		) as Record<RouteId, string>,
 		months: Array.isArray(raw.months) ? raw.months.filter((m): m is string => typeof m === 'string') : [],
+		settingsMoved: readChanges<SettingsMove>(raw.settings_moved, (change) =>
+			Array.isArray(change.inputs) && change.inputs.length > 0 &&
+			change.inputs.every((name) => typeof name === 'string' && name.length <= 64 &&
+				/^[a-z][a-z0-9_]*(\.[A-Za-z0-9_-]+)?$/.test(name)) &&
+			new Set(change.inputs).size === change.inputs.length),
+		checkerMoved: readChanges<CheckerMove>(raw.checker_moved, (change) =>
+			typeof change.score_moved === 'boolean'),
 		read: true
 	};
 }

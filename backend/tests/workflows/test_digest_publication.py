@@ -151,9 +151,6 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     month = run_plan.date[:7]
     projections = (
         "frontend/public/console/band.json",
-        f"frontend/public/day-metrics/{month}.json",
-        f"frontend/public/machine/{month}.csv",
-        f"frontend/public/run-days/{month}.json",
         f"frontend/public/run-timeline/{month}.csv",
         "frontend/public/source-health.json",
         f"frontend/public/telemetry/{month}.csv",
@@ -332,6 +329,22 @@ def test_named_indexes_import_old_permanent_heads_without_scanning_raw_archive(
     assert compact_path in inputs
     assert not any(path.startswith("state/raw/feed-retirements/1990") for path in inputs)
     assert "state/raw/feed-retirements" not in inputs
+
+
+def test_native_band_inputs_include_both_spans_without_retired_projection_roots() -> None:
+    settings = config.load(CONFIG_DIR)
+    through = "2026-10-09"
+    widest = max(settings.appearance.console.window_presets)
+    first = (date.fromisoformat(through) - timedelta(days=2 * widest - 1)).isoformat()
+    inputs = digest_assemble.input_paths(date=through, settings=settings)
+    day = first.replace("-", "/")
+    assert f"frontend/public/digest/{day}/run.json" in inputs
+    assert f"state/day-metrics/{day}.json" in inputs
+    assert f"frontend/public/digest/{day}/digest.json" not in inputs
+    assert not any(
+        path.startswith(f"frontend/public/{root}/")
+        for path in inputs for root in ("machine", "run-days", "day-metrics")
+    )
 
 
 def test_inputs_include_the_full_seen_and_published_consumer_windows() -> None:

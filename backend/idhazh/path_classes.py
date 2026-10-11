@@ -57,9 +57,6 @@ DERIVED: Final[tuple[str, ...]] = (
     "frontend/public/assist/index",
     "frontend/public/source-health.json",
     "frontend/public/console",
-    "frontend/public/run-days",
-    "frontend/public/day-metrics",
-    "frontend/public/machine",
     "frontend/public/run-timeline",
     "state/day-metrics",
 )

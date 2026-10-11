@@ -19,9 +19,7 @@ from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
 from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.gardener import MonthsWindow, RetentionPolicy
-from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.visual_decision import VisualDecision
 
@@ -188,7 +186,7 @@ def test_every_console_read_resolves_to_exactly_one_declared_shape() -> None:
         assert entry.contract in CONTRACTS, f"{stem} is not a registered contract ({entry.reader})"
 
     stems = payloads_by_stem()
-    assert len(stems) == 6, "the current console reads answer off six shapes"
+    assert len(stems) == 3, "only the band, telemetry and source-health projections remain"
     assert set(stems) == {entry.contract.__schema_stem__ for entry in CONSOLE_PAYLOADS}
 
 
@@ -291,15 +289,6 @@ def test_the_band_refuses_months_that_run_backwards() -> None:
             ConsoleBand.model_validate(payload | {"months": months})
 
 
-def test_a_day_cannot_draw_more_charts_than_it_published() -> None:
-    """The charts are a subset of the items, counted from the same payload, so a
-    row claiming more is a producer that counted two different trees."""
-    day = PublicRunDay.read(CONTRACT_FIXTURES_DIR / "public-run-day" / "five-runs.json")
-    payload = day.model_dump(mode="json")
-    with pytest.raises(ValidationError, match="claims"):
-        PublicRunDay.model_validate(payload | {"published_items": 3, "published_charts": 7})
-
-
 def test_every_published_month_payload_has_a_window_that_ends() -> None:
     """A payload a run appends to with no age is a directory that grows for ever.
 
@@ -310,7 +299,6 @@ def test_every_published_month_payload_has_a_window_that_ends() -> None:
     with the public-copy series of `config/gardener/telemetry-aggregate.json`;
     every other month folder has its own `public_*_keep_months` knob.
     """
-    observability = ObservabilityConfig()
     telemetry = config.load_gardener().tasks["telemetry-aggregate"]
     assert isinstance(telemetry, RetentionPolicy) and telemetry.series
     widest = months_a_window_can_touch(ConsoleConfig().max_window_days)
@@ -319,17 +307,7 @@ def test_every_published_month_payload_has_a_window_that_ends() -> None:
         for entry in CONSOLE_PAYLOADS
         if "<YYYY-MM>" in entry.published_to
     }
-    assert monthly == {
-        "telemetry",
-        "run-days",
-        "day-metrics",
-        "machine",
-    }
-    for root in monthly - {"telemetry"}:
-        knob = f"public_{root.replace('-', '_')}_keep_months"
-        months = getattr(observability, knob)
-        assert months is not None, f"observability.{knob} may not be null"
-        assert months >= widest
+    assert monthly == {"telemetry"}
     copy = telemetry.series[config.PUBLIC_COPY]
     assert isinstance(copy, MonthsWindow), "the public-copy series may not be forever"
     assert copy.value >= widest
