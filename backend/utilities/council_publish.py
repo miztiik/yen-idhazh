@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -9,10 +10,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from idhazh import completed_writes, config
+from idhazh import completed_writes, config, event_lines
 from idhazh.contracts.council_events import CouncilExit, CouncilProgram, NightPublished
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import event_log, outcome, run_identity, session
+from idhazh.council import event_log, outcome, run_identity, run_summary, session
 from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
 from idhazh.council.tenancy import Tenant
@@ -192,10 +193,18 @@ def _publication_code(result: PublicationResult) -> CouncilExit:
 
 
 def main(argv: list[str] | None = None) -> int:
-    return outcome.run(CouncilProgram.PUBLISH, lambda: _main(argv))
+    event_lines.install_crash_printer()
+    report = run_summary.Report()
+    with event_log.capture() as events:
+        code = outcome.run(CouncilProgram.PUBLISH, lambda: _main(argv, report=report))
+    report.events = events
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        report.write(Path(summary))
+    return code
 
 
-def _main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None, *, report: run_summary.Report | None = None) -> int:
     parser = outcome.Parser(description=__doc__)
     parser.add_argument("--date", action="append", required=True)
     parser.add_argument("--run-id", required=True)
@@ -203,10 +212,17 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--job-started-at", type=int)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--config-root", type=Path, default=Path("config"))
+    parser.add_argument("--matrix", help="The planner's JSON list of expected judging jobs.")
     parser.add_argument(
         "--units-result", choices=("success", "failure", "cancelled", "skipped"), default="success"
     )
     args = parser.parse_args(argv)
+    if report is not None and args.matrix is not None:
+        report.load(
+            args.matrix,
+            args.repo_root / "backend" / "var" / "council" / "events",
+            args.run_id,
+        )
     return settle_and_publish(
         repo=args.repo_root,
         dates=tuple(args.date),
@@ -216,7 +232,8 @@ def _main(argv: list[str] | None = None) -> int:
         started_at=datetime.fromtimestamp(args.job_started_at, UTC)
         if args.job_started_at is not None
         else None,
-        units_failed=args.units_result in ("failure", "cancelled"),
+        units_failed=args.units_result in ("failure", "cancelled")
+        or (report is not None and report.failed),
     )
 
 
