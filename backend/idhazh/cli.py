@@ -350,6 +350,7 @@ def _planned(date: str, execution: int | None) -> RunPlan:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] in ("council-prepare", "council-shard", "council-settle"):
         from idhazh.contracts.council_events import CouncilProgram

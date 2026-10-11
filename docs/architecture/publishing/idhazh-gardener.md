@@ -400,6 +400,11 @@ every line break, so one event is always one line, and no text inside it can
 start a line that GitHub reads as a workflow command. A test reads the event off
 the log record (`event_log.payload`), never its text.
 
+The pre-install crash printer reaches only `idhazh/__init__.py`,
+`idhazh/crash_trace.py` and `idhazh/event_lines.py`. Their import-time code
+uses the standard library alone. The bare planner fixture copies these three
+named files and runs with site packages disabled.
+
 | # | Event | When | What it says |
 | --- | --- | --- | --- |
 | 1 | `task-planned` | Before each task runs | The task, its kind, shard, run and attempt, the wake's day, a range a person named, every knob of its declaration, and the declared folders the commit does not hold yet |
