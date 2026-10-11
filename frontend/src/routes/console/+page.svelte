@@ -105,7 +105,7 @@
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
-	import RunHealthPanel from './RunHealthPanel.svelte';
+	import RunHealth from '$lib/console/pipelines/RunHealth.svelte';
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
 
 	let { data } = $props();
@@ -564,7 +564,6 @@
 
 	/** The day `Run health` has picked, on its chart or on its squares, or null
 	 * for the newest. One value for both figures, so they cannot show two days. */
-	let runAt = $state<number | null>(null);
 
 	/** Whole bytes with thousands separators. The per-article cost is a
 	 * four-digit number, so a rounded kilobyte would hide the whole range the
@@ -1074,25 +1073,17 @@
 	     its title to carry it - the same way `Failure rate against volume`
 	     names its own. A sighted reader has the window control above and the
 	     chart's date row. -->
-	<section
-		data-windowed="run-health"
-		data-window-days={windowDays}
-		aria-label="Run health, over {countDays(windowDays)}"
-	>
-		<Panel verdict title="Run health">
-			<RunHealthPanel
+			<RunHealth
 				yieldDays={data.runYieldDays}
 				grid={data.grid}
 				window={viewport}
+				days={windowDays}
 				floorPct={data.floorPct}
 				height={knobs.chart_height}
 				width={knobs.chart_width}
 				tickDensity={data.chart.tick_density}
 				readoutMaxShare={data.chart.readout_max_share}
-				bind:selected={runAt}
 			/>
-		</Panel>
-	</section>
 	{/snippet}
 
 	{#snippet throughputViewportPanel()}
