@@ -4,6 +4,7 @@
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
+	import { shortDate } from '$lib/format';
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
@@ -23,7 +24,7 @@
 <p data-duration-cohort>{split.count} of {split.recorded} recorded item clocks supply these means. Positive unclaimed time and overlap are averaged separately; the solid marker is elapsed time.</p>
 <DateSeries {geometry} empty={emptyState('quiet', 'No complete reconciling item clock was measured.')}
 	name="item-time-split" label="Daily mean stage durations with separate overlap deduction and elapsed marker"
-	{width} height={knobs.chart_height} {readout} readoutMaxShare={chart.readout_max_share} />
+	{width} height={knobs.chart_height} readout={{ ...readout, columns: readout.columns.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />
 <details data-time-split-readings><summary>The clocks behind the stacks</summary>
 	{#each split.days as day (day.date)}
 		<p>{day.date}: {day.count} of {day.recorded} clocks are complete; excluded: {day.missing} missing, {day.invalid} invalid and {day.inconsistent} inconsistent. {day.overlapping} clocks overlap.</p>

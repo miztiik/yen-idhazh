@@ -7,6 +7,7 @@
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
+	import { countDays } from '$lib/console/span-words';
 	import { noRecordSentence, setAsideSentence } from '$lib/console/recording';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import type { PanelState } from '$lib/console/waiting';
@@ -174,7 +175,7 @@
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
 	{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
-	<p class="console-carry" data-console-carry="model">{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
+	<p class="console-carry" data-console-carry="model" data-pipelines-window-from={viewport.start} data-pipelines-window-to={viewport.end}>{data.carries.pipelines} <a href="{base}/console/model/">Summaries →</a></p>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
@@ -185,6 +186,8 @@
 				{:else}
 					<Panel {id} title={titles[id]} wide verdict={id === 'at-a-glance'}>
 						<div data-windowed={id === 'run-timeline' || id === 'chart-drawing' ? undefined : id} data-window-days={id === 'run-timeline' || id === 'chart-drawing' ? undefined : windowDays}
+							aria-label={id === 'run-timeline' || id === 'chart-drawing' ? undefined : `${titles[id]}, selected window ${countDays(windowDays)}`}
+							data-readout-fetched={id !== 'extraction' && (panelQueries[id] !== undefined || id === 'run-timeline') ? '' : undefined}
 							data-panel-state={mounted && reach === null && ['at-a-glance', 'site-cost-per-item', 'chart-drawing'].includes(id) ? 'loading' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />

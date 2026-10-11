@@ -80,6 +80,14 @@ opted-in count cards name their own declined settings rule. The native cold-load
 check keeps the four-hop ceiling on independent ledger/data/engine branches,
 with real held responses and planted serial requests proving the distinction.
 
+Native readout headings spell dates for readers and declare that their inputs
+are fetched. Private strips remain prerendered. The site-cost horizon states
+both measured rates and the Pages cap; its signed size delta names the selected
+span. Shared legacy month-price and reserved-tint contracts are still tested on
+their retained real components, while the route's waiting and retry tests hold
+its declared native index. A clipped native calendar is not widened with
+invented pre-record days to satisfy a legacy telemetry oracle.
+
 The flag count keeps the newest recorded boolean for each distinct article;
 null cells cannot replace a flag, and conflicting booleans on its latest
 recorded day stay unknown in any row order. Counts remain exactly the recorded

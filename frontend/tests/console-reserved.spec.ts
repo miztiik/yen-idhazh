@@ -1,11 +1,14 @@
 import { expect, test, type Page, type Route } from './support/door-page';
-import { telemetryCsv } from '../src/lib/charts/series';
+import { FIRST, THROUGH, dayBefore, packedPipelines, servePipelines } from './support/pipelines-ledgers';
+import { clientCode, drawClient } from './support/console-window/client-render';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /**
  * The console's reserved shape, and the four different nothings behind it.
  *
- * The page holds no telemetry row when its document arrives - every row is
- * fetched on mount. That split one
+ * Native panels hold no ledger rows when the document arrives; private
+ * published-day panels keep their build-time inputs. The native split makes
  * "nothing" into four, and the page used to draw three of them the same
  * way: an unmarked gap. A quiet pipeline and a broken fetch were one picture,
  * which is the exact pair this console exists to tell apart.
@@ -33,31 +36,32 @@ import { telemetryCsv } from '../src/lib/charts/series';
 
 test.use({ serviceWorkers: 'block' });
 
-/** How long a blocked month is held before it answers, so the waiting state is
- * on screen long enough to measure. Comfortably past `shimmer_after_ms` (400). */
-const HELD_MS = 2500;
-
-const TELEMETRY = '**/telemetry/*.csv';
-
-/** A telemetry shard with a header and no rows. Valid, parses, holds nothing -
- * which is what a genuinely quiet month looks like on the wire.
- *
- * Written by the same function the pipeline writes shards with. A header copied
- * into this file would be right on the day it was copied: the reader refuses a
- * shard whose columns do not match the contract, and a refused shard is
- * indistinguishable here from a fetch that never arrived. */
-const EMPTY_CSV = telemetryCsv([]);
+const INDEX = (url: URL) => url.pathname === '/state/compact/item-health/daily/index.json';
+let release: (() => void) | undefined;
+let quietRoot: string;
+let missingRoot: string;
+let legacyCode: string;
+test.beforeAll(async () => {
+	const count = Math.round((Date.parse(`${THROUGH}T00:00:00Z`) - Date.parse(`${FIRST}T00:00:00Z`)) / 86_400_000);
+	quietRoot = await packedPipelines('reserved-quiet', Array.from({ length: count + 1 }, (_, at) =>
+		({ covers: dayBefore(THROUGH, count - at), rows: [] })));
+	missingRoot = await packedPipelines('reserved-missing', []);
+	legacyCode = await clientCode([['LegacyReserved', './tests/fixtures/panels/LegacyReserved.svelte']]);
+});
+test.afterEach(() => { release?.(); release = undefined; });
 
 async function hydrated(page: Page) {
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
-		'data-telemetry-state',
-		/loading|ready|quiet|missing|unreachable/
+		'data-route-state',
+		/loading|ok|quiet|missing|unreachable/
 	);
 }
 
 async function settled(page: Page) {
+	release?.();
+	release = undefined;
 	await expect(page.locator('[data-console-panels="pipelines"]')).not.toHaveAttribute(
-		'data-telemetry-state',
+		'data-route-state',
 		'loading',
 		{ timeout: 20_000 }
 	);
@@ -83,10 +87,11 @@ async function panelBoxes(page: Page): Promise<Record<string, [number, number, n
 	});
 }
 
-/** Hold every month file for `HELD_MS`, so the waiting state can be measured. */
+/** Release the actual declared index only after the waiting frame is measured. */
 async function holdMonths(page: Page) {
-	await page.route(TELEMETRY, async (route: Route) => {
-		await new Promise((resolve) => setTimeout(resolve, HELD_MS));
+	const held = new Promise<void>((resolve) => release = resolve);
+	await page.route(INDEX, async (route: Route) => {
+		await held;
 		await route.continue();
 	});
 }
@@ -99,7 +104,10 @@ async function holdMonths(page: Page) {
  * them here is what makes the oracle below strong: a third panel that starts
  * changing size fails, whatever the reason.
  */
-const FETCHED_PANELS = ['What is failing, by stage', "Where an item's time went"];
+const FETCHED_PANELS = ['What is failing, by stage', "Where an item's time went",
+	'Whether a run is getting slower on the same work', 'Time per item by stage',
+	'What one item cost the model', "Where the run's time went, on the run's own clock",
+	'What the extractor found', 'How old an article was when we published it'];
 
 /** The one the waiting and retry rows drive. Either would do; one is named so
  * those tests read about a single box rather than a set. */
@@ -163,7 +171,7 @@ test('THE ORACLE: only the panel that is waiting for rows changes size', async (
 	// While the months are in the air. Reading the boxes now is reading what an
 	// operator sees in the first frame.
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
-		'data-telemetry-state',
+		'data-route-state',
 		'loading'
 	);
 	const first = await panelBoxes(page);
@@ -184,11 +192,11 @@ test('THE ORACLE: only the panel that is waiting for rows changes size', async (
 	const resized = Object.keys(first)
 		.filter((name) => first[name][1] !== after[name][1] || first[name][2] !== after[name][2])
 		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
-	expect(resized, `panels changed size when the payload landed:\n${resized.join('\n')}`).toEqual(
-		FETCHED_PANELS.map(
-			(name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`
-		)
-	);
+	expect(resized.filter((line) => !FETCHED_PANELS.some((name) => line.startsWith(`${name}:`))),
+		`a private panel changed size:\n${resized.join('\n')}`).toEqual([]);
+	for (const name of FETCHED_PANELS.slice(0, 2)) {
+		expect(resized.some((line) => line.startsWith(`${name}:`)), `${name} never received its populated rows`).toBe(true);
+	}
 });
 
 test('THE ORACLE: nothing above the first panel moves when the payload lands', async ({ page }) => {
@@ -257,7 +265,7 @@ test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ p
 	// the same panel.
 	await expect(reserved).toHaveCount(0);
 	const settledPanel = ((await panel.boundingBox()) as { y: number }).y;
-	const replaced = await panel.locator('figure.chart').boundingBox();
+	const replaced = await panel.locator('svg[data-chart]').first().boundingBox();
 	expect(waiting, 'nothing was reserved').not.toBeNull();
 	expect(replaced, 'nothing replaced the reserved box').not.toBeNull();
 	expect(Math.round((replaced as { y: number }).y - settledPanel)).toBe(
@@ -321,6 +329,19 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.setViewportSize({ width: 1280, height: 900 });
+	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
+	const styles = [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]);
+	await drawClient(page, legacyCode, 'LegacyReserved', {}, styles);
+	const block = page.locator('[data-shimmer="on"] .loading').first();
+	await expect(block).toBeVisible();
+	const look = await block.evaluate((node) => {
+		const style = getComputedStyle(node);
+		return { image: style.backgroundImage, colour: style.backgroundColor, running: node.getAnimations().length };
+	});
+	expect(look.image).toBe('none');
+	expect(look.running).toBe(0);
+	expect(look.colour, 'the kept monthly block lost its flat tint').not.toBe('rgba(0, 0, 0, 0)');
+
 	await holdMonths(page);
 	await page.goto('/console/');
 	await hydrated(page);
@@ -331,13 +352,13 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 	);
 	await page.screenshot();
 
-	const block = page.locator('[data-shimmer="on"] .loading').first();
-	await expect(block).toBeVisible();
+	const native = page.locator('[data-shimmer="on"] .loading').first();
+	await expect(native).toBeVisible();
 
 	// The blanket `animation-duration: 0.01ms !important` on `*` does not remove
 	// a gradient - it freezes one mid-sweep. So the block has to lose the image
 	// outright, and this is where that is proved rather than reasoned about.
-	const look = await block.evaluate((node) => {
+	const nativeLook = await native.evaluate((node) => {
 		const style = getComputedStyle(node);
 		return {
 			image: style.backgroundImage,
@@ -345,55 +366,44 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 			running: node.getAnimations().length
 		};
 	});
-	expect(look.image, 'a gradient survived reduced motion and is frozen mid-sweep').toBe('none');
-	expect(look.running, 'an animation is still attached under reduced motion').toBe(0);
-	expect(look.colour, 'the flat block has no tint, so it is not a block').not.toBe(
-		'rgba(0, 0, 0, 0)'
-	);
+	expect(nativeLook.image, 'a gradient survived reduced motion and is frozen mid-sweep').toBe('none');
+	expect(nativeLook.running, 'an animation is still attached under reduced motion').toBe(0);
+	await expect(native.locator('[data-reserved-frame]')).toBeVisible();
 });
 
 test('QUIET: a window that was read and held nothing says so once, and names the widening', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
-	// Every month arrives, and every month is empty. That is a quiet pipeline and
-	// nothing else - no gap, no failure.
-	await page.route(TELEMETRY, (route: Route) =>
-		route.fulfill({ status: 200, contentType: 'text/csv', body: EMPTY_CSV })
-	);
+	// Every day is explicitly indexed and empty: no missing-day gap or failure.
+	await servePipelines(page, quietRoot);
 	await page.goto('/console/');
 	await settled(page);
 
 	const surface = page.locator('[data-console-panels="pipelines"]');
-	await expect(surface).toHaveAttribute('data-telemetry-state', 'quiet');
+	await expect(surface).toHaveAttribute('data-route-state', 'quiet');
 
 	// Said ONCE, above the panels and beside the control that would widen the
 	// window, because every panel below is empty for the same reason.
 	const standing = page.locator('[data-console-standing]');
 	await expect(standing).toHaveCount(1);
-	await expect(standing).toHaveAttribute('data-console-standing', 'quiet');
 	await expect(standing).toContainText('Nothing was recorded in these');
-	await expect(standing).toContainText('reaches back to months that do');
+	await expect(page.locator('[data-window-preset="90"] input')).toBeEnabled();
 	// Neutral, never a warning: an empty window is an answer, not a fault.
-	await expect(standing).toHaveAttribute('data-tone', 'neutral');
+	await expect(page.locator('[data-reserved="failure-mix"]')).toHaveAttribute('data-tone', 'neutral');
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
 
-	// And the panels keep their own, more precise, empty sentences: the reserved
-	// box does not take over for a window that is simply empty.
-	await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(0);
-	await expect(page.locator('[data-mix-empty="none"]')).toHaveCount(1);
+	// The native frame names the quiet answer without inventing a numeric tick.
+	await expect(page.locator('[data-reserved="failure-mix"]')).toHaveAttribute('data-panel-state', 'quiet');
+	await expect(page.locator('[data-reserved="failure-mix"]')).toContainText('Nothing recorded.');
+	await expect(page.locator('[data-reserved="failure-mix"] svg text')).toHaveCount(0);
 });
 
-test('MISSING: months the pipeline never wrote are named, and read as a gap', async ({ page }) => {
+test('MISSING: a ledger that was never published is not drawn as a quiet zero', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 
-	// The hole is in the built fixture and is not injected here. The canary's
-	// band lists three months, and the widest preset reaches back past all of
-	// them - so the months before the first shard are inside the window and were
-	// never written, which is exactly what a real gap is.
-	await page.route(TELEMETRY, (route: Route) =>
-		route.fulfill({ status: 200, contentType: 'text/csv', body: EMPTY_CSV })
-	);
+	// Valid empty indexes declare no first day. No date or zero can be inferred.
+	await servePipelines(page, missingRoot);
 	await page.goto('/console/');
 	await settled(page);
 
@@ -401,66 +411,62 @@ test('MISSING: months the pipeline never wrote are named, and read as a gap', as
 	await settled(page);
 
 	const surface = page.locator('[data-console-panels="pipelines"]');
-	await expect(surface).toHaveAttribute('data-telemetry-state', 'missing');
+	await expect(surface).toHaveAttribute('data-route-state', 'missing');
 
 	const standing = page.locator('[data-console-standing]');
-	await expect(standing).toContainText('never recorded');
-	await expect(standing).toContainText('gap rather than a dip');
-	// The dates are named in words, not left to be worked out from the axis.
-	await expect(standing).toContainText(
-		/\b(January|February|March|April|May|June|July|August|September|October|November|December) 20\d\d\b/
-	);
+	await expect(standing).toContainText('a record this site has not published yet');
+	await expect(page.locator('[data-reserved="failure-mix"]')).toContainText('Not published yet.');
+	await expect(page.locator('[data-reserved="failure-mix"] svg text')).toHaveCount(0);
 	// No alarm and no retry: nothing went wrong and there is nothing to fetch.
-	await expect(standing).toHaveAttribute('data-tone', 'neutral');
+	await expect(page.locator('[data-reserved="failure-mix"]')).toHaveAttribute('data-tone', 'neutral');
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
 });
 
-test('UNREACHABLE: a fetch that did not arrive names its month and offers a retry', async ({
+test('UNREACHABLE: a declared native fetch that did not arrive names its record and retries', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
+	await servePipelines(page, quietRoot);
 	let refuse = true;
-	await page.route(TELEMETRY, async (route: Route) => {
+	await page.route(INDEX, async (route: Route) => {
 		if (refuse) return route.abort();
-		return route.continue();
+		return route.fallback();
 	});
 	await page.goto('/console/');
 	await settled(page);
 
 	const surface = page.locator('[data-console-panels="pipelines"]');
-	await expect(surface).toHaveAttribute('data-telemetry-state', 'unreachable');
+	await expect(surface).toHaveAttribute('data-route-state', 'unreachable');
 
 	const standing = page.locator('[data-console-standing]');
 	await expect(standing).toContainText('did not arrive');
 	// A warn tint, and it is the only one of the three settled states with a hue.
-	await expect(standing).toHaveAttribute('data-tone', 'warn');
+	await expect(page.locator('[data-reserved="failure-mix"]')).toHaveAttribute('data-tone', 'warn');
 
 	// The retry names its own subject, so it is still true read out of context.
 	const retry = page.locator('[data-console-retry]');
 	await expect(retry).toBeVisible();
 	const label = ((await retry.textContent()) ?? '').trim();
-	expect(label).toMatch(/^Try .+ again$/);
+	expect(label).toBe('Fetch the record again');
 
 	// And it recovers rather than sulking for the rest of the page's life.
 	refuse = false;
 	await retry.click();
 	await settled(page);
-	await expect(surface).not.toHaveAttribute('data-telemetry-state', 'unreachable');
+	await expect(surface).toHaveAttribute('data-route-state', 'quiet');
 });
 
 test('a blocked fetch and a quiet pipeline do not draw the same picture', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 
-	await page.route(TELEMETRY, (route: Route) =>
-		route.fulfill({ status: 200, contentType: 'text/csv', body: EMPTY_CSV })
-	);
+	await servePipelines(page, quietRoot);
 	await page.goto('/console/');
 	await settled(page);
 	const read = async () => ({
 		state: await page
 			.locator('[data-console-panels="pipelines"]')
-			.getAttribute('data-telemetry-state'),
-		tone: await page.locator('[data-console-standing]').getAttribute('data-tone'),
+			.getAttribute('data-route-state'),
+		tone: await page.locator('[data-reserved="failure-mix"]').getAttribute('data-tone'),
 		says: ((await page.locator('[data-console-standing]').textContent()) ?? '')
 			.replace(/\s+/g, ' ')
 			.trim(),
@@ -468,8 +474,7 @@ test('a blocked fetch and a quiet pipeline do not draw the same picture', async 
 	});
 	const quiet = await read();
 
-	await page.unroute(TELEMETRY);
-	await page.route(TELEMETRY, (route: Route) => route.abort());
+	await page.route(INDEX, (route: Route) => route.abort());
 	await page.goto('/console/');
 	await settled(page);
 	const broken = await read();

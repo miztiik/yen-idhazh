@@ -364,7 +364,7 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 	// the squares draw on that day: the line is the square's own sentence after the
 	// run and the day. Both are built from what the run wrote down, read through
 	// `loadManifests`, which the next test holds to a manifest it writes.
-	const end = (await page.locator('[data-viewport-control]').getAttribute('data-window-end')) ?? '';
+	const end = (await page.locator('[data-pipelines-window-to]').getAttribute('data-pipelines-window-to')) ?? '';
 	expect(end, 'the viewport prints no window').toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	const readout = page.locator('[data-readout="run-health"]');
 	await expect(readout.locator('[data-readout-day]')).toHaveText(`${shortDate(end)}, the newest day`);

@@ -23,7 +23,7 @@ for (const [id, name] of PANELS) {
 		const compiled = serverCompiler(info.outputPath('components'));
 		const lib = (file: string) => pathToFileURL(join(FRONTEND, 'src', 'lib', `${file}.ts`)).href;
 		const rewrite: Rewrite[] = [
-			'charts/frame', 'charts/readout', 'charts/viewport', 'charts/indexed-runs', 'charts/series',
+			'charts/frame', 'charts/readout', 'charts/viewport', 'charts/indexed-runs', 'charts/series', 'charts/glance',
 			'charts/theme', 'charts/run-yield', 'charts/day-slots', 'charts/d3/dateSeries', 'charts/d3/empty',
 			'charts/d3/model-rule', 'charts/d3/flow', 'charts/d3/rankedList',
 			'console/daily-figures', 'console/run-square', 'console/span-words', 'format'

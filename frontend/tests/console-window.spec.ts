@@ -3,6 +3,7 @@ import { expect, test, type Page } from './support/door-page';
 import { type RouteId } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-window';
 import { ONE_DAYS, spanSaid } from './support/span-said';
+import { openRetained } from './support/retained-telemetry';
 
 import { monthsInWindow, monthsToFetch, stepPreset, windowOfDays } from '../src/lib/charts/viewport';
 
@@ -334,7 +335,7 @@ test('the control names the window it is holding, and is inert before a script r
 
 	const status = page.locator('[data-window-status]');
 	await hydrated(page);
-	await expect(status).toContainText(`showing ${defaultDays()} days`);
+	await expect(status).toContainText(`Showing ${defaultDays()} days, to `);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
 
 	// Every preset is on the page at once. A menu would hide the wide one, which
@@ -350,8 +351,8 @@ test('the control names the window it is holding, and is inert before a script r
 	// it means, because since 2026-09-27 the control is on the strip above and
 	// the sentence is under the band.
 	const document = await (await page.request.get(routeHref('pipelines'))).text();
-	expect(document).toContain('The days control above needs JavaScript');
-	expect(document).toContain('they draw rows a browser fetches');
+	expect(document).toContain('The article record needs JavaScript to load');
+	expect(document).toContain('Private published-day panels remain available');
 	expect(
 		document,
 		'the prerendered control still claims the sections below are showing data'
@@ -369,7 +370,7 @@ test('one day is one day, in the sentence and to a screen reader', async ({ page
 	const narrowest = Math.min(...presets());
 	expect(narrowest, 'the presets no longer offer a single day, so this proves nothing').toBe(1);
 	await setWindow(page, narrowest);
-	await expect(page.locator('[data-window-status]')).toContainText('showing 1 day.');
+	await expect(page.locator('[data-window-status]')).toContainText('Showing 1 day, to ');
 	await expect(page.locator('[data-window-preset="1"] [aria-hidden="true"]')).toHaveText('1D');
 	await expect(page.getByRole('radio', { name: '1 day', exact: true })).toHaveCount(1);
 	await expect(page.getByRole('radio', { name: '14 days', exact: true })).toHaveCount(1);
@@ -459,13 +460,15 @@ for (const width of [390, 768, 1440]) {
 		// reaches the canary's older month is priced.
 		await page.addInitScript(() => localStorage.setItem('idhazh:console-window', '1'));
 		await page.setViewportSize({ width, height: 900 });
+		await openRetained(page, () => [], 'ready', {
+			months: ['2026-06', '2026-07', '2026-08'], held: ['2026-08']
+		});
+		await expect(page.locator('[data-window-status]')).toContainText('90D would fetch 2 more months');
 		await page.goto(routeHref('pipelines'));
 		await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
 		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '1');
 		await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
-		// The canary keeps two telemetry months, so the widest presets reach one
-		// the one-day window never fetched. Without a price this proves nothing.
-		await expect(page.locator('[data-window-status]')).toContainText('would fetch');
+		await expect(page.locator('[data-window-status]')).toContainText('Showing 1 day, to ');
 		const before = await belowTheStrip(page);
 		expect(Object.keys(before), 'a block below the strip is missing').toHaveLength(4);
 
@@ -504,7 +507,7 @@ for (const [id, declared] of Object.entries(BY_ROUTE) as [RouteId, (typeof BY_RO
     await hydrated(page);
     expect(presets().length, 'a control with one option cannot disagree with anything').toBeGreaterThan(1);
     const found = await windowed(page);
-    expect(found.map((surface) => surface.name).sort(), 'the declared surface inventory must be complete').toEqual(declared.windowed);
+    expect(found.map((surface) => surface.name).sort(), 'the declared surface inventory must be complete').toEqual([...declared.windowed].sort());
     for (const preset of presets()) {
       await setWindow(page, preset);
       const surfaces = await windowed(page);

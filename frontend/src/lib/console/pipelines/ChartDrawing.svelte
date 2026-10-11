@@ -72,4 +72,6 @@
 <style>
 	.lede { font-size: var(--text-2xl); }
 	[data-flow="chart"] :global(svg) { inline-size: 100%; max-inline-size: 100%; block-size: auto; }
+	details { margin-block-start: var(--space-6); font-size: var(--text-sm); }
+	details[open] { padding: var(--space-5); border: 1px solid var(--color-rule); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 </style>

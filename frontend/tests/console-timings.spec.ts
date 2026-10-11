@@ -29,6 +29,8 @@ import {
 } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { grouped } from '../src/lib/charts/series';
+import { openRetained } from './support/retained-telemetry';
+import { telemetryRow } from './support/telemetry-row';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -344,7 +346,8 @@ test.describe('the timing chart on the page', () => {
 	});
 
 	test('the columns are the window the control set, not the days with rows', async ({ page }) => {
-		await page.goto('/console/');
+		await openRetained(page, (window) => days(window.start, 2).map((date) =>
+			telemetryRow({ date, fetch_ms: 300, extract_ms: 40, summarize_ms: 1_000 })));
 
 		const control = page.locator('[data-window-control]');
 		const plot = page.locator('[data-timing="plot"]');

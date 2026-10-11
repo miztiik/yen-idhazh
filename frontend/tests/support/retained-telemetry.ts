@@ -9,7 +9,8 @@ import type { PanelState } from '../../src/lib/console/waiting';
 
 let code: Promise<string> | undefined;
 export async function openRetained(
-	page: Page, build: (window: TimeWindow) => readonly TelemetryRow[], panelState: PanelState = 'ready'
+	page: Page, build: (window: TimeWindow) => readonly TelemetryRow[], panelState: PanelState = 'ready',
+	monthInputs: { months?: string[]; held?: string[] } = {}
 ): Promise<{ window: TimeWindow }> {
 	const appearance = JSON.parse(readFileSync(resolve('..', 'config', 'appearance.json'), 'utf8'));
 	const bands = JSON.parse(readFileSync(resolve('..', 'config', 'idhazh.json'), 'utf8')).summarize.bands;
@@ -23,7 +24,7 @@ export async function openRetained(
 	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
 	const styles = [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]);
 	await drawClient(page, await code, 'RetainedTelemetry', {
-		rows, bands, config: appearance.console, chart: appearance.chart, pinned, initialDays, panelState
+		rows, bands, config: appearance.console, chart: appearance.chart, pinned, initialDays, panelState, ...monthInputs
 	}, styles);
 	await expect(page.locator('[data-telemetry-rows]')).toHaveAttribute('data-telemetry-rows', String(rows.length));
 	return { window };

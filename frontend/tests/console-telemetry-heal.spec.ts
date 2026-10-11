@@ -17,7 +17,7 @@ test('a failed packed file load heals on a later widen', async ({ page }) => {
 	await servePipelines(page, root);
 	let refusing = true;
 	let asked = 0;
-	await page.route(`**/state/compact/item-health/daily/${older.replaceAll('-', '/')}.parquet`, (route) => {
+	await page.route((url) => url.pathname === `/state/compact/item-health/daily/${older.replaceAll('-', '/')}.parquet`, (route) => {
 		asked += 1;
 		return refusing ? route.abort('failed') : route.fallback();
 	});

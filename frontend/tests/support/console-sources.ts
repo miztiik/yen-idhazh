@@ -141,7 +141,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'range-host.ts', 'reduction-input.ts', 'retained-telemetry.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
 		'telemetry-row.ts', 'views.ts'
 	],
-	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte', 'RetainedTelemetry.svelte'],
+	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte', 'RetainedTelemetry.svelte', 'LegacyReserved.svelte'],
 	'tests/support/console-window': [
 		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'machine-spans.ts',
 		'client-render.ts', 'server-panels.ts'

@@ -91,7 +91,9 @@ const TELEMETRY_FIXTURE = resolve(process.cwd(), 'tests', 'fixtures', 'telemetry
 
 /** The day the page says its window ends on: the viewport publishes the span it draws. */
 async function windowEnd(page: Page): Promise<string> {
-	const end = (await page.locator('[data-viewport-control]').getAttribute('data-window-end')) ?? '';
+	const native = page.locator('[data-pipelines-window-to]');
+	const end = await native.count() ? (await native.getAttribute('data-pipelines-window-to')) ?? ''
+		: (await page.locator('[data-viewport-control]').getAttribute('data-window-end')) ?? '';
 	expect(end, 'the viewport publishes no window end').toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	return end;
 }
@@ -496,7 +498,7 @@ test('a square says what happened without a mouse', async ({ page }) => {
 test('the run that read only the start of an article says so on its own square', async ({
 	page
 }) => {
-	await page.goto(routeHref('pipelines'));
+	await openOnWindow(page, WIDEST);
 
 	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
 	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that
