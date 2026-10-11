@@ -132,19 +132,11 @@ test('the three titles the row was opened for are the ones that changed', async 
 		BY_ROUTE.machine!.renamedTitles[1]
 	);
 
-	// The model-change panel draws only where the ledger holds a swap, and the
-	// canary holds none - so what is asserted is the shape that survives either
-	// state: where the section is drawn it carries the new heading, and where it
-	// is not it is absent rather than headless.
+	// A missing swap is a named absence, not a missing panel.
 	await page.goto(routeHref('model'));
-	const swap = page.locator('[data-model-swap-section]');
-	if ((await swap.count()) > 0) {
-		await expect(swap.locator('h2')).toHaveText(BY_ROUTE.model!.renamedTitles[0]);
-	} else {
-		expect(await titlesOn(page), 'a headless model-change section is on the page').not.toContain(
-			BY_ROUTE.model!.renamedTitles[0]
-		);
-	}
+	await expect(page.locator('[data-console-panel-id="model-change"] h2')).toHaveText(
+		BY_ROUTE.model!.renamedTitles[0]
+	);
 });
 
 /** A word that belongs to how the thing is built rather than to what a reader

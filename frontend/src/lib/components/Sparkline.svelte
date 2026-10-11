@@ -130,7 +130,7 @@
 			{@const x = atX(marks.points[boundary.point]?.x ?? 0)}
 			<line x1={x} x2={x} y1="0" y2={height} stroke="var(--color-text-tertiary)"
 				stroke-dasharray={boundary.kind === 'checker' ? '1 3' : '3 3'}
-				data-model-rule-date={boundary.date} data-model-rule-kind={boundary.kind} />
+				data-model-rule-date={boundary.date} data-model-rule-line={boundary.date} data-model-rule-kind={boundary.kind} />
 		{/each}
 		<polyline points={drawn} style="stroke: {SPARKLINE_SWATCH}" />
 		{#if spot !== null}

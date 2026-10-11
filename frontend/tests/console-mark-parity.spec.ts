@@ -31,15 +31,15 @@
  * split across two renders at the two widths, not across a live resize; the
  * live resize stays with the other five.
  *
- * Both routes ship every preset's aggregate inline, so a window change costs no
- * fetch here (`console/+page.svelte`), which is why the case can read the new
- * window's marks the moment the control moves.
+ * Summaries resolves its declared native queries when the window changes. The
+ * case waits for that requested range before reading the new window's marks.
  */
 
 import { expect, test, type Page } from './support/door-page';
 import { buildSwap, pair, renderSwap, swapFixture, timedPair } from './support/model-swap';
 import { BAND_UNREAD } from '../src/lib/console/band';
 import { BY_ROUTE, type Chart } from './support/console-expect/console-mark-parity';
+import { chartsReady } from './support/charts-ready';
 
 /** Two widths far enough apart that the frame is bound to change and the gutter
  * charts cross from beside to stacked - which moves the layout and must not
@@ -84,6 +84,7 @@ async function setWindow(page: Page, days: number): Promise<void> {
 		'data-window-days',
 		String(days)
 	);
+	await chartsReady(page);
 }
 
 /** The width the chart last drew to, read off its own viewBox. It changes when

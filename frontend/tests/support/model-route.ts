@@ -8,6 +8,7 @@ import { publishedSite } from './published-site';
 import { cachedParquetAddon, parquetAddon } from '../../scripts/duckdb-addon';
 import { ITEM_HEALTH_COLUMNS, SCORE_COLUMNS } from '../../src/lib/server/ledger-rows';
 import { assertBuild, REPO } from '../../scripts/build-state';
+import { consoleConfig } from '../../src/lib/server/config';
 
 export async function modelRoute(report: string, evidence: 'missing' | 'quiet' | 'populated' | 'sufficient') {
 	const verified = assertBuild(REPO, 'canary');
@@ -26,6 +27,7 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 		rmSync(root, { recursive: true });
 	};
 	try {
+		const sufficientCount = Math.max(8, consoleConfig().min_attempts_for_rate);
 		const site = publishedSite(join(root, 'public'), { published: evidence === 'missing' ? [] : ['2030-06-15'] });
 		if (evidence === 'sufficient') {
 			const payload = join(site.digest, '2030', '06', '15', 'digest.json');
@@ -60,16 +62,16 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 			const itemDays: BuiltRowsDay[] = [];
 			for (const date of dates) {
 				const model = date === '2030-06-10' ? 'before-model' : 'after-model';
-				const measuredScores = evidence === 'sufficient' ? Array.from({ length: 8 }, (_, index) => ({
+				const measuredScores = evidence === 'sufficient' ? Array.from({ length: sufficientCount }, (_, index) => ({
 					...score, version: '2026-10-11', date, run_id: `${date}-one`, model_id: model,
-					url_key: `${date}-${index}`, band: index < 2 ? 'low' : 'high', hhem: 0.5 + index / 20,
+					url_key: `${date}-${index}`, band: index < 2 ? 'low' : 'high', hhem: 0.5 + index / (sufficientCount * 2),
 					hhem_delta: 0, unsupported_numbers: index === 0 ? 1 : 0, hedge_dropped: false,
 					summary_words: 100 + index * 5, source_words: 500, source_words_before_cap: 500,
 					compression: 0.2, extractiveness: 0.2, verbatim_run: 0.1, score_ms: 1000 + index * 200,
 					determinism_violation: index === 0, self_repetition: 0, coherence: -0.25, semantic_coverage: 0.5,
 					evidential_density: 0.004, speculative_density: 0.001
 				})) : scores;
-				const measuredItems = evidence === 'sufficient' ? Array.from({ length: 8 }, (_, index) => ({
+				const measuredItems = evidence === 'sufficient' ? Array.from({ length: sufficientCount }, (_, index) => ({
 					...article, version: '2026-10-11', date, run_id: `${date}-one`, model_id: model,
 					url_key: `${date}-${index}`, source_id: 'recorded-source', stage: 'summarize',
 					outcome: index === 0 ? 'failed' : 'ok', code: index === 0 ? 'context_exceeded' : null,
@@ -87,7 +89,13 @@ export async function modelRoute(report: string, evidence: 'missing' | 'quiet' |
 			if (evidence === 'populated' || evidence === 'sufficient') for (const date of dates) {
 				const metrics = join(state, 'day-metrics', '2030', '06', `${date.slice(-2)}.json`);
 				mkdirSync(dirname(metrics), { recursive: true });
-				writeFileSync(metrics, JSON.stringify({ summaries_scored: evidence === 'sufficient' ? 8 : 1, determinism_violations: 1, extraction_suspect: 0 }));
+				writeFileSync(metrics, JSON.stringify({
+					items_planned: evidence === 'sufficient' ? sufficientCount : 1,
+					items_published: evidence === 'sufficient' ? sufficientCount : 1,
+					items_failed: evidence === 'sufficient' ? 1 : 0,
+					summaries_scored: evidence === 'sufficient' ? sufficientCount : 1,
+					determinism_violations: 1, extraction_suspect: 0
+				}));
 			}
 		}
 		const frontend = join(root, 'frontend');

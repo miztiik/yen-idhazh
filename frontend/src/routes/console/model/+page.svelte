@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { base } from '$app/paths';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { routeReach, retryAsks, tallyAsks, type RouteReach } from '$lib/console/queries/window';
 	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
@@ -56,8 +57,16 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Summaries &mdash; Console &mdash; {data.ui.site_title}</title>
+</svelte:head>
+
 <WindowControlSource days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
 	record={{ asked: windowDays, first, through: reach?.through ?? null }} monthsFor={() => 0} onChange={show} />
+<p class="console-carry" data-console-carry="machine">
+	{data.carries.model}
+	<a class="carry-link" href="{base}/console/machine/">Hardware &rarr;</a>
+</p>
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retryFailed}>
 	<div data-recording-lines>

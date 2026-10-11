@@ -327,7 +327,7 @@ test.describe('the daily figures, behind a control', () => {
 		// it names the span - a table that ignored the control above it would be two
 		// windows on one page. `console-window.spec.ts` owns the day count.
 		await expect(page.locator('[data-model-table-control] > summary')).toContainText(
-			'The days behind the cards'
+			'Show these figures day by day, over these'
 		);
 		// Closed, so the section leads with the shape. The rows are in the document
 		// either way: this costs no fetch and needs no script.

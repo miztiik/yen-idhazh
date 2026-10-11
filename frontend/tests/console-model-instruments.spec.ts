@@ -1,6 +1,7 @@
 import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { chartsReady } from './support/charts-ready';
 import {
 	DRAWN_BY,
 	EVAL_PANELS,
@@ -356,6 +357,7 @@ test.describe('the panels, in a browser', () => {
 		}
 		// Nothing marks itself a panel without being in the map.
 		await page.goto('/console/model/');
+		await chartsReady(page);
 		const marked = await page.locator('[data-eval-panel]').evaluateAll((nodes) =>
 			nodes.map((node) => node.getAttribute('data-eval-panel') ?? '')
 		);
@@ -507,6 +509,7 @@ test.describe('the panels, in a browser', () => {
 		page
 	}) => {
 		await page.goto('/console/model/');
+		await chartsReady(page);
 		const before = await page.locator('[data-match-day]').count();
 		expect(before, 'the faithfulness panel drew no day').toBeGreaterThan(0);
 		for (const id of ['faithfulness', 'source-doubts', 'summary-length']) {

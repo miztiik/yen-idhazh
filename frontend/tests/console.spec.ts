@@ -17,6 +17,7 @@ import { publishedSite } from './support/published-site';
 import { openServed } from './support/served-telemetry';
 import { serverCompiler } from './support/server-render';
 import { telemetryRow } from './support/telemetry-row';
+import { chartsReady } from './support/charts-ready';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -1125,6 +1126,7 @@ test('reading and writing are drawn as separate candles per day', async ({ page 
 
 /** The newest day the throughput chart draws a candle for. The readout under it rests on that day. */
 async function newestCandleDay(page: Page): Promise<string> {
+	await chartsReady(page);
 	const dates = await page
 		.locator('[data-candle="write"]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-date') ?? ''));
@@ -1687,7 +1689,7 @@ async function modelRows(page: Page): Promise<{ date: string; cells: Record<stri
  * work's own rule, pinned over rows written in `console-model-work.spec.ts`. */
 const MODEL_CELL = BY_ROUTE.model!.cellFormats!;
 
-test('every model cell prints a count, a share, a time or a dash, on a day of the window', async ({ page }) => {
+test('every model cell prints a count, a share, a time or not measured, on a day of the window', async ({ page }) => {
 	await page.goto(routeHref('model'));
 	await openDailyFigures(page);
 
@@ -1710,7 +1712,7 @@ test('every model cell prints a count, a share, a time or a dash, on a day of th
 	}
 });
 
-test('a day the scorer never reached prints dashes, and still prints its speed', async ({
+test('a day the scorer never reached is not measured, and still prints its speed', async ({
 	page
 }) => {
 	await page.goto(routeHref('model'));
@@ -1720,24 +1722,24 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 	// the scorer makes prints a dash rather than a zero that would say the model
 	// wrote nothing.
 	const rows = await modelRows(page);
-	const unscored = rows.filter((row) => row.cells.summaries === '-');
-	expect(unscored.length, 'every day in the window was scored, so the dashes are untested').toBeGreaterThan(0);
+	const unscored = rows.filter((row) => row.cells.summaries === 'not measured');
+	expect(unscored.length, 'every day in the window was scored, so the unknown state is untested').toBeGreaterThan(0);
 	for (const row of unscored) {
 		for (const cell of BY_ROUTE.model!.unscoredCells!) {
-			expect(row.cells[cell], `${row.date} ${cell}`).toBe('-');
+			expect(row.cells[cell], `${row.date} ${cell}`).toBe('not measured');
 		}
 	}
 	// Speed is measured by the runtime, not by the scorer, so it still prints.
 	expect(
-		unscored.some((row) => row.cells['per-item'] !== '-' && row.cells.minutes !== '-'),
+		unscored.some((row) => row.cells['per-item'] !== 'not measured' && row.cells.minutes !== 'not measured'),
 		'no day the scorer never reached was timed, so the speed half is untested'
 	).toBe(true);
 
 	// And a scored day is not all dashes, which is what stops the check above
 	// passing on a table that prints nothing.
-	const scored = rows.filter((row) => row.cells.summaries !== '-');
+	const scored = rows.filter((row) => row.cells.summaries !== 'not measured');
 	expect(scored.length, 'no day in the window was scored').toBeGreaterThan(0);
-	for (const row of scored) expect(row.cells.copied, row.date).not.toBe('-');
+	for (const row of scored) expect(row.cells.copied, row.date).not.toBe('not measured');
 });
 
 test('nothing under the heading is a score or an internal column name', async ({ page }) => {
@@ -1747,7 +1749,7 @@ test('nothing under the heading is a score or an internal column name', async ({
 	// section is a scan that passes for the wrong reason.
 	await openDailyFigures(page);
 
-	const section = await page.locator('[data-model-section]').innerText();
+	const section = await page.locator('[data-model-cards] .cards').innerText();
 
 	// A value between zero and one is what the scorer emits, and none of them may
 	// reach an operator: a number nobody can pull a lever on is not a report. A
@@ -1770,18 +1772,17 @@ test('nothing under the heading is a score or an internal column name', async ({
 	expect(printed.filter((text) => /\d\.\d/.test(text))).toEqual([]);
 });
 
-test('the candle stays first inside the section, above the table', async ({ page }) => {
+test('the retained card table precedes the separately named throughput panel', async ({ page }) => {
 	await page.goto(routeHref('model'));
+	await chartsReady(page);
 
 	const order = await page
-		.locator('[data-model-section] [data-throughput="chart"], [data-model-section] [data-model="table"]')
+		.locator('[data-console-panels="model"] [data-throughput="chart"], [data-console-panels="model"] [data-model="table"]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-throughput') ?? 'table'));
 	expect(order).toEqual(BY_ROUTE.model!.sectionOrder);
 
-	// One heading for the whole section. The candle keeps its own name, one level
-	// down, so a fourth console section is not what this became.
 	await expect(page.getByRole('heading', { level: 2, name: BY_ROUTE.model!.sectionHeading! })).toBeVisible();
 	await expect(
-		page.getByRole('heading', { level: 3, name: BY_ROUTE.model!.chartHeading! })
+		page.getByRole('heading', { level: 2, name: BY_ROUTE.model!.chartHeading! })
 	).toBeVisible();
 });

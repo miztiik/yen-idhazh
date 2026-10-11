@@ -23,6 +23,10 @@ export async function chartsReady(page: Page, why = 'a chart near the viewport n
 		.poll(
 			() =>
 				page.evaluate(() => {
+					const queries = [...document.querySelectorAll('[data-model-query][data-query-state]')];
+					const asked = document.querySelector('[data-window-control]')?.getAttribute('data-window-days');
+					if (queries.some((query) => query.getAttribute('data-query-state') === 'loading' ||
+						asked !== null && asked !== undefined && query.getAttribute('data-query-asked') !== asked)) return false;
 					const reach = window.innerHeight * 2;
 					return [...document.querySelectorAll('figure[data-chart-drawn]')].every((figure) => {
 						const host = figure.querySelector('[data-chart]');

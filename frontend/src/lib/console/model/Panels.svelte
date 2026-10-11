@@ -109,14 +109,14 @@
 	<p data-lede>{times.times === null ? 'not measured' : (times.times.median / 1000).toFixed(2)} median seconds</p>
 	<p data-comparison="each time band's count against the share done by then">Each time band's count against the share done by then.</p>
 	{#if times.times !== null}
-		<div data-eval-panel={id}>
+		<figure data-eval-panel={id} data-chart={id}>
 			<TimeHistogram times={times.times} name={id === 'write-cost' ? 'write-times' : 'score-cost'}
 				subject={id === 'write-cost' ? 'seconds to write one summary' : 'seconds to check one summary'}
 				verb={id === 'write-cost' ? 'written' : 'checked'} noRuleReason="One distribution pools the window, so a setting change has no date on this axis."
 				width={chart.width_px} height={chart.height_px} readoutMaxShare={chart.readout_max_share}
 				barToken={id === 'write-cost' ? SERIES_TOKENS['summary-call'] : SERIES_TOKENS.checking} />
-		</div>
-	{:else}<p data-model-rule="no" data-model-rule-none="One distribution pools the window, so a setting change has no date on this axis." data-readout-none="No measured clock readings were available.">No positive clock reading was recorded in this window.</p>{/if}
+		</figure>
+	{:else}<p data-model-rule="no" data-model-rule-name={id} data-model-rule-none="One distribution pools the window, so a setting change has no date on this axis." data-readout-none="No measured clock readings were available.">No positive clock reading was recorded in this window.</p>{/if}
 	<p data-write-times={id === 'write-cost' ? 'readout' : undefined} data-score-cost={id === 'score-cost' ? 'readout' : undefined}>
 		{times.times === null ? 'No measured summaries' : `${grouped(times.times.n)} summaries`} in {nameSpan(range.days)}.
 		Median <span data-score-cost={id === 'score-cost' ? 'median' : undefined}>{times.times === null ? 'not measured' : Math.round(times.times.median / 1000) === 0 ? '<1 s' : `${Math.round(times.times.median / 1000)} s`}</span>;
@@ -138,9 +138,9 @@
 {:else if id === 'model-change'}
 	<p data-lede>{swap === null ? 'The published record holds no model change to compare.' : swap.lede}</p>
 	<p data-comparison="scores after the change against scores before it">Scores after the change against scores before it. Different article populations do not establish a cause.</p>
-	<div data-model-rule="no" data-model-rule-none="This panel compares the two sides of the model change itself." data-readout-none={swap === null || !swap.enough ? 'There are no comparable measured populations to draw.' : undefined}>
+	<div data-model-rule="no" data-model-rule-name="model-change" data-model-rule-none="This panel compares the two sides of the model change itself." data-readout-none={swap === null || !swap.enough ? 'There are no comparable measured populations to draw.' : undefined}>
 		{#if swap !== null}<p>The change on {swap.at}, from {swap.before.model} to {swap.after.model}; {swap.before.articles} summaries before and {swap.after.articles} after.</p>
-			{#if swap.enough}<SwapDots {swap} width={chart.width_px} readoutMaxShare={chart.readout_max_share} />
+			{#if swap.enough}<div data-chart="model-change"><SwapDots {swap} width={chart.width_px} readoutMaxShare={chart.readout_max_share} /></div>
 			{:else}<p>Only {Math.min(swap.before.articles, swap.after.articles)} of the {knobs.min_attempts_for_rate} summaries this chart needs are on its smaller side, so it is not drawn.</p>{/if}
 		{/if}
 	</div>

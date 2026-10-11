@@ -145,33 +145,6 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 			await context.route('**/state/compact/*/index/daily.json', (route) => route.abort('failed'));
 		}
 
-		test('pending native doors keep the waiting frame without a settled answer', async ({ page }) => {
-			await page.route('**/state/compact/*/index/*.json', () => {});
-			await page.goto('/console/model/');
-			await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'loading');
-			for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
-				await expect(page.locator(`[data-console-panel-id="${id}"] [data-reserved]`)).toHaveAttribute('data-panel-state', 'loading');
-				await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
-			}
-		});
-
-		test('a quiet native window still names lost days and unread files', async ({ page, context }, info) => {
-			const root = info.outputPath('native-partial');
-			mkdirSync(root, { recursive: true });
-			for (const ledger of ['item-health', 'summary-quality-evals'] as const) {
-				await buildLedger(root, { ledger, pinned: '2026-08-20',
-					days: [{ ago: 2, state: 'lost', setAside: 2 }, { ago: 0, state: 'empty' }] });
-				await serveToPage(context, root, ledger);
-			}
-			await page.goto('/console/model/');
-			await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'quiet');
-			for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
-				const panel = page.locator(`[data-console-panel-id="${id}"]`);
-				await expect(panel.locator('[data-record-note]').first()).toContainText('18 Aug 2026');
-				await expect(panel).toContainText('set aside');
-				await expect(panel.locator('[data-lede]')).toHaveCount(0);
-			}
-		});
 		await page.goto('/console/model/');
 		await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', state);
 		for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
@@ -179,5 +152,34 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 				.toHaveText(state === 'quiet' ? 'Nothing recorded.' : state === 'missing' ? 'Not published yet.' : 'Did not arrive.');
 			await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
 		}
+
 	});
 }
+
+test('pending native doors keep the waiting frame without a settled answer', async ({ page }) => {
+	await page.route('**/state/compact/*/index/*.json', () => {});
+	await page.goto('/console/model/');
+	await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'loading');
+	for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+		await expect(page.locator(`[data-console-panel-id="${id}"] [data-reserved]`)).toHaveAttribute('data-panel-state', 'loading');
+		await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
+	}
+});
+
+test('a quiet native window still names lost days and unread files', async ({ page, context }, info) => {
+	const root = info.outputPath('native-partial');
+	mkdirSync(root, { recursive: true });
+	for (const ledger of ['item-health', 'summary-quality-evals'] as const) {
+		await buildLedger(root, { ledger, pinned: '2026-08-20',
+			days: [{ ago: 2, state: 'lost', setAside: 2 }, { ago: 0, state: 'empty' }] });
+		await serveToPage(context, root, ledger);
+	}
+	await page.goto('/console/model/');
+	await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'quiet');
+	for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+		const panel = page.locator(`[data-console-panel-id="${id}"]`);
+		await expect(panel.locator('[data-record-note]').first()).toContainText('18 Aug 2026');
+		await expect(panel).toContainText('set aside');
+		await expect(panel.locator('[data-lede]')).toHaveCount(0);
+	}
+});

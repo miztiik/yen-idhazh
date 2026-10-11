@@ -18,11 +18,11 @@
 	<p data-model-reasons-intro>{windowDays === 1 ? 'The single column is this one day' : `The columns run over these ${windowDays} days`}. The reasons stay separate, never added into one doubt count.</p>
 	<p data-model-reasons-rule>Each summary carries at most one published reason. The reason comes from its published item, not a second scoring rule.</p>
 	{#if !selected.some((day) => day.items > 0)}<p data-model-reasons="empty" data-doubt-reasons-empty={days === null ? 'missing' : 'quiet'} data-lede>{days === null ? 'The published doubt record is unavailable.' : 'No published summary carries a doubt record in this window.'}</p>
-		<div data-model-rule="no" data-model-rule-none="There are no published days on which to place a change." data-readout-none="No doubt readings were available."></div>
+		<div data-model-rule="no" data-model-rule-name="doubt-reasons" data-model-rule-none="There are no published days on which to place a change." data-readout-none="No doubt readings were available."></div>
 	{:else}
 		<p data-lede data-model-reasons-headline={headline === null ? undefined : ''} data-model-reasons={headline === null ? 'none' : undefined}>{headline ?? 'No summary carried a doubt reason in this window.'}</p>
 		<Series {series} {rule} {chart} name="doubt-reasons" stacked />
-		<p>{neverSeenNote(selected, windowDays)}</p>{#if unexplained !== null}<p data-model-reasons-unexplained>{unexplained}</p>{/if}
+		<p data-model-reasons-never>{neverSeenNote(selected, windowDays)}</p>{#if unexplained !== null}<p data-model-reasons-unexplained>{unexplained}</p>{/if}
 		<p>{REASONS.map((r) => r.label).join('; ')}.</p>
 		{#if totals.explained > 0}
 			<details><summary>The counts behind the reasons</summary>
