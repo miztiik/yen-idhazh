@@ -90,7 +90,7 @@ class ContentSimilarityJudge:
         pairs carrying its own. Answering anything else here would leave the
         difference unread, with every unit reporting success.
         """
-        return config.load().app.council.shards
+        return config.load_council().shards
 
     @property
     def committed_paths(self) -> tuple[str, ...]:

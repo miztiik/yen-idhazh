@@ -68,7 +68,7 @@ VENUE_LEDGERS: Final = (LedgerName.COUNCIL_RUN_RECORDS, LedgerName.HOST_FINGERPR
 
 def publication_paths(council: CouncilConfig) -> tuple[str, ...]:
     """The venue's and hosted tenants' declarations, never a blanket state claim."""
-    hosted = tenants(council.tenants)
+    hosted = tenants(council.judge_names, council=council)
     if not hosted:
         return ()
     if any(
@@ -262,7 +262,7 @@ def run_shard(
     invocation, so two tenants sharing a job would each be handed the whole span
     the venue meant for one of them.
     """
-    host = tenant(slug)
+    host = tenant(slug, council=council)
     return _recorded(
         host.judge_id,
         unit=f"shard {shard} of {shards}",
@@ -286,7 +286,7 @@ def run_shard(
 
 def _hosted(council: CouncilConfig, date: DateStamp) -> tuple[Tenant, ...]:
     """The tenants this night hosts, said out loud so an empty night is readable."""
-    hosted = tenants(council.tenants)
+    hosted = tenants(council.judge_names, council=council)
     if not hosted:
         _log.info("no tenant is registered, so %s is a night the council hosts nobody", date)
     return hosted

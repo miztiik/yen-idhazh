@@ -178,6 +178,7 @@ def traced_settings() -> config.Settings:
     """The committed config with tracing switched on, and nothing else moved."""
     settings = config.load(CONFIG_DIR)
     return config.Settings(
+        council=settings.council,
         app=settings.app.model_copy(
             update={
                 "observability": settings.app.observability.model_copy(
@@ -202,6 +203,7 @@ def untraced_settings() -> config.Settings:
     """
     settings = config.load(CONFIG_DIR)
     return config.Settings(
+        council=settings.council,
         app=settings.app.model_copy(
             update={
                 "observability": settings.app.observability.model_copy(

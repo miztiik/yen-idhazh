@@ -34,9 +34,9 @@ SOURCE = TENANT_SOURCE.replace(
 
 def configuration(root: Path, slugs: tuple[str, ...]) -> Path:
     target = copy_config(root)
-    path = target / "idhazh.json"
+    path = target / "llm_council.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["council"]["tenants"] = list(slugs)
+    data["judge_names"] = list(slugs)
     path.write_text(json.dumps(data), encoding="utf-8", newline="\n")
     return target
 

@@ -8,17 +8,7 @@ from idhazh.contracts.base import DateStamp, Model, Slug
 
 
 class CouncilConfig(Model):
-    """The clocks, the width, the nights covered and the tenants one judging night runs under.
-
-    A top-level block rather than a knob under a tenant, because every number
-    here prices a runner: a checkout, an install, a weights restore and a matrix
-    shard. No tenant can see any of them.
-
-    Until 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and
-    the width sat inside the content-similarity judge's own block - so a
-    repository with no judge configured had no width to size its matrix by and
-    no clock to stop a shard on.
-    """
+    """`config/llm_council.json`: the clocks, width, nights and judges of one night."""
 
     shard_timeout_minutes: int = Field(
         default=200,
@@ -117,7 +107,7 @@ class CouncilConfig(Model):
             "floor under the window only slows a backfill down instead of stopping it."
         ),
     )
-    tenants: tuple[Slug, ...] = Field(
+    judge_names: tuple[Slug, ...] = Field(
         default=(),
         description=(
             "Which tenants the council hosts, in the order it runs them. The one place a "

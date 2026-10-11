@@ -1,7 +1,7 @@
 name: LLM-COUNCIL
 
 # The council, once a night, on its own clock. It asks every tenant registered
-# in `council.tenants` to pick its work for the day, fans out over one job a
+# in `judge_names` in `config/llm_council.json` to pick its work for the day, fans out over one job a
 # tenant a shard, and settles what came back.
 #
 # **Council, not judges, and the name is about where this goes** (owner,
@@ -179,7 +179,7 @@ jobs:
       - id: bounds
         run: |
           set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key council.shard_timeout_minutes \
+          python3 backend/utilities/shard_bound.py --key shard_timeout_minutes --config-file llm_council.json \
             >> "$GITHUB_OUTPUT"
 
       # What tonight fans out to, asked of the tenants rather than computed

@@ -77,9 +77,9 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *slugs: str) -> Path:
     """The loader's named config inputs, with the named slugs registered."""
     target = copy_config(root)
-    raw = json.loads(read_text(target / "idhazh.json"))
-    raw["council"]["tenants"] = list(slugs)
-    (target / "idhazh.json").write_text(
+    raw = json.loads(read_text(target / "llm_council.json"))
+    raw["judge_names"] = list(slugs)
+    (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     return target
@@ -243,7 +243,7 @@ def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -
     """
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ())})
     config_root = _config_registering(venue, A_SLUG)
-    council = config.load(config_root).app.council
+    council = config.load_council(config_root)
     window = (
         council.shard_timeout_minutes
         - council.shard_preamble_minutes
@@ -283,7 +283,7 @@ def test_the_night_runs_every_hosted_tenant_for_the_date_it_was_given(venue: Pat
     """Pick the work, then settle it, both once a date and both for every tenant."""
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
-    council = config.load(config_root).app.council
+    council = config.load_council(config_root)
 
     session.prepare(council, date=A_DATE, run_id=A_RUN)
     session.settle(

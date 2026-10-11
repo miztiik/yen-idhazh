@@ -392,7 +392,7 @@ def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: 
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
-    shipped, verdicts, written = a_night(tmp_path, units=settings.app.council.shards)
+    shipped, verdicts, written = a_night(tmp_path, units=settings.council.shards)
 
     report = count_verdicts.stage_count_verdicts(
         DATE,
@@ -437,7 +437,7 @@ def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path
         state_dir=state,
     )
 
-    assert settings.app.council.shards > len(written), "a night short of a unit"
+    assert settings.council.shards > len(written), "a night short of a unit"
     assert (report.counted, report.held_reason) == (False, "shards_missing")
     assert report.metrics_appended == 1
     assert ledger.list_raw_files(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, days=[DATE])
@@ -494,7 +494,7 @@ def test_a_settled_night_files_each_judged_date_through_the_door_and_the_fit_rea
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", str(AN_ATTEMPT))
     a_published_day(common.PUBLIC_ROOT, date=DATE)
     state = tmp_path / "state"
-    units = config.load(CONFIG_DIR).app.council.shards
+    units = config.load_council(CONFIG_DIR).shards
     nights = (AN_EARLIER_DATE, DATE)
     for date in nights:
         for unit in range(units):
@@ -598,7 +598,7 @@ def test_the_night_that_lost_a_unit_is_the_night_this_judge_asks_for_again(
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
-    shards = settings.app.council.shards
+    shards = settings.council.shards
 
     whole = counted_by(
         DATE, root=tmp_path / "whole", state=state, settings=settings, units=shards
@@ -633,7 +633,7 @@ def test_the_date_memory_survives_the_reset_that_empties_the_counts(tmp_path: Pa
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
-    shards = settings.app.council.shards
+    shards = settings.council.shards
     counted_by(DATE, root=tmp_path / "first", state=state, settings=settings, units=shards)
 
     after = counted_by(
@@ -668,7 +668,7 @@ def test_a_paused_judge_family_takes_no_verdict_reading_archive_or_count(
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
-    shards = settings.app.council.shards
+    shards = settings.council.shards
     counted_by(DATE, root=tmp_path / "first", state=state, settings=settings, units=shards)
     before = sorted(path.relative_to(state).as_posix() for path in state.rglob("*.*"))
     registry = json.loads(read_text(CONFIG_DIR / ledger.paths.REGISTRY_FILENAME))

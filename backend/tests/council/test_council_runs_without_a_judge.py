@@ -239,9 +239,9 @@ def _council(*slugs: str, repair_dates: int = 1) -> CouncilConfig:
     a real night is bounded by. Only the guest list and how many older nights
     ride along are this test's.
     """
-    committed = config.load(CONFIG_DIR).app.council
+    committed = config.load_council(CONFIG_DIR)
     return committed.model_copy(
-        update={"tenants": list(slugs), "repair_dates_a_night": repair_dates}
+        update={"judge_names": tuple(slugs), "repair_dates_a_night": repair_dates}
     )
 
 
@@ -264,7 +264,7 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
     state_root = venue / "state"
 
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
-    hosted = registry.tenants(council.tenants)
+    hosted = registry.tenants(council.judge_names)
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
     prepared = session.prepare(council, date=TONIGHT, run_id=run_id)
     settled = session.settle(
@@ -298,7 +298,7 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
     )
     council = _council(A_SLUG, ANOTHER_SLUG, repair_dates=3)
 
-    hosted = registry.tenants(council.tenants)
+    hosted = registry.tenants(council.judge_names)
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
 
     assert [host.judge_id for host in hosted] == [A_SLUG, ANOTHER_SLUG]

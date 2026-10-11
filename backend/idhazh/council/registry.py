@@ -1,6 +1,6 @@
 """Which tenants is the council hosting, and where does a slug lead?
 
-A slug in `council.tenants` is the whole of what the venue is told. What stands
+A slug in `judge_names` in `config/llm_council.json` is all the venue is told. What stands
 behind it is found by asking each package that declares a tenant what its own
 slug is, and every one of those imports happens inside a function - so no module
 here carries a tenant in its import closure and nothing here lists who may
@@ -27,6 +27,7 @@ from typing import Final, cast
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.tenancy import Tenant
 
 #: The package the council looks in. Read on every call rather than bound as a
@@ -86,7 +87,9 @@ def _declared(module_name: str) -> tuple[ModuleType, Tenant]:
     return module, cast(Tenant, declared)
 
 
-def _refuse_a_night_this_tenant_cannot_finish(module: ModuleType, app: AppConfig | None) -> None:
+def _refuse_a_night_this_tenant_cannot_finish(
+    module: ModuleType, app: AppConfig | None, council: CouncilConfig | None
+) -> None:
     """Give the tenant that answered to the slug its say on the night ahead.
 
     Asked of that tenant and of no other. A venue that ran every declared
@@ -99,10 +102,19 @@ def _refuse_a_night_this_tenant_cannot_finish(module: ModuleType, app: AppConfig
     check = getattr(module, TENANT_FIT_CHECK, None)
     if check is None:
         return
-    check(app if app is not None else config.load().app)
+    check(
+        app if app is not None else config.load().app,
+        council=council if council is not None else config.load_council(),
+    )
 
 
-def tenant(slug: str, *, package: str | None = None, app: AppConfig | None = None) -> Tenant:
+def tenant(
+    slug: str,
+    *,
+    package: str | None = None,
+    app: AppConfig | None = None,
+    council: CouncilConfig | None = None,
+) -> Tenant:
     """The tenant that answers to `slug`, or a refusal naming the slug.
 
     Refused rather than skipped. A night that quietly dropped an unrecognised
@@ -114,23 +126,28 @@ def tenant(slug: str, *, package: str | None = None, app: AppConfig | None = Non
     for module_name in _declaring_modules(root):
         module, found = _declared(module_name)
         if found.judge_id == slug:
-            _refuse_a_night_this_tenant_cannot_finish(module, app)
+            _refuse_a_night_this_tenant_cannot_finish(module, app, council)
             return found
         declared.append(found.judge_id)
     known = ", ".join(declared) if declared else "none"
     raise SystemExit(
-        f"council.tenants names '{slug}' and no package under {root}/ declares it. "
+        f"judge_names in config/llm_council.json names '{slug}' and no package "
+        f"under {root}/ declares it. "
         f"The tenants that do declare themselves: {known}. Either the slug is a typo "
         f"or the tenant's own {TENANT_MODULE} module is not in this checkout."
     )
 
 
 def tenants(
-    slugs: Sequence[str], *, package: str | None = None, app: AppConfig | None = None
+    slugs: Sequence[str],
+    *,
+    package: str | None = None,
+    app: AppConfig | None = None,
+    council: CouncilConfig | None = None,
 ) -> tuple[Tenant, ...]:
     """Every tenant the council hosts, in the order the config names them.
 
     An empty list is a legal night. The venue runs every step it always runs and
     judges nothing, which is what a room with no case heard in it looks like.
     """
-    return tuple(tenant(slug, package=package, app=app) for slug in slugs)
+    return tuple(tenant(slug, package=package, app=app, council=council) for slug in slugs)
