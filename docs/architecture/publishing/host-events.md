@@ -329,6 +329,8 @@ isolated directory does not yet exist. Original path labels are not rewritten;
 distinct case-sensitive roots stay distinct. Symlinks and junctions are refused.
 Missing destination names follow the existing parent's case rules. On Windows,
 those rules come from read-only directory attributes, not universal lowercasing.
+The Windows API branch uses an explicit platform check; Linux does not load
+Windows-only APIs.
 Missing or unreadable sources, hash drift, unknown/mixed schemas, unsafe paths,
 receipt disagreement and incomplete compact/index dependencies fail by name.
 Present set-aside files receive `unresolved`, never a successful skipped-file
@@ -368,6 +370,13 @@ source dependencies and estimated read/candidate bytes. `scope_hash` binds the
 entire operator manifest. `evidence_hash` binds the validated report and limits;
 the derived bundle path and the hash itself are excluded from that preimage.
 Exact partial retries reuse bytes. Different bytes at a candidate path fail.
+
+Console view inputs use the retained `ConsoleBand` contract, including its known
+historical schema dates. The retired `frontend/public/machine/*.csv` projection
+has no current reader contract and is refused before any bundle write. This
+refusal does not retire source bytes or make a manifested file reconciled.
+An affected historical batch remains blocked until its exact dependencies are
+resolved; unrelated validated batches can proceed.
 The report is published last. New evidence generations do not overwrite old ones.
 This is per-file atomic visibility, not a multi-file or power-loss guarantee.
 The read estimate counts the two source passes; manifest/retry-target reads and
