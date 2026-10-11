@@ -1,4 +1,5 @@
 import { expect, test } from './support/door-page';
+import { openMachine } from './support/machine-record-state';
 
 /**
  * What the stolen-processor panel says on the archive as it stands.
@@ -18,7 +19,7 @@ import { expect, test } from './support/door-page';
  */
 
 test.beforeEach(async ({ page }) => {
-	await page.goto('/console/machine/');
+	await openMachine(page);
 });
 
 test('THE ORACLE: a page with no reading says so about the days it drew, and never that there is none', async ({

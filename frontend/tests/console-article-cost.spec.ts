@@ -10,6 +10,7 @@
  */
 
 import { expect, test, type Page } from './support/door-page';
+import { openMachine } from './support/machine-record-state';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { seconds } from '../src/lib/charts/machine';
@@ -255,7 +256,7 @@ async function numericCost(
 
 test.describe('the panel', () => {
 	test('printed values match the figures the page publishes beside them', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
@@ -295,7 +296,7 @@ test.describe('the panel', () => {
 	});
 
 	test('the processor card publishes measured and offered counts in the words', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
@@ -312,7 +313,7 @@ test.describe('the panel', () => {
 	});
 
 	test('processor time is printed beside the hour it has to fit inside', async ({ page }) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
@@ -333,7 +334,7 @@ test.describe('the panel', () => {
 	test('the added-memory printout matches the figure the page publishes beside it', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
@@ -367,7 +368,7 @@ test.describe('the panel', () => {
 		// A zero would say every article cost nothing, which is a claim about the
 		// machine rather than about the ledger. Which cards have a figure is the
 		// window's own fact; the rule is the same for each card at each preset.
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		for (const preset of CONSOLE.window_presets) {
 			await widen(page, preset);
@@ -387,7 +388,7 @@ test.describe('the panel', () => {
 	test('the panel names what it cannot answer, and the measurement that would', async ({
 		page
 	}) => {
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const open = page.locator(`${PANEL} [data-article-cost-open="memory-half"]`);
 		await expect(open).toContainText('the prompt it read, or the reply it wrote');
 		await expect(open).toContainText('at each call boundary');
@@ -397,7 +398,7 @@ test.describe('the panel', () => {
 		// The id is the address, and the group is the decision an operator is
 		// taking when he reads it. Both are config, and this is what holds the
 		// page to them.
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		const group = page.locator('[data-console-group="what-the-model-spends"]');
 		await expect(group.locator('[data-console-panel-id="article-cost"]')).toHaveCount(1);
 		await expect(page.locator('[data-console-panel-id="article-cost"] h3')).toHaveText(

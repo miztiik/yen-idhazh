@@ -12,21 +12,52 @@
  * carry a machine reading. Two bars that visibly sit on top of each other refuse
  * that addition without anybody having to read a caption.
  *
- * `frontend/scripts/build-canary.mjs` writes the ledger this reads. Four of its
- * days carry a machine reading and the newest deliberately does not.
+ * Independent rows mount the retained real component's two shapes, overlap,
+ * disagreement and swap. A separate native-route oracle holds its newest-day
+ * query to the canary's deliberately unmeasured newest day.
  */
 
-import { expect, test } from './support/door-page';
+import { expect, test, type Page } from './support/door-page';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { memoryHeld } from '../src/lib/console/machine/memory-held';
+import { windowOfDays } from '../src/lib/charts/viewport';
+import { clientCode, drawClient } from './support/console-window/client-render';
+import { openMachine } from './support/machine-record-state';
 
 const DESKTOP = { width: 1280, height: 900 };
 
 /** The panel, wherever its group puts it. Read by id rather than by title,
  * because the title is prose and a row may rewrite it. */
 const PANEL = '[data-console-panel-id="memory-held"]';
+const GIB = 2 ** 30;
+const reading = (date: string, cells: Record<string, number> = {}) => Object.fromEntries(
+	Object.entries({ date, item_id: date, os_mem_total_bytes: 16 * GIB,
+		os_mem_available_bytes: 6 * GIB, llama_rss_bytes: 12 * GIB, python_rss_bytes: 2 * GIB,
+		os_swap_total_bytes: GIB, os_swap_free_bytes: GIB, ...cells }).map(([key, value]) => [key, String(value)])
+);
+const record = memoryHeld([
+	{ date: '2026-08-01', item_id: 'unrecorded' },
+	reading('2026-08-08'),
+	reading('2026-08-18', { llama_rss_anon_bytes: 4 * GIB, python_rss_anon_bytes: GIB,
+		os_swap_free_bytes: GIB - 1024 ** 2 }),
+	reading('2026-08-19', { llama_rss_anon_bytes: 12 * GIB, python_rss_anon_bytes: 2 * GIB })
+]);
+let panelCode: string;
+test.beforeAll(async () => {
+	panelCode = await clientCode([['MemoryHeldPanel', './src/lib/console/machine/MemoryHeldPanel.svelte']]);
+});
+async function drawHeld(page: Page, days: number) {
+	const span = windowOfDays('2026-08-19', days, 'right');
+	await drawClient(page, panelCode, 'MemoryHeldPanel', {
+		record, start: span.start, end: span.end, days
+	});
+	await page.addStyleTag({ content: readFileSync(resolve('src', 'styles', 'tokens.css'), 'utf8') });
+}
 
 test.beforeEach(async ({ page }) => {
 	await page.setViewportSize(DESKTOP);
-	await page.goto('/console/machine/');
+	await drawHeld(page, 30);
 });
 
 test('THE ORACLE: the drawn parts add up to the machine, on every bar the page draws', async ({
@@ -201,7 +232,7 @@ test('the swap in use is ruled under the bar, and none is not the same as no rea
 	).toBe(true);
 });
 
-test('the window control narrows the bars, and the panel names its own grain', async ({ page }) => {
+test('a narrowed component span narrows its bars and names its own grain', async ({ page }) => {
 	const panel = page.locator(PANEL);
 	// The subtitle's last clause carries the grain, as every subtitle on this
 	// route does. `console-frame.spec.ts` holds the rule; this holds it to the
@@ -217,11 +248,16 @@ test('the window control narrows the bars, and the panel names its own grain', a
 	// The canary puts one reading day ten days back, so the narrowest preset
 	// cannot reach it and the widest can. A panel that ignored the control would
 	// draw the same count at both.
-	await page.locator('[data-window-preset="7"]').click();
-	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	await drawHeld(page, 7);
 	await expect(panel.locator('[data-memory-bar]')).toHaveCount(wide - 1);
 	const narrowNote = ((await panel.locator(':scope > header > p').textContent()) ?? '')
 		.replace(/\s+/g, ' ')
 		.trim();
 	expect(narrowNote, 'the subtitle kept the span the page opened at').toContain('over these 7 days');
+});
+
+test('the native route does not substitute an older memory bar for its newest unmeasured day', async ({ page }) => {
+	await openMachine(page);
+	await expect(page.locator(`${PANEL} [data-memory-bar]`)).toHaveCount(0);
+	await expect(page.locator(`${PANEL} [data-machine-panel-empty="memory-held"]`)).toBeVisible();
 });

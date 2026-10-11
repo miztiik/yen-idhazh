@@ -10,6 +10,7 @@
  */
 
 import { expect, test, type Page } from './support/door-page';
+import { openMachine } from './support/machine-record-state';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { grouped } from '../src/lib/charts/series';
@@ -217,7 +218,7 @@ test.describe('the panel', () => {
 		// drawn colour rather than off the class, because a class nothing styles
 		// passes an assertion and still draws one grey strip.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await hydrated(page);
 		await setWindow(page, Math.max(...consoleConfig().window_presets));
 
@@ -248,7 +249,7 @@ test.describe('the panel', () => {
 		// different fixes. A panel that drew only the count would pass every
 		// assertion above and leave an operator tuning the wrong thing.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await hydrated(page);
 
 		const fired = (await readTiles(page)).filter((tile) => tile.state === 'fired');
@@ -289,7 +290,7 @@ test.describe('the panel', () => {
 		// the year. Measured across two spans that hold different marks, because
 		// a height read once says nothing about whether it is fixed.
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await hydrated(page);
 
 		const presets = consoleConfig().window_presets;
@@ -309,7 +310,7 @@ test.describe('the panel', () => {
 
 	test('the pinning line agrees with the state the page publishes beside it', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await hydrated(page);
 		await setWindow(page, Math.max(...consoleConfig().window_presets));
 
@@ -340,7 +341,7 @@ test.describe('the panel', () => {
 		page
 	}) => {
 		await page.setViewportSize(DESKTOP);
-		await page.goto('/console/machine/');
+		await openMachine(page);
 		await hydrated(page);
 
 		const finding = page.locator('[data-disk-read-finding]');
