@@ -49,8 +49,10 @@ class PaperTenant:
     ran: list[tuple[str, str, int, int]] = field(default_factory=list)
     prepared: list[str] = field(default_factory=list)
     settled: list[str] = field(default_factory=list)
+    asked: list[tuple[DateStamp, ...]] = field(default_factory=list)
 
     def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+        self.asked.append(window)
         return tuple(window)
 
     def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:

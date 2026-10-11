@@ -141,6 +141,13 @@ The planning job logs each registered name and status to stderr, never to its
 key-value outputs. A paused judge may have an unavailable or broken package;
 the scheduled night never imports or checks it.
 
+Planning validates the whole declaration set and resolves every active package
+before asking about outstanding nights or preparing any work. A missing judge
+file, duplicate name, missing active package or raising active import earns
+`2 refused`, with the configured judge's validated slug in the diagnostic.
+Dependency failures retain their cause; they are not called missing judges.
+Neither the diagnostic nor the output includes exception text.
+
 An active judge is refused by name if any ledger it will commit belongs to a
 paused or retired family. The refusal names the judge, ledger and family.
 This includes the venue's own records. A paused judge and an active family are
@@ -180,6 +187,11 @@ the night. No directory is listed and no neighboring package is imported.
 The config loader refuses a slug whose derived package is not a Python
 identifier or is a keyword. Imports stay inside the resolver, so no council
 module carries a judge in its import closure.
+
+Tenant binding imports no execution stages or heavy judge libraries. Import
+those inside the functions that use them, so planning needs no judge extras
+just to resolve a name. The content-similarity tenant imports its stage modules
+only when preparing, judging or settling.
 
 Three things follow, and each is the reason a simpler design was refused.
 
