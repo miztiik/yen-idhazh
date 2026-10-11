@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #3 declares a persisted shape, approved as P1 and amended by P13; every other row states its own level.
-**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. Fowler and Andre reviewed it on 2026-10-11 and settled the contested items in debate. The owner ruled P1 to P19 on 2026-10-11 (P12 deferred to row #8's replay), ruled E1, F1 and G1 (C5 and C8 are no longer stops), ruled that determinism is not an expectation (C10), and dropped rows #10 and #11 with both reviewers' approval (D3). **Hold (owner, 2026-10-11): the owner disapproved judging per site.** The judge must judge summary quality across the digest - the summary-quality metrics of docs/architecture/publishing/autotune-summary-quality.md and what recent research supports - not each site's articles, and the ledger is drift-evals, not site-drift-evals. Rows #2 and #4 to #14 are being redesigned around that, with a literature survey and Fowler's and Andre's review; no row may start until the owner rules on the redesign. Table Q tracks every open request. No row started.
+**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. The owner ruled P1 to P19 on 2026-10-11 (P12 deferred to row #8's replay), ruled E1, F1 and G1, ruled that determinism is not an expectation (C10), and dropped rows #10 and #11 (D3). **Hold (owner, 2026-10-11): the owner disapproved judging per site** - the judge must judge summary quality across the digest - and the ledger is drift-evals. The hard look the owner asked for is done: a research survey (TODO/20261011-summary-quality-metrics-research-record.md) and Andre's and Fowler's reviews (TODO/20261011-summary-fidelity-judge-review-record.md). Section 4 proposes the redesign; P20 to P37 await the owner, and rows #2 to #14 are rewritten once they are ruled. Table Q tracks every open request. No row started.
 
 ## 0. Operating contract
 
@@ -584,7 +584,7 @@ Table V2 - rejected alternatives
 
 ## 3. Owner rulings
 
-Table P - rulings the owner made on 2026-10-11
+Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P37 pending
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -607,6 +607,24 @@ Table P - rulings the owner made on 2026-10-11
 | P17 | Combine weights: scored only on the replay's injected slips and reshuffled dates, never on live crossings, and fixed before any night they judge; the replay prints the best weights and a person commits them; an autotune loop never writes the settings file, and an automatic loop would file damped, clamped rows in a ledger of its own, at Level 5, not built here (F2.2, F2.6) | Approved | Weights chosen this way move detection power, never the false-crossing rate, because the p-value comes from the same re-deals whatever the weights; weights fitted on live crossings would let the alarm choose what it alarms on | 8, 13 |
 | P18 | The reading budget counts new stretches: a typical night is the mean number of new stretches per judged date after the first seven; the count is split by check, and a check that crosses on reshuffled dates more often than false_discovery_rate is fixed first; false_discovery_rate 0.01 stays the second lever (M1.5). C5 would read: "No stop: the row splits the count by check, fixes a check that crosses too often on reshuffled dates, then sets false_discovery_rate to 0.01 and replays again before the switch; only a typical night still over the budget is reported, as a finding with options, never as a veto" | Approved | One real change stays in the recent window seven nights, so a count of crossings per night counts it seven times; in simulation, lowering the rate first removed 3.4 crossings a night, 2.7 of them real (Andre, 2026-10-11) | 8 |
 | P19 | Outside this plan: correct the evaluation persona's file, .github/agents/andre.agent.md, which says this pipeline runs "pinned and deterministic so a re-run is a re-run" | Approved, as one small commit of its own | The owner ruled that determinism is not an expectation, and determinism.md says "Determinism is not a property a summarizer needs"; a persona that expects a repeat would review every later plan against it | none |
+| P20 | Unit of judgment: the whole digest, per production model series with per-column instrument keys (P14); a prompt or runtime change labels the crossings inside its window rather than starting a series; sites, article count, unusually short, page furniture and article length are no longer judged, and article length and source become covariates | Pending; recommended: approve | Per-site cells are too small to test, and the one summariser-side change on record moved inside sources: the 99 sources present in both weeks moved -0.101 against -0.103 overall (review record, Andre 1.1); the research treats length, source and page type as covariates (research record 7.3); splitting a series on every input would blind the judge 13 nights after each change, about every 9 days | 3, 4, 7, 15, 8, 13, 12 |
+| P21 | The judged set of Table RA: faithfulness (an index and two shares), unsupported numbers and dropped hedges judged; copying and summary length watched as behaviour; coverage, coherence and the input mix as diagnostics; loops and too-short summaries paused until their base rates are known. Amends P13: each declaration gains role, statistic, line, adjust_by and rho, and the kinds become statistics tested by one module | Pending; recommended: approve | LLM-era frameworks judge faithfulness, completeness and conciseness; fluency is near ceiling; adjacent-sentence cosine and top-20-word coverage are unvalidated (research record 1.2 and 2.5); no column measures completeness or conciseness today (P32) | 4, 7, 15 |
+| P22 | The test: a recency-weighted 7-day window (recency_lambda 0.15) against the 28 days before it, whole days re-dealt with one deal for every member, widened for each member's day-to-day correlation (rho, proposed by the replay and committed by a person), on values adjusted for length band and source with the raw value stored beside; days under 100 rows left out | Pending; recommended: approve | It held its false rate at every baseline length simulated, and 0 of 8 stable real nights crossed; control limits taken from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation and on 7 of the same 8 real nights; a 56-day reference would span every pipeline regime on record (review record, SP4) | 7, 15, 8 |
+| P23 | false_discovery_rate stays 0.05 | Pending; recommended: approve | With no change, 0.10 drift readings a month; 0.01 gives 0.03 but loses about 20 points of power on marginal changes (review record, SP6) | 8 |
+| P24 | The composite: every member keeps its own row; two calibrated combined rows enter the same step - quality_worse, the weighted positive parts of the quality members, so an improvement never offsets a harm, and something_changed, a T-squared over the quality and behaviour members; a person reads evaluator check, drift (two consecutive nights), watch or quiet; nothing acts. Amends P15 | Pending; recommended: approve | The 2026-09-07 step was a behaviour change a quality composite must not call worse, yet a person must see it; a signed, correlation-normalised sum lets an improvement cancel a harm; the per-item publish gate stays a veto chain (research record 5 and 7.4; review record, SP5) | 13, 12 |
+| P25 | Weights and rho: start from reader harm - faithfulness 3 across its three rows, unsupported numbers 3, dropped hedges 2; the replay scores candidate weights by their worst detection across an injection library (swapped numbers, entities and dates, negated statements, dropped hedges, truncation, a copied lead, repetition) and proposes rho; a person commits both; a new member lands paused with weight 0 and rho 0. Sharpens P17 | Pending; recommended: approve | Calibration does not depend on the weights, because every p comes from the re-deals; weights fitted on live crossings would let the alarm choose what it alarms on | 8, 13 |
+| P26 | The rows of Table RB and the settings of Table RC; amends P1: DriftEval loses site and page_type and gains the fields RB2 names, with the key run_id, date, check_name, comparison, model_id, instrument | Pending; recommended: approve | Nothing is written to drift-evals yet, so a shape change costs plan edits only; after row #3 merges, every change is a migration (review record, Fowler 2.5) | all |
+| P27 | Withdraw P7 (scipy in an optional extra installed by the council's jobs): the redesigned test needs only numpy | Pending; recommended: approve | The exact tails P7 served left with rows #5 and #6 | 9 |
+| P28 | The long-baseline comparison (row #14) moves to Table B with its trigger - 52 weeks plus 28 days of scored history, about 2027-09 - and then covers the quality members | Pending; recommended: approve | A gated row would hold this plan open for about a year (review record, Fowler 7) | 14 |
+| P29 | drift-evals names a kind of thing, which the owner's registry rule of 2026-09-27 forbids ("The value says what the ledger holds, never the kind of thing it is"): keep drift-evals and add a dated exception line to ledger-registry.md, or rename it summary-drift-evals | Pending; recommended: keep drift-evals with the exception line | The owner chose drift-evals on 2026-10-11; the cost is that no other judge can use the name (review record, Fowler 2.5) | 3 |
+| P30 | Drop row #9's peak-memory observation | Pending; recommended: approve | No machine is recorded per unit, so nothing could read it (review record, Fowler 7) | 9 |
+| P31 | A plan of its own, outside this judge: sentence-level faithfulness (each summary sentence against its best article window; the mean, the minimum and the sentences under 0.50 and 0.80), entity and date checks, and per-column instrument stamps, as one eval-row change after a one-day measurement | Pending; recommended: approve, as a separate plan | Scoring the whole summary against each window marks down multi-window articles: a 2-window article scores 0.22 and a 3-window article 0.40 below the same article read whole; about 3 times today's 12.5 scorer-minutes a day (estimate); Level 5; plan 36's 0.50 line must be re-cut on the new score (research record 4; review record, SP3) | - |
+| P32 | Completeness and conciseness: pilot a sampled key-fact judge, never the summariser, on injected omissions before building it, its scores in a ledger of its own; a second faithfulness checker only after P31, as a 100-a-day trial | Pending; recommended: approve the pilot only | The only route to completeness and conciseness, unproven at 9B; 20 to 75 runner-minutes a day (estimate); a second checker adds 1 to 3 GB of memory and a dependency (review record, SP3) | - |
+| P33 | Plan 36: this judge supplies the drift alarms; plan 36 drops its fit and fold rows (1, 2, 4, 5) and its self-judged fluency (rows 6 and 10), keeps the publish gate on absolute lines, the rejects ledger and rows 3, 8 and 13, re-points its console row to this judge, and fixes three stale premises: a fluency leg in an old workflow, a history rewrite in prune.yml that CLAUDE.md section 8 forbids, and an unregistered state/rejects/ that the gardener's sweep would empty (its retention a 30-day exception) | Pending; recommended: approve, as a revision of plan 36 | Plan 36's own correction E1 made every adaptive floor a watch-only fleet alarm, which is this judge's job, and two alarms per metric would disagree; self-judged fluency carries every documented judge bias on a near-ceiling dimension (research record 2.3; review record, Fowler 3 and Andre 6) | - |
+| P34 | Per-source extraction health: a source-health check in feed-health or item-health, in a plan of its own | Pending; recommended: approve | Row #1 deletes the only per-site extraction checks, and no summary metric sees one source's extraction breaking (RD6) | 1 |
+| P35 | Accepting a known change: later, a person's mark resets one member's baseline; until then a deliberate change that starts no series reads as drift for up to 35 days | Pending; recommended: later, with B2's ledger of marks | The pipeline changed about every 9 days (RD5) | - |
+| P36 | Correct the evaluation persona's line that calls a model judge a project non-goal, which contradicts CLAUDE.md section 1a | Pending; recommended: approve, as one small commit | CLAUDE.md section 1a: "LLM-as-judge is primary evaluation where applicable" | - |
+| P37 | Move Table Q to a standing file, TODO/owner-requests.md, read first and updated in every session | Pending; recommended: approve | A plan-doc is deleted when it closes, and Table Q already tracks other plans' items (review record, Fowler 6) | - |
 
 Table Q - every owner request on these plans since 2026-10-10, and where it landed (kept current; an open item is closed only by a ruling, a row or a commit)
 
@@ -631,14 +649,14 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q17 | 2026-10-11 | Approve the recommendations of the last review (judge P13 to P19; council P1 to P8) | Done | Both Table P | - |
 | Q18 | 2026-10-11 | The ESCALATE triggers table does not render | Done | Table C's delimiter row had three cells for four columns; F1.5 had an extra cell | - |
 | Q19 | 2026-10-11 | Disapprove site-drift-evals; use the generic name drift-evals | Done | H4.1, row #3, P1 | The contract and its stem follow: DriftEval, drift-eval |
-| Q20 | 2026-10-11 | Judging per site is wrong: judge summary quality - faithfulness, coherence, conciseness and the other standard metrics - and the variance of the metrics in autotune-summary-quality.md, taking good elements from its loop | Open | Status hold; rows #2 and #4 to #14 | The redesign, ruled by the owner before any row starts |
-| Q21 | 2026-10-11 | A hard look at what matters, how we measure it, and what is measured and judged upon | Open | Andre and Fowler reviewing | Decisions to the owner |
-| Q22 | 2026-10-11 | Which council rows bring the gardener's lifecycle, logging, telemetry and other strengths? | Open | Answered in the session; a mapping table goes into the council plan | Add the table to the council plan |
-| Q23 | 2026-10-11 | Survey recent research on news and long-form summary metrics; use what is reasonable instead of a small set | Open | A research survey running | Findings into the redesign |
-| Q24 | 2026-10-11 | How to make a composite metric that decides | Open | Andre, with the survey | A decision rule to the owner |
+| Q20 | 2026-10-11 | Judging per site is wrong: judge summary quality - faithfulness, coherence, conciseness and the other standard metrics - and the variance of the metrics in autotune-summary-quality.md, taking good elements from its loop | Proposed | Section 4; P20 to P30 | The owner rules P20 to P30; then rows #2 to #14 are rewritten |
+| Q21 | 2026-10-11 | A hard look at what matters, how we measure it, and what is measured and judged upon | Done | Review record (TODO/20261011-summary-fidelity-judge-review-record.md); Section 4 | Rulings P20 to P37 |
+| Q22 | 2026-10-11 | Which council rows bring the gardener's lifecycle, logging, telemetry and other strengths? | Answered | The council plan's Table T maps each gardener strength to its row | The owner rules the council plan's P9 to P11 |
+| Q23 | 2026-10-11 | Survey recent research on news and long-form summary metrics; use what is reasonable instead of a small set | Done | Research record (TODO/20261011-summary-quality-metrics-research-record.md); Section 4 | Instrument changes ruled as P31 and P32 |
+| Q24 | 2026-10-11 | How to make a composite metric that decides | Proposed | Section 4 (the rule); P24, P25 | The owner rules P24 and P25 |
 | Q25 | 2026-10-11 | Keep track of every item so nothing is lost | Done, standing | This table | Update it in every session that touches these plans |
-| Q26 | 2026-10-11 | Plan 36 already designs fleet alarms on the same four metrics (raised by the review, not the owner) | Open | Plan 36 (TODO/20260918-36-summary-quality-autotune-plan.md) | The owner rules how the two plans divide the work |
-| Q27 | 2026-10-11 | The evaluation persona still calls a model judge a project non-goal, against CLAUDE.md section 1a (raised by the review, not the owner) | Open | .github/agents/andre.agent.md | The owner rules on correcting it |
+| Q26 | 2026-10-11 | Plan 36 already designs fleet alarms on the same four metrics (raised by the review, not the owner) | Proposed | P33 | The owner rules P33; then plan 36 is revised |
+| Q27 | 2026-10-11 | The evaluation persona still calls a model judge a project non-goal, against CLAUDE.md section 1a (raised by the review, not the owner) | Proposed | P36 | The owner rules P36 |
 
 Table R - the review changes the owner approved on 2026-10-10, and where each lands now
 
@@ -671,3 +689,83 @@ Table S - checked and kept as written
 | S4 | The 20-article floor | Below 20 a real shift is rarely caught | Andre |
 | S5 | Benjamini-Hochberg over Bonferroni | Valid once every check has a p-value (R2) | Andre |
 | S6 | Stage 1 checks ignore the model | Already true for the length rule today | Andre |
+
+## 4. Redesign proposed on 2026-10-11 (pending P20 to P37)
+
+Evidence: TODO/20261011-summary-quality-metrics-research-record.md (76 verified sources) and TODO/20261011-summary-fidelity-judge-review-record.md (Andre's and Fowler's reviews, replayed on the 50 daily records under state/day-metrics/, 2026-08-21 to 2026-10-10).
+
+In one paragraph: the judge judges the quality of the digest's summaries, per production model series, not each site's articles. Each night it compares the last 7 days, recent days weighted more, with the 28 days before, re-dealing whole days to learn what no change looks like, after adjusting each summary for its article's length band and source. Faithfulness, unsupported numbers and dropped hedges are judged; copying and summary length are watched as behaviour; coverage, coherence and the input mix are shown as diagnostics; article length and source are covariates, never judged. Two combined rows sit beside the members, quality_worse and something_changed, and a person reads one of four levels. Nothing acts.
+
+Table RA - what is judged (declared per P13 as amended by P21)
+
+| # | Member | Role | Column and daily statistic | Adjusted for | Worse when | Status at landing | Weight |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| RA1 | faith_index | quality | mean of logit(hhem), clipped at logit_clip | length band, source | lower | active | 1 |
+| RA2 | faith_below_050 | quality | share of hhem under 0.50 | length band, source | higher | active | 1 |
+| RA3 | faith_below_080 | quality | share of hhem under 0.80 | length band, source | higher | active | 1 |
+| RA4 | numbers_unsupported | quality | share with at least one unsupported number | source | higher | active | 3 |
+| RA5 | hedges_dropped | quality | share with hedge_dropped | source, article hedging present | higher | active | 2 |
+| RA6 | repetition_loops | quality | share with self_repetition above 0.05 | none | higher | paused until its base rate is known | 0 |
+| RA7 | length_short | quality | share under 25 summary words | none | higher | paused until its base rate is known | 0 |
+| RA8 | copy_index | behaviour | mean extractiveness | never | higher | active | in something_changed only |
+| RA9 | copy_ceiling | behaviour | share with verbatim_run above 0.50 | never | higher | active | in something_changed only |
+| RA10 | length_median | behaviour | median summary words | never | either | active | in something_changed only |
+| RA11 | scored_nulls | evaluator | share of rows missing hhem, coherence or semantic_coverage | none | higher | active | - |
+| RA12 | coverage, coherence, input mix | diagnostic | semantic_coverage and coherence (median, low tail, spread); length-band shares, source composition, extraction_suspect rate | - | - | stored with p, outside the step | - |
+
+Not judged: compression, hhem_full, hhem_delta, score_ms, band, determinism_violation, and fluency as plan 36 specifies it (P33). Completeness and conciseness wait for an instrument (P32). Rows flagged extraction_suspect leave the quality members.
+
+The rule, as a builder implements it (full form in the review record, section SP5):
+
+- Per summary i and quality member m: y is the member's value; the expected value e is the baseline mean of the summary's length band plus a shrunken source offset (source_shrinkage_rows); the residual is y - e. Behaviour members are never adjusted.
+- The daily value x_d is the mean residual of day d (the median of y for length_median), weighted by the day's row count n_d; a day under min_day_rows is left out and stored as thin.
+- T_m = h_m x (recency-weighted mean of x over recent_days, weight lambda (1 - lambda)^age, minus the n-weighted mean over baseline_days), where h_m is +1 or -1 by harm direction.
+- No-change case: whole days of the two windows re-dealt, the same deal for every member and both combined rows; z_m is T_m standardised against the deals and divided by sqrt((1 + rho_m) / (1 - rho_m)); p_m = (1 + deals at least as large) / (deals + 1).
+- quality_worse: S = sum of omega_m x max(z_m, 0) over active quality members, so an improvement never offsets a harm. something_changed: T2 = z' V+ z over active quality and behaviour members, V the covariance of z over the deals. Both take their p from the same deals.
+- One false-discovery family per (run_id, date, series): the active members and the two combined rows, Benjamini-Hochberg at false_discovery_rate. Paused members and diagnostics keep a p and get no q.
+- Reading levels, derived from stored rows: evaluator check (an evaluator row crossed; read it before calling anything drift); drift (quality_worse, something_changed or a quality member crossed on drift_consecutive_nights consecutive nights); watch (any other crossing); quiet, too few days, or new series. Every crossed row prints its effect raw and adjusted, its q, and the inputs that changed inside its window.
+- A new member lands paused with weight 0 and rho 0; the replay runs it on past dates and on injected changes; the owner makes it active; a person commits its weight and rho.
+
+Table RB - the rows after the redesign
+
+| # | Row | Depends-on | Level | Change |
+| --- | --- | --- | --- | --- |
+| RB1 | #1 The drift review is deleted | - | 3 | Unchanged, except that its removed-setting message no longer names min_articles as moved |
+| RB2 | #3 The judge's ledger and its tenant module | council plan: Judges carry a status and a model need | 5 | DriftEval loses site and page_type and gains the member slug, role, statistic, model_id (always set), instrument, recency_lambda, rho, raw and adjusted values, inputs_changed and day counts; key run_id, date, check_name, comparison, model_id, instrument |
+| RB3 | #4 Settings file and member declarations per model series | 3 | 3 | Absorbs row #2's settings file; site identity is deleted; declarations gain role, statistic, line, transform, adjust_by, instrument and rho |
+| RB4 | #7 Per-summary values, daily values and the mix adjustment | 4 | 3 | Replaces the per-check modules of rows #5 to #7 |
+| RB5 | #15 The recency-weighted whole-day test | 7 | 3 | New: one test module for every member |
+| RB6 | #8 The false-discovery step per (run, date, series), and the replay with an injection library | 15 | 3 | The replay also proposes weights and rho (P25) |
+| RB7 | #9 The switch | 1, 8 | 3 | Its peak-memory observation is dropped (P30) |
+| RB8 | #13 The two combined rows and the reading levels | 9 | 3 | Replaces the all-sites and combined-measures row |
+| RB9 | #12 The panel on the console Model page | 9 | 3 | Lists crossings by level, smallest q first |
+| RB10 | #2, #5, #6 | - | - | COLLAPSED: site identity; article count, which is feed volume; unusually short and page furniture, which are input properties |
+| RB11 | #14 | - | - | Moves to Table B with its trigger (P28) |
+
+Table RC - settings that change (config/judges/summary-fidelity-judge.json; the rest of F1 stays)
+
+| # | Field | Default | Range | Note |
+| --- | --- | --- | --- | --- |
+| RC1 | recent_days | 7 | 7 to 14, whole weeks | F1.1, range narrowed |
+| RC2 | baseline_days | 28 | 14 to 56, whole weeks | F1.2, range narrowed |
+| RC3 | recency_lambda | 0.15 | 0 to 0.5; 0 is a flat window | New |
+| RC4 | min_day_rows | 100 | 20 to 1000 | Replaces min_articles (F1.3) |
+| RC5 | min_recent_days, min_baseline_days | 4, 7 | 3 to 7; 7 to 28 | New |
+| RC6 | drift_consecutive_nights | 2 | 1 to 7 | New |
+| RC7 | logit_clip | 0.001 | 0.000001 to 0.01 | New |
+| RC8 | length_band_edges_words | 900, 1650 | ascending, 100 to 10000 | New; a test holds them to HHEM's window geometry |
+| RC9 | source_shrinkage_rows | 10 | 0 to 100 | New |
+| RC10 | trailing_line_quantile | 0.10 | 0.01 to 0.25 | New; diagnostic tails |
+| RC11 | metrics | RA1 to RA12 | role, statistic, line, transform, harm_direction, adjust_by, instrument, combine_weight 0 to 10, rho 0 to 0.8, lifecycle_status | F1.13 as amended by P21 |
+| RC12 | short_tail_percentile, multi_tenant_hosts, page_types | - | - | Removed (F1.5, F1.9, F1.10) |
+
+Table RD - what the replay on the real record showed (Andre, 2026-10-11)
+
+| # | Finding |
+| --- | --- |
+| RD1 | 2026-09-07: watch from 09-09 (copying up), drift from 09-12 (something_changed). Faithfulness rose because the summaries copied more; quality_worse never crossed in the 50 days |
+| RD2 | 2026-09-24: drift from 09-26 on shorter summaries and more dropped hedges; part of the hedge rise is an artefact of the band-reason ranking, so the judge reads the eval-row column, never band reasons |
+| RD3 | Stable nights: 0 of 8 crossed. With no change, 2.4 percent of nights cross a row, and drift is read 0.10 times a month at q 0.05 (0.03 at q 0.01) |
+| RD4 | Detection over a full week: 5 percent of summaries unfaithful 1.00; 2 percent 0.72; one 10-a-day source unfaithful 0.95; unsupported numbers doubled 0.74; dropped hedges up 3 points 0.29, the weakest |
+| RD5 | The pipeline changed about every 9 days, and every crossing on record traces to a dated change, so a crossing names the inputs that changed inside its window |
+| RD6 | No summary metric sees extraction breaking on one source, and row #1 deletes drift.py's per-site checks; extraction_suspect was 0 on all 50 days (P34) |
