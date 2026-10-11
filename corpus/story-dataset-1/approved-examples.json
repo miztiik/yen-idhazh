@@ -1,0 +1,159 @@
+{
+  "status": "proposed-for-discussion-not-approved-or-applied",
+  "frame_sha256": "5932360865e018124c57c274c7c494d6c7db6cc4a73f914aa10ef2e5832c1b1e",
+  "scope": "Ten additional real archived pairs, excluding every pair in the first five examples.",
+  "examples": [
+    {
+      "id": "B1",
+      "source_pair_id": "p0048",
+      "topic": "Food safety regulation",
+      "event": "FSSAI action against five e-commerce platforms",
+      "a_stories": ["Announcement of enforcement action"],
+      "b_stories": ["Announcement of enforcement action"],
+      "relation": "Same event, story and specific occurrence; duplicate coverage proposed.",
+      "reason": "Both name the same five platforms and the same alleged violations. Neither identifies another enforcement action.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B2",
+      "source_pair_id": "p0069",
+      "topic": "Import taxation",
+      "event": "India's pre-festival edible-oil duty reduction",
+      "a_stories": ["Duty-cut announcement"],
+      "b_stories": ["Duty-cut announcement"],
+      "relation": "Same event, story and specific occurrence; duplicate coverage proposed.",
+      "reason": "B supplies individual duty rates for the same policy reduction described by A, not another cut.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B3",
+      "source_pair_id": "p0071",
+      "topic": "Cross-border transport",
+      "event": "Russia-North Korea Tumen road-bridge project",
+      "a_stories": ["Bridge opening to traffic"],
+      "b_stories": ["Bridge opening to traffic"],
+      "relation": "Same event, story and opening occurrence; duplicate coverage proposed.",
+      "reason": "Both describe the same first road crossing, one-kilometre span and 300-vehicle daily capacity. Construction history is context, not automatically a separately covered story.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B4",
+      "source_pair_id": "p0026",
+      "topic": "Consumer-device launches",
+      "a_event": "Samsung Galaxy Tab S12 launch in India",
+      "b_event": "Samsung Galaxy M08/F08 launch in India",
+      "a_stories": ["Tablet introduction and specifications"],
+      "b_stories": ["Budget-phone introduction and specifications"],
+      "relation": "Shared topic and company; different events and stories; not duplicates.",
+      "reason": "Tablet and smartphone launches are distinct. The same company and published day do not establish one joint launch event.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B5",
+      "source_pair_id": "p0046",
+      "topic": "Indian court proceedings",
+      "a_event": "Ramesh Mhatre assault proceedings",
+      "b_event": "UPI merchant-fee legal challenge",
+      "a_stories": ["Supreme Court stays bail"],
+      "b_stories": ["Supreme Court declines fee-rollout stay"],
+      "relation": "Shared legal topic and court; different cases, stories and occurrences; not duplicates.",
+      "reason": "One ruling concerns bail for an assault defendant; the other concerns payment fees. Court identity and date alone do not imply event identity.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B6",
+      "source_pair_id": "p0063",
+      "topic": "University accountability",
+      "event": "IIT Bombay response to Sahil Wakode's death",
+      "a_stories": ["Dean accountability dispute"],
+      "b_stories": ["Dean accountability dispute"],
+      "a_occurrences": ["Institute suspends dean and apologizes"],
+      "b_occurrences": ["Faculty forum rejects allegations and holds a support march"],
+      "relation": "Same event and proposed continuing story; different actions; not duplicates.",
+      "reason": "The institute's disciplinary action and the faculty forum's response are separate developments in the dean dispute. Story granularity remains a proposal for user review.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B7",
+      "source_pair_id": "p0077",
+      "topic": "Aviation safety",
+      "event": "Amazon cargo-plane crash at Miami airport",
+      "a_stories": ["Victim identification", "Crash investigation"],
+      "b_stories": ["Crash investigation"],
+      "a_occurrences": ["Victims named", "NTSB outlines runway-safety investigation"],
+      "b_occurrences": ["Report that the pilot was warned about landing speed"],
+      "relation": "Shared event and investigation story, different reported findings; partial story coverage; not duplicates.",
+      "reason": "A has two equal supported story memberships. Identifying victims and announcing an investigation focus do not duplicate a report of a warning to the pilot.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B8",
+      "source_pair_id": "p0003",
+      "a_memberships": [
+        {"topic": "US currency design", "event": "Trump one-dollar coin release", "story": "Coin goes on sale"}
+      ],
+      "b_memberships": [
+        {"topic": "US currency design", "event": "Trump one-dollar coin release", "story": "Coin goes on sale"},
+        {"topic": "US currency design", "event": "Trump 250-dollar banknote proposal", "story": "Treasury announces banknote plans"}
+      ],
+      "relation": "Same coin-release occurrence, but B adds a separate banknote proposal; partial overlap, not whole-article duplicates.",
+      "reason": "The shared coin launch and additional banknote plans are recorded separately. A shared topic does not put the coin and banknote into one event automatically.",
+      "evidence": "stored full summaries"
+    },
+    {
+      "id": "B9",
+      "source_pair_id": "p0042",
+      "topic": "Enterprise AI adoption",
+      "event": "Databricks frontier-model employee rollout",
+      "a_stories": ["Day-one model access"],
+      "b_stories": ["Day-one model access"],
+      "relation": "Same rollout, story and occurrence; duplicate coverage with a headcount discrepancy.",
+      "reason": "The headcounts differ, but the 14,000 URL redirects to the 12,000 URL. This supports one source article and rollout rather than two independent deployments; it does not prove why the count changed.",
+      "evidence": "stored summaries plus original-source resolution",
+      "source_checks": [
+        {
+          "url": "https://www.databricks.com/blog/how-databricks-rolls-out-frontier-models-14000-employees-day-1",
+          "status": "HTTP301",
+          "location": "https://www.databricks.com/blog/how-databricks-rolls-out-frontier-models-12000-employees-day-1"
+        },
+        {
+          "url": "https://www.databricks.com/blog/how-databricks-rolls-out-frontier-models-12000-employees-day-1",
+          "status": "read",
+          "finding": "Describes day-one frontier-model access for more than12,000 Databricks employees."
+        }
+      ]
+    },
+    {
+      "id": "B10",
+      "source_pair_id": "p0013",
+      "topic": "Bank employment conditions",
+      "event": "UFBU-IBA September2026 strike dispute",
+      "a_stories": ["Three-day strike deferment"],
+      "b_stories": ["Three-day strike deferment", "Negotiated terms and unresolved demands"],
+      "relation": "Same deferment occurrence; B expands the dispute's unresolved-demand story. Partial coverage proposed, not automatic whole-article duplication.",
+      "reason": "The sources refer to the same meeting and decision, but the original A summary says the strike was called off and a five-day week agreed. The sources instead describe deferment and a committee to examine the proposal. The evidence conflict must be flagged, not converted into a second occurrence.",
+      "evidence": "stored summaries plus both original sources",
+      "needs_targeted_review": true,
+      "source_checks": [
+        {
+          "url": "https://www.thehindu.com/business/Industry/bank-unions-defer-three-day-nationwide-strike-ubfu/article71517225.ece",
+          "status": "read",
+          "finding": "Reports deferment after talks and agreement to form a committee, not settled implementation of the five-day week."
+        },
+        {
+          "url": "https://www.thehindu.com/business/Industry/bank-union-strike-why-has-ufbu-deferred-it-and-not-called-it-off/article71518584.ece",
+          "status": "read",
+          "finding": "Links the first article and explicitly says deferred, not cancelled; explains outstanding demands."
+        }
+      ],
+      "granularity_question": "Whether the explanatory demands belong to a sibling story or are facets of the deferment story remains for user approval."
+    }
+  ],
+  "limits": [
+    "These are proposed article and relationship labels, not applied dataset changes.",
+    "All supported story memberships are equal; no primary/secondary ranking.",
+    "Supportive details and background references are not automatically independent stories.",
+    "Every pair differs from the prior five examples.",
+    "The original935 binary verdicts remain unchanged; proposed duplicate coverage has distinct semantics."
+  ]
+}
