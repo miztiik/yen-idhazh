@@ -15,6 +15,7 @@ from conftest import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import registry
 
 from ._tenants import a_venue, forget, written
@@ -55,10 +56,10 @@ def test_every_slug_the_committed_config_registers_resolves() -> None:
     spelled here. A council test that named a judge would be the roster this
     whole design exists to remove.
     """
-    council = config.load(CONFIG_DIR).app.council
+    council = config.load_council(CONFIG_DIR)
 
-    assert [host.judge_id for host in registry.tenants(council.tenants)] == list(
-        council.tenants
+    assert [host.judge_id for host in registry.tenants(council.judge_names)] == list(
+        council.judge_names
     )
 
 
@@ -157,9 +158,9 @@ def _that_refuses(venue: Path, slug: str) -> None:
     module.write_text(
         module.read_text(encoding="utf-8")
         + "\n\n"
-        + "def refuse_a_night_this_tenant_cannot_finish(app):\n"
+        + "def refuse_a_night_this_tenant_cannot_finish(app, *, council):\n"
         + '    raise ValueError(f"{TENANT.judge_id} needs more than '
-        + '{app.council.shard_timeout_minutes} minutes")\n',
+        + '{council.shard_timeout_minutes} minutes")\n',
         encoding="utf-8",
         newline="\n",
     )
@@ -189,10 +190,11 @@ def test_the_check_reads_the_config_the_caller_named(venue: Path) -> None:
     """
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
     _that_refuses(venue, "a-paper-tenant")
-    app = AppConfig.model_validate({"council": {"shard_timeout_minutes": 199}})
+    app = AppConfig.model_validate({})
+    council = CouncilConfig(shard_timeout_minutes=199)
 
-    with pytest.raises(ValueError, match=str(app.council.shard_timeout_minutes)):
-        registry.tenant("a-paper-tenant", app=app)
+    with pytest.raises(ValueError, match=str(council.shard_timeout_minutes)):
+        registry.tenant("a-paper-tenant", app=app, council=council)
 
 
 def test_a_tenant_nobody_asked_for_cannot_refuse_the_night(venue: Path) -> None:

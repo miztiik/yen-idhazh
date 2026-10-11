@@ -266,7 +266,15 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
     """
     target = root / "config"
     pointer = str(AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models_file)
-    for name in ("idhazh.json", "sources.json", "taxonomy.json", "watchlist.json", "appearance.json", pointer):
+    for name in (
+        "idhazh.json",
+        "sources.json",
+        "taxonomy.json",
+        "watchlist.json",
+        "appearance.json",
+        "llm_council.json",
+        pointer,
+    ):
         destination = target / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(CONFIG_DIR / name, destination)

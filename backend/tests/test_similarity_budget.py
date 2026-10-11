@@ -17,11 +17,10 @@ from idhazh.similarity import budget
 pytestmark = pytest.mark.contract
 
 
-def _with(pair_budget: int, **council: int) -> AppConfig:
+def _with(pair_budget: int) -> AppConfig:
     """A config that draws `pair_budget` pairs, against whatever clocks are named."""
     return AppConfig.model_validate(
         {
-            "council": council,
             "assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": pair_budget}}},
         }
     )
@@ -46,7 +45,10 @@ def test_the_committed_draw_finishes_inside_the_window_the_council_leaves() -> N
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
 
-    budget.refuse_a_night_this_tenant_cannot_finish(committed)
+    budget.refuse_a_night_this_tenant_cannot_finish(
+        committed,
+        council=CouncilConfig.model_validate_json(read_text(CONFIG_DIR / "llm_council.json")),
+    )
 
 
 def test_a_draw_one_pair_too_wide_is_refused_and_a_longer_night_takes_it() -> None:
@@ -59,13 +61,13 @@ def test_a_draw_one_pair_too_wide_is_refused_and_a_longer_night_takes_it() -> No
     council = CouncilConfig()
     fits = _the_widest_draw_that_fits(council)
 
-    budget.refuse_a_night_this_tenant_cannot_finish(_with(fits))
+    budget.refuse_a_night_this_tenant_cannot_finish(_with(fits), council=council)
 
     with pytest.raises(ValueError, match=f"pair_budget {fits + 1}"):
-        budget.refuse_a_night_this_tenant_cannot_finish(_with(fits + 1))
+        budget.refuse_a_night_this_tenant_cannot_finish(_with(fits + 1), council=council)
 
-    longer = _with(fits + 1, shard_timeout_minutes=council.shard_timeout_minutes + 10)
-    budget.refuse_a_night_this_tenant_cannot_finish(longer)
+    longer = CouncilConfig(shard_timeout_minutes=council.shard_timeout_minutes + 10)
+    budget.refuse_a_night_this_tenant_cannot_finish(_with(fits + 1), council=longer)
 
 
 def test_the_window_is_the_bound_less_what_the_venue_spends_around_the_work() -> None:
@@ -87,7 +89,7 @@ def test_the_window_is_the_bound_less_what_the_venue_spends_around_the_work() ->
     assert fits_the_bound > _the_widest_draw_that_fits(council)
 
     with pytest.raises(ValueError, match="s a unit has to work in"):
-        budget.refuse_a_night_this_tenant_cannot_finish(_with(fits_the_bound))
+        budget.refuse_a_night_this_tenant_cannot_finish(_with(fits_the_bound), council=council)
 
 
 def test_the_refusal_names_every_knob_a_person_could_move() -> None:
@@ -100,7 +102,7 @@ def test_the_refusal_names_every_knob_a_person_could_move() -> None:
     too_wide = _the_widest_draw_that_fits(council) + 1
 
     with pytest.raises(ValueError) as refused:
-        budget.refuse_a_night_this_tenant_cannot_finish(_with(too_wide))
+        budget.refuse_a_night_this_tenant_cannot_finish(_with(too_wide), council=council)
 
     said = str(refused.value)
     for knob in ("pair_budget", "council.shards", "shard_preamble_minutes"):
@@ -114,4 +116,4 @@ def test_a_config_with_no_judge_block_has_nothing_to_check() -> None:
     without = AppConfig.model_validate({})
 
     assert without.assemble.same_story.adaptive_dedup_threshold is None
-    budget.refuse_a_night_this_tenant_cannot_finish(without)
+    budget.refuse_a_night_this_tenant_cannot_finish(without, council=CouncilConfig())

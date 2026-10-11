@@ -16,6 +16,7 @@ def copy_config(root: Path) -> Path:
     target.mkdir(parents=True)
     for name in (
         "idhazh.json",
+        "llm_council.json",
         "sources.json",
         "taxonomy.json",
         "watchlist.json",

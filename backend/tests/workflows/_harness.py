@@ -88,6 +88,7 @@ def _copy_config(target: Path, *, models_file: str | None = None) -> None:
     pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
     names = (
         "idhazh.json",
+        "llm_council.json",
         "sources.json",
         "taxonomy.json",
         "watchlist.json",

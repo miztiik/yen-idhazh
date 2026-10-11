@@ -46,9 +46,9 @@ def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]
     A tenant narrows the venue's width downward through its own `shard_count`,
     so a tenant that runs no model takes one job rather than four.
     """
-    council = config.load(config_dir).app.council
+    council = config.load_council(config_dir)
     found: list[dict[str, object]] = []
-    for host in tenants(council.tenants):
+    for host in tenants(council.judge_names, council=council):
         width = shard_width(council, host)
         for date in dates:
             found += [
@@ -69,7 +69,7 @@ def committed_paths(config_dir: Path) -> tuple[str, ...]:
     no tenant writes nothing at all and names nothing, which is what keeps the
     commit step skipped.
     """
-    return publication_paths(config.load(config_dir).app.council)
+    return publication_paths(config.load_council(config_dir))
 
 
 def _parallel(count: int) -> int:

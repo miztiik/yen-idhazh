@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -31,7 +31,7 @@ nothing at all.
 ## Three verbs, and all three are the council's own
 
 The workflow runs `council-prepare`, `council-shard` and `council-settle`, and
-nothing else. Each one resolves the slugs in `council.tenants`, calls the
+nothing else. Each one resolves `judge_names` in `config/llm_council.json`, calls the
 matching member of the tenancy protocol on every tenant it got, and files what
 comes back. **Until 2026-09-21 it ran one judge's four commands instead**, and
 the command router imported that judge's four stage modules at the top of the
@@ -59,13 +59,24 @@ council runs.
 
 ## The tenant list, and the judge in it
 
-`council.tenants` is an ordered list of slugs in `config/idhazh.json`. It is the
+`judge_names` is an ordered list of slugs in `config/llm_council.json`. It is the
 one place a judge is registered, and since 2026-09-21 it names one: the
 content-similarity judge, which declares itself in
 [../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py)
 and routes the three units of work to its own four stages. An empty list is
 still a legal night - the venue runs every step it always runs and judges
 nothing.
+
+The council reads its own file through `CouncilConfig` and `config.load_council`.
+The shared loader also carries it as `Settings.council` and records its digest.
+The file holds the same clocks, width, repair window and floor as before.
+`config/idhazh.json` refuses a `council` block and names the new file.
+
+### Design rationale: the council owns its settings file
+
+The workflow's settings and judge list live together, as the gardener's settings
+and task list do. A judge's settings are not the venue's settings. Moving this
+file changes neither which judges run nor what work fits inside a night.
 
 **That one line decides whether a night judges anything at all.** Everything
 else can be built, every gate can pass, and a config naming no slug still runs a
@@ -171,14 +182,14 @@ ledger, so it needs to know nothing about how a tenant files anything - and
 **with nobody registered the union is empty and tonight is the whole plan**.
 Every step below still runs on that one date.
 
-Three knobs draw the boundary, and all three are the council's because each one
+Three knobs in `config/llm_council.json` draw the boundary, and all three are the council's because each one
 is another job a tenant a shard.
 
 | The knob | What it sets | Committed |
 | --- | --- | --- |
-| `council.repair_window_nights` | how many nights back the council asks about, ending the night before tonight | 7 |
-| `council.first_night` | the floor no window reaches past | 2026-09-19 |
-| `council.repair_dates_a_night` | how many older dates one night may repair, on top of tonight | 1 |
+| `repair_window_nights` | how many nights back the council asks about, ending the night before tonight | 7 |
+| `first_night` | the floor no window reaches past | 2026-09-19 |
+| `repair_dates_a_night` | how many older dates one night may repair, on top of tonight | 1 |
 
 **What counts as behind is the tenant's**, because only the tenant knows what it
 has read. **The window is the council's**, because only the council knows what a
@@ -321,9 +332,9 @@ what this run wrote onto the new base is the whole of what is needed.
 
 **The venue owns every clock here, because the venue owns the runner.** The job
 timeout, the checkout, the install and the weights restore are all the council's
-and no tenant can see any of them, so `council.shard_timeout_minutes`,
-`council.shard_preamble_minutes` and `council.shard_wrap_up_minutes` sit in the
-council's own config block. The first is how long GitHub lets a unit hold a
+and no tenant can see any of them, so `shard_timeout_minutes`,
+`shard_preamble_minutes` and `shard_wrap_up_minutes` sit in
+`config/llm_council.json`. The first is how long GitHub lets a unit hold a
 runner. The second is what the venue has already spent before the judging
 process starts. The third is the reserve: how much a unit keeps back for writing
 its records and getting its artifact away.
@@ -362,7 +373,7 @@ those four steps is about 12.1 minutes - provisioning 0.41, cache restore 0.63
 to 1.58, checksum verify 0.12, and a health poll bounded at 10 - so the default
 is 13, one minute above it.
 
-**`council.shard_timeout_minutes` stays at 200 and no council number is derived
+**`shard_timeout_minutes` stays at 200 and no council number is derived
 from a judge's throughput.** How long the venue lets one unit occupy a runner is
 the council's policy, set against the platform's 6 h job ceiling and the nightly
 schedule. A bound derived from a measured per-pair cost would be the coupling
@@ -380,7 +391,7 @@ the reserve exists to avoid.
 
 **And the upload runs whatever happened to the unit.** It carries `always()`,
 because the exposure was never the collecting job dying - it is a unit dying.
-Without it a unit that spent most of `council.shard_timeout_minutes` and judged
+Without it a unit that spent most of `shard_timeout_minutes` and judged
 every pair it reached ships none of them, and tomorrow's run pays for that work
 a second time.
 

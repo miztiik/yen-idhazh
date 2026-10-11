@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -313,7 +313,7 @@ and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
 
 The council hosts judges and depends on none of them
 ([llm-council.md](llm-council.md#the-venue-and-its-tenants-are-separate-things)).
-This judge registers by putting its slug in `council.tenants` and declaring
+This judge registers in `judge_names` in `config/llm_council.json` and declares
 itself in
 [../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py),
 which binds the venue's three units of work to the four stages above: pick the

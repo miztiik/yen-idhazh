@@ -42,11 +42,11 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *, slugs: tuple[str, ...], shards: int | None = None) -> Path:
     """The loader's named config inputs, with those slugs registered."""
     target = copy_config(root)
-    raw = json.loads(read_text(target / "idhazh.json"))
-    raw["council"]["tenants"] = list(slugs)
+    raw = json.loads(read_text(target / "llm_council.json"))
+    raw["judge_names"] = list(slugs)
     if shards is not None:
-        raw["council"]["shards"] = shards
-    (target / "idhazh.json").write_text(
+        raw["shards"] = shards
+    (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     return target

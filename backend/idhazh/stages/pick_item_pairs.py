@@ -128,7 +128,7 @@ def stage_pick_item_pairs(
     """
     same_story = settings.app.assemble.same_story
     tuning = same_story.judging_knobs()
-    shards = settings.app.council.shards
+    shards = settings.council.shards
     window_hours = settings.app.assemble.same_story_window_hours
     stamp = scorer_inputs(settings)
 

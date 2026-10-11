@@ -1345,9 +1345,9 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
     root = _a_day_on_disk(tmp_path, day)
     config_dir = tmp_path / "config"
     shutil.copytree(CONFIG_DIR, config_dir)
-    raw = json.loads(read_text(config_dir / "idhazh.json"))
-    raw["council"]["shard_wrap_up_minutes"] = raw["council"]["shard_timeout_minutes"]
-    (config_dir / "idhazh.json").write_text(
+    raw = json.loads(read_text(config_dir / "llm_council.json"))
+    raw["shard_wrap_up_minutes"] = raw["shard_timeout_minutes"]
+    (config_dir / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     settings = config.load(config_dir)
@@ -1369,7 +1369,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
             digest_root=root,
             draw_path=_a_draw(judge_root / day.date),
             verdict_path=_a_verdict_file(judge_root / day.date, shard=0),
-            deadline=compute_shard_deadline(settings.app.council, started=time.monotonic()),
+            deadline=compute_shard_deadline(settings.council, started=time.monotonic()),
             base_url=server.base_url,
         )
         assert server.decodes == [], "the shard judged its pair, so no deadline reached it"

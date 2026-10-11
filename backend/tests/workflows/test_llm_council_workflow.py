@@ -50,7 +50,8 @@ FILENAME: Final = "llm-council.yml"
 #: in the file, so a workflow that read a different knob fails rather than
 #: bounding the unit by the work shard's clock - or by a tenant's block, which a
 #: night with no tenant registered does not have.
-TIMEOUT_KEY: Final = "council.shard_timeout_minutes"
+TIMEOUT_KEY: Final = "shard_timeout_minutes"
+TIMEOUT_FILE: Final = "llm_council.json"
 
 #: What that path prints, and therefore the name the workflow reads it back by.
 #: An Actions output name cannot carry a dot, so the reader prints the leaf.
@@ -127,7 +128,10 @@ def test_the_unit_reads_its_timeout_from_the_one_file_that_says_so() -> None:
     bounds = _step(_judges(), "draw", "id", "bounds")
     script = _script(bounds, "the bounds step")
 
-    assert f"backend/utilities/shard_bound.py --key {TIMEOUT_KEY}" in script
+    assert (
+        f"backend/utilities/shard_bound.py --key {TIMEOUT_KEY} --config-file {TIMEOUT_FILE}"
+        in script
+    )
     assert not re.search(r"\btimeout-minutes:\s*\d", str(_judges())), (
         "a timeout literal is a second answer to a question config already answers"
     )
@@ -160,13 +164,12 @@ def test_an_unreadable_timeout_is_refused_before_the_job_starts(
     number. The refusal is `type(value) is not int`, and this is what holds that
     exact spelling shut.
     """
-    block, leaf = TIMEOUT_KEY.split(".")
-    (tmp_path / "idhazh.json").write_text(
-        json.dumps({block: {leaf: value}}), encoding="utf-8", newline="\n"
+    (tmp_path / TIMEOUT_FILE).write_text(
+        json.dumps({TIMEOUT_KEY: value}), encoding="utf-8", newline="\n"
     )
 
     with pytest.raises(SystemExit):
-        shard_bound.minutes(tmp_path, key=TIMEOUT_KEY)
+        shard_bound.minutes(tmp_path, key=TIMEOUT_KEY, config_file=TIMEOUT_FILE)
 
 
 def test_a_bound_the_config_does_not_carry_is_refused_rather_than_traced() -> None:
@@ -185,7 +188,7 @@ def test_a_bound_the_config_does_not_carry_is_refused_rather_than_traced() -> No
 def test_the_bound_reader_still_answers_its_first_caller() -> None:
     """One reader and one refusal. A second utility would be a second answer."""
     assert shard_bound.minutes(CONFIG_DIR) >= 1
-    assert shard_bound.minutes(CONFIG_DIR, key=TIMEOUT_KEY) >= 1
+    assert shard_bound.minutes(CONFIG_DIR, key=TIMEOUT_KEY, config_file=TIMEOUT_FILE) >= 1
 
 
 def test_the_unit_reaches_the_model_through_the_one_shared_action() -> None:
@@ -343,7 +346,10 @@ def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     assert _normalize_condition(judge["if"], "the judging job") == (
         "needs.draw.outputs.matrix != '[]'"
     )
-    assert _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job") == "always()"
+    assert (
+        _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job")
+        == "always()"
+    )
 
 
 def test_the_parallelism_is_the_cell_count_and_never_the_shard_width() -> None:
