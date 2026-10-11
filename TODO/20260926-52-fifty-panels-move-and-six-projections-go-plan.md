@@ -64,7 +64,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3a | Each route owns its detailed window tests; the shared spec checks shared promises only | 1 | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Fowler and owner |
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Susan, Fowler and owner |
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | IMPLEMENTED: final integration and delivery pending | p52-panel-queries (`feat/console-panel-queries`) | Read from merge | Owner and disjoint contract, canary and guard workers |
-| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | Read from merge | p52-row5-band-completion |
+| 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | LOCAL READY: publication pending | p52-band-ledgers (`feat/console-band-ledgers`) | Read from merge | p52-row5-local-completion |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5 | E | PENDING | - | - | - |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
@@ -906,6 +906,7 @@ Row 4 owns known defect 40: write one canary job through the real probe and comp
   - `backend/idhazh/telemetry/publish/console_band.py`, `settings_moved.py` (new), `machine.py`, `run_days.py`, `day_metrics.py` (the public half only), `dispatch.py`, `series.py`
   - `backend/idhazh/contracts/console_band.py`, `backend/idhazh/contracts/fingerprint.py` (read only unless a name moves), `backend/idhazh/contracts/machine_shard.py`, `backend/idhazh/contracts/public_run_day.py`, `backend/idhazh/contracts/console_payloads.py`, `backend/idhazh/contracts/__init__.py`, `backend/idhazh/contracts/knobs/observability.py`, `backend/idhazh/config.py`, `backend/idhazh/path_classes.py`
   - `backend/idhazh/publication_checks/checks/console.py`, `backend/utilities/build_canary_day.py`
+  - `backend/tests/test_canary_day.py` (the rebuilt canary checks surviving outputs and refuses retired public projection roots)
   - `frontend/src/lib/console/band.ts`, `frontend/src/lib/console/settings-moved.ts`, `frontend/tests/settings-moved.spec.ts`, `frontend/tests/console-band.spec.ts`, `tests/fixtures/settings-moved/five-on-one-day.json`, `tests/fixtures/settings-moved/five-on-one-day.expected.json` (new), `tests/fixtures/contracts/console-band/newest-day.json`
   - `config/idhazh.json`, `frontend/scripts/copy-visuals.mjs`, `.gitignore`, `.github/workflows/digest.yml`
   - `backend/tests/test_console_payloads_producer.py`, `backend/tests/contracts/test_console_band_fields.py` (new, the field-set binding), `backend/tests/telemetry/test_settings_moved.py` (new), `backend/tests/contracts/test_app_config.py`, `backend/tests/contracts/test_gardener_config.py`, `backend/tests/contracts/test_stamped_boundary.py`, `backend/tests/pipeline/test_day_shards.py`, `backend/tests/workflows/_harness.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`

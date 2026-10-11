@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 The operator console reads native records as well as the remaining public
 projections. Each crossing into the site needs a contract (Guardrail #11).
 This page lists the public projections. The machine-readable copy is
@@ -377,14 +377,14 @@ compact, which is why the no-months row reads under the committed 777:
 | 14 (the retention bound) | 758 | 37.9 percent |
 | 24 (two years) | 780 | 39.0 percent |
 
-**The list cannot pass 14, and that is retention rather than a hope.** `months`
-is the union of the published month shards, and each series drops a shard once
-it is past its own window: the publishers trim theirs to
-`observability.public_*_keep_months`, and the gardener's `telemetry-aggregate`
-task trims the telemetry copy to its `public-copy` series. Every one of those is
-14. So the whole growable part of this payload is the 32 bytes between
-the first row and the third, and the served payload at its bound is about 809 -
-40.5 percent of the guardrail, which needs no window of its own.
+**The months list names telemetry only.** The band checks the named months
+inside the widest configured window; it no longer unions the retired machine,
+run-days and public day-metrics copies. Telemetry's `public-copy` series still
+governs its retention. Settings and checker changes are also bounded by the
+widest window, with one equal-length predecessor search for each kind.
+The figures above describe the older shape, before the movement fields.
+The owner suspended size studies on 2026-10-10; this change keeps the existing
+ceiling rather than deriving a new value from a measurement.
 
 **The band carried two numbers for two days, and the fix was to delete one.**
 `console-band.spec.ts` asserted `8 * 1024` of its own from 2026-09-08, sized for

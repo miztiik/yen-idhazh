@@ -594,7 +594,7 @@ def model_candidates(day: BandModel | None) -> list[Candidate]:
 class MachineFacts:
     """The band's slice of the host rows, and only that slice.
 
-    The Hardware route draws the whole picture from the published machine series.
+    The Hardware route draws the whole picture from native host records.
     What the band needs is four numbers, so four are derived here rather than
     the twenty the route draws.
 
