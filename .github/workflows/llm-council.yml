@@ -380,6 +380,7 @@ jobs:
         env:
           COUNCIL_DATES: ${{ needs.draw.outputs.dates }}
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+          COUNCIL_UNITS_RESULT: ${{ needs.judge.result }}
         run: |
           set -euo pipefail
           asked=()
@@ -388,4 +389,4 @@ jobs:
           done < <(echo "$COUNCIL_DATES" | jq -r '.[]')
           python backend/utilities/council_publish.py "${asked[@]}" \
             --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" \
-            --job-started-at "$JOB_STARTED_AT"
+            --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT"

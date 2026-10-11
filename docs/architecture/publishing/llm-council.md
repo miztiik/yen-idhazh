@@ -57,6 +57,46 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
+### Events and exit codes
+
+Every council program writes one JSON event per log line on stderr through
+`backend/idhazh/event_lines.py`, the same writer the gardener uses.
+`backend/idhazh/contracts/council_events.py` declares the event fields.
+The planner records dates and counts, the matrix records committed judge
+declarations, each attempted unit records its result, and the collector records
+collection counts and publication status. No event carries article, judge or
+source text. An exception carries only its type and place in the code.
+Unstructured library messages are omitted, not copied into an event.
+
+The workflow's key-value outputs stay on stdout. Each entrypoint writes its
+final code, label and fixed sentence together in a `program-finished` event:
+`0 ok` means every unit finished and the rows landed; `1 failed` means a unit
+failed, or the rows did not land (stale or lost); `2 refused` means stopped
+before any unit ran; `3 push_refused` means main refused every push, so nothing
+landed. `backend/idhazh/council/outcome.py` combines actual outcomes, worst first:
+2, 3, 1, 0. A returned deadline stop earns 1, not success. The final event is
+printed even when the configured log level hides routine progress.
+
+The collector retains completed work from earlier and later judges and dates
+after a failure. It also receives the judging job's result, so a failed or
+cancelled cell stays red even when its siblings' bytes land. Publication never
+reruns a judge. An integrity failure found after work earns 1 and publishes
+nothing; it cannot claim that no unit ran. A raised unit emits a failure event
+but still leaves a missing persisted council record. Adding that record is a
+separate contract change.
+
+Each entrypoint installs the shared text-free crash printer. Caught failures
+become diagnostic events. An uncaught crash prints exception types and code
+places, never messages, paths, source lines or notes.
+
+### Design rationale: one log format does not mean one text policy
+
+The shared writer owns line format and UTC stamps. The gardener retains its
+existing text-event adapter and GitHub command handling. The council omits
+unstructured text because a judge or library may put source text in a message.
+The crash printer uses the standard library alone, so pre-install programs keep
+working. These policies do not import gardener or judge code into the council.
+
 ## The tenant list, and the judge in it
 
 `judge_names` is an ordered list of slugs in `config/llm_council.json`. It is the

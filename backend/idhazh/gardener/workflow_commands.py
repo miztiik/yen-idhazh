@@ -36,27 +36,11 @@ from idhazh.contracts.gardener_events import (
     TaskPlanned,
 )
 from idhazh.contracts.shard_landing import ShardLanding
-
-#: What GitHub's toolkit replaces in a command's message, `%` first, so an
-#: escape already written is never escaped a second time.
-_DATA_ESCAPES: Final = (("%", "%25"), ("\r", "%0D"), ("\n", "%0A"))
-
-#: What it replaces in a property's value: the message's three, and the `:` and
-#: `,` that would end the property.
-_PROPERTY_ESCAPES: Final = (*_DATA_ESCAPES, (":", "%3A"), (",", "%2C"))
+from idhazh.event_lines import escaped_data as escaped_data
+from idhazh.event_lines import escaped_property as escaped_property
 
 #: The command that closes the group a task's lines fold into.
 END_GROUP: Final = "::endgroup::"
-
-
-def escaped_data(text: str) -> str:
-    """A command's message, with `%`, CR and LF escaped so it stays on its own line."""
-    return _replaced(text, _DATA_ESCAPES)
-
-
-def escaped_property(text: str) -> str:
-    """A command's property value, escaped as a message is and `:` and `,` as well."""
-    return _replaced(text, _PROPERTY_ESCAPES)
 
 
 def around(event: Model) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -107,10 +91,3 @@ def _warning_line(published: ShardPublished) -> str:
         )
     title = escaped_property(f"shard {published.shard}")
     return f"::warning title={title}::{escaped_data(said)}"
-
-
-def _replaced(text: str, escapes: tuple[tuple[str, str], ...]) -> str:
-    """`text` with each character of `escapes` replaced, in their order."""
-    for character, escape in escapes:
-        text = text.replace(character, escape)
-    return text
