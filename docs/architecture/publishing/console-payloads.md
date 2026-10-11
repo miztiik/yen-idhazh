@@ -126,6 +126,12 @@ day the run is publishing, and every projection's body stays in its own module
 | `day_metrics.py` | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | the publication's day and manifest, with that day's native rows |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
 
+The band finds its newest manifest over the bounded named-month cover,
+including the whole month of the plan being assembled. A delayed older plan
+therefore cannot replace a newer published day in that month. Its subsequent
+window and predecessor reads are anchored on the newest day found, not the
+plan's date or the current clock. Discovery does not enter the following month.
+
 Each native manifest keeps its `chart_evidence` without recomputing
 or pooling it. Missing historical evidence stays null. The exact counts,
 denominator and weighted rates are defined once in

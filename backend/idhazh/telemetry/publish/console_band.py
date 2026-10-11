@@ -39,6 +39,7 @@ it (Guardrail #6).
 from __future__ import annotations
 
 import math
+from calendar import monthrange
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -1331,8 +1332,9 @@ def publish(
     Returns the path when the band changed and None when it did not. The reads
     are:
 
-    - the widest span's native manifests and state day-metrics records, for the
-      runs, size and published-item counts;
+    - native manifest discovery over the named months, including the whole
+      planning month; then the widest span's native manifests and state
+      day-metrics records, for the runs, size and published-item counts;
     - the feed-health days the widest span reaches, through `ledger.load_health`,
       which opens the files of the newest days the ledger holds and no others;
     - the newest day's item-health rows through `ledger.load_days`, which opens
@@ -1358,11 +1360,12 @@ def publish(
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
     oldest = date.fromisoformat(f"{oldest_month_kept(today, months)}-01")
+    discovery_end = today.replace(day=monthrange(today.year, today.month)[1])
     newest_date = next(
         (
             stamp
             for stamp in day_partition.days_in_window(
-                today.isoformat(), (today - oldest).days
+                discovery_end.isoformat(), (discovery_end - oldest).days
             )
             if (assemble.day_dir(digest_root, stamp) / "run.json").is_file()
         ),
