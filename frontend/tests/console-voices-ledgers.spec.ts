@@ -1,5 +1,5 @@
 /** Voices reduces native recorded slices, then draws those same records on its real route. */
-import { expect, test } from './support/door-page';
+import { expect, test as routeTest } from './support/door-page';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -16,6 +16,25 @@ import { buildRows, serveToPage } from './support/ledger-lifecycle';
 import { judgementRoute } from './support/judgement-route';
 import { readPanel, judgeSettled } from './support/panel-gates';
 import { consolePanels } from './support/console-panels';
+
+type PrivateRoute = Awaited<ReturnType<typeof judgementRoute>>;
+const test = routeTest.extend<object, { populated: PrivateRoute; feedOnly: PrivateRoute }>({
+	populated: [async ({}, use, info) => {
+		const route = await judgementRoute(join(info.project.outputDir, 'voices-populated', String(info.workerIndex)), {
+			voices: publishVoicesFixture
+		});
+		try { await use(route); } finally { await route.close(); }
+	}, { scope: 'worker', timeout: 150_000 }],
+	feedOnly: [async ({}, use, info) => {
+		const route = await judgementRoute(join(info.project.outputDir, 'voices-feed-only', String(info.workerIndex)), {
+			voices: async (state, publicRoot) => {
+				await publishVoicesFixture(state, publicRoot);
+				rmSync(join(state, 'compact', 'item-health'), { recursive: true });
+			}
+		});
+		try { await use(route); } finally { await route.close(); }
+	}, { scope: 'worker', timeout: 150_000 }]
+});
 
 const RANGE = windowRange(90, '2030-06-15', '2030-06-14');
 let root: string;
@@ -143,9 +162,8 @@ test('native 429 and network errors join real feed reads on the older observed r
 	expect(reading).toContain('rate limited (HTTP 429) on 1 of 2 fetches');
 	expect(reading).toContain('network error (status not recorded) on 1 of 2 fetches');
 });
-test('the real independently published route draws native failures and survives both themes at every approved width', async ({ page }, info) => {
-	const published = await judgementRoute(info.outputPath('voices-route'), { voices: publishVoicesFixture });
-	try {
+test('the real independently published route draws native failures and survives both themes at every approved width', async ({ page, populated: published }, info) => {
+	{
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(error.message));
 		page.on('response', (response) => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
@@ -223,7 +241,7 @@ test('the real independently published route draws native failures and survives 
 		await expect(catchPanel).toContainText('Watchlist answers were not recorded completely');
 		await expect(catchPanel.locator('[data-tile-state], [data-empty-state="quiet"]')).toHaveCount(0);
 		expect(errors).toEqual([]);
-	} finally { await published.close(); }
+	}
 });
 test('unknown words, zero lengths and incomplete newest-run scores do not invent evidence', () => {
 	const range = windowRange(2, '2030-06-15', '2030-06-14');
@@ -275,12 +293,8 @@ test('combined failures include a clean feed with a failed article without chang
 	expect(view.sources[0].article?.tiles.map((tile) => tile.state)).toEqual(['fired', 'quiet']);
 	expect(view.sources[0].fired).toBe(1);
 });
-test('absent and lost article data retain useful real feed evidence without calling it an article answer', async ({ page }, info) => {
-	const published = await judgementRoute(info.outputPath('voices-feed-only'), { voices: async (state, publicRoot) => {
-		await publishVoicesFixture(state, publicRoot);
-		rmSync(join(state, 'compact', 'item-health'), { recursive: true });
-	} });
-	try {
+test('absent and lost article data retain useful real feed evidence without calling it an article answer', async ({ page, feedOnly: published }) => {
+	{
 		await page.goto(`${published.origin}console/voices/`);
 		await expect(page.locator('[data-console-panels="voices"]')).toHaveAttribute('data-route-state', 'missing');
 		const panel = page.locator('[data-console-panel-id="feeds-failed"]');
@@ -301,5 +315,5 @@ test('absent and lost article data retain useful real feed evidence without call
 		await expect(panel.locator('[data-chart-name^="articles-"]')).toHaveCount(0);
 		await expect(panel).toContainText('1 answered on every day');
 		await expect(panel).not.toContainText('Every feed and article fetch answered');
-	} finally { await published.close(); }
+	}
 });

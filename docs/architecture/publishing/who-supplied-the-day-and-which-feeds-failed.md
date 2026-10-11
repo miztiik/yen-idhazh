@@ -145,6 +145,18 @@ before compilation. Private source census and feed inputs remain build-time
 inputs, never browser ledgers. Quiet, missing and lost states still reach the
 real producer and engine; no synthetic answer supplies them.
 
+The native state driver compiles one private page per browser test. Its four
+states change actual published indexes, with the preview holding and releasing
+real HTTP requests for loading. Each standalone quiet or missing test still
+builds its own private census and feed inputs. The shared four-state sweep
+therefore checks all its assertions without four compilations in one timeout.
+The Voices private build compiles only the Voices route from its fixed named
+inputs, not the unrelated Judgement and Data explorer pages. Those routes keep
+their existing builder inputs when their own tests call it.
+Native route fixtures prepare and close their private build at worker scope,
+under the existing 150-second limit. The route's view and readout assertions
+then use the existing test timeout for their own browser work.
+
 ## See also
 
 - [console.md](console.md): console route questions.

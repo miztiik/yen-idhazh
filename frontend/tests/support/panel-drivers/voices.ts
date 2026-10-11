@@ -1,8 +1,8 @@
 /** Which judged Voices panels have state drivers or build-time inputs? */
 
 import type { Driver, BasicNothing } from '../panel-gates';
-import { test } from '@playwright/test';
-import { writeFileSync } from 'node:fs';
+import { test, type Page } from '@playwright/test';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { judgementRoute } from '../judgement-route';
 import { buildRows, type BuiltCell } from '../ledger-lifecycle';
@@ -60,9 +60,18 @@ export async function publishVoicesFixture(state: string, publishedRoot?: string
 	})));
 }
 
-const states = Object.fromEntries((['loading', 'quiet', 'missing', 'unreachable'] as const).map((state) => [
-	state, (async (page) => {
-		const route = await judgementRoute(test.info().outputPath(`voices-${state}`), {
+type PrivateRoute = Awaited<ReturnType<typeof judgementRoute>>;
+const routes = new WeakMap<Page, PrivateRoute>();
+test.afterEach(async ({ page }) => {
+	const route = routes.get(page);
+	routes.delete(page);
+	if (route) { route.release(); await route.close(); }
+});
+
+async function stateRoute(page: Page, state: BasicNothing): Promise<PrivateRoute> {
+	let route = routes.get(page);
+	if (!route) {
+		route = await judgementRoute(test.info().outputPath(`voices-${state}`), {
 			voicesWait: state === 'loading',
 			voices: async (root, publishedRoot) => {
 				if (state === 'quiet') writeFileSync(join(publishedRoot, 'source-health.json'), JSON.stringify({ ...VOICES_CENSUS, sources: [] }));
@@ -70,10 +79,24 @@ const states = Object.fromEntries((['loading', 'quiet', 'missing', 'unreachable'
 				if (state !== 'missing') await buildRows(root, 'feed-health', [{ covers: '2030-06-15', rows: [] }]);
 			}
 		});
-		if (state === 'unreachable') writeFileSync(join(route.staticRoot, 'state', 'compact', 'item-health', 'index', 'daily.json'), '{"entries":');
+		routes.set(page, route);
+	}
+	// The four native states share one compiled page, not four compilations inside one test.
+	const stateRoot = join(route.staticRoot, 'state');
+	rmSync(join(stateRoot, 'compact', 'item-health'), { recursive: true, force: true });
+	if (state !== 'missing') await buildRows(stateRoot, 'item-health', [{ covers: '2030-06-15', rows: [] }]);
+	if (state === 'unreachable') writeFileSync(join(stateRoot, 'compact', 'item-health', 'index', 'daily.json'), '{"entries":');
+	if (state === 'loading') route.hold();
+	else route.release();
+	return route;
+}
+
+const states = Object.fromEntries((['loading', 'quiet', 'missing', 'unreachable'] as const).map((state) => [
+	state, (async (page) => {
+		const route = await stateRoute(page, state);
 		return {
 			afterOpen: async () => { await page.goto(`${route.origin}console/voices/`); },
-			afterRead: async () => { route.release(); await route.close(); }
+			afterRead: async () => { route.release(); }
 		};
 	}) satisfies Driver
 ])) as Readonly<Record<BasicNothing, Driver>>;

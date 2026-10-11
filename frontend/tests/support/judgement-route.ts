@@ -218,8 +218,16 @@ const VOICES_INPUTS = [
 	'src/routes/console/voices/+page.svelte'
 ] as const;
 
-function stageModules(frontend: string, voices = false): void {
-	for (const name of [...INPUTS, ...(voices ? VOICES_INPUTS : [])]) {
+function inputsFor(voices: boolean): string[] {
+	const shared = voices ? INPUTS.filter((name) =>
+		!name.startsWith('src/routes/console/judgement/') &&
+		!name.startsWith('src/routes/console/data-explorer/')
+	) : [...INPUTS];
+	return [...shared, ...(voices ? VOICES_INPUTS : [])];
+}
+
+function stageModules(frontend: string, inputs: readonly string[]): void {
+	for (const name of inputs) {
 		const source = join(FRONTEND, name);
 		const target = join(frontend, name);
 		mkdirSync(dirname(target), { recursive: true });
@@ -238,6 +246,7 @@ export async function judgementRoute(
 	origin: string;
 	inputs: string[];
 	staticRoot: string;
+	hold: () => void;
 	release: () => void;
 	close: () => Promise<void>;
 }> {
@@ -316,8 +325,8 @@ export async function judgementRoute(
 			holdoutPairs: [], holdoutScores: []
 		}));
 		const frontend = join(root, 'frontend');
-		stageModules(frontend, options.voices !== undefined);
-		const inputs = [...INPUTS, ...(options.voices ? VOICES_INPUTS : [])];
+		const inputs = inputsFor(options.voices !== undefined);
+		stageModules(frontend, inputs);
 		const addon = await parquetAddon();
 		const home = join(root, 'node-home');
 		const address = new URL(addon.url);
@@ -369,19 +378,20 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 		const runner = join(frontend, 'judgement-preview.mjs');
 		writeFileSync(runner, `
 			import { build, preview } from 'vite';
+			import { createInterface } from 'node:readline';
 			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))},
 				logLevel: 'warn', build: { reportCompressedSize: false } });
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
 			let held = ${JSON.stringify(options.voicesWait ?? false)};
 			const pending = [];
-			if (held) server.middlewares.stack.unshift({ route: '', handle: (request, response, next) => {
+			if (${JSON.stringify(options.voices !== undefined || options.voicesWait === true)}) server.middlewares.stack.unshift({ route: '', handle: (request, response, next) => {
 				if (held && request.url?.includes('/state/compact/item-health/index/')) pending.push(next);
 				else next();
 			} });
 			console.log('JUDGEMENT_ORIGIN=' + server.resolvedUrls.local[0]);
-			process.stdin.resume();
-			process.stdin.on('data', (bytes) => {
-				if (bytes.toString().trim() === 'release') {
+			createInterface({ input: process.stdin }).on('line', (command) => {
+				if (command === 'hold') held = true;
+				else if (command === 'release') {
 					held = false;
 					for (const next of pending.splice(0)) next();
 				} else server.httpServer.close(() => process.exit(0));
@@ -418,7 +428,8 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			});
 		});
 		writeFileSync(join(report, 'build.json'), `${JSON.stringify(ready)}\n`);
-		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close, release: () => child?.stdin?.write('release\n') };
+		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close,
+			hold: () => child?.stdin?.write('hold\n'), release: () => child?.stdin?.write('release\n') };
 	} catch (error) {
 		await close();
 		throw error;
