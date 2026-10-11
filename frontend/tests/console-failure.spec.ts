@@ -279,42 +279,17 @@ test('a window too thin to divide states that, and never a rate', async ({ page 
 	await expect(page.locator('[data-failure-low-sample]')).toBeVisible();
 });
 
-test('a held month file says the chart is waiting, not empty', async ({ page }) => {
-	let release!: () => void;
-	const held = new Promise<void>((resolve) => (release = resolve));
-	let requested = 0;
-	await page.route('**/telemetry/*.csv', async (route) => {
-		requested += 1;
-		await held;
-		await route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
-	});
-
-	try {
-		await page.goto('/console/');
-		await expect.poll(() => requested, 'the page did not request a month file').toBeGreaterThan(0);
-		await expect(page.locator('[data-failure-loading]')).toHaveText(
-			'Reading the monthly files. This chart is not ready yet.'
-		);
-		await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
-		await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
-	} finally {
-		release();
-	}
+test('the retained component says loading is waiting, not empty', async ({ page }) => {
+	await openServed(page, () => [], 'loading');
+	await expect(page.locator('[data-failure-loading]')).toHaveText(
+		'Reading the monthly files. This chart is not ready yet.'
+	);
+	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
+	await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
 });
 
-test('a month file that returns 404 says the chart is unavailable, not empty', async ({ page }) => {
-	let requested = 0;
-	await page.route('**/telemetry/*.csv', async (route) => {
-		requested += 1;
-		await route.fulfill({ status: 404, contentType: 'text/plain', body: '' });
-	});
-
-	await page.goto('/console/');
-	await expect.poll(() => requested, 'the page did not request a month file').toBeGreaterThan(0);
-	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
-		'data-telemetry-fetching',
-		'no'
-	);
+test('the retained component says unreachable is unavailable, not empty', async ({ page }) => {
+	await openServed(page, () => [], 'unreachable');
 	await expect(page.locator('[data-failure-unavailable]')).toHaveText('This chart is unavailable.');
 	await expect(page.locator('[data-failure-empty]')).toHaveCount(0);
 	await expect(page.locator('[data-failure-chart]')).toHaveCount(0);
@@ -340,7 +315,7 @@ test('a window holding nothing renders, and says so rather than drawing zero', a
 });
 
 test('the chart draws in CSS pixels, so its type is the size it declares', async ({ page }) => {
-	await page.goto('/console/');
+	await openServed(page, ({ end }) => items(end, 'retained', 'publish', 'ok', 8));
 
 	// A `viewBox` is a scale factor, not a unit. Three panels declaring 360
 	// units into a 163px column put `font-size="10"` on screen at 4.5px.
@@ -374,7 +349,7 @@ test('the chart draws in CSS pixels, so its type is the size it declares', async
 });
 
 test('the surface follows the shared window and says so', async ({ page }) => {
-	await page.goto('/console/');
+	await openServed(page, ({ end }) => items(end, 'retained', 'publish', 'ok', 8));
 	await expect(page.locator('[data-window-preset="7"] input')).toBeEnabled();
 
 	for (const days of [7, 14]) {

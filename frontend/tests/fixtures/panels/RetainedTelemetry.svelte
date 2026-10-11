@@ -7,9 +7,10 @@
 	import { nativeStageTimings } from '$lib/console/pipelines/stage-timings';
 	import type { TelemetryRow, SummaryBand } from '$lib/charts/series';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
-	let { rows, bands, config, chart, pinned, initialDays }: {
+	import type { PanelState } from '$lib/console/waiting';
+	let { rows, bands, config, chart, pinned, initialDays, panelState }: {
 		rows: TelemetryRow[]; bands: SummaryBand[]; config: ConsoleConfig; chart: ChartConfig;
-		pinned: string; initialDays: number;
+		pinned: string; initialDays: number; panelState: PanelState;
 	} = $props();
 	const initial = (() => ({ days: initialDays, window: windowOfDays(pinned, initialDays, config.today_anchor) }))();
 	let days = $state(initial.days);
@@ -28,7 +29,7 @@
 	<WindowControl {days} presets={config.window_presets} ready onChange={show} />
 	<StageTimings days={timings} span={window} height={config.chart_height} width={config.chart_width}
 		tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} />
-	<Viewport {rows} {window} panelState="ready" {config} {bands}
+	<Viewport {rows} {window} {panelState} {config} {bands}
 		tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share}
 		onPan={(offset) => window = panWindow(window, offset)}
 		onStep={(direction) => show(stepPreset(days, config.window_presets, direction))} />

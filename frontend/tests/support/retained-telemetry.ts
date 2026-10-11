@@ -5,10 +5,11 @@ import { resolve } from 'node:path';
 import { clientCode, drawClient } from './console-window/client-render';
 import { windowOfDays, type TimeWindow } from '../../src/lib/charts/viewport';
 import type { TelemetryRow } from '../../src/lib/charts/series';
+import type { PanelState } from '../../src/lib/console/waiting';
 
 let code: Promise<string> | undefined;
 export async function openRetained(
-	page: Page, build: (window: TimeWindow) => readonly TelemetryRow[]
+	page: Page, build: (window: TimeWindow) => readonly TelemetryRow[], panelState: PanelState = 'ready'
 ): Promise<{ window: TimeWindow }> {
 	const appearance = JSON.parse(readFileSync(resolve('..', 'config', 'appearance.json'), 'utf8'));
 	const bands = JSON.parse(readFileSync(resolve('..', 'config', 'idhazh.json'), 'utf8')).summarize.bands;
@@ -22,7 +23,7 @@ export async function openRetained(
 	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
 	const styles = [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]);
 	await drawClient(page, await code, 'RetainedTelemetry', {
-		rows, bands, config: appearance.console, chart: appearance.chart, pinned, initialDays
+		rows, bands, config: appearance.console, chart: appearance.chart, pinned, initialDays, panelState
 	}, styles);
 	await expect(page.locator('[data-telemetry-rows]')).toHaveAttribute('data-telemetry-rows', String(rows.length));
 	return { window };
