@@ -101,6 +101,8 @@ fixed sentences. It never repeats an article, a verdict or an exception message.
 
 `COUNCIL_EVENT_FILE` makes the shared event writer append declared events to a
 transient JSON-lines file, even when the configured log level hides progress.
+Its file writer is private, outside the process-wide logger registry, so log
+capture or configuration cannot propagate its copy as a second console event.
 The planner's `events/planner.jsonl` rides its existing selection bundle, which
 uploads even after preparation fails.
 Each judging cell writes `events/<judge>/<date>/<shard>.jsonl` in the existing

@@ -259,6 +259,29 @@ def test_hidden_progress_still_rides_the_bundle(
     assert json.loads(process.stderr)["label"] == "ok"
 
 
+def test_bundle_writer_is_isolated_from_registered_logger_handlers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("COUNCIL_EVENT_FILE", str(path))
+    registered = logging.getLogger("idhazh.council.event_log.transport")
+    previous = registered.propagate
+    registered.propagate = True
+    registered.addHandler(caplog.handler)
+    try:
+        event_log.install()
+        with caplog.at_level(logging.INFO), event_log.capture() as captured:
+            event_log.emit(unit(outcome="failed"), level=logging.ERROR)
+        assert len(caplog.records) == 1
+        assert len(captured) == 1
+        assert len(run_summary.read_events(path)) == 1
+    finally:
+        registered.removeHandler(caplog.handler)
+        registered.propagate = previous
+        monkeypatch.delenv("COUNCIL_EVENT_FILE")
+        event_log.install()
+
+
 def test_event_transport_write_failure_is_not_silently_ignored(tmp_path: Path) -> None:
     logger = logging.Logger("closed-transport")
     handler = event_log.EventFile(tmp_path / "closed.jsonl", encoding="utf-8")

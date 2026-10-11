@@ -22,7 +22,8 @@ from idhazh.event_lines import payload as payload
 
 logger = logging.getLogger(__name__)
 _captured: ContextVar[list[Model] | None] = ContextVar("council_events", default=None)
-_transport = logging.getLogger(f"{__name__}.transport")
+# A private writer cannot acquire handlers or parents from process-wide logging setup.
+_transport = logging.Logger(f"{__name__}.transport")
 _transport.propagate = False
 
 
