@@ -75,7 +75,8 @@ def test_only_active_judges_get_cells_work_and_publication_paths(
     )
     council = config.load_council(target)
     assert night_plan.main(["--config-root", str(target), "--tonight", DATE]) == 0
-    assert json.loads(capsys.readouterr().out.split("=", 1)[1])[0] == DATE
+    output = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
+    assert json.loads(output["dates"])[0] == DATE
     cells = council_matrix.cells(target, dates=(DATE,))
     assert cells == [
         {
@@ -140,7 +141,8 @@ def test_an_inactive_only_room_runs_every_step_without_import_or_output(
     target = room(venue, {"unavailable-judge": (status, True)})
     council = config.load_council(target)
     assert night_plan.main(["--config-root", str(target), "--tonight", DATE]) == 0
-    assert json.loads(capsys.readouterr().out.split("=", 1)[1]) == [DATE]
+    output = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
+    assert json.loads(output["dates"]) == [DATE]
     assert council_matrix.cells(target, dates=(DATE,)) == []
     assert council_matrix.committed_paths(target) == ()
     assert session.prepare(council, date=DATE, run_id=RUN) == ()

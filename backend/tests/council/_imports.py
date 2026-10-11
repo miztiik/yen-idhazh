@@ -81,6 +81,8 @@ MODULE_NAMES = (
     "idhazh.council.run_identity",
     "idhazh.council.run_summary",
     "idhazh.council.session",
+    "idhazh.council.selection",
+    "idhazh.council.trial_paths",
     "idhazh.council.tenancy",
     "idhazh.day_partition",
     "idhazh.event_lines",
