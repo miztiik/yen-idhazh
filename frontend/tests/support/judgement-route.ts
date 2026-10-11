@@ -6,7 +6,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import {
-	appendFileSync, copyFileSync, mkdirSync, readFileSync,
+	appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync,
 	realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { publishedSite } from './published-site';
 import { buildLedger } from './ledger-lifecycle';
 import { cachedParquetAddon, parquetAddon } from '../../scripts/duckdb-addon';
+import { ledgerCopy, publishedLedgers } from '../../scripts/published-ledgers.mjs';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const INPUTS = [
@@ -183,9 +184,8 @@ const INPUTS = [
 	'svelte.config.js',
 	'vite.config.ts'
 ] as const;
-
-function stageModules(frontend: string): void {
-	for (const name of INPUTS) {
+function stageModules(frontend: string, inputs: readonly string[]): void {
+	for (const name of inputs) {
 		const source = join(FRONTEND, name);
 		const target = join(frontend, name);
 		mkdirSync(dirname(target), { recursive: true });
@@ -195,11 +195,17 @@ function stageModules(frontend: string): void {
 
 export async function judgementRoute(
 	report: string,
-	options: { scoreRecord?: 'populated'; evidence?: 'absent' | 'empty' | 'unknown-denominators' | 'missing-gate' } = {}
+	options: {
+		scoreRecord?: 'populated'; evidence?: 'absent' | 'empty' | 'unknown-denominators' | 'missing-gate';
+		voices?: (state: string, publishedRoot: string) => Promise<void>;
+		voicesWait?: boolean;
+	} = {}
 ): Promise<{
 	origin: string;
 	inputs: string[];
 	staticRoot: string;
+	hold: () => void;
+	release: () => void;
 	close: () => Promise<void>;
 }> {
 	mkdirSync(report, { recursive: true });
@@ -223,6 +229,7 @@ export async function judgementRoute(
 		const site = publishedSite(join(root, 'public'), { published: absent ? [] : ['2030-06-15'] });
 		const state = join(root, 'state');
 		mkdirSync(state, { recursive: true });
+		if (options.voices) await options.voices(state, join(root, 'public'));
 		if (!absent) {
 		writeFileSync(join(site.digest, '2030', '06', '15', 'run.json'), JSON.stringify({
 			date: '2030-06-15',
@@ -276,8 +283,14 @@ export async function judgementRoute(
 			holdoutPairs: [], holdoutScores: []
 		}));
 		const frontend = join(root, 'frontend');
-		stageModules(frontend);
-		const inputs = [...INPUTS];
+		const inputs = options.voices
+			? ['.svelte-kit/output/server', '.svelte-kit/output/client/_app']
+			: [...INPUTS];
+		if (options.voices) {
+			// The browser launcher verifies this production build before any fixture uses it.
+			cpSync(join(FRONTEND, '.svelte-kit', 'output', 'server'), join(frontend, 'server'), { recursive: true });
+			cpSync(join(FRONTEND, '.svelte-kit', 'output', 'client', '_app'), join(frontend, 'static', '_app'), { recursive: true });
+		} else stageModules(frontend, inputs);
 		const addon = await parquetAddon();
 		const home = join(root, 'node-home');
 		const address = new URL(addon.url);
@@ -288,6 +301,15 @@ export async function judgementRoute(
 		copyFileSync(join(FRONTEND, 'package.json'), join(frontend, 'package.json'));
 		copyFileSync(join(FRONTEND, 'tsconfig.json'), join(frontend, 'tsconfig.json'));
 		mkdirSync(join(frontend, 'static'), { recursive: true });
+		const published = ledgerCopy(state, publishedLedgers());
+		if (published.refused.length) throw new Error(published.refused.join('\n'));
+		for (const file of published.files) {
+			const destination = join(frontend, 'static', 'state', ...file.split('/'));
+			mkdirSync(dirname(destination), { recursive: true });
+			if (published.indexes[file] === undefined) copyFileSync(join(state, ...file.split('/')), destination);
+			else writeFileSync(destination, published.indexes[file], 'utf8');
+		}
+		writeFileSync(join(report, 'published-ledgers.json'), `${JSON.stringify(published, null, 2)}\n`);
 		const band = join(frontend, 'static', 'console', 'band.json');
 		execFileSync(process.env.IDHAZH_PYTHON ?? 'python', ['-c', `
 from pathlib import Path
@@ -317,17 +339,31 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			copyFileSync(join(FRONTEND, 'static', file), join(frontend, 'static', file));
 		}
 		writeFileSync(join(report, 'inputs.json'), `${JSON.stringify(inputs, null, 2)}\n`);
-		const runner = join(frontend, 'judgement-preview.mjs');
-		writeFileSync(runner, `
+		const runner = options.voices
+			? join(FRONTEND, 'tests', 'support', 'voices-preview.mjs')
+			: join(frontend, 'judgement-preview.mjs');
+		if (!options.voices) writeFileSync(runner, `
 			import { build, preview } from 'vite';
+			import { createInterface } from 'node:readline';
 			await build({ cacheDir: ${JSON.stringify(join(root, 'vite-cache'))},
 				logLevel: 'warn', build: { reportCompressedSize: false } });
 			const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
+			let held = ${JSON.stringify(options.voicesWait ?? false)};
+			const pending = [];
+			if (${JSON.stringify(options.voices !== undefined || options.voicesWait === true)}) server.middlewares.stack.unshift({ route: '', handle: (request, response, next) => {
+				if (held && request.url?.includes('/state/compact/item-health/index/')) pending.push(next);
+				else next();
+			} });
 			console.log('JUDGEMENT_ORIGIN=' + server.resolvedUrls.local[0]);
-			process.stdin.resume();
-			process.stdin.on('data', () => server.httpServer.close(() => process.exit(0)));
+			createInterface({ input: process.stdin }).on('line', (command) => {
+				if (command === 'hold') held = true;
+				else if (command === 'release') {
+					held = false;
+					for (const next of pending.splice(0)) next();
+				} else server.httpServer.close(() => process.exit(0));
+			});
 		`, 'utf8');
-		child = spawn(process.execPath, [runner], {
+		child = spawn(process.execPath, [runner, ...(options.voices ? [String(options.voicesWait ?? false)] : [])], {
 			cwd: frontend,
 			env: { ...process.env, HOME: home, USERPROFILE: home, DIGEST_ROOT: site.digest, STATE_ROOT: state,
 				TELEMETRY_ROOT: site.telemetry, BASE_PATH: '' },
@@ -358,7 +394,8 @@ target.write_text(band.to_json(), encoding="utf-8", newline="\\n")
 			});
 		});
 		writeFileSync(join(report, 'build.json'), `${JSON.stringify(ready)}\n`);
-		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close };
+		return { ...ready, inputs, staticRoot: join(frontend, 'build'), close,
+			hold: () => child?.stdin?.write('hold\n'), release: () => child?.stdin?.write('release\n') };
 	} catch (error) {
 		await close();
 		throw error;

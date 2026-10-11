@@ -27,6 +27,14 @@ class JudgeDeclaration(Model):
     runs_model: bool = Field(strict=True)
 
 
+class JudgeRefusalError(ValueError):
+    """A configured judge's refusal, with its validated name separate from text."""
+
+    def __init__(self, judge_id: Slug, message: str) -> None:
+        super().__init__(message)
+        self.judge_id = judge_id
+
+
 def derive_judge_package_name(slug: str) -> str:
     """Derive one importable package name, without accepting a dotted path."""
     package = slug.replace("-", "_")
@@ -186,6 +194,6 @@ class CouncilConfig(Model):
         for name in names:
             derive_judge_package_name(name)
             if name in seen:
-                raise ValueError(f"judge_names lists judge '{name}' twice")
+                raise JudgeRefusalError(name, f"judge_names lists judge '{name}' twice")
             seen.add(name)
         return names

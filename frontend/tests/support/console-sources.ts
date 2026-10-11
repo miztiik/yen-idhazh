@@ -67,6 +67,13 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts'
 	],
+	'src/lib/console/voices': [
+		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
+		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts', 'watchlist.ts',
+		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte',
+		'FetchTimePanel.svelte', 'RetiringPanel.svelte', 'SourceCutsPanel.svelte',
+		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte', 'WatchlistPanel.svelte'
+	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
 		'ColumnList.svelte', 'ColumnPicker.svelte', 'ColumnType.svelte', 'CopyAnswer.svelte',

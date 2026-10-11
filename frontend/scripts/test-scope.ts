@@ -256,6 +256,9 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/src\/lib\/console\/pipelines\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'Pipelines panels and native query consumers';
+		} else if (/^frontend\/src\/lib\/console\/voices\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'route-owned Voices panels and publishing checks';
 		} else if (/^frontend\/src\/routes\/archive\//.test(path)) {
 			selected = ['logic', 'archive', 'model-search', 'publishing'];
 			reason = 'archive route and search consumer';

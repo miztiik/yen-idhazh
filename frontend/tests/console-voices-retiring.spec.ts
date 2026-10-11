@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/door-page';
 import type { SourceHealthRow, SourceHealthView } from '../src/lib/server/payload';
 import { retiring } from '../src/lib/server/source-retiring';
 
@@ -289,7 +289,7 @@ test('a source under its evidence floors is drawn, not hidden, and says what is 
 	// here for. What they have not got is a number anybody may act on.
 	await expect(page.locator('[data-retiring-unjudged-lead]')).toHaveText(/Not judged yet/);
 	await expect(page.locator('[data-retiring-unjudged-lead]')).toHaveText(
-		/judged at \d+ of them plus \d+/
+		/a source needs \d+ complete days plus \d+ decisions of its own/
 	);
 	const readout = await unjudged.first().locator('[data-retiring-readout]').innerText();
 	expect(readout).toMatch(/Decided \d+ of the \d+ address/);

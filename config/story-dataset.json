@@ -1,0 +1,52 @@
+{
+  "expected_articles": 15122,
+  "expected_bytes": 14371193,
+  "expected_sha256": "726ef4918640c9c8e18e633e1bc04aaf0fbece7b27ee29957a124f9eb96fa48d",
+  "batch_size": 20,
+  "top_k": 10,
+  "block_size": 32,
+  "random_audit_fraction": 0.01,
+  "representative_pair_probability": 0.00001,
+  "seed": 20261009,
+  "development_fraction": 0.3,
+  "metadata_neighbors": 1,
+  "acceptance_status": "unapproved",
+  "engineering_defaults_notice": "Batch size, topK, block size, audit fraction, split seed, metadata-neighbor depth and Bernoulli probability are provisional cost/discovery/audit parameters. They are not scientific quality guarantees, final counts, pair quotas, labeling budgets or owner-approved acceptance thresholds.",
+  "approved_semantics": [
+    "Topic > Event > Story; Event is broader parent, Story is a supported strand.",
+    "All supported memberships are equal. No primary/secondary ranking.",
+    "Specific occurrences and duplicate coverage are distinct from hierarchy identity.",
+    "Shared-only-some coverage is partial overlap, not whole-article duplication.",
+    "Additional detail does not automatically create a Story; a shared Topic does not imply a shared Event.",
+    "Article-to-article neighbors only; no reader-query dataset.",
+    "Every frozen article must eventually be annotated or explicitly reasoned unresolved.",
+    "Primary labels are model gpt-6.1-sol, not human or prior Qwen labels.",
+    "Read full stored summaries first; consult original sources when ambiguous/conflicting; required inaccessible evidence remains unresolved.",
+    "Independent targeted review plus reproducible random audit; not mandatory second pass of all labels.",
+    "Generic names and majority vote cannot automatically reconcile catalog identities.",
+    "Representative probability sample and targeted challenge streams are separately reported.",
+    "B1-B10 approved meanings only; B10 proposed explanatory sibling Story is still flagged, not adjudicated.",
+    "Fresh development/confirmation event groups; the old 935 binary regression frame is immutable and not new hierarchy gold.",
+    "No production adoption, fine-tuning, public action or publication approval."
+  ],
+  "stages": [
+    "freeze exact approved bytes and regression hashes",
+    "register saved vector provenance and report text conflicts/missing coverage",
+    "export blind bounded primary evidence batches",
+    "import model submissions atomically as unresolved/catalog-pending/qualified",
+    "explicitly review shared identity proposals and aliases",
+    "export independent blind targeted/random audit batches; join answers after import",
+    "acquire archive-wide probability and metadata candidates plus per-model rank union",
+    "independently judge pair evidence, including occurrence and coverage",
+    "fix event/article partitions before tuning; quarantine newly crossing components",
+    "freeze development-only algorithm settings before confirmation predictions",
+    "measure only complete declared qrels and overlapping memberships; report blockers honestly",
+    "append local delta commits; never publish without owner approval"
+  ],
+  "vector_files": {
+    "minilm-l6": "baseline-vectors\\vectors-minilm-l6\\minilm-l6.npy",
+    "gte-small": "baseline-vectors\\vectors-gte-small\\gte-small.npy",
+    "jina-v5-nano": "new-vectors-37895396586\\jina-v5-nano.npy",
+    "embeddinggemma-two": "new-vectors-37909985697\\embeddinggemma-two.npy"
+  }
+}

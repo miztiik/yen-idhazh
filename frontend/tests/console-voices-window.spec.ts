@@ -1,15 +1,19 @@
 /** Voices narrows source counts while named snapshots keep their own recorded span. */
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 
 import { shortDate } from '../src/lib/format';
 
 import { hydrated, setWindow, windowed, routeHref } from './support/console-window/controls';
 import { windowDates } from './support/console-window/readout';
-import { DRAWN_THROUGH as JUDGED_THROUGH } from './support/console-window/readout';
 
-import { clientCode, drawClient } from './support/console-window/client-render';
+import { clientCode } from './support/console-window/client-render';
+import { retirementDrawing } from '../src/lib/console/voices/retiring';
+import type { Retiring } from '../src/lib/server/source-retiring';
+import { consoleConfig } from '../src/lib/server/config';
+import { shareMarks } from '../src/lib/charts/targetbar';
 
 async function cutFacts(page: Page) {
+	await expect(page.locator('[data-console-panels="voices"]')).not.toHaveAttribute('data-route-state', 'loading');
 	// Named, not positional. The cost sentence sits above this one now, and a
 	// `p` picked by order silently reads whichever paragraph moved into first
 	// place rather than failing.
@@ -57,96 +61,70 @@ test('the source table follows the window, and drops what falls outside it', asy
 		/held\s+[\d,]+\s+articles/
 	);
 });
-test('feed and ranking snapshots state that they do not follow the window', async ({ page }) => {
+test('only the three unpublished source snapshots keep their recorded span', async ({ page }) => {
 	await page.goto(routeHref('voices'));
 	await hydrated(page);
 
-	// A windowed quarantine count would disagree with the resting the pipeline
-	// actually performed, so the feed count reads every run and states it. The
-	// strip of days beside it does follow the window, and is a separate node -
-	// which is why this locator is the paragraph and not the section.
-	const feeds = page.locator('[data-window-exempt="feeds"]');
-	await expect(feeds).toContainText('does not follow the window');
-	await expect(feeds).not.toHaveAttribute('data-window-days', /.*/);
+	// These are the producer's unpublished decisions, not a new judgement over
+	// the native-query window.
+	for (const [id, sentence] of [
+		['source-health', 'not the window control'],
+		['retiring', 'does not follow the window control'],
+		['ranking-discount', 'does not follow the control']
+	]) {
+		const snapshot = page.locator(`[data-window-exempt="${id}"]`);
+		await expect(snapshot).toContainText(sentence);
+		await expect(snapshot).not.toHaveAttribute('data-window-days', /.*/);
+	}
 
 	// And the ranking weight, which the run reduced over its own span when it
 	// ran. Redrawing it over seven days would print a number no run applied.
-	const weight = page.locator('[data-window-exempt="reliability"]');
-	await expect(weight).toContainText('does not follow the window control');
+	const weight = page.locator('[data-window-exempt="ranking-discount"]');
+	await expect(weight).toContainText('does not follow the control');
 	await expect(weight).not.toHaveAttribute('data-window-days', /.*/);
 });
 test.describe("remaining one-day words and keys on generated records", () => {
+	test.use({ bypassCSP: true });
 
 let browserCode: string;
-test.beforeAll(async () => { browserCode = await clientCode([["Voices","./src/routes/console/voices/+page.svelte"]]); });
+test.beforeAll(async () => { browserCode = await clientCode([["Retiring","./src/lib/console/voices/RetiringPanel.svelte"]]); });
 async function drawRecord(page: Page, name: string, props: Record<string, unknown>) {
-  await drawClient(page, browserCode, name, props);
+	await page.goto('/console/voices/');
+	await page.addScriptTag({ content: browserCode });
+	const strip = (props.data as { retiring: Retiring | null }).retiring;
+	const drawing = retirementDrawing(strip, 6);
+	const config = consoleConfig();
+	await page.evaluate(({ strip, drawing, index, config }) => {
+		document.querySelector('main')?.replaceChildren();
+		drawing.index = new Map(index);
+		window.oneDayWords.draw('Retiring', { strip, drawing, cap: config.source_rows, readoutMaxShare: 1, width: config.chart_width, height: config.chart_height });
+	}, { strip, drawing, index: [...drawing.index], config });
 }
 
-function voiceData(preset: number, recordedDates: string[]) {
-	const feedDates = windowDates(preset);
-	const squares = recordedDates.map((date) => ({ date, state: 'nothing', label: `${shortDate(date)}: it decided nothing that day.` }));
+function voiceData(_preset: number, recordedDates: string[]): { retiring: Retiring } {
+	const squares = recordedDates.map((date) => ({ date, state: 'nothing' as const, label: `${shortDate(date)}: it decided nothing that day.` }));
+	const source = {
+		sourceId: 'source-a', title: 'source-a', squares, share: null,
+		publications: 0, decisions: 0, opportunities: 0, unjudged: false,
+		daysUnder: 0, daysLeft: null, retiresOn: null, retired: false, dwellFrom: null,
+		marks: { ...shareMarks(0, 0.5), empty: true }, readout: 'Nothing was decided.'
+	};
 	return {
-		ui: { site_title: 'Generated records' },
-		console: { default_window_days: preset, window_presets: [1, 7], today_anchor: 'right', min_attempts_for_rate: 5, source_rows: 10 },
-		windowDay: JUDGED_THROUGH,
-		chart: CHART,
-		carries: { voices: '' },
-		recordNotes: {},
-		standing: null,
-		sourceHealth: null,
-		sourceCutsByWindow: [{ days: preset, articles: 0, measured: false, cost: null }],
-		feedDates,
-		feedRecord: { runs: 0 },
-		quarantineAfter: 5,
-		feedsHidden: 0,
-		feeds: ['feed-a', 'feed-b'].map((feedId) => ({
-			feedId, resting: false, streak: 0, failures: 0,
-			marks: { empty: true, track: 1, band: 'unknown' },
-			days: feedDates.map((date) => ({ date, outcome: 'answered', label: `${shortDate(date)}: answered.` }))
-		})),
 		retiring: {
 			dates: recordedDates, dwellDays: 14, autoRetire: false,
+			runId: '2030-06-15-1', generatedAt: '2030-06-15T19:00:00Z',
 			alarmPoint: 0.5, clear: 0, hidden: 0,
-			rows: [{
-				sourceId: 'source-a', title: 'source-a', squares, share: 0.5,
-				daysUnder: 0, daysLeft: null, retiresOn: null, retired: false,
-				marks: { empty: true, track: 1, band: 'unknown' }, readout: 'Nothing was decided.'
-			}],
+			rows: [source],
 			completeDates: recordedDates.length, minCompleteDays: 14, minDecisions: 10,
 			unjudgedHidden: 0,
 			unjudged: ['source-b'].map((sourceId) => ({
-				sourceId, title: sourceId, squares, readout: 'Nothing was decided.'
+				...source, sourceId, title: sourceId, unjudged: true
 			}))
 		}
 	};
 }
 
 for (const preset of [1, 7]) {
-	test(`THE ORACLE: feed words at ${preset} day(s) preserve real feed navigation`, async ({ page }) => {
-		await drawRecord(page, 'Voices', { data: voiceData(preset, windowDates(7)) });
-		const group = page.locator('[data-windowed="feed-outcomes"]');
-		const strip = page.locator('[data-readout="feed-outcomes"] [data-readout-subject]');
-		await expect(group).toHaveAttribute('aria-label', preset === 1
-			? "Every feed's reading for this one day, one square per feed. Arrow keys move between feeds. Escape returns to the first feed."
-			: "Every feed's days, one square a day. Arrow keys read a square, Escape returns to the first feed's newest day.");
-		await expect(strip).toHaveText(preset === 1 ? 'feed-a, 15 Jun 2030, this one day' : 'feed-a, 15 Jun 2030, its newest day');
-		await expect(page.locator('[data-readout-hint="feed-outcomes"]')).toHaveText(preset === 1
-			? 'Point at a square to read it. Arrow keys move between feeds. Escape returns to the first feed.'
-			: "Point at a square to read it. Left and Right step through a feed's days, Up and Down move between feeds, Escape returns to rest.");
-		await group.focus();
-		await group.press('ArrowDown');
-		await group.press('ArrowDown');
-		await expect(strip).toHaveText(preset === 1 ? 'feed-b, 15 Jun 2030' : 'feed-b, 9 Jun 2030');
-		await group.press('Escape');
-		await expect(strip).toContainText(preset === 1 ? ', this one day' : ', its newest day');
-		if (preset === 1) {
-			await group.press('ArrowRight');
-			await group.press('ArrowRight');
-			await expect(strip).toHaveText('feed-b, 15 Jun 2030');
-		}
-	});
-
 	for (const recordDays of [1, 7]) {
 		test(`THE ORACLE: source words use their own ${recordDays}-day record at the ${preset}-day window`, async ({ page }) => {
 			await drawRecord(page, 'Voices', { data: voiceData(preset, windowDates(recordDays)) });
@@ -245,11 +223,11 @@ for (const state of ['absent', 'empty', 'no-squares'] as const) {
 		await drawRecord(page, 'Voices', { data });
 		await expect(page.locator('[data-readout="source-yield"]')).toHaveCount(0);
 		if (state === 'absent') await expect(page.locator('[data-retiring="table"]')).toHaveCount(0);
+		else if (state === 'empty') await expect(page.locator('[data-empty-state="quiet"]')).toHaveCount(1);
 		else {
 			await expect(page.locator('[data-retiring="table"]')).toHaveAttribute('data-readout-none', 'no source has a day on record, so there is no square to read; agreed with Susan');
-			await expect(page.locator(state === 'empty' ? '[data-retiring-empty]' : '[data-retiring-no-strip]')).toBeVisible();
+			await expect(page.locator('[data-retiring-no-strip]')).toBeVisible();
 		}
 	});
 }
 });
-const CHART = { width_px: 760, height_px: 220, tick_density: 6, readout_max_share: 1 };

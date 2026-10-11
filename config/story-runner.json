@@ -1,0 +1,204 @@
+{
+  "shard_rows": 400,
+  "unit_rows": 20,
+  "soft_stop_minutes": 300,
+  "max_parallel": 2,
+  "hardware": {
+    "vcpu": 4,
+    "memory_gb": 16,
+    "gpu": false
+  },
+  "model_files": {
+    "thenlper/gte-small": [
+      {
+        "path": "1_Pooling/config.json",
+        "bytes": 190,
+        "sha256": "4be450dde3b0273bb9787637cfbd28fe04a7ba6ab9d36ac48e92b11e350ffc23"
+      },
+      {
+        "path": "config.json",
+        "bytes": 583,
+        "sha256": "00273cdfb3e05c7304d180270bdef8adae45023e7bdfc396338bdd815943dc59"
+      },
+      {
+        "path": "model.safetensors",
+        "bytes": 66746168,
+        "sha256": "9a1eb90bbac323ea08aa5629b624fe6ae75db121b904799c2266a1e2c2de22d2"
+      },
+      {
+        "path": "modules.json",
+        "bytes": 385,
+        "sha256": "73348a3d8f8ae4cc5f851dc6b98be3ea819390b814e83656d5eebbadf75fe43e"
+      },
+      {
+        "path": "sentence_bert_config.json",
+        "bytes": 57,
+        "sha256": "948201d8329907aae938fa62f9ceeed53f5694dacc2b87b9f3b78b37ee986529"
+      },
+      {
+        "path": "special_tokens_map.json",
+        "bytes": 125,
+        "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+      },
+      {
+        "path": "tokenizer.json",
+        "bytes": 711661,
+        "sha256": "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "bytes": 394,
+        "sha256": "e1790949631401af1bfb6c9c7aeec7fcf612e274d73579d99f704faea40c8ba7"
+      },
+      {
+        "path": "vocab.txt",
+        "bytes": 231508,
+        "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+      }
+    ],
+    "google/embeddinggemma-2": [
+      {
+        "path": "1_Pooling/config.json",
+        "bytes": 90,
+        "sha256": "8759bdf7c77efc7df7723f64856a593c8943b71ee38baf2a88771fbaf78438f9"
+      },
+      {
+        "path": "2_Normalize/config.json",
+        "bytes": 97,
+        "sha256": "cdb09dfca347a56aa2d691744e38d5ad3c7cbc2834e7181272b9a15328b82524"
+      },
+      {
+        "path": "chat_template.jinja",
+        "bytes": 1016,
+        "sha256": "4b852efc0b9960283e735363331e6f325b33bc74bdbaa076f595bc4e9b94d85e"
+      },
+      {
+        "path": "config.json",
+        "bytes": 4455,
+        "sha256": "b8f1e9931b57fbc054acdb445c41765d55b0074c58d145fa82839941ad1b5bb3"
+      },
+      {
+        "path": "config_sentence_transformers.json",
+        "bytes": 1565,
+        "sha256": "031e56a498d33c349ab489a21885bcfe25b4fcba841149dc99e1e90d4a7c28f5"
+      },
+      {
+        "path": "model.safetensors",
+        "bytes": 1488915288,
+        "sha256": "197a32965d4b1105faf060417baa899e193fb73cd401f42ec9295234d5553d79"
+      },
+      {
+        "path": "modules.json",
+        "bytes": 413,
+        "sha256": "3d02572a0455b832de67fb8e63a54981bc7e8b46e337c95e917bd8122a533bfd"
+      },
+      {
+        "path": "preprocessor_config.json",
+        "bytes": 511,
+        "sha256": "ea2ae257e901064abdd98dceb19f2b0da06af600bed15e0f99f5c85c37ee9d78"
+      },
+      {
+        "path": "processor_config.json",
+        "bytes": 1788,
+        "sha256": "168f6a08522f3ce5dea596d94d003af2fd691742d4f41fe1f9d8cce76bfbf69c"
+      },
+      {
+        "path": "sentence_bert_config.json",
+        "bytes": 747,
+        "sha256": "b1bcd9f2dce3ae863b359e87d0710b5dbc3314a59ecb4e2f97c7778fc8e4b228"
+      },
+      {
+        "path": "tokenizer.json",
+        "bytes": 32170510,
+        "sha256": "4d777ef5bdc1aa36227abdfb77c3e49e7b9c892d16e1b6bda41c393504828be4"
+      },
+      {
+        "path": "tokenizer.model",
+        "bytes": 4689013,
+        "sha256": "e594c8a90eb08d8bda498ff4747977dc827ae0c3c56b5c0d41a605a22d02ef03"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "bytes": 1599,
+        "sha256": "17bd5d6e9364ca49a534e1502076593317c298d4a663623091ed45388f004874"
+      }
+    ],
+    "jinaai/jina-embeddings-v5-text-nano-text-matching": [
+      {
+        "path": "1_Pooling/config.json",
+        "bytes": 312,
+        "sha256": "f54132064e1846eab44448285b505446bf085dc950595638fb94f40a31c7d1fd"
+      },
+      {
+        "path": "config.json",
+        "bytes": 1361,
+        "sha256": "367857e3a726df6f1997bcb8443a4351e68b29c65f996e5874a4b3e7c5661a16"
+      },
+      {
+        "path": "config_sentence_transformers.json",
+        "bytes": 275,
+        "sha256": "8786b8d8846dcc94cf9403c357c5b5b42690aa1677e2ff8ea6b9470252cf73cd"
+      },
+      {
+        "path": "configuration_eurobert.py",
+        "bytes": 12138,
+        "sha256": "8737378a5cea9e6c7be0e077138d6c725fb5909ad122c979adcdcc1a005a51b3"
+      },
+      {
+        "path": "model.safetensors",
+        "bytes": 423543712,
+        "sha256": "5963f7a6e0218b82737b77b3157ec459383088c0e089e958b6a09b2dd802f1dc"
+      },
+      {
+        "path": "modeling_eurobert.py",
+        "bytes": 48990,
+        "sha256": "d7d54988acaab772bbc1d4ab227937c1d20341d3f84e2eccfc39e2fddbc2fe07"
+      },
+      {
+        "path": "modules.json",
+        "bytes": 349,
+        "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf"
+      },
+      {
+        "path": "tokenizer.json",
+        "bytes": 17210235,
+        "sha256": "98d4a1d32152d6cedf85b5e88f3b205106dca1fe72aaab34e0ac13c238421069"
+      },
+      {
+        "path": "tokenizer_config.json",
+        "bytes": 487,
+        "sha256": "6c4640d432db970b2436a4386d3ee992b99e756b62c37446c3f581c8d09cbb05"
+      }
+    ]
+  },
+  "code_files": [
+    ".github/workflows/story-archive-encoding.yml",
+    "config/story-runner.json",
+    "config/story-dataset.json",
+    "backend/idhazh/__init__.py",
+    "backend/idhazh/contracts/base.py",
+    "backend/idhazh/contracts/encoder_reading.py",
+    "backend/idhazh/contracts/story_encoder_candidate.py",
+    "backend/idhazh/contracts/story_runner.py",
+    "backend/idhazh/contracts/story_vector_derivation.py",
+    "backend/idhazh/contracts/story_source.py",
+    "backend/idhazh/contracts/story_vectors.py",
+    "backend/idhazh/contracts/story_candidates.py",
+    "backend/idhazh/contracts/story_evaluation.py",
+    "backend/idhazh/story_dataset/__init__.py",
+    "backend/idhazh/story_dataset/runner_archive.py",
+    "backend/idhazh/story_dataset/runner_bootstrap.py",
+    "backend/idhazh/story_dataset/runner_cli.py",
+    "backend/idhazh/story_dataset/runner_download.py",
+    "backend/idhazh/story_dataset/runner_execution.py",
+    "backend/idhazh/story_dataset/runner_inputs.py",
+    "backend/idhazh/story_dataset/runner_results.py",
+    "backend/idhazh/story_dataset/storage.py",
+    "backend/idhazh/story_dataset/source.py",
+    "backend/idhazh/story_dataset/encoder_candidates.py",
+    "backend/idhazh/story_dataset/vector_files.py",
+    "backend/idhazh/story_dataset/vectors.py",
+    "backend/idhazh/story_dataset/vector_derivation.py"
+  ],
+  "consent": "Use the public repository and its standard ubuntu-latest runner. Preparing is not permission to upload, push or dispatch. Explicit outbound approval must disclose that workflow code, input artifacts, logs and result artifacts will be publicly accessible."
+}

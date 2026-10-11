@@ -85,6 +85,13 @@ A source edit during compilation cannot certify the old output. Browser
 tests refuse an unrecorded, wrong-mode or stale build. Preview never adopts an
 existing server. `PREVIEW_PORT` remains the override for a port collision.
 
+Private Voices fixtures reuse that verified build's compiled server and client
+output. A separate SvelteKit `Server` prerenders the real route with the
+fixture's unpublished source census and packed feed records. Only the generated
+page, its dependencies and published ledgers are served. Changing a native
+record does not require compiling the source again. The generic Judgement
+fixture builder still compiles its fixed named source inventory.
+
 ### Native host codec checks
 
 The `rust` group runs the pinned host crate and its named Python native-file

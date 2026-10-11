@@ -30,6 +30,7 @@ from ._harness import (
     SUBSTITUTED_DATE,
     _action_call,
     _declared_steps,
+    _dispatch_inputs,
     _effective_shell,
     _job,
     _load_workflows,
@@ -45,6 +46,85 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 FILENAME: Final = "llm-council.yml"
+
+
+def test_only_the_collector_checks_out_code_and_fetches_named_data() -> None:
+    workflow = _load_workflows()[FILENAME]
+    checkout = _step(workflow, "save_council_results", "uses", "actions/checkout@v6")
+    settings = checkout["with"]
+    assert isinstance(settings, dict)
+    assert (str(settings["fetch-depth"]), settings["filter"]) == ("1", "blob:none")
+    assert str(settings["sparse-checkout"]).splitlines() == ["config", "backend", ".github"]
+    disable = _step(
+        workflow,
+        "save_council_results",
+        "name",
+        "Keep collection sparse and disable implicit downloads",
+    )
+    script = _script(disable, "the collecting checkout")
+    assert "git config index.sparse true" in script
+    assert 'echo "GIT_NO_LAZY_FETCH=1" >> "$GITHUB_ENV"' in script
+    steps = _steps(workflow, "save_council_results")
+    assert (
+        steps.index(checkout)
+        < steps.index(disable)
+        < steps.index(_step(workflow, "save_council_results", "uses", "actions/setup-python@v7"))
+    )
+    for job in ("draw", "judge"):
+        assert "with" not in _step(workflow, job, "uses", "actions/checkout@v6")
+
+
+def test_collector_keeps_a_failed_or_cancelled_judging_job_red() -> None:
+    step = _step(
+        _load_workflows()[FILENAME],
+        "save_council_results",
+        "name",
+        "Settle and publish every completed tenant output",
+    )
+    environment = step["env"]
+    script = step["run"]
+    assert isinstance(environment, dict)
+    assert isinstance(script, str)
+    assert environment["COUNCIL_UNITS_RESULT"] == "${{ needs.judge.result }}"
+    assert '--units-result "$COUNCIL_UNITS_RESULT"' in script
+
+
+def test_event_transport_uses_existing_always_uploaded_bundles_and_planned_cells() -> None:
+    workflow = _load_workflows()[FILENAME]
+    planner = _job(workflow, "draw")
+    judge = _job(workflow, "judge")
+    assert planner["env"] == {
+        "COUNCIL_EVENT_FILE": "backend/var/council/events/planner.jsonl",
+    }
+    assert judge["env"] == {
+        "COUNCIL_SELECTION": "${{ needs.draw.outputs.selection }}",
+        "COUNCIL_EVENT_FILE":
+        "backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl",
+    }
+    selection = _uploads("draw", SELECTION_ARTIFACT)
+    assert len(selection) == 1
+    assert _normalize_condition(selection[0]["if"], "planner upload") == "always()"
+    upload = _uploads("judge", METRICS_ARTIFACT)
+    assert len(upload) == 1
+    assert _normalize_condition(upload[0]["if"], "judge upload") == "always()"
+    settings = upload[0]["with"]
+    assert isinstance(settings, dict)
+    paths = str(settings["path"]).splitlines()
+    assert paths[0] == "backend/var/council"
+    assert "!backend/var/council/events/planner.jsonl" in paths
+    download = _step(workflow, "save_council_results", "uses", "actions/download-artifact@v8")
+    settings = download["with"]
+    assert isinstance(settings, dict)
+    assert settings["pattern"] == "council-*"
+    assert settings["path"] == "backend/var/council"
+    assert settings["merge-multiple"] == "true"
+    collect = _step(workflow, "save_council_results", "name", COMMIT_STEP)
+    assert _normalize_condition(collect["if"], "collector") == "always()"
+    environment = collect["env"]
+    assert isinstance(environment, dict)
+    assert environment["COUNCIL_MATRIX"] == "${{ needs.draw.outputs.matrix }}"
+    assert '--matrix "$COUNCIL_MATRIX"' in str(collect["run"])
+
 
 #: The dotted path the unit's bound is read from. Spelled once here and asserted
 #: in the file, so a workflow that read a different knob fails rather than
@@ -91,6 +171,7 @@ COMMIT_PROGRAM: Final = "backend/utilities/council_publish.py"
 #: What a unit's output travels in, and what a date's selection travels in.
 METRICS_ARTIFACT: Final = "council-metrics-"
 SELECTION_ARTIFACT: Final = "council-selection-"
+RESULTS_ARTIFACT: Final = "council-results-"
 
 
 def _judges() -> dict[str, object]:
@@ -265,7 +346,7 @@ def test_the_matrix_is_emitted_by_the_utility_and_not_computed_in_the_file() -> 
     fanout = _script(_step(_judges(), "draw", "id", FANOUT_STEP), "the fanout step")
 
     assert FANOUT_COMMAND in fanout
-    assert "--date" in fanout
+    assert "--date" not in fanout
     assert "idhazh.json" not in fanout, (
         "the planning job reads no config key of its own; the utility is what reads config"
     )
@@ -273,44 +354,93 @@ def test_the_matrix_is_emitted_by_the_utility_and_not_computed_in_the_file() -> 
 
 
 def test_the_planning_job_asks_the_night_plan_which_dates_tonight_judges() -> None:
-    """Tonight, plus whatever its tenants say they are behind on.
-
-    The council asks and never looks, so this step needs no tenant to run - and
-    a night with nobody registered plans tonight and nothing else. A date
-    computed in the file instead would be one answer the tenants never saw.
-    """
+    """The planner alone validates dates and judges, before any work is picked."""
     plan = _step(_judges(), "draw", "id", PLAN_STEP)
     environment = plan.get("env")
     script = _script(plan, "the night plan step")
 
     assert PLAN_COMMAND in script
     assert isinstance(environment, dict)
-    assert environment["TONIGHT"] == "${{ steps.decide.outputs.date }}"
+    assert environment["EVENT_NAME"] == "${{ github.event_name }}"
     assert environment["DISPATCH_DATE"] == "${{ inputs.date }}", (
-        "a dispatched date replaces the plan, and it arrives through env rather than "
-        "pasted into the command"
+        "the required manual date arrives through env rather than shell interpolation"
     )
+    assert environment["DISPATCH_JUDGES"] == "${{ inputs.judges }}"
+    assert '--mode "$MODE"' in script
+    assert '--dispatched "${DISPATCH_DATE:-}"' in script
+    assert '--judges "${DISPATCH_JUDGES:-}"' in script
+    assert 'case "$EVENT_NAME" in' in script
+    assert "schedule) MODE=scheduled ;;" in script
+    assert "workflow_dispatch) MODE=manual ;;" in script
+    assert "*) exit 2 ;;" in script
+    assert "--tonight" not in script
+    assert "date -u" not in script
+    assert "set -euo pipefail" in script
     assert "${{" not in script, "a value pasted into the command is not a value read by name"
+    steps = _steps(_judges(), "draw")
+    assert not any(step.get("id") == "decide" for step in steps)
+    for step in steps:
+        if step.get("id") in {"identity", "runtime", "bounds", FANOUT_STEP} or step.get(
+            "name"
+        ) == "Pick the work for each date":
+            assert steps.index(plan) < steps.index(step)
 
 
-def test_every_date_the_plan_names_reaches_the_matrix() -> None:
-    """A plan of two dates that fans out to one judges half the night it planned.
+def test_manual_dispatch_requires_one_date_and_a_list_of_judges() -> None:
+    inputs = _dispatch_inputs(_judges())
+    assert set(inputs) == {"date", "judges"}
+    for name in ("date", "judges"):
+        field = inputs[name]
+        assert isinstance(field, dict)
+        assert field["required"] == "true"
+        assert field["type"] == "string"
+        assert "default" not in field, "an omitted manual input must not select work"
+    date = inputs["date"]
+    judges = inputs["judges"]
+    assert isinstance(date, dict)
+    assert isinstance(judges, dict)
+    assert "One required" in str(date["description"])
+    assert "UTC" in str(date["description"])
+    assert judges["description"] == (
+        'One or more judge names from config/llm_council.json as JSON (["name"]). '
+        "Active: publish as scheduled. Paused: download only, no commits. "
+        "Retired: refused. Download council-results-<run_id>."
+    )
 
-    The list is turned into one `--date` an entry rather than word-split into
-    the command line, so a date can never arrive as two - and the fan-out reads
-    the plan's output rather than the single date the planning job opened on.
-    """
+
+def test_the_full_selection_reaches_the_matrix_without_a_date_cross_product() -> None:
+    """Each judge keeps its own dates; the aggregate list must not select cells."""
     fanout = _step(_judges(), "draw", "id", FANOUT_STEP)
     environment = fanout.get("env")
     script = _script(fanout, "the fanout step")
 
     assert isinstance(environment, dict)
-    assert environment["NIGHT_DATES"] == f"${{{{ steps.{PLAN_STEP}.outputs.{DATES_OUTPUT} }}}}"
-    assert "steps.decide.outputs.date" not in str(environment), (
-        "the fan-out takes the plan's dates, not the one date the night opened on"
-    )
-    assert "asked+=(--date" in script
-    assert 'python3 backend/utilities/council_matrix.py "${asked[@]}"' in script
+    assert environment == {"COUNCIL_SELECTION": "${{ steps.plan.outputs.selection }}"}
+    assert "python3 backend/utilities/council_matrix.py" in script
+    assert "--date" not in script
+    assert "--selection" not in script
+    assert "jq" not in script
+    assert "${{" not in script
+
+
+def test_the_planner_publishes_one_selection_and_one_primary_date() -> None:
+    outputs = _job(_judges(), "draw").get("outputs")
+    assert isinstance(outputs, dict)
+    assert outputs["date"] == "${{ steps.plan.outputs.date }}"
+    assert outputs["selection"] == "${{ steps.plan.outputs.selection }}"
+    assert outputs[DATES_OUTPUT] == "${{ steps.fanout.outputs.dates }}"
+
+
+def test_prepare_uses_aggregate_dates_but_keeps_each_judges_selection() -> None:
+    prepare = _step(_judges(), "draw", "name", "Pick the work for each date")
+    environment = prepare.get("env")
+    script = _script(prepare, "prepare")
+    assert isinstance(environment, dict)
+    assert environment["COUNCIL_SELECTION"] == "${{ steps.plan.outputs.selection }}"
+    assert environment["COUNCIL_DATES"] == "${{ steps.fanout.outputs.dates }}"
+    assert 'echo "$COUNCIL_DATES" | jq -r \'.[]\' | while read -r judged' in script
+    assert 'council-prepare --date "$judged" --run-id "$COUNCIL_RUN_ID"' in script
+    assert "${{" not in script
 
 
 def test_every_fanout_output_the_workflow_reads_is_one_the_emitter_prints(
@@ -387,12 +517,21 @@ def test_a_cell_carries_its_tenant_its_date_and_its_own_width(
     tenant's width, and a tenant that runs no model would pay four weights
     restores for work that uses none of them.
     """
-    shard = _script(_step(_judges(), "judge", "name", "Run this unit of the tenant's work"), "")
+    step = _step(_judges(), "judge", "name", "Run this unit of the tenant's work")
+    shard = _script(step, "shard")
+    environment = step.get("env")
     emitted = _emitted(capsys)
     cells = json.loads(emitted["matrix"])
 
+    assert isinstance(environment, dict)
     for value in ("tenant", "date", "shard", "shards"):
-        assert f"matrix.{value}" in shard, f"the unit is never told which {value} it is"
+        variable = f"COUNCIL_{value.upper()}"
+        assert environment[variable] == f"${{{{ matrix.{value} }}}}"
+        assert f'--{value} "${variable}"' in shard
+    job_environment = _job(_judges(), "judge").get("env")
+    assert isinstance(job_environment, dict)
+    assert job_environment["COUNCIL_SELECTION"] == "${{ needs.draw.outputs.selection }}"
+    assert "${{" not in shard
     assert cells, "the committed config registers a tenant, so tonight fans out to cells"
     assert all(
         set(cell) == {"tenant", "date", "shard", "shards", "runs_model"} for cell in cells
@@ -462,7 +601,7 @@ def test_every_artifact_this_night_writes_is_named_for_the_cell_that_wrote_it() 
         assert f"matrix.{value}" in str(metrics_with["name"]), (
             f"a unit's artifact does not say which {value} produced it"
         )
-    assert "steps.decide.outputs.date" in str(selection_with["name"])
+    assert "steps.plan.outputs.date" in str(selection_with["name"])
     assert str(selection_with["path"]) == session.COUNCIL_ROOT_RELPATH, (
         "the selection is uploaded from the scratch root, so the date and the tenant "
         "survive as directory levels and two tenants do not merge on top of each other"
@@ -471,6 +610,28 @@ def test_every_artifact_this_night_writes_is_named_for_the_cell_that_wrote_it() 
     assert f"!{session.COUNCIL_ROOT_RELPATH}/*/{session.SELECTION_DIRNAME}" in str(
         metrics_with["path"]
     ), "a unit re-uploads the selection it downloaded"
+    assert (
+        f"!{session.COUNCIL_ROOT_RELPATH}/trials/*/*/*/scratch/*/{session.SELECTION_DIRNAME}"
+        in str(metrics_with["path"])
+    ), "a paused unit re-uploads the trial selection it downloaded"
+
+
+def test_final_results_include_trial_settlement_even_after_collection_fails() -> None:
+    workflow = _judges()
+    uploads = _uploads("save_council_results", RESULTS_ARTIFACT)
+    assert len(uploads) == 1
+    upload = uploads[0]
+    assert upload["uses"] == "actions/upload-artifact@v7"
+    assert _normalize_condition(upload["if"], "final results") == "always()"
+    settings = upload.get("with")
+    assert isinstance(settings, dict)
+    assert settings["name"] == "council-results-${{ needs.draw.outputs.run_id }}"
+    assert settings["path"] == session.COUNCIL_ROOT_RELPATH
+    assert settings["if-no-files-found"] == "warn"
+    steps = _steps(workflow, "save_council_results")
+    assert steps.index(_step(workflow, "save_council_results", "name", COMMIT_STEP)) < (
+        steps.index(upload)
+    ), "trial settlement state and receipts only exist after the collector runs"
 
 
 def test_what_a_night_wrote_outlives_the_run_that_wrote_it() -> None:
@@ -482,7 +643,11 @@ def test_what_a_night_wrote_outlives_the_run_that_wrote_it() -> None:
     one older date. At about 27 KB a shard file, a week of four shards is under
     a megabyte.
     """
-    uploads = _uploads("judge", METRICS_ARTIFACT) + _uploads("draw", SELECTION_ARTIFACT)
+    uploads = (
+        _uploads("judge", METRICS_ARTIFACT)
+        + _uploads("draw", SELECTION_ARTIFACT)
+        + _uploads("save_council_results", RESULTS_ARTIFACT)
+    )
 
     assert uploads, "the night uploads nothing at all"
     for upload in uploads:
@@ -570,13 +735,15 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     environment = step.get("env")
 
     assert len(calls) == 1, "one collecting job, one push"
-    assert '"${asked[@]}"' in calls[0]
+    assert "--date" not in calls[0]
     assert isinstance(environment, dict)
-    assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
+    assert environment["COUNCIL_SELECTION"] == "${{ needs.draw.outputs.selection }}"
     assert not re.search(r"\bstate/\S+", calls[0]), (
         "a ledger path spelled here is a path a second tenant's output never reaches"
     )
-    assert "if" not in step, "the collecting utility handles an empty venue without a commit"
+    assert _normalize_condition(step["if"], "collector") == "always()", (
+        "the collector must run after a failed download and handle an empty venue"
+    )
 
 
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:
@@ -608,18 +775,21 @@ def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
     """One job a date would put two jobs of one run pushing `main`.
 
     The workflow-level `concurrency` group serialises runs, not the jobs inside
-    one, so the second push would race the first. One job, a loop over the dates
-    the planning job named, one push.
+    one, so the second push would race the first. One job hands the complete
+    selection to the collector, which derives its dates and publishes once.
     """
     settle = _step(_judges(), "save_council_results", "name", COMMIT_STEP)
     environment = settle.get("env")
     script = _script(settle, "the settle step")
 
     assert isinstance(environment, dict)
-    assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
-    assert "while read" in script, "the dates are looped rather than taken one at a time"
+    assert environment["COUNCIL_SELECTION"] == "${{ needs.draw.outputs.selection }}"
+    assert environment["COUNCIL_COMMIT"] == "${{ github.sha }}"
+    assert "--date" not in script
+    assert "--selection" not in script
     assert COMMIT_PROGRAM in script
-    assert '--commit "${{ github.sha }}"' in script
+    assert '--commit "$COUNCIL_COMMIT"' in script
+    assert "${{" not in script
 
 
 def test_the_one_commit_message_names_every_date_the_night_settled() -> None:
@@ -631,7 +801,7 @@ def test_the_one_commit_message_names_every_date_the_night_settled() -> None:
     environment = _step(_judges(), "save_council_results", "name", COMMIT_STEP).get("env")
 
     assert isinstance(environment, dict)
-    assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
+    assert environment["COUNCIL_SELECTION"] == "${{ needs.draw.outputs.selection }}"
     source = (REPO_ROOT / "backend" / "utilities" / "council_publish.py").read_text(encoding="utf-8")
     assert '"council: " + " ".join(dates)' in source
 
