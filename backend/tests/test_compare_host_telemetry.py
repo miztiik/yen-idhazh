@@ -744,6 +744,27 @@ def test_recorded_population_keeps_memory_when_executable_is_unavailable(tmp_pat
     )
 
 
+def test_cache_capture_ignores_sysfs_control_files(tmp_path: Path) -> None:
+    from idhazh.telemetry import silicon
+    from idhazh.telemetry.host_evidence_inputs import settings
+    from utilities.host_telemetry_reference import capture_cache
+
+    source = tmp_path / "sys-cache"
+    index = source / "index3"
+    index.mkdir(parents=True)
+    (index / "level").write_bytes(b"3\n")
+    (index / "size").write_bytes(b"5120K\n")
+    (source / "uevent").write_bytes(b"")
+    (source / "index-invalid").write_bytes(b"")
+    native, _, _ = settings()
+    destination = tmp_path / "capture"
+    capture_cache(destination, source, native)
+    assert silicon.cache_bytes(root=destination) == silicon.cache_bytes(root=source)
+    assert (destination / "index3/size").read_bytes() == b"5120K\n"
+    assert not (destination / "uevent").exists()
+    assert not (destination / "index-invalid").exists()
+
+
 def test_missing_evidence_refuses_an_exited_producer_without_waiting(tmp_path: Path) -> None:
     import subprocess
     import sys

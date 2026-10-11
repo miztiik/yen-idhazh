@@ -207,6 +207,22 @@ def window_cells(
     )
 
 
+def capture_cache(destination: Path, source: Path, native: NativeSettings) -> None:
+    destination.mkdir(parents=True, exist_ok=False)
+    with os.scandir(source) as stream:
+        for index, entry in enumerate(stream):
+            if index >= native.verification_limits.max_files:
+                raise ValueError("cache inventory exceeds its cap")
+            if not entry.name.startswith("index") or not entry.is_dir():
+                continue
+            target = destination / entry.name
+            target.mkdir()
+            for name in ("level", "size"):
+                (target / name).write_bytes(
+                    read_bytes(Path(entry.path) / name, native.capture_limits.max_sysfs_text_bytes)
+                )
+
+
 def host_row(
     root: Path, native: NativeSettings, *, day: str, run_id: str, now: str
 ) -> HostFingerprintRow:
@@ -218,20 +234,9 @@ def host_row(
     fields, clocks = silicon._cpuinfo_fields(cpuinfo)
     capture = root / "captures" / str(uuid4())
     cache = capture / "cache"
-    cache.mkdir(parents=True)
+    capture_cache(cache, silicon.CACHE_ROOT, native)
     (capture / "cpuinfo").write_bytes(cpu_raw)
     (capture / "uptime").write_bytes(uptime)
-    base = silicon.CACHE_ROOT
-    with os.scandir(base) as stream:
-        for index, entry in enumerate(stream):
-            if index >= native.verification_limits.max_files:
-                raise ValueError("cache inventory exceeds its cap")
-            target = cache / entry.name
-            target.mkdir()
-            for name in ("level", "size"):
-                (target / name).write_bytes(
-                    read_bytes(Path(entry.path) / name, native.capture_limits.max_sysfs_text_bytes)
-                )
     cells = {
         "cpu_model": fields.get("model name") or None,
         "cpu_vendor": fields.get("vendor_id") or None,
