@@ -1,7 +1,7 @@
 import type { Row } from '../../data/ledger';
 import { modelByDate, throughputWithin } from './work';
 import { textRows } from './rows';
-import { itemRates } from '../rates';
+import { itemRates, nearestRank } from '../rates';
 
 export function modelThroughput(rows: readonly Row[], window: { start: string; end: string }) {
 	const text = textRows(rows).filter((row) => {
@@ -14,5 +14,6 @@ export function modelThroughput(rows: readonly Row[], window: { start: string; e
 		group.push(row);
 		dated.set(row.date, group);
 	}
-	return throughputWithin(dated, modelByDate(text), window);
+	return throughputWithin(dated, modelByDate(text), window,
+		(values, fraction) => nearestRank(values, fraction)!);
 }

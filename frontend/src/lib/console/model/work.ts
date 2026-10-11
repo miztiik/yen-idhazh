@@ -37,7 +37,7 @@ import type { MovementPolarity } from '../../charts/theme';
 // layer both reducers reach, so the server one borrows it rather than the
 // console importing a server type back the other way.
 import type { DayScoredCounts } from '../eval-instruments';
-import { itemRates, nearestRank } from '../rates';
+import { itemRates } from '../rates';
 import type { SummaryBand } from '../../server/config';
 
 export { itemRates } from '../rates';
@@ -852,14 +852,14 @@ export function scoreCost(
  * Distinct from `spread` above, which answers the length panels: that one
  * carries the range a word count needs, this one the quartiles a per-item rate
  * needs, and nothing measures a rate in words. */
-function rateSpread(values: number[]): RateSpread | null {
+function rateSpread(values: number[], rank: typeof quantile = quantile): RateSpread | null {
 	if (values.length === 0) return null;
 	const sorted = [...values].sort((a, b) => a - b);
 	return {
 		min: sorted[0],
-		p25: nearestRank(sorted, 0.25)!,
-		median: nearestRank(sorted, 0.5)!,
-		p75: nearestRank(sorted, 0.75)!,
+		p25: rank(sorted, 0.25),
+		median: rank(sorted, 0.5),
+		p75: rank(sorted, 0.75),
 		max: sorted[sorted.length - 1]
 	};
 }
@@ -883,7 +883,8 @@ function rateSpread(values: number[]): RateSpread | null {
 export function throughputWithin(
 	itemHealthByDate: Map<string, Record<string, string>[]>,
 	modelOnDate: Map<string, string>,
-	span: { start: string; end: string }
+	span: { start: string; end: string },
+	rank: typeof quantile = quantile
 ): ThroughputDay[] {
 	return [...itemHealthByDate.entries()]
 		.filter(([date]) => date >= span.start && date <= span.end)
@@ -915,8 +916,8 @@ export function throughputWithin(
 				prompt += measured(row.input_tokens) ?? 0;
 				written += measured(row.output_tokens) ?? 0;
 			}
-			const read = rateSpread(reads);
-			const write = rateSpread(writes);
+			const read = rateSpread(reads, rank);
+			const write = rateSpread(writes, rank);
 			if (read === null || write === null) return null;
 			const evaluated = Math.max(prompt - cached, 0);
 			return {
@@ -932,8 +933,8 @@ export function throughputWithin(
 					.map(([runId, bucket]) => ({
 						runId,
 						items: Math.max(bucket.read.length, bucket.write.length),
-						read: rateSpread(bucket.read)?.median ?? 0,
-						write: rateSpread(bucket.write)?.median ?? 0
+						read: rateSpread(bucket.read, rank)?.median ?? 0,
+						write: rateSpread(bucket.write, rank)?.median ?? 0
 					}))
 					.sort((a, b) => a.runId.localeCompare(b.runId))
 			};

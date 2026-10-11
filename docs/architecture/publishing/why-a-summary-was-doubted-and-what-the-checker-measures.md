@@ -24,6 +24,8 @@ Native throughput uses the same nearest-rank quartiles and median for the
 daily candle and each run's readout. A single-run day therefore prints the
 same middle rate in both places. Only paired reading and writing measurements
 enter that population; whole-day token totals still supply the weighted rates.
+The build-time reducer keeps its interpolated readings for existing callers;
+the native adapter explicitly selects the nearest-rank rule for both grains.
 
 The page owns one window control and one recording frame. Sampling, measurement
 off, recording start, coverage by another record and private partial-read notes
