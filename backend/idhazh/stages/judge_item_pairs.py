@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from idhazh import assemble, atomic_write, config
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import ShardOutcome
@@ -137,7 +138,8 @@ def stage_judge_item_pairs(
     entry = judge.entry_of(settings)
     timeout = request_timeout_seconds(entry)
     stamp = stamps.judge_inputs(settings)
-    flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
+    execution = judge_settings.load(settings.config_dir)
+    flush_every = execution.flush_every_pairs
     drawn = _rows_this_shard_owns(draw_path, shard=shard, shards=shards)
     # Asked once a shard, before any pair is judged. A verdict every returned token
     # could belong to another verdict too can never take any of the window's

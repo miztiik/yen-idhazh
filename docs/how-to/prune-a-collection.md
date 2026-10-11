@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -74,8 +74,8 @@ listing it, and the next dry run starts after `handled_through`.
 ### 3. Delete
 
 Set the declaration's `dry_run` to `false`, in one reviewed commit taken after a
-scheduled wake has logged its list, and name the task in `LIVE_BY_DECISION` in
-`backend/tests/contracts/test_gardener_config.py` with the decision beside it.
+scheduled wake has logged its list, and name the decision - who made it, when and
+why - in that commit's message.
 The next wake takes up to the ceiling, and each wake after it takes the next
 batch until a wake's `outcome` is `done`. Each wake is the
 same shape and the same cost whatever the backlog is - that is what the ceiling

@@ -16,8 +16,9 @@ from idhazh.council import registry, session
 from utilities.council_publish import settle_and_publish
 from utilities.publication_git import Repository
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import TENANT_SOURCE, a_venue, forget
+from .test_lifecycle import room
 
 SOURCE = TENANT_SOURCE.replace(
     "from pathlib import Path", "from pathlib import Path\nfrom idhazh import atomic_write"
@@ -34,11 +35,67 @@ SOURCE = TENANT_SOURCE.replace(
 
 def configuration(root: Path, slugs: tuple[str, ...]) -> Path:
     target = copy_config(root)
-    path = target / "idhazh.json"
+    write_declarations(target, slugs)
+    path = target / "llm_council.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["council"]["tenants"] = list(slugs)
+    data["judge_names"] = list(slugs)
     path.write_text(json.dumps(data), encoding="utf-8", newline="\n")
     return target
+
+
+def test_publication_resolves_only_the_active_judge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(
+        tmp_path,
+        {
+            "seed": "seed\n",
+            "config/push-retry.json": '{"deadline_seconds":{"default":300},"base_step_seconds":0.001,'
+            '"ceiling_seconds":0.001,"ceiling_after":1}\n',
+        },
+    )
+    package = "publication_lifecycle"
+    a_venue(
+        tmp_path,
+        package=package,
+        slugs={"active-judge": (1, ("state/paper",))},
+        poisoned_neighbour="paused-judge",
+        source=SOURCE,
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
+    monkeypatch.setattr(session, "COUNCIL_ROOT", repo / "backend" / "var" / "council")
+    forget(package)
+    try:
+        target = room(
+            tmp_path,
+            {
+                "paused-judge": ("paused", True),
+                "active-judge": ("active", False),
+                "retired-judge": ("retired", False),
+            },
+        )
+        assert (
+            settle_and_publish(
+                repo=repo,
+                dates=("2026-10-10",),
+                run_id="2026-10-11-123",
+                commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+                config_root=target,
+            )
+            == 0
+        )
+        assert on_origin(origin, "state/paper/2026-10-10.json") == "completed\n"
+        rows = ledger.load_days(
+            repo / "state",
+            LedgerName.COUNCIL_RUN_RECORDS,
+            ["2026-10-10"],
+            model=CouncilRunRecord,
+        )
+        assert len(rows) == 1 and rows[0].judge_id == "active-judge"
+    finally:
+        forget(package)
 
 
 def test_many_tenants_and_later_dates_survive_a_failure(

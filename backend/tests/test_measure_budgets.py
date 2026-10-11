@@ -192,8 +192,17 @@ def test_the_definition_reading_divides_by_what_it_counted(
 def a_config_dir(root: Path, taxonomy: dict[str, Any]) -> Path:
     """A whole config tree with one file replaced, because `config.load` reads them all."""
     root.mkdir(parents=True, exist_ok=True)
-    for name in ("idhazh.json", "sources.json", "watchlist.json", "appearance.json"):
-        (root / name).write_bytes((CONFIG_DIR / name).read_bytes())
+    for name in (
+        "idhazh.json",
+        "sources.json",
+        "watchlist.json",
+        "appearance.json",
+        "llm_council.json",
+        "judges/content-similarity-judge.json",
+    ):
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((CONFIG_DIR / name).read_bytes())
     app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     model = config.models_path(CONFIG_DIR, app)
     target = config.models_path(root, app)
@@ -431,8 +440,7 @@ def test_the_check_names_every_stale_site_and_both_digests() -> None:
     configured = config.load(CONFIG_DIR).models.summarizer.sha256
     assert configured is not None
     assert readings_awaiting_a_retake(configured_sha256=configured) == (), (
-        "row #13b retook all three; a stale one here means a reading moved without "
-        "its subject"
+        "row #13b retook all three; a stale one here means a reading moved without its subject"
     )
 
     swapped = "0" * 64
@@ -565,5 +573,5 @@ def test_this_surface_writes_nothing_a_commit_would_carry() -> None:
     source = read_text(REPO_ROOT / "backend" / "utilities" / "measure_budgets.py")
 
     assert "write_text" in source, "if the writes went, this case is checking nothing"
-    for forbidden in ("REPO_ROOT / \"docs\"", "REPO_ROOT / \"config\" /", "git commit"):
+    for forbidden in ('REPO_ROOT / "docs"', 'REPO_ROOT / "config" /', "git commit"):
         assert forbidden not in source, f"{forbidden} is a committed destination"

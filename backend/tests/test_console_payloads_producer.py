@@ -409,6 +409,46 @@ def test_the_band_names_the_newest_day_in_every_sentence(tree: tuple[Path, Path]
     assert band.months == []
 
 
+@pytest.mark.parametrize(
+    ("planned", "newest", "outside"),
+    [
+        ("2026-10-09", "2026-10-10", "2026-11-01"),
+        ("2028-02-28", "2028-02-29", "2028-03-01"),
+        ("2026-12-30", "2026-12-31", "2027-01-01"),
+    ],
+)
+def test_a_delayed_plan_keeps_the_newest_published_day_in_its_month(
+    tmp_path: Path, planned: str, newest: str, outside: str
+) -> None:
+    """Publication order does not replace a newer band's facts with an older plan."""
+    state, digest = _seed_tree(tmp_path, ())
+    for index, stamp in enumerate((planned, newest, outside), start=1):
+        folder = digest / stamp[:4] / stamp[5:7] / stamp[8:10]
+        folder.mkdir(parents=True)
+        (folder / "run.json").write_text(
+            _manifest(
+                stamp, planned=4, succeeded=3, failed=1, site_bytes=index * 1_000_000
+            ).to_json(),
+            encoding="utf-8",
+        )
+        record = state / "day-metrics" / stamp[:4] / stamp[5:7] / f"{stamp[8:10]}.json"
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(_record(stamp).to_json(), encoding="utf-8")
+    console_band.publish(
+        state_root=state,
+        digest_root=digest,
+        generated_at=f"{outside}T19:00:00Z",
+        today=date.fromisoformat(planned),
+        console=CONSOLE,
+        run=RUN,
+        collect=COLLECT,
+    )
+    band = console_band.read_band(console_band.band_path(digest))
+    assert band.verdict.date == newest
+    assert band.size.bytes == 2_000_000
+    assert band.verdict.sentence.startswith(f"{newest} ran 1 run and published 3 of 4")
+
+
 def test_the_band_ignores_public_mirrors_and_never_opens_a_day_payload(
     three_month_tree: tuple[Path, Path], opened: list[str]
 ) -> None:

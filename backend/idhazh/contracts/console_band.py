@@ -250,7 +250,7 @@ class ConsoleBand(Contract):
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-10",
+            version="2026-10-11",
             change="Adds settings_moved and checker_moved: days a setting or the checker moved.",
             why="Item-health cannot see the prompt or the checker; the run record and evals can.",
         ),

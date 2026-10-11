@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 The operator console reads native records as well as the remaining public
 projections. Each crossing into the site needs a contract (Guardrail #11).
 This page lists the public projections. The machine-readable copy is
@@ -125,6 +125,12 @@ day the run is publishing, and every projection's body stays in its own module
 | `console_band.py` | `console/band.json` | native run manifests and state day-metrics over the widest window; native feed-health, item-health and host-fingerprint through the ledger door; native summary-quality-evals for checker movement |
 | `day_metrics.py` | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | the publication's day and manifest, with that day's native rows |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of the item-health ledger, through `ledger.load_days` |
+
+The band finds its newest manifest over the bounded named-month cover,
+including the whole month of the plan being assembled. A delayed older plan
+therefore cannot replace a newer published day in that month. Its subsequent
+window and predecessor reads are anchored on the newest day found, not the
+plan's date or the current clock. Discovery does not enter the following month.
 
 Each native manifest keeps its `chart_evidence` without recomputing
 or pooling it. Missing historical evidence stays null. The exact counts,
@@ -377,14 +383,14 @@ compact, which is why the no-months row reads under the committed 777:
 | 14 (the retention bound) | 758 | 37.9 percent |
 | 24 (two years) | 780 | 39.0 percent |
 
-**The list cannot pass 14, and that is retention rather than a hope.** `months`
-is the union of the published month shards, and each series drops a shard once
-it is past its own window: the publishers trim theirs to
-`observability.public_*_keep_months`, and the gardener's `telemetry-aggregate`
-task trims the telemetry copy to its `public-copy` series. Every one of those is
-14. So the whole growable part of this payload is the 32 bytes between
-the first row and the third, and the served payload at its bound is about 809 -
-40.5 percent of the guardrail, which needs no window of its own.
+**The months list names telemetry only.** The band checks the named months
+inside the widest configured window; it no longer unions the retired machine,
+run-days and public day-metrics copies. Telemetry's `public-copy` series still
+governs its retention. Settings and checker changes are also bounded by the
+widest window, with one equal-length predecessor search for each kind.
+The figures above describe the older shape, before the movement fields.
+The owner suspended size studies on 2026-10-10; this change keeps the existing
+ceiling rather than deriving a new value from a measurement.
 
 **The band carried two numbers for two days, and the fix was to delete one.**
 `console-band.spec.ts` asserted `8 * 1024` of its own from 2026-09-08, sized for

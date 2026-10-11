@@ -147,11 +147,11 @@ def main(argv: list[str] | None = None) -> int:
     if str(args.dispatched):
         planned = (a_date(str(args.dispatched), what="the dispatched date"),)
     else:
-        app = config.load(args.config_root).app
+        settings = config.load(args.config_root)
         planned = plan_the_night(
-            app.council,
+            settings.council,
             tonight=a_date(str(args.tonight), what="--tonight"),
-            hosted=tenants(app.council.tenants, app=app),
+            hosted=tenants(settings.council.running(), app=settings.app, council=settings.council),
         )
     print(f"dates={json.dumps(list(planned), separators=(',', ':'))}")
     return 0

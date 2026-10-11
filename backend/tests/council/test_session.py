@@ -27,7 +27,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -77,9 +77,10 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *slugs: str) -> Path:
     """The loader's named config inputs, with the named slugs registered."""
     target = copy_config(root)
-    raw = json.loads(read_text(target / "idhazh.json"))
-    raw["council"]["tenants"] = list(slugs)
-    (target / "idhazh.json").write_text(
+    write_declarations(target, slugs)
+    raw = json.loads(read_text(target / "llm_council.json"))
+    raw["judge_names"] = list(slugs)
+    (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     return target
@@ -243,7 +244,7 @@ def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -
     """
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ())})
     config_root = _config_registering(venue, A_SLUG)
-    council = config.load(config_root).app.council
+    council = config.load_council(config_root)
     window = (
         council.shard_timeout_minutes
         - council.shard_preamble_minutes
@@ -283,7 +284,7 @@ def test_the_night_runs_every_hosted_tenant_for_the_date_it_was_given(venue: Pat
     """Pick the work, then settle it, both once a date and both for every tenant."""
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
-    council = config.load(config_root).app.council
+    council = config.load_council(config_root)
 
     session.prepare(council, date=A_DATE, run_id=A_RUN)
     session.settle(
@@ -302,8 +303,8 @@ def test_the_scratch_root_the_workflow_carries_is_the_one_the_council_names() ->
     would mean a unit writing where nothing collects from, and the run would look
     like a tenant that produced nothing.
     """
-    assert session.scratch_root(A_DATE).as_posix().endswith(
-        f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}"
+    assert (
+        session.scratch_root(A_DATE).as_posix().endswith(f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}")
     )
     assert not Path(session.COUNCIL_ROOT_RELPATH).is_absolute()
 
@@ -400,9 +401,7 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
             (EvaluationStep.EVALUATE_WORK_PART, 3),
         ]
     )
-    assert [row.work_part_index for row in ran] == [0, 1, 3], (
-        "the unit that died filed nothing"
-    )
+    assert [row.work_part_index for row in ran] == [0, 1, 3], "the unit that died filed nothing"
     assert {row.work_part_count for row in recorded} == {4}
     assert len(ran) < ran[0].work_part_count, "the pair is what an operator reads as a missing unit"
     assert {row.judge_id for row in recorded} == {A_SLUG}
@@ -604,7 +603,8 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     checks in `test_council_runs_without_a_judge.py` hold the contract exception.
     """
     found = _judge_modules_reached(
-        "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)
+        "idhazh.council.session",
+        ("idhazh.content_similarity_judge", "idhazh.similarity", *JUDGE_STAGE_MODULES),
     )
 
     assert found == [], f"a council verb imports {found}"
@@ -617,7 +617,9 @@ def test_the_router_no_longer_carries_a_judges_stage() -> None:
     spelled in the router's own tuple, which is how the four judge verbs
     survived the first cut. Both halves are held here.
     """
-    found = _judge_modules_reached("idhazh.cli", JUDGE_STAGE_MODULES)
+    found = _judge_modules_reached(
+        "idhazh.cli", ("idhazh.content_similarity_judge", *JUDGE_STAGE_MODULES)
+    )
 
     assert found == [], f"the router still imports {found}"
     assert not [verb for verb in cli.STAGES if verb.startswith("judge")]
