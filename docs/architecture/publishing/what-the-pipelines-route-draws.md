@@ -3,8 +3,8 @@
 **Last Updated**: 2026-10-11
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
-This page holds three of its panels - where a run's time went, what one item cost
-the model, and extraction. Chart drawing has its own page,
+This page holds its native stage and cost readings and its private run figures.
+Chart drawing has its own page,
 [how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md](how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md),
 and the feed and source panels belong to Voices
 ([who-supplied-the-day-and-which-feeds-failed.md](who-supplied-the-day-and-which-feeds-failed.md)).
@@ -26,7 +26,7 @@ The browser uses the declared queries in `console/queries/pipelines.ts` and the
 shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Failure
 mix, failed rules, item time split, fixed-reference work, stage timings, model
 cost, newest-run timeline and stated article ages read `item-health`. The
-extraction checker separately reads `summary-quality-evals`. It is not a ledger
+recorded extraction flags separately read `summary-quality-evals`. It is not a ledger
 named `scores`. Neither route load nor the browser reads telemetry CSV,
 `run-timeline`, `span-rollup` or a month inventory for these panels.
 
@@ -53,13 +53,16 @@ percentages divide failed rows by recorded rows, since the declared slice carrie
 no article identity. Private payload shrinkage is a signed reading, not a zero
 bar. No unavailable value is filled with zero to get a gate through.
 
-The extractor keeps the newest boolean suspicion for each distinct article;
-null cells cannot replace a reading, and conflicting booleans on its latest
-measured day stay unknown in any row order. This does not certify evaluator
-selection: the declared query has no evaluator name/version fields, and the
-current EvalRow gives an unrun extraction instrument a false default. A named
-instrument filter requires a separately approved query/record contract; this
-candidate must not claim that null handling proves the filter.
+The flag count keeps the newest recorded boolean for each distinct article;
+null cells cannot replace a flag, and conflicting booleans on its latest
+recorded day stay unknown in any row order. Counts remain exactly the recorded
+counts, not claims that a checker ran. The panel states that checker identity
+and version are unavailable. The declared query has only date, article key and
+the flag. `EvalRow` defaults the flag to false, and `work.py`'s `to_eval_row`
+does not pass an extraction measurement. No contract guarantees that other
+evaluators leave null. A zero count therefore says only that no recorded flag
+is true. Proving instrument selection needs an owner-designed provenance
+producer and declared query contract; this route invents neither.
 Each native half states its returned dates beside the private published figures.
 Private payload-size rates require the immediately preceding manifest and the
 current manifest to both record a finite size; a missing size is not zero.
@@ -453,15 +456,15 @@ as two rules.
 example of a panel that serves *is it working* and *what is broken* at once
 rather than choosing.
 
-The **verdict half** is four cards: articles the reading found enough figures of
-one kind in, the share of published chartable articles that went out with no
-chart, the share of articles whose every fact still cuts its own characters, and
-the facts kept over the window. Four levels, covering the whole reading. They
-carry `data-extraction-question="is it working"`.
+The **verdict half** counts distinct articles, found facts, non-prose articles
+and contaminated articles from the native extraction slice. A ranked list
+counts element classes and rows that would not re-slice. Separately, the
+published-chart share comes from private day records. Recorded boolean flags
+have their own source state and date range; neither a flag nor its false
+default establishes which checker ran.
 
-The **break half** is one chart, `Whether the yield is falling`, carrying
-`data-extraction-question="what is broken"`. Two of the cards' own lines tell the
-operator to read the direction rather than the level, so the panel plots one
+The **break half** is one private chart, `Whether the yield is falling`.
+The panel plots one
 point a day: articles the reading found enough figures in, against published
 articles carrying a chart. That pair is the discrimination the panel exists for -
 the planner stopping and the extractor stopping look identical in the published

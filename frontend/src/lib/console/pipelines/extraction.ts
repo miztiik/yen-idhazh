@@ -1,4 +1,4 @@
-/** What did native extraction find, and how many distinct checked articles were suspect? */
+/** What did native extraction find, and how many distinct articles carry recorded flags? */
 import type { Row } from '../../data/ledger';
 import { finiteCell } from '../rates';
 
@@ -36,7 +36,6 @@ export function nativeExtraction(items: readonly Row[], evaluations: readonly Ro
 			if (previous === undefined) checked.set(row.url_key, { date: '', readings: new Set() });
 			continue;
 		}
-		// Other evaluators leave this cell null; they cannot replace its instrument.
 		if (previous === undefined || date > previous.date) {
 			checked.set(row.url_key, { date, readings: new Set([row.extraction_suspect]) });
 		} else if (date === previous.date) previous.readings.add(row.extraction_suspect);

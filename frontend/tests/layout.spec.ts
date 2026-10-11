@@ -13,7 +13,7 @@
  * Both assertions live in the same test so neither can be satisfied alone.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 
 /** Measured 2026-08-28 on the live site, before this row. */
 const BEFORE_PX = 624;

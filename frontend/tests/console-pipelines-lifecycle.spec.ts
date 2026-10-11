@@ -83,14 +83,16 @@ test('an evaluator still in flight does not hide the loaded extractor or invent 
 	});
 	await page.goto('/console/');
 	const panel = page.locator('[data-eval-panel="extraction"]');
-	await expect(panel.locator('[data-reserved="extraction"]')).toHaveAttribute('data-panel-state', 'ready');
+	await expect(panel.locator('[data-extraction-source="native"]')).toHaveAttribute('data-panel-state', 'ready');
 	await expect(panel.locator('[data-reserved="extraction-suspect"]')).toHaveAttribute('data-panel-state', 'loading');
 	await expect(panel.locator('[data-nothing-fired]')).toHaveCount(0);
 	await expect(panel).toContainText('narrative');
 	release();
 	await settled(page);
-	await expect(panel.locator('[data-reserved="extraction-suspect"]')).toHaveAttribute('data-panel-state', 'ready');
-	await expect(panel.locator('[data-nothing-fired]')).toBeVisible();
+	await expect(panel.locator('[data-extraction-source="flags"]')).toHaveAttribute('data-panel-state', 'ready');
+	await expect(panel.locator('[data-nothing-fired]')).toHaveText(
+		'No recorded extraction flag is true in these days. This does not establish that the extraction checker ran.');
+	await expect(panel).toContainText('of 8 distinct recorded articles; 0 have no boolean flag');
 });
 
 for (const width of [390, 768, 1440]) {

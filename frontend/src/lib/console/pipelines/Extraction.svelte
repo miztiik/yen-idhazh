@@ -30,7 +30,7 @@
 	const noRule = { declined: 'one figure of the window, not a date axis' };
 </script>
 <div data-eval-panel="extraction">
-	<p data-comparison="classes">Chartable articles against narrative and unclassified ones, beside the checker's independent suspicion.</p>
+	<p data-comparison="classes">Chartable articles against narrative and unclassified ones, beside recorded extraction flags.</p>
 	{#if publishedShare.measuredDays === 0}
 		<p data-extraction="none">The build-time published chart-share record is unavailable in this window.</p>
 	{:else}
@@ -38,6 +38,7 @@
 			value={publishedShare.unusedPct === null ? 'Not measured' : `${publishedShare.unusedPct}%`}
 			note="{publishedShare.unused} of {publishedShare.chartablePublished} chartable published articles" />
 	{/if}
+	<div data-extraction-source="native" data-panel-state={nativeState}>
 	<Reserved record panelState={nativeState} height={knobs.chart_height} width={knobs.chart_width} name="extraction" label="Native extraction readings">
 	<div class="auto-grid">
 		<KpiCard label="Articles the extraction record names" value={String(extraction.articles)} rule={noRule} />
@@ -50,15 +51,19 @@
 	<RankedList geometry={classes} caption="Articles by element class and failed re-slice" maxText={classes === null ? 'not measured' : `${classes.max} articles`}
 		unmeasuredNote="No extraction class was measured." emptyNote="No extraction class is recorded." />
 	</Reserved>
-	<Reserved record panelState={evaluationsState} height={knobs.chart_height} width={knobs.chart_width} name="extraction-suspect" label="The checker's extraction readings">
-		<KpiCard label="Checker suspected page furniture" value={extraction.suspect === null ? 'Record unavailable' : String(extraction.suspect)} rule={noRule}
-			note={extraction.checked === null ? 'No evaluator divisor is available' : `of ${extraction.checked} distinct checked articles; ${extraction.suspectUnknown} have no instrument reading`} />
+	</div>
+	<p data-extraction-provenance>The record does not identify which extraction checker ran or its version. A false flag is the record's default, not proof that an extraction check ran.</p>
+	<div data-extraction-source="flags" data-panel-state={evaluationsState}>
+	<Reserved record panelState={evaluationsState} height={knobs.chart_height} width={knobs.chart_width} name="extraction-suspect" label="Recorded extraction flags">
+		<KpiCard label="Recorded flags for page furniture" value={extraction.suspect === null ? 'Record unavailable' : String(extraction.suspect)} rule={noRule}
+			note={extraction.checked === null ? 'No recorded article count is available' : `of ${extraction.checked} distinct recorded articles; ${extraction.suspectUnknown} have no boolean flag`} />
 		{#if extraction.suspect === 0 && extraction.checked !== null && extraction.checked > 0 && extraction.suspectUnknown === 0}
-			<p data-nothing-fired>The checker took no extracted text for page furniture in these recorded days.</p>
+			<p data-nothing-fired>No recorded extraction flag is true in these days. This does not establish that the extraction checker ran.</p>
 		{/if}
-		{#if evaluationsWindow}<p data-extraction-evaluator-record>Checker record: {evaluationsWindow.from} through {evaluationsWindow.to}.</p>{/if}
-		<p>Counts include articles that were not published. Later dated instrument readings replace earlier ones; other evaluators' unmeasured cells do not replace them. Conflicting instrument readings on the latest measured day are unknown. Nothing acts on these numbers.</p>
+		{#if evaluationsWindow}<p data-extraction-evaluator-record>Flag record: {evaluationsWindow.from} through {evaluationsWindow.to}.</p>{/if}
+		<p>Counts include articles that were not published. Later dated boolean flags replace earlier ones; a missing flag does not replace a recorded flag. Conflicting flags on the latest recorded day are unknown. Nothing acts on these numbers.</p>
 	</Reserved>
+	</div>
 	<h3>Whether the yield is falling</h3>
 	<DateSeries {geometry} empty={emptyState('quiet', 'No build-time day carries both yield counts.')}
 		name="extraction-yield" label="Enough figures to draw and articles published with a chart, day by day"

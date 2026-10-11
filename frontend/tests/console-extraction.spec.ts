@@ -23,8 +23,8 @@ test('the panel names its own absence rather than leaving a heading over nothing
 	await expect(panel(page)).toBeVisible();
 	await expect(panel(page).locator('[data-extraction="none"]')).toContainText('unavailable');
 	await expect(panel(page).locator('[data-reserved="extraction"]')).toHaveAttribute('data-panel-state', 'missing');
-	await expect(panel(page).locator('[data-reserved="extraction-suspect"]')).toHaveAttribute('data-panel-state', 'ready');
-	await expect(panel(page)).toContainText('1 have no instrument reading');
+	await expect(panel(page).locator('[data-extraction-source="flags"]')).toHaveAttribute('data-panel-state', 'ready');
+	await expect(panel(page)).toContainText('1 have no boolean flag');
 });
 
 test('a panel with no private record draws no trend and no empty axis', async ({ page }) => {
@@ -53,7 +53,7 @@ test('the section follows the window control the rest of the page follows', asyn
 		await settled(page);
 		await expect(page.locator('[data-windowed="extraction"]')).toHaveAttribute('data-window-days', String(days));
 		await expect(panel(page).locator('[data-extraction-record]')).toHaveText(`Extraction record: ${THROUGH} through ${THROUGH}.`);
-		await expect(panel(page).locator('[data-extraction-evaluator-record]')).toHaveText(`Checker record: ${THROUGH} through ${THROUGH}.`);
+		await expect(panel(page).locator('[data-extraction-evaluator-record]')).toHaveText(`Flag record: ${THROUGH} through ${THROUGH}.`);
 	}
 });
 
@@ -77,6 +77,17 @@ test('the page reports no error and no missing file while the panel renders', as
 	expect(missing).toEqual([]);
 });
 
+test('recorded flags keep their exact counts without certifying a checker', async ({ page }) => {
+	await page.goto('/console/');
+	await settled(page);
+	await expect(panel(page).getByText('Recorded flags for page furniture', { exact: true })).toBeVisible();
+	await expect(panel(page)).toContainText('of 2 distinct recorded articles; 1 have no boolean flag');
+	await expect(panel(page).locator('[data-extraction-provenance]')).toHaveText(
+		"The record does not identify which extraction checker ran or its version. A false flag is the record's default, not proof that an extraction check ran.");
+	await expect(panel(page).locator('[data-nothing-fired]')).toHaveCount(0);
+	await expect(panel(page)).not.toContainText("other evaluators' unmeasured cells");
+});
+
 for (const state of ['missing', 'unreachable', 'quiet'] as const) {
 	test(`the ${state} evaluator does not collapse a loaded extractor into null`, async ({ page }) => {
 		await page.route('**/state/compact/summary-quality-evals/index/*.json', async (route) => {
@@ -89,7 +100,7 @@ for (const state of ['missing', 'unreachable', 'quiet'] as const) {
 		});
 		await page.goto('/console/');
 		await settled(page);
-		await expect(panel(page).locator('[data-reserved="extraction"]')).toHaveAttribute('data-panel-state', 'ready');
+		await expect(panel(page).locator('[data-extraction-source="native"]')).toHaveAttribute('data-panel-state', 'ready');
 		await expect(panel(page).locator('[data-reserved="extraction-suspect"]')).toHaveAttribute('data-panel-state', state);
 		await expect(panel(page)).toContainText('comparative');
 		await expect(panel(page).locator('[data-nothing-fired]')).toHaveCount(0);

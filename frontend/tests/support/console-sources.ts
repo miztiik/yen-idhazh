@@ -130,7 +130,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'consecutive-days.ts', 'console-panels.ts', 'console-sources.ts', 'console-widths.ts', 'day-drawings.ts',
 		'day-loader.ts', 'day-ready.ts', 'explorer-answer.ts', 'in-zone.ts', 'judgement-route.ts',
 		'ledger-lifecycle.ts', 'machine-record-state.ts', 'machine-rows.ts', 'model-swap.ts',
-		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'published-site.ts', 'published.ts',
+		'month-shard.ts', 'panel-gates.ts', 'panel-tab.ts', 'pipelines-ledgers.ts', 'published-site.ts', 'published.ts',
 		'range-host.ts', 'reduction-input.ts', 'served-telemetry.ts', 'server-render.ts', 'span-said.ts',
 		'telemetry-row.ts', 'views.ts'
 	],

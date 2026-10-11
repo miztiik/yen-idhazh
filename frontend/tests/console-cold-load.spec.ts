@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page, type Request } from './support/browser';
+import { expect, test, type BrowserContext, type Page, type Request } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Manifest } from 'vite';

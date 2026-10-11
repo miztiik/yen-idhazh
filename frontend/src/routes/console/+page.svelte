@@ -36,6 +36,18 @@
 		queries.stageTimingsQuery, queries.itemCostQuery, queries.runTimelineQuery, queries.extractionQuery,
 		queries.extractionScoresQuery, queries.articleAgeQuery
 	];
+	const readers: Record<string, (range: Range) => Promise<SliceResult>> = {
+		[queries.failureMixQuery.name]: (range) => sliceOnce(queries.failureMixQuery, range),
+		[queries.failedRuleQuery.name]: (range) => sliceOnce(queries.failedRuleQuery, range),
+		[queries.itemTimeSplitQuery.name]: (range) => sliceOnce(queries.itemTimeSplitQuery, range),
+		[queries.slowerOnSameWorkQuery.name]: (range) => sliceOnce(queries.slowerOnSameWorkQuery, range),
+		[queries.stageTimingsQuery.name]: (range) => sliceOnce(queries.stageTimingsQuery, range),
+		[queries.itemCostQuery.name]: (range) => sliceOnce(queries.itemCostQuery, range),
+		[queries.runTimelineQuery.name]: (range) => sliceOnce(queries.runTimelineQuery, range),
+		[queries.extractionQuery.name]: (range) => sliceOnce(queries.extractionQuery, range),
+		[queries.extractionScoresQuery.name]: (range) => sliceOnce(queries.extractionScoresQuery, range),
+		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
+	};
 	type Answer = SliceResult | LedgerReach | 'pending';
 	const WINDOW_KEY = 'idhazh:console-window';
 	let windowDays = $state(knobs.default_window_days);
@@ -68,7 +80,7 @@
 		reach = nextReach;
 		await Promise.all(selected.map(async (query) => {
 			const range = rangeFor(query, days, nextReach, knobs.window_presets);
-			const answer = 'from' in range ? await sliceOnce(query, range) : range;
+			const answer = 'from' in range ? await readers[query.name](range) : range;
 			if (ticket === revision) {
 				if ('from' in range) ranges = { ...ranges, [query.name]: range };
 				answers = { ...answers, [query.name]: answer };
