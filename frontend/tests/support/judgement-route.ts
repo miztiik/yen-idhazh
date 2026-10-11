@@ -5,9 +5,10 @@
  * walk expands the inputs. Cache, output and preview remain private.
  */
 import { execFileSync, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
 	appendFileSync, copyFileSync, mkdirSync, readFileSync,
-	realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync
+	rmSync, symlinkSync, unlinkSync, writeFileSync
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -203,12 +204,12 @@ export async function judgementRoute(
 	close: () => Promise<void>;
 }> {
 	mkdirSync(report, { recursive: true });
-	const root = join(realpathSync.native(report), 'isolated-route');
+	const root = join(FRONTEND, '..', `.tmp_judgement-${randomUUID()}`);
 	mkdirSync(root, { recursive: true });
 	const links: string[] = [];
 	let child: ReturnType<typeof spawn> | undefined;
 	const close = async () => {
-		if (child !== undefined && child.exitCode === null) {
+		if (child !== undefined && child.pid !== undefined && child.exitCode === null) {
 			await new Promise<void>((done) => {
 				const timer = setTimeout(() => { child?.kill(); }, 10_000);
 				child?.once('exit', () => { clearTimeout(timer); done(); });

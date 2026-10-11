@@ -20,8 +20,9 @@ INVOCATION_DEADLINE: ContextVar[float | None] = ContextVar("publication-deadline
 class Repository:
     """All Git calls are literal and lazy fetching is opt-in."""
 
-    def __init__(self, repo: Path) -> None:
+    def __init__(self, repo: Path, *, git_dir: Path | None = None) -> None:
         self.repo = repo
+        self.git_dir = git_dir
         self._entries: dict[tuple[str, str], Entry | None] = {}
         self.deadline: float | None = None
 
@@ -77,7 +78,12 @@ class Repository:
         if remaining is not None and remaining <= 0:
             raise RuntimeError("publication deadline expired before Git operation")
         return subprocess.run(
-            ["git", *(("--literal-pathspecs",) if "check-ignore" not in args else ()), *args],
+            [
+                "git",
+                *(("--git-dir", str(self.git_dir)) if self.git_dir is not None else ()),
+                *(("--literal-pathspecs",) if "check-ignore" not in args else ()),
+                *args,
+            ],
             input=data,
             cwd=self.repo,
             capture_output=True,

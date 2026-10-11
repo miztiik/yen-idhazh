@@ -150,11 +150,15 @@ def test_a_sealed_row_carrying_a_column_the_contract_renamed_is_still_named_stal
 
 def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CLAUDE.md section 2, at the one boundary this error crosses."""
     payload = _a_decision()
     payload["version"] = "2026-01-01"
     payload["routed_at"] = payload.pop("decided_at")
+    working = tmp_path / "working"
+    working.mkdir()
+    monkeypatch.chdir(working)
 
     with pytest.raises(StalePayloadError) as raised:
         VisualDecision.read(_staged(tmp_path, payload, "world-01.visual.json"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import threading
 import time
 from collections.abc import Iterable, Iterator
@@ -49,6 +50,30 @@ CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def fixture_git_ceiling() -> Iterator[None]:
+    """Git below the real checkout must never discover its parent repository."""
+    previous = os.environ.get("GIT_CEILING_DIRECTORIES")
+    os.environ["GIT_CEILING_DIRECTORIES"] = os.pathsep.join(
+        filter(None, [previous, str(REPO_ROOT)])
+    )
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("GIT_CEILING_DIRECTORIES", None)
+        else:
+            os.environ["GIT_CEILING_DIRECTORIES"] = previous
+
+
+@pytest.fixture
+def tmp_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Short generated names leave room for actual Git and ledger fixture paths."""
+    return tmp_path_factory.mktemp("t")
+
+
 #: The model file `config/idhazh.json` points at. A test that stands a recorded
 #: server up serves this model's renderings, because that is the model the
 #: settings it loads name.

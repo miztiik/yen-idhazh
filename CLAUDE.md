@@ -200,7 +200,7 @@ When in doubt, choose the higher level. Counting files is not the test: four fil
 - **Commit only intended changes.** Stage explicit paths and verify them with `git diff --cached --name-only`. Keep commits small and reversible. Branch names and commit messages describe the change.
 - **Preserve published history.** Update pushed branches by merging, not rebasing or amending. Merge only after required checks pass.
 - **Verify before cleanup.** Confirm the PR is merged and no local work will be lost. Delete its remote branch, remove only your clean worktree, and prune its obsolete local branch. A `: gone` marker alone does not prove a merge.
-- **Use one commit identity:** `miztiik <miztiik@users.noreply.github.com>`. No attribution tags, including `Co-authored-by` trailers. [.mailmap](.mailmap) normalizes GitHub's squash-merge identity.
+- **Use one commit identity:** `miztiik <miztiik@users.noreply.github.com>`. No attribution tags, except the archive delivery's user ruling of 2026-10-10: local archive commits include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`. [.mailmap](.mailmap) normalizes GitHub's squash-merge identity.
 
 Avoid `git stash`, `git reset --hard`, `git clean -fd`, broad checkout/restore, `git add .`, `git add -A`, force pushes and amendments to pushed commits.
 

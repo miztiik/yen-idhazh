@@ -261,7 +261,9 @@ python backend\utilities\choose_pairs_to_judge.py `
   --total 1000 --duplicate-share 0.10 --seed 20261008 --reach-days 1
 ```
 
-The export is retained locally, not in Git. The committed 935-row sheet contains
+The original export was retained locally. The new, local-only archive contract
+freezes its exact bytes in [`../story-dataset-1/articles.jsonl`](../story-dataset-1/articles.jsonl).
+This is not publication approval. The committed 935-row sheet contains
 the complete article text needed to judge it; the cached encoder input and
 report preserve the scoring inputs and their hashes.
 
@@ -545,8 +547,9 @@ encoding to test other cutoffs or compute additional metrics.
 
 The current `encoder-comparison.yml` still reads the 10,675-summary proxy input,
 and the evaluator refuses vectors in a different article order. A compact
-judged-input runner and matching order/hash are the next wiring change; neither
-has been silently substituted for the completed run. A prompt/context or
+selected-input encoder and order/hash validation now exist in the local
+full-archive pipeline below. They do not replace the old evaluator or change its
+completed run. A prompt/context or
 weight change needs new vectors for that changed variant, but only for its
 selected inputs. A learned cutoff or representation must be chosen without
 tuning on the final held-out sample.
@@ -747,3 +750,402 @@ run continues. A gated model, a renamed one, or one needing a library version
 the runner does not have all land there. That is a finding about the model's
 availability, not about its quality, and the row says so rather than going
 missing.
+
+## Local full-archive dataset contract and run plan
+
+The new [`../story-dataset-1/manifest.json`](../story-dataset-1/manifest.json)
+freezes all 15,122 URL-unique rows, 14,371,193 bytes, without rewriting the
+source. It also pins the old 935-row frame, verdicts and encoder input hashes.
+The original regression labels retain their old binary meaning. They are not
+new hierarchy labels. No old artifact, production encoder or workflow changes.
+
+[`../../config/story-dataset.json`](../../config/story-dataset.json) is the
+machine-readable run plan. Its stages and approved meanings are durable.
+Batch size 20, topK 10, block size 32, random audit fraction 0.01, Bernoulli pair
+probability 0.00001, split seed and development fraction are **provisional
+engineering parameters**, not quality guarantees, labeling budgets, pair quotas
+or owner-approved acceptance targets. Acceptance remains `unapproved`.
+
+### Identity and label meaning
+
+Topic > Event > Story is the hierarchy. Event is the broader parent: presidential
+election > 2024 presidential election > TV debate 1. Each article can have
+several supported paths, all equal. A specific occurrence is recorded below a
+Story but is not the definition of an Event. Whole-article duplicate coverage
+is a separate pair judgment. Shared-only-some coverage is partial overlap.
+
+The [approved B1-B10 source artifact](../story-dataset-1/approved-examples.json)
+is preserved byte-for-byte, including its earlier discussion status. The
+owner's later approval is recorded in
+[seed-catalog-review.json](../story-dataset-1/seed-catalog-review.json). A1-A5
+were not used. B10's explanatory sibling-Story boundary remains unresolved;
+its earlier recorded source findings do not become a fabricated adjudication
+or a fabricated check timestamp. Fifty-three explicit seed identities are
+examples, not a closed ontology and not twenty completed article annotations.
+
+An article ID is `a-` plus SHA-256 of its exact validated URL. Its input hash
+is SHA-256 of canonical JSON for the complete validated source row, with LF.
+Source bytes themselves are never normalized. Catalog IDs hash an explicitly
+reviewed global identity key and kind, not an article title or batch filename.
+Worker-local `proposal:<slug>` references are scoped by the batch hash.
+Identical display names are never automatically merged.
+
+### Worker request and answer
+
+From the preserved `archive-story-dataset` worktree root, use the existing Python
+with the project's development dependencies: Pydantic, NumPy, SciPy and
+scikit-learn. On this machine `C:\Python314\python.exe` has them; the main
+checkout's `.venv` lacks scikit-learn. Installing only NumPy and Pydantic is not
+enough because the CLI also imports the offline evaluation modules. A fresh
+environment needs the project's existing `.[dev]` extra, not new tools.
+
+```powershell
+Set-Location 'C:\Users\kumarsnaveen\Downloads\NawiN\personal\gitrepos\yen-idhazh.worktrees\archive-story-dataset'
+$Python = 'C:\Python314\python.exe'
+$env:PYTHONPATH = "$PWD\backend"
+$D = 'corpus\story-dataset-1'
+& $Python -m idhazh.story_dataset.cli status
+& $Python -m idhazh.story_dataset.cli schema --output "$D\schemas"
+& $Python -m idhazh.story_dataset.cli export --output "$D\workers\primary-0002.json"
+```
+
+The first unanswered request is already
+[`workers/primary-0001.json`](../story-dataset-1/workers/primary-0001.json).
+Its `.catalog.json` sidecar contains shared definitions. The evidence view
+contains the exact full summary, title, URL, domain, item ID, first day,
+published instant, nullable original time-source value and input hash.
+It contains no candidate group or encoder score. Source text is untrusted data.
+All instants newly written by the pipeline use UTC.
+
+Give a fresh `gpt-6.1-sol` worker that request, sidecar and
+[`schemas/WorkerSubmission.json`](../story-dataset-1/schemas/WorkerSubmission.json).
+Ask it to return one local JSON artifact, not to write the catalog or repository.
+It must answer **every** requested article ID. This is the answer shape; the
+angle-bracket fields below must be copied from the request, not invented:
+
+```json
+{
+  "batch_id": "<request batch_id>",
+  "source_sha256": "<request source_sha256>",
+  "catalog_revision": "<request catalog_revision>",
+  "label_source": "model",
+  "labeler": "gpt-6.1-sol",
+  "worker_id": "primary-0001-sol",
+  "operation": "primary",
+  "independent_of": [],
+  "proposals": [],
+  "decisions": {
+    "<article_id>": {
+      "input_sha256": "<that article input_sha256>",
+      "state": "annotated",
+      "memberships": [{
+        "topic": "<canonical topic ID or proposal ref>",
+        "event": "<linked event ID or proposal ref>",
+        "story": "<linked story ID or proposal ref>",
+        "occurrence_refs": [],
+        "evidence": "<reasoned support from this article>"
+      }],
+      "reason": "<reasoned full-article decision>",
+      "unresolved_reasons": [],
+      "review_flags": [],
+      "source_checks": [],
+      "summary_evidence": "full-stored-summary"
+    }
+  },
+  "supersedes": {}
+}
+```
+
+Repeat each map entry for the complete request. For ambiguity, use
+`state: "unresolved"` and nonempty `unresolved_reasons`; supported paths can
+remain alongside uncertainty. Read the full summary first. Consult original
+sources when ambiguous or conflicting. Record real source findings and check
+instants; necessary inaccessible evidence remains unresolved. Never claim
+blank source checks prove the evidence is complete or that a model is human.
+
+Unseen identity proposals have exactly `ref`, `kind`, `name`, `parent_refs`,
+`definition`, and `evidence_article_ids`. Kinds are `topic`, `event`, `story`,
+`occurrence`. Topic parents are empty; Event parents are Topics; Story parents
+are Events; occurrence parents are Stories. A proposed membership is imported
+as **catalog pending**, not as a qualified global label.
+
+```powershell
+& $Python -m idhazh.story_dataset.cli import --input '.\worker-answer.json'
+& $Python -m idhazh.story_dataset.cli catalog --output "$D\catalog-current.json"
+& $Python -m idhazh.story_dataset.cli catalog-review --input '.\catalog-review.json'
+& $Python -m idhazh.story_dataset.cli status
+```
+
+A `CatalogReview` must name the exact `expected_revision`, model reviewer and
+reason. New entities carry a reviewed `identity_key`, definition, typed parent
+IDs and supporting article IDs. Use `identity_id(kind, identity_key)` from
+`idhazh.story_dataset.catalog` to compute IDs. `proposal_resolutions` maps
+`<batch_id>:proposal:<slug>` to those IDs. Explicit aliases preserve old entities
+and reviewed history. Unknown parents, cycles, broken paths and stale revisions
+are refused. No string-name equality or majority vote reconciles identities.
+Catalog changes must preserve both primary and independent-review membership
+paths; a proposal cannot resolve to a Story under an unrelated Event.
+
+Each import is one SQLite transaction in the **local ignored**
+`state.sqlite3`; previous record payloads are immutable. An identical submission
+resumes with zero added rows. Missing/foreign IDs, input-hash changes, fake human
+provenance and unsupported parent links fail the whole batch. A correction needs
+a fresh explicit-ID export and exact `correction_targets` copied to
+`supersedes`. It appends a record, never edits an earlier answer. Keep the SQLite
+file out of Git. Commit immutable typed checkpoints instead; `history --output <dir>`
+also exports typed JSONL history, but does not by itself freeze a coherent multi-file
+epoch. Do not push these commits.
+
+`checkpoint --output <new-directory>` reads the active database in one consistent
+read transaction. It exports exact typed history rows in sequence order, worker
+batches, submission metadata and proposals, current catalogue, active partition
+with its exposure lineage, and portable vector manifest. Submission decisions
+are reconstructed from the history and checked
+against their original hashes on restore. Catalogue revisions are rebuilt from
+review records and checked against the stored snapshots before export. The
+hash-and-size manifest is written last; a directory without it is not complete.
+
+`restore-checkpoint --input <directory>` requires an empty local index and the
+same frozen source and policy. It restores records and worker state atomically.
+The approved archive and example captures have exact-byte Git attributes:
+their original CRLF bytes are evidence, not authored text to normalize.
+It does not copy raw source HTML, model binaries, vector arrays or the large
+pair frame. Those omissions remain named by their immutable revisions in the
+checkpoint; missing frame settings are not activated. Supply the exact portable
+vector evidence at the dataset-relative manifest paths before vector scoring,
+and regenerate or explicitly recover the exact pair frame before pair-frame
+dependent work. Status and annotation resume do not require those large files.
+Confirmation exposure stays locked after restore even when its development
+configuration is an omitted artifact. Both prediction and evaluation of an
+external confirmation run record exposure before returning label-based metrics.
+Partition revisions keep each article's original development or confirmation
+exposure through temporary uncertainty, so later corrections cannot redraw it.
+Neighbor evidence with selected vector extensions records both endpoint file
+hashes; a mixed-file comparison has their canonical combined digest.
+
+Automatic exports reserve disjoint pending article batches. An interrupted
+worker resumes the **same** input:
+
+```powershell
+& $Python -m idhazh.story_dataset.cli resume `
+  --batch-id '<original batch_id>' --output "$D\workers\resumed.json"
+& $Python -m idhazh.story_dataset.cli export --operation review `
+  --output "$D\workers\review-0001.json"
+```
+
+Reviews select flagged, unresolved or catalog-pending rows plus a reproducible
+hash-based random audit of the rest. They hide the first answer and include
+opaque record hashes and primary worker IDs only. A different worker must copy
+`independent_of_workers` to its answer's `independent_of`. Review imports do not
+overwrite primary labels. Status reports disagreements and pending resolutions;
+agreement is not accuracy. No mandatory second pass or invented acceptance
+bound is imposed.
+
+### Candidates, coverage and fresh partitions
+
+The probability stream independently samples the declared population of
+**114,329,881 unordered distinct archive pairs**. Geometric skips give each pair
+the configured Bernoulli inclusion probability without building an all-pairs
+list. The challenge stream separately records metadata proposals and the union
+of ranked neighbors from all four models. Each model retains its own cosine,
+rank, query and vector hash. Cosines are never averaged. Rank disagreement
+means actual model-rank disagreement, not the old lexical sampling-group name.
+
+Metadata discovery considers uncached articles too. `pair-add` accepts typed
+source-backed extended-time, paraphrase or follow-up proposals without making
+labels. Source-backed tags require source-check evidence. A pair can be in both
+streams; its identity is one pair but its acquisitions remain separately
+reported. Do not concatenate them into a production-frequency estimator.
+
+```powershell
+& $Python -m idhazh.story_dataset.cli pairs `
+  --queries "$D\approved-example-ids.json" --output "$D\pairs-example-neighbors.json"
+& $Python -m idhazh.story_dataset.cli pair-export `
+  --frame "$D\pairs-example-neighbors.json" --output "$D\workers\pairs-0001.json"
+& $Python -m idhazh.story_dataset.cli pair-import --input '.\pair-worker-answer.json'
+& $Python -m idhazh.story_dataset.cli pair-export --operation review `
+  --frame "$D\pairs-example-neighbors.json" --output "$D\workers\pair-review-0001.json"
+```
+
+Omit `--queries` for full cached-query discovery, or use `--metadata-only` to
+avoid vectors. Query IDs are a cost/discovery choice, not a labeling budget.
+Pair workers see both full evidence rows and independently label Topic, Event,
+Story, occurrence and coverage. Canonical article memberships do not supply
+automatic pair answers. Pair review views are independent and blind too.
+Pair export serializes, validates and hashes one canonical frame snapshot before
+taking SQLite's write lock. A registered frame must match those exact bytes; it
+is not serialized or inserted again. Frame and batch IDs keep their original
+meaning. Selection and reservations still share one transaction, and corrupt or
+conflicting stored bytes fail closed.
+
+The four saved caches contain 10,675 URLs. **Three summaries differ from the
+full archive source**, so only 10,672 rows are currently text-valid. The 4,447
+uncached rows and three conflicts remain missing inputs, never zero-score
+negatives. This does not establish full semantic retrieval coverage.
+[`vectors.json`](../story-dataset-1/vectors.json) pins order, text, numeric shape,
+nonzero finite rows, each file hash, reading hash and encoding settings.
+
+### Repair the saved registration after a worktree move
+
+The original `vectors.json` and SQLite registration used absolute paths. Three
+paths still name the old worktree. Do not edit that JSON or a historical SQLite
+payload. `relocate-vectors` creates a new typed `VectorSnapshot`, with the prior
+registration hash in `previous_revision`. It checks every supplied location
+against the exact old file hash before copying anything. It copies input,
+readings, config, vectors and any extensions once into immutable, hash-named
+`vector-evidence/` files beneath the dataset root. Persisted paths are relative
+POSIX paths. Later reads resolve them against `--root`, not the working directory.
+Move that whole dataset root together; the old session cache is no longer needed
+by the new snapshot. No model runs and no settings, row order, text hashes or
+source identities change. Copying cached bytes costs disk space, not encoding.
+
+For the current saved registration, run this once after the active dataset
+worker has finished its write. Use the `$Python`, `$D` and worktree above:
+
+```powershell
+$Legacy = Get-Content "$D\vectors.json" -Raw | ConvertFrom-Json
+& $Python -m idhazh.story_dataset.cli relocate-vectors `
+  --expected-revision '3ddd0f15e7d1f49af9bdb0691b5009b35c4157096e08daca186fc70ee4bd93d9' `
+  --file "$($Legacy.input_sha256)=$PWD\corpus\encoder-comparison-1\pairs.json" `
+  --file "$($Legacy.readings_sha256)=$PWD\corpus\encoder-comparison-1\readings\encoders.json" `
+  --file "$($Legacy.encoder_config_sha256)=$PWD\config\encoder-comparison.json" `
+  --output "$D\vectors-relocated-0001.json"
+& $Python -m idhazh.story_dataset.cli pairs `
+  --queries "$D\approved-example-ids.json" --output "$D\pairs-relocated-0001.json"
+```
+
+The existing external vector files are still at their saved locations, so this
+repair needs only the three checkout mappings. If an external cache also moves,
+add `--file "<its file_sha256>=<its new path>"` for each affected cache or
+extension. Unknown hashes, changed bytes, a stale expected revision or an
+existing output with different bytes are refused. There is no basename search
+or automatic path substitution. The old JSON and registration remain intact.
+`status` reports coverage from registered identities; `pairs` checks all evidence
+hashes before using the vectors. A different active revision needs that revision's
+evidence and expected hash, not the historical hash above.
+
+New `vectors --vector-root <cache-root> --output <new-file.json>` registrations
+produce portable snapshots immediately. They refuse to replace an existing
+registration; use the explicit relocation command instead. Extension imports
+also require a portable base and retain their input and model checks.
+
+`encode --ids <bounded-ID-array.json> --model <slug> --output <file.npy>`
+can fill selected missing inputs on CPU, one model at a time, using offline
+cached weights and pinned original settings. `vector-import` validates its
+typed extension before adding coverage. Unpinned control revisions are refused.
+The installed ST 5.2.2 / Transformers 5.17 runtime cannot load EmbeddingGemma-2,
+which requires ST >= 6.1, Transformers >= 5.19 and compatible CPU image
+dependencies. That cost remains visible; no substitute model, TLS bypass,
+GPU, service or whole-archive re-encode is performed.
+
+When the historical MiniLM or GTE revision is unknown, a current official pin
+is **not** proof of the historical weights. The separate
+`idhazh.story_dataset.candidate_cli` path registers a **new** immutable
+`PinnedEncoderCandidate` from the exact saved reading and a dated, hash-checked
+official model metadata capture. Its distinct slug preserves the unknown old
+revision; it never changes the old reading or activates an old vector manifest.
+Its `CandidateVectorUnit` and `CandidateVectorState` contain only independently
+encoded new rows. Old control arrays cannot supply their coverage.
+
+```powershell
+& $Python -m idhazh.story_dataset.candidate_cli `
+  --source-root "$D" --root '<new candidate evidence root>' register `
+  --vectors '<exact portable snapshot.json>' --legacy-root "$D" `
+  --slug '<old control slug>' --pin '<official immutable revision>' `
+  --metadata '<captured official API response.json>' --check '<SourceCheck.json>'
+& $EncodingPython -m idhazh.story_dataset.candidate_cli `
+  --source-root "$D" --root '<new candidate evidence root>' encode `
+  --candidate '<hash-named candidate.json>' --ids '<bounded IDs.json>' `
+  --output '<new unit.npy>'
+& $Python -m idhazh.story_dataset.candidate_cli `
+  --source-root "$D" --root '<new candidate evidence root>' import `
+  --candidate '<hash-named candidate.json>' --unit '<unit.json>' `
+  --previous '<previous immutable candidate state.json>'
+```
+
+Omit `--previous` for the first unit only. Registration retains original options,
+prefix, dimensions, symmetric query/candidate roles, 256-token truncation and
+float32 arrays. Encoding requires a checked isolated ST >= 6.1,
+Transformers >= 5.19, Pillow and matching CPU torch/torchvision environment;
+it remains offline-only after exact official model acquisition. Candidate state
+imports copy vectors into hash-named evidence and recheck retained unit bytes.
+The new control must encode every article of the eventual common evaluation
+universe itself; combining it with unknown historical rows is prohibited.
+
+Fix the split before tuning:
+
+```powershell
+& $Python -m idhazh.story_dataset.cli split --output "$D\partition-0001.json"
+& $Python -m idhazh.story_dataset.cli evaluate --output "$D\evaluation-blocked.json"
+```
+
+Every supported Event membership joins its article component; multi-Event
+articles connect all their Events. A known Event still connects its article
+when another membership, parent support or occurrence is unresolved. The whole
+connected component remains unknown-membership quarantined. Regression exposure
+also persists on exposed peers after a later correction removes the original
+link, and survives checkpoint replay. `split --frame <named-link-frame.json>` also
+joins every supplied link, including uncertain ones. Supply deliberate identity
+links, never the broad discovery frame: discovery is not identity evidence.
+Articles exposed in the old 935 frame, and their new linked components,
+are quarantined from fresh confirmation. Unqualified rows are not silently
+excluded. A later edge crossing development and confirmation quarantines the
+whole component, never redraws a favorable split. Provisional unknown-membership
+quarantine can clear after evidence is completed; exposure/crossing quarantine
+cannot. A changed annotation/catalog snapshot blocks old evaluations.
+
+`freeze-development` registers a typed `DevelopmentConfig` against the fixed
+partition before confirmation is opened. `predict --config ... --ids ...
+--model ... --partition ... --relation ...` produces actual saved-vector
+article-neighbor rankings. With `--cluster`, it produces a development-frozen
+cosine connected-component baseline, never chooses a cluster count from test
+labels. These predictions are not automatic quality claims.
+
+Retrieval evaluation requires independently judged relations for **every**
+query/candidate pair in the declared candidate universe, plus positives and
+negatives. Unjudged/unresolved pairs are not negatives. Precision@k, recall@k
+and binary NDCG@k are reported only on that completely judged universe.
+Topic/Event/Story cluster evaluation uses overlapping pairwise co-membership
+precision/recall/F1, not ordinary ARI. Pairwise comparison supports equal
+multiple memberships; it is not a chance-adjusted Omega score. Reference:
+Collins and Dent, 1988, *Omega: a general formulation of the Rand Index of
+cluster recovery suitable for non-disjoint solutions*. No all-positive toy
+universe can return a falsely perfect accepted evaluation.
+
+### Validation and current scope
+
+The named real fixture is
+`backend/tests/fixtures/story-dataset/approved.json`, with twenty actual approved
+source rows and four byte-checked slices of the real saved vectors. Tests
+exercise freeze changes, foreign IDs, all-or-nothing import, pending proposals,
+catalog review, equal memberships, partial coverage, B10 uncertainty, unchanged
+old record bytes, resume, disjoint requests, independent blind reviews, known
+probability, rank union, vector conflicts, split crossings, unjudged qrels and
+overlapping metrics. Relocation tests preserve old payload bytes, vector bytes,
+settings, text/order identities, labels and ranks. They move a generated dataset,
+remove its old cache, then reopen and use its saved vectors. Hash changes,
+nonportable paths, stale registrations and immutable-output changes fail closed.
+No test downloads a model or calls a label service.
+
+Run `status` for current annotation counts; primary workers may be active.
+Seed definitions and passing fixture tests are not full-archive annotation or
+evaluation. Status distinguishes
+visited, annotated, unresolved, catalog-pending, reviewed and unvisited rows.
+All 15,122 rows must eventually have a qualified annotation or a reasoned
+unresolved state. Quality acceptance, audit sufficiency and a meaningful minimum
+encoder difference are not yet owner-approved.
+
+```mermaid
+flowchart TD
+  F[Exact local source freeze] --> W[Blind resumable primary batches]
+  W --> P[Unresolved or proposed identities]
+  P --> C[Explicit catalog review and aliases]
+  C --> R[Independent targeted and random review]
+  F --> A[Probability stream plus separate challenge acquisitions]
+  A --> J[Independent pair evidence judgments]
+  C --> S[Fresh Event and article components]
+  J --> S
+  S --> D[Freeze development settings]
+  D --> E[Complete qrels and overlapping-membership pilot evaluation]
+  E --> B[Report blockers and unapproved acceptance]
+```

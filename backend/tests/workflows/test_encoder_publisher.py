@@ -109,7 +109,7 @@ def test_complete_selected_comparison_lands_without_foreign_files_or_attribution
     assert result.status is Status.LANDED, result
     assert git(repo, "rev-parse", "HEAD").strip() == before
     assert (repo / ".git/index").read_bytes() == index
-    remote = Repository(origin)
+    remote = Repository(origin, git_dir=origin)
     assert remote.entry("main", foreign) is None
     receipt = PublicationReceipt.read(publication_evidence.receipt_path(repo, identity, "encoder-comparison"))
     expected = {

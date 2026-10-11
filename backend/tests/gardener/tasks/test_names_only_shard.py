@@ -168,7 +168,7 @@ def _by_pattern(origin: Path, seed: Path) -> dict[str, str]:
 def blob(origin: Path, path: str) -> bytes:
     """One file from origin main, as bytes."""
     done = subprocess.run(
-        ["git", "show", f"main:{path}"],
+        ["git", "--git-dir", str(origin), "show", f"main:{path}"],
         cwd=origin,
         capture_output=True,
         check=True,

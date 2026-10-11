@@ -19,6 +19,7 @@ from typing import Any, Final, cast
 import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from fixture_git import command as fixture_git_command
 from origin_template import copy_origin, template
 
 from idhazh import ledger, path_classes
@@ -1883,7 +1884,6 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
             name: value
             for name, value in os.environ.items()
             if name not in {"GITHUB_OUTPUT", "PUSH_RETRY_CONFIG"}
-            and not name.startswith("GIT_CONFIG_")
         },
         "HOME": str(home),
         "USERPROFILE": str(home),
@@ -1911,14 +1911,14 @@ def _reading_its_output(tmp_path: Path, settings: dict[str, str]) -> tuple[dict[
 
 def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     completed = subprocess.run(
-        [
-            "git",
+        fixture_git_command(
+            repo,
             "-c",
             "user.name=Scripted Origin",
             "-c",
             "user.email=origin@example.invalid",
             *args,
-        ],
+        ),
         cwd=repo,
         env=env,
         capture_output=True,
