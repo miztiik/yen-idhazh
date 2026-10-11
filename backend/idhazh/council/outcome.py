@@ -33,7 +33,9 @@ def worst(codes: Iterable[int]) -> CouncilExit:
 
 def of_results(results: Iterable[ShardResult]) -> CouncilExit:
     return worst(
-        CouncilExit.FAILED if result.outcome is ShardOutcome.STOPPED_ON_DEADLINE else CouncilExit.OK
+        CouncilExit.FAILED
+        if result.outcome in (ShardOutcome.STOPPED_ON_DEADLINE, ShardOutcome.FAILED)
+        else CouncilExit.OK
         for result in results
     )
 
@@ -65,7 +67,7 @@ def run(program: CouncilProgram, work: Callable[[], int]) -> int:
         try:
             code = work()
         except (Exception, SystemExit, KeyboardInterrupt) as error:
-            if isinstance(error, SystemExit) and error.code == 0:
+            if isinstance(error, SystemExit) and error.code == 0 and not _STARTED.get():
                 code = CouncilExit.OK
             else:
                 refused = not _STARTED.get() and (

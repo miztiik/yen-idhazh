@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -44,7 +44,11 @@ planned alone, as `idhazh run` does.
 The council save job files each judged date's run records through the ledger
 door. Each row names the step and part, while the envelope names the save job,
 attempt and council run. A retry therefore replaces the earlier attempt when
-the reader settles rows by `unit_id`.
+the reader settles rows by `unit_id`. A raised unit files `outcome=failed` and
+`fault=raised`; all other outcomes have an empty fault. Earlier rows load with
+no fault. Exception details are not persisted. The
+[council's recording rule](../publishing/llm-council.md#the-venue-keeps-its-own-record-of-every-unit-it-ran)
+owns collection, recording failures and isolated trials.
 
 The console reads the feed record at build time from its packed files under `state/compact/feed-health/`, so the Voices page stops at the newest packed day. There is no published mirror; the one that existed until 2026-09-16 was never fetched.
 
