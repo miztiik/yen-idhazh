@@ -115,7 +115,7 @@ for (const width of [390, 768, 1440]) {
 			const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
 			expect(overflow, 'the route overflows its real viewport').toBe(false);
 			await page.locator('[data-console-carry="model"] a').click();
-			await expect(page.locator('[data-console-panels="model"]')).toBeVisible();
+			await expect(page.locator('[data-console-route="model"]')).toBeVisible();
 			await page.goBack();
 			await settled(page);
 			await expect(page.locator('[data-console-panels="pipelines"]')).toBeVisible();
