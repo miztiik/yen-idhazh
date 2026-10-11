@@ -128,7 +128,7 @@ test('existing published host cells still refuse conflicting records after query
 	await expect(page.locator('[data-clock-pair]')).toHaveCount(0);
 });
 
-test('the standing retries repaired indexes instead of keeping a failed read session', async ({ page }) => {
+test('the standing retries failed index fetches', async ({ page }) => {
 	await machineRecordState(page, 'unreachable');
 	await fixture(page, 2);
 	await expect(page.locator('[data-console-retry]')).toBeVisible();
@@ -136,6 +136,26 @@ test('the standing retries repaired indexes instead of keeping a failed read ses
 	await page.locator('[data-console-retry]').click();
 	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'ok');
 	await expect(page.locator('[data-clock-pair]')).toHaveCount(2);
+});
+
+test('retrying a failed host fetch keeps successful article and count reads', async ({ page }) => {
+	const successfulRequests: string[] = [];
+	page.on('request', (request) => {
+		if (/\/state\/(?:compact|raw)\/(?:item-health|run-shards)\//.test(request.url())) {
+			successfulRequests.push(request.url());
+		}
+	});
+	await page.route(/\/state\/compact\/host-fingerprint\/index\/[^/]+\.json/, (route) => route.abort('failed'));
+	await fixture(page, 2);
+	await expect(page.locator('[data-console-retry]')).toBeVisible();
+	await expect(page.locator('[data-panel-query="memory-held"]')).toHaveAttribute('data-machine-panel-state', 'ok');
+	const before = [...successfulRequests];
+	expect(before.length).toBeGreaterThan(0);
+	await page.unrouteAll({ behavior: 'ignoreErrors' });
+	await page.locator('[data-console-retry]').click();
+	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'ok');
+	await expect(page.locator('[data-clock-pair]')).toHaveCount(2);
+	expect(successfulRequests).toEqual(before);
 });
 
 test('an unsettled count correction is a visible refusal, not a reactive page crash', async ({ page }) => {

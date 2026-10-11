@@ -28,7 +28,8 @@ ramp, so narrowing a window cannot recolour a machine.
 `RouteStatus` owns one delayed shimmer and one reserved standing sentence.
 Loading is not an answer. Quiet says `Nothing recorded.`, missing says
 `Not published yet.`, and an unsuccessful fetch says `Did not arrive.`.
-The standing retry clears the failed read session and re-asks the questions.
+The standing retry re-asks only unsuccessful questions and keeps successful reads.
+An incompatible index remains unavailable until reload, as the native door requires.
 Changing the window cannot allow a late answer from the old request to replace
 the new one. Redraws and resizes reuse query rows.
 

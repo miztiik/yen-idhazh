@@ -239,6 +239,7 @@ async function widen(page: Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
+	await expect(page.locator('[data-console-panels="machine"]')).not.toHaveAttribute('data-route-state', 'loading');
 }
 
 const PANEL = '[data-windowed="machine-article-cost"]';

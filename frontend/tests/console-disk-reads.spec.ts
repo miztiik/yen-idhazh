@@ -194,6 +194,7 @@ async function setWindow(page: Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
+	await expect(page.locator('[data-console-panels="machine"]')).not.toHaveAttribute('data-route-state', 'loading');
 }
 
 /** Every tile of the upper strip, as the reader is given it. */

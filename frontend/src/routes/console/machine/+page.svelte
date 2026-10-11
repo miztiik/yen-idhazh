@@ -6,7 +6,6 @@
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { routeReach, rangeFor, sliceOnce, retryAsks, tallyAsks, windowRange, type Range, type PanelQuery, type RouteReach } from '$lib/console/queries/window';
-	import { startAfresh } from '$lib/data/ledger';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import { finiteCell } from '$lib/console/rates';
 	import * as queries from '$lib/console/queries/machine';
@@ -62,7 +61,10 @@
 		windowDays = days;
 		if (ready) try { localStorage.setItem('idhazh:console-window', String(days)); } catch { /* Storage is optional. */ }
 	}
-	function retry() { startAfresh(); retryAsks(asked); generation++; }
+	function retry() {
+		retryAsks(asked.filter((query) => answers[query.name]?.state === 'unreachable'));
+		generation++;
+	}
 	function ask(query: PanelQuery, range: Range): Promise<SliceResult> {
 		switch (query.name) {
 			case 'runShardsQuery': return sliceOnce(queries.runShardsQuery, range);
