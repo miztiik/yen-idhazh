@@ -1,4 +1,4 @@
-/** How many articles failed at each stage on each recorded day? */
+/** How many recorded rows failed at each stage on each recorded day? */
 import type { Row } from '../../data/ledger';
 import type { SeriesInput } from '../../charts/d3/dateSeries';
 import { SERIES_TOKENS } from '../series-tokens';
@@ -29,7 +29,7 @@ export function nativeFailureMix(rows: readonly Row[], calendar?: readonly strin
 	const stages = [...new Set(failures.map((row) => String(row.stage)))].sort((a, b) =>
 		failures.filter((row) => row.stage === b).length - failures.filter((row) => row.stage === a).length || a.localeCompare(b));
 	return {
-		series, failures: failures.length, articles: rows.length,
+		series, failures: failures.length, recorded: rows.length,
 		share: rows.length === 0 ? null : failures.length / rows.length,
 		stages, chosenStage: stages[0] ?? null,
 		rules: stages.map((stage) => {

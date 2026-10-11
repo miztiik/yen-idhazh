@@ -23,6 +23,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-judgement-agreement-marks', 'console-judgement-day-labels',
 		'console-judgement-record-window', 'console-machine-window', 'console-machine-day-labels',
 		'console-pipelines-window', 'console-pipelines-day-labels', 'console-model-window',
+		'console-pipelines-native', 'console-pipelines-nothings', 'console-pipelines-lifecycle',
 		'console-voices-window', 'console-window-readout',
 		'console-judgement-line', 'console-judgement-merges', 'console-judgement-verdict',
 		'console-machine-data', 'console-machine-page',

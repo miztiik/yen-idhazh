@@ -9,6 +9,27 @@ import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+test('Pipelines modules and new correctness specs keep their route coverage', () => {
+	for (const separator of ['/', '\\']) {
+		const path = ['frontend', 'tests', 'support', 'pipelines-ledgers.ts'].join(separator);
+		assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'panels', 'publishing']);
+		assert.equal(ciAnswer([path], true).console, true);
+	}
+	const inventory = groupedSpecs(join(FRONTEND, 'tests')).console;
+	for (const name of ['console-pipelines-native', 'console-pipelines-nothings', 'console-pipelines-lifecycle']) {
+		assert.ok(inventory.includes(`${name}.spec.ts`));
+		assert.deepEqual(selectPaths([`frontend/tests/${name}.spec.ts`]).groups, ['console']);
+	}
+	for (const separator of ['/', '\\']) {
+		for (const name of ['FailureMix.svelte', 'record-window.ts', 'item-time-split.ts']) {
+			const path = ['frontend', 'src', 'lib', 'console', 'pipelines', name].join(separator);
+			assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'panels', 'publishing']);
+			assert.equal(ciAnswer([path], true).console, true);
+			assert.equal(ciAnswer([path], true).panels, true);
+		}
+	}
+	assert.deepEqual(selectPaths(['frontend/src/lib/console/unknown-route/new.ts']).groups, [...FRONTEND_GROUPS]);
+});
 function tmpdir() {
 	const path = resolve(FRONTEND, '../backend/var/checks/scope-tests');
 	mkdirSync(path, { recursive: true });

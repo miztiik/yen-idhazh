@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { siteCost, publishingHorizon, sizeGain } from './site-cost-per-item';
+	import { siteCost, publishingHorizon, sizeGain, newestSize } from './site-cost-per-item';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
@@ -10,11 +10,11 @@
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
 	let { manifests, publishedItems, window, knobs, chart, rule, sizeBytes }: {
 		manifests: RunSummary[]; publishedItems: Record<string, number>; window: TimeWindow;
-		knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule; sizeBytes: number | null;
+		knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule; sizeBytes?: number | null;
 	} = $props();
 	const articles = $derived(new Map(Object.entries(publishedItems)));
 	const cost = $derived(siteCost(manifests, articles, window));
-	const horizon = $derived(publishingHorizon(sizeBytes, cost, articles));
+	const horizon = $derived(publishingHorizon(sizeBytes === undefined ? newestSize(manifests) : sizeBytes, cost, articles));
 	const gain = $derived(sizeGain(manifests.filter((day) => day.date >= window.start && day.date <= window.end)));
 	const signed = $derived(cost.days.filter((day) => day.bytesPerItem < 0));
 	const geometry = $derived(dateSeries([{ label: 'Payload bytes per article', token: '--chart-3', points: cost.days.map((day) => ({ date: day.date, value: day.bytesPerItem < 0 ? null : day.bytesPerItem })) }],
@@ -30,7 +30,7 @@
 {#if horizon}<p data-cost-horizon>The cap has room for about {Math.round(horizon.articles).toLocaleString('en-GB')} more articles: about {horizon.years.toFixed(1)} years at this window's rate. The cap measures the built site, which is larger than the payload tree, so this is the most room we have.</p>{/if}
 {#if gain !== null}<p>{gain >= 0 ? 'Up' : 'Down'} {(Math.abs(gain) / 1024 / 1024).toFixed(1)} MB in this window.</p>{/if}
 {#if signed.length > 0}
-	<p data-contract-blocked="signed-size">The payload shrank on {signed.map((day) => day.date).join(', ')}. The shared bar drawing cannot place negative bytes per article; those days remain readings, not zero bars.</p>
+	<p>The payload shrank on {signed.map((day) => day.date).join(', ')}. A composition bar cannot add negative bytes; the signed readings are listed below, not drawn as zero.</p>
 	<ul>{#each signed as day (day.date)}<li>{day.date}: {Math.round(day.bytesPerItem)} B per article.</li>{/each}</ul>
 {/if}
 <DateSeries {geometry} empty={emptyState('quiet', 'No day both published an article and recorded a size.')}

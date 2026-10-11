@@ -32,7 +32,7 @@
 <div data-eval-panel="extraction">
 	<p data-comparison="classes">Chartable articles against narrative and unclassified ones, beside the checker's independent suspicion.</p>
 	{#if publishedShare.measuredDays === 0}
-		<p data-extraction="none">No build-time record of the published chart share is available in this window.</p>
+		<p data-extraction="none">The build-time published chart-share record is unavailable in this window.</p>
 	{:else}
 		<KpiCard label="Of those, published without one" rule={noRule} lede
 			value={publishedShare.unusedPct === null ? 'Not measured' : `${publishedShare.unusedPct}%`}

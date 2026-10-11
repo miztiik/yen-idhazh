@@ -153,7 +153,7 @@
 
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <WindowControlSource days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
-	ready={recordReady} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
+	ready={mounted} {busy} {record} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
 	{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
@@ -170,7 +170,7 @@
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
-							<SiteCostPerItem manifests={data.manifests} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} rule={settings} sizeBytes={data.band.size.bytes} />
+							<SiteCostPerItem manifests={data.manifests} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} rule={settings} />
 						{:else if id === 'chart-drawing'}
 							<ChartDrawing days={charts} {windowDays} {knobs} />
 						{:else if id === 'run-timeline'}
@@ -184,6 +184,7 @@
 						{:else if id === 'failure-mix'}
 							<FailureMix rows={rows(queries.failureMixQuery)} ruleRows={rows(queries.failedRuleQuery)}
 								nativeState={panelState(queries.failureMixQuery)} rulesState={panelState(queries.failedRuleQuery)}
+								rulesWindow={queryWindow(queries.failedRuleQuery)}
 								calendar={calendar(queries.failureMixQuery)} {knobs} chart={data.chart} rule={queryRule(queries.failureMixQuery)} />
 						{:else if panelQueries[id] !== undefined}
 							{@const query = panelQueries[id]}

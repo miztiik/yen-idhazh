@@ -16,7 +16,8 @@ import { articleAge } from '../src/lib/console/pipelines/article-age';
 import { slowerOnSameWork } from '../src/lib/console/pipelines/slower-on-same-work';
 import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
 import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
-import { nativeTimeSplit } from '../src/lib/console/pipelines/item-time-split';
+import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
+import { pipelinesRecord, retryReach } from '../src/lib/console/pipelines/record-window';
 import type { Row, SliceResult } from '../src/lib/data/ledger';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -187,7 +188,7 @@ test('extraction retains useful partial readings and counts distinct evaluator a
 
 test('stage clocks, signed gaps and independent cost pairs never fill unknown cells with zero', () => {
 	expect(nativeStageTimings(rows(queries.stageTimingsQuery)).length).toBeGreaterThan(0);
-	expect(nativeTimeSplit(rows(queries.itemTimeSplitQuery)).signed).toBe(true);
+	expect(nativeTimeSplit(rows(queries.itemTimeSplitQuery)).days.some((day) => day.overlapping > 0)).toBe(true);
 	const stage = nativeStageTimings([{ date: '2030-06-01', fetch_ms: 0, extract_ms: null, summarize_ms: 10 }])[0];
 	expect(stage.fetch).toEqual({ ms: 0, timed: 1, total: 1 });
 	expect(stage.extract).toEqual({ ms: null, timed: 0, total: 1 });
@@ -203,9 +204,40 @@ test('stage clocks, signed gaps and independent cost pairs never fill unknown ce
 	const clock = { date: '2030-06-01', item_total_ms: 800, fetch_ms: 100, extract_ms: 20,
 		summarize_ms: 600, label_ms: 150, summary_ms: 430, visual_plan_ms: 60, faithfulness_ms: 30, stage_gap_ms: 50 };
 	const split = nativeTimeSplit([clock, { ...clock, summary_ms: null }]);
-	expect(split.days[0].items).toBe(2);
-	expect(split.days[0].composable).toBe(1);
-	expect(split.days[0].parts.map((part) => part.value)).toEqual([100, 20, 150, 370, 60, 20, 30, 50]);
-	expect(split.days[0].parts.reduce((sum, part) => sum + part.value!, 0)).toBe(split.days[0].compositionTotal.value);
-	expect(split.days[0].readings.find((part) => part.cell === 'summary_ms')?.timed).toBe(1);
+	expect(split.days[0].recorded).toBe(2);
+	expect(split.days[0].count).toBe(2);
+	expect(split.days[0].stages.map((part) => part.value)).toEqual([100, 20, 600, 30]);
+	expect(split.days[0].stages.reduce((sum, part) => sum + part.value!, 0) + split.days[0].unattributed! - split.days[0].overlap!)
+		.toBe(split.days[0].elapsed);
+	expect(split.days[0].details.find((part) => part.cell === 'summary_ms')).toEqual({
+		cell: 'summary_ms', label: 'Summary call, including visual plan', value: null, timed: 1
+	});
+	expect(timeSplitReadout(split).series.find((part) => part.label === 'Elapsed time')?.values).toEqual(['0.80 s']);
+});
+
+test('positive gaps and overlap cannot cancel away; calls are never extra durations', () => {
+	const clock = { date: '2030-06-01', item_total_ms: 800, fetch_ms: 100, extract_ms: 20,
+		summarize_ms: 600, faithfulness_ms: 30, stage_gap_ms: 50, label_ms: 0, summary_ms: null, visual_plan_ms: null };
+	const split = nativeTimeSplit([clock, { ...clock, item_total_ms: 700, stage_gap_ms: -50 },
+		{ ...clock, fetch_ms: null }, { ...clock, item_total_ms: 1 }], ['2030-06-01', '2030-06-02']);
+	expect(split.days[0]).toMatchObject({ recorded: 4, count: 2, missing: 1, inconsistent: 1,
+		unattributed: 25, overlap: 25, signedGap: 0, elapsed: 750 });
+	expect(split.series.map((series) => series.points[0].value)).toEqual([100, 20, 600, 30, 25]);
+	expect(split.days[0].details[0]).toMatchObject({ value: 0, timed: 2 });
+	expect(split.days[1]).toMatchObject({ count: 0, elapsed: null, overlap: null });
+	expect(timeSplitReadout(split).series.find((series) => series.label === 'Overlap')?.values).toEqual(['0.03 s', null]);
+});
+
+test('the record starts at the actual ledger beginning, and retry pins the endpoint', () => {
+	const previous = { through: '2030-06-10', ledgers: {
+		'item-health': { state: 'ok', first: '2030-01-01', through: '2030-06-10', lastRows: null, fault: null },
+		'summary-quality-evals': { state: 'missing', fault: 'not-packed' }
+	} } as const;
+	const refreshed = { through: '2030-06-11', ledgers: {
+		'item-health': { state: 'ok', first: '2030-01-01', through: '2030-06-11', lastRows: null, fault: null },
+		'summary-quality-evals': { state: 'ok', first: '2030-06-11', through: '2030-06-11', lastRows: null, fault: null }
+	} } as const;
+	expect(pipelinesRecord(previous, 7)).toEqual({ first: '2030-01-01', through: '2030-06-10', asked: 7 });
+	expect(retryReach(previous, refreshed).through).toBe('2030-06-10');
+	expect(pipelinesRecord(null, 7)).toBeNull();
 });

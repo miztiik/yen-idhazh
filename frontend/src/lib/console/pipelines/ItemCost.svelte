@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import { nativeItemCost } from './item-cost';
+	import { SERIES_TOKENS } from '../series-tokens';
 	import type { Row } from '$lib/data/ledger';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
 	let { rows, knobs, chart }: { rows: Row[]; knobs: ConsoleConfig; chart: ChartConfig } = $props();
@@ -13,8 +14,8 @@
 </p>
 <p data-comparison="distribution">Writing one summary against reading one prompt; their distributions share one time axis.</p>
 <p>{cost.writeCostRatio === null ? 'The two per-token costs cannot yet be compared.' : `Writing a token cost ${cost.writeCostRatio.toFixed(1)} times reading one.`}</p>
-{#each [{ times: cost.reading, name: 'item-reading', subject: 'Seconds to read one prompt', verb: 'read', noun: 'prompt', nouns: 'prompts' },
-	{ times: cost.writing, name: 'item-writing', subject: 'Seconds to write one summary', verb: 'written', noun: 'summary', nouns: 'summaries' }] as part (part.name)}
+{#each [{ times: cost.reading, name: 'item-reading', subject: 'Seconds to read one prompt', verb: 'read', noun: 'prompt', nouns: 'prompts', token: SERIES_TOKENS['reading-prompt'] },
+	{ times: cost.writing, name: 'item-writing', subject: 'Seconds to write one summary', verb: 'written', noun: 'summary', nouns: 'summaries', token: SERIES_TOKENS['writing-reply'] }] as part (part.name)}
 	<div class={part.name}>
 		{#if part.times === null}
 			<p data-item-cost={part.name}>No {part.noun} clock was measured.</p>
@@ -22,7 +23,7 @@
 			<p>{part.times.n} clocks were measured; {knobs.min_attempts_for_rate} are needed for a distribution.</p>
 		{:else}
 			<TimeHistogram times={part.times} name={part.name} subject={part.subject} verb={part.verb} noun={part.noun} nouns={part.nouns}
-				noRuleReason="one distribution of the window, not a date axis"
+				noRuleReason="one distribution of the window, not a date axis" barToken={part.token}
 				width={knobs.chart_width} height={knobs.chart_height} readoutMaxShare={chart.readout_max_share} domain={cost.domain} />
 		{/if}
 	</div>
@@ -34,7 +35,5 @@
 </p>
 <style>
 	.lede { font-size: var(--text-2xl); font-variant-numeric: tabular-nums; }
-	.item-reading { --chart-1: var(--chart-6); }
-	.item-writing { --chart-1: var(--chart-7); }
 	.note { font-size: var(--text-sm); color: var(--color-text-secondary); }
 </style>

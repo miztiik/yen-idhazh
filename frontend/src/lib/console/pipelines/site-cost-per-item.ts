@@ -7,6 +7,11 @@ function measured(value: unknown): value is number {
 	return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+export function newestSize(manifests: readonly RunSummary[]): number | null {
+	const value = [...manifests].sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.siteBytes;
+	return measured(value) ? value : null;
+}
+
 export function siteCost(...[manifests, articles, window]: Parameters<typeof measuredCost>) {
 	const ordered = [...manifests].sort((a, b) => a.date.localeCompare(b.date));
 	const paired = new Map(ordered.flatMap((day, index) => {

@@ -45,27 +45,32 @@ a new preset starts a new window. The record notice uses the ledger's actual
 first day, not the first plotted day. Lost days, set-aside files, unknown cells,
 and recorded zero remain distinct.
 
-This is an **implemented candidate, not a ready gate verdict**. The retained
-FailureList lacks an identity-free input for the declared rule slice; signed
-stacked dateSeries parts and signed payload shrinkage need the shared drawing
-contract; StageTimings lacks the structured settings-rule input. The route
-names those blocks and keeps available readings. Histogram token integration,
-the shared script-off oracle, parent-owned test registrations and private-build
-inventories, original telemetry-only oracles and final certification still need
-reconciliation. No unavailable value is filled with zero to get a gate through.
+The approved A1 contracts are wired: FailureList accepts identity-free rule rows
+with stage radios, StageTimings retains the complete settings/checker rule, and
+the two cost histograms use the named reading-prompt and writing-reply tokens.
+The rule ranking makes no source, detail or distinct-article claim. Failure
+percentages divide failed rows by recorded rows, since the declared slice carries
+no article identity. Private payload shrinkage is a signed reading, not a zero
+bar. No unavailable value is filled with zero to get a gate through.
 
-The extractor chooses the newest measured suspicion for each distinct article.
-Null cells from other evaluators do not replace that instrument. Conflicting
-boolean readings on its latest measured day stay unknown, in any row order.
+The extractor keeps the newest boolean suspicion for each distinct article;
+null cells cannot replace a reading, and conflicting booleans on its latest
+measured day stay unknown in any row order. This does not certify evaluator
+selection: the declared query has no evaluator name/version fields, and the
+current EvalRow gives an unrun extraction instrument a false default. A named
+instrument filter requires a separately approved query/record contract; this
+candidate must not claim that null handling proves the filter.
 Each native half states its returned dates beside the private published figures.
 Private payload-size rates require the immediately preceding manifest and the
 current manifest to both record a finite size; a missing size is not zero.
 
-The item-time composition is also owner-blocked. The recorder's signed gap
-subtracts fetch, extract, summarize and faithfulness once. Label and summary
-calls are not extra additive stages. The candidate's derived call split needs
-an explicit decision about overlap and a single cohort before it can be judged
-as a stack. The proposed separate overlap deduction is not an approved meaning.
+The approved item-time composition uses one complete, reconciling cohort for
+fetch, extract, summarize, faithfulness, the total and the signed gap. Summarize
+is counted once. Label, summary and visual-plan calls remain non-additive details,
+including timed counts and null readings. Positive unnamed gaps and negative
+overlap are averaged separately, so cancellation cannot hide overlap. The chart
+draws every positive duration, an adjacent overlap deduction and an elapsed-time
+marker; formatted readouts, cohort counts and exclusions explain the arithmetic.
 
 ## Where a run's time went is one panel on Pipelines, at two grains
 
@@ -116,8 +121,9 @@ It also checks that no separate sub-step readout remains.
 
 **It is a snapshot, so the window control does not reach it.** A bar's position
 is measured from its own run's start and a span cannot narrow one run, so the
-panel names the run it drew. It reads one published directory bounded to two
-months. With that data absent, the view is empty and the route still renders.
+panel names the run it drew. It asks the newest recorded day of item-health for
+exactly its declared native clock columns. With that data absent, the view is
+empty and the route still renders.
 
 **Pipelines depends on `$lib/charts/machine` for its `seconds` formatter.**
 

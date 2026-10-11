@@ -59,6 +59,14 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'settings-moved.ts', 'span-words.ts', 'strip.ts', 'verdict-split.ts', 'waiting.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
+	'src/lib/console/pipelines': [
+		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte', 'Extraction.svelte',
+		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
+		'RunTimeline.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
+		'article-age.ts', 'at-a-glance.ts', 'chart-drawing.ts', 'extraction.ts', 'failure-mix.ts',
+		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
+		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts'
+	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
 		'ColumnList.svelte', 'ColumnPicker.svelte', 'ColumnType.svelte', 'CopyAnswer.svelte',

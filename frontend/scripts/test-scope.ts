@@ -31,7 +31,7 @@ const CONSOLE: TestGroup[] = ['logic', 'console', 'panels', 'publishing'];
  * console route renders it, so its edits buy the console on the pull request.
  */
 const CONSOLE_OWNED =
-	/^(frontend\/(tests\/(?:console[-.]|support\/(?:console-expect|console-window|panel-drivers)\/)|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
+	/^(frontend\/(tests\/(?:console[-.]|support\/(?:(?:console-expect|console-window|panel-drivers)\/|pipelines-ledgers\.ts$))|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
 
 /** What a console panel's picture is drawn from, beyond the console's own files.
  *
@@ -233,9 +233,15 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/tests\/support\/console-window\//.test(path)) {
 			selected = CONSOLE;
 			reason = 'shared window controls and focused route window consumers';
+		} else if (path === 'frontend/tests/support/pipelines-ledgers.ts') {
+			selected = CONSOLE;
+			reason = 'Pipelines native browser fixtures';
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';
+		} else if (/^frontend\/src\/lib\/console\/pipelines\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'Pipelines panels and native query consumers';
 		} else if (/^frontend\/src\/routes\/archive\//.test(path)) {
 			selected = ['logic', 'archive', 'model-search', 'publishing'];
 			reason = 'archive route and search consumer';
