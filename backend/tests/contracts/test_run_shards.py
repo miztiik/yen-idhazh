@@ -226,3 +226,47 @@ def test_daily_and_reopened_month_keep_numeric_corrections(tmp_path: Path) -> No
     assert [row.shards for row in ledger.load_days(
         state, LedgerName.RUN_SHARDS, [sample.date], model=RunShards,
     )] == [4]
+
+
+@pytest.mark.parametrize(("on", "today"), [
+    ("2026-10-01", date(2026, 10, 2)),
+    ("2026-08-01", date(2026, 10, 11)),
+])
+@pytest.mark.parametrize("via_backfill", [False, True])
+@pytest.mark.parametrize("latest", [1, 3, None])
+def test_pending_correction_is_part_of_the_manifest_comparison(
+    tmp_path: Path, on: str, today: date, via_backfill: bool, latest: int | None,
+) -> None:
+    state = tmp_path / "state"
+    target = tmp_path / "digest"
+    named = target.joinpath(*on.split("-"), "run.json")
+
+    def file_count(count: int | None, attempt: int) -> int:
+        sample = manifest(on, [count])
+        identity = writer(attempt=attempt)
+        if not via_backfill:
+            return record(state, sample, identity=identity)
+        named.parent.mkdir(parents=True, exist_ok=True)
+        named.write_text(sample.to_json(), encoding="utf-8", newline="\n")
+        return backfill(target, state, first=on, through=on, identity=identity)
+
+    assert file_count(1, 1) == 1
+    pack(tmp_path, today)
+    assert file_count(3, 2) == 1
+    pending = {
+        held.path: held.path.read_bytes()
+        for held in ledger.list_raw_files(state, LedgerName.RUN_SHARDS, days=[on])
+    }
+    assert file_count(latest, 3) == (1 if latest == 1 else 0)
+    assert all(path.read_bytes() == contents for path, contents in pending.items())
+    if latest != 1:
+        assert {
+            held.path: held.path.read_bytes()
+            for held in ledger.list_raw_files(state, LedgerName.RUN_SHARDS, days=[on])
+        } == pending
+
+    pack(tmp_path, today)
+    assert [row.shards for row in ledger.load_days(
+        state, LedgerName.RUN_SHARDS, [on], model=RunShards,
+    )] == [1 if latest == 1 else 3]
+    assert file_count(latest, 4) == 0

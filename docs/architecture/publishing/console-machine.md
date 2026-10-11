@@ -49,10 +49,13 @@ Only those count cells are validated; legacy duplicate run records therefore
 remain readable. The last numeric count per run wins, and a later unknown never
 erases a recorded number. Historical null is unknown, not zero.
 
-Repeating a manifest read compares its mappings with the native settled day.
-Unchanged mappings file nothing, before or after compaction. Corrections file
-only changed counts in new immutable raw files. An unknown cannot demote a
-numeric count. A rerun therefore cannot grow the ledger without changed evidence.
+Repeating a manifest read compares its mappings with the named day's compact
+rows and pending raw corrections, settled together using their original filing
+provenance. Unchanged mappings file nothing, before or after compaction. A
+correction back to the packed value still files when a different count is
+pending. Corrections file only changed counts in new immutable raw files. An
+unknown cannot demote a numeric count. A rerun therefore cannot grow the ledger
+without changed evidence.
 
 Fresh-base publication keeps all completed count files unchanged. If rebuilding
 the final manifest corrects its count, the native writer emits one new immutable
