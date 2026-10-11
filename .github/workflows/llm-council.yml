@@ -1,7 +1,7 @@
 name: LLM-COUNCIL
 
 # The council, once a night, on its own clock. It asks every tenant registered
-# in `council.tenants` to pick its work for the day, fans out over one job a
+# active in `judge_names` in `config/llm_council.json` to pick its work for the day, fans out over one job a
 # tenant a shard, and settles what came back.
 #
 # **Council, not judges, and the name is about where this goes** (owner,
@@ -42,16 +42,6 @@ on:
         description: 'Digest date to judge (YYYY-MM-DD). Defaults to yesterday, UTC.'
         default: ''
 
-permissions:
-  contents: write
-  # Reading an artifact an EARLIER run wrote needs this scope, and a declared
-  # block sets every scope it does not list to none. Read-only, and no stored
-  # token: the default credential carries it. Nothing in this file crosses a run
-  # today - a dead night is repaired by judging its date again, which is what
-  # the night plan below is for - so this is the scope that keeps the cheaper
-  # recovery open rather than one a step here already uses.
-  actions: read
-
 concurrency:
   group: llm-council
   cancel-in-progress: false
@@ -63,6 +53,8 @@ env:
 
 jobs:
   draw:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -179,12 +171,12 @@ jobs:
       - id: bounds
         run: |
           set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key council.shard_timeout_minutes \
+          python3 backend/utilities/shard_bound.py --key shard_timeout_minutes --config-file llm_council.json \
             >> "$GITHUB_OUTPUT"
 
       # What tonight fans out to, asked of the tenants rather than computed
-      # here. A cell is flat - a tenant, a date, a shard and that tenant's own
-      # width - because a per-tenant width is not a third axis: a cross product
+      # here. A cell is flat - tenant, date, shard, shards and runs_model -
+      # because a per-tenant width is not a third axis: a cross product
       # would hand every tenant the widest tenant's width and pay a weights
       # restore for work that runs no model.
       #
@@ -239,6 +231,9 @@ jobs:
           retention-days: 3
 
   judge:
+    permissions:
+      contents: read
+      actions: read
     needs: draw
     # An empty matrix is a strategy-evaluation failure, and the run reds on it
     # rather than skipping quietly. No tenant registered is a legal night, and
@@ -278,7 +273,7 @@ jobs:
           pattern: council-selection-*
           merge-multiple: true
           path: backend/var/council
-          # Passed rather than inherited. The `permissions` block above names
+          # Passed rather than inherited. This job's permissions block names
           # what this credential may do, and an artifact read is one of them.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -293,6 +288,7 @@ jobs:
       # The probe address is handed over rather than inherited: it has one home,
       # the workflow `env` above, and this is the line that carries it in.
       - uses: ./.github/actions/model-server
+        if: matrix.runs_model
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           probe_url: ${{ env.MODEL_SERVER_PROBE }}
@@ -338,6 +334,9 @@ jobs:
           retention-days: 3
 
   save_council_results:
+    permissions:
+      contents: write
+      actions: read
     needs: [draw, judge]
     # A unit that died still leaves the others' work worth keeping, and a date
     # still owes whatever its tenants settle.
@@ -381,6 +380,7 @@ jobs:
         env:
           COUNCIL_DATES: ${{ needs.draw.outputs.dates }}
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+          COUNCIL_UNITS_RESULT: ${{ needs.judge.result }}
         run: |
           set -euo pipefail
           asked=()
@@ -389,4 +389,4 @@ jobs:
           done < <(echo "$COUNCIL_DATES" | jq -r '.[]')
           python backend/utilities/council_publish.py "${asked[@]}" \
             --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" \
-            --job-started-at "$JOB_STARTED_AT"
+            --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT"

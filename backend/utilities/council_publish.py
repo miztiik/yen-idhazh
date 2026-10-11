@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
-import dataclasses
-import json
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -13,8 +10,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from idhazh import completed_writes, config
+from idhazh.contracts.council_events import CouncilExit, CouncilProgram, NightPublished
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import run_identity, session
+from idhazh.council import event_log, outcome, run_identity, session
+from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
 from idhazh.council.tenancy import Tenant
 from idhazh.telemetry import job_machine
@@ -23,7 +22,7 @@ from utilities.publication_evidence import identified
 from utilities.publication_git import Repository
 from utilities.publication_inputs import materialize
 from utilities.publication_request import IntegrityError, PublicationRequest, Write, contains
-from utilities.publish_to_repo import publish
+from utilities.publish_to_repo import PublicationResult, Status, publish
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 
@@ -36,12 +35,20 @@ def settle_and_publish(
     config_root: Path,
     started_at: datetime | None = None,
     clock: Callable[[], datetime] = job_machine.utc_now,
+    units_failed: bool = False,
 ) -> int:
+    dates = tuple(a_date(date, what="--date") for date in dates)
+    run_identity.opened_on(run_id)
     settings = config.load(config_root)
-    hosted = tenants(settings.app.council.tenants)
+    hosted = tenants(settings.council.running(), app=settings.app, council=settings.council)
     if not hosted:
-        print("council: no tenants; no record or publication")
-        return 0
+        code = CouncilExit.FAILED if units_failed else CouncilExit.OK
+        event_log.emit(
+            NightPublished(
+                dates=dates, run_id=run_id, landing="no-changes", pushes=0, writes=0, code=code
+            )
+        )
+        return code
     git = Repository(repo)
     source = git.git("rev-parse", "HEAD").strip()
     permissions = tuple(
@@ -53,7 +60,7 @@ def settle_and_publish(
         )
     )
     writes: dict[str, Write] = {}
-    task_failed = False
+    task_failed = units_failed
     integrity_failed: IntegrityError | None = None
     identity = session._identify_writer(run_id=run_id, commit_sha=commit_sha)
 
@@ -121,29 +128,37 @@ def settle_and_publish(
                                 repo,
                                 preserve_existing=True,
                             )
-                    session.settle(
-                        settings.app.council,
+                    results = session.settle(
+                        settings.council,
                         date=date,
                         run_id=run_id,
                         state_dir=repo / "state",
                         commit_sha=commit_sha,
                         completed=completed,
                     )
+                    task_failed = bool(outcome.of_results(results)) or task_failed
                 except Exception as error:
                     if isinstance(error, IntegrityError):
                         integrity_failed = error
                     task_failed = True
-                    print(
-                        f"council {date}: task failure {type(error).__name__}: {error}",
-                        file=sys.stderr,
-                    )
+                    event_log.failed(error)
     try:
         completed(None, {path: machine_evidence[path] for path in machine_paths})
     except IntegrityError as error:
         integrity_failed = error
     if integrity_failed is not None:
-        print(f"council: integrity-refused: {integrity_failed}", file=sys.stderr)
-        return 2
+        event_log.failed(integrity_failed)
+        event_log.emit(
+            NightPublished(
+                dates=dates,
+                run_id=run_id,
+                landing="integrity-refused",
+                pushes=0,
+                writes=len(writes),
+                code=CouncilExit.FAILED,
+            )
+        )
+        return CouncilExit.FAILED
     request = PublicationRequest(
         identity,
         "council: " + " ".join(dates),
@@ -153,18 +168,44 @@ def settle_and_publish(
         writes,
     )
     result = publish(request, repo=repo, retry=load_retry(repo / DEFAULT_CONFIG))
-    print(json.dumps(dataclasses.asdict(result), default=str))
-    return result.exit_code or int(task_failed)
+    code = outcome.worst((_publication_code(result), int(task_failed)))
+    event_log.emit(
+        NightPublished(
+            dates=dates,
+            run_id=run_id,
+            landing=result.status.value,
+            pushes=result.push_count,
+            writes=len(writes),
+            code=code,
+        )
+    )
+    return code
+
+
+def _publication_code(result: PublicationResult) -> CouncilExit:
+    """Keep rejection distinct from lost/stale work without using the publisher's prose."""
+    if result.status is Status.REFUSED and result.push_count > 0:
+        return CouncilExit.PUSH_REFUSED
+    if result.status in (Status.LANDED, Status.ALREADY_ON_MAIN, Status.NO_CHANGES):
+        return CouncilExit.OK
+    return CouncilExit.FAILED
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return outcome.run(CouncilProgram.PUBLISH, lambda: _main(argv))
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = outcome.Parser(description=__doc__)
     parser.add_argument("--date", action="append", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--job-started-at", type=int)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--config-root", type=Path, default=Path("config"))
+    parser.add_argument(
+        "--units-result", choices=("success", "failure", "cancelled", "skipped"), default="success"
+    )
     args = parser.parse_args(argv)
     return settle_and_publish(
         repo=args.repo_root,
@@ -175,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         started_at=datetime.fromtimestamp(args.job_started_at, UTC)
         if args.job_started_at is not None
         else None,
+        units_failed=args.units_result in ("failure", "cancelled"),
     )
 
 

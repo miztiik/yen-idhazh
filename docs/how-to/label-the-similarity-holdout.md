@@ -1,6 +1,6 @@
 # Label the Similarity Holdout
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 Read pairs of articles the merge line has to decide between, and record whether
 each pair is one news event or two. The marks are saved through the ledger door
@@ -42,7 +42,7 @@ them, which is what lets the sheet sort by distance from the line.
 `idhazh council-prepare` writes one draw a day, under
 `backend/var/council/<date>/selection/<judge>/`
 ([run-the-pipeline.md](run-the-pipeline.md)). It runs the selection step of every
-tenant registered in `council.tenants`, so it writes nothing until the
+tenant registered in `judge_names` in `config/llm_council.json`, so it writes nothing until the
 content-similarity judge's slug is in that list. That tree is not committed, so
 a fresh clone has none of it and you draw the days you want first:
 

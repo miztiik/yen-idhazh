@@ -118,7 +118,7 @@ def stage_count_verdicts(
     that produced it at all.
     """
     knobs = settings.app.assemble.same_story.judging_knobs()
-    shards = settings.app.council.shards
+    shards = settings.council.shards
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
     writer = WriterIdentity.model_validate(identity.model_dump() | {"producer": PRODUCER})
 

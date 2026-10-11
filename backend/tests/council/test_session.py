@@ -27,7 +27,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -77,9 +77,10 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *slugs: str) -> Path:
     """The loader's named config inputs, with the named slugs registered."""
     target = copy_config(root)
-    raw = json.loads(read_text(target / "idhazh.json"))
-    raw["council"]["tenants"] = list(slugs)
-    (target / "idhazh.json").write_text(
+    write_declarations(target, slugs)
+    raw = json.loads(read_text(target / "llm_council.json"))
+    raw["judge_names"] = list(slugs)
+    (target / "llm_council.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     return target
@@ -102,6 +103,7 @@ def _a_whole_night(
     slugs: tuple[str, ...],
     shards: int,
     dead: tuple[int, ...],
+    stopped: bool = False,
     commit_sha: str = A_SHA,
 ) -> None:
     """Pick the work, run every unit, then settle - all through the command line."""
@@ -120,10 +122,9 @@ def _a_whole_night(
                 str(shards),
             ]
             if shard in dead:
-                with pytest.raises(RuntimeError):
-                    cli.main(argv)
+                assert cli.main(argv) == 1
             else:
-                assert cli.main(argv) == 0
+                assert cli.main(argv) == (1 if stopped else 0)
     assert (
         cli.main(
             [
@@ -181,7 +182,9 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     assert cli.main([verb, "--date", A_DATE, "--run-id", A_RUN, "--config", str(empty)]) == 0
     from idhazh.stages import common
 
-    assert not ledger.list_raw_files(common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, days={A_RUN[:10]})
+    assert not ledger.list_raw_files(
+        common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, days={A_RUN[:10]}
+    )
 
 
 def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue: Path) -> None:
@@ -189,8 +192,14 @@ def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(venue
     config_root = _config_registering(venue, A_SLUG)
     state = venue / "state"
     address = [
-        "--config", str(config_root), "--run-id", A_RUN,
-        "--state-root", str(state), "--commit", A_SHA,
+        "--config",
+        str(config_root),
+        "--run-id",
+        A_RUN,
+        "--state-root",
+        str(state),
+        "--commit",
+        A_SHA,
     ]
 
     for judged in (A_DATE, "2026-09-19"):
@@ -215,10 +224,7 @@ def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given(verb: str) -> N
     Every value it could reach for belongs to somebody else: a digest run's id
     claims a machine and a clock this night never drew.
     """
-    with pytest.raises(SystemExit) as refused:
-        cli.main([verb, "--date", A_DATE])
-
-    assert refused.value.code == 2, "argparse refuses a bad command line with 2"
+    assert cli.main([verb, "--date", A_DATE]) == 2
 
 
 def test_a_shard_with_no_tenant_stops_at_the_command_line() -> None:
@@ -227,10 +233,7 @@ def test_a_shard_with_no_tenant_stops_at_the_command_line() -> None:
     Without the refusal the verb would spend a runner - a checkout, an install
     and a multi-gigabyte weights restore - to decide it had been told nothing.
     """
-    with pytest.raises(SystemExit) as refused:
-        cli.main(["council-shard", "--date", A_DATE, "--run-id", A_RUN])
-
-    assert refused.value.code == 2
+    assert cli.main(["council-shard", "--date", A_DATE, "--run-id", A_RUN]) == 2
 
 
 def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -> None:
@@ -243,7 +246,7 @@ def test_the_command_line_hands_the_tenant_the_councils_own_clock(venue: Path) -
     """
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ())})
     config_root = _config_registering(venue, A_SLUG)
-    council = config.load(config_root).app.council
+    council = config.load_council(config_root)
     window = (
         council.shard_timeout_minutes
         - council.shard_preamble_minutes
@@ -283,12 +286,10 @@ def test_the_night_runs_every_hosted_tenant_for_the_date_it_was_given(venue: Pat
     """Pick the work, then settle it, both once a date and both for every tenant."""
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
-    council = config.load(config_root).app.council
+    council = config.load_council(config_root)
 
     session.prepare(council, date=A_DATE, run_id=A_RUN)
-    session.settle(
-        council, date=A_DATE, run_id=A_RUN, state_dir=venue / "state", commit_sha=A_SHA
-    )
+    session.settle(council, date=A_DATE, run_id=A_RUN, state_dir=venue / "state", commit_sha=A_SHA)
 
     tenant = written(A_VENUE, A_SLUG).TENANT
     assert tenant.prepared == [A_DATE]
@@ -302,8 +303,8 @@ def test_the_scratch_root_the_workflow_carries_is_the_one_the_council_names() ->
     would mean a unit writing where nothing collects from, and the run would look
     like a tenant that produced nothing.
     """
-    assert session.scratch_root(A_DATE).as_posix().endswith(
-        f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}"
+    assert (
+        session.scratch_root(A_DATE).as_posix().endswith(f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}")
     )
     assert not Path(session.COUNCIL_ROOT_RELPATH).is_absolute()
 
@@ -315,21 +316,16 @@ def test_a_units_file_names_the_date_the_tenant_and_the_unit_that_wrote_it() -> 
     copied out for a person to look at - still says who wrote it. A name carrying
     only the date is the defect this grammar exists to close.
     """
-    named = session.unit_file(
-        A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG, shard=7
-    )
+    named = session.unit_file(A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG, shard=7)
 
     assert named.name == f"{A_DATE}-{A_SLUG}-07.csv"
-    assert named.parent == session.unit_dir(
-        A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG
-    )
+    assert named.parent == session.unit_dir(A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG)
 
 
 def test_eight_units_of_one_date_write_eight_paths() -> None:
     """Sharding works because the names differ, and it works up to any width."""
     written_paths = {
-        session.unit_file(A_DATE, slot="verdicts", judge_id=A_SLUG, shard=unit)
-        for unit in range(8)
+        session.unit_file(A_DATE, slot="verdicts", judge_id=A_SLUG, shard=unit) for unit in range(8)
     }
 
     assert len(written_paths) == 8
@@ -389,9 +385,7 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
     recorded = _the_councils_record(state_root)
     ran = [row for row in recorded if row.evaluation_step is EvaluationStep.EVALUATE_WORK_PART]
 
-    assert sorted(
-        (row.evaluation_step, row.work_part_index) for row in recorded
-    ) == sorted(
+    assert sorted((row.evaluation_step, row.work_part_index) for row in recorded) == sorted(
         [
             (EvaluationStep.COMBINE_JUDGE_RESULTS, None),
             (EvaluationStep.SELECT_JUDGE_WORK, None),
@@ -400,9 +394,7 @@ def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
             (EvaluationStep.EVALUATE_WORK_PART, 3),
         ]
     )
-    assert [row.work_part_index for row in ran] == [0, 1, 3], (
-        "the unit that died filed nothing"
-    )
+    assert [row.work_part_index for row in ran] == [0, 1, 3], "the unit that died filed nothing"
     assert {row.work_part_count for row in recorded} == {4}
     assert len(ran) < ran[0].work_part_count, "the pair is what an operator reads as a missing unit"
     assert {row.judge_id for row in recorded} == {A_SLUG}
@@ -428,7 +420,7 @@ def test_a_unit_that_stopped_on_its_own_clock_still_has_its_row_filed(
     config_root = _config_registering(venue, A_SLUG)
     state_root = tmp_path / "state"
 
-    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=1, dead=())
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=1, dead=(), stopped=True)
 
     unit = next(
         row
@@ -492,9 +484,7 @@ def test_two_tenants_of_one_night_both_keep_their_own_first_unit(
     recorded = _the_councils_record(state_root)
 
     assert "judge_id" in ledger.COUNCIL_RUN_RECORD_KEY
-    assert {
-        (row.judge_id, row.evaluation_step, row.work_part_index) for row in recorded
-    } == {
+    assert {(row.judge_id, row.evaluation_step, row.work_part_index) for row in recorded} == {
         (A_SLUG, EvaluationStep.COMBINE_JUDGE_RESULTS, None),
         (A_SLUG, EvaluationStep.EVALUATE_WORK_PART, 0),
         (A_SLUG, EvaluationStep.SELECT_JUDGE_WORK, None),
@@ -570,17 +560,11 @@ def test_the_saving_job_files_one_date_and_a_rerun_replaces_its_rows(
     _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=2, dead=())
     retried = ledger.read_day_files(state_root, LedgerName.COUNCIL_RUN_RECORDS, A_DATE)
     assert len(retried) == 2, "the door keeps each physical attempt for settlement"
-    stored = [
-        ledger.load_stored([raw.path], model=CouncilRunRecord)
-        for raw in retried
-    ]
+    stored = [ledger.load_stored([raw.path], model=CouncilRunRecord) for raw in retried]
     current = ledger.settle_rows(stored, ledger.COUNCIL_RUN_RECORD_KEY)
 
     assert {row.identity.attempt for row in current} == {2}
-    assert {
-        (row.row.evaluation_step, row.row.work_part_index)
-        for row in current
-    } == {
+    assert {(row.row.evaluation_step, row.row.work_part_index) for row in current} == {
         (EvaluationStep.SELECT_JUDGE_WORK, None),
         (EvaluationStep.EVALUATE_WORK_PART, 0),
         (EvaluationStep.EVALUATE_WORK_PART, 1),
@@ -604,7 +588,8 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     checks in `test_council_runs_without_a_judge.py` hold the contract exception.
     """
     found = _judge_modules_reached(
-        "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)
+        "idhazh.council.session",
+        ("idhazh.content_similarity_judge", "idhazh.similarity", *JUDGE_STAGE_MODULES),
     )
 
     assert found == [], f"a council verb imports {found}"
@@ -617,7 +602,9 @@ def test_the_router_no_longer_carries_a_judges_stage() -> None:
     spelled in the router's own tuple, which is how the four judge verbs
     survived the first cut. Both halves are held here.
     """
-    found = _judge_modules_reached("idhazh.cli", JUDGE_STAGE_MODULES)
+    found = _judge_modules_reached(
+        "idhazh.cli", ("idhazh.content_similarity_judge", *JUDGE_STAGE_MODULES)
+    )
 
     assert found == [], f"the router still imports {found}"
     assert not [verb for verb in cli.STAGES if verb.startswith("judge")]

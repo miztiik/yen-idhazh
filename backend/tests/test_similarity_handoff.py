@@ -19,8 +19,8 @@ from typing import Final
 
 import pytest
 
+from idhazh.content_similarity_judge import tenant
 from idhazh.council import session
-from idhazh.similarity import tenant
 from idhazh.stages import common, judge_item_pairs
 
 #: A night these tests ask the tenant about. Any date would do - none of them

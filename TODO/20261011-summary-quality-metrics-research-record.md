@@ -1,6 +1,6 @@
 # Evaluating LLM-written news summaries without references: dimensions, metrics, composite decisions and drift monitoring
 
-**Record**: research for the summary-fidelity-judge plan (TODO/20261011-summary-fidelity-judge-plan.md), made on 2026-10-11 at the owner's request to survey recent research on news and long-form summary metrics and on combining metrics into one decision. Written by a research agent; every cited work was checked to exist; quotations are kept short and the rest is summarised. It is evidence for the owner's rulings, not a ruling.
+**Record**: research for plan 65, the summary-fidelity judge (TODO/20261011-65-summary-fidelity-judge-plan.md), made on 2026-10-11 at the owner's request to survey recent research on news and long-form summary metrics and on combining metrics into one decision. Written by a research agent; every cited work was checked to exist; quotations are kept short and the rest is summarised. It is evidence for the owner's rulings, not a ruling.
 
 Research review for the yen-idhazh summary-fidelity judge ("hard look"), 2026-10-11.
 
@@ -651,7 +651,7 @@ Notes: [vendor] marks a vendor document, [preprint] a paper not peer-reviewed at
 
 **Internal context (not literature)**
 
-75. yen-idhazh, the summary-fidelity-judge plan (TODO/20261011-summary-fidelity-judge-plan.md) and the daily records under state/day-metrics/: source for the 2026-09-07 step, the owner's rulings and the P14, P15 and P17 references.
+75. yen-idhazh, plan 65, the summary-fidelity judge (TODO/20261011-65-summary-fidelity-judge-plan.md) and the daily records under state/day-metrics/: source for the 2026-09-07 step, the owner's rulings and the P14, P15 and P17 references.
 76. yen-idhazh, "What one summary number means": docs/concepts/summary-metrics.md. Source for the statement that `hhem` is the best of overlapping windows.
 
 (+) These papers' existence and bibliographic details were confirmed by web search during this review. The DOI links themselves could not be click-tested from the sandbox, which has no network access. Lucas & Saccucci, Hawkins, Jensen et al. and Derringer & Suich had their DOI or stable URL confirmed in search results.

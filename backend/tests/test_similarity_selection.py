@@ -19,6 +19,7 @@ headline, which scores 1.0 by a different rule than every other pair.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from collections import Counter
 from dataclasses import replace
@@ -398,6 +399,37 @@ def test_the_draw_round_trips_through_the_contract(
     headline = [row for row in rows if row.headline]
     assert len(headline) == 1, "one pair of mastheads ran the same headline"
     assert headline[0].composite_score == 1.0
+
+
+def test_a_written_judge_budget_changes_the_real_draw_without_cutting_merged_pairs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    digest_root = tmp_path / "digest"
+    a_published_day(digest_root)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    settings = config.load(CONFIG_DIR)
+    path = tmp_path / "config" / "judges" / "content-similarity-judge.json"
+    path.parent.mkdir(parents=True)
+    raw = json.loads((CONFIG_DIR / "judges" / path.name).read_text(encoding="utf-8"))
+    driven = replace(settings, config_dir=path.parent.parent)
+
+    def draw(budget: int) -> Draw:
+        raw["pair_budget"] = budget
+        path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
+        return stage_pick_item_pairs(
+            DATE,
+            run_id=COUNCIL_RUN,
+            settings=driven,
+            digest_root=digest_root,
+            draw_path=tmp_path / f"draw-{budget}.csv",
+        )
+
+    full = draw(200)
+    limited = draw(1)
+    line = settings.app.assemble.same_story.floor_min
+    merged = [pair for pair in full.taken if pair.score >= line]
+    assert len(limited.taken) < len(full.taken) == full.pairs_in_band
+    assert limited.taken == merged
 
 
 def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(

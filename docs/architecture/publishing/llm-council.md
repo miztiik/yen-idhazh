@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-11
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -31,7 +31,7 @@ nothing at all.
 ## Three verbs, and all three are the council's own
 
 The workflow runs `council-prepare`, `council-shard` and `council-settle`, and
-nothing else. Each one resolves the slugs in `council.tenants`, calls the
+nothing else. Each one resolves the active names in `config/llm_council.json`, calls the
 matching member of the tenancy protocol on every tenant it got, and files what
 comes back. **Until 2026-09-21 it ran one judge's four commands instead**, and
 the command router imported that judge's four stage modules at the top of the
@@ -57,46 +57,160 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
+### Events and exit codes
+
+Every council program writes one JSON event per log line on stderr through
+`backend/idhazh/event_lines.py`, the same writer the gardener uses.
+`backend/idhazh/contracts/council_events.py` declares the event fields.
+The planner records dates and counts, the matrix records committed judge
+declarations, each attempted unit records its result, and the collector records
+collection counts and publication status. No event carries article, judge or
+source text. An exception carries only its type and place in the code.
+Unstructured library messages are omitted, not copied into an event.
+
+The workflow's key-value outputs stay on stdout. Each entrypoint writes its
+final code, label and fixed sentence together in a `program-finished` event:
+`0 ok` means every unit finished and the rows landed; `1 failed` means a unit
+failed, or the rows did not land (stale or lost); `2 refused` means stopped
+before any unit ran; `3 push_refused` means main refused every push, so nothing
+landed. `backend/idhazh/council/outcome.py` combines actual outcomes, worst first:
+2, 3, 1, 0. A returned deadline stop earns 1, not success. The final event is
+printed even when the configured log level hides routine progress.
+
+The collector retains completed work from earlier and later judges and dates
+after a failure. It also receives the judging job's result, so a failed or
+cancelled cell stays red even when its siblings' bytes land. Publication never
+reruns a judge. An integrity failure found after work earns 1 and publishes
+nothing; it cannot claim that no unit ran. A raised unit emits a failure event
+but still leaves a missing persisted council record. Adding that record is a
+separate contract change.
+
+Each entrypoint installs the shared text-free crash printer. Caught failures
+become diagnostic events. An uncaught crash prints exception types and code
+places, never messages, paths, source lines or notes.
+
+### Design rationale: one log format does not mean one text policy
+
+The shared writer owns line format and UTC stamps. The gardener retains its
+existing text-event adapter and GitHub command handling. The council omits
+unstructured text because a judge or library may put source text in a message.
+The crash printer uses the standard library alone, so pre-install programs keep
+working. These policies do not import gardener or judge code into the council.
+
 ## The tenant list, and the judge in it
 
-`council.tenants` is an ordered list of slugs in `config/idhazh.json`. It is the
+`judge_names` is an ordered list of slugs in `config/llm_council.json`. It is the
 one place a judge is registered, and since 2026-09-21 it names one: the
 content-similarity judge, which declares itself in
-[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py)
-and routes the three units of work to its own four stages. An empty list is
+[../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py)
+and routes the three units of work to its own four stages. Its declaration is
+`config/judges/content-similarity-judge.json`: active, and running a model.
+An empty list, or a list with no active judge, is
 still a legal night - the venue runs every step it always runs and judges
 nothing.
 
-**That one line decides whether a night judges anything at all.** Everything
-else can be built, every gate can pass, and a config naming no slug still runs a
-night that plans tonight, fans out to no cell and commits nothing.
+The council reads its own file through `CouncilConfig` and `config.load_council`.
+The shared loader also carries it as `Settings.council` and records its digest.
+The file holds the same clocks, width, repair window and floor as before.
+`config/idhazh.json` refuses a `council` block and names the new file.
 
-A slug resolves to the module that declares it: the council reads the directory
-listing of its own package, finds each subpackage that has a `tenant` module in
-it, and imports one until a declared slug matches. **Every one of those imports
-happens inside a function**, so no council module carries a judge in its import
-closure - and a package with no `tenant` module is never imported at all, so one
-tenant's broken import cannot hide another tenant's slug.
+### Design rationale: the council owns its settings file
+
+The workflow's settings and judge list live together, as the gardener's settings
+and task list do. A judge's settings are not the venue's settings. Moving this
+file changes neither which judges run nor what work fits inside a night.
+
+### Each registered judge declares whether it runs
+
+Every name has a file at `config/judges/<slug>.json`. The council validates only
+`lifecycle_status` and `runs_model`; both are required, with no default.
+`JudgeDeclaration` declares those two keys. The judge's own settings reader
+validates the other keys. Registration order is preserved, and a repeated name
+is refused by name.
+
+Table A - judge status
+
+| Id | Status | Council work | Existing rows |
+| --- | --- | --- | --- |
+| A1 | `active` | Import, ask about outstanding nights, build cells, prepare, run shards, settle and publish. Start a model server only where `runs_model` is true. | Families must accept every committed ledger. |
+| A2 | `paused` | No import, question, cell, work, staged path or council record. Keep its name and file. | Readers, other writers, packing and ageing keep their own rules. |
+| A3 | `retired` | As paused, for good. Keep the name and file; its package may stay. Never reuse its slug. | Keep row contracts while retained rows need them. |
+
+Every scheduled step uses `CouncilConfig.running()` before resolving code.
+The planning job logs each registered name and status to stderr, never to its
+key-value outputs. A paused judge may have an unavailable or broken package;
+the scheduled night never imports or checks it.
+
+Planning validates the whole declaration set and resolves every active package
+before asking about outstanding nights or preparing any work. A missing judge
+file, duplicate name, missing active package or raising active import earns
+`2 refused`, with the configured judge's validated slug in the diagnostic.
+Dependency failures retain their cause; they are not called missing judges.
+Neither the diagnostic nor the output includes exception text.
+
+An active judge is refused by name if any ledger it will commit belongs to a
+paused or retired family. The refusal names the judge, ledger and family.
+This includes the venue's own records. A paused judge and an active family are
+legal: the family may still serve readers and other writers.
+
+### Design rationale: a new judge starts paused
+
+Owner decision, 2026-10-11: a new judge lands paused with its file and package.
+A person switches it to active in a commit whose message names the activation
+decision. The commit log is the record; no named-decision test enforces it.
+The existing content-similarity judge remains active, so its nights do not change.
+
+For example, `summary-fidelity-judge` can be registered after its package lands:
+
+```json
+{"judge_names": ["content-similarity-judge", "summary-fidelity-judge"]}
+```
+
+Its own `config/judges/summary-fidelity-judge.json` moves through these edits:
+
+```text
+{"lifecycle_status": "paused", "runs_model": false}
+{"lifecycle_status": "active", "runs_model": false}
+{"lifecycle_status": "paused", "runs_model": false}
+{"lifecycle_status": "retired", "runs_model": false}
+```
+
+The activation commit records the person's decision. Pause again if a defect
+is found; keep all rows. On return, only nights inside the repair window can be
+judged, so a pause longer than that window leaves older nights unjudged.
+Retire when replaced; keep both registration and declaration.
+
+A slug names its package with hyphens replaced by underscores. The council
+imports exactly `idhazh.<package>.tenant`, checks that its required `TENANT`
+declares the requested `judge_id`, then asks that module whether its work fits
+the night. No directory is listed and no neighboring package is imported.
+The config loader refuses a slug whose derived package is not a Python
+identifier or is a keyword. Imports stay inside the resolver, so no council
+module carries a judge in its import closure.
+
+Tenant binding imports no execution stages or heavy judge libraries. Import
+those inside the functions that use them, so planning needs no judge extras
+just to resolve a name. The content-similarity tenant imports its stage modules
+only when preparing, judging or settling.
 
 Three things follow, and each is the reason a simpler design was refused.
 
 - **No list in Python.** A map from slug to module would make adding a judge a
   code change, and it would be a roster of who may exist - which is what the
   central judge identifier was deleted for.
-- **A slug nothing declares is refused by name.** Skipping it would run every
+- **A missing module or a different declared slug is refused by name.** Skipping it would run every
   step, report nothing wrong, and judge less than the config asked for.
-- **Removing a judge is a config edit and a directory delete.** Never a router
-  edit.
+- **Stopping a judge changes its status, not its registration.** No router edit
+  or package deletion is needed.
 
 ### Resolving is also when a tenant may refuse the night
 
 A tenant module may declare
 `refuse_a_night_this_tenant_cannot_finish`, and the resolver calls it on the
-tenant that answered to the slug - on that one and on no other. A tenant nobody
-registered cannot stop a night it is not in, even though the search has to import
-it to read its slug.
+tenant that answered to the slug - on that one and on no other. An unrequested
+tenant is never imported and cannot stop a night it is not in.
 
-**The planning job resolves every registered slug before it can build its
+**The planning job resolves every active slug before it can build its
 matrix**, so a refusal lands there: before the matrix exists, before any job is
 dispatched, and before a runner has restored a model's weights. "Before a model
 call" would be a weaker claim - it is also true of a point after a cache restore
@@ -166,19 +280,19 @@ an entry, so the matrix, the artifact names and the collecting job all carry it
 without any of them changing shape.
 
 **The council asks; it does not look.** It calls `nights_outstanding(window=...)`
-on every registered tenant and unions what comes back. It opens no tenant's
+on every active tenant and unions what comes back. It opens no tenant's
 ledger, so it needs to know nothing about how a tenant files anything - and
 **with nobody registered the union is empty and tonight is the whole plan**.
 Every step below still runs on that one date.
 
-Three knobs draw the boundary, and all three are the council's because each one
+Three knobs in `config/llm_council.json` draw the boundary, and all three are the council's because each one
 is another job a tenant a shard.
 
 | The knob | What it sets | Committed |
 | --- | --- | --- |
-| `council.repair_window_nights` | how many nights back the council asks about, ending the night before tonight | 7 |
-| `council.first_night` | the floor no window reaches past | 2026-09-19 |
-| `council.repair_dates_a_night` | how many older dates one night may repair, on top of tonight | 1 |
+| `repair_window_nights` | how many nights back the council asks about, ending the night before tonight | 7 |
+| `first_night` | the floor no window reaches past | 2026-09-19 |
+| `repair_dates_a_night` | how many older dates one night may repair, on top of tonight | 1 |
 
 **What counts as behind is the tenant's**, because only the tenant knows what it
 has read. **The window is the council's**, because only the council knows what a
@@ -238,25 +352,29 @@ The model entry, the temperature, the prompt and the grammar all reach a runner
 through a reviewed commit. A person approves the instrument at that commit, not
 at 22:00 on a runner.
 
-Two things the workflow needed for this, and neither is a stored secret.
-`permissions:` declares `actions: read` beside `contents: write`, because a
-declared block sets every scope it does not list to none and reading an artifact
-needs that one; the default credential carries it and reaches each download by
-hand. And **the uploads keep three nights instead of one**. One day expired
+Each job declares only the permissions its steps use. The planning job
+(`draw`) has `contents: read`. Judging cells (`judge`) have `contents: read`
+and `actions: read` for artifact downloads. Only the collecting job
+(`save_council_results`) has `contents: write`; it also has `actions: read`
+for its downloads. Each declared block sets every unlisted scope to none.
+Judge code runs beside fetched article text, so it must not hold a write token.
+The default credential reaches each download by hand; there is no stored token.
+`backend/tests/workflows/test_llm_council_workflow.py` holds this boundary.
+
+**The uploads keep three nights instead of one**. One day expired
 before the next scheduled run had even started, so a run that judged a whole
 night and then died before committing left its verdicts where nothing could
 reach them. A shard file is about 27 KB, so a week of four shards is under a
 megabyte. Nothing in the workflow reads across a run today - a dead night is
-repaired by judging its date again - so the scope keeps the cheaper recovery
-open rather than powering one that already exists.
+repaired by judging its date again.
 
 ## The matrix is a flat list of cells
 
 The planning job asks
 [../../../backend/utilities/council_matrix.py](../../../backend/utilities/council_matrix.py)
 what the night fans out to, and publishes the answer as job outputs. A cell
-carries four values - the tenant, the date, the shard, and **that tenant's own
-width**.
+carries five values - `tenant`, `date`, `shard`, `shards` (that tenant's own
+width), and `runs_model` (whether this cell needs a model server).
 
 **Not a cross product of three vectors.** A per-tenant width is not a third
 axis: a product would hand every tenant the widest tenant's width, and a tenant
@@ -277,18 +395,24 @@ would fail on an error nobody could read. The collecting job keeps `always()`.
 
 ## Units judge, and only the collecting job writes
 
-Units run in parallel, one `llama-server` each, and **none of them commits
+Units run in parallel, one `llama-server` for each model-running cell, and **none of them commits
 anything**. A `collect` job downloads every unit's output and makes one commit call,
 over every path the night's tenants named. Two processes never share a path.
+
+The model-server action has `if: matrix.runs_model`. A model-free cell restores
+no weights and starts no server. It keeps the same timeout, preamble allowance
+and wrap-up reserve. Its process starts earlier, so its unchanged work window
+ends earlier against the job clock; there is no second clock or larger budget.
+The planning job still prints the pinned llama.cpp build on every night.
 
 `fail-fast` is off. **A unit that dies costs its own work and nothing else** -
 the settle runs anyway and keeps everything the surviving units produced.
 
 **Writers declare their paths beside themselves.** Tenant paths come back from
 `committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
-`HOST_FINGERPRINT` beside its session; their staging paths come from the ledger
+`HOST_FINGERPRINT` beside its resolver; their staging paths come from the ledger
 registry. The collecting utility uses these independent declarations and returns
-without a record or push when no tenant is registered.
+without a record or push when no judge is active.
 
 **A declared directory is not permission to sweep it.** As the collecting job
 finishes atomic writes, `council_publish.py` records exact paths and byte digests
@@ -321,9 +445,9 @@ what this run wrote onto the new base is the whole of what is needed.
 
 **The venue owns every clock here, because the venue owns the runner.** The job
 timeout, the checkout, the install and the weights restore are all the council's
-and no tenant can see any of them, so `council.shard_timeout_minutes`,
-`council.shard_preamble_minutes` and `council.shard_wrap_up_minutes` sit in the
-council's own config block. The first is how long GitHub lets a unit hold a
+and no tenant can see any of them, so `shard_timeout_minutes`,
+`shard_preamble_minutes` and `shard_wrap_up_minutes` sit in
+`config/llm_council.json`. The first is how long GitHub lets a unit hold a
 runner. The second is what the venue has already spent before the judging
 process starts. The third is the reserve: how much a unit keeps back for writing
 its records and getting its artifact away.
@@ -362,7 +486,7 @@ those four steps is about 12.1 minutes - provisioning 0.41, cache restore 0.63
 to 1.58, checksum verify 0.12, and a health poll bounded at 10 - so the default
 is 13, one minute above it.
 
-**`council.shard_timeout_minutes` stays at 200 and no council number is derived
+**`shard_timeout_minutes` stays at 200 and no council number is derived
 from a judge's throughput.** How long the venue lets one unit occupy a runner is
 the council's policy, set against the platform's 6 h job ceiling and the nightly
 schedule. A bound derived from a measured per-pair cost would be the coupling
@@ -380,7 +504,7 @@ the reserve exists to avoid.
 
 **And the upload runs whatever happened to the unit.** It carries `always()`,
 because the exposure was never the collecting job dying - it is a unit dying.
-Without it a unit that spent most of `council.shard_timeout_minutes` and judged
+Without it a unit that spent most of `shard_timeout_minutes` and judged
 every pair it reached ships none of them, and tomorrow's run pays for that work
 a second time.
 

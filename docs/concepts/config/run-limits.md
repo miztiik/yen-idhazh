@@ -1,6 +1,6 @@
 # Guards, alarms and limits
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-10-11
 
 Some numbers in `config/` are not there to be tuned. They are there to stop a
 bug running for six hours, to say out loud that something has changed, or to
@@ -38,9 +38,9 @@ The width is the one that bit. `.github/workflows/llm-council.yml` sized its own
 
 What stayed put: `run.shard_timeout_minutes` and `run.shard_wrap_up_minutes` are the work shard's, a different stage with a different preamble, and `flush_every_pairs` is denominated in pairs, a unit only the content-similarity judge has. Ruled by Carmack on the three that moved and by Fowler on the block that became optional, 2026-09-21.
 
-**`council.tenants` is in the same block for the same reason, and what is in it is a config edit rather than a code change.** A list of judges written in Python would be a roster of who may exist - the thing a central judge identifier was deleted for. So the config carries slugs, the council resolves each slug to the module that declares it, and a slug nothing declares is refused by name rather than skipped. A night that quietly dropped an unrecognised slug would run every step, report nothing wrong and judge less than the file asked for. It named nobody until 2026-09-21 and names the content-similarity judge now; an empty list stays legal, and it is a night the venue runs end to end and judges nothing.
+**The council's settings and `judge_names` share `config/llm_council.json`.** Registration is a config edit, not a code change, and an empty list stays legal. [The council owns that rule](../../architecture/publishing/llm-council.md#the-tenant-list-and-the-judge-in-it).
 
-**And `council.shard_preamble_minutes` exists because the job's clock and the process's clock are not the same clock.** The platform starts counting at provisioning; the judging process starts after a checkout, a weights cache restore, a checksum verify and a health poll. Subtracting only the wrap-up reserve put the in-process deadline **after** GitHub's own kill whenever the model was slow to load - so on the one night the reserve was for, it protected nothing. The default of 13 minutes is one minute above the worst case those four steps have been measured at, which is 12.1 minutes. Raising the bound instead was refused: how long a unit may occupy a runner is the venue's policy against the platform ceiling and the nightly schedule, and no council number is derived from any judge's throughput. Owner ruling, 2026-09-21.
+**And `shard_preamble_minutes` exists because the job's clock and the process's clock are not the same clock.** The platform starts counting at provisioning; the judging process starts after a checkout, a weights cache restore, a checksum verify and a health poll. Subtracting only the wrap-up reserve put the in-process deadline **after** GitHub's own kill whenever the model was slow to load - so on the one night the reserve was for, it protected nothing. The default of 13 minutes is one minute above the worst case those four steps have been measured at, which is 12.1 minutes. Raising the bound instead was refused: how long a unit may occupy a runner is the venue's policy against the platform ceiling and the nightly schedule, and no council number is derived from any judge's throughput. Owner ruling, 2026-09-21.
 
 ## A guard is not a limit, and its name has to say so
 
