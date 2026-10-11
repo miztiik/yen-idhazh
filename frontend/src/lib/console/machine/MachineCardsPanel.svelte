@@ -29,9 +29,13 @@
 		title="Which machines this run was given"
 		note="A run is not a machine and most runs draw more than one kind, so a rate quoted for the whole run belongs to none of them - one card a machine of the newest run."
 	>
-		<p class="lede" data-lede data-comparison="Each machine against the page's fixed speed scale"
+		<p class="lede" data-lede
 			data-model-rule="no" data-model-rule-none="These are the machines of one run, not a change over days.">
-			{machines.cards.length} machine kinds in run {newestRunId ?? (machines.runId || 'not recorded')}.
+			{machines.cards.length ? `${machines.cards.length} machine ${machines.cards.length === 1 ? 'kind' : 'kinds'} given to`
+				: 'No recorded machine identity in'} run {newestRunId ?? (machines.runId || 'not recorded')}.
+		</p>
+		<p data-comparison="Each machine's share of the shards against the other machines' shares">
+			Each machine's share of the shards against the other machines' shares.
 		</p>
 		{#if machines.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="machines-off">
@@ -73,7 +77,7 @@
 </div>
 
 <style>
-	.lede { font-size: var(--text-2xl); font-weight: 600; line-height: var(--leading-tight); }
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.empty {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-sm);

@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { windowOfDays } from '../src/lib/charts/viewport';
 
 import type { DiskReadDay, DiskReads } from '../src/lib/console/machine/disk-reads';
+import { diskReads as recordedDiskReads } from '../src/lib/console/machine/disk-reads';
 import { memoryHeld } from '../src/lib/console/machine/memory-held';
 
 import { windowed } from './support/console-window/controls';
@@ -96,6 +97,16 @@ test.beforeAll(async ({}, testInfo) => {
 async function draw(page: Page, name: string, props: Record<string, unknown>) {
   await page.setContent(`<style>${stripStyles}</style><main>${drawn[name](props)}</main>`);
 }
+
+test('a marked disk day below the naming threshold still prints its measured waits', async ({ page }) => {
+	const reads = recordedDiskReads([{
+		date: JUDGED_THROUGH, run_id: `${JUDGED_THROUGH}-1`, item_index: '1', llama_major_faults: '2'
+	}], { marked: 1, named: 3 });
+	await draw(page, 'DiskReadsPanel', { reads, days: 1, windowDays: 1, readoutMaxShare: 1 });
+	await expect(page.locator('[data-disk-read-finding]')).toHaveAttribute('data-disk-read-finding', 'fired');
+	await expect(page.locator('[data-disk-read-finding]')).toContainText('2 waits for disk memory');
+	await expect(page.locator('[data-lede]')).toHaveText('1 of 1 recorded days marked a disk re-read.');
+});
 
 test('THE ORACLE: the disk-reads panel names one date and this one day, and no keys, at one day', async ({
 	page

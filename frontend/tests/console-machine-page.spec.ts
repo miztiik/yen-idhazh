@@ -4,6 +4,8 @@ import * as queries from '../src/lib/console/queries/machine';
 import type { Row } from '../src/lib/data/ledger';
 import { buildRows, serveToPage } from './support/ledger-lifecycle';
 import { machineRecordState } from './support/machine-record-state';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const DAY = '2026-08-20', RUN = `${DAY}-1`;
 const PANELS = ['two-clocks', 'processor-lost', 'disk-reads', 'machine-cards', 'slower-machines',
@@ -15,23 +17,28 @@ function cells(ledger: string): Row {
 		.flatMap((query) => query.columns).map((name) => [name, null]));
 }
 
-async function fixture(page: Page, count: number | null, conflict = false, hostConflict = false) {
+async function fixture(page: Page, count: number | null, conflict = false, hostConflict = false,
+	options: { stolenPct?: number; diskReads?: number; itemsPerShard?: number } = {}) {
 	const root = test.info().outputPath('machine-records');
 	await buildRows(root, 'host-fingerprint', [{ covers: DAY, rows: (hostConflict ? [0, 1, 0] : [0, 1]).map((shard, index) => ({
 		...cells('host-fingerprint'), date: DAY, run_id: RUN, job: 'work', shard,
 		fingerprint: '0123456789abcdef', cpu_model: 'Fixture CPU', cores: index === 2 ? 8 : 4, threads: 8,
 		model_load_ms: 1000, job_seconds: 30, server_prompt_tokens: 100, server_prompt_seconds: 1
 	})) }]);
-	await buildRows(root, 'item-health', [{ covers: DAY, rows: [0, 1].map((shard) => ({
-		...cells('item-health'), date: DAY, run_id: RUN, item_id: `article-${shard}`, source_id: 'fixture',
+	await buildRows(root, 'item-health', [{ covers: DAY, rows: [0, 1].flatMap((shard) =>
+		Array.from({ length: options.itemsPerShard ?? 1 }, (_, index) => ({
+		...cells('item-health'), date: DAY, run_id: RUN, source_id: 'fixture',
 		machine_job: 'work', machine_shard: shard, cpu_model: 'Fixture CPU',
-		item_index: shard, input_tokens: 100, cached_tokens: 0, output_tokens: 20,
+		item_index: options.itemsPerShard ? index : shard, input_tokens: 100, cached_tokens: 0, output_tokens: 20,
 		prefill_ms: 2000, decode_ms: 500, item_total_ms: 4000, fetch_ms: 500, extract_ms: 500,
 		summarize_ms: 2000, faithfulness_ms: 500, stage_gap_ms: 500, queue_wait_ms: 100,
 		label_input_tokens: 100, label_cached_tokens: 10, summary_input_tokens: 200, summary_cached_tokens: 40,
 		n_ctx_configured: 8192, n_parallel: 2, os_mem_total_bytes: 16 * 2 ** 30,
-		os_mem_available_min_bytes: 6 * 2 ** 30, os_mem_available_bytes: 6 * 2 ** 30
-	})) }]);
+		os_mem_available_min_bytes: 6 * 2 ** 30, os_mem_available_bytes: 6 * 2 ** 30,
+		llama_rss_bytes: 8 * 2 ** 30, cpu_steal_pct: options.stolenPct ?? 1,
+		llama_major_faults: options.diskReads ?? 0,
+		item_id: options.itemsPerShard ? `article-${shard}-${index}` : `article-${shard}`
+	}))) }]);
 	await buildRows(root, 'run-shards', [{ covers: DAY, rows: [
 		{ date: DAY, run_id: RUN, shards: count },
 		...(conflict ? [{ date: DAY, run_id: RUN, shards: 3 }] : [])
@@ -65,8 +72,39 @@ test('all fifteen panels draw after public queries arrive, without a manifest re
 	await expect(context).toContainText('4096 tokens per request slot');
 	await expect(context.locator('[data-comparison]')).toHaveText('Each prompt against the reading limit.');
 	await expect(page.locator('[data-console-panel-id="prompt-reuse"] [data-lede]')).toHaveText('10 tokens held for the middle label request.');
+	await expect(page.locator('[data-console-panel-id="memory-held"] [data-lede]')).toContainText('At most 50.0 percent');
+	await expect(page.locator('[data-console-panel-id="disk-reads"] [data-lede]')).toHaveText('0 of 1 recorded days marked a disk re-read.');
 	for (const call of ['label', 'summary']) {
 		await expect(context.locator(`svg[data-chart-name="context-${call}"]`)).toContainText('Reading limit: 4096 tokens per slot');
+	}
+});
+
+test('a marked processor day below the naming threshold is never described as a quiet machine', async ({ page }) => {
+	const knobs = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')).console;
+	await fixture(page, 2, false, false, {
+		stolenPct: (knobs.processor_lost_pct_marked + knobs.processor_lost_pct_named) / 2,
+		diskReads: knobs.model_disk_reads_marked
+	});
+	await expect(page.locator('[data-processor-lost-verdict]')).toHaveAttribute('data-processor-lost-verdict', 'marked');
+	await expect(page.locator('[data-console-panel-id="processor-lost"] [data-lede]')).toContainText(`1 of 1 recorded days reached ${knobs.processor_lost_pct_marked} percent`);
+	await expect(page.locator('[data-console-panel-id="disk-reads"] [data-lede]')).toHaveText('1 of 1 recorded days marked a disk re-read.');
+	await expect(page.locator('[data-disk-read-finding]')).not.toContainText('never once');
+});
+
+test('the tail lede quotes the slowest tenth in seconds and each lede uses its planned size', async ({ page }) => {
+	await fixture(page, 2, false, false, { itemsPerShard: 10 });
+	await expect(page.locator('[data-console-panel-id="tail-trend"] [data-lede]')).toContainText('2.0 seconds at the slowest tenth');
+	for (const id of PANELS.filter((id) => id !== 'platform-mix')) {
+		const size = await page.locator(`[data-console-panel-id="${id}"] [data-lede]`).evaluate((node, panel) => {
+			const token = panel === 'article-cost' ? '--text-2xl' : '--text-xl';
+			const probe = document.createElement('span');
+			probe.style.fontSize = `var(${token})`;
+			node.appendChild(probe);
+			const expected = getComputedStyle(probe).fontSize;
+			probe.remove();
+			return { actual: getComputedStyle(node).fontSize, expected };
+		}, id);
+		expect(size.actual, id).toBe(size.expected);
 	}
 });
 

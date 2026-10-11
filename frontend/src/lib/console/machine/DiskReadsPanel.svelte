@@ -64,7 +64,7 @@
 			? 'empty'
 			: reads.recorded === 0
 				? 'unrecorded'
-				: reads.worst !== null
+				: reads.fired > 0
 					? 'fired'
 					: 'quiet'
 	);
@@ -83,6 +83,9 @@
 			return days === 1
 				? `${waited}, on ${reads.worst.date}.`
 				: `${waited}, worst on ${reads.worst.date} at ${grouped(reads.worst.reads ?? 0)}, over the ${reads.recorded} of ${countDays(days)} that counted.`;
+		}
+		if (reads.reads > 0) {
+			return `The model recorded ${grouped(reads.reads)} waits for disk memory over ${reads.recorded} recorded days; ${reads.fired} days crossed the panel's marking rule.`;
 		}
 		return days === 1
 			? `In ${nameSpan(days)}, the model never once had to wait on the disk for memory it already had.`
@@ -208,8 +211,12 @@
 			? `one tile for ${nameSpan(windowDays)}`
 			: `one tile a day, over ${nameSpan(windowDays)}`}."
 	>
-		<p class="finding" data-lede data-disk-read-finding={verdict}
-			data-comparison="Disk waits against the named wait threshold"
+		<p class="lede" data-lede>{reads.recorded === 0 ? 'No day counted disk re-reads.'
+			: `${reads.fired} of ${reads.recorded} recorded days marked a disk re-read.`}</p>
+		<p data-comparison="Days the model was read again from disk against days it was not">
+			Days the model was read again from disk against days it was not.
+		</p>
+		<p class="finding" data-disk-read-finding={verdict}
 			data-model-rule="no" data-model-rule-none="The host's memory choices do not depend on model settings.">{finding}</p>
 
 		{#if reads.days.length === 0}
@@ -315,8 +322,9 @@
 </div>
 
 <style>
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.finding {
-		font-size: var(--text-2xl);
+		font-size: var(--text-sm);
 		line-height: var(--leading-tight);
 		font-weight: 600;
 		margin: var(--space-2) 0 var(--space-3);

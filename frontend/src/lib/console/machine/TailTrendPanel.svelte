@@ -174,6 +174,7 @@
 	 * lowest and the highest percentile drawn, so a change to `PERCENTILES`
 	 * moves the sentence with the plots. */
 	const newest = $derived(tailRuns.at(-1) ?? null);
+	const slowestTenth = $derived(newest?.ms[PERCENTILES.indexOf(90)] ?? null);
 	const spread = $derived.by(() => {
 		const middle = newest?.ms[0] ?? 0;
 		const slowest = newest?.ms.at(-1) ?? 0;
@@ -197,9 +198,11 @@
 			data-model-rule-name="machine-latency"
 			data-model-rule-none={tailRuns.length > 1 ? undefined : 'Fewer than two measured runs leave no edge between runs to mark.'}
 			data-model-rule-from={tailRuns[0]?.date ?? ''} data-model-rule-to={tailRuns.at(-1)?.date ?? ''}>
-		<p class="lede" data-lede data-comparison="The slowest articles against the middle article, on one shared scale">
-			{spread === null ? 'No measured tail comparison.' : `${spread.times.toFixed(1)} times as long at the slow end.`}
+		<p class="lede" data-lede>
+			{slowestTenth === null ? 'No slowest-tenth reading was recorded.'
+				: `${(slowestTenth / 1000).toFixed(1)} seconds at the slowest tenth of the newest measured run.`}
 		</p>
+		<p data-comparison="The slowest articles against the middle one">The slowest articles against the middle one.</p>
 		{#if tailRuns.length === 0}
 			<div use:observeWidth={(px) => (tailWidth = px)}>
 				<svg data-chart-type="dateSeries" data-panel-question="is it working"
@@ -434,7 +437,7 @@
 </div>
 
 <style>
-	.lede { font-size: var(--text-2xl); font-weight: 600; line-height: var(--leading-tight); }
+	.lede { font-size: var(--text-xl); font-weight: 600; line-height: var(--leading-tight); }
 	.empty {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-sm);

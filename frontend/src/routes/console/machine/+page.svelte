@@ -183,8 +183,8 @@
 	const changes = $derived('changes' in settings ? settings.changes : []);
 	const changeNote = $derived('note' in settings ? settings.note : settings.declined);
 	const titles: Readonly<Record<string, string>> = {
-		'two-clocks': 'Whether the speed numbers can be trusted', 'processor-lost': 'What the host took from our processor',
-		'disk-reads': 'Whether the machine read its weights back from disk', 'machine-cards': 'Which machines this run was given',
+		'two-clocks': 'Whether the speed numbers can be trusted', 'processor-lost': 'How much of the processor went to somebody else',
+		'disk-reads': "Whether the machine took the model's memory back", 'machine-cards': 'Which machines this run was given',
 		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
 		'slowest-articles': 'Which articles took longest in the last run', 'tail-trend': 'Whether the slowest articles are getting slower',
 		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",

@@ -164,6 +164,9 @@ public cells; they do not invent a job or shard or fill private unasked inputs.
 
 The tail retains all five percentiles on one domain; under-floor runs are
 printed rather than drawn. Settings-change rules cross the whole stack.
+Its lede quotes the slowest tenth in seconds, not a ratio of the two extreme
+percentiles. Memory-held quotes the model server's resident bound as a share of
+the whole machine, explicitly at most because its mapped pages overlap.
 Every dated comparison names changed dates with no measured column, rather than
 claiming nothing changed because no rule could be drawn. No-change and
 unavailable-settings sentences come from the shared settings helper.
@@ -177,6 +180,9 @@ item records without a host record, after host recording began or on an
 explicitly lost day, are named **dated article records**, not published
 articles: the approved item question does not select publication outcome.
 Cards retain `data-machine-record` and its existing reasons.
+Processor and disk ledes count marked days against recorded days. A marked day
+below the separate naming threshold remains marked; it is never described as
+a quiet machine. The original recording and threshold detail remains beside it.
 
 ## Validation and rejected substitutions
 
