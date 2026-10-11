@@ -233,6 +233,9 @@ def test_canary_custom_digest_root_files_and_packs_exact_manifest_counts(
 ) -> None:
     from utilities import build_canary_day
 
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
     digest = tmp_path / "digest"
     staged = tmp_path / "fixture-rows"
     staged.mkdir()
