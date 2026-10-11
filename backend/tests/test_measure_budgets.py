@@ -198,8 +198,11 @@ def a_config_dir(root: Path, taxonomy: dict[str, Any]) -> Path:
         "watchlist.json",
         "appearance.json",
         "llm_council.json",
+        "judges/content-similarity-judge.json",
     ):
-        (root / name).write_bytes((CONFIG_DIR / name).read_bytes())
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((CONFIG_DIR / name).read_bytes())
     app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     model = config.models_path(CONFIG_DIR, app)
     target = config.models_path(root, app)

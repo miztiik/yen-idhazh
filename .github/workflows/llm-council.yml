@@ -1,7 +1,7 @@
 name: LLM-COUNCIL
 
 # The council, once a night, on its own clock. It asks every tenant registered
-# in `judge_names` in `config/llm_council.json` to pick its work for the day, fans out over one job a
+# active in `judge_names` in `config/llm_council.json` to pick its work for the day, fans out over one job a
 # tenant a shard, and settles what came back.
 #
 # **Council, not judges, and the name is about where this goes** (owner,
@@ -175,8 +175,8 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
       # What tonight fans out to, asked of the tenants rather than computed
-      # here. A cell is flat - a tenant, a date, a shard and that tenant's own
-      # width - because a per-tenant width is not a third axis: a cross product
+      # here. A cell is flat - tenant, date, shard, shards and runs_model -
+      # because a per-tenant width is not a third axis: a cross product
       # would hand every tenant the widest tenant's width and pay a weights
       # restore for work that runs no model.
       #
@@ -288,6 +288,7 @@ jobs:
       # The probe address is handed over rather than inherited: it has one home,
       # the workflow `env` above, and this is the line that carries it in.
       - uses: ./.github/actions/model-server
+        if: matrix.runs_model
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           probe_url: ${{ env.MODEL_SERVER_PROBE }}

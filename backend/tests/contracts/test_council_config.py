@@ -33,6 +33,14 @@ def test_the_loader_reads_the_named_file_without_other_config(tmp_path: Path) ->
     (tmp_path / "llm_council.json").write_text(
         written.model_dump_json(), encoding="utf-8", newline="\n"
     )
+    (tmp_path / "judges").mkdir()
+    for name in written.judge_names:
+        (tmp_path / "judges" / f"{name}.json").write_text(
+            '{"lifecycle_status":"paused","runs_model":false}', encoding="utf-8", newline="\n"
+        )
+    written.bind_declarations(
+        config.load_judge_declarations(tmp_path, written), config_dir=tmp_path
+    )
     assert config.load_council(tmp_path) == written
 
 

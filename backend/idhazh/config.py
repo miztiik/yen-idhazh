@@ -25,6 +25,7 @@ loader carries the same model separately from `AppConfig` and records its digest
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -41,7 +42,7 @@ from pydantic import TypeAdapter, ValidationError
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import SLUG_PATTERN
-from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration
 from idhazh.contracts.knobs.gardener import (
     CollectionTaskPolicy,
     CompactionPolicy,
@@ -179,19 +180,46 @@ class Settings:
     taxonomy: Taxonomy
     watchlist: Watchlist
     digests: tuple[ConfigDigest, ...]
+    config_dir: Path = DEFAULT_CONFIG_DIR
 
 
 def load_council(config_dir: Path = DEFAULT_CONFIG_DIR) -> CouncilConfig:
     """Read the council's own named file without loading a judge or model."""
-    return CouncilConfig.model_validate_json(
+    council = CouncilConfig.model_validate_json(
         (config_dir / "llm_council.json").read_text(encoding="utf-8")
     )
+    council.bind_declarations(load_judge_declarations(config_dir, council), config_dir=config_dir)
+    return council
+
+
+def load_judge_declarations(
+    config_dir: Path, council: CouncilConfig
+) -> dict[str, JudgeDeclaration]:
+    """Read only the council's two keys from each named judge file."""
+    declarations: dict[str, JudgeDeclaration] = {}
+    for name in council.judge_names:
+        path = config_dir / "judges" / f"{name}.json"
+        try:
+            raw = TypeAdapter(dict[str, object]).validate_python(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
+            declarations[name] = JudgeDeclaration.model_validate(
+                {key: raw[key] for key in JudgeDeclaration.model_fields if key in raw}
+            )
+        except (ValidationError, json.JSONDecodeError) as error:
+            raise ValueError(f"config/judges/{name}.json is refused: {error}") from error
+    return declarations
 
 
 def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
+    council = CouncilConfig.model_validate_json(read["llm_council.json"])
+    council.bind_declarations(load_judge_declarations(config_dir, council), config_dir=config_dir)
+    for name in council.judge_names:
+        judge_file = f"judges/{name}.json"
+        read[judge_file] = (config_dir / judge_file).read_text(encoding="utf-8")
     refuse_a_trial_case_named_for_a_claimed_root(app)
     read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
     try:
@@ -207,7 +235,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     )
     return Settings(
         app=app,
-        council=CouncilConfig.model_validate_json(read["llm_council.json"]),
+        council=council,
         models=models,
         appearance=appearance,
         sources=Sources.from_json(read["sources.json"]),
@@ -220,6 +248,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
             )
             for name, text in sorted(read.items())
         ),
+        config_dir=config_dir,
     )
 
 

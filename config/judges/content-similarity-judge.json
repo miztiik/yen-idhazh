@@ -1,0 +1,7 @@
+{
+  "lifecycle_status": "active",
+  "runs_model": true,
+  "pair_budget": 200,
+  "flush_every_pairs": 1,
+  "judge_temperature": 0.0
+}

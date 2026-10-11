@@ -151,9 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         planned = plan_the_night(
             settings.council,
             tonight=a_date(str(args.tonight), what="--tonight"),
-            hosted=tenants(
-                settings.council.judge_names, app=settings.app, council=settings.council
-            ),
+            hosted=tenants(settings.council.running(), app=settings.app, council=settings.council),
         )
     print(f"dates={json.dumps(list(planned), separators=(',', ':'))}")
     return 0

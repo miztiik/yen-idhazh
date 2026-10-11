@@ -19,7 +19,7 @@ from idhazh.council.session import VENUE_LEDGERS
 from idhazh.ledger import staging
 from utilities import council_matrix
 
-from ._config import copy_config
+from ._config import copy_config, write_declarations
 from ._tenants import a_venue, forget
 
 A_VENUE = "a_paper_venue"
@@ -42,6 +42,7 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 def _config_registering(root: Path, *, slugs: tuple[str, ...], shards: int | None = None) -> Path:
     """The loader's named config inputs, with those slugs registered."""
     target = copy_config(root)
+    write_declarations(target, slugs)
     raw = json.loads(read_text(target / "llm_council.json"))
     raw["judge_names"] = list(slugs)
     if shards is not None:
@@ -98,8 +99,8 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
     assert json.loads(emitted["matrix"]) == [
-        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 0, "shards": 2},
-        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2},
+        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 0, "shards": 2, "runs_model": False},
+        {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2, "runs_model": False},
     ]
     assert emitted["committed_paths"].split() == [
         *(staging.staged_path(which) for which in VENUE_LEDGERS),

@@ -104,7 +104,14 @@ The first row is what the registry is for. The claim used to be a hand-written P
 
 **The check sits at the write, never in the path builders.** `path`, `tree_root` and `relpath` also serve readers, and a paused family is still read.
 
-**What pausing a family costs, beyond its own rows.** CI builds its canary day through the same writers, so pausing a family thins that fixture too. A paused `content-similarity-judge` re-judges the same nights at every council run until they leave the window, because what counts a night as outstanding reads the record the skip stops writing. And a paused `digest-fragments` stops the first run of a new day from publishing it at all: the day is assembled from the fragments on disk, and a day with none is refused. A paused `visual-prunes` stops the cleanup record while the cleanup itself still runs, because the record goes through the ledger door from the assemble job, which is not one of the maintenance jobs; nothing reads those rows yet, and the cleanup deletes nothing today.
+**Pause a judge before pausing any family it commits into.** The council refuses
+an active judge if any of its committed ledgers belongs to a paused or retired
+family, naming the judge, ledger and family before work starts. The judge's own
+declaration controls whether it runs; the family controls whether rows are
+written. They need not have the same status. Pausing a judge leaves other writers
+into an active family unchanged. See [judge status](../publishing/llm-council.md#each-registered-judge-declares-whether-it-runs).
+
+**What pausing a family costs, beyond its own rows.** CI builds its canary day through the same writers, so pausing a family thins that fixture too. A paused `digest-fragments` stops the first run of a new day from publishing it at all: the day is assembled from the fragments on disk, and a day with none is refused. A paused `visual-prunes` stops the cleanup record while the cleanup itself still runs, because the record goes through the ledger door from the assemble job, which is not one of the maintenance jobs; nothing reads those rows yet, and the cleanup deletes nothing today.
 
 ## Onboarding and offboarding
 

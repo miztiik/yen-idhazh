@@ -16,7 +16,9 @@ from __future__ import annotations
 import math
 from typing import Final
 
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.deadline import compute_shard_deadline
 
@@ -33,7 +35,12 @@ from idhazh.council.deadline import compute_shard_deadline
 SECONDS_A_JUDGED_PAIR: Final = 110.98
 
 
-def refuse_a_night_this_tenant_cannot_finish(app: AppConfig, *, council: CouncilConfig) -> None:
+def refuse_a_night_this_tenant_cannot_finish(
+    app: AppConfig,
+    *,
+    council: CouncilConfig,
+    judge_knobs: ContentSimilarityJudgeConfig | None = None,
+) -> None:
     """A draw a unit cannot finish is a job GitHub kills with nothing uploaded.
 
     Read when the council resolves this tenant, which the planning job does
@@ -51,9 +58,9 @@ def refuse_a_night_this_tenant_cannot_finish(app: AppConfig, *, council: Council
     raising the budget has to choose between them and a bare comparison says
     which one it is not.
     """
-    knobs = app.assemble.same_story.adaptive_dedup_threshold
-    if knobs is None:
+    if app.assemble.same_story.adaptive_dedup_threshold is None:
         return
+    knobs = judge_settings.load(council.config_dir) if judge_knobs is None else judge_knobs
     a_shard = math.ceil(knobs.pair_budget / council.shards)
     seconds = a_shard * SECONDS_A_JUDGED_PAIR
     window = compute_shard_deadline(council, started=0.0)

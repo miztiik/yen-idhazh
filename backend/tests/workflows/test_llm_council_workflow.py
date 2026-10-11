@@ -118,6 +118,15 @@ def _emitted(capsys: pytest.CaptureFixture[str]) -> dict[str, str]:
     return dict(line.split("=", 1) for line in printed if line)
 
 
+def test_only_a_model_running_cell_starts_the_model_server() -> None:
+    step = next(
+        step
+        for step in _steps(_judges(), "judge")
+        if step.get("uses") == "./.github/actions/model-server"
+    )
+    assert _normalize_condition(step["if"], "the model-server step") == "matrix.runs_model"
+
+
 def test_the_unit_reads_its_timeout_from_the_one_file_that_says_so() -> None:
     """The bound is a knob, and the workflow spells no number.
 
@@ -385,9 +394,9 @@ def test_a_cell_carries_its_tenant_its_date_and_its_own_width(
     for value in ("tenant", "date", "shard", "shards"):
         assert f"matrix.{value}" in shard, f"the unit is never told which {value} it is"
     assert cells, "the committed config registers a tenant, so tonight fans out to cells"
-    assert all(set(cell) == {"tenant", "date", "shard", "shards"} for cell in cells), (
-        "a cell the unit reads four values off has to carry all four and nothing else"
-    )
+    assert all(
+        set(cell) == {"tenant", "date", "shard", "shards", "runs_model"} for cell in cells
+    ), "a cell the unit reads four values off has to carry all four and nothing else"
     assert json.loads(emitted["dates"]) == [SUBSTITUTED_DATE]
 
 
