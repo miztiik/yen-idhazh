@@ -13,6 +13,6 @@ export const EXPECT: RouteExpect = {
 	firstPayload: {
 		routeData: '/console/__data.json',
 		band: '/console/band.json',
-		panels: '/telemetry/'
+		panels: '/state/compact/item-health/'
 	}
 };

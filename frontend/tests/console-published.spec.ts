@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

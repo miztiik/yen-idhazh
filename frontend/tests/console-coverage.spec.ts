@@ -19,7 +19,7 @@
  * It runs against the canary build. See `frontend/scripts/build-canary.mjs`.
  */
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './support/door-page';
 import { coverage, SPARSE_COVERAGE } from '../src/lib/charts/frame';
 
 /** Every chart that declares a coverage sentence, and what it draws a mark

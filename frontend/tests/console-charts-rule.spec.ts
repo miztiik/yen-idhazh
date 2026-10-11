@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chartRule, coverageOf, type ChartThresholds, type GlanceDay } from '../src/lib/charts/glance';

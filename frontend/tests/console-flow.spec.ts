@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/door-page';
 import { chartsReady } from './support/charts-ready';
 import { chartFlow, type FlowDay } from '../src/lib/charts/chart-flow';
 

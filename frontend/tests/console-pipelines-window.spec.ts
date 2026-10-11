@@ -1,5 +1,5 @@
 /** Pipelines draws only the windowed telemetry and refuses a too-narrow rule. */
-import { expect, test } from './support/browser';
+import { expect, test } from './support/door-page';
 
 import { serverCompiler } from './support/server-render';
 

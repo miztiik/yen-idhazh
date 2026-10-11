@@ -1,5 +1,5 @@
 /** Pipelines failure and timing words refer only to the selected days. */
-import { expect, test, type Page } from './support/browser';
+import { expect, test, type Page } from './support/door-page';
 
 import { resolve } from 'node:path';
 

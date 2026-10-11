@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/door-page';
 
 /** The extraction panel on the operator's page.
  *

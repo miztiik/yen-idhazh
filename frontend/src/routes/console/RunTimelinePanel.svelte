@@ -38,7 +38,7 @@
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import { seconds } from '$lib/charts/machine';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
-	import type { RunTimelineView, TimelineBar } from '$lib/server/run-timeline';
+	import type { RunTimelineView, TimelineBar } from '$lib/console/pipelines/run-timeline';
 
 	let {
 		view,
@@ -349,7 +349,7 @@
 			{/if}
 			{#if view.overrunCount > 0}
 				{view.overrunCount}
-				{view.overrunCount === 1 ? 'bar overruns its' : 'bars overrun their'} own clock, hatched at
+				{view.overrunCount === 1 ? 'bar overruns its' : 'bars overrun their'} own clock, ruled at
 				the end: the visual plan is decoded inside the summary call, so it is apportioned out of it
 				rather than timed beside it and the two together count part of one call twice.
 			{/if}
@@ -409,8 +409,8 @@
 		margin: 0;
 	}
 	.headline .figure {
-		font-size: var(--text-2xl);
-		line-height: var(--leading-2xl);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
 		font-weight: 600;
 		color: var(--color-text);
 	}
@@ -450,13 +450,8 @@
 		box-shadow: inset 0 0 0 1.5px var(--color-text-tertiary);
 	}
 	.key.overrun {
-		background: var(--color-surface);
-		box-shadow: inset 0 0 0 1.5px var(--color-text-tertiary);
-		background-image: repeating-linear-gradient(
-			45deg,
-			transparent 0 3px,
-			var(--color-text-tertiary) 3px 4px
-		);
+		block-size: 2px;
+		background: var(--color-text-tertiary);
 	}
 
 	/* The clock. The label strip spans exactly the tracks under it - the gutter and
@@ -556,14 +551,9 @@
 	   covers is time already drawn once by the step that claimed it. */
 	.overrun {
 		position: absolute;
-		inset-block: 0;
-		border-radius: var(--radius-sm);
-		box-shadow: inset 0 0 0 1.5px var(--color-text-tertiary);
-		background-image: repeating-linear-gradient(
-			45deg,
-			transparent 0 3px,
-			var(--color-text-tertiary) 3px 4px
-		);
+		inset-block-end: 0;
+		block-size: 2px;
+		background: var(--color-text-tertiary);
 	}
 
 	.total {

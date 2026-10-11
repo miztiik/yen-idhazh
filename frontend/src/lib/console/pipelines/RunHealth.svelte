@@ -22,7 +22,13 @@
 </script>
 
 <section data-windowed="run-health" data-window-days={days} aria-label="Run health, over {countDays(days)}">
-	<Panel verdict title="Run health">
-		<RunHealthPanel {yieldDays} {grid} {window} {floorPct} {height} {width} {tickDensity} {readoutMaxShare} bind:selected />
+	<Panel id="run-health" verdict title="Run health">
+		<p data-lede style="font-size: var(--text-2xl)">The published day beside the runs that tried it.</p>
+		<p data-comparison="planned">Planned against published articles, and each run's own recorded outcome.</p>
+		{#if yieldDays.length === 0 && grid.length === 0}
+			<p data-empty="missing">The private run and published-day records are unavailable in this window.</p>
+		{:else}
+			<RunHealthPanel {yieldDays} {grid} {window} {floorPct} {height} {width} {tickDensity} {readoutMaxShare} bind:selected />
+		{/if}
 	</Panel>
 </section>

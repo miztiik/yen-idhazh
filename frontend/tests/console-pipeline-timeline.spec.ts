@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './support/door-page';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -111,6 +111,7 @@ test('every step the panel draws carries a value, and the ones it does not are n
 
 test('a bar sits where its item started and is as long as the item took', async ({ page }) => {
 	await page.goto('/console/');
+	await expect(panel(page)).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
 	const bars = panel(page).locator('[data-timeline-bar]');
 	const count = await bars.count();
 	expect(count, 'the timeline drew no bars').toBeGreaterThan(0);
@@ -146,6 +147,7 @@ test('the run timeline renders when its published series is gone', async ({ page
 	// asks of every published surface.
 	await page.goto('/console/');
 	const board = panel(page);
+	await expect(page.locator('[data-reserved="run-timeline"][data-panel-state="loading"]')).toHaveCount(0);
 	const empty = (await board.getAttribute('data-run-timeline')) === 'empty';
 	if (empty) {
 		await expect(board.locator('[data-run-timeline-empty]')).toBeVisible();
@@ -210,6 +212,7 @@ test.describe('one fold, two grains', () => {
 		page
 	}) => {
 		await page.goto('/console/');
+		await expect(panel(page)).toHaveAttribute('data-run-timeline', /^\d{4}-\d{2}-\d{2}-\d+$/);
 		const byStart = await drawnBars(page);
 		await chooseGrain(page, 'by-shard');
 		const grouped = await drawnBars(page);

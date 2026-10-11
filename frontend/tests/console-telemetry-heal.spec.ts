@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './support/door-page';
 import { telemetryCsv } from '../src/lib/charts/series';
 import { telemetryRow } from './support/telemetry-row';
 

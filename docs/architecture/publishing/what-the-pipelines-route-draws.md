@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -14,6 +14,59 @@ How any figure here is allowed to read is
 surfaces follow the window control is
 [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md).
 
+## Plan52: native readings and private published-day facts
+
+The route now has twelve addressed panels, in this order: `at-a-glance`,
+`run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
+`slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
+`chart-drawing`, `extraction`, `article-age`. Configuration comes from
+`consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
+
+The browser uses the declared queries in `console/queries/pipelines.ts` and the
+shared `routeReach`, four-argument `rangeFor` and `sliceOnce` lifecycle. Failure
+mix, failed rules, item time split, fixed-reference work, stage timings, model
+cost, newest-run timeline and stated article ages read `item-health`. The
+extraction checker separately reads `summary-quality-evals`. It is not a ledger
+named `scores`. Neither route load nor the browser reads telemetry CSV,
+`run-timeline`, `span-rollup` or a month inventory for these panels.
+
+`at-a-glance`, `run-health`, `site-cost-per-item`, `chart-drawing`, and extraction's
+published-chart share and yield remain private BUILD_TIME readings of manifests,
+published-chart counts and day metrics. They are not newly published datasets
+and are not reconstructed from native queries. Extraction's private share is
+prepared for each permitted window and recorded endpoint, so a native endpoint
+earlier than the built day does not reuse the wrong day's share.
+
+Before native answers arrive their frames reserve space, without bars, dates or
+numbers posing as readings. Failure-rule and evaluator states are independent
+of the item sections. Retry re-asks only failed queries; successful returned
+answers keep their own ranges. A retry keeps the original common endpoint; only
+a new preset starts a new window. The record notice uses the ledger's actual
+first day, not the first plotted day. Lost days, set-aside files, unknown cells,
+and recorded zero remain distinct.
+
+This is an **implemented candidate, not a ready gate verdict**. The retained
+FailureList lacks an identity-free input for the declared rule slice; signed
+stacked dateSeries parts and signed payload shrinkage need the shared drawing
+contract; StageTimings lacks the structured settings-rule input. The route
+names those blocks and keeps available readings. Histogram token integration,
+the shared script-off oracle, parent-owned test registrations and private-build
+inventories, original telemetry-only oracles and final certification still need
+reconciliation. No unavailable value is filled with zero to get a gate through.
+
+The extractor chooses the newest measured suspicion for each distinct article.
+Null cells from other evaluators do not replace that instrument. Conflicting
+boolean readings on its latest measured day stay unknown, in any row order.
+Each native half states its returned dates beside the private published figures.
+Private payload-size rates require the immediately preceding manifest and the
+current manifest to both record a finite size; a missing size is not zero.
+
+The item-time composition is also owner-blocked. The recorder's signed gap
+subtracts fetch, extract, summarize and faithfulness once. Label and summary
+calls are not extra additive stages. The candidate's derived call split needs
+an explicit decision about overlap and a single cohort before it can be judged
+as a stack. The proposed separate overlap deduction is not an approved meaning.
+
 ## Where a run's time went is one panel on Pipelines, at two grains
 
 | Panel | Grain | The sentence it is for |
@@ -25,12 +78,12 @@ end to end, what its items cost added up, and how many ran at once - and it
 covers every item of the run rather than picking the worst one out. The grain
 switch changes the row and never the question.
 
-**It sits low on Pipelines, and `Run health` is the route's first panel.** A
+**It sits low on Pipelines, after the cost panels.** A
 window is a span and this panel is one run, so an operator reaches it after a
 windowed panel has told him which run to open it on - and the panel that
-verdicts the route goes first, which is the thirteenth chart rule applied
+verdicts the run remains near the top, which is the thirteenth chart rule applied
 ([../../concepts/console-design/the-rules-every-console-chart-obeys.md](../../concepts/console-design/the-rules-every-console-chart-obeys.md#thirteen-rules-hold-for-every-chart-on-this-console)).
-Pipelines takes one untitled group in `console.panel_groups`: what it needed was
+Pipelines takes one untitled group in `config/console/pipelines.json`: what it needed was
 an order, not headings, and it already carries four section headings of its own.
 
 **One panel, one source for both grains.** The panel folds item and shard rows in one
@@ -46,13 +99,12 @@ figures. The [item command](../../concepts/telemetry.md#the-committed-traces-bri
 prints recent trace trees with their run and attempt instead of adding item
 passes together. Expired detail remains unavailable.
 
-**Hollow is unclaimed, hatched is overclaimed, and both carry a legend key.** A
-reader cannot name the hatched notch on sight, which is the test: a texture
-nobody can read is a texture that says nothing. Neither is tinted - nobody has
-agreed how much overhead is too much.
+**Hollow is unclaimed; a solid 2 px tertiary rule is overclaimed.** The overrun
+is not the hatch for an unknown reading. Both have a written legend; neither
+claims anybody has agreed how much overhead is too much.
 
 The reader is
-[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts);
+[../../../frontend/src/lib/console/pipelines/run-timeline.ts](../../../frontend/src/lib/console/pipelines/run-timeline.ts);
 the producer of the published mirror is
 [../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
 its shape is [run-timeline.md](run-timeline.md) and every drawing rule is

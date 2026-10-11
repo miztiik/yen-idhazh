@@ -1,6 +1,6 @@
 # The Run Timeline
 
-**Last Updated**: 2026-10-01
+**Last Updated**: 2026-10-11
 
 **What shape does the run timeline have, and why that shape?** This page answers
 that one question. The shape landed before any producer so the writers produce
@@ -16,6 +16,27 @@ the other.
 The machine-readable copy is `backend/idhazh/contracts/run_timeline.py`, and it
 is the one a build reads. `RunTimelineRow` is the contract, and
 `RunTimelineRow.json_schema()` is the schema a reader outside Python is handed.
+
+## The Pipelines native reader
+
+Plan52's `/console/` reader no longer loads this projection. Its declared
+`runTimelineQuery` reads native item-health cells, with `machine_shard` rather
+than the projection's `shard`. The route-owned `console/pipelines/run-timeline.ts`
+chooses the newest numeric run suffix through `newestRunRows` (BigInt comparison,
+not lexical ordering), and places only rows with a valid UTC start, item id,
+nonnegative item clock and recorded whole shard.
+
+Zero is the earliest **eligible** item start. The six producer parts are fetch,
+extract, label, summary, visual plan and faithfulness (called score in this
+view); their sum is subtracted from the item clock for the signed residual.
+Queue wait, robots and stage gap retain their native readings separately and
+are not subtracted again. Capping item bars does not cap run totals or shard
+folds. The source test compares offsets and residuals against the actual Python
+producer, not a second projected fixture.
+
+The projection and its public/native producer remain intact for the separately
+owned retirement row. No host-envelope fields, fabricated shard or clock
+inference were added to this declared query.
 
 ## The question the timeline answers
 

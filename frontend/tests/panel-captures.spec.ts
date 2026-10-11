@@ -68,7 +68,7 @@ const BROKEN_THEME: Theme = 'dark';
  * be filed by one. Giving each section one framed, addressed panel is a change
  * to the route, not to its pictures.
  */
-const DRAWS_NO_PANEL_ID: ReadonlySet<RouteId> = new Set(['pipelines']);
+const DRAWS_NO_PANEL_ID: ReadonlySet<RouteId> = new Set();
 
 /** What a page asks for its rows with. A script, a font or a stylesheet is
  * the page itself, and refusing one would picture a broken page rather than a

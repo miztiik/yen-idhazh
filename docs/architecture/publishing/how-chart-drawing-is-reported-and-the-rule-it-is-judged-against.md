@@ -1,6 +1,6 @@
 # How chart drawing is reported, and the rule it is judged against
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-11
 
 `Visuals drawn for articles` is a Pipelines section in three parts: a flow of
 where items go, the two figures the retirement rule names, and a daily table
@@ -15,6 +15,14 @@ The rest of Pipelines is
 [what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md); how any
 figure here is allowed to read is
 [../../concepts/console-design.md](../../concepts/console-design.md).
+
+Plan52 retains this question, flow, rule and daily table as the route-owned
+`console/pipelines/ChartDrawing.svelte` panel. `dayMetrics` and the manifest and
+published-chart shaping remain private BUILD_TIME reads, not a new native
+dataset. `at-a-glance` owns the two published-count cards. A window shorter than
+the rule's stated span prints its widening sentence and no rule verdict.
+Native item-health/evaluator failures cannot erase these independent private
+readings.
 
 ## The chart drawing is a flow, and every drop leaves it as a named branch
 

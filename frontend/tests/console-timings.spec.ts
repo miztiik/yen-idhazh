@@ -15,7 +15,7 @@
  * assertion into a tautology or a false failure.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
