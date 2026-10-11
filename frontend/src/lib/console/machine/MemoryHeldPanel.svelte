@@ -48,6 +48,7 @@
 	wide
 >
 	<p class="lede" data-lede
+		data-model-rule-name="machine-memory-held"
 		data-model-rule="no" data-model-rule-none="This is one day's memory partition, not a comparison between days.">
 		{serverShare === null ? 'The model server did not record its memory bound.'
 			: `At most ${serverShare.toFixed(1)} percent of the machine's memory was resident in the model server at the tightest recorded moment.`}

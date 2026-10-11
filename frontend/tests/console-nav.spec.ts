@@ -636,6 +636,7 @@ test.describe('a route that draws what the server counted', () => {
 
 		test('Hardware carries the same window control as the other two', async ({ page }) => {
 			await page.goto(MACHINE.href);
+			await page.locator('[data-console-panels="machine"]:not([data-route-state="loading"])').waitFor();
 			const expected = MACHINE.machinePanels!;
 			// It was the one route without one until 2026-08-31, and it printed a
 			// sentence pointing at the two routes that had it. An operator who

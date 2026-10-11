@@ -14,7 +14,7 @@
  *
  * Independent rows mount the retained real component's two shapes, overlap,
  * disagreement and swap. A separate native-route oracle holds its newest-day
- * query to the canary's deliberately unmeasured newest day.
+ * query to a built ledger's deliberately unmeasured newest day.
  */
 
 import { expect, test, type Page } from './support/door-page';
@@ -24,6 +24,8 @@ import { memoryHeld } from '../src/lib/console/machine/memory-held';
 import { windowOfDays } from '../src/lib/charts/viewport';
 import { clientCode, drawClient } from './support/console-window/client-render';
 import { openMachine } from './support/machine-record-state';
+import { buildRows, serveToPage } from './support/ledger-lifecycle';
+import * as queries from '../src/lib/console/queries/machine';
 
 const DESKTOP = { width: 1280, height: 900 };
 
@@ -257,6 +259,26 @@ test('a narrowed component span narrows its bars and names its own grain', async
 });
 
 test('the native route does not substitute an older memory bar for its newest unmeasured day', async ({ page }) => {
+	const root = test.info().outputPath('newest-memory-records');
+	const days = ['2026-08-19', '2026-08-20'];
+	const cells = (ledger: string) => Object.fromEntries(Object.values(queries)
+		.filter((query) => query.ledger === ledger).flatMap((query) => query.columns)
+		.map((column) => [column, null]));
+	await buildRows(root, 'item-health', days.map((date, index) => ({ covers: date, rows: [{
+		...cells('item-health'), date, run_id: `${date}-1`, item_id: date,
+		...(index === 0 ? { os_mem_total_bytes: 16 * GIB, os_mem_available_bytes: 6 * GIB,
+			llama_rss_bytes: 12 * GIB, python_rss_bytes: 2 * GIB } : {})
+	}] })));
+	await buildRows(root, 'host-fingerprint', days.map((date) => ({ covers: date, rows: [{
+		...cells('host-fingerprint'), date, run_id: `${date}-1`, job: 'work', shard: 0,
+		fingerprint: '0123456789abcdef', cpu_model: 'Fixture CPU', cores: 4, threads: 8
+	}] })));
+	await buildRows(root, 'run-shards', days.map((date) => ({ covers: date, rows: [{
+		date, run_id: `${date}-1`, shards: null
+	}] })));
+	for (const ledger of ['item-health', 'host-fingerprint', 'run-shards'] as const) {
+		await serveToPage(page.context(), root, ledger);
+	}
 	await openMachine(page);
 	await expect(page.locator(`${PANEL} [data-memory-bar]`)).toHaveCount(0);
 	await expect(page.locator(`${PANEL} [data-machine-panel-empty="memory-held"]`)).toBeVisible();

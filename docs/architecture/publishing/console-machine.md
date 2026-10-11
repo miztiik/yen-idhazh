@@ -54,6 +54,12 @@ Unchanged mappings file nothing, before or after compaction. Corrections file
 only changed counts in new immutable raw files. An unknown cannot demote a
 numeric count. A rerun therefore cannot grow the ledger without changed evidence.
 
+Fresh-base publication keeps all completed count files unchanged. If rebuilding
+the final manifest corrects its count, the native writer emits one new immutable
+file for that UTC day. Publication checks its original invocation identity and
+refuses an existing target; it never treats raw count files as derived output.
+Further preparation retains that completed correction rather than filing it again.
+
 Native settlement keeps the latest numeric record in the original envelope's
 `written_at_ms`, then `file_id` order. Those two existing provenance cells are
 retained beside the count row during packing; they are not business fields.

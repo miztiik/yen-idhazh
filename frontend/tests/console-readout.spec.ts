@@ -675,16 +675,26 @@ test.describe('the readout is the default', () => {
 
 			const html = await page.request.get(route).then((res) => res.text());
 			const inlined = named.filter((entry) => !entry.fetched);
-			expect(
-				inlined.length,
-				`${route}: every strip claims fetched rows, so nothing is left to prerender`
-			).toBeGreaterThan(0);
-			for (const entry of inlined) {
-				expect(html, `${route}: ${entry.name} is not in the prerendered document`).toContain(
-					`data-readout="${entry.name}"`
-				);
+			const routeId = BAND_UNREAD.routes.find((entry) => entry.href === route)!.id;
+			if (BY_ROUTE[routeId]?.nativeRows) {
+				expect(inlined, `${route}: a native strip lost its fetched boundary`).toEqual([]);
+				for (const entry of named) {
+					expect(entry.fetched, `${route}: a strip has no declared source`).toBe(true);
+					expect(html, `${route}: a fetched strip was prerendered`).not.toContain(`data-readout="${entry.name}"`);
+				}
+				expect(html, `${route}: a ledger reading was prerendered`).not.toContain('data-readout-day');
+			} else {
+				expect(
+					inlined.length,
+					`${route}: every strip claims fetched rows, so nothing is left to prerender`
+				).toBeGreaterThan(0);
+				for (const entry of inlined) {
+					expect(html, `${route}: ${entry.name} is not in the prerendered document`).toContain(
+						`data-readout="${entry.name}"`
+					);
+				}
+				expect(html, `${route}: no resting column is prerendered`).toContain('data-readout-day');
 			}
-			expect(html, `${route}: no resting column is prerendered`).toContain('data-readout-day');
 		}
 	});
 

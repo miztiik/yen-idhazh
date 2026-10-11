@@ -15,7 +15,7 @@ for (const state of ['loading', 'missing', 'quiet', 'unreachable'] as const sati
 			await expect(panel.locator('[data-readout]')).toHaveCount(0);
 		} else {
 			await expect(panel.locator(`[data-empty-state="${state}"]`)).toBeVisible();
-			await expect(panel.locator('.empty-sentence')).not.toBeEmpty();
+			await expect(panel.locator('.record-state')).not.toBeEmpty();
 		}
 	});
 }
@@ -26,7 +26,7 @@ test('the machine panel says a published record with no compact folder is not pa
 	await page.goto('/console/machine/');
 	const panel = page.locator(PANEL);
 	await expect(panel).toHaveAttribute('data-machine-panel-state', 'missing');
-	await expect(panel.locator('[data-empty-state="missing"] .empty-sentence')).toHaveText('Not published yet.');
+	await expect(panel.locator('[data-empty-state="missing"] .record-state')).toHaveText('Not published yet.');
 });
 
 test('thirty days then seven query the real worker and fetch each whole file once', async ({ page, context, parquet }) => {

@@ -30,6 +30,7 @@
 		note="A run is not a machine and most runs draw more than one kind, so a rate quoted for the whole run belongs to none of them - one card a machine of the newest run."
 	>
 		<p class="lede" data-lede
+			data-model-rule-name="machine-cards"
 			data-model-rule="no" data-model-rule-none="These are the machines of one run, not a change over days.">
 			{machines.cards.length ? `${machines.cards.length} machine ${machines.cards.length === 1 ? 'kind' : 'kinds'} given to`
 				: 'No recorded machine identity in'} run {newestRunId ?? (machines.runId || 'not recorded')}.

@@ -13,5 +13,6 @@ export const EXPECT: RouteExpect | null = {
 		'machine-prompt-reuse',
 		'machine-tokens'
 	],
-	dailyTable: false
+	dailyTable: false,
+	ready: '[data-console-panels="machine"]:not([data-route-state="loading"])'
 };

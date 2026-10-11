@@ -502,11 +502,13 @@ for (const [id, declared] of Object.entries(BY_ROUTE) as [RouteId, (typeof BY_RO
   test(`THE ORACLE: ${id} obeys the common control over every declared surface`, async ({ page }) => {
     await page.goto(routeHref(id));
     await hydrated(page);
+    if (declared.ready) await page.locator(declared.ready).waitFor();
     expect(presets().length, 'a control with one option cannot disagree with anything').toBeGreaterThan(1);
     const found = await windowed(page);
     expect(found.map((surface) => surface.name).sort(), 'the declared surface inventory must be complete').toEqual(declared.windowed);
     for (const preset of presets()) {
       await setWindow(page, preset);
+      if (declared.ready) await page.locator(declared.ready).waitFor();
       const surfaces = await windowed(page);
       expect(surfaces.length, 'a declared surface disappeared').toBe(found.length);
       for (const surface of surfaces) {

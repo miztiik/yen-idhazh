@@ -204,7 +204,8 @@
 		</p>
 		<p data-comparison="The slowest articles against the middle one">The slowest articles against the middle one.</p>
 		{#if tailRuns.length === 0}
-			<div use:observeWidth={(px) => (tailWidth = px)}>
+			<div data-readout-none="No run timed enough articles to draw a percentile."
+				use:observeWidth={(px) => (tailWidth = px)}>
 				<svg data-chart-type="dateSeries" data-panel-question="is it working"
 					style="width:100%" height={tailH} viewBox={`0 0 ${tailW} ${tailH}`} role="img"
 					aria-label="Five empty percentile frames; no run timed enough articles.">
