@@ -2,6 +2,8 @@
 import { expect, test } from './support/door-page';
 import { hydrated, setWindow } from './support/console-window/controls';
 import { THROUGH, nativeRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 let root: string;
 test.beforeAll(async () => {
@@ -93,9 +95,9 @@ for (const state of ['missing', 'unreachable', 'quiet'] as const) {
 		await page.route('**/state/compact/summary-quality-evals/index/*.json', async (route) => {
 			if (state === 'missing') return route.fulfill({ status: 404 });
 			if (state === 'unreachable') return route.abort('failed');
-			const response = await route.fetch();
-			const index = await response.json();
-			return route.fulfill({ response, json: { ...index, entries: index.entries.map((entry: object) =>
+			const name = new URL(route.request().url()).pathname.split('/').at(-1)!;
+			const index = JSON.parse(readFileSync(join(root, 'compact', 'summary-quality-evals', 'index', name), 'utf8'));
+			return route.fulfill({ json: { ...index, entries: index.entries.map((entry: object) =>
 				({ ...entry, rows: 0, bytes: 0, state: 'empty' })) } });
 		});
 		await page.goto('/console/');

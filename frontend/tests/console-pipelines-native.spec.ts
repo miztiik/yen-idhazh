@@ -19,7 +19,9 @@ import { slowerOnSameWork } from '../src/lib/console/pipelines/slower-on-same-wo
 import { nativeStageTimings } from '../src/lib/console/pipelines/stage-timings';
 import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
-import { pipelinesRecord, retryReach } from '../src/lib/console/pipelines/record-window';
+import { pipelinesRecord, publishedShareFor, retryReach } from '../src/lib/console/pipelines/record-window';
+import { chartFlow, visualsPublished } from '../src/lib/console/pipelines/chart-drawing';
+import { windowOfDays } from '../src/lib/charts/viewport';
 import type { Row, SliceResult } from '../src/lib/data/ledger';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -265,4 +267,26 @@ test('the record starts at the actual ledger beginning, and retry pins the endpo
 	expect(pipelinesRecord(previous, 7)).toEqual({ first: '2030-01-01', through: '2030-06-10', asked: 7 });
 	expect(retryReach(previous, refreshed).through).toBe('2030-06-10');
 	expect(pipelinesRecord(null, 7)).toBeNull();
+});
+
+test('an undrawable flow retains the recorded published visual count', () => {
+	const days = [{ reached: 1, asked: 1, drafted: 1, published: 2 }];
+	expect(chartFlow(days).empty).toBe(true);
+	expect(chartFlow(days).steps).toEqual([]);
+	expect(visualsPublished(days)).toBe(2);
+	expect(visualsPublished([...days, { reached: 2, asked: 2, drafted: 2, published: 3 }])).toBe(5);
+});
+
+test('centred windows select private totals by the same anchor that shaped them', () => {
+	const anchor = '2030-06-15';
+	const window = windowOfDays(anchor, 7, 'centre');
+	expect(window).toEqual({ start: '2030-06-12', end: '2030-06-18' });
+	const spans = [
+		{ through: anchor, days: 7, measuredDays: 7, unused: 2 },
+		{ through: window.end, days: 7, measuredDays: 7, unused: 9 },
+		{ through: anchor, days: 1, measuredDays: 1, unused: 0 }
+	];
+	expect(publishedShareFor(spans, anchor, 7)?.unused).toBe(2);
+	expect(publishedShareFor(spans, anchor, 1)?.unused).toBe(0);
+	expect(publishedShareFor(spans, '2030-06-16', 7)).toBeUndefined();
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { chartRule, chartFlow, minutesText, coverageText } from './chart-drawing';
+	import { chartRule, chartFlow, visualsPublished, minutesText, coverageText } from './chart-drawing';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import { movementVerdict } from '$lib/charts/theme';
@@ -23,7 +23,7 @@
 	const minutes = (value: number | null) => value === null ? '-' : value.toFixed(1);
 </script>
 <div use:observeWidth={(width) => measured = width} data-windowed="chart-drawing" data-window-days={windowDays}>
-	{#if days.length > 0}<p data-lede class="lede">{flow.steps.at(-1)?.value ?? 0} visuals published.</p>{/if}
+	{#if days.length > 0}<p data-lede class="lede">{visualsPublished(days)} visuals published.</p>{/if}
 	{#if !rule.narrow}<p data-charts-verdict>{rule.verdict}</p>{/if}
 	{#if days.length === 0}<p data-empty="missing">The private chart-drawing day records are unavailable.</p>
 	{:else if flow.empty}<p data-empty="quiet">{flow.reason}</p>{/if}

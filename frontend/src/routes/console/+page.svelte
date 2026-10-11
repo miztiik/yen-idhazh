@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
-	import { pipelinesRecord, retryReach } from '$lib/console/pipelines/record-window';
+	import { pipelinesRecord, publishedShareFor, retryReach } from '$lib/console/pipelines/record-window';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
@@ -59,11 +59,12 @@
 	const allAnswers = $derived(asks.map((query) => answers[query.name]));
 	const busy = $derived(allAnswers.some((answer) => answer === 'pending'));
 	const recordReady = $derived(mounted && reach?.through !== null && reach?.through !== undefined && !busy);
-	const viewport = $derived(windowOfDays(reach?.through ?? data.windowDay, windowDays, knobs.today_anchor));
+	const anchor = $derived(reach?.through ?? data.windowDay);
+	const viewport = $derived(windowOfDays(anchor, windowDays, knobs.today_anchor));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const yieldDays = $derived(data.extractionDays.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const publishedShare = $derived(data.extractionPublishedByWindow.find((span) => span.days === windowDays && span.through === viewport.end)
+	const publishedShare = $derived(publishedShareFor(data.extractionPublishedByWindow, anchor, windowDays)
 		?? { measuredDays: 0, unused: 0, chartablePublished: 0, unusedPct: null });
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 
