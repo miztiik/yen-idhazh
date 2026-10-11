@@ -27,8 +27,7 @@
 	 *
 	 * The strip is also the key, so no chart that carries one draws a legend as
 	 * well. A chart with no shared column says why in `noReadout` instead: the
-	 * wrapper declares one of the two, and `console-readout.spec.ts` fails on a
-	 * chart that declares neither.
+	 * wrapper declares one of the two so a missing readout is not unexplained.
 	 */
 	import type { EChartsOption } from 'echarts';
 	import { onMount } from 'svelte';

@@ -33,9 +33,7 @@ import {
  *   them as three parts of one total is what would put a stack on the page, and
  *   a stack asserts a whole nobody measured.
  *
- * Node, not a browser: this is the arithmetic. That the component draws it as
- * three bars side by side rather than as a stack is asserted on the built page,
- * in `console-run-yield.spec.ts`.
+ * Node, not a browser: this is the arithmetic.
  */
 
 /** Four days that between them hold every case the chart has to survive: a

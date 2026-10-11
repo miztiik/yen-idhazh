@@ -978,9 +978,7 @@ function writeItemHealthCanary() {
 	//
 	// These rows are dated a month before the rest, so their own day files sit a
 	// month behind the others - and the month mirror the publisher folds from them
-	// is a file only the widest preset reaches. A browser that widens the window
-	// fetches it, and `console-telemetry-heal.spec.ts` fails that fetch to prove a
-	// retry heals it.
+	// is a file only the widest preset reaches.
 	const longAgoRows = [
 		...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
 		...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900])
