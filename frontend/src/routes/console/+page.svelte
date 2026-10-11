@@ -86,10 +86,11 @@
 				answers = { ...answers, [query.name]: answer };
 			}
 		}
-		// The first slice loads the signed Parquet reader before simultaneous prepares.
-		await read(selected[0]);
-		if (ticket !== revision) return;
-		await Promise.all(selected.slice(1).map(read));
+		// These slices share the door's one prepared-statement connection.
+		for (const query of selected) {
+			if (ticket !== revision) return;
+			await read(query);
+		}
 	}
 	onMount(() => {
 		mounted = true;

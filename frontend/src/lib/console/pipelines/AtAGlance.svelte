@@ -50,5 +50,6 @@
 {/if}
 <p data-comparison="Articles published against visuals published over the same days.">Articles published against visuals published over the same days.</p>
 <style>
+	.auto-grid :global(.kpi) { background: var(--color-surface); }
 	svg { inline-size: 100%; max-inline-size: 100%; block-size: auto; }
 </style>
