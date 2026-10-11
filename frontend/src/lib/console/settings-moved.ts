@@ -24,6 +24,7 @@
 import type { BandSettingsMoved, ConsoleShell } from './band';
 import type { ModelRule, RuleChange } from '../charts/d3/model-rule';
 import type { DateStamp } from '../data/ledger';
+import { nameSpan } from './span-words';
 
 /** The slice of a published day's runs both derivations need.
  *
@@ -356,8 +357,8 @@ export function settingsRules(
 	if (changes.length === 0 && notes.length === 0) {
 		const days = (Date.parse(window.to) - Date.parse(window.from)) / 86_400_000 + 1;
 		notes.push(checker === 'score'
-			? `Nothing changed about how the summaries are written or the faithfulness scorer inside these ${days} days.`
-			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} inside these ${days} days.`);
+			? `Nothing changed about how the summaries are written or the faithfulness scorer inside ${nameSpan(days)}.`
+			: `Nothing changed about how the summaries are written${checker === 'none' ? '' : ' or checked'} inside ${nameSpan(days)}.`);
 	}
 	return { changes, note: notes.length > 0 ? notes.join(' ') : null };
 }

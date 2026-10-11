@@ -1,4 +1,4 @@
-/** Hardware reports its window on ten measured surfaces. */
+/** Hardware reports its window on nine measured surfaces. */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {

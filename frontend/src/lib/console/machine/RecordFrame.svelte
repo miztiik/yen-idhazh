@@ -14,7 +14,7 @@
 		{@render children()}
 	{:else}
 		<Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note="The published record has not answered this comparison yet.">
-			<div data-readout-none="The requested record has no drawing yet."
+			<div data-readout-none="The requested record has no drawing yet; agreed with Susan"
 				data-empty-state={state === 'loading' ? undefined : state}
 				data-model-rule-name={`machine-${id}`}
 				data-model-rule="no" data-model-rule-none="No record is available for this comparison yet.">

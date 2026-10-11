@@ -55,6 +55,7 @@
 	<EmptyState drawing={empty} {height} {width} {name} {label} />
 {:else}
 	{@const box = geometry.frame}
+	<div class="distribution-plot" data-readout-columns={geometry.bins.length}>
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<svg
 		class="distribution"
@@ -65,7 +66,6 @@
 		aria-label={label}
 		data-chart-type="distribution"
 		data-chart-name={name}
-		data-readout-columns={geometry.bins.length}
 		tabindex="0"
 		use:pointerReadout={{ marks, width: box.width, onSelect: (index) => selected = index }}
 	>
@@ -141,6 +141,7 @@
 			<div data-readout-row="share"><dd>At or below</dd><dd>{readout.series[1]?.values[at]}</dd></div>
 		</dl>
 	{/if}
+	</div>
 {/if}
 
 <style>
