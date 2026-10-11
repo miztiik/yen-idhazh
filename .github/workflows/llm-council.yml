@@ -42,16 +42,6 @@ on:
         description: 'Digest date to judge (YYYY-MM-DD). Defaults to yesterday, UTC.'
         default: ''
 
-permissions:
-  contents: write
-  # Reading an artifact an EARLIER run wrote needs this scope, and a declared
-  # block sets every scope it does not list to none. Read-only, and no stored
-  # token: the default credential carries it. Nothing in this file crosses a run
-  # today - a dead night is repaired by judging its date again, which is what
-  # the night plan below is for - so this is the scope that keeps the cheaper
-  # recovery open rather than one a step here already uses.
-  actions: read
-
 concurrency:
   group: llm-council
   cancel-in-progress: false
@@ -63,6 +53,8 @@ env:
 
 jobs:
   draw:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -239,6 +231,9 @@ jobs:
           retention-days: 3
 
   judge:
+    permissions:
+      contents: read
+      actions: read
     needs: draw
     # An empty matrix is a strategy-evaluation failure, and the run reds on it
     # rather than skipping quietly. No tenant registered is a legal night, and
@@ -278,7 +273,7 @@ jobs:
           pattern: council-selection-*
           merge-multiple: true
           path: backend/var/council
-          # Passed rather than inherited. The `permissions` block above names
+          # Passed rather than inherited. This job's permissions block names
           # what this credential may do, and an artifact read is one of them.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -338,6 +333,9 @@ jobs:
           retention-days: 3
 
   save_council_results:
+    permissions:
+      contents: write
+      actions: read
     needs: [draw, judge]
     # A unit that died still leaves the others' work worth keeping, and a date
     # still owes whatever its tenants settle.
