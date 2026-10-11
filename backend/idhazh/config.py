@@ -42,7 +42,7 @@ from pydantic import TypeAdapter, ValidationError
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import SLUG_PATTERN
-from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration
+from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration, JudgeRefusalError
 from idhazh.contracts.knobs.gardener import (
     CollectionTaskPolicy,
     CompactionPolicy,
@@ -206,8 +206,8 @@ def load_judge_declarations(
             declarations[name] = JudgeDeclaration.model_validate(
                 {key: raw[key] for key in JudgeDeclaration.model_fields if key in raw}
             )
-        except (ValidationError, json.JSONDecodeError) as error:
-            raise ValueError(f"config/judges/{name}.json is refused: {error}") from error
+        except (OSError, ValidationError, json.JSONDecodeError) as error:
+            raise JudgeRefusalError(name, f"config/judges/{name}.json is refused") from error
     return declarations
 
 

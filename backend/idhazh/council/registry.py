@@ -22,7 +22,11 @@ from typing import Final, cast
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.knobs.council import CouncilConfig, derive_judge_package_name
+from idhazh.contracts.knobs.council import (
+    CouncilConfig,
+    JudgeRefusalError,
+    derive_judge_package_name,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerLifecycleStatus
 from idhazh.council.tenancy import Tenant
@@ -138,7 +142,8 @@ def tenant(
                 for address in addresses
                 for declared in committed
             ):
-                raise ValueError(
+                raise JudgeRefusalError(
+                    slug,
                     f"active judge '{slug}' writes ledger '{held.name.value}' in "
                     f"family '{family.name}', which is {family.lifecycle_status.value}"
                 )
@@ -157,4 +162,12 @@ def tenants(
     An empty list is a legal night. The venue runs every step it always runs and
     judges nothing, which is what a room with no case heard in it looks like.
     """
-    return tuple(tenant(slug, package=package, app=app, council=council) for slug in slugs)
+    hosted: list[Tenant] = []
+    for slug in slugs:
+        try:
+            hosted.append(tenant(slug, package=package, app=app, council=council))
+        except JudgeRefusalError:
+            raise
+        except (Exception, SystemExit) as error:
+            raise JudgeRefusalError(slug, f"judge '{slug}' is refused") from error
+    return tuple(hosted)

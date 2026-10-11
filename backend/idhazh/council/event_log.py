@@ -5,9 +5,12 @@ from __future__ import annotations
 import logging
 import sys
 
+from pydantic import ValidationError
+
 from idhazh import event_lines
 from idhazh.contracts.base import Model
 from idhazh.contracts.council_events import Diagnostic
+from idhazh.contracts.knobs.council import JudgeRefusalError
 from idhazh.event_lines import cause_of as cause_of
 from idhazh.event_lines import payload as payload
 
@@ -19,9 +22,23 @@ def emit(event: Model, *, level: int = logging.INFO, force: bool = False) -> Non
 
 
 def failed(failure: BaseException, *, refused: bool = False) -> None:
-    error, where = cause_of(failure)
+    named = failure if isinstance(failure, JudgeRefusalError) else None
+    if isinstance(failure, ValidationError):
+        for detail in failure.errors(include_url=False, include_input=False):
+            candidate = detail.get("ctx", {}).get("error")
+            if isinstance(candidate, JudgeRefusalError):
+                named = candidate
+                break
+    error, where = cause_of(
+        named.__cause__ if named is not None and named.__cause__ is not None else failure
+    )
     emit(
-        Diagnostic(kind="refusal" if refused else "exception", error=error, where=where),
+        Diagnostic(
+            kind="refusal" if refused else "exception",
+            judge_id=None if named is None else named.judge_id,
+            error=error,
+            where=where,
+        ),
         level=logging.ERROR,
     )
 

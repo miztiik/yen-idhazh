@@ -124,6 +124,7 @@ class Diagnostic(Model):
     """A non-event log or caught exception with its text omitted at the boundary."""
 
     kind: Literal["log", "exception", "refusal"]
+    judge_id: Slug | None = None
     error: ErrorName | None = None
     where: CodePlace | None = None
 
