@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -275,9 +276,27 @@ def test_every_push_rejected_reports_three_even_after_unit_failure(
             origin,
             f'echo \'{HOSTILE}\' >&2\nprintf "rejected\\n" >> "$GIT_DIR/rejected-pushes"\nexit 1',
         )
+        trace = tmp_path / "push-trace.jsonl"
+        monkeypatch.setenv("GIT_TRACE2_EVENT", str(trace))
         published = run(repo, target, caplog, capsys, code=3, landing="refused", units=2)
         assert published["pushes"] >= 1
-        assert len((origin / "rejected-pushes").read_text().splitlines()) == published["pushes"]
+        traced = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+        started = [
+            event["sid"] for event in traced
+            if event["event"] == "start" and event["argv"][1:3] == ["--literal-pathspecs", "push"]
+        ]
+        exited = {
+            event["sid"]: event["code"] for event in traced
+            if event["event"] == "exit" and event["sid"] in started
+        }
+        rejected = (origin / "rejected-pushes").read_text().splitlines()
+        assert rejected and set(rejected) == {"rejected"}
+        assert set(exited.values()) == {1}, "every completed push must be rejected"
+        # The counter includes a final attempt that can expire before Git or its hook runs.
+        assert len(started) in (published["pushes"], published["pushes"] - 1)
+        assert set(started[:-1]) <= exited.keys(), "only the last push may be interrupted"
+        assert len(exited) <= len(rejected) <= len(started)
+        assert published["pushes"] - len(rejected) in (0, 1)
         assert git(origin, "rev-parse", "main") == before
         assert published["writes"] == len(evidence(repo))
         assert len(rows(repo)) == 2
@@ -286,6 +305,20 @@ def test_every_push_rejected_reports_three_even_after_unit_failure(
             path = f"state/experiments/second-failed/{date}.json"
             assert (repo / path).read_bytes() == b"completed\n"
             assert on_origin(origin, path) is None
+
+
+def test_a_push_deadline_can_expire_before_the_rejection_hook_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    with venue(tmp_path, monkeypatch, caplog) as (origin, repo, _):
+        before = git(origin, "rev-parse", "main").strip()
+        a_hook(origin, 'printf "rejected\\n" >> "$GIT_DIR/rejected-pushes"\nexit 1')
+        repository = Repository(repo)
+        repository.deadline = time.monotonic()
+        with pytest.raises(RuntimeError, match="deadline expired before Git operation"):
+            repository.push(before)
+        assert not (origin / "rejected-pushes").exists()
+        assert git(origin, "rev-parse", "main").strip() == before
 
 
 def test_stale_mutable_output_keeps_newer_main_and_local_recovery(
