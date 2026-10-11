@@ -55,6 +55,7 @@ test('timing-rule inspection keeps both events on a changed day', async ({ page 
 	await expect(page.locator('[data-readout="timings"]')).toContainText('The summary prompt changed.');
 	await expect(page.locator('[data-readout="timings"]')).toContainText('The score checker changed.');
 	await expect(page.locator('[data-model-rule-line]')).toHaveCount(1);
+	await expect(page.locator('svg[data-chart="stage-timings"]')).toHaveAttribute('data-chart-name', 'timings');
 	await page.locator('[data-timing="plot"]').focus();
 	await page.keyboard.press('ArrowLeft');
 	await expect(page.locator('[data-readout="timings"]')).not.toContainText('The summary prompt changed.');
@@ -73,6 +74,7 @@ test('histogram bars and inspection swatches use the same named quantity', async
 	await expect(page.locator('[data-hist-bin] rect').first()).toHaveAttribute('fill', 'var(--chart-6)');
 	expect(await page.locator('[data-readout-row="Read in this band"] .readout-swatch').evaluate((node) => (node as HTMLElement).style.background)).toBe('var(--chart-6)');
 	await expect(page.locator('[data-histogram="cumulative"]')).toHaveAttribute('stroke', 'var(--chart-3)');
+	await expect(page.locator('svg[data-chart="time-histogram"]')).toHaveAttribute('data-chart-name', 'reading');
 });
 
 for (const width of [390, 1440]) {

@@ -34,7 +34,7 @@
 <div data-eval-panel="extraction" use:observeWidth={(next) => measured = next}>
 	<p data-comparison="Chartable articles against narrative and unclassified ones.">Chartable articles against narrative and unclassified ones, beside recorded extraction flags.</p>
 	{#if publishedShare.measuredDays === 0}
-		<p data-extraction="none">The build-time published chart-share record is unavailable in this window.</p>
+		<p data-extraction="none" data-lede class="unmeasured-lede">The build-time published chart-share record is unavailable in this window.</p>
 	{:else}
 		<KpiCard label="Of those, published without one" rule={noRule} lede
 			value={publishedShare.unusedPct === null ? 'Not measured' : `${publishedShare.unusedPct}%`}
@@ -48,6 +48,7 @@
 		<KpiCard label="Not prose" value={String(extraction.notProse)} rule={noRule} />
 		<KpiCard label="Contaminated" value={String(extraction.contaminated)} rule={noRule} />
 	</div>
+	<style>.unmeasured-lede { font-size: var(--text-3xl); }</style>
 	<p>{extraction.note}</p>
 	{#if nativeWindow}<p data-extraction-record>Extraction record: {nativeWindow.from} through {nativeWindow.to}.</p>{/if}
 	<RankedList geometry={classes} caption="Articles by element class and failed re-slice" maxText={classes === null ? 'not measured' : `${classes.max} articles`}

@@ -9,6 +9,12 @@ The route resolves its record window before calling the private panels settled.
 Native reads start independently; request epochs prevent late windows replacing
 the current one, and the extractor and recorded flags retain separate states.
 
+The retained timing and histogram plots name their actual drawing elements for
+the shared chart checks. Timeline rows name their actual bar frames. An absent
+private chart-share record still has a headline, stating its absence rather
+than inventing a percentage. The first published-count card is the route verdict;
+its count note names the same calendar that its bars draw.
+
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds its native stage and cost readings and its private run figures.
 Chart drawing has its own page,

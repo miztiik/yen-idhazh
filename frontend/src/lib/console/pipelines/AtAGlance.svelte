@@ -44,7 +44,7 @@
 					<ChartReadout {readout} at={selected[card.name]} name="published-{card.name}" maxShare={chart.readout_max_share} hint="" />
 				</div>
 			{/snippet}
-			<KpiCard label={card.label} value={String(card.strip.total)} lede={index === 0} rule={noRule} {trend} />
+			<KpiCard label={card.label} value={String(card.strip.total)} note={card.strip.bars.length === 1 ? 'in this one day' : `in these ${card.strip.bars.length} days`} lede={index === 0} rule={noRule} {trend} />
 		{/each}
 	</div>
 {/if}

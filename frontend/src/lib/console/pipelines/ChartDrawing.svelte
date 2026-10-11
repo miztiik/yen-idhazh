@@ -69,4 +69,7 @@
 	{#if value !== null}<p data-rule-move={name}><span data-movement={value.toFixed(4)} data-polarity={sense}
 		data-movement-verdict={movementVerdict(value, sense)} data-movement-paint="color">{value >= 0 ? '+' : ''}{Math.round(value * 100)}%</span> across this window</p>{/if}
 {/snippet}
-<style>.lede { font-size: var(--text-2xl); }</style>
+<style>
+	.lede { font-size: var(--text-2xl); }
+	[data-flow="chart"] :global(svg) { inline-size: 100%; max-inline-size: 100%; block-size: auto; }
+</style>

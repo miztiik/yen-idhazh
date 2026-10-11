@@ -58,6 +58,7 @@ for (const [id, name] of PANELS) {
 		const appearance = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'appearance.json'), 'utf8'));
 		const common = {
 			knobs: appearance.console, chart: appearance.chart, window: { start: DAY.date, end: DAY.date },
+			viewport: { start: DAY.date, end: DAY.date },
 			windowDays: 1, days: 1, rule: { declined: 'one distribution, not a date axis' },
 			floorPct: 70, height: appearance.console.chart_height, width: appearance.console.chart_width,
 			tickDensity: appearance.chart.tick_density, readoutMaxShare: appearance.chart.readout_max_share

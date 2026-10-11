@@ -273,6 +273,8 @@
 					data-readout-at={index}
 					data-readout-picked={picked === index ? 'yes' : undefined}
 					data-timeline-bar={bar.id}
+					data-chart="run-timeline"
+					data-chart-name={`run-timeline-${bar.id}`}
 					data-timeline-shard={bar.shard}
 					data-timeline-start-ms={bar.startOffsetMs}
 					data-timeline-total-ms={bar.totalMs}

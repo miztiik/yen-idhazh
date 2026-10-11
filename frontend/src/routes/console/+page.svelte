@@ -182,9 +182,9 @@
 						windowPending={mounted && reach === null}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
-					<Panel {id} title={titles[id]} wide>
+					<Panel {id} title={titles[id]} wide verdict={id === 'at-a-glance'}>
 						<div data-windowed={id === 'run-timeline' ? undefined : id} data-window-days={id === 'run-timeline' ? undefined : windowDays}
-							data-panel-state={mounted && reach === null ? 'loading' : undefined}>
+							data-panel-state={mounted && reach === null && ['at-a-glance', 'site-cost-per-item', 'chart-drawing'].includes(id) ? 'loading' : undefined}>
 						{#if id === 'at-a-glance'}
 							<AtAGlance days={data.charts} window={viewport} {knobs} chart={data.chart} />
 						{:else if id === 'site-cost-per-item'}
