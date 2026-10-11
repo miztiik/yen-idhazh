@@ -151,7 +151,7 @@ pub fn cleanup_known_pid(
     if !verify()? {
         return Ok(());
     }
-    let signal = |signal| unsafe {
+    let signal = |signal: libc::c_int| unsafe {
         libc::syscall(
             libc::SYS_pidfd_send_signal,
             descriptor.as_raw_fd(),

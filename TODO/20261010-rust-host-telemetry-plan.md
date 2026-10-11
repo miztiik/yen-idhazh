@@ -342,6 +342,7 @@ Table P - Row 3 rejected alternatives
   - `backend/tests/test_host_event_resource_parity.py`
   - `frontend/scripts/test-scope.ts`
   - `frontend/scripts/tests/test-scope.test.mjs`
+  - `frontend/scripts/tests/run-checks.test.mjs`
   - `tests/fixtures/host-events/resource-windows.json`
   - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
