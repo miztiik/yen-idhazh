@@ -358,7 +358,7 @@ async function main(args: string[]): Promise<number> {
 				await run('ruff', python, ['-m', 'ruff', 'check', '.']);
 				await run('mypy', python, ['-m', 'mypy']);
 				const report = join(directory, `${id}.xml`);
-				const basetemp = join(directory, `${id}-pytest`);
+				const basetemp = join(root, 'backend/var', `p-${id.slice(0, 12)}`);
 				rmSync(report, { force: true });
 				try {
 					const step = await run('pytest', python, ['-m', 'pytest', '-o', 'addopts=', '-q', '-n', selected.backendFiles ? '0' : 'auto',

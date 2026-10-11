@@ -53,8 +53,7 @@ def _git_environment(tmp_path: Path) -> dict[str, str]:
         **{
             name: value
             for name, value in os.environ.items()
-            if not name.startswith("GIT_CONFIG_")
-            and name not in {"GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY"}
+            if name not in {"GITHUB_OUTPUT", "GITHUB_STEP_SUMMARY"}
         },
         "HOME": str(home),
         "USERPROFILE": str(home),

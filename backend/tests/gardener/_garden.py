@@ -31,6 +31,7 @@ from uuid import uuid4
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT
+from fixture_git import command as fixture_git_command
 from origin_template import copy_origin, template
 
 from idhazh.gardener.registry import TaskModule
@@ -208,7 +209,7 @@ def quiet_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def git(repo: Path, *args: str) -> str:
     """One git command in `repo`, as the seed's author, raising on failure."""
     done = subprocess.run(
-        ["git", *SEED_IDENTITY, *args],
+        fixture_git_command(repo, *SEED_IDENTITY, *args),
         cwd=repo,
         env=os.environ.copy(),
         capture_output=True,
@@ -259,7 +260,7 @@ def an_origin(root: Path, files: dict[str, str]) -> tuple[Path, Path]:
 def read_origin(origin: Path, destination: Path, *paths: str) -> Path:
     """These paths of the origin's `main`, written under `destination` without a clone."""
     packed = subprocess.run(
-        ["git", "archive", "--format=tar", "main", *paths],
+        fixture_git_command(origin, "archive", "--format=tar", "main", *paths),
         cwd=origin,
         env=os.environ.copy(),
         capture_output=True,
@@ -278,7 +279,7 @@ def on_origin(origin: Path, relative: str) -> str | None:
     in the reader thread and look like a file that never landed.
     """
     done = subprocess.run(
-        ["git", "show", f"main:{relative}"],
+        fixture_git_command(origin, "show", f"main:{relative}"),
         cwd=origin,
         env=os.environ.copy(),
         capture_output=True,

@@ -239,9 +239,9 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     assert result.status is Status.LANDED, result
     assert result.prepared
     for path in projections:
-        entry = Repository(origin).entry("main", path)
+        entry = Repository(origin, git_dir=origin).entry("main", path)
         assert entry is not None, f"projection was omitted from publication: {path}"
-        assert Repository(origin).blob(entry.oid) == (repo / path).read_bytes()
+        assert Repository(origin, git_dir=origin).blob(entry.oid) == (repo / path).read_bytes()
     assert result.observed_tip is not None
     digest_publish.published_inputs(repo, result.observed_tip, date=run_plan.date, settings=settings)
     manifest_text = on_origin(origin, f"{day}/run.json")
@@ -253,19 +253,19 @@ def test_fresh_base_regeneration_preserves_completed_raw_and_newer_inventory(
     )
     assert on_origin(origin, "frontend/public/other.json") == '{"newer":true}\n'
     for path, data in raw.items():
-        entry = Repository(origin).entry("main", path)
+        entry = Repository(origin, git_dir=origin).entry("main", path)
         assert entry is not None
-        assert Repository(origin).blob(entry.oid) == data
-    entry = Repository(origin).entry("main", asset)
+        assert Repository(origin, git_dir=origin).blob(entry.oid) == data
+    entry = Repository(origin, git_dir=origin).entry("main", asset)
     assert entry is not None
-    assert Repository(origin).blob(entry.oid) == raced
+    assert Repository(origin, git_dir=origin).blob(entry.oid) == raced
     expected = corpus.roll(remote_rows, incoming, window=2)
     assert corpus.read_rows(repo / "corpus") == expected
     corpus.refuse_a_miscounted_census(expected, corpus.read_meta(repo / "corpus"))
     for path in ("corpus/corpus.jsonl", "corpus/corpus.meta.json"):
-        entry = Repository(origin).entry("main", path)
+        entry = Repository(origin, git_dir=origin).entry("main", path)
         assert entry is not None
-        assert Repository(origin).blob(entry.oid) == (repo / path).read_bytes()
+        assert Repository(origin, git_dir=origin).blob(entry.oid) == (repo / path).read_bytes()
 
 
 @pytest.mark.parametrize("staged", [False, True])
@@ -485,11 +485,11 @@ def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(
     assert result.status is Status.LANDED, result
     assert git(repo, "rev-parse", "HEAD").strip() == source
     assert (repo / ".git/index").read_bytes() == index
-    assert Repository(origin).entry("main", "state/foreign-staged.json") is None
+    assert Repository(origin, git_dir=origin).entry("main", "state/foreign-staged.json") is None
     for target in evidence:
-        entry = Repository(origin).entry("main", target.relative_to(repo).as_posix())
+        entry = Repository(origin, git_dir=origin).entry("main", target.relative_to(repo).as_posix())
         assert entry is not None and entry.mode == "100644"
-        assert Repository(origin).blob(entry.oid) == target.read_bytes()
+        assert Repository(origin, git_dir=origin).blob(entry.oid) == target.read_bytes()
 
 
 def test_plan_workflow_call_parses_and_bad_retry_config_stops_before_git_changes(

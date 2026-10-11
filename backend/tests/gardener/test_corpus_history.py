@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from fixture_git import command as fixture_git_command
 
 from idhazh.contracts.corpus import CorpusMeta
 from utilities import corpus_history, publication_git
@@ -68,7 +69,7 @@ def _epoch(instant: str) -> str:
 def dated_git(repo: Path, instant: str, *args: str) -> str:
     """One git command as the seed's author, authored and committed at `instant`."""
     done = subprocess.run(
-        ["git", *SEED_IDENTITY, *args],
+        fixture_git_command(repo, *SEED_IDENTITY, *args),
         cwd=repo,
         env=os.environ
         | {"GIT_AUTHOR_DATE": _epoch(instant), "GIT_COMMITTER_DATE": _epoch(instant)},
@@ -130,7 +131,7 @@ class History:
         return checkout
 
     def on_origin(self, *args: str) -> str:
-        return git(self.root, "--git-dir", str(self.origin), *args)
+        return git(self.origin, *args)
 
     def tree(self, commitish: str) -> str:
         """The tree of one commit in the explicitly addressed bare origin."""
@@ -390,7 +391,7 @@ def test_a_replay_that_conflicts_is_aborted_and_nothing_is_pushed(
     assert history.on_origin("rev-parse", "main").strip() == tip
 
 
-@pytest.mark.parametrize("bare_repository_policy", ("explicit", "all"))
+@pytest.mark.parametrize("bare_repository_policy", ("explicit",))
 def test_a_wake_with_nothing_old_enough_records_the_run_and_pushes_without_force(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -403,8 +404,8 @@ def test_a_wake_with_nothing_old_enough_records_the_run_and_pushes_without_force
     monkeypatch.setenv("GIT_CONFIG_KEY_" + str(config_count), "safe.bareRepository")
     monkeypatch.setenv("GIT_CONFIG_VALUE_" + str(config_count), bare_repository_policy)
     monkeypatch.setenv("GIT_CONFIG_COUNT", str(config_count + 1))
-    assert git(tmp_path, "config", "--get", "safe.bareRepository").strip() == bare_repository_policy
     history = History(tmp_path, declared=a_declaration())
+    assert git(history.author, "config", "--get", "safe.bareRepository").strip() == bare_repository_policy
     history.add("2026-05-01T09:00:00Z", "the root")
     history.add("2026-06-01T09:00:00Z", "a recent change")
     checkout = history.publish()

@@ -15,6 +15,7 @@ from idhazh.contracts.story_annotation import (
     ArticleDecision,
     CatalogReview,
     IdentityProposal,
+    Kind,
     WorkerBatch,
     WorkerSubmission,
 )
@@ -1060,6 +1061,121 @@ def test_frozen_regression_articles_are_never_confirmation(work: Path) -> None:
         assert result.article_partitions[example.b.article_id] == "quarantine"
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("unknown", ["other-membership", "topic", "story", "occurrence"])
+def test_known_event_survives_partial_paths_and_exposure_checkpoint(
+    work: Path, unknown: str
+) -> None:
+    from idhazh.contracts.story_evaluation import Partition
+    from idhazh.story_dataset.partitions import build_partition
+
+    store = seeded_store(work / "live")
+    replay = Store(work / "replay")
+    try:
+        batch = export_batch(store, manifest(), articles(), policy())
+        import_submission(store, manifest(), articles(), answer(batch))
+        example = fixtures().examples[0]
+        exposed, peer = example.a.article_id, example.b.article_id
+        correction = export_batch(
+            store, manifest(), articles(), policy(), article_ids=[exposed]
+        )
+        submission = answer(correction, "partial-path-fixture")
+        known = submission.decisions[exposed].memberships[0]
+        missing = "proposal:unreviewed"
+        kind: Kind
+        if unknown == "other-membership":
+            other = next(
+                e.a_decision.memberships[0]
+                for e in fixtures().examples
+                if e.a_decision.memberships and e.a_decision.memberships[0].event != known.event
+            )
+            partial = other.model_copy(update={"story": missing, "occurrence_refs": []})
+            memberships = [partial, known]
+            parent, kind = other.event, "story"
+        else:
+            field = "occurrence_refs" if unknown == "occurrence" else unknown
+            partial = known.model_copy(
+                update={field: [missing] if unknown == "occurrence" else missing}
+            )
+            if unknown != "occurrence":
+                partial.occurrence_refs = []
+            memberships = [partial]
+            parent = {"topic": "", "story": known.event, "occurrence": known.story}[unknown]
+            kind = "topic" if unknown == "topic" else "story" if unknown == "story" else "occurrence"
+            if unknown == "topic":
+                # An unresolved proposal may later resolve to the supported known parent.
+                submission.proposals.append(IdentityProposal(
+                    ref="proposal:known-event", kind="event", name="Fixture known Event",
+                    parent_refs=[missing], definition="Bounded known Event proposal.",
+                    evidence_article_ids=[exposed],
+                ))
+                partial = partial.model_copy(update={"event": "proposal:known-event"})
+                memberships = [partial]
+        submission.proposals.append(IdentityProposal(
+            ref=missing, kind=kind, name="Fixture unresolved identity",
+            parent_refs=[parent] if parent else [], definition="Bounded unresolved path.",
+            evidence_article_ids=[exposed],
+        ))
+        submission.decisions[exposed] = submission.decisions[exposed].model_copy(
+            update={"memberships": memberships}
+        )
+        # A proposed Topic needs a proposed Event/Story until its supported alias is reviewed.
+        if unknown == "topic":
+            submission.proposals.append(IdentityProposal(
+                ref="proposal:known-story", kind="story", name="Fixture known Story",
+                parent_refs=["proposal:known-event"], definition="Bounded known Story proposal.",
+                evidence_article_ids=[exposed],
+            ))
+            submission.decisions[exposed].memberships[0].story = "proposal:known-story"
+        import_submission(store, manifest(), articles(), submission)
+        if unknown == "topic":
+            current = read_catalog(store)
+            review_catalog(store, CatalogReview(
+                expected_revision=current.revision, reviewer="fixture",
+                reason="Resolve the known Event only; retain unresolved parent support.",
+                proposal_resolutions={correction.batch_id + ":proposal:known-event": known.event},
+            ), set(articles()))
+        first = build_partition(
+            store, manifest(), set(articles()), policy(), {exposed}
+        )
+        assert first.component_ids[exposed] == first.component_ids[peer]
+        for identity in (exposed, peer):
+            assert first.article_partitions[identity] == "quarantine"
+            assert {"unknown-membership", "regression-exposure"} <= set(
+                first.quarantine_reasons[identity]
+            )
+        with store.transaction():
+            store.set_setting("source", manifest().source_sha256)
+        export_checkpoint(store.root, work / "epoch", manifest(), policy())
+        restore_checkpoint(replay, work / "epoch", manifest(), policy())
+        saved = replay.get("partition", str(replay.setting("partition")), Partition)
+        assert saved == first
+        # Remove the old exposed endpoint's link; its exposed peer cannot become fresh.
+        correction = export_batch(
+            replay, manifest(), articles(), policy(), article_ids=[exposed, peer]
+        )
+        submission = answer(correction, "later-path-fixture")
+        other = next(
+            e.a_decision.memberships[0] for e in fixtures().examples
+            if e.a_decision.memberships and e.a_decision.memberships[0].event != known.event
+        )
+        submission.decisions[exposed].memberships = [other]
+        submission.decisions[peer].memberships = [other]
+        import_submission(replay, manifest(), articles(), submission)
+        later = build_partition(
+            replay, manifest(), set(articles()), policy(), set(), previous=saved
+        )
+        linked_peer = next(
+            identity for identity, record in latest_annotations(replay).items()
+            if identity not in {exposed, peer} and other in record.decision.memberships
+        )
+        for identity in (exposed, peer, linked_peer):
+            assert later.article_partitions[identity] == "quarantine"
+            assert "regression-exposure" in later.quarantine_reasons[identity]
+    finally:
+        store.close()
+        replay.close()
 
 
 def test_complete_qrels_metrics_and_unjudged_negative_guard() -> None:

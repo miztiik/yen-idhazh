@@ -8,7 +8,7 @@ from typing import Literal
 from idhazh.contracts.story_candidates import PairFrame
 from idhazh.contracts.story_evaluation import Partition, StoryPolicy
 from idhazh.contracts.story_source import SourceFreeze
-from idhazh.story_dataset.catalog import read_catalog, resolved_paths
+from idhazh.story_dataset.catalog import read_catalog, resolve_ref, resolved_paths
 from idhazh.story_dataset.storage import Store, digest
 from idhazh.story_dataset.workers import latest_annotations
 
@@ -39,13 +39,16 @@ def build_partition(
     first_by_event: dict[str, str] = {}
     unqualified = set(article_ids) - records.keys()
     for identity, record in records.items():
+        if identity not in article_ids:
+            continue
         paths = resolved_paths(record, catalog)
         if paths is None or record.decision.state != "annotated":
             unqualified.add(identity)
-        if paths is None:
-            continue
-        for path in paths:
-            event = path[1]
+        # Qualification requires the whole path; leakage only needs its known Event.
+        for membership in record.decision.memberships:
+            event = resolve_ref(catalog, record.batch_id, membership.event)
+            if event is None:
+                continue
             if event in first_by_event:
                 join(identity, first_by_event[event])
             first_by_event[event] = identity
@@ -68,15 +71,21 @@ def build_partition(
     partition: Literal["development", "confirmation", "quarantine"]
     exposure = dict(previous.article_exposure) if previous else {}
     if previous:
+        if previous.source_sha256 != manifest.source_sha256 or previous.seed != policy.seed:
+            raise ValueError("previous split belongs to another source")
+        regression_ids = regression_ids | set(previous.regression_article_ids)
         for identity, assignment in previous.article_partitions.items():
             if assignment != "quarantine":
                 exposure.setdefault(identity, assignment)
+    regression_exposed = regression_ids | {
+        identity
+        for identity, reasons in (previous.quarantine_reasons.items() if previous else [])
+        if "regression-exposure" in reasons
+    }
     for members in components.values():
         component = digest(members)
         prior = set()
         if previous:
-            if previous.source_sha256 != manifest.source_sha256 or previous.seed != policy.seed:
-                raise ValueError("previous split belongs to another source")
             prior = {
                 previous.article_partitions[identity]
                 for identity in members
@@ -91,7 +100,7 @@ def build_partition(
         crossing = len(prior - {"quarantine"}) > 1
         if crossing:
             crossings += 1
-        if set(members) & (regression_ids | unqualified) or crossing or "quarantine" in prior:
+        if set(members) & (regression_exposed | unqualified) or crossing or "quarantine" in prior:
             partition = "quarantine"
         elif prior:
             partition = next(iter(prior))
@@ -112,7 +121,7 @@ def build_partition(
             ] = []
             if set(members) & unqualified:
                 reasons.append("unknown-membership")
-            if set(members) & regression_ids:
+            if set(members) & regression_exposed:
                 reasons.append("regression-exposure")
             if crossing or "quarantine" in prior:
                 reasons.append("new-crossing-link")
