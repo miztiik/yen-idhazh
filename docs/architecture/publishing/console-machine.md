@@ -62,9 +62,9 @@ settlement independent of file order and packing schedule. It is ledger-specific
 also `(date, run_id)`. Daily packing and reopened months preserve the answer.
 
 The bounded migration covered **2026-07-14 through 2026-10-11**: 51 existing
-named manifests yielded 236 mappings, 120 numeric and 116 unknown. Exact parity
+named manifests yielded 237 mappings, 121 numeric and 116 unknown. Exact parity
 was checked after packing: August and September are monthly; October 1-10 are
-daily. The October 11 manifest's one row stays raw while that UTC day is open;
+daily. The October 11 manifest's two rows stay raw while that UTC day is open;
 the newest completed, packed day is October 10. This describes candidate data,
 not evidence that the family is already served by the live site. Before merge,
 the owner must verify live daily/monthly coverage and newest data within three
