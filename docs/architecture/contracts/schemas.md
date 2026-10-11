@@ -413,15 +413,14 @@ Every persisted payload is written by one function: **sorted keys, two-space ind
 The helper also accepts explicitly selected record-list keys. `DigestDay` puts
 stories, leads, run references and verticals on one line each. `RunManifest`
 keeps runs and model settings expanded, and puts configuration digests and
-vertical counts on one line each. The published day-metrics month encoder
-keeps days expanded, and puts sources, instruments and stage timings on one
-line each. `DayMetrics` uses the same record selections for state day files,
+vertical counts on one line each. `DayMetrics` keeps state day files expanded,
+and puts sources, instruments and stage timings on one line each,
 including each instrument's nested statistics. Other fields stay expanded.
 Existing helper callers keep their layout. These producers preserve fields, values and stamps;
 older layouts load normally and take the new layout when rewritten.
 
-The published run-days month encoder keeps days expanded and puts runs on one
-line each. `SourceHealthView` puts each source, including its nested history,
+The retired public run-days encoder is gone; native manifest layout is unchanged.
+`SourceHealthView` puts each source, including its nested history,
 on one line. `ConsoleBand` puts routes and runs on one line each.
 `PublicationInventory` puts file entries and changelog records on one line
 each. `VisualData` puts chart marks on one line each and keeps the encoding

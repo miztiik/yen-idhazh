@@ -264,7 +264,6 @@ names the file an operator edits and the rule it broke.
 | An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
 | A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
 | The compaction that governs `feed-health`, a `full-grain` series or a `public-copy` series keeping fewer month files than the widest console read selects | A panel blanks for a month that ran |
-| The declaration that governs the host-fingerprint ledger - its compaction - keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from that ledger, so a source month deleted while its published month is kept is a shard nothing can rebuild |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | A compaction not called `compact-<folder>`, or `compact-trial-<folder>` for trial roots, where `<folder>` is its ledger's door folder with each `/` written `-` | One compaction a ledger folder, found by name, and separate names keep trial retention from governing production |

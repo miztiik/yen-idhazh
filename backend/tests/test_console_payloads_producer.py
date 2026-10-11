@@ -33,7 +33,6 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import (
     ModelRole,
@@ -48,13 +47,9 @@ from idhazh.contracts.source_health_view import (
     SourcePermission,
 )
 from idhazh.contracts.visual_decision import VisualKind, VisualState
-from idhazh.month_partition import months_between, oldest_month_kept
 from idhazh.telemetry.publish import (
     console_band,
-    day_metrics,
     dispatch,
-    machine,
-    run_days,
     series,
 )
 
@@ -358,16 +353,6 @@ def opened(tmp_path: Path) -> Iterator[list[str]]:
     yield from _handles(tmp_path)
 
 
-def _publish_all(state: Path, digest: Path, *, months: set[str]) -> None:
-    machine.publish(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
-    day_metrics.publish_public(
-        state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
-    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=months)
-
-
 def _month_read(path: str) -> str | None:
     """The month a read names, whichever shape the file it opened is in.
 
@@ -385,175 +370,18 @@ def _month_read(path: str) -> str | None:
     return None
 
 
-def test_the_second_run_opens_only_its_named_month(
-    three_month_tree: tuple[Path, Path], opened: list[str]
-) -> None:
-    """The second run opens one of three months, asserted on file handles.
-
-    The first run backfills - every month's target is missing, so every month is
-    read. The second names the one month it appended to and reads that one,
-    because the run knows which month it just wrote.
-    """
-    state, digest = three_month_tree
-    _publish_all(state, digest, months=set(THREE_MONTHS))
-    _OPENED.clear()
-
-    _publish_all(state, digest, months={NEWEST})
-
-    read = [path for path in _OPENED if str(state) in path or str(digest) in path]
-    source_months = {month for path in read for month in [_month_read(path)] if month}
-    assert source_months == {NEWEST}, sorted(source_months)
-
-
-def test_the_first_run_reads_every_month_and_the_second_writes_nothing(
-    three_month_tree: tuple[Path, Path],
-) -> None:
-    """Byte equality, not a timestamp: a re-derived month is not rewritten."""
-    state, digest = three_month_tree
-    first = machine.publish(
-        state_root=state,
-        digest_root=digest,
-        keep_months=len(THREE_MONTHS),
-        today=TODAY,
-        months=set(THREE_MONTHS),
-    )
-    assert len(first) == len(THREE_MONTHS)
-
-    again = machine.publish(
-        state_root=state,
-        digest_root=digest,
-        keep_months=len(THREE_MONTHS),
-        today=TODAY,
-        months=set(THREE_MONTHS),
-    )
-
-    assert again == []
-
-
-def test_a_missing_target_is_written_even_when_its_month_was_not_named(
-    three_month_tree: tuple[Path, Path],
-) -> None:
-    """A fresh clone, a deleted file and a first backfill all land.
-
-    Without this a month outside the named set would be skipped for ever, and a
-    console asking for it would get a 404 it cannot tell from a broken deploy.
-    """
-    state, digest = three_month_tree
-    machine.publish(
-        state_root=state,
-        digest_root=digest,
-        keep_months=len(THREE_MONTHS),
-        today=TODAY,
-        months=set(THREE_MONTHS),
-    )
-    first_month = THREE_MONTHS[0]
-    machine.shard_path(digest, first_month).unlink()
-
-    written = machine.publish(
-        state_root=state,
-        digest_root=digest,
-        keep_months=len(THREE_MONTHS),
-        today=TODAY,
-        months={NEWEST},
-    )
-
-    assert [path.stem for path in written] == [first_month]
-
-
-# --- retention ---------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("dirname", "suffix"),
-    [
-        (machine.DIRNAME, ".csv"),
-        (day_metrics.PUBLIC_DIRNAME, ".json"),
-        (run_days.DIRNAME, ".json"),
-    ],
-)
-def test_every_series_is_pruned_to_its_own_knob(
-    tree: tuple[Path, Path], dirname: str, suffix: str
-) -> None:
-    """A producer that wrote without pruning would be the growing cost Guardrail #12
-    refuses: a directory that gains a file a month and loses none."""
-    state, digest = tree
-    _publish_all(state, digest, months=set(MONTHS))
-
-    kept = series.published_months(digest, dirname, suffix, MONTHS[-14:])
-
-    assert kept == list(MONTHS[-14:]), kept
-
-
 def test_a_knob_below_one_month_would_delete_the_month_being_written(
     tree: tuple[Path, Path],
 ) -> None:
     _state, digest = tree
     with pytest.raises(ValueError, match="fewer than one month"):
-        series.prune_months(digest, "machine", ".csv", keep_months=0, today=TODAY)
-
-
-# --- the trust boundary ------------------------------------------------------
-
-
-def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path]) -> None:
-    """A published shard is the one artifact nobody can re-derive once its
-    source month is folded away, so reading it back is what says it still
-    loads rather than merely still parses."""
-    state, digest = tree
-    _publish_all(state, digest, months=set(MONTHS))
-
-    assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
-    assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
-    assert len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST))) == 1
-    text = run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8")
-    assert text.startswith("[\n  {\n")
-    for day in json.loads(text):
-        for run in day["runs"]:
-            assert json.dumps(run, sort_keys=True, separators=(",", ": ")) in text
-
-
-# --- the run-day reduction ---------------------------------------------------
-
-
-def test_the_run_day_row_counts_the_page_and_not_the_planner(
-    tree: tuple[Path, Path],
-) -> None:
-    """The manifest records what the planner decided; this records what survived
-    to the page. A chart whose render failed is a visual and is not a published
-    chart."""
-    state, digest = tree
-    _publish_all(state, digest, months=set(MONTHS))
-
-    row = run_days.read_shard(run_days.shard_path(digest, NEWEST))[0]
-
-    assert row.date == NEWEST_DAY
-    assert row.published_items == 3
-    assert row.published_charts == 1
-    assert row.models == ["energy-model"]
-    assert row.runs[0].planned == 4
-
-
-def test_a_day_with_no_manifest_costs_the_month_that_day_and_no_more(
-    tree: tuple[Path, Path],
-) -> None:
-    _unused_state, digest = tree
-    orphan = digest / NEWEST[:4] / NEWEST[5:7] / "02"
-    orphan.mkdir(parents=True)
-    (orphan / "digest.json").write_text(
-        _day(f"{NEWEST}-02", items=1, charts=0).to_json(), encoding="utf-8"
-    )
-
-    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months={NEWEST})
-
-    rows = run_days.read_shard(run_days.shard_path(digest, NEWEST))
-    assert [row.date for row in rows] == [NEWEST_DAY]
+        series.prune_months(digest, "run-timeline", ".csv", keep_months=0, today=TODAY)
 
 
 # --- the band ----------------------------------------------------------------
 
 
 def _band(state: Path, digest: Path, *, months: set[str] | None = None) -> Any:
-    _publish_all(state, digest, months=set(MONTHS) if months is None else months)
     console_band.publish(
         state_root=state,
         digest_root=digest,
@@ -578,11 +406,111 @@ def test_the_band_names_the_newest_day_in_every_sentence(tree: tuple[Path, Path]
     assert band.verdict.sentence.startswith(f"{NEWEST_DAY} ran 1 run and published 3 of 4")
     assert band.verdict.health is Health.AMBER
     assert [square.label for square in band.verdict.runs] == ["Run 1 is worth a look"]
-    window_months = months_a_window_can_touch(max(CONSOLE.window_presets))
-    named_months = months_between(
-        oldest_month_kept(TODAY, window_months), TODAY.isoformat()[:7]
+    assert band.months == []
+
+
+@pytest.mark.parametrize(
+    ("planned", "newest", "outside"),
+    [
+        ("2026-10-09", "2026-10-10", "2026-11-01"),
+        ("2028-02-28", "2028-02-29", "2028-03-01"),
+        ("2026-12-30", "2026-12-31", "2027-01-01"),
+    ],
+)
+def test_a_delayed_plan_keeps_the_newest_published_day_in_its_month(
+    tmp_path: Path, planned: str, newest: str, outside: str
+) -> None:
+    """Publication order does not replace a newer band's facts with an older plan."""
+    state, digest = _seed_tree(tmp_path, ())
+    for index, stamp in enumerate((planned, newest, outside), start=1):
+        folder = digest / stamp[:4] / stamp[5:7] / stamp[8:10]
+        folder.mkdir(parents=True)
+        (folder / "run.json").write_text(
+            _manifest(
+                stamp, planned=4, succeeded=3, failed=1, site_bytes=index * 1_000_000
+            ).to_json(),
+            encoding="utf-8",
+        )
+        record = state / "day-metrics" / stamp[:4] / stamp[5:7] / f"{stamp[8:10]}.json"
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(_record(stamp).to_json(), encoding="utf-8")
+    console_band.publish(
+        state_root=state,
+        digest_root=digest,
+        generated_at=f"{outside}T19:00:00Z",
+        today=date.fromisoformat(planned),
+        console=CONSOLE,
+        run=RUN,
+        collect=COLLECT,
     )
-    assert band.months == [month for month in MONTHS if month in named_months]
+    band = console_band.read_band(console_band.band_path(digest))
+    assert band.verdict.date == newest
+    assert band.size.bytes == 2_000_000
+    assert band.verdict.sentence.startswith(f"{newest} ran 1 run and published 3 of 4")
+
+
+def test_the_band_ignores_public_mirrors_and_never_opens_a_day_payload(
+    three_month_tree: tuple[Path, Path], opened: list[str]
+) -> None:
+    state, digest = three_month_tree
+    for name, suffix in (("machine", ".csv"), ("run-days", ".json"), ("day-metrics", ".json")):
+        target = digest.parent / name / f"{NEWEST}{suffix}"
+        target.parent.mkdir(parents=True)
+        target.write_text("not a projection", encoding="utf-8")
+    for payload in digest.glob("*/*/*/digest.json"):
+        payload.write_text("not a day payload", encoding="utf-8")
+    telemetry = digest.parent / "telemetry"
+    telemetry.mkdir()
+    (telemetry / f"{NEWEST}.csv").write_text("", encoding="utf-8")
+    _OPENED.clear()
+    band = _band(state, digest)
+    assert band.months == [NEWEST]
+    assert band.verdict.date == NEWEST_DAY
+    assert band.size.bytes == 1_060_000
+    assert band.settings_moved is not None and band.checker_moved is not None
+    assert not any(Path(path).name == "digest.json" for path in _OPENED)
+    assert not any(name in Path(path).parts for path in _OPENED for name in ("machine", "run-days"))
+
+
+def test_native_movement_reads_one_span_and_the_nearest_independent_predecessors(
+    tmp_path: Path, opened: list[str]
+) -> None:
+    state, digest = _seed_tree(tmp_path, (NEWEST,))
+    fixture = json.loads(
+        (Path(__file__).parents[2] / "tests" / "fixtures" / "settings-moved" /
+         "five-on-one-day.json").read_text(encoding="utf-8")
+    )
+    original = fixture["days"][2]["records"][0]["inputs"]
+    for stamp, context in (
+        ("2026-06-26", 1024), ("2026-06-28", 2048), ("2026-07-01", 4096),
+    ):
+        manifest = _manifest(stamp, planned=4, succeeded=3, failed=1, site_bytes=1_000_000)
+        payload = manifest.model_dump(mode="json")
+        payload["runs"][0]["inputs"] = {**original, "n_ctx": context}
+        path = digest / stamp[:4] / stamp[5:7] / stamp[8:10] / "run.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(RunManifest.model_validate(payload).to_json(), encoding="utf-8")
+    for stamp in ("2026-06-26", "2026-06-27"):
+        run_id = f"{stamp}-1"
+        row = _eval_row(NEWEST).model_copy(update={
+            "date": stamp, "run_id": run_id, "scored_at": f"{stamp}T06:10:00Z",
+        })
+        seed_scores(state, [row], run_id=run_id)
+    _OPENED.clear()
+    console_band.publish(
+        state_root=state, digest_root=digest, generated_at=f"{NEWEST_DAY}T19:00:00Z",
+        today=TODAY, console=CONSOLE.model_copy(update={"window_presets": [3]}),
+        run=RUN, collect=COLLECT,
+    )
+    band = console_band.read_band(console_band.band_path(digest))
+    assert band.settings_moved is not None
+    assert band.settings_moved.compared_from == "2026-06-29"
+    assert band.settings_moved.changes[0].inputs == ["n_ctx"]
+    assert band.checker_moved is not None
+    assert band.checker_moved.compared_from == "2026-06-29"
+    assert band.checker_moved.changes == []
+    assert any("2026/06/27" in Path(path).as_posix() for path in _OPENED)
+    assert not any("2026/06/26" in Path(path).as_posix() for path in _OPENED)
 
 
 def test_a_failed_run_outranks_a_resting_feed_at_the_same_severity(
@@ -1048,7 +976,6 @@ def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
 
 def test_the_band_is_written_only_when_its_bytes_move(tree: tuple[Path, Path]) -> None:
     state, digest = tree
-    _publish_all(state, digest, months=set(MONTHS))
     stamp = f"{NEWEST_DAY}T19:00:00Z"
     first = console_band.publish(
         state_root=state,
@@ -1121,24 +1048,6 @@ def test_every_published_root_is_derived_from_the_digest_root(tmp_path: Path) ->
     assert console_band.band_path(canary).is_relative_to(tmp_path / "canary")
 
 
-def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
-    tree: tuple[Path, Path],
-) -> None:
-    """A month of days is fetched as one file, and every row in it validates
-    against its own schema (`CLAUDE.md` section 11)."""
-    state, digest = tree
-    _publish_all(state, digest, months=set(MONTHS))
-
-    payload = json.loads(run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8"))
-
-    assert isinstance(payload, list)
-    assert {row["version"] for row in payload} == {
-        __import__(
-            "idhazh.contracts.public_run_day", fromlist=["PublicRunDay"]
-        ).PublicRunDay.schema_version()
-    }
-
-
 # --- what the band says about the record's reach -----------------------------
 
 #: Rows the fixture builds rather than ones the committed ledger happens to hold,
@@ -1185,7 +1094,6 @@ def _published_band(state: Path, digest: Path) -> Any:
     somebody has to drain. The fields stay on the payload because a reader
     holding an older day still finds them there.
     """
-    _publish_all(state, digest, months=set(MONTHS))
     console_band.publish(
         state_root=state,
         digest_root=digest,
@@ -1287,5 +1195,11 @@ def test_the_dispatcher_routes_every_registered_projection_exactly_once(
     )
 
     declared = tuple(projection.name for projection in dispatch.PROJECTIONS)
+    assert declared == (
+        "telemetry", "source-health", "day-metrics", "run-timeline", "console-band",
+    )
+    assert not any(
+        (digest.parent / name).exists() for name in ("machine", "run-days", "day-metrics")
+    )
     assert published.dispatched == declared
     assert len(set(declared)) == len(declared), "two entries would share one writer"

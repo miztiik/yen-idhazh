@@ -14,11 +14,16 @@ import {
 	namesMovedShort,
 	settingsByDate,
 	settingsMoved,
+	inputsMoved,
+	settingsRules,
 	unreadRuleNote,
 	NAMES_SHOWN,
 	SETTING_WORDS,
 	WORDS_IN_ORDER
 } from '../src/lib/console/settings-moved';
+import { BAND_UNREAD, readBand } from '../src/lib/console/band';
+import { ruleBoundaries, ruleDeclaration, ruleEvents } from '../src/lib/charts/d3/model-rule';
+import type { DateStamp } from '../src/lib/data/ledger';
 
 /**
  * Which settings moved, and what a chart may say about it.
@@ -59,6 +64,116 @@ function fixture(): FixtureDay[] {
 	expect(parsed.days.length, `${path} carries no days`).toBeGreaterThan(0);
 	return parsed.days;
 }
+
+test('both languages compare names against the same authored expected fixture', () => {
+	const expected = JSON.parse(readFileSync(join(ROOT, 'tests', 'fixtures', 'settings-moved', 'five-on-one-day.expected.json'), 'utf8'));
+	expect(inputsMoved(fixture(), '2026-09-14')).toEqual(expected);
+	expect(fixture()[4].records[0].inputs?.prompt_sha256).not.toBe(fixture()[4].records[1].inputs?.prompt_sha256);
+});
+
+test('a name compares across absent values and a revert is a second change', () => {
+	const original = fixture()[2].records[0].inputs!;
+	const days = [
+		{ date: '2026-09-16', records: [{ inputs: original }] },
+		{ date: '2026-09-17', records: [{ inputs: { ...original, turn_markers_sha256: null } }] },
+		{ date: '2026-09-18', records: [{ inputs: { ...original, turn_markers_sha256: 'a'.repeat(64) } }] },
+		{ date: '2026-09-19', records: [{ inputs: original }] }
+	];
+	expect(inputsMoved(days, '2026-09-17')).toEqual({
+		compared_from: '2026-09-17',
+		changes: [
+			{ date: '2026-09-18', inputs: ['turn_markers_sha256'] },
+			{ date: '2026-09-19', inputs: ['turn_markers_sha256'] }
+		]
+	});
+	expect(inputsMoved([], '2026-09-16')).toEqual({ compared_from: null, changes: [] });
+});
+
+const ruleWindow = { from: '2026-09-16' as DateStamp, to: '2026-09-20' as DateStamp };
+function ruleShell() {
+	return { ...BAND_UNREAD, settingsMoved: {
+		compared_from: '2026-09-16', changes: [
+			{ date: '2026-09-17', inputs: ['prompt_sha256', 'n_ctx'] },
+			{ date: '2026-09-21', inputs: ['runtime_build'] }
+		]
+	}, checkerMoved: {
+		compared_from: '2026-09-16', changes: [
+			{ date: '2026-09-17', score_moved: false },
+			{ date: '2026-09-18', score_moved: true }
+		]
+	} };
+}
+
+test('settings and checker readouts retain two events at one boundary', () => {
+	const rule = settingsRules(ruleShell(), ruleWindow, 'every');
+	expect(rule).toEqual({ changes: [
+		{ date: '2026-09-17', kind: 'settings', words: 'the prompt and the context size changed on this day' },
+		{ date: '2026-09-17', kind: 'checker', words: 'the checker changed on this day; the faithfulness score did not' },
+		{ date: '2026-09-18', kind: 'checker', words: 'the faithfulness scorer changed on this day' }
+	], note: null });
+	expect(ruleDeclaration(rule)).toEqual({ value: 'yes' });
+	expect(ruleEvents(rule, ['2026-09-17']).lines[0]).toHaveLength(2);
+	expect(ruleBoundaries(rule, ['2026-09-16', '2026-09-17'], [100, 200], 50)).toEqual([
+		{ date: '2026-09-17', x: 150, kind: 'settings' }
+	]);
+});
+
+test('checker filters do not remove settings and missing kinds remain independent', () => {
+	const onlyScore = settingsRules(ruleShell(), ruleWindow, 'score');
+	expect('changes' in onlyScore && onlyScore.changes.map((c) => `${c.date} ${c.kind}`)).toEqual([
+		'2026-09-17 settings', '2026-09-18 checker'
+	]);
+	const shell = ruleShell();
+	const missing = settingsRules({ ...shell, settingsMoved: null }, ruleWindow, 'every');
+	expect('changes' in missing && missing.changes).toHaveLength(2);
+	expect('note' in missing && missing.note).toContain('written did not arrive');
+	const settings = settingsRules({ ...shell, checkerMoved: null }, ruleWindow, 'every');
+	expect('changes' in settings && settings.changes).toHaveLength(1);
+	expect('note' in settings && settings.note).toContain('checked did not arrive');
+	expect(ruleDeclaration(settingsRules(BAND_UNREAD, ruleWindow, 'none')).value).toBe('no');
+});
+
+test('rule notes distinguish full, partial and unrecorded spans without invented certainty', () => {
+	const empty = { ...ruleShell(), settingsMoved: { compared_from: '2026-09-16', changes: [] } };
+	expect(settingsRules(empty, ruleWindow, 'none')).toEqual({
+		changes: [], note: 'Nothing changed about how the summaries are written inside these 5 days.'
+	});
+	expect(settingsRules({ ...empty, settingsMoved: { compared_from: '2026-09-18', changes: [] } }, ruleWindow, 'none')).toEqual({
+		changes: [], note: 'This chart can mark a change in how the summaries are written only from 18 Sept on. None came after that day.'
+	});
+	expect(settingsRules({ ...empty, settingsMoved: { compared_from: null, changes: [] } }, ruleWindow, 'none')).toEqual({
+		changes: [], note: 'How the summaries are written was not recorded on these days, so this chart cannot mark a change.'
+	});
+	const unknown = { ...empty, settingsMoved: { compared_from: '2026-09-16', changes: [{ date: '2026-09-17', inputs: ['new_setting'] }] } };
+	const unknownRule = settingsRules(unknown, ruleWindow, 'none');
+	expect('changes' in unknownRule && unknownRule.changes[0].words).toBe('a recorded setting changed on this day');
+});
+
+test('score-only notes and windows before coverage make no checker-wide certainty claim', () => {
+	const empty = { ...BAND_UNREAD, settingsMoved: { compared_from: '2026-09-16', changes: [] }, checkerMoved: { compared_from: '2026-09-16', changes: [{ date: '2026-09-17', score_moved: false }] } };
+	expect(settingsRules(empty, ruleWindow, 'score')).toEqual({
+		changes: [], note: 'Nothing changed about how the summaries are written or the faithfulness scorer inside these 5 days.'
+	});
+	expect(settingsRules({ ...empty, checkerMoved: { ...empty.checkerMoved, compared_from: '2026-09-18' } }, ruleWindow, 'score')).toEqual({
+		changes: [], note: 'This chart can mark a change in the faithfulness scorer only from 18 Sept on. None came after that day.'
+	});
+	expect(settingsRules({ ...empty, settingsMoved: { compared_from: '2026-09-22', changes: [] } }, ruleWindow, 'none')).toEqual({
+		changes: [], note: 'This chart can mark a change in how the summaries are written only from 22 Sept on. That is after this window.'
+	});
+});
+
+test('the band treats absent and malformed movement fields as unknown separately', () => {
+	const payload = { verdict: { sentence: 'A run finished.' }, size: { sentence: 'A recorded size.' } };
+	expect(readBand(payload).settingsMoved).toBeNull();
+	expect(readBand(payload).checkerMoved).toBeNull();
+	for (const bad of [{}, { compared_from: null, changes: [{ date: '2026-09-17', inputs: ['prompt_sha256'] }] },
+		{ compared_from: '2026-09-16', changes: [{ date: '2026-09-31', inputs: ['prompt_sha256'] }] },
+		{ compared_from: '2026-09-16', changes: [{ date: '2026-09-17', inputs: ['prompt_sha256', 'prompt_sha256'] }] }]) {
+		const shell = readBand({ ...payload, settings_moved: bad, checker_moved: ruleShell().checkerMoved });
+		expect(shell.settingsMoved).toBeNull();
+		expect(shell.checkerMoved).toEqual(ruleShell().checkerMoved);
+	}
+});
 
 test.describe('what moved, and on which day', () => {
 	test('five settings on one date are one entry naming all five', () => {
@@ -122,8 +237,9 @@ test.describe('what moved, and on which day', () => {
 		expect(settingsMoved(fixture()).map((one) => one.date)).not.toContain('2026-09-16');
 	});
 
-	test('a day that only went back to an older value started nothing', () => {
-		expect(settingsMoved(fixture()).map((one) => one.date)).not.toContain('2026-09-18');
+	test('a mixed day introduces the reverted prompt, not every older value', () => {
+		expect(settingsMoved(fixture()).find((one) => one.date === '2026-09-18')?.settings).toEqual(['the prompt']);
+		expect(settingsMoved(fixture()).find((one) => one.date === '2026-09-19')?.settings).toEqual(['the sanitizer']);
 	});
 
 	test('one setting on its own is one entry naming one', () => {
@@ -150,7 +266,7 @@ test.describe('what a chart draws from it', () => {
 			drawn.slice(0, 3),
 			columns.slice(0, 3)
 		);
-		expect(rules.map((rule) => rule.date)).toEqual(['2026-09-17']);
+		expect(rules.map((rule) => rule.date)).toEqual(['2026-09-17', '2026-09-18']);
 	});
 
 	test('that one rule reads out all five, on one line', () => {

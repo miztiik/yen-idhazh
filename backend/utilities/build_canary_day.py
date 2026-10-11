@@ -104,8 +104,6 @@ from idhazh.telemetry import silicon
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
-    machine,
-    run_days,
     run_timeline,
     series,
     source_health,
@@ -1397,12 +1395,11 @@ def write_source_health(target: Path) -> int:
 def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     """Write every payload the console fetches, through the pipeline's producers.
 
-    The same six calls in the same order as `idhazh publish`, so the canary's
+    The remaining projections use the same producers as `idhazh publish`, so the canary's
     console reads a tree built by the code that builds the real one rather than
     by a fixture writer that can drift from it. The band is last because it
-    reads the run-day shards the call above it writes, and because its months
-    list is the union across every series - so each of them has to be on disk
-    before it is taken.
+    reads native manifests and state day-metrics, and its months list needs the
+    telemetry projection already on disk.
 
     **It is a separate step from building the day, and it has to be.** The
     item-health rows, the host records, the span rollup and the telemetry
@@ -1422,13 +1419,11 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     months = {month_of(date) for date in [*earlier_days(), DATE]}
     keep = len(months) + 1
     # Where `build-canary.mjs` puts the projection, which is not where the real
-    # tree puts it: the canary keeps telemetry under `state/` and the four other
-    # series beside the digest. The band needs it by name because its months
-    # list is the union across all five.
+    # tree puts it: the canary keeps telemetry under `state/`. The band needs
+    # this root by name for its telemetry-only months list.
     telemetry_root = state_root / "telemetry"
     written = 0
     for producer in (
-        machine,
         run_timeline,
     ):
         written += len(
@@ -1441,25 +1436,6 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
                 ensure_month=month_of(DATE),
             )
         )
-    written += len(
-        day_metrics.publish_public(
-            state_root=state_root,
-            digest_root=digest_root,
-            keep_months=keep,
-            today=today,
-            months=months,
-            ensure_month=month_of(DATE),
-        )
-    )
-    written += len(
-        run_days.publish(
-            digest_root=digest_root,
-            keep_months=keep,
-            today=today,
-            months=months,
-            ensure_month=month_of(DATE),
-        )
-    )
     band = console_band.publish(
         state_root=state_root,
         digest_root=digest_root,
@@ -1919,6 +1895,8 @@ def clear_output(digest_root: Path, state_root: Path) -> None:
         digest_root,
         search_index_root(digest_root),
         *(series.series_root(digest_root, name) for name in series.PUBLISHED_ROOTS),
+        # Retired public outputs from an earlier canary must not survive a rebuild.
+        *(digest_root.parent / name for name in ("machine", "run-days", "day-metrics")),
         state_root,
     ):
         if folder.exists():

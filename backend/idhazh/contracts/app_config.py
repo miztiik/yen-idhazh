@@ -57,7 +57,6 @@ from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.knobs.windows import months_a_window_can_touch
 
 #: The top-level `config/idhazh.json` keys this file used to carry. `models`
 #: held the whole active model inline, so a swap edited eleven lines in the file
@@ -235,21 +234,4 @@ class AppConfig(Contract):
     @model_validator(mode="after")
     def _the_archive_opens_on_a_span_the_presets_name(self) -> Self:
         refuse_an_archive_window_no_preset_offers(self.ui, self.console)
-        return self
-
-    @model_validator(mode="after")
-    def _no_cleanup_age_is_shorter_than_the_console_can_ask_for(self) -> Self:
-        """Every full-grain window outlives the widest read the console offers.
-
-        Checked here because `ObservabilityConfig` cannot see `console`, and the
-        failure is the worst kind: a shard is deleted, a reader pans back to it
-        months later, and the page draws a gap that reads as a day the pipeline
-        did nothing. `config.load` runs the same check again against
-        `config/appearance.json`, which is the file the published console
-        actually reads its window from.
-        """
-        self.observability.refuse_windows_shorter_than(
-            months_a_window_can_touch(self.console.max_window_days),
-            window_days=self.console.max_window_days,
-        )
         return self

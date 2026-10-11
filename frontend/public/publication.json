@@ -67,9 +67,6 @@
     {"bytes": 1247232,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
     {"bytes": 551473,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
     {"bytes": 2487,"items": 0,"path": "console/band.json","root": "public"},
-    {"bytes": 147384,"items": 0,"path": "day-metrics/2026-08.json","root": "public"},
-    {"bytes": 439744,"items": 0,"path": "day-metrics/2026-09.json","root": "public"},
-    {"bytes": 112908,"items": 0,"path": "day-metrics/2026-10.json","root": "public"},
     {"bytes": 11547,"items": 4,"path": "digest/2026/08/21/digest.json","root": "public"},
     {"bytes": 4583,"items": 0,"path": "digest/2026/08/21/run.json","root": "public"},
     {"bytes": 27985,"items": 10,"path": "digest/2026/08/22/digest.json","root": "public"},
@@ -172,12 +169,6 @@
     {"bytes": 40690,"items": 0,"path": "digest/2026/10/10/run.json","root": "public"},
     {"bytes": 141463,"items": 72,"path": "digest/2026/10/11/digest.json","root": "public"},
     {"bytes": 5946,"items": 0,"path": "digest/2026/10/11/run.json","root": "public"},
-    {"bytes": 4162,"items": 0,"path": "machine/2026-08.csv","root": "public"},
-    {"bytes": 79366,"items": 0,"path": "machine/2026-09.csv","root": "public"},
-    {"bytes": 68432,"items": 0,"path": "machine/2026-10.csv","root": "public"},
-    {"bytes": 17459,"items": 0,"path": "run-days/2026-08.json","root": "public"},
-    {"bytes": 56766,"items": 0,"path": "run-days/2026-09.json","root": "public"},
-    {"bytes": 22353,"items": 0,"path": "run-days/2026-10.json","root": "public"},
     {"bytes": 643201,"items": 0,"path": "run-timeline/2026-09.csv","root": "public"},
     {"bytes": 510576,"items": 0,"path": "run-timeline/2026-10.csv","root": "public"},
     {"bytes": 230648,"items": 0,"path": "source-health.json","root": "public"},
@@ -259,7 +250,7 @@
     {"bytes": 21225,"items": 0,"path": "raw/feed-health/2026/10/10/01a127ce-4e19-8860-a543-1224ba14adae.parquet","root": "state"},
     {"bytes": 21223,"items": 0,"path": "raw/feed-health/2026/10/11/01a12a32-783d-80c8-91b2-dcf02b0f446c.parquet","root": "state"}
   ],
-  "total_bytes": 59433784,
+  "total_bytes": 58485210,
   "total_items": 16999,
   "version": "2026-10-03T13:33"
 }

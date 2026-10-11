@@ -701,22 +701,16 @@ def test_a_compaction_keeps_every_month_file_a_console_read_still_selects(
     ],
     ids=["its-retention-task", "its-compaction"],
 )
-def test_the_machine_ledger_lasts_as_long_as_the_published_shard_folded_from_it(
+def test_the_retired_machine_copy_imposes_no_separate_source_window(
     tmp_path: Path, name: str, refusal: str
 ) -> None:
-    """A published month whose source months are gone is a shard nothing can rebuild.
-
-    Whichever declaration governs the ledger is held: its retention task while it
-    has one, and its compaction once the ledger files under the two roots.
-    """
+    """Native read floors remain; the deleted public copy adds no second floor."""
     short = (
         fixture(name, window={"unit": "months", "value": 13})
         if name == "host-fingerprint"
         else a_compaction("host-fingerprint", monthly_window={"unit": "months", "value": 12})
     )
-    message = refused(a_garden(tmp_path, **{name.replace("-", "_"): short}))
-    assert refusal in message
-    assert "observability.public_machine_keep_months is 14" in message
+    config.load_gardener(a_garden(tmp_path, **{name.replace("-", "_"): short}))
 
 
 def a_picture_task(window: dict[str, Any]) -> dict[str, Any]:

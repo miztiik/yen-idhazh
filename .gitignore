@@ -77,9 +77,6 @@ frontend/static/index/
 frontend/static/console/
 frontend/static/config/
 frontend/static/scores/
-frontend/static/run-days/
-frontend/static/day-metrics/
-frontend/static/machine/
 frontend/static/state/
 
 # Scaffolding for the reference-set authoring pass: a second copy of queue.jsonl,

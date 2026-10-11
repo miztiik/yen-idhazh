@@ -187,10 +187,6 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )
-    window = appearance.console.max_window_days
-    app.observability.refuse_windows_shorter_than(
-        months_a_window_can_touch(window), window_days=window
-    )
     return Settings(
         app=app,
         models=models,
@@ -284,10 +280,6 @@ _CONSOLE_READ_SERIES: Final[tuple[tuple[str, str], ...]] = (
 _PICTURE_WINDOW_TASKS: Final = ("digest-fragments", "visual-prune")
 _DAYS_A_PICTURE_MONTH: Final = 30
 
-#: The ledger the published machine shard is folded from, so the declaration
-#: that governs it may not keep less than `observability.public_machine_keep_months`.
-_MACHINE_SOURCE: Final = LedgerName.HOST_FINGERPRINT
-
 _TASK_POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
 _A_TASK_NAME: Final = re.compile(SLUG_PATTERN)
 
@@ -371,7 +363,6 @@ def refuse_what_the_declarations_break(
     _refuse_a_summary_that_goes_first(tasks)
     _refuse_a_copy_that_is_not_its_source(tasks)
     _refuse_a_window_a_console_read_still_opens(tasks, appearance)
-    _refuse_a_machine_source_shorter_than_its_copy(tasks, app)
     _refuse_a_picture_window_the_archive_does_not_state(tasks, app)
     for name, policy in tasks.items():
         if isinstance(policy, CompactionPolicy):
@@ -753,24 +744,6 @@ def _refuse_a_window_a_console_read_still_opens(
         kept = _series_of(policy, series)
         if not _reaches(kept, floor):
             raise refused(name, f"keeps its {series} series {_spelled(kept)}")
-
-
-def _refuse_a_machine_source_shorter_than_its_copy(
-    tasks: Mapping[str, TaskPolicy], app: AppConfig
-) -> None:
-    """The published machine shard is rebuilt from its ledger, so the ledger lasts as long."""
-    governing = _governing(_MACHINE_SOURCE, tasks)
-    if governing is None:
-        return
-    name, policy = governing
-    published = app.observability.public_machine_keep_months
-    if not _keeps(policy, MonthsWindow(unit="months", value=published)):
-        raise ValueError(
-            f"{_where(name)} {_kept_by(policy)} and "
-            f"observability.public_machine_keep_months is {published}. The published "
-            "machine shard is folded from the host-fingerprint ledger, so a source month "
-            "deleted while the published one is still kept is a shard nothing can rebuild"
-        )
 
 
 def _refuse_a_picture_window_the_archive_does_not_state(
