@@ -21,6 +21,22 @@ fn real_configuration_bounds_controls_and_override() {
     config.limits.max_concurrent_windows = config.limits.max_windows + 1;
     assert!(config.validate().is_err());
 }
+
+#[test]
+fn native_configuration_rejects_migration_and_unknown_sections() {
+    let bytes = include_bytes!("../../../../config/host-telemetry-experiment.json");
+    for field in ["history_migration_limits", "unknown_section"] {
+        let mut data: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+        data[field] = serde_json::json!({"max_roots": 4});
+        let bytes = serde_json::to_vec(&data).unwrap();
+        let error = ExperimentConfig::from_bytes(&bytes, 65536).unwrap_err();
+        assert!(
+            error.contains(&format!("unknown field `{field}`")),
+            "{error}"
+        );
+    }
+}
+
 #[test]
 fn all_formats_compressions_and_lifecycle_are_explicit() {
     for format in ["parquet", "json"] {

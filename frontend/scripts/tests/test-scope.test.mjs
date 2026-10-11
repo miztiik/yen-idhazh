@@ -15,6 +15,30 @@ function tmpdir() {
 	return path;
 }
 
+test('historical host dry-run paths select bounded Python fixtures without native preparation', () => {
+	for (const path of [
+		'backend/idhazh/contracts/host_migration.py',
+		'backend/idhazh/telemetry/host_history_files.py',
+		'backend/idhazh/telemetry/host_history_migration.py',
+		'backend/idhazh/telemetry/host_history_bundle.py',
+		'backend/idhazh/telemetry/host_history_paths.py',
+		'backend/utilities/migrate_host_fingerprints.py',
+		'config/host-history-migration.json',
+		'tests/fixtures/host-events/history-migration.json'
+	]) {
+		const selected = selectPaths([path]);
+		assert.deepEqual(selected.groups, ['backend']);
+		assert.deepEqual(selected.backendFiles, [
+			'backend/tests/contracts/test_host_migration.py',
+			'backend/tests/test_host_fingerprint_migration.py'
+		]);
+		assert.equal(selected.rust, false);
+		assert.equal(selected.contracts, false);
+	}
+	const config = selectPaths(['config/host-telemetry-experiment.json']);
+	assert.ok(config.backendFiles.includes('backend/tests/test_host_fingerprint_migration.py'));
+});
+
 test('native Rust and its actual file fixture select focused checks without browser preparation', () => {
 	for (const path of ['backend/rust/host-telemetry/src/codec/parquet.rs',
 		'backend/rust/host-telemetry/rust-toolchain.toml', 'backend/rust/host-telemetry/Cargo.lock',
