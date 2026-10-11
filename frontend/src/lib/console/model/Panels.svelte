@@ -52,10 +52,10 @@
 	<ThroughputTrend days={throughputs} height={chart.height_px} width={chart.width_px} reference={throughputReference}
 		tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} windowDays={range.days} rule={speedRule} />
 {:else if endings !== null}
-	<p data-lede>{endings.length} calls cut off at the length limit, out of {endings.calls} recorded endings</p>
+	<p data-lede>{endings.calls === 0 ? 'Call endings were not measured.' : `${endings.length} calls cut off at the length limit, out of ${endings.calls} recorded endings`}</p>
 	<p data-comparison="calls cut off against calls that ended on their own">Calls cut off at the length limit against calls that ended on their own. Each call has one ending.</p>
 	<Series series={endings.series} {rule} {chart} name="call-ending" stacked />
-	{#if endings.length === 0}<p>No call was cut off at the length limit in these {range.days} days.</p>{/if}
+	{#if endings.calls > 0 && endings.length === 0}<p>No call was cut off at the length limit in these {range.days} days.</p>{/if}
 {:else if refusals !== null}
 	<p data-lede>{refusals.top === undefined ? 'No named rule refused a model reply.' : `${refusals.top.label}: ${refusals.top.count} refusals`} at summarization</p>
 	<p data-comparison="the rule that refused most against every other rule">The rule that refused most against every other rule.</p>
@@ -66,7 +66,7 @@
 	{#if refusals.failed === 0}<p>No rule refused a model reply in these {range.days} days.</p>{/if}
 {:else if scores !== null}
 	<div data-eval-panel="faithfulness" data-match-floor={scores.floor}>
-	<p data-lede>{scores.days.at(-1)?.matchMid === null ? 'Faithfulness was not measured.' : `${scores.days.at(-1)?.matchMid}% median faithfulness`}</p>
+	<p data-lede>{scores.days.at(-1)?.matchMid == null ? 'Faithfulness was not measured.' : `${scores.days.at(-1)?.matchMid}% median faithfulness`}</p>
 	<p data-comparison="each day's median against its middle half">Each day's median against its middle half.</p>
 	<Series series={scores.series} {rule} {chart} name="faithfulness" rules={scores.rules} domain={[scores.floor, 100]} />
 	<p>{scores.wider}</p>
@@ -122,8 +122,8 @@
 		Median <span data-score-cost={id === 'score-cost' ? 'median' : undefined}>{times.times === null ? 'not measured' : Math.round(times.times.median / 1000) === 0 ? '<1 s' : `${Math.round(times.times.median / 1000)} s`}</span>;
 		95th <span data-score-cost={id === 'score-cost' ? 'p95' : undefined}>{times.times === null ? 'not measured' : Math.round(times.times.p95 / 1000) === 0 ? '<1 s' : `${Math.round(times.times.p95 / 1000)} s`}</span>.
 		{times.untimed} rows had no measured clock.
+		{#if id === 'score-cost'}The checker runs after the model has finished; this clock is not part of the model's writing time.{/if}
 	</p>
-	{#if id === 'score-cost'}<p>The checker runs after the model has finished; this clock is not part of the model's writing time.</p>{/if}
 {:else if id === 'summary-length'}
 	<p data-lede>{median(lengths.map((run) => run.median)) ?? 'not measured'} median words per run</p>
 	<p data-comparison="each run's middle length against its shortest and longest">Each run's middle length against its shortest and longest.</p>

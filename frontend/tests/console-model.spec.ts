@@ -300,6 +300,7 @@ test.describe('the eleven measures, as cards', () => {
 				const box = spark?.getBoundingClientRect();
 				return {
 					label: node.getAttribute('data-kpi') ?? '',
+					figure: node.querySelector('[data-kpi-value]')?.textContent?.trim() ?? '',
 					drew: Boolean(spark),
 					width: box ? Math.round(box.width) : 0,
 					overflow: box ? Math.round(box.right - card.right) : 0
@@ -308,10 +309,10 @@ test.describe('the eleven measures, as cards', () => {
 		);
 
 		expect(drawn, 'the scan found no cards').toHaveLength(12);
-		expect(drawn.filter((entry) => !entry.drew).map((entry) => entry.label)).toEqual([]);
+		expect(drawn.filter((entry) => !entry.drew && entry.figure !== 'not measured').map((entry) => entry.label)).toEqual([]);
 		// A line narrower than this is a smudge, and one wider than its card pushes
 		// a scrollbar under the whole grid.
-		expect(drawn.filter((entry) => entry.width < 120)).toEqual([]);
+		expect(drawn.filter((entry) => entry.drew && entry.width < 120)).toEqual([]);
 		expect(drawn.filter((entry) => entry.overflow > 0)).toEqual([]);
 	});
 });

@@ -43,7 +43,7 @@ const VALUE_PX = 10;
 
 const MODEL_ROUTES = BAND_UNREAD.routes.flatMap((route) => {
 	const expected = BY_ROUTE[route.id]?.modelPanels;
-	return expected ? [{ href: route.href, ...expected }] : [];
+	return expected ? [{ id: route.id, href: route.href, ...expected }] : [];
 });
 const PIPELINES_ROUTES = BAND_UNREAD.routes.flatMap((route) => {
 	const expected = BY_ROUTE[route.id]?.scoringStage;
@@ -222,7 +222,17 @@ test.describe('what one summary cost, as a distribution', () => {
 				for (const readout of MODEL.windowReadouts) {
 					const found = page.locator(readout);
 					if ((await found.count()) === 0) continue;
-					await expect(found, `${readout} names a different span`).toContainText(spanSaid(preset));
+					let measuredDays = preset;
+					if (MODEL.id === 'model') {
+						const id = readout.includes('score-cost') ? 'score-cost' : 'write-cost';
+						const query = page.locator(`[data-model-query="${id}"]`);
+						await expect(query).toHaveAttribute('data-query-asked', String(preset));
+						await expect(query).toHaveAttribute('data-query-state', 'ready');
+						measuredDays = Number(await query.getAttribute('data-window-days'));
+						expect(measuredDays).toBeGreaterThan(0);
+						expect(measuredDays).toBeLessThanOrEqual(preset);
+					}
+					await expect(found, `${readout} names a different measured span`).toContainText(spanSaid(measuredDays));
 					await expect(found, `${readout} says "1 days"`).not.toContainText(ONE_DAYS);
 				}
 			}
@@ -304,6 +314,7 @@ test.describe('what checking a summary cost, off the critical path', () => {
 			page
 		}) => {
 			await page.goto(MODEL.href);
+			if (MODEL.id === 'model') await expect(page.locator('[data-model-query="score-cost"]')).toHaveAttribute('data-query-state', 'ready');
 			// A real measurement that rounds away prints `<1 s` rather than a zero,
 			// which would say it took no time.
 			const spoken = (seconds: number) => (seconds === 0 ? '<1 s' : `${seconds} s`);

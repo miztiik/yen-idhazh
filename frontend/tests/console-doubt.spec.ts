@@ -362,12 +362,18 @@ test.describe('the ranked list, on the built console', () => {
 
 		for (const preset of presets) {
 			await page.locator(`[data-window-preset="${preset}"]`).click();
+			const query = page.locator('[data-model-query="source-doubts"]');
+			await expect(query).toHaveAttribute('data-query-asked', String(preset));
+			await expect(query).toHaveAttribute('data-query-state', 'ready');
+			const effective = Number(await query.getAttribute('data-window-days'));
+			expect(effective).toBeGreaterThan(0);
+			expect(effective).toBeLessThanOrEqual(preset);
 			await expect(page.locator('[data-model-doubt]')).toHaveAttribute(
 				'data-model-doubt-days',
-				String(preset)
+				String(effective)
 			);
 			await expect(page.locator('[data-model-doubt-intro]')).toContainText(
-				preset === 1 ? 'over this one day' : `over these ${preset} days`
+				effective === 1 ? 'over this one day' : `over these ${effective} days`
 			);
 		}
 	});

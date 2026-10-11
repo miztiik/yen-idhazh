@@ -58,7 +58,8 @@
 </script>
 
 <div data-readout-fetched={queries.map((query) => query.ledger).join(' ')} data-model-query={name}
-	data-query-state={panelState} data-window-days={range?.days}>
+	data-query-state={panelState} data-query-asked={range?.asked} data-window-days={range?.days}
+	data-range-from={range?.from} data-range-to={range?.to}>
 	{#if panelState === 'ready'}
 		{#if range !== null}
 			{@render children(rows, range)}

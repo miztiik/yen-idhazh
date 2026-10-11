@@ -141,6 +141,9 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 			if (state !== 'missing') await buildRows(root, ledger, [{ covers: '2026-08-20', rows: [] }]);
 			await serveToPage(context, root, ledger);
 		}
+		if (state === 'unreachable') {
+			await context.route('**/state/compact/*/index/daily.json', (route) => route.abort('failed'));
+		}
 
 		test('pending native doors keep the waiting frame without a settled answer', async ({ page }) => {
 			await page.route('**/state/compact/*/index/*.json', () => {});
@@ -169,9 +172,6 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 				await expect(panel.locator('[data-lede]')).toHaveCount(0);
 			}
 		});
-		if (state === 'unreachable') {
-			await context.route('**/state/compact/*/index/daily.json', (route) => route.abort('failed'));
-		}
 		await page.goto('/console/model/');
 		await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', state);
 		for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {

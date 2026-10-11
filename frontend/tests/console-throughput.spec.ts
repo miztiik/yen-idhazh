@@ -86,7 +86,7 @@ async function setWindow(page: Page, days: number) {
 		'data-window-days',
 		String(days)
 	);
-	await expect(page.locator('[data-model-query="model-throughput"]')).toHaveAttribute('data-window-days', String(days));
+	await expect(page.locator('[data-model-query="model-throughput"]')).toHaveAttribute('data-query-asked', String(days));
 	await expect(page.locator('[data-model-query="model-throughput"]')).toHaveAttribute('data-query-state', 'ready');
 }
 

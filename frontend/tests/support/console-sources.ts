@@ -15,7 +15,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
 	'src/lib': [
-		'archive-calendar.ts', 'bands.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
+		'archive-calendar.ts', 'bands.ts', 'chart-evidence.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
 		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts'
 	],
 	'src/lib/assist': [
