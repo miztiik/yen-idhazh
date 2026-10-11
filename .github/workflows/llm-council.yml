@@ -53,6 +53,8 @@ env:
 
 jobs:
   draw:
+    env:
+      COUNCIL_EVENT_FILE: backend/var/council/events/planner.jsonl
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -216,9 +218,10 @@ jobs:
       # then land beside each other in the merged download rather than on top of
       # each other, which an artifact named for neither could not prevent.
       #
-      # Nothing writes this directory until a tenant is registered, so an empty
-      # upload is the no-tenant case rather than a failure.
-      - uses: actions/upload-artifact@v7
+      # The planner's safe event lines also travel here, even if preparation
+      # failed or no tenant ran.
+      - if: always()
+        uses: actions/upload-artifact@v7
         with:
           name: council-selection-${{ steps.decide.outputs.date }}
           path: backend/var/council
@@ -231,6 +234,8 @@ jobs:
           retention-days: 3
 
   judge:
+    env:
+      COUNCIL_EVENT_FILE: backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl
     permissions:
       contents: read
       actions: read
@@ -328,6 +333,7 @@ jobs:
           path: |
             backend/var/council
             !backend/var/council/*/selection
+            !backend/var/council/events/planner.jsonl
           if-no-files-found: warn
           # The same three nights the selection keeps, and for the same reason:
           # a unit's verdicts outlive the run that produced them.
@@ -377,10 +383,12 @@ jobs:
       # run pushing `main` would race each other, and the workflow-level
       # `concurrency` group does not serialise jobs inside a run.
       - name: Settle and publish every completed tenant output
+        if: always()
         env:
           COUNCIL_DATES: ${{ needs.draw.outputs.dates }}
           COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
           COUNCIL_UNITS_RESULT: ${{ needs.judge.result }}
+          COUNCIL_MATRIX: ${{ needs.draw.outputs.matrix }}
         run: |
           set -euo pipefail
           asked=()
@@ -389,4 +397,5 @@ jobs:
           done < <(echo "$COUNCIL_DATES" | jq -r '.[]')
           python backend/utilities/council_publish.py "${asked[@]}" \
             --run-id "$COUNCIL_RUN_ID" --commit "${{ github.sha }}" \
-            --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT"
+            --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT" \
+            --matrix "$COUNCIL_MATRIX"

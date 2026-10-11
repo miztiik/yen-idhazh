@@ -62,6 +62,42 @@ def test_collector_keeps_a_failed_or_cancelled_judging_job_red() -> None:
     assert '--units-result "$COUNCIL_UNITS_RESULT"' in script
 
 
+def test_event_transport_uses_existing_always_uploaded_bundles_and_planned_cells() -> None:
+    workflow = _load_workflows()[FILENAME]
+    planner = _job(workflow, "draw")
+    judge = _job(workflow, "judge")
+    assert planner["env"] == {
+        "COUNCIL_EVENT_FILE": "backend/var/council/events/planner.jsonl",
+    }
+    assert judge["env"] == {
+        "COUNCIL_EVENT_FILE":
+        "backend/var/council/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl",
+    }
+    selection = _uploads("draw", SELECTION_ARTIFACT)
+    assert len(selection) == 1
+    assert _normalize_condition(selection[0]["if"], "planner upload") == "always()"
+    upload = _uploads("judge", METRICS_ARTIFACT)
+    assert len(upload) == 1
+    assert _normalize_condition(upload[0]["if"], "judge upload") == "always()"
+    settings = upload[0]["with"]
+    assert isinstance(settings, dict)
+    paths = str(settings["path"]).splitlines()
+    assert paths[0] == "backend/var/council"
+    assert "!backend/var/council/events/planner.jsonl" in paths
+    download = _step(workflow, "save_council_results", "uses", "actions/download-artifact@v8")
+    settings = download["with"]
+    assert isinstance(settings, dict)
+    assert settings["pattern"] == "council-*"
+    assert settings["path"] == "backend/var/council"
+    assert settings["merge-multiple"] == "true"
+    collect = _step(workflow, "save_council_results", "name", COMMIT_STEP)
+    assert _normalize_condition(collect["if"], "collector") == "always()"
+    environment = collect["env"]
+    assert isinstance(environment, dict)
+    assert environment["COUNCIL_MATRIX"] == "${{ needs.draw.outputs.matrix }}"
+    assert '--matrix "$COUNCIL_MATRIX"' in str(collect["run"])
+
+
 #: The dotted path the unit's bound is read from. Spelled once here and asserted
 #: in the file, so a workflow that read a different knob fails rather than
 #: bounding the unit by the work shard's clock - or by a tenant's block, which a
@@ -592,7 +628,9 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     assert not re.search(r"\bstate/\S+", calls[0]), (
         "a ledger path spelled here is a path a second tenant's output never reaches"
     )
-    assert "if" not in step, "the collecting utility handles an empty venue without a commit"
+    assert _normalize_condition(step["if"], "collector") == "always()", (
+        "the collector must run after a failed download and handle an empty venue"
+    )
 
 
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:

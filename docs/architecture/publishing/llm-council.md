@@ -89,6 +89,40 @@ Each entrypoint installs the shared text-free crash printer. Caught failures
 become diagnostic events. An uncaught crash prints exception types and code
 places, never messages, paths, source lines or notes.
 
+### What a person reads on the collecting job's page
+
+The collector appends one Markdown summary to `GITHUB_STEP_SUMMARY`, including
+its final exit code and label, publication result, and one row per reported
+judge, UTC date and step. Prepare and settle rows come from their own events.
+Each planned judging cell has a row even when it sends nothing. Each judge has
+one folded log group; a failed unit gets an error annotation outside that group.
+The summary contains only validated identities, closed words, counts, dates and
+fixed sentences. It never repeats an article, a verdict or an exception message.
+
+`COUNCIL_EVENT_FILE` makes the shared event writer append declared events to a
+transient JSON-lines file, even when the configured log level hides progress.
+Its file writer is private, outside the process-wide logger registry, so log
+capture or configuration cannot propagate its copy as a second console event.
+The planner's `events/planner.jsonl` rides its existing selection bundle, which
+uploads even after preparation fails.
+Each judging cell writes `events/<judge>/<date>/<shard>.jsonl` in the existing
+always-uploaded metrics bundle. A cell excludes the planner's downloaded event
+file from its upload, so siblings cannot overwrite it. The collector reads only
+the files named by the planner's matrix and the one planner event file, not an
+archive or a directory census. These files are not committed and no later run
+uses them.
+
+No complete unit and exit report means **no report**, not success. A platform
+kill may cause it, but the summary does not claim that cause. An explicit
+refusal keeps its `2 refused` label, and a valid failed report keeps its failed
+outcome. Unknown events, unknown fields, unsafe text and mismatched job
+identities produce **invalid report** and a fixed error annotation; rejected
+data is never rendered. Failed or incomplete expected reports keep publication
+red, as does the upstream judging job's failed or cancelled result. The
+collector step runs even after an artifact download failure, so missing files
+are still reported. Publication keeps completed sibling work and never reruns
+a judge.
+
 ### Design rationale: one log format does not mean one text policy
 
 The shared writer owns line format and UTC stamps. The gardener retains its

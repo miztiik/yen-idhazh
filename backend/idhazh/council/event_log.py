@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from pathlib import Path
+from typing import override
 
 from pydantic import ValidationError
 
@@ -15,10 +21,43 @@ from idhazh.event_lines import cause_of as cause_of
 from idhazh.event_lines import payload as payload
 
 logger = logging.getLogger(__name__)
+_captured: ContextVar[list[Model] | None] = ContextVar("council_events", default=None)
+# A private writer cannot acquire handlers or parents from process-wide logging setup.
+_transport = logging.Logger(f"{__name__}.transport")
+_transport.propagate = False
+
+
+class EventFile(logging.FileHandler):
+    """Use LF in the transient bundle before any transport or test reads it."""
+
+    def __init__(self, path: Path, *, encoding: str) -> None:
+        super().__init__(path, encoding=encoding)
+        if self.stream is not None:
+            self.stream.reconfigure(newline="\n")
+
+    @override
+    def handleError(self, record: logging.LogRecord) -> None:
+        raise
 
 
 def emit(event: Model, *, level: int = logging.INFO, force: bool = False) -> None:
+    captured = _captured.get()
+    if captured is not None:
+        captured.append(event)
+    if _transport.handlers:
+        event_lines.emit(event, logger=_transport, level=level, force=True)
     event_lines.emit(event, logger=logger, level=level, force=force)
+
+
+@contextmanager
+def capture() -> Iterator[list[Model]]:
+    """Keep this invocation's declared events, even when progress logs are hidden."""
+    events: list[Model] = []
+    token = _captured.set(events)
+    try:
+        yield events
+    finally:
+        _captured.reset(token)
 
 
 def failed(failure: BaseException, *, refused: bool = False) -> None:
@@ -62,3 +101,13 @@ def install(level: str = "INFO") -> None:
     handler.setFormatter(OneJsonLine())
     logging.basicConfig(level=level, handlers=[handler])
     logging.getLogger().setLevel(level)
+    target = os.environ.get("COUNCIL_EVENT_FILE")
+    for previous in tuple(_transport.handlers):
+        _transport.removeHandler(previous)
+        previous.close()
+    if target:
+        path = Path(target)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        output = EventFile(path, encoding="utf-8")
+        output.setFormatter(OneJsonLine())
+        _transport.addHandler(output)
