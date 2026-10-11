@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { watchlist } from './watchlist';
+	import { WATCHLIST_STATE_WORDS } from './watchlist';
 	import type { PanelState } from '../waiting';
 	import VoicesPanel from './VoicesPanel.svelte';
 	import RecordFrame from './RecordFrame.svelte';
@@ -15,8 +16,9 @@
 		{#if view}
 			<p data-lede>{view.lede}</p>
 			<div class="evidence watchlist" data-chart-type={view.geometry === null ? 'tileStrip' : undefined} data-chart-name="watchlist"
-				data-readout-none={view.geometry === null ? 'No complete hit column was recorded, so there is no tile reading' : undefined}>
-				<TileStrip geometry={view.geometry} empty={recordEmptyState('quiet')} name="watchlist" label="Watchlist catch days" {width} {height} {tileMinPx} readout={view.records} {readoutMaxShare} stateWords={{ absent: 'hit column not recorded completely', quiet: 'no catch recorded', fired: 'caught' }}/>
+				data-readout-none={view.geometry === null ? 'No complete hit column was recorded for a tile reading; agreed with Susan' : undefined}>
+				{#if view.geometry !== null}<TileStrip geometry={view.geometry} empty={recordEmptyState('quiet')} name="watchlist" label="Watchlist catch days" {width} {height} {tileMinPx} readout={view.records} {readoutMaxShare} stateWords={WATCHLIST_STATE_WORDS}/>
+				{:else}<p class="notes">Watchlist answers were not recorded completely, so no day tiles can be drawn.</p>{/if}
 			</div>
 			<p class="notes">{view.quiet ? 'The watchlist caught nothing in this window.' : view.finding}</p>
 			<p class="notes">A filled day: the watchlist caught at least one article. This window marks a day at {view.marked} and names it at {view.named} distinct catches.</p>

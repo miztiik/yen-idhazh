@@ -22,6 +22,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Remaining delivery authorized, 2026-10-10.** The owner authorized the remaining pull requests and merges without another implementation approval round. Row 4 builds the real query, fixture and loading capability only. Its former measurement worker, volume harness, benchmark page, CI timing comparison and measured engine-download figure are suspended. The loading standing says `Fetching the record.`; no missing measurement delays implementation and no guessed size is printed.
 
+**Voices integration delegated by Naveen, 2026-10-11.** Row 8 owns the eight feed-case extraction from `console.spec.ts`, truthful native settlement in the shared ownership/readout scans, Voices scope mapping and its tests, inherited route inventories/knob fixtures, and actual packed-fixture staging in the bounded private builder. Keep all cases and independent assertions. This is test integration, not a shared chart or query API change. The owner retains public merge and CI.
+
 | Field | Value |
 | --- | --- |
 | **Blocked by** | Row 1 is in flight; rows 2 and 3 follow it. Plan 50 rows 9 and 12 are complete (#1166, #1161); publication and page-cache prerequisites are complete (#1169, #1157). The remaining dependencies are the rows in section 1, not a new measurement. **A route row (6 to 9) merges only when the live site carries what it reads** (section 1, "Before a route row merges"); until then its branch waits and the pool keeps running |
@@ -67,7 +69,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | PENDING | - | - | - |
 | 6 | Pipelines asks the ledger | 5 | E | PENDING | - | - | - |
 | 7 | Summaries asks the ledger | 5 | E | PENDING | - | - | - |
-| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | BLOCKED: shared Voices test ownership | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
+| 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | IMPLEMENTED: local delivery; parent merge and CI pending | p52-voices-ledgers (`feat/console-voices-ledgers`) | Read from merge | Row8 finishing worker; actual Susan/Fowler consultations |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |
 | 10 | The `telemetry` and `run-timeline` projections go | 6 | F | PENDING | - | - | - |
 | 11 | ECharts leaves | 7, 8, 9, 10 | G | PENDING | - | - | - |

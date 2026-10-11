@@ -20,7 +20,7 @@
 	{:else}
 		<p data-lede>{strip.rows.length + strip.hidden} sources are close to retiring themselves.</p>
 		<p class="notes" data-retiring-lead data-window-exempt="retiring">Run {strip.runId} counted this distance. A source under {Math.round(strip.alarmPoint * 100)}% every day for {strip.dwellDays} days running stops being asked. This does not follow the window control.</p>
-		{#if !strip.autoRetire}<p class="notes" data-retiring-watching>Nothing retires on this measurement yet — this panel is watching only.</p>{/if}
+		{#if !strip.autoRetire}<p class="notes" data-retiring-watching>Nothing retires on this reading yet - this panel is watching only.</p>{/if}
 		<p class="notes" data-retiring-clear>{strip.clear} judged sources are at or above the mark today.</p>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div class="evidence" data-chart-type="rankedList" data-chart-name="source-yield" data-retiring="table" data-retiring-dwell={strip.dwellDays} data-retiring-auto={strip.autoRetire ? 'yes' : 'no'}
@@ -62,7 +62,7 @@
 				? 'Point at a square to read it. Arrow keys move between sources. Escape returns to the first source.'
 				: "Point at a square to read it. Left and Right step through a source's days, Up and Down move between sources, Escape returns to rest."}/>{/if}
 			{#if strip.unjudged.length}
-				<p class="notes" data-retiring-unjudged-lead>Not judged yet — under one or both evidence floors, so no countdown may be drawn. The record is {strip.completeDates} complete days; a source needs {strip.minCompleteDays} complete days plus {strip.minDecisions} decisions of its own.</p>
+				<p class="notes" data-retiring-unjudged-lead>Not judged yet - under one or both evidence floors, so no countdown may be drawn. The record is {strip.completeDates} complete days; a source needs {strip.minCompleteDays} complete days plus {strip.minDecisions} decisions of its own.</p>
 				<ol class="source-rows" data-retiring-unjudged>
 					{#each strip.unjudged as row (row.sourceId)}
 						<li data-retiring-unjudged-row={row.sourceId}><p>{row.title} <small data-source-note-id>{row.sourceId}</small></p><p data-retiring-cell="bar">not judged yet</p>

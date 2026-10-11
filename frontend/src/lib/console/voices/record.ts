@@ -2,6 +2,7 @@
 import type { Row, SliceResult, LedgerReach } from '../../data/ledger';
 import type { Range } from '../queries/window';
 import { factsOf, recordsOf, readoutOf, type ReadoutFacts } from '../../charts/readout';
+import { shortDate } from '../../format';
 
 export type Answer = SliceResult | LedgerReach | 'pending';
 export const numberOf = (value: Row[string] | undefined): number | null =>
@@ -32,8 +33,11 @@ export function readingRecords(rows: readonly { title: string; facts: readonly {
 }
 export function dayReadout(records: readonly ReadoutFacts[]) {
 	return readoutOf({
-		type: 'tileStrip', columns: records.map((record) => record.subject), series: [],
-		events: { lines: records.map((record) => record.facts.map((fact) => ({ label: fact.label, value: fact.value ?? record.notMeasured, swatch: null }))) },
+		type: 'tileStrip', columns: records.map((record) => record.subject.replace(/\b\d{4}-\d{2}-\d{2}\b/g, shortDate)), series: [],
+		events: { lines: records.map((record) => [
+			{ label: 'UTC day', value: record.subject.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0] ?? record.subject, swatch: null },
+			...record.facts.map((fact) => ({ label: fact.label, value: fact.value ?? record.notMeasured, swatch: null }))
+		]) },
 		notMeasured: 'not recorded', resting: 'last'
 	});
 }

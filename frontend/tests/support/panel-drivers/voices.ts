@@ -2,7 +2,7 @@
 
 import type { Driver, BasicNothing } from '../panel-gates';
 import { test } from '@playwright/test';
-import { unlinkSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { judgementRoute } from '../judgement-route';
 import { buildRows, type BuiltCell } from '../ledger-lifecycle';
@@ -64,12 +64,13 @@ const states = Object.fromEntries((['loading', 'quiet', 'missing', 'unreachable'
 	state, (async (page) => {
 		const route = await judgementRoute(test.info().outputPath(`voices-${state}`), {
 			voicesWait: state === 'loading',
-			voices: async (root) => {
+			voices: async (root, publishedRoot) => {
+				if (state === 'quiet') writeFileSync(join(publishedRoot, 'source-health.json'), JSON.stringify({ ...VOICES_CENSUS, sources: [] }));
 				if (state !== 'missing') await buildRows(root, 'item-health', [{ covers: '2030-06-15', rows: [] }]);
-				await buildRows(root, 'feed-health', [{ covers: '2030-06-15', rows: [] }]);
+				if (state !== 'missing') await buildRows(root, 'feed-health', [{ covers: '2030-06-15', rows: [] }]);
 			}
 		});
-		if (state === 'unreachable') unlinkSync(join(route.staticRoot, 'state', 'compact', 'item-health', 'index', 'monthly.json'));
+		if (state === 'unreachable') writeFileSync(join(route.staticRoot, 'state', 'compact', 'item-health', 'index', 'daily.json'), '{"entries":');
 		return {
 			afterOpen: async () => { await page.goto(`${route.origin}console/voices/`); },
 			afterRead: async () => { route.release(); await route.close(); }

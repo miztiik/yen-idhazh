@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { publishedSite } from './published-site';
 import { buildLedger } from './ledger-lifecycle';
 import { cachedParquetAddon, parquetAddon } from '../../scripts/duckdb-addon';
+import { ledgerCopy, publishedLedgers } from '../../scripts/published-ledgers.mjs';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const INPUTS = [
@@ -183,7 +184,7 @@ const INPUTS = [
 	'svelte.config.js',
 	'vite.config.ts'
 ] as const;
-// Row 8 uses the same bounded private publication/build, with these exact additional inputs.
+// Voices uses the same bounded private publication/build, with these exact additional inputs.
 const VOICES_INPUTS = [
 	'src/lib/charts/run-history.ts',
 	'src/lib/components/PanelGroup.svelte',
@@ -327,6 +328,15 @@ export async function judgementRoute(
 		copyFileSync(join(FRONTEND, 'package.json'), join(frontend, 'package.json'));
 		copyFileSync(join(FRONTEND, 'tsconfig.json'), join(frontend, 'tsconfig.json'));
 		mkdirSync(join(frontend, 'static'), { recursive: true });
+		const published = ledgerCopy(state, publishedLedgers());
+		if (published.refused.length) throw new Error(published.refused.join('\n'));
+		for (const file of published.files) {
+			const destination = join(frontend, 'static', 'state', ...file.split('/'));
+			mkdirSync(dirname(destination), { recursive: true });
+			if (published.indexes[file] === undefined) copyFileSync(join(state, ...file.split('/')), destination);
+			else writeFileSync(destination, published.indexes[file], 'utf8');
+		}
+		writeFileSync(join(report, 'published-ledgers.json'), `${JSON.stringify(published, null, 2)}\n`);
 		const band = join(frontend, 'static', 'console', 'band.json');
 		execFileSync(process.env.IDHAZH_PYTHON ?? 'python', ['-c', `
 from pathlib import Path

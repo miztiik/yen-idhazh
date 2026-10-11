@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { feedsFailed } from './feeds-failed';
+	import { FEED_STATE_WORDS, ARTICLE_STATE_WORDS } from './feeds-failed';
 	import TileStrip from '../../charts/d3/TileStrip.svelte';
 	import { recordEmptyState } from '../../charts/d3/empty';
 	let { view, width, height, tileMinPx, readoutMaxShare, minAttempts, feedOnly = false }: {
@@ -20,18 +21,21 @@
 	{#if view.noCommon}
 		<p class="notes">No common observed feed-and-article span can be drawn. An unobserved day is not a successful fetch.</p>
 	{:else if view.sources.length === 0}
-		<p class="notes">{view.completeClean ? 'Every feed and article fetch answered every day in the common recorded span.' : 'No failure was recorded in the common observed span; unobserved source-days are not claims of successful fetches.'}</p>
+		<p class="notes">{view.completeClean ? feedOnly ? 'Every feed answered every day in the recorded feed span. Article fetches are not counted.' : 'Every feed and article fetch answered every day in the common recorded span.' : 'No failure was recorded in the common observed span; unobserved source-days are not claims of successful fetches.'}</p>
 	{:else}
 		<ol class="sources" data-feeds="table" data-feeds-drawn={view.sources.length} data-feeds-hidden={view.hidden}>
 			{#each view.sources as source (source.sourceId)}
-				<li data-failed-source={source.sourceId}>
+				<li data-failed-source={source.sourceId} data-feed={feedOnly ? source.sourceId : undefined}
+					data-feed-failures={feedOnly ? source.feedFailures : undefined}
+					data-feed-streak={feedOnly ? source.feedStreak : undefined}>
 					<p>{source.sourceId}: {source.fired} failed days</p>
 					<p class="notes">Feed</p>
-					<TileStrip geometry={source.feed} empty={recordEmptyState('quiet')} name="feed-{source.sourceId}" label="{source.sourceId} feed failures" {width} {height} {tileMinPx} showAxis={feedOnly} readout={source.feedRecords} {readoutMaxShare} stateWords={{ absent: 'not recorded as asked', quiet: 'recorded with no failure', fired: 'failed or answered empty' }}/>
+					<TileStrip geometry={source.feed} empty={recordEmptyState('quiet')} name="feed-{source.sourceId}" label="{source.sourceId} feed failures" {width} {height} {tileMinPx} showAxis={feedOnly} readout={source.feedRecords} {readoutMaxShare} stateWords={FEED_STATE_WORDS}/>
 					<p class="notes">{source.feedEnding}</p>
+					{#if feedOnly}<p class="notes" data-feed-result>{source.feedResult}</p>{/if}
 					{#if !feedOnly}
 						<p class="notes">Articles</p>
-						<TileStrip geometry={source.article} empty={recordEmptyState('quiet')} name="articles-{source.sourceId}" label="{source.sourceId} article failures" {width} {height} {tileMinPx} readout={source.articleRecords} {readoutMaxShare} stateWords={{ absent: 'fetch not recorded', quiet: 'no recorded failure', fired: 'fetch failures' }}/>
+						<TileStrip geometry={source.article} empty={recordEmptyState('quiet')} name="articles-{source.sourceId}" label="{source.sourceId} article failures" {width} {height} {tileMinPx} readout={source.articleRecords} {readoutMaxShare} stateWords={ARTICLE_STATE_WORDS}/>
 						<p class="notes">{source.ending}</p>
 					{/if}
 				</li>

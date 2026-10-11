@@ -84,6 +84,9 @@ test('THE ORACLE: Pipelines kept no attribute the moved panels own', async ({ pa
 	// And the same sweep on Voices finds them, so a suite that passed because
 	// every selector had been renamed out of existence fails here instead.
 	await page.goto(routeHref('voices'));
+	await expect(page.locator('[data-console-panels="voices"]')).toHaveAttribute(
+		'data-route-state', /^(ok|quiet|missing|unreachable)$/
+	);
 	const arrived: string[] = [];
 	for (const selector of OWNED) {
 		if ((await page.locator(selector).count()) > 0) arrived.push(selector);

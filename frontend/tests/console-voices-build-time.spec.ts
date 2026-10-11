@@ -93,6 +93,23 @@ test('real SSR preserves recorded dwell, unjudged floors, full-weight defaults a
 	expect(discount).not.toContain('data-ranked-row="thin"');
 	expect(discount).toContain('1 unread feeds keep full weight');
 });
+test('ranking ties, floor rules and all three tail populations remain exact under a cap', () => {
+	const snapshot = view([
+		row({ source_id: 'floor-low', reliability: 0.5, reliability_reads: 2 }),
+		row({ source_id: 'floor-high', reliability: 0.5, reliability_reads: 7 }),
+		row({ source_id: 'light', reliability: 0.8, reliability_reads: 3 }),
+		row({ source_id: 'perfect', reliability: 1, reliability_reads: 5 }),
+		row({ source_id: 'unread', reliability: 1, reliability_reads: 0 }),
+		row({ source_id: 'retired', reliability: 0.5, reliability_reads: 8, retired: true })
+	]);
+	const discount = rankingDiscount(snapshot, 1)!;
+	expect(discount.geometry!.rows.map((one) => [one.key, one.value, one.row.context, one.row.status])).toEqual([
+		['floor-high', 0.5, '7 evidence-bearing reads; world', 'on the floor']
+	]);
+	expect(discount.geometry!.rules.map((rule) => [rule.at, rule.label])).toEqual([[0.5, 'the most the ranking takes']]);
+	expect(discount.lede).toBe('3 feeds were discounted by run 2030-06-15-1.');
+	expect(discount.tail).toBe('2 more discounted, 1 on the floor; 1 answered every evidence-bearing read. 1 unread feeds keep full weight; they were not read in 30 days.');
+});
 test.describe('compiled real build-time components', () => {
 	// The lab mounts compiled components, not the site's script delivery policy.
 	test.use({ bypassCSP: true });

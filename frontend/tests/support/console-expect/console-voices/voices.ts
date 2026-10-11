@@ -7,7 +7,7 @@ export const EXPECT: RouteExpect | null = {
 	panels: [
 		{
 			name: 'the source census',
-			selector: '[data-source-health-lead], [data-source-health="absent"]'
+			selector: '[data-console-panel-id="source-health"]'
 		},
 		{
 			name: 'the ranking weight',

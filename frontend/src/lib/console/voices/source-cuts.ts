@@ -7,6 +7,7 @@ import { numberOf, wordOf } from './record';
 export function sourceCuts(rows: readonly Row[], range: Range, cap: number): SourceCuts & { unknown: number; zeroLengths: number; zeroCaps: number } {
 	const unique = new Map<string, { source: string; date: string; before: number | null; after: number | null }>();
 	for (const row of rows) {
+		if (wordOf(row.date, '') < range.from || wordOf(row.date, '') > range.to) continue;
 		const source = wordOf(row.source_id, ''), key = wordOf(row.url_key, '');
 		if (!source || !key) continue;
 		const article = { source, date: wordOf(row.date, ''), before: numberOf(row.source_words_before_cap), after: numberOf(row.source_words) };

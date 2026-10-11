@@ -117,11 +117,11 @@
 	function monthsFor(): number { return 0; }
 </script>
 
-<svelte:head><title>Voices — Console — {data.ui.site_title}</title></svelte:head>
+<svelte:head><title>Voices - Console - {data.ui.site_title}</title></svelte:head>
 <RouteStatus route="voices" {answers} days={windowDays} through={reach?.through ?? null} shimmerAfterMs={console.shimmer_after_ms} onRetry={() => void ask(true)}>
 	<WindowControlSource days={windowDays} presets={console.window_presets} {monthsFor} {busy} {ready}
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through: reach?.through ?? null }} onChange={show}/>
-	<p class="console-carry" data-console-carry="pipelines">{data.carries.voices} <a href="{base}/console/">Pipelines →</a></p>
+	<p class="console-carry" data-console-carry="pipelines">{data.carries.voices} <a href="{base}/console/">Pipelines -&gt;</a></p>
 	<PanelGroup id={config.panel_groups[0].id} title={config.panel_groups[0].title} panels={config.panel_groups[0].panels.length}>
 		<SourceHealthPanel {census} width={console.chart_width} height={console.chart_height}/>
 		<FeedsFailedPanel days={windowDays} view={failed ?? (feedsAnswer !== 'pending' ? fallback : null)} {fallback} panelState={feedPanelState} articleState={stateOf(feedsAnswer)}

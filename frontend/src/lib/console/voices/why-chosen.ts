@@ -12,7 +12,7 @@ const runNumber = (row: Row): number | null => {
 };
 function authorityWords(row: Row): string {
 	const factors = ['tier_score', 'feed_weight', 'feed_reliability'].map((key) => numberOf(row[key]));
-	const words = `tier ${factors[0] ?? 'not recorded'} × weight ${factors[1] ?? 'not recorded'} × reliability ${factors[2] ?? 'not recorded'}`;
+	const words = `tier ${factors[0] ?? 'not recorded'} x weight ${factors[1] ?? 'not recorded'} x reliability ${factors[2] ?? 'not recorded'}`;
 	if (factors.some((value) => value === null)) return `${row.authority_score}; ${words}. The multiplication cannot be checked.`;
 	const product = factors.reduce<number>((value, factor) => value * factor!, 1);
 	return Math.abs(product - numberOf(row.authority_score)!) <= 0.000001
@@ -42,11 +42,13 @@ export function whyChosen(rows: readonly Row[], cap: number) {
 	const drawn = complete.slice(0, cap);
 	const authority = candidates.map((row) => numberOf(row.authority_score)).filter((n): n is number => n !== null).sort((a, b) => b - a);
 	const threshold = candidates.length >= cap && authority.length === candidates.length ? authority[cap - 1] : null;
-	const displaced = threshold === null || drawn.length < cap || complete.length !== candidates.length ? null : drawn.filter((row) => numberOf(row.authority_score)! < threshold).length;
+	const displaced = threshold === null || drawn.length < cap || complete.length !== candidates.length || unknownIdentity > 0 ? null : drawn.filter((row) => numberOf(row.authority_score)! < threshold).length;
 	const bonuses = NAMES.slice(1).map((label, index) => ({
 		label, value: drawn.reduce((sum, row) => sum + numberOf(row[COLUMNS[index + 1]])!, 0)
 	})).sort((a, b) => b.value - a.value);
-	const finding = threshold !== null && complete.length !== candidates.length
+	const finding = unknownIdentity > 0
+		? `${unknownIdentity} newest-day rows lack an item identity or numeric run suffix. The bonuses' effect on the ${cap}-article choice cannot be established.`
+		: threshold !== null && complete.length !== candidates.length
 		? `The authority threshold was recorded, but only ${complete.length} of ${candidates.length} candidates have complete selection scores. The bonuses' effect on the ${cap}-article choice cannot be established.`
 		: displaced === null
 		? `The ${cap}-article authority threshold cannot be established from ${candidates.length} candidates with this evidence.`
@@ -55,7 +57,8 @@ export function whyChosen(rows: readonly Row[], cap: number) {
 		geometry: partsOfOne(drawn.map((row) => ({
 			label: wordOf(row.item_id), parts: NAMES.map((label, index) => ({ label, value: numberOf(row[COLUMNS[index]])! }))
 		})), { order: NAMES, quantityByLabel: { Authority: 'authority', Recency: 'recency', Lens: 'lens', Watchlist: 'watchlist', Carriage: 'carriage' } }),
-		count: candidates.length, drawn: drawn.length, incomplete: candidates.length - complete.length, unknownIdentity,
+		count: candidates.length, drawn: drawn.length, complete: complete.length, hidden: complete.length - drawn.length,
+		incomplete: candidates.length - complete.length, unknownIdentity,
 		lede: finding, finding,
 		records: readingRecords(drawn.map((row) => ({
 			title: wordOf(row.item_id), facts: [

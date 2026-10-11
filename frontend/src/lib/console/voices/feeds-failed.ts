@@ -5,11 +5,13 @@ import type { LedgerTable } from '../../server/ledger-rows';
 import type { RecordRead } from '../recording';
 import type { Range } from '../queries/window';
 import { windowRange } from '../queries/window';
-import { answered, failing, preserves, settled, reliability, resultLabel } from '../../feed-health';
+import { answered, chronological, failing, preserves, settled, reliability, resultLabel, streak } from '../../feed-health';
 import { tileStrip, type TileInput } from '../../charts/d3/tileStrip';
 import { datesOf, numberOf, wordOf, readingRecords, dayReadout } from './record';
 
 export interface FeedInput { results: FeedResult[]; read: RecordRead }
+export const FEED_STATE_WORDS = { absent: 'not recorded as asked', quiet: 'recorded with no failure', fired: 'failed or answered empty' };
+export const ARTICLE_STATE_WORDS = { absent: 'fetch not recorded', quiet: 'no recorded failure', fired: 'fetch failures' };
 // The existing feedResults projection, on its canonical reader's single answer.
 // Keeping that answer's metadata avoids reading the same rows twice or losing empty/read-failed distinctions.
 export function feedInput(table: LedgerTable): FeedInput {
@@ -38,7 +40,19 @@ function commonCode(rows: readonly Row[]): string {
 	const common = [...codes].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
 	return common ? FAILS[common[0]] ?? common[0] : 'no failure recorded';
 }
+function codeCounts(rows: readonly Row[]): string {
+	const counts = new Map<string, number>();
+	for (const row of rows) {
+		const code = FAILS[wordOf(row.code)] ?? wordOf(row.code);
+		const status = numberOf(row.http_status);
+		const label = `${code} (${status === null ? 'status not recorded' : `HTTP ${status}`})`;
+		counts.set(label, (counts.get(label) ?? 0) + 1);
+	}
+	return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.map(([label, count]) => `${label} on ${count} of ${rows.length} fetches`).join('; ') || 'not recorded';
+}
 export function feedsFailed(input: FeedInput, articles: readonly Row[] | null, range: Range, cap: number, marked: number, named: number) {
+	if (articles !== null) articles = articles.filter((row) => wordOf(row.date, '') >= range.from && wordOf(row.date, '') <= range.to);
 	const feeds = input.results.filter((row) => row.date >= range.from && row.date <= range.to);
 	const feedThrough = feeds.map((row) => row.date).sort().at(-1) ?? null;
 	const articleThrough = articles?.map((row) => wordOf(row.date, '')).filter(Boolean).sort().at(-1) ?? null;
@@ -53,6 +67,7 @@ export function feedsFailed(input: FeedInput, articles: readonly Row[] | null, r
 		for (const row of feedFailures) feedCodes.set(resultLabel(row), (feedCodes.get(resultLabel(row)) ?? 0) + 1);
 		const commonFeed = [...feedCodes].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
 		const newestFeedFailure = feedFailures.map((row) => row.date).sort().at(-1);
+		const lastFeed = chronological(feedRows).at(-1);
 		const failures = articleRows.filter((row) => Object.hasOwn(FAILS, wordOf(row.code, '')));
 		const days = dates.map((date) => {
 			const feedDay = feedRows.filter((row) => row.date === date && !preserves(row));
@@ -68,15 +83,20 @@ export function feedsFailed(input: FeedInput, articles: readonly Row[] | null, r
 		const newestFailure = failures.map((row) => wordOf(row.date, '')).sort().at(-1);
 		const record = (kind: 'feed' | 'article') => readingRecords(days.map((day) => ({
 			title: `${sourceId}, ${kind}, ${day.date}`, facts: kind === 'feed' ? [
+				{ label: 'State', value: FEED_STATE_WORDS[day.feed.state] },
 				{ label: 'Feed reads', value: day.feed.state === 'absent' ? 'not recorded as asked' : `${day.feed.reading} failed of ${day.feedDay.length} asked` },
 				{ label: 'Answers', value: day.feedDay.map((row) => `${resultLabel(row)}${row.status === null ? '' : `, HTTP ${row.status}`}${row.detail ? `, ${row.detail}` : ''}`).join('; ') || 'not recorded' }
 			] : [
+				{ label: 'State', value: ARTICLE_STATE_WORDS[day.article.state] },
 				{ label: 'Article fetches', value: day.article.state === 'absent' ? 'not recorded as asked' : `${day.article.reading} failed of ${day.articleDay.length} recorded fetches` },
+				{ label: 'Code counts', value: codeCounts(day.articleDay) },
 				{ label: 'Answers', value: day.articleDay.map((row) => `${FAILS[wordOf(row.code)] ?? wordOf(row.code)}, ${wordOf(row.outcome)}${numberOf(row.http_status) === null ? '' : `, HTTP ${row.http_status}`}; ${wordOf(row.source_form)}, tier ${numberOf(row.tier) ?? 'not recorded'}`).join('; ') || 'not recorded' }
 			]
 		})));
 		return {
 			sourceId, fired: firedDates.length,
+			feedFailures: feedFailures.length, feedStreak: streak(chronological(feedRows)),
+			feedResult: lastFeed ? resultLabel(lastFeed) : 'not recorded as asked',
 			feed: tileStrip(days.map((day) => day.feed), { thresholds: [1, 1] }),
 			article: articles === null ? null : tileStrip(days.map((day) => day.article), { thresholds: [marked, named] }),
 			feedRecords: dayReadout(record('feed')), articleRecords: dayReadout(record('article')),
@@ -84,7 +104,7 @@ export function feedsFailed(input: FeedInput, articles: readonly Row[] | null, r
 			feedEnding: newestFeedFailure ? `mostly ${commonFeed}, last ${newestFeedFailure}` : 'no feed failure recorded',
 			observed: days.some((day) => day.feed.state !== 'absent' || day.article.state !== 'absent'),
 			answeredEveryDay: days.length > 0 && days.every((day) => day.feedDay.length > 0 && day.feedDay.every(answered) &&
-				articles !== null && day.articleDay.length > 0 && day.articleDay.every((row) => row.outcome === 'ok'))
+				(articles === null || day.articleDay.length > 0 && day.articleDay.every((row) => row.outcome === 'ok')))
 		};
 	}).sort((a, b) => b.fired - a.fired || a.sourceId.localeCompare(b.sourceId));
 	const failed = sources.filter((source) => source.fired > 0);

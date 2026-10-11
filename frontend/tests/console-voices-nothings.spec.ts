@@ -15,10 +15,23 @@ for (const state of ['loading', 'quiet', 'missing', 'unreachable'] as const) {
 					await expect(panel).toHaveText('');
 					await expect(panel.locator('[data-chart-type]')).toHaveCount(0);
 				} else {
-					await expect(panel.locator(`[data-empty-state="${state}"]`)).toHaveCount(1);
-					await expect(panel).toHaveText(state === 'quiet' ? 'Nothing recorded.' : state === 'missing' ? 'Not published yet.' : 'Did not arrive.');
+					const sentence = state === 'quiet' ? 'Nothing recorded.' : state === 'missing' ? 'Not published yet.' : 'Did not arrive.';
+					const empty = panel.locator(`[data-empty-state="${state}"]`);
+					await expect(empty).toHaveCount(1);
+					await expect(empty).toHaveText(sentence);
+					const feedNote = id === 'feeds-failed' && state === 'missing'
+						? ' Not published yet. No feed record was included in this build, so a common feed-and-article count cannot be stated.' : '';
+					await expect(panel).toHaveText(`${sentence}${feedNote}`);
 				}
 				await expect(panel.locator('[data-ranked-row], [data-tile-state], [data-source-cut]')).toHaveCount(0);
+			}
+			if (state === 'quiet' || state === 'missing') {
+				for (const id of ['source-health', 'retiring', 'ranking-discount']) {
+					const panel = page.locator(`[data-console-panel-id="${id}"] .panel-body`);
+					await expect(panel.locator(`[data-empty-state="${state}"]`)).toHaveCount(1);
+					await expect(panel).toContainText(state === 'quiet' ? 'Nothing recorded.' : 'Not published yet.');
+					await expect(panel.locator('[data-ranked-row], [data-retiring-day], [data-source-state]')).toHaveCount(0);
+				}
 			}
 		} finally { await prepared?.afterRead?.(); }
 	});
