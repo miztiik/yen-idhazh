@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #8 changes a persisted shape and pauses for the owner; every other row states its own level.
-**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner approved P1 to P8 on 2026-10-11. Table T maps each of the gardener's strengths to the row that brings it; P9 to P11 add what no row covered and await the owner. The summary-fidelity-judge plan registers its judge paused and model-free in the entry shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. No row started.
+**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner approved P1 to P8 and P12 to P14 on 2026-10-11. Table T maps each of the gardener's strengths to the row that brings it; P9 to P11 add what no row covered, P15 to P17 answer the owner's later points, and all six await the owner. The summary-fidelity-judge plan registers its judge paused and model-free in the entry shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. No row started.
 
 ## 0. Operating contract
 
@@ -36,7 +36,7 @@ Table C - when to stop and ask
 
 | # | Name | Trigger | What happens |
 | --- | --- | --- | --- |
-| C1 | Stored shape | A row changes a persisted shape (council-run-records or a judge's ledger) | Stop. The owner rules on the shape (CLAUDE.md section 0). Row #8's shape is P5 |
+| C1 | Stored shape | A row changes a persisted shape (council-run-records or a judge's ledger) | Stop. The owner rules on the shape (CLAUDE.md section 0). Row #8's shape is ruled (P5, P13) |
 | C2 | Judge import | A judge module or contract would enter the council's own import closure | Stop. backend/tests/council/test_council_runs_without_a_judge.py holds the seam, and the list of judge contracts that cross it may not grow (llm-council.md) |
 | C3 | Untrusted text | Text from a judge, an article or an exception would reach an event, the job summary, a commit message or a file path | Stop (Guardrail #11) |
 | C4 | Write token | A judging cell would hold a write token | Stop |
@@ -64,12 +64,12 @@ Table D - rows
 
 ### Row #1 - Judges carry a status and a model need
 
-- **Scope:** each council.tenants entry becomes a judge's slug, its lifecycle_status (Table E3) and runs_model, none defaulted; every council step resolves, asks and runs only active judges; the planning step refuses by name an active judge whose ledger sits in a paused or retired family; the judging job starts the model server only on a cell whose judge runs a model; the content-similarity judge's entry is active and runs a model, so its nights do not change.
+- **Scope:** each council.tenants entry becomes a judge's slug, its lifecycle_status (Table E3) and runs_model, none defaulted; every council step resolves, asks and runs only active judges; the planning step refuses by name an active judge any of whose committed ledgers sits in a paused or retired family (P14); the judging job starts the model server only on a cell whose judge runs a model; the content-similarity judge's entry is active and runs a model, so its nights do not change.
 - **Level:** 3 (changes the council's config shape, the judges every council step reaches, and its workflow).
 - **Files touched:**
   - backend/idhazh/contracts/knobs/council.py (JudgeLifecycleStatus; TenantEntry: slug, lifecycle_status and runs_model, none defaulted, unknown keys refused; tenants becomes an ordered tuple of entries, each slug once; running() names the active slugs in order)
   - config/idhazh.json (council.tenants: [{"slug": "content-similarity-judge", "lifecycle_status": "active", "runs_model": true}])
-  - backend/utilities/council_matrix.py (cells and committed paths from running(); runs_model on each cell; an active judge whose committed ledger sits in a paused or retired family is refused, naming the judge, the ledger and the family; each registered judge and its status logged, never printed to the step output)
+  - backend/utilities/council_matrix.py (cells and committed paths from running(); runs_model on each cell; an active judge any of whose committed ledgers sits in a paused or retired family is refused, naming the judge, the ledger and the family; each registered judge and its status logged, never printed to the step output)
   - backend/idhazh/council/night_plan.py, backend/idhazh/council/session.py and backend/utilities/council_publish.py (resolve running(), never every entry)
   - backend/idhazh/council/registry.py and backend/idhazh/council/tenancy.py (docstrings: a hosted judge is an active one; a judge that runs no model declares runs_model false and pays no weights restore)
   - .github/workflows/llm-council.yml (the model-server step gains `if: matrix.runs_model`; the fan-out comment names five values on a cell)
@@ -90,7 +90,7 @@ Table E1 - decisions
 | E1.1 | Each council.tenants entry carries its judge's lifecycle_status and runs_model, with no default, so registration and status are one line and cannot disagree | Owner, 2026-10-11 (P1); ledger-registry.md (a family carries its status on its entry) |
 | E1.2 | An entry stays for every status: a judge stops by its status, never by losing its entry, and a retired entry keeps its slug from reuse, so judge_id keeps one meaning in council-run-records | knobs_gardener.py (a retired declaration stays as the record) |
 | E1.3 | Every council step resolves running() only; retyping tenants makes mypy name any step that still passes every entry | Fowler (architecture review, 2026-10-11) |
-| E1.4 | A judge's status says whether the council runs it, and its family's status says whether rows are written; the planning step refuses by name an active judge whose committed ledger sits in a paused or retired family, and allows every other pairing | ledger-registry.md |
+| E1.4 | A judge's status says whether the council runs it, and its family's status says whether rows are written; the planning step refuses by name an active judge any of whose committed ledgers sits in a paused or retired family, and allows every other pairing | ledger-registry.md; owner, 2026-10-11 (P14) |
 | E1.5 | A judge is registered paused in the change that lands its tenant module, and a named decision makes it active | ledger-registry.md (a switch ships safe until a named decision) |
 | E1.6 | runs_model travels on the cell beside the judge's width; every cell keeps the council's one bound, preamble and reserve; the planning job still prints llama_cpp_build every night | llm-council.md |
 
@@ -200,10 +200,11 @@ Table H2 - rejected alternatives
 
 ### Row #5 - The collecting job writes the night's summary on its job page
 
-- **Scope:** the collecting job appends one Markdown summary to its job page, built from the night's events alone, with one log group per judge and an error annotation for a failed unit.
+- **Scope:** the collecting job appends one Markdown summary to its job page, built from the night's events alone, with one log group per judge and an error annotation for a failed unit. Each judging job adds its event lines to the bundle it already uploads, which runs even when the job fails, and the collecting job reads them from there; a job the platform killed sends none and is listed as no report (P12).
 - **Level:** 2.
 - **Files touched:**
   - backend/idhazh/council/run_summary.py (new)
+  - .github/workflows/llm-council.yml, where a judging job's upload does not already carry its event lines (re-derive at dispatch)
   - backend/utilities/council_publish.py
   - backend/tests/council/_imports.py
   - backend/tests/council/test_run_summary.py (new)
@@ -216,6 +217,7 @@ Table I1 - decisions
 | # | Decision | Authority |
 | --- | --- | --- |
 | I1.1 | The summary says nothing the events do not, so it cannot contradict the log | idhazh-gardener.md ("What a person reads on the job page") |
+| I1.2 | A judging job's event lines ride in the bundle it already uploads, so the summary needs no new transport and still hears from a job that failed | Owner, 2026-10-11 (P12) |
 
 Table I2 - rejected alternatives
 
@@ -279,10 +281,10 @@ Table K2 - rejected alternatives
 
 ### Row #8 - A unit that raises files a failed council record
 
-- **Scope:** the council files outcome failed with fault raised in its finally when a unit raises, extending the council's record without breaking rows already written.
-- **Level:** 5 (a persisted contract changes). ESCALATE C1 fires: the owner rules on P5 before work starts.
+- **Scope:** the council files outcome failed with fault raised in its finally when a unit raises, extending the council's record without breaking rows already written. The shape is ruled (P13): ShardOutcome gains failed; a new field fault takes one closed word, raised, and is empty unless the outcome is failed; a row written before the change reads with no fault.
+- **Level:** 5 (a persisted contract changes). The owner ruled the shape before work starts (P5, P13), so ESCALATE C1 is met and the row runs without stopping.
 - **Files touched:**
-  - backend/idhazh/contracts/council_run_record.py (ShardOutcome gains failed, a fault field; version and changelog entry)
+  - backend/idhazh/contracts/council_run_record.py (ShardOutcome gains failed; fault, one closed word raised, empty unless failed; version and changelog entry)
   - backend/idhazh/council/session.py
   - The contract fixture and backend/tests/contracts/_fixtures.py
   - backend/tests/council/test_session.py
@@ -297,6 +299,7 @@ Table L1 - decisions
 | # | Decision | Authority |
 | --- | --- | --- |
 | L1.1 | A code defect and a platform kill need different fixes, so the record tells them apart | Owner, 2026-10-11 (P5) |
+| L1.2 | outcome failed, and fault with one word, raised, empty otherwise; a row written earlier reads with no fault | Owner, 2026-10-11 (P13) |
 
 Table L2 - rejected alternatives
 
@@ -332,7 +335,7 @@ Table M2 - rejected alternatives
 
 Owner requests that touch this plan are tracked, with their status, in Table Q of the summary-fidelity-judge plan (TODO/20261011-summary-fidelity-judge-plan.md).
 
-Table P - owner rulings: P1 to P8 ruled on 2026-10-11; P9 to P11 pending
+Table P - owner rulings: P1 to P8 and P12 to P14 ruled on 2026-10-11; P9 to P11 and P15 to P17 pending
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -347,6 +350,12 @@ Table P - owner rulings: P1 to P8 ruled on 2026-10-11; P9 to P11 pending
 | P9 | Row #1 gains a test that names the owner's decision beside every active judge, so a change that flips a judge to active without one fails | Pending; recommended: approve | The gardener holds the same rule with a test; E1.5 states it for judges with nothing holding it (Table T, T4) | 1 |
 | P10 | Row #1's llm-council.md edit carries the worked lifecycle example under Table T | Pending; recommended: approve | The owner asked for a lifecycle example (Table T, T3) | 1 |
 | P11 | A new B5: running one judge over a range of dates by hand, deferred until the owner wants a judge's history before its switch | Pending; recommended: approve | The gardener's run-task runs one task over a range and never pushes; the council has no equivalent (Table T, T12) | - |
+| P12 | How a judging job's events reach the job-page summary | Approved: each judging job adds its event lines to the bundle it already uploads | That upload already runs when a job fails, so no new transport is needed (Table I1) | 5 |
+| P13 | Row #8's stored shape, ruled before work starts | Approved: ShardOutcome gains failed; fault takes one word, raised, and is empty unless the outcome is failed; an earlier row reads with no fault | The owner clears stop points before implementation, so row #8 runs without stopping (Table L1) | 8 |
+| P14 | A judge whose committed ledgers sit in more than one family | Approved: refused if any of them sits in a paused or retired family | The council never writes into a paused family (E1.4) | 1 |
+| P15 | A paused or retired judge is never imported, checked or run, and retiring needs no code deletion: the council finds each active judge's package by its slug, which brings B3 in (the content-similarity package is renamed to its slug); row #4 refuses an active entry with no package and a package no entry names | Pending; recommended: approve | The owner, 2026-10-11: the council should not process a paused or retired judge, and retirement does not mean deleting code. Today the sorted search imports every package that sorts before the slug it resolves (E2.8). The gardener differs: it refuses a module no active or paused task uses | 1, 4 |
+| P16 | Each exit code carries a label and one fixed sentence, printed beside the number: 0 ok, 1 failed (a unit failed, or the rows did not land, stale or lost, P7), 2 refused (stopped before any unit ran), 3 push_refused (main refused every push); worst first 2, 3, 1, 0, as the gardener orders them | Pending; recommended: approve | The owner, 2026-10-11: a number needs its label beside it (CLAUDE.md section 0b); each pipeline keeps its own labels | 3, 5 |
+| P17 | A manual run may name one or more judges and one date: an active judge commits as on a scheduled night, a paused judge runs as a trial whose output is uploaded and nothing is committed, and a retired judge is refused | Pending; recommended: approve | The owner, 2026-10-11: judges can be run by hand. A trial keeps a paused judge's rows out until the named decision that makes it active (E1.5) | 7 |
 
 Table T - the gardener's strengths and the council row that brings each (Fowler, 2026-10-11; the owner asked which row brings lifecycle, logging, telemetry and the rest)
 
