@@ -138,7 +138,7 @@
 {:else if id === 'model-change'}
 	<p data-lede>{swap === null ? 'The published record holds no model change to compare.' : swap.lede}</p>
 	<p data-comparison="scores after the change against scores before it">Scores after the change against scores before it. Different article populations do not establish a cause.</p>
-	<div data-model-rule="no" data-model-rule-name="model-change" data-model-rule-none="This panel compares the two sides of the model change itself." data-readout-none={swap === null || !swap.enough ? 'There are no comparable measured populations to draw.' : undefined}>
+	<div data-model-rule="no" data-model-rule-name="model-change" data-model-rule-none="This panel compares the two sides of the model change itself.">
 		{#if swap !== null}<p>The change on {swap.at}, from {swap.before.model} to {swap.after.model}; {swap.before.articles} summaries before and {swap.after.articles} after.</p>
 			{#if swap.enough}<div data-chart="model-change"><SwapDots {swap} width={chart.width_px} readoutMaxShare={chart.readout_max_share} /></div>
 			{:else}<p>Only {Math.min(swap.before.articles, swap.after.articles)} of the {knobs.min_attempts_for_rate} summaries this chart needs are on its smaller side, so it is not drawn.</p>{/if}

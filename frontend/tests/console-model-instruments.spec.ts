@@ -519,9 +519,14 @@ test.describe('the panels, in a browser', () => {
 			// control, not a list of everything the control moves.
 			await expect(page.locator(`[data-eval-panel="${id}"][data-windowed]`)).toHaveCount(0);
 		}
-		await expect(page.locator('[data-model-match-days]')).toHaveAttribute(
-			'data-model-match-days',
-			String(CONFIG.console?.default_window_days ?? 30)
-		);
+		const query = page.locator('[data-model-query="faithfulness"]');
+		await expect(query).toHaveAttribute('data-query-asked', String(CONFIG.console?.default_window_days ?? 30));
+		const from = await query.getAttribute('data-range-from');
+		const to = await query.getAttribute('data-range-to');
+		expect(from).not.toBeNull();
+		expect(to).not.toBeNull();
+		const recordedDays = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+		expect(recordedDays).toBeGreaterThan(0);
+		await expect(page.locator('[data-model-match-days]')).toHaveAttribute('data-model-match-days', String(recordedDays));
 	});
 });
