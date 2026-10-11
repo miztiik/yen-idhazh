@@ -74,15 +74,15 @@ Table D - rows
 | 12 | The stored checks on a console page | 9 | I | PENDING | - | - | - |
 | 13 | All-sites comparison and combined-measures check | 9 | I | PENDING | - | - | - |
 | 14 | Long-baseline comparison | 13 | J | PENDING | - | - | - |
-| 16 | Plan 36 row #1: extract the fit core, direction-parameterised | plan 34's fit core (on main: backend/idhazh/similarity/fit.py) | K | PENDING (held: QQ3) | - | - | - |
-| 17 | Plan 36 row #2: the two contracts and the per-metric knob block, inert | 16 | L | PENDING (held: QQ3) | - | - | - |
+| 16 | Plan 36 row #1: extract the fit core, direction-parameterised | plan 34's fit core (on main: backend/idhazh/similarity/fit.py) | K | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
+| 17 | Plan 36 row #2: the two contracts and the per-metric knob block, inert | 16 | L | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
 | 18 | Plan 36 row #3: EvalRow gains publish_decision and withheld_reason (its geval column dropped by QQ4) | plan 35's EvalRow changes (on main since 2026-09-24) | K | PENDING (held: QQ12) | - | - | - |
-| 19 | Plan 36 row #4: the fold | 17, 18 | M | PENDING (held: QQ3) | - | - | - |
-| 20 | Plan 36 row #5: the fit and the faithfulness seed | 16, 17, 19 | N | PENDING (held: QQ3) | - | - | - |
+| 19 | Plan 36 row #4: the fold | 17, 18 | M | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
+| 20 | Plan 36 row #5: the fit and the faithfulness seed | 16, 17, 19 | N | COLLAPSED (owner, 2026-10-11, QQ3: this judge's nightly test replaces plan 36's fitted floors) | - | - | - |
 | 21 | Plan 36 row #6: G-Eval fluency judge in the council | 18 | L | COLLAPSED (owner, 2026-10-11, QQ4: the summarizer grading its own fluency is replaced by the sampled key-fact check, rows #29 to #31) | - | - | - |
-| 22 | Plan 36 row #7: the veto-chain publish gate, record-only | 17, 18, 20 | O | PENDING (held: QQ12) | - | - | - |
+| 22 | Plan 36 row #7: the veto-chain publish gate, record-only | 18 (the fitted bands it read are dropped by QQ3; it reads fixed lines only) | O | PENDING (held: QQ12) | - | - | - |
 | 23 | Plan 36 row #8: flip the flag (ESCALATE, Level 5) | 22 | P | PENDING (held: QQ12) | - | - | - |
-| 24 | Plan 36 row #9: console quality bands and the withhold panel | 20, 22 | P | PENDING (held: QQ14) | - | - | - |
+| 24 | Plan 36 row #9: console quality bands and the withhold panel (its fitted-floor lines dropped by QQ3) | 9, 22 | P | PENDING (held: QQ14) | - | - | - |
 | 25 | Plan 36 row #10: measure a real G-Eval call | 21 | M | COLLAPSED (owner, 2026-10-11, QQ4, with row #21) | - | - | - |
 | 26 | Plan 36 row #11: confirm coherence runs in assemble | plan 35's coherence scorer (scoring since 2026-09-24) | K | PENDING (held: QQ24) | - | - | - |
 | 27 | Plan 36 row #12: the rejects ledger and the corpus fence | 18, 22 | P | PENDING (held: QQ13) | - | - | - |
@@ -606,9 +606,9 @@ Table QQ - the open decisions, asked one at a time in this order (each with its 
 | --- | --- | --- | --- | --- | --- |
 | QQ1 | Unit of judgment: what the judge compares night to night - each site, the whole digest per production model, or the digest plus a per-source pointer | P20; rows #2 and #4 to #14 | - | Ruled 2026-10-11 | A1: the whole digest, per production model series; article length and source only adjust the comparison and are never judged. The judge reads every scored summary and samples nothing itself (Q44) |
 | QQ2 | What is judged: which metrics decide drift, which are only watched as behaviour, and which are only shown | P21; Table RA | QQ1 | Ruled 2026-10-11 | A1: faithfulness (the average and the shares under 0.50 and 0.80), unsupported numbers and dropped hedges are judged; loops and too-short summaries wait paused until their base rates are known; copying and summary length are watched as behaviour; coverage, coherence and the input mix are shown only; article length and source only adjust (Table RA) |
-| QQ3 | Plan 36's fitted floors (a 5th-percentile floor per metric, refitted daily): replace them with this judge's nightly test, keep both, or keep the floors as the alarm | Rows #16, #17, #19 and #20; part of row #24 | QQ2 | Asked 2026-10-11 | - |
+| QQ3 | Plan 36's fitted floors (a 5th-percentile floor per metric, refitted daily): replace them with this judge's nightly test, keep both, or keep the floors as the alarm | Rows #16, #17, #19 and #20; part of row #24 | QQ2 | Ruled 2026-10-11 | A1: this judge's nightly test replaces plan 36's fitted floors; rows #16, #17, #19 and #20 collapse, the floor lines leave row #24, and the gate (row #22) reads fixed lines only |
 | QQ4 | Fluency as plan 36 designs it (the summariser grades its own fluency) against a sampled key-fact judge for completeness and conciseness, or both | Rows #21 and #25, the geval column of row #18; P32 (first part) | QQ2 | Ruled 2026-10-11 | A1 B1 C3. The digest run keeps the article text of the day's sampled summaries in a small ledger, deleted after 30 days, and the judge reads it the next night (a CLAUDE.md section 0a exception, approved). The summarizer's own model lists each article's key facts before it sees the summary, then marks which facts the summary holds (completeness) and which summary sentences carry one (conciseness); if the pilot shows it overlooking removed facts, the check moves to Gemma 4 E4B. 30 summaries a day, a config number. Plan 36's self-graded fluency is dropped (rows #21 and #25 collapse; row #18 loses geval). Rows #29 to #31 |
-| QQ5 | The nightly test: the recency-weighted last 7 days against the days before, whole days re-dealt, values adjusted for article length and source | P22 | QQ1, QQ2 | Open | - |
+| QQ5 | The nightly test: the recency-weighted last 7 days against the days before, whole days re-dealt, values adjusted for article length and source | P22 | QQ1, QQ2 | Asked 2026-10-11 | - |
 | QQ6 | Baseline length: 28 days, 56 days with a gap, or 14 days | P22 (RC2) | QQ5 | Open | - |
 | QQ7 | False-discovery rate: 0.05, 0.01 or 0.10 | P23 | QQ5 | Open | - |
 | QQ8 | The composite: two combined rows (quality worse; something changed) beside every metric's own row, one signed score, or no composite | P24 | QQ2, QQ5 | Open | - |
@@ -631,7 +631,7 @@ Table QQ - the open decisions, asked one at a time in this order (each with its 
 | QQ25 | Plan 36's plan-34 retro row: keep the space-trap and thinking-off guards for the content-similarity judge and the key-fact judge (row #30) | Row #28 | QQ4 (ruled) | Open | - |
 | QQ26 | Plan 36's execution approval of 2026-09-19: carry it to rows #16 to #28, or hold every row until plan 65 is approved as a whole | Rows #16 to #28 | QQ1 to QQ25 | Open | - |
 
-Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 pending, asked one at a time through Table QQ
+Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 asked one at a time through Table QQ, each marked when ruled; P39 on 2026-10-11
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -673,6 +673,7 @@ Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 pending, aske
 | P36 | Correct the evaluation persona's line that calls a model judge a project non-goal, which contradicts CLAUDE.md section 1a | Pending; recommended: approve, as one small commit | CLAUDE.md section 1a: "LLM-as-judge is primary evaluation where applicable" | - |
 | P37 | Move Table Q to a standing file, TODO/owner-requests.md, read first and updated in every session | Pending; recommended: approve | A plan-doc is deleted when it closes, and Table Q already tracks other plans' items (review record, Fowler 6) | - |
 | P38 | P31's eval-row change also makes the faithfulness scorer replaceable: the scorer, its pinned revision and its window size are named in config, the eval column gets a name that does not name HHEM, and RC8's test reads the window size from that declaration | Pending; recommended: approve | The owner gave Q15's reason as "we may change the evaluator or something else". The judge side already copes: a replaced scorer starts a new series (P14), and each member names its instrument (RC11). The scorer side does not: hhem.py pins the HHEM model and revision as code constants, the column is named hhem, and CLAUDE.md section 10 asks for model references in config. P31 already restarts the faithfulness series, so doing it there costs no second restart; the rename reaches every reader of the column (Level 5) | P31's plan |
+| P39 | Plan 36's fitted floors (rows #16, #17, #19 and #20, and the floor lines of row #24) are replaced by this judge's nightly test | Approved 2026-10-11 through QQ3 (A1) | Plan 36's own correction E1 left the floors no per-item action: faithfulness's 5th percentile (0.14) sits below the fixed 0.50 line, so each floor became a watch-only alarm on the whole digest, which this judge provides with a known false-alarm rate; the judge already watches the low end through the shares under 0.50 and 0.80 (QQ2) | 16, 17, 19, 20, 22, 24 |
 
 Table Q - every owner request on these plans since 2026-10-10, and where it landed (kept current; an open item is closed only by a ruling, a row or a commit)
 
@@ -776,7 +777,7 @@ Table RE - what the redesign takes from the design of record, docs/architecture/
 | RE4 | Coherence, the cosine of neighbouring sentences, is a monitor and never a gate: a repeated sentence reads as coherent | A diagnostic; repetition is judged on its own by repetition_loops, paused until its base rate is known | RA6, RA12 |
 | RE5 | Fluency by G-Eval: the summariser judges its own output, next day, on about 30 summaries | Not built: a model judging its own text favours it, on a dimension already near its ceiling. The sampled key-fact check measures completeness and conciseness instead; for its pilot it uses the summarizer's own model, listing the article's key facts before it sees the summary | QQ4, rows #29 to #31 |
 | RE6 | No human labels: each metric is judged against its own rolling distribution | Taken: each member is compared with its own trailing 28 days; no golden or reference set | P22 |
-| RE7 | An adaptive floor per metric, the 5th percentile of a fixed-size rolling histogram, fitted daily, damped, gated and clamped | Not taken: a fitted floor says where the low tail sits, not whether a day moved beyond chance, and limits estimated from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation. The whole-day re-deal test would replace the fit; whether plan 36's fitted floors (rows #16, #17, #19 and #20) go is QQ3 | P22, QQ3 |
+| RE7 | An adaptive floor per metric, the 5th percentile of a fixed-size rolling histogram, fitted daily, damped, gated and clamped | Not taken: a fitted floor says where the low tail sits, not whether a day moved beyond chance, and limits estimated from a reference window alone crossed 4.5 to 53 times their nominal rate in simulation. The whole-day re-deal test replaces the fit, and plan 36's fitted floors (rows #16, #17, #19 and #20) are dropped (QQ3) | P22, QQ3 |
 | RE8 | The adaptive floors only downgrade or watch; plan 36's correction E1 later made every one a watch-only fleet alarm | Taken: this judge is that alarm. Nothing downgrades or acts; a person reads one of four levels | P24, B2 |
 | RE9 | Faithfulness seeds from the committed HHEM history, so its first day has a baseline | Taken in effect: the judge reads the committed eval ledger, which held 50 scored days when the redesign was reviewed | P22 |
 | RE10 | When the fit stops moving, the council's cadence drops to weekly | Not taken: the judge runs no model and costs one runner job a night | RB7 |
