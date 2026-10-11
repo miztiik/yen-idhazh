@@ -1,4 +1,5 @@
 import { expect, test } from './support/door-page';
+import type { Page } from '@playwright/test';
 import { chartsReady } from './support/charts-ready';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +21,14 @@ import { BY_ROUTE } from './support/console-expect/console-frame';
 const DESKTOP = { width: 1440, height: 900 };
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+async function frameReady(page: Page): Promise<void> {
+	const native = page.locator('[data-console-panels][data-route-state]');
+	if (await native.count() > 0) {
+		await expect(native).toHaveAttribute('data-route-state', /^(ok|quiet|missing|unreachable)$/);
+	}
+	await chartsReady(page);
+}
 
 /** The width the server draws a console chart at, before anything has measured
  * it - read from the knob rather than written here. */
@@ -79,7 +88,7 @@ test.describe(`the console frame on ${label}`, () => {
 	test('nothing scrolls sideways on a desktop', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
-		await chartsReady(page);
+		await frameReady(page);
 
 		const overflowing = await page.evaluate(() => {
 			const bad: string[] = [];
@@ -107,10 +116,11 @@ test.describe(`the console frame on ${label}`, () => {
 	test('every chart you read a value off is drawn wide enough to read it', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
-		await chartsReady(page);
+		await frameReady(page);
 
 		const charts = await page.evaluate(() =>
-			[...document.querySelectorAll('figure svg, [data-glance-chart] svg, [data-timing="plot"]')]
+			[...document.querySelectorAll('figure svg, [data-glance-chart] svg, [data-timing="plot"], [data-chart-type="rankedList"] [data-ranked="rows"], [data-chart-type="partsOfOne"] .parts-rows, ol[data-chart-type="tileStrip"]')]
+				.filter((svg) => svg.closest('[data-reserved], [data-panel-state="loading"]') === null)
 				// A sparkline is deliberately small and carries no axis, no gridline
 				// and no label - it shows direction, and the number beside it says how
 				// much. Holding it to a width meant for a plot with an axis is a
@@ -147,7 +157,7 @@ test.describe(`the console frame on ${label}`, () => {
 		// nothing in a screenshot or a byte gate would show it.
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
-		await chartsReady(page);
+		await frameReady(page);
 
 		const charts = await page.evaluate(() => {
 			const describe = (node: Element): string => {
@@ -167,7 +177,8 @@ test.describe(`the console frame on ${label}`, () => {
 				return node.closest('[aria-label]')?.getAttribute('aria-label')?.trim() ?? '';
 			};
 
-			return [...document.querySelectorAll('[data-surface="operator"] svg')]
+			return [...document.querySelectorAll('[data-surface="operator"] svg, [data-chart-type="rankedList"] [data-ranked="rows"], [data-chart-type="partsOfOne"] .parts-rows, ol[data-chart-type="tileStrip"]')]
+				.filter((svg) => svg.closest('[data-reserved], [data-panel-state="loading"]') === null)
 				.filter((svg) => svg.closest('[aria-hidden="true"]') === null)
 				.filter((svg) => svg.getBoundingClientRect().width > 0)
 				.map((svg) => {
@@ -195,6 +206,7 @@ test.describe(`the console frame on ${label}`, () => {
 	test('the page is one column of panels, not a wall of headings', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
+		await frameReady(page);
 		// `data-console-panel`, not `data-panel`: FailurePanels already carried the
 		// shorter name, so the obvious selector passed before a single panel
 		// existed. A test that cannot fail is not a test.
@@ -220,6 +232,7 @@ test.describe(`the console frame on ${label}`, () => {
 		// the wrong group, which is exactly what a regrouping row can get wrong.
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
+		await frameReady(page);
 
 		expect(declared.length, 'the Hardware expectations declare no groups').toBeGreaterThan(0);
 		const groups = await page.locator('[data-console-group]').evaluateAll((nodes) =>
@@ -279,6 +292,7 @@ test.describe(`the console frame on ${label}`, () => {
 		// guessing which of the two a figure is.
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
+		await frameReady(page);
 
 		const notes = await page
 			.locator('[data-console-panel-id]')
@@ -299,7 +313,9 @@ test.describe(`the console frame on ${label}`, () => {
 			// small grey type the grouping was opened to cut through.
 			expect(panel.note, `${panel.id}'s subtitle is more than one sentence`).not.toMatch(/\.\s+\S/);
 			const last = panel.note.split(' - ').at(-1) ?? '';
-			expect(last, `${panel.id}'s last clause names no grain`).toMatch(
+			const grain = expected.grains?.[panel.id];
+			if (grain !== undefined) expect(last).toBe(`${grain}.`);
+			else expect(last, `${panel.id}'s last clause names no grain`).toMatch(
 				/newest run|these \d+ days|this one day/
 			);
 		}
@@ -312,6 +328,7 @@ test.describe(`the console frame on ${label}`, () => {
 		// check on this page.
 		await page.setViewportSize(DESKTOP);
 		await page.goto(route);
+		await frameReady(page);
 
 		const sizes = await page.evaluate(() => {
 			const group = document.querySelector('[data-console-group]');

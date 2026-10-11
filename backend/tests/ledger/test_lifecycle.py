@@ -34,7 +34,7 @@ from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
-from idhazh.ledger import paths
+from idhazh.ledger import lifecycle, paths
 from idhazh.stages import score_merge_line_holdout, work
 from idhazh.telemetry import FileSink, source_health
 from idhazh.telemetry.publish import day_metrics
@@ -107,6 +107,31 @@ def _persist(state: Path) -> bool:
             identity=_identity(ServerJob.ASSEMBLE),
         )
     )
+
+
+@pytest.mark.parametrize("status", [LedgerLifecycleStatus.PAUSED, LedgerLifecycleStatus.RETIRED])
+def test_raw_trial_exception_requires_exact_root_run_and_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: LedgerLifecycleStatus
+) -> None:
+    which = LedgerName.VISUAL_PRUNES
+    _pause(monkeypatch, _family_of(which), status)
+    trial = tmp_path / "trial" / "state"
+    identity = _identity(ServerJob.ASSEMBLE)
+    row = _first(VisualPruneRow)
+
+    def write(root: Path, writer: WriterIdentity) -> list[Path]:
+        return ledger.persist(root, [row], ledger=which, covers=A_DAY, identity=writer)
+
+    assert not write(trial, identity), "a different state root alone is not authorization"
+    with lifecycle.isolated_trial(trial, identity=identity):
+        assert not write(tmp_path / "state", identity)
+        assert not write(trial, identity.model_copy(update={"run_id": "2026-09-24-999"}))
+        assert not write(trial, identity.model_copy(update={"attempt": 2}))
+        assert not ledger.accepts_new_rows(which, 1), "non-raw writers keep their family gate"
+        written = write(trial, identity)
+        assert bool(written) is (status is LedgerLifecycleStatus.PAUSED)
+        assert all(path.is_relative_to(trial) for path in written)
+    assert not write(trial, identity), "the production gate returns when the trial exits"
 
 
 def _collect_metrics(state: Path) -> bool:

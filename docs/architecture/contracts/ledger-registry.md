@@ -93,16 +93,26 @@ The first row is what the registry is for. The claim used to be a hand-written P
 
 ## The three lifecycle statuses, and what each one changes
 
-`active` is written and read. `paused` is not written now and will resume. `retired` is no longer written and is not coming back. What a ledger's indexes record while its family is paused or retired, and at every other stage of its life, is [ledger-lifecycle.md](ledger-lifecycle.md).
+`active` is written and read. `paused` is not written in production now and will resume. `retired` is no longer written and is not coming back. What a ledger's indexes record while its family is paused or retired, and at every other stage of its life, is [ledger-lifecycle.md](ledger-lifecycle.md).
 
 **All three are claimed, so all three are protected.** The status says what a writer may do, never whether the rows survive. Deleting a family's data for good is something a person does on purpose, never a side effect of a status change.
 
 **The write path reads the status on every write.** One function decides: `accepts_new_rows` in `backend/idhazh/ledger/lifecycle.py`, which reads the family's status from the registry each time it is called. Every route that writes new rows asks it before it writes: the ledger door ([persistence.md](persistence.md)) for every raw write from a pipeline job, and the writers of the ledgers outside the door - the day record, the digest fragment, the trace sink once per shard, and the similarity judge's score distribution and archive. Two rules hold, and both are the owner's:
 
-- A write into a paused or retired family is skipped with one warning naming the ledger, its family, the status and the rows not written, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
+- A production write into a paused or retired family is skipped with one warning naming the ledger, its family, the status and the rows not written, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
 - The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept. Those passes never ask, and the ledger door exempts a compact-tier write and any write from `migrate`, `run-tasks` or `history`, because each of those files rows again that were already recorded - skipping one after its source was deleted would lose rows while the run reported success.
 
 **The check sits at the write, never in the path builders.** `path`, `tree_root` and `relpath` also serve readers, and a paused family is still read.
+
+**Isolated council trials are the narrow raw-write exception.** The owner
+approved it on 2026-10-11 UTC. An explicitly selected paused manual judge may
+write raw rows into a paused family only under its run/attempt/judge trial root.
+The council opens a scoped authorization during settlement; the ledger checks
+the exact state root, run and attempt on every raw write. A different
+`state_dir` alone grants nothing. Retired families, production roots and writers
+outside the raw door keep their existing gate. Trial rows never enter
+publication. [Council trials](../publishing/llm-council-dates.md#a-paused-trial-cannot-enter-publication)
+owns the selection and isolation rules.
 
 **Pause a judge before pausing any family it commits into.** The council refuses
 an active judge if any of its committed ledgers belongs to a paused or retired

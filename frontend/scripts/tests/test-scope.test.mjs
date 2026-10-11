@@ -242,6 +242,24 @@ test('extracted console logic keeps source changes covered with browser consumer
 	assert.equal(groupForSpec('console-new-question.spec.ts'), 'console');
 });
 
+test('Voices panel inputs keep route consumers and unknown-path broad coverage', () => {
+	for (const name of ['feeds-failed.ts', 'FeedTiles.svelte', 'why-chosen.ts', 'WatchlistPanel.svelte']) {
+		for (const separator of ['/', '\\']) {
+			const path = ['frontend', 'src', 'lib', 'console', 'voices', name].join(separator);
+			assert.deepEqual(selectPaths([path]).groups, ['logic', 'console', 'panels', 'publishing'], path);
+			assert.equal(ciAnswer([path], true).console, true, path);
+			assert.equal(ciAnswer([path], true).panels, true, path);
+		}
+	}
+	assert.deepEqual(selectPaths(['frontend/src/lib/console/voices/feeds-failed.ts', 'unknown-area/module.ts']).groups,
+		['backend', ...FRONTEND_GROUPS]);
+	assert.deepEqual(selectPaths(['frontend/src/lib/console/unmapped/panel.ts']).groups, [...FRONTEND_GROUPS]);
+	const inventory = groupedSpecs(join(FRONTEND, 'tests')).console;
+	for (const name of ['console-voices-build-time', 'console-voices-ledgers', 'console-voices-nothings']) {
+		assert.equal(inventory.filter((file) => file === `${name}.spec.ts`).length, 1, name);
+	}
+});
+
 test('grouped specs follow only the explicit inventory', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'idhazh-groups-'));
 	try {
