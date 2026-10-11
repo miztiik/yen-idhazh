@@ -106,7 +106,9 @@
 		try {
 			if (value !== undefined) localStorage.setItem(WINDOW_KEY, value);
 			return localStorage.getItem(WINDOW_KEY);
-		} catch {
+		} catch (error) {
+			if (!(error instanceof DOMException) || (error.name !== 'SecurityError' && error.name !== 'QuotaExceededError')) throw error;
+			console.warn('[console] The window preference could not be read or saved; the selected window remains usable for this page.');
 			return null;
 		}
 	}
