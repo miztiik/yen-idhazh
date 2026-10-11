@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #8 changes a persisted shape and pauses for the owner; every other row states its own level.
-**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner ruled P1 to P18 on 2026-10-11 and declined P9. P18 is the owner's rule that the council keeps its own config file and each judge its own, as the gardener does; it supersedes P1 and adds rows #10 and #11. Table T maps each of the gardener's strengths to the row that brings it. The summary-fidelity-judge plan registers its judge paused and model-free in the shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. The owner authorized delivery on 2026-10-11: each row lands as a merged pull request, with Fowler resolving ambiguity, and the rows run one at a time because each edits llm-council.md.
+**Status**: drafted 2026-10-11 at the owner's request that the LLM council follow the gardener's pattern, and reviewed by Fowler, who applied the runtime persona's rule for the one runtime question. The owner ruled P1 to P18 on 2026-10-11 and declined P9. P18 is the owner's rule that the council keeps its own config file and each judge its own, as the gardener does; it supersedes P1 and adds rows #10 and #11. Table T maps each of the gardener's strengths to the row that brings it. The summary-fidelity-judge plan registers its judge paused and model-free in the shape row #1 defines, so that plan's row 'The judge's ledger and its tenant module' waits for row #1. Delivery from the Cowork session stopped on 2026-10-11 before any row started: that session cannot run the local checks CLAUDE.md section 9 asks for, and the owner did not take up building with CI as the only check. No row started.
 
 ## 0. Operating contract
 
@@ -60,7 +60,7 @@ Table D - rows
 | 7 | Each judge runs over its own outstanding dates | 1 | C | PENDING | - | - | - |
 | 8 | A unit that raises files a failed council record | 3 | D | PENDING | - | - | - |
 | 9 | The council's record is published for the console | 8 | E | PENDING | - | - | - |
-| 10 | The council reads its own config file | - | A | IN-FLIGHT | chore/council-own-config-file | - | Fowler (review) |
+| 10 | The council reads its own config file | - | A | PENDING | - | - | - |
 | 11 | The council finds each judge by its slug | - | A | PENDING | - | - | - |
 
 ## 2. Rows
