@@ -182,16 +182,17 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 289,
+    "published_items": 358,
     "runs": [
       {"chart_evidence": null,"charts_drafted": 15,"decided": 74,"decision_ms": 11,"failed": 6,"n": 1,"planned": 80,"prefiltered": 0,"run_id": "2026-10-10-38035218900","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T07:40:52Z","status": "partial","succeeded": 74},
       {"chart_evidence": null,"charts_drafted": 19,"decided": 77,"decision_ms": 3,"failed": 3,"n": 2,"planned": 80,"prefiltered": 0,"run_id": "2026-10-10-38052630997","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T12:38:14Z","status": "partial","succeeded": 77},
       {"chart_evidence": null,"charts_drafted": 13,"decided": 78,"decision_ms": 1,"failed": 2,"n": 3,"planned": 80,"prefiltered": 0,"run_id": "2026-10-10-38038375235","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T14:05:40Z","status": "partial","succeeded": 78},
       {"chart_evidence": {"derived_value_rate": null,"derived_values": 0,"displayed_values": 0,"trusted_data_ratio": null,"trusted_values": 0},"charts_drafted": 14,"decided": 76,"decision_ms": 11,"failed": 4,"n": 4,"planned": 80,"prefiltered": 0,"run_id": "2026-10-10-38076788045","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T18:42:14Z","status": "partial","succeeded": 76},
       {"chart_evidence": {"derived_value_rate": null,"derived_values": 0,"displayed_values": 0,"trusted_data_ratio": null,"trusted_values": 0},"charts_drafted": 16,"decided": 75,"decision_ms": 2,"failed": 5,"n": 5,"planned": 80,"prefiltered": 0,"run_id": "2026-10-10-38065379352","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T18:12:54Z","status": "partial","succeeded": 75},
-      {"chart_evidence": {"derived_value_rate": null,"derived_values": 0,"displayed_values": 0,"trusted_data_ratio": null,"trusted_values": 0},"charts_drafted": 0,"decided": 7,"decision_ms": 0,"failed": 1,"n": 6,"planned": 8,"prefiltered": 0,"run_id": "2026-10-10-38084785457","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T20:43:01Z","status": "partial","succeeded": 7}
+      {"chart_evidence": {"derived_value_rate": null,"derived_values": 0,"displayed_values": 0,"trusted_data_ratio": null,"trusted_values": 0},"charts_drafted": 0,"decided": 7,"decision_ms": 0,"failed": 1,"n": 6,"planned": 8,"prefiltered": 0,"run_id": "2026-10-10-38084785457","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T20:43:01Z","status": "partial","succeeded": 7},
+      {"chart_evidence": {"derived_value_rate": null,"derived_values": 0,"displayed_values": 0,"trusted_data_ratio": null,"trusted_values": 0},"charts_drafted": 12,"decided": 69,"decision_ms": 3,"failed": 11,"n": 7,"planned": 80,"prefiltered": 0,"run_id": "2026-10-10-38089192396","skipped": 0,"source_list_stale": false,"started_at": "2026-10-10T21:51:57Z","status": "partial","succeeded": 69}
     ],
-    "site_bytes": 42108751,
+    "site_bytes": 42247659,
     "site_files": 100,
     "version": "2026-10-10"
   }
