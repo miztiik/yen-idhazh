@@ -1,13 +1,15 @@
 # Host telemetry through serialized events
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 ## What is implemented
 
 The isolated contracts, native Rust producers/storage and read-only verifier do
 not change production collectors or shared ledger readers. Rust now collects,
 renders and atomically files real probe, target and clock host records.
-Resource windows and production invocation are not implemented at this increment.
+The isolated resource monitor now returns item-window cells and exports legacy
+job-memory and runtime server-status artifacts. Production invocation remains
+unchanged; this is not the single-writer cutover.
 The corrected host row removes the legacy CPU count and frequency columns.
 The candidate reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
@@ -79,6 +81,80 @@ six packages, 410,532 cached archive bytes and no prior version changes. The who
 MSVC development executable measured 25,457,664 bytes; this is neither a dependency
 size delta nor a Linux release-cost claim. Actual Linux cost remains experiment
 evidence, not a conclusion from fixture equality.
+
+## Resource windows and memory artifacts
+
+The CLI routes `monitor` to live sampling and `resource-replay` to bounded recorded
+captures. `event-send` publishes a validated command; `event-wait` waits for
+readiness or the matching acknowledgement/result. A window wait that expires
+returns typed incomplete cells, without invoking Python collection. Invalid
+messages and foreign process identities remain faults, not successful timeouts.
+An uncorrelated `protocol.fault` fails every wait in that session, including
+readiness. A correlated fault fails only its selected command. Before returning
+a matching success, the client validates the bounded list of already-visible
+results; UUID filename order cannot hide a session-wide fault. Exhausted scan
+budgets fail explicitly rather than certifying an unchecked success.
+`monitor-cleanup` uses Linux process start ticks and a pinned process descriptor
+to signal only the operator's monitor, with a bounded termination grace.
+
+The process sampler brackets readings with PID/start-tick identity. Window worker
+memory belongs to the registered Python worker, never the Rust monitor. Job
+memory remains all readable `python*` processes; it is neither that worker alone
+nor a workload-subtree sum. Exited targets have unavailable readings; a reused
+closing PID is an explicit identity fault, including when memory is off.
+
+Each active window holds its opening snapshot, previous CPU counters and running
+minima/maxima. CPU mean remains the whole-window counter difference, not a mean of
+sample percentages. Decimal rounding matches Python's binary-float rounding.
+CPU extrema include periodic differences and the whole-window mean. Available
+memory minima include both endpoints; server HWM uses only the two endpoints.
+Major faults use the endpoint counter difference, with null on reset. Zero
+resource interval selects endpoints only. Overlapping windows keep independent
+snapshots and monotonic deadlines; missed wakes do not invent samples.
+
+Job samples retain the configured legacy cadence. Runtime status retains its
+separate one-second cadence. Job sampling ends when its selected process exits;
+window CPU/load results and explicit unavailable memory evidence continue.
+Rust streams plain `rss-samples.jsonl` and
+`python-procs.jsonl`, with the unchanged kilobyte keys and at most three argv
+fields. `server-rss-samples.jsonl` keeps the legacy `VmRSS`/`VmHWM` string mapping;
+`cgroup-memory-peak.txt` retains the final available peak. Events wrap typed
+sample/rollcall bodies; legacy files have no envelope fields. Existing Python
+summary readers can consume those files directly.
+
+Memory off performs no status, meminfo, memory-cgroup or Python-population reads,
+does not extract major faults from stat, and creates no memory artifacts. CPU,
+load, identity, window heartbeat and lifecycle continue. Completed windows retain
+valid CPU/load cells and disabled memory diagnostics, rather than an incomplete
+whole window.
+
+The event history has finite total and retained budgets. Consumed command/reply
+pairs retire only after their refreshed retry window; retired IDs retain bounded
+conflict evidence. Failed reads also consume their reserved byte allowance.
+Ordinary traffic and new consumption files reserve room for failure and complete
+shutdown. Consumption duplicates count toward physical files and stored bytes,
+not as new logical events. A refused consumption write is explicit backpressure;
+it does not mark the message consumed. Exact retries preserve immutable bytes.
+Normal closes retain room for a future fault, stop and stopped event, plus each
+remaining open window. Startup and window admission also check that shutdown
+payloads fit the result-size cap.
+Only a bounded batch with every listed incomplete window and `monitor.stopped`
+can spend the final drain reservation. The monitor checks the entire batch's
+capacity and immutable destinations before publication, then commits its stopped
+state only after every file was published. This is not filesystem batch atomicity:
+an I/O failure remains explicit and can leave an immutable completed prefix.
+A live protocol fault stops the monitor after explicit incomplete results.
+Cancellation flushes incomplete windows and `monitor.stopped`, correlated to the
+session's readiness event when no stop command exists; atomic completed results
+survive. Kernel termination that cannot run cleanup remains the
+operator's diagnosed-unavailable path, not fabricated completion.
+
+The named resource fixture compares the same captures, process population,
+windows and artifact records against unchanged Python readers. Generated proc
+trees also drive the real monitor subprocess with memory on and off. Linux-only
+tests cover real task exit, pinned-PID cleanup and signal cancellation; Windows
+fixture success does not claim those Linux tests passed. Live scheduler and IPC
+cost still require the artifact-only experiment.
 
 ## Exact-byte verification
 

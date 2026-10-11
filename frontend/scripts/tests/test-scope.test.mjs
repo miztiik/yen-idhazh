@@ -20,7 +20,8 @@ test('native Rust and its actual file fixture select focused checks without brow
 		'backend/rust/host-telemetry/rust-toolchain.toml', 'backend/rust/host-telemetry/Cargo.lock',
 		'tests/fixtures/host-events/file-parity.json', 'backend/tests/contracts/test_rust_host_file_parity.py',
 		'backend/rust/host-telemetry/src/ledger/store.rs', 'backend/tests/test_rust_host_store_parity.py',
-		'backend/rust/host-telemetry/src/probe_inputs/hierarchy.rs', 'backend/tests/contracts/test_host_event_rust_parity.py']) {
+		'backend/rust/host-telemetry/src/probe_inputs/hierarchy.rs', 'backend/tests/contracts/test_host_event_rust_parity.py',
+		'backend/rust/host-telemetry/src/monitor/session.rs', 'backend/tests/test_host_event_resource_parity.py']) {
 		const selected = selectPaths([path]);
 		assert.deepEqual(selected.groups, ['backend']);
 		assert.equal(selected.rust, true);
@@ -28,7 +29,7 @@ test('native Rust and its actual file fixture select focused checks without brow
 		assert.deepEqual(selected.backendFiles, path === 'tests/fixtures/host-events/file-parity.json'
 			? ['backend/tests/contracts/test_rust_host_file_parity.py']
 			: ['backend/tests/contracts/test_host_event_rust_parity.py', 'backend/tests/contracts/test_rust_host_file_parity.py', 'backend/tests/test_rust_host_receipts.py',
-				'backend/tests/test_rust_host_store_parity.py']);
+				'backend/tests/test_rust_host_store_parity.py', 'backend/tests/test_host_event_resource_parity.py'].sort());
 		assert.equal(ciAnswer([path], true).browser, false);
 		assert.equal(ciAnswer([path], true).modelAbsent, false);
 		assert.equal(ciAnswer([path], true).robots, false);
@@ -41,6 +42,11 @@ test('native Rust and its actual file fixture select focused checks without brow
 	assert.equal(receipts.rust, true);
 	assert.deepEqual(receipts.groups, ['backend']);
 	assert.deepEqual(receipts.backendFiles, ['backend/tests/test_rust_host_receipts.py']);
+	const resources = selectPaths(['tests/fixtures/host-events/resource-windows.json']);
+	assert.equal(resources.rust, true);
+	assert.deepEqual(resources.groups, ['backend']);
+	assert.deepEqual(resources.backendFiles, ['backend/tests/test_host_event_resource_parity.py',
+		'backend/tests/test_host_readings.py', 'backend/tests/test_memory_sampler.py']);
 	for (const path of ['tests/fixtures/host-events/probe-clock.json',
 		'tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt',
 		'tests/fixtures/runtime/2026-08-26-5-shard-0.prom']) {

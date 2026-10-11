@@ -66,7 +66,7 @@ Table D - authoritative execution queue
 | D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | DONE | rust-d11-storage | - | owner; disjoint identity/path and atomic workers |
 | D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | DONE | rust-d12-receipts | - | owner; native receipt/recovery leaf |
 | D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | DONE | rust-d3-producers | - | owner; producer recovery and correctness workers |
-| D4 | 4 | Produce window and job resource events in Rust | 3 | D | PENDING | - | - | - |
+| D4 | 4 | Produce window and job resource events in Rust | 3 | D | DONE | rust-d4-resources | - | owner; bounded resource monitor, shutdown/fault corrections and real Linux lifecycle complete; candidate gates pass; production collectors unchanged; live-cost evidence belongs to D5 |
 | D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | PENDING | - | - | - |
 | D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | PENDING | - | - | - |
 | D13 | 13 | Migrate shared schemas and readers before writers | 5 | F | PENDING | - | - | - |
@@ -321,20 +321,28 @@ Table P - Row 3 rejected alternatives
 - **Files touched:**
   - `backend/rust/host-telemetry/src/main.rs`
   - `backend/rust/host-telemetry/src/cli.rs`
+  - `backend/rust/host-telemetry/src/lib.rs`
   - `backend/rust/host-telemetry/src/producers/job_samples.rs`
+  - `backend/rust/host-telemetry/src/sampling/capture.rs`
   - `backend/rust/host-telemetry/src/sampling/process.rs`
   - `backend/rust/host-telemetry/src/sampling/machine.rs`
   - `backend/rust/host-telemetry/src/windows/reduce.rs`
   - `backend/rust/host-telemetry/src/monitor/session.rs`
+  - `backend/rust/host-telemetry/src/monitor/runner.rs`
   - `backend/rust/host-telemetry/src/transport/files.rs`
   - `backend/rust/host-telemetry/src/transport/bounds.rs`
+  - `backend/rust/host-telemetry/src/transport/client.rs`
   - `backend/rust/host-telemetry/tests/process_sampling.rs`
   - `backend/rust/host-telemetry/tests/machine_sampling.rs`
   - `backend/rust/host-telemetry/tests/transport.rs`
   - `backend/rust/host-telemetry/tests/job_samples.rs`
   - `backend/rust/host-telemetry/tests/windows.rs`
   - `backend/rust/host-telemetry/tests/process_lifecycle.rs`
+  - `backend/rust/host-telemetry/tests/support/resources.rs`
   - `backend/tests/test_host_event_resource_parity.py`
+  - `frontend/scripts/test-scope.ts`
+  - `frontend/scripts/tests/test-scope.test.mjs`
+  - `frontend/scripts/tests/run-checks.test.mjs`
   - `tests/fixtures/host-events/resource-windows.json`
   - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`

@@ -32,7 +32,25 @@ mod invocation;
 pub mod producers {
     pub mod job_clock;
     pub mod job_probe;
+    pub mod job_samples;
     pub mod target_probe;
+}
+pub mod sampling {
+    pub mod capture;
+    pub mod machine;
+    pub mod process;
+}
+pub mod windows {
+    pub mod reduce;
+}
+pub mod transport {
+    pub mod bounds;
+    pub mod client;
+    pub mod files;
+}
+pub mod monitor {
+    pub mod runner;
+    pub mod session;
 }
 pub mod probe_inputs {
     pub mod allowance;
