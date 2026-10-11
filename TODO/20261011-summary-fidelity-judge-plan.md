@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-11
 **Level**: 5 (CLAUDE.md section 6). Row #3 declares a persisted shape, approved as P1 and amended by P13; every other row states its own level.
-**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. The owner ruled P1 to P19 on 2026-10-11 (P12 deferred to row #8's replay), ruled E1, F1 and G1, ruled that determinism is not an expectation (C10), and dropped rows #10 and #11 (D3). **Hold (owner, 2026-10-11): the owner disapproved judging per site** - the judge must judge summary quality across the digest - and the ledger is drift-evals. The hard look the owner asked for is done: a research survey (TODO/20261011-summary-quality-metrics-research-record.md) and Andre's and Fowler's reviews (TODO/20261011-summary-fidelity-judge-review-record.md). Section 4 proposes the redesign; P20 to P37 await the owner, and rows #2 to #14 are rewritten once they are ruled. Table Q tracks every open request. No row started.
+**Status**: drafted 2026-10-11 from the drift-review plan of 2026-10-10, whose 16 review changes the owner approved (Table R). The owner then ruled to stop the drift review, to store every check in a ledger under state/raw/ in parquet, and to run the work as a judge in the LLM council. The owner ruled P1 to P19 on 2026-10-11 (P12 deferred to row #8's replay), ruled E1, F1 and G1, ruled that determinism is not an expectation (C10), and dropped rows #10 and #11 (D3). **Hold (owner, 2026-10-11): the owner disapproved judging per site** - the judge must judge summary quality across the digest - and the ledger is drift-evals. The hard look the owner asked for is done: a research survey (TODO/20261011-summary-quality-metrics-research-record.md) and Andre's and Fowler's reviews (TODO/20261011-summary-fidelity-judge-review-record.md). Section 4 proposes the redesign; P20 to P38 await the owner, and rows #2 to #14 are rewritten once they are ruled. Table Q tracks every open request. No row started.
 
 ## 0. Operating contract
 
@@ -584,7 +584,7 @@ Table V2 - rejected alternatives
 
 ## 3. Owner rulings
 
-Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P37 pending
+Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P38 pending
 
 | # | Question | Ruling | Evidence | Rows |
 | --- | --- | --- | --- | --- |
@@ -625,6 +625,7 @@ Table P - owner rulings: P1 to P19 ruled on 2026-10-11; P20 to P37 pending
 | P35 | Accepting a known change: later, a person's mark resets one member's baseline; until then a deliberate change that starts no series reads as drift for up to 35 days | Pending; recommended: later, with B2's ledger of marks | The pipeline changed about every 9 days (RD5) | - |
 | P36 | Correct the evaluation persona's line that calls a model judge a project non-goal, which contradicts CLAUDE.md section 1a | Pending; recommended: approve, as one small commit | CLAUDE.md section 1a: "LLM-as-judge is primary evaluation where applicable" | - |
 | P37 | Move Table Q to a standing file, TODO/owner-requests.md, read first and updated in every session | Pending; recommended: approve | A plan-doc is deleted when it closes, and Table Q already tracks other plans' items (review record, Fowler 6) | - |
+| P38 | P31's eval-row change also makes the faithfulness scorer replaceable: the scorer, its pinned revision and its window size are named in config, the eval column gets a name that does not name HHEM, and RC8's test reads the window size from that declaration | Pending; recommended: approve | The owner gave Q15's reason as "we may change the evaluator or something else". The judge side already copes: a replaced scorer starts a new series (P14), and each member names its instrument (RC11). The scorer side does not: hhem.py pins the HHEM model and revision as code constants, the column is named hhem, and CLAUDE.md section 10 asks for model references in config. P31 already restarts the faithfulness series, so doing it there costs no second restart; the rename reaches every reader of the column (Level 5) | P31's plan |
 
 Table Q - every owner request on these plans since 2026-10-10, and where it landed (kept current; an open item is closed only by a ruling, a row or a commit)
 
@@ -644,7 +645,7 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q12 | 2026-10-11 | Judges need a lifecycle status, as ledgers and gardener tasks have | Planned | The council plan's row 'Judges carry a status and a model need', Table E3 | Build |
 | Q13 | 2026-10-11 | The council should follow the gardener's strengths: capability, observability, flexibility, commit, sparse | Planned | The council plan, rows #1 to #9 (council P1 to P8 approved) | Q22 maps each strength to its row |
 | Q14 | 2026-10-11 | Each judge runs over its own outstanding dates (council P2, approved) | Planned | The council plan's row 'Each judge runs over its own outstanding dates'; B8 | Once it lands, this judge's nights_outstanding names its own missed dates |
-| Q15 | 2026-10-11 | The judge must support new metrics: what it measures separate from how it tests | Done in design | P13 (approved), row #4 | Carried into the redesign (Q20) |
+| Q15 | 2026-10-11 | The judge must support new metrics: what it measures separate from how it tests, "because we may change the evaluator or something else" | Done in design for the judge; reopened 2026-10-11 for the evaluator | P13 (approved), row #4; P14 (approved): a replaced scorer starts a new series. The scorer itself is still HHEM, fixed in code | Carried into the redesign (Q20); the owner rules P38 |
 | Q16 | 2026-10-11 | A composite weighted score, tunable as metrics are added, to decide when something drifted; the pasted penalty, band and veto proposal | Done in design, reopened | P15 and P17 (approved): a calibrated combined check, no automatic actions | Reopened by Q24 |
 | Q17 | 2026-10-11 | Approve the recommendations of the last review (judge P13 to P19; council P1 to P8) | Done | Both Table P | - |
 | Q18 | 2026-10-11 | The ESCALATE triggers table does not render | Done | Table C's delimiter row had three cells for four columns; F1.5 had an extra cell | - |
@@ -657,6 +658,8 @@ Table Q - every owner request on these plans since 2026-10-10, and where it land
 | Q25 | 2026-10-11 | Keep track of every item so nothing is lost | Done, standing | This table | Update it in every session that touches these plans |
 | Q26 | 2026-10-11 | Plan 36 already designs fleet alarms on the same four metrics (raised by the review, not the owner) | Proposed | P33 | The owner rules P33; then plan 36 is revised |
 | Q27 | 2026-10-11 | The evaluation persona still calls a model judge a project non-goal, against CLAUDE.md section 1a (raised by the review, not the owner) | Proposed | P36 | The owner rules P36 |
+| Q28 | 2026-10-11 | Write the research record's formulas as math that GitHub renders, not invented ASCII such as sqrt | Done for the research record | Research record, commit fce0749 | This plan's section 4 and the review record still write math in ASCII; convert them when the owner asks |
+| Q29 | 2026-10-11 | What Display and Display only mean in the research record's table 5.1; what the redesign takes from the research, what it does not, and why | Answered | Research record, under table 5.1 (the terms); review record SP1 row s9 and section 4 of this plan (taken and not taken) | - |
 
 Table R - the review changes the owner approved on 2026-10-10, and where each lands now
 
