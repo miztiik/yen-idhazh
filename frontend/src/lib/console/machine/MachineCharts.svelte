@@ -13,6 +13,7 @@
 	import { costOverDays } from '$lib/charts/cost';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
+	import { shortDate } from '$lib/format';
 	import { closestToMemory, contextReadings, labelHeldMedian, reuseChecks, reuseSeries, slowestArticles, slowerMachines, textRows } from './records';
 	import type { ConsoleShell } from '$lib/console/band';
 	import type { Row } from '$lib/data/ledger';
@@ -186,7 +187,9 @@
 					<div data-cost="per-article"><dt>An article, out of {priced.items}</dt><dd>{priced.items ? money(cost.runningTotal / priced.items, rate.currency, 4) : 'Not recorded'}</dd></div>
 				</dl>
 			{/if}
-			<div use:observeWidth={(px) => (width = px)}><DateSeries geometry={drawing} readout={drawing?.readout ?? null} empty={emptyState('quiet', 'Nothing recorded for this comparison.')}
+			<div use:observeWidth={(px) => (width = px)}><DateSeries geometry={drawing}
+				readout={drawing === null ? null : { ...drawing.readout, columns: drawing.dates.map(shortDate) }}
+				empty={emptyState('quiet', 'Nothing recorded for this comparison.')}
 				name={id} label={title} width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} /></div>
 			{#if ruleNote}<p data-model-rule-empty={id}>{ruleNote}</p>{/if}
 			{#if id === 'prompt-reuse'}{#each reuse as check}<p>{check.call}: our pooled held share {check.ours?.toFixed(1) ?? 'not recorded'}%;

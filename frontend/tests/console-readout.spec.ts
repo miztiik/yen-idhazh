@@ -272,6 +272,10 @@ function significant(name: string): string[] {
 async function open(page: Page, route: string, size = DESKTOP): Promise<void> {
 	await page.setViewportSize(size);
 	await page.goto(route);
+	const routeId = BAND_UNREAD.routes.find((entry) => entry.href === route)!.id;
+	if (BY_ROUTE[routeId]?.nativeRows) {
+		await page.locator('[data-console-panels="machine"]:not([data-route-state="loading"])').waitFor();
+	}
 	const fleet = FLEET_ROUTES.find((entry) => entry.href === route);
 	if (fleet) {
 		await expect(page.locator(fleet.selector)).toHaveAttribute('data-fleet-state', 'ready');
