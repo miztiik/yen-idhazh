@@ -125,6 +125,23 @@ def test_approved_multi_memberships_are_equal_and_partial_is_not_duplicate() -> 
         assert approved[name].pair_decision.coverage == "duplicate"
 
 
+def test_frozen_capture_git_attributes_preserve_exact_crlf_bytes() -> None:
+    import subprocess
+
+    raw = b'{"evidence":"bounded generated fixture"}\r\n'
+    original = subprocess.check_output(
+        ["git", "hash-object", "--stdin", "--no-filters"], input=raw
+    )
+    for path in (
+        "corpus/story-dataset-1/articles.jsonl",
+        "corpus/story-dataset-1/approved-examples.json",
+    ):
+        filtered = subprocess.check_output(
+            ["git", "hash-object", "--stdin", "--path", path], input=raw
+        )
+        assert filtered == original
+
+
 def test_checkpoint_replays_exact_histories_catalog_and_submissions(work: Path) -> None:
     store = seeded_store(work / "live")
     restored = Store(work / "restored")

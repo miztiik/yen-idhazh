@@ -907,6 +907,8 @@ hash-and-size manifest is written last; a directory without it is not complete.
 
 `restore-checkpoint --input <directory>` requires an empty local index and the
 same frozen source and policy. It restores records and worker state atomically.
+The approved archive and example captures have exact-byte Git attributes:
+their original CRLF bytes are evidence, not authored text to normalize.
 It does not copy raw source HTML, model binaries, vector arrays or the large
 pair frame. Those omissions remain named by their immutable revisions in the
 checkpoint; missing frame settings are not activated. Supply the exact portable

@@ -104,3 +104,7 @@ frontend/public/assist/index/*.bin binary
 state/**/*.parquet                -merge
 state/compact/**/index/*.json      -merge
 *.parquet                         binary
+
+# These approved captures are pinned by their original bytes, including CRLF.
+corpus/story-dataset-1/articles.jsonl binary
+corpus/story-dataset-1/approved-examples.json binary
