@@ -166,7 +166,8 @@ export const RUST_PARITY_TEST = 'backend/tests/contracts/test_rust_host_file_par
 export const RUST_STORE_TEST = 'backend/tests/test_rust_host_store_parity.py';
 export const RUST_RECEIPTS_TEST = 'backend/tests/test_rust_host_receipts.py';
 export const RUST_PRODUCERS_TEST = 'backend/tests/contracts/test_host_event_rust_parity.py';
-export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST];
+export const RUST_RESOURCES_TEST = 'backend/tests/test_host_event_resource_parity.py';
+export const RUST_TESTS = [RUST_PARITY_TEST, RUST_STORE_TEST, RUST_RECEIPTS_TEST, RUST_PRODUCERS_TEST, RUST_RESOURCES_TEST];
 const HOST_TESTS: Record<string, string[]> = {
 	'backend/idhazh/contracts/host_events.py': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'backend/idhazh/contracts/host_output.py': ['backend/tests/contracts/test_host_output.py', 'backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_output_verify.py', ...RUST_TESTS],
@@ -179,6 +180,7 @@ const HOST_TESTS: Record<string, string[]> = {
 	'tests/fixtures/host-events/storage-parity.json': [RUST_STORE_TEST],
 	'tests/fixtures/host-events/publication-parity.json': [RUST_RECEIPTS_TEST],
 	'tests/fixtures/host-events/probe-clock.json': [RUST_PRODUCERS_TEST],
+	'tests/fixtures/host-events/resource-windows.json': [RUST_RESOURCES_TEST, 'backend/tests/test_host_readings.py', 'backend/tests/test_memory_sampler.py'],
 	'tests/fixtures/host-events/manifest.json': ['backend/tests/contracts/test_host_events.py', 'backend/tests/test_host_event_files.py', ...RUST_TESTS],
 	'tests/fixtures/host-events/cpu-snapshots.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
 	'tests/fixtures/host-events/fingerprint-versions.json': ['backend/tests/contracts/test_host_output.py', RUST_PRODUCERS_TEST],
