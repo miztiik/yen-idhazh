@@ -12,6 +12,9 @@
 	{:else}
 		<p data-lede>{discount.lede}</p>
 		<p class="notes" data-window-exempt="ranking-discount">Run {discount.snapshot.runId} applied these factors over {discount.snapshot.windowDays} days. This fixed source-health reading does not follow the control. A feed no one read keeps full weight, not a measured perfect record.</p>
-		<div class="evidence"><RankedList caption="Ranking discounts" geometry={discount.geometry} maxText={discount.maxText} unmeasuredNote="The ranking factor was not recorded." emptyNote="No feed was discounted by this run." tail={discount.tail}/></div>
+		<div class="evidence discount-evidence"><RankedList caption="Ranking discounts" geometry={discount.geometry} maxText={discount.maxText} unmeasuredNote="The ranking factor was not recorded." emptyNote="No feed was discounted by this run." tail={discount.tail}/></div>
 	{/if}
 </VoicesPanel>
+<style>
+	.discount-evidence :global(.ranked-rule > span) { inset-inline-end: 0; }
+</style>

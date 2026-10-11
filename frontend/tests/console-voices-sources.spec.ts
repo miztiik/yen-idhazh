@@ -23,6 +23,7 @@ const PLOT = '[data-source-cuts="range"]';
 /** The window the section is drawing, read off the section. A length chosen
  * here would be an oracle over a plot nobody is being shown. */
 async function openWindow(page: Page): Promise<number> {
+	await expect(page.locator('[data-console-panels="voices"]')).not.toHaveAttribute('data-route-state', 'loading');
 	const days = Number(
 		await page.locator('[data-windowed="source-cuts"]').getAttribute('data-window-days')
 	);

@@ -60,7 +60,8 @@
 	const chosen = $derived(whyChosen(rowsOf(chosenAnswer), knobs.why_chosen_rows));
 	const catches = $derived(watchSpan === null ? null : watchlist(rowsOf(watchAnswer), watchSpan, knobs.watchlist_hits_marked, knobs.watchlist_hits_named));
 	const feedPanelState = $derived(feedsAnswer === 'pending' ? 'loading' : data.feedInput.read.state === 'not-packed' ? 'missing' :
-		data.feedInput.read.state === 'unreadable' ? 'unreachable' : failed || fallback ? 'ready' : stateOf(feedsAnswer));
+		data.feedInput.read.state === 'unreadable' ? 'unreachable' :
+		(failed && (failed.feedThrough !== null || failed.articleThrough !== null)) || fallback ? 'ready' : stateOf(feedsAnswer));
 
 	onMount(() => {
 		ready = true;

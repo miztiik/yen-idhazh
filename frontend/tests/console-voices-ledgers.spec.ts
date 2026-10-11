@@ -94,7 +94,7 @@ test('native 429 and network errors join real feed reads on the older observed r
 	expect(view.sources).toHaveLength(1);
 	expect(view.sources[0].article?.tiles.map((tile) => tile.reading)).toEqual([2]);
 	expect(view.sources[0].feedEnding).toBe('mostly transient, last 2030-06-14');
-	expect(view.sources[0].ending).toBe('mostly network error, last 2030-06-14');
+	expect(view.sources[0].ending).toBe('mostly rate limited, last 2030-06-14');
 	const reading = view.sources[0].articleRecords.events[0].map((line) => line.value).join(' ');
 	expect(reading).toContain('rate limited, failed, HTTP 429');
 	expect(reading).toContain('network error, failed');

@@ -133,6 +133,14 @@ the earlier approval to move window cases did not approve this move.
 The shared disjointness, drawn-plus-hidden count and feed-row metadata assertions
 remain unresolved. Combined rows identify a failed source, not a failed feed.
 
+The cross-route ownership sweep in `frontend/tests/console-voices.spec.ts`
+also reads the moved attributes immediately after navigation, before native
+answers arrive. Its integrated run found six of thirteen declared attributes;
+all eight panel-ownership cases passed, as did the settled native geometry and
+census checks. Its owner must add a truthful native-settlement wait before the
+attribute sweep. Row8 cannot change this cross-route body or remove the seven
+late-arriving selectors from its expectations to manufacture a pass.
+
 ## Related contracts
 
 - [console.md](console.md): console route questions.

@@ -293,7 +293,7 @@ test('the actual feed row retains pointer, click, keyboard and Escape readings',
 	const panel = page.locator('[data-console-panel-id="feeds-failed"]');
 	const plot = panel.locator('ol[data-chart-type="tileStrip"]').first();
 	await expect(plot).toBeVisible();
-	const strip = plot.locator('..').locator('[data-readout-subject]');
+	const strip = plot.locator('..').locator('[data-readout-day]');
 	const resting = await strip.innerText();
 	await plot.focus();
 	await plot.press('Home');
