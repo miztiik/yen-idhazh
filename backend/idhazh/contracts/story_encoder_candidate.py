@@ -1,6 +1,6 @@
 """Which new pinned encoder runs are distinct from unproven historical control vectors?"""
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
 from pydantic import Field, JsonValue, model_validator
 
@@ -21,7 +21,7 @@ Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 
 class PinnedEncoderCandidate(Contract):
     __schema_stem__ = "story-pinned-encoder-candidate"
-    __changelog__ = (
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-11",
             change="Register new pinned candidates without claiming historical vector provenance.",
@@ -63,7 +63,7 @@ class PinnedEncoderCandidate(Contract):
 
 class CandidateVectorUnit(VectorExtensionSnapshot):
     __schema_stem__ = "story-candidate-vector-unit"
-    __changelog__ = (
+    __changelog__: ClassVar[tuple[ChangelogEntry]] = (
         ChangelogEntry(
             version="2026-10-11",
             change="Bind independently encoded vector units to an immutable new candidate.",
@@ -77,7 +77,7 @@ class CandidateVectorUnit(VectorExtensionSnapshot):
 
 class CandidateVectorState(Contract):
     __schema_stem__ = "story-candidate-vector-state"
-    __changelog__ = (
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-11",
             change="Retain validated candidate-only vector unit lineage and coverage.",
