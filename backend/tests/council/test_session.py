@@ -604,7 +604,8 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     checks in `test_council_runs_without_a_judge.py` hold the contract exception.
     """
     found = _judge_modules_reached(
-        "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)
+        "idhazh.council.session",
+        ("idhazh.content_similarity_judge", "idhazh.similarity", *JUDGE_STAGE_MODULES),
     )
 
     assert found == [], f"a council verb imports {found}"
@@ -617,7 +618,9 @@ def test_the_router_no_longer_carries_a_judges_stage() -> None:
     spelled in the router's own tuple, which is how the four judge verbs
     survived the first cut. Both halves are held here.
     """
-    found = _judge_modules_reached("idhazh.cli", JUDGE_STAGE_MODULES)
+    found = _judge_modules_reached(
+        "idhazh.cli", ("idhazh.content_similarity_judge", *JUDGE_STAGE_MODULES)
+    )
 
     assert found == [], f"the router still imports {found}"
     assert not [verb for verb in cli.STAGES if verb.startswith("judge")]

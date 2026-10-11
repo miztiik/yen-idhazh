@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+import keyword
+
+from pydantic import Field, field_validator
 
 from idhazh.contracts.base import DateStamp, Model, Slug
+
+
+def derive_judge_package_name(slug: str) -> str:
+    """Derive one importable package name, without accepting a dotted path."""
+    package = slug.replace("-", "_")
+    if not package.isidentifier() or keyword.iskeyword(package):
+        raise ValueError(f"judge name '{slug}' does not derive a valid Python package name")
+    return package
 
 
 class CouncilConfig(Model):
@@ -111,10 +121,18 @@ class CouncilConfig(Model):
         default=(),
         description=(
             "Which tenants the council hosts, in the order it runs them. The one place a "
-            "tenant is registered: the council resolves each slug to the module that "
-            "declares it, and a slug nothing declares is refused by name. Empty is a "
+            "tenant is registered: its slug names its package with hyphens replaced by "
+            "underscores. The package must be a valid Python identifier, not a keyword. "
+            "A missing module or a different declared judge_id is refused by name. Empty is a "
             "legal night - every step still runs and the venue judges nothing - because "
             "a list in source would make adding a judge a code change and would put a "
             "roster of who may exist back inside the venue."
         ),
     )
+
+    @field_validator("judge_names")
+    @classmethod
+    def require_importable_judge_names(cls, names: tuple[Slug, ...]) -> tuple[Slug, ...]:
+        for name in names:
+            derive_judge_package_name(name)
+        return names

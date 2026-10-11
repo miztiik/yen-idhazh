@@ -23,6 +23,8 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
 
 from idhazh import atomic_write, config, ledger
+from idhazh.content_similarity_judge import tenant
+from idhazh.content_similarity_judge.tenant import JUDGE_ID, VERDICTS_DIRNAME
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -32,9 +34,8 @@ from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.council import metrics_sink, session
-from idhazh.similarity import counting, tenant
+from idhazh.similarity import counting
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
-from idhazh.similarity.tenant import JUDGE_ID, VERDICTS_DIRNAME
 from idhazh.stages import count_verdicts
 
 DATE: Final = "2026-09-18"

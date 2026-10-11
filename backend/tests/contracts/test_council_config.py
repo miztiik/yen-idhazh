@@ -57,6 +57,24 @@ def test_an_empty_judge_list_keeps_the_clocks() -> None:
     assert council.shard_timeout_minutes >= 1
 
 
+@pytest.mark.parametrize("name", ["123-judge", "1", "class", "for", "a.b", "a_b", "-judge"])
+def test_the_loader_refuses_a_judge_name_that_cannot_name_its_package(
+    tmp_path: Path, name: str
+) -> None:
+    (tmp_path / "llm_council.json").write_text(
+        json.dumps({"judge_names": [name]}), encoding="utf-8", newline="\n"
+    )
+
+    with pytest.raises(ValidationError, match="judge_names") as refused:
+        config.load_council(tmp_path)
+    assert name in str(refused.value)
+
+
+@pytest.mark.parametrize("name", ["judge", "judge-2", "class-judge", "a-long-judge-name"])
+def test_a_valid_slug_keeps_its_registered_spelling(name: str) -> None:
+    assert CouncilConfig(judge_names=(name,)).judge_names == (name,)
+
+
 def test_the_whole_range_of_the_repair_cap_loads() -> None:
     field = CouncilConfig.model_fields["repair_dates_a_night"]
     lowest = next(bound.ge for bound in field.metadata if hasattr(bound, "ge"))

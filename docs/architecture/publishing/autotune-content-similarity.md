@@ -315,7 +315,7 @@ The council hosts judges and depends on none of them
 ([llm-council.md](llm-council.md#the-venue-and-its-tenants-are-separate-things)).
 This judge registers in `judge_names` in `config/llm_council.json` and declares
 itself in
-[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py),
+[../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py),
 which binds the venue's three units of work to the four stages above: pick the
 work, judge one unit of it, then count and fit. That module imports the venue;
 nothing in the venue imports it.
