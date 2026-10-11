@@ -68,7 +68,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | Judgement carries its ids and gates, and preserves what the evidence can establish | 1, 3a | B | DONE | p52-judgement (`feat/console-judgement-panels`) | #1538 | Susan, Fowler and owner |
 | 4 | Every panel's question and shared loading state are declared before it is drawn | 2 | C | DONE | p52-panel-queries (`feat/console-panel-queries`) | #1542 | Owner and disjoint contract, canary and guard workers |
 | 5 | The band reads the ledgers and carries the settings changes, and the three remaining projections nothing draws go | 3, 4 | D | DONE | p52-band-ledgers (`feat/console-band-ledgers`) | #1547 | p52-row5-local-completion |
-| 6 | Pipelines asks the ledger | 5, 2b | E | IN-FLIGHT: adopted native integration; final correctness gates pending | p52-pipelines-ledgers (`feat/console-pipelines-ledgers`) | Read from merge | p52-final-pipelines |
+| 6 | Pipelines asks the ledger | 5, 2b | E | REVIEW CANDIDATE: native code parity repaired; final integration and CI pending | p52-pipelines-ledgers (`feat/console-pipelines-ledgers`) | Read from merge | Owner |
 | 7 | Summaries asks the ledger | 5, 2b | E | PENDING | - | - | - |
 | 8 | Voices asks the ledger, and the ranking panels join it | 4 | D | PENDING | - | - | - |
 | 9 | Hardware asks the ledger, and its page carries no data | 5 | E | PENDING | - | - | - |

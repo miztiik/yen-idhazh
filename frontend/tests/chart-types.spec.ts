@@ -250,10 +250,13 @@ test('identity-free rule rankings count rows and unknown rules, never sources or
 		{ date: '2026-09-01', stage: 'fetch', outcome: 'failed', code: 'network', failed_rule: 'Retry limit' },
 		{ date: '2026-09-02', stage: 'fetch', outcome: 'failed', code: 'blocked', failed_rule: 'Source permission' },
 		{ date: '2026-09-02', stage: 'fetch', outcome: 'failed', code: 'Retry limit', failed_rule: null },
-		{ date: '2026-09-03', stage: 'fetch', outcome: 'ok', code: '', failed_rule: '' },
+		{ date: '2026-09-03', stage: 'fetch', outcome: 'ok', code: null, failed_rule: '' },
 		{ date: '2026-09-03', stage: 'extract', outcome: 'failed', code: 'blank', failed_rule: 'Empty body' }
 	]);
 	const window = { start: '2026-09-01', end: '2026-09-03' };
+	expect(rows[4].code).toBeNull();
+	expect(() => failureRuleRows([{ date: '2026-09-01', stage: 'fetch', outcome: 'ok', failed_rule: null }])).toThrow(/code string or null/);
+	expect(() => failureRuleRows([{ date: '2026-09-01', stage: 'fetch', outcome: 'ok', code: 0, failed_rule: null }])).toThrow(/code string or null/);
 	expect(failureRules(rows, window, 'fetch')).toEqual({
 		dates: ['2026-09-01', '2026-09-02', '2026-09-03'], rows: 5, failed: 4, unknown: 1,
 		rules: [
