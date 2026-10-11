@@ -15,6 +15,7 @@ from idhazh.contracts.story_annotation import (
     WorkerBatch,
     WorkerSubmission,
 )
+from idhazh.contracts.story_candidate_evaluation import CandidateEvaluationSnapshot
 from idhazh.contracts.story_candidates import (
     ChallengeAddition,
     PairFrame,
@@ -248,7 +249,9 @@ def execute(args: argparse.Namespace) -> None:
                 store,
                 manifest,
                 store.get("partition", split_id, Partition) if split_id else None,
-                read_model(args.vectors, TypeAdapter(DerivedVectorSnapshot | VectorSnapshot))
+                read_model(args.vectors, TypeAdapter(
+                    CandidateEvaluationSnapshot | DerivedVectorSnapshot | VectorSnapshot
+                ))
                 if args.vectors else (read_vectors(store, vector_id) if vector_id else None),
                 read_model(args.frame, PairFrame) if args.frame else None,
                 read_model(args.retrieval, RetrievalRun) if args.retrieval else None,
@@ -286,7 +289,9 @@ def execute(args: argparse.Namespace) -> None:
             vector_manifest = read_vectors(store, vector_id)
             if command == "predict" and args.vectors:
                 vector_manifest = read_model(
-                    args.vectors, TypeAdapter(DerivedVectorSnapshot | VectorSnapshot)
+                    args.vectors, TypeAdapter(
+                        CandidateEvaluationSnapshot | DerivedVectorSnapshot | VectorSnapshot
+                    )
                 )
             if command == "vector-import":
                 extended = register_extension(

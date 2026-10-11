@@ -156,6 +156,13 @@ def test_dimensions_selected_in_development_and_identical_for_both_roles(tmp_pat
             update={"parameters": {"vector_candidates": {derived.derivation.slug: digest(derived)}}}
         )
         freeze_development(store, config, partition)
+        alternative = config.model_copy(update={
+            "parameters": {
+                "vector_candidates": {derived.derivation.slug: digest(derived)},
+                "cosine_threshold": 0.5,
+            },
+        })
+        freeze_development(store, alternative, partition)
         result = predict(
             store,
             partition,
@@ -170,15 +177,29 @@ def test_dimensions_selected_in_development_and_identical_for_both_roles(tmp_pat
         assert isinstance(result, RetrievalRun)
         assert result.vector_manifest_sha256 == digest(derived)
         assert store.setting("confirmation-opened") == digest(config)
+        with pytest.raises(ValueError, match="already opened"):
+            predict(
+                store, partition, derived, alternative, universe, derived.derivation.slug,
+                "confirmation", "story", 1,
+            )
+        assert store.setting("confirmation-opened") == digest(config)
+        wrong_settings = result.model_copy(update={
+            "development_config_sha256": digest(alternative),
+        })
+        blocked = evaluate(
+            store, manifest(), partition, derived, None, retrieval=wrong_settings,
+        )
+        assert any("already opened" in blocker for blocker in blocked.blockers)
+        assert store.setting("confirmation-opened") == digest(config)
         report = evaluate(store, manifest(), partition, derived, None, retrieval=result)
         assert any("qrels" in blocker for blocker in report.blockers)
-        assert not any("derived dimensions" in blocker for blocker in report.blockers)
+        assert not any("vector candidate" in blocker for blocker in report.blockers)
         unselected = config.model_copy(update={"parameters": {}})
         with store.transaction():
             store.save("development-config", digest(unselected), unselected)
         wrong = result.model_copy(update={"development_config_sha256": digest(unselected)})
         rejected = evaluate(store, manifest(), partition, derived, None, retrieval=wrong)
-        assert any("derived dimensions" in blocker for blocker in rejected.blockers)
+        assert any("vector candidate" in blocker for blocker in rejected.blockers)
         with pytest.raises(ValueError, match="already opened"):
             freeze_development(store, config.model_copy(update={"parameters": {}}), partition)
     finally:

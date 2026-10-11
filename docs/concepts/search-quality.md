@@ -1,6 +1,6 @@
 # Search Quality
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-11
 Whether the archive's on-device search finds the right story: the metric, the
 label set, how an operator measures it, and why no test gates it.
 
@@ -470,6 +470,34 @@ the encoder, the floor or the ranking. Authority: owner.
 | Gate on the gap between case A' and case A instead of on a level | It is the right instrument for "did the ranking regress" and it needs two committed corpora to compare, which the repository does not keep. Building that is a bigger change than this row, and it does not remove the need for the labels. | Andre, Fowler |
 | Score the live line over the trailing window `assist.search_months` names | Measured 2026-09-22: that window holds 7,044 items and not one labelled answer, so the reading is recall 0.000 with every query unanswerable. It would replace a number that says how stale the labels are with a number that says the labels are not in September. | Andre, Guardrail #10 |
 | Move the live line to `backend/utilities/measure_retrieval.py` beside the membership check | It was the only measurement of live search quality in the project, and a utility with no scheduled caller is an instrument deleted on a delay. **Superseded 2026-09-23**: the line was deleted outright, so there is nothing left to move. The design rationale above says what that cost. | Andre, owner |
+
+## Separate article-neighbour evaluation
+
+The offline `story_dataset` instrument compares an article with other articles,
+not a reader's query with search results. It does not change the browser metric,
+its labels or production settings.
+
+`python -m idhazh.story_dataset.runner_cli materialize-candidate` takes
+`--candidate-root`, `--candidate`, `--state`, `--source-root` and
+`--output-root`. It concatenates only registered units for that pinned candidate
+into a separate evaluation root. It copies their native arrays and official
+metadata, checks source text, order, settings, model revision and numeric bytes,
+and records the immutable state and unit hashes. It performs no inference.
+An unknown historical revision stays unknown; no historical row is borrowed
+to fill a new candidate's missing coverage.
+
+Prediction and evaluation require the exact candidate snapshot hash in frozen
+development settings. Once confirmation is opened, another settings hash is
+refused. A changing catalogue, incomplete independent judgments or an unfixed
+event-connected partition blocks a quality comparison; complete vectors alone
+do not name a winner. The old 935-pair regression frame is not new hierarchy gold.
+
+Here **Precision@k** is relevant returned neighbours divided by k.
+**Recall@k** is relevant returned neighbours divided by all relevant neighbours
+in the completely judged, declared universe. **NDCG@k** compares discounted
+graded relevance with its ideal order. These are distinct from overlapping
+cluster pairwise precision, recall and F1, which compare predicted shared
+memberships with supported shared memberships.
 
 ## See also
 
