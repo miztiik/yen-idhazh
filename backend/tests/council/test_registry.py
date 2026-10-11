@@ -1,12 +1,13 @@
 """Does the council find the tenants it was told to host, and refuse the ones it cannot?
 
-Every tenant here is written by the test that uses it, so the search is gated
+Every tenant here is written by the test that uses it, so the lookup is gated
 with no judge in the repository and without a judge's test module. Nothing in
 this file imports `idhazh.similarity` or any judge contract.
 """
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from conftest import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import registry
 
 from ._tenants import a_venue, forget, written
@@ -55,10 +57,10 @@ def test_every_slug_the_committed_config_registers_resolves() -> None:
     spelled here. A council test that named a judge would be the roster this
     whole design exists to remove.
     """
-    council = config.load(CONFIG_DIR).app.council
+    council = config.load_council(CONFIG_DIR)
 
-    assert [host.judge_id for host in registry.tenants(council.tenants)] == list(
-        council.tenants
+    assert [host.judge_id for host in registry.tenants(council.judge_names)] == list(
+        council.judge_names
     )
 
 
@@ -110,11 +112,12 @@ def test_a_slug_nothing_declares_is_refused_by_name(venue: Path) -> None:
 
     said = str(refused.value)
     assert "a-paper-tenent" in said, "the refusal has to name the slug that was not found"
-    assert "a-paper-tenant" in said, "and what it did find, or a typo reads as a missing file"
+    assert f"{A_VENUE}.a_paper_tenent.tenant" in said
+    assert f"{A_VENUE}.a_paper_tenant.tenant" not in sys.modules
 
 
 def test_a_package_that_declares_no_tenant_is_never_imported(venue: Path) -> None:
-    """The search reads the directory listing, and imports only what it is going to ask.
+    """Only the requested package is imported, even with a broken neighbor.
 
     The neighbour below raises on import. A search that imported every package
     to ask its name would take the whole run down with it, and one judge's
@@ -128,6 +131,59 @@ def test_a_package_that_declares_no_tenant_is_never_imported(venue: Path) -> Non
     )
 
     assert registry.tenant("a-paper-tenant").judge_id == "a-paper-tenant"
+
+
+@pytest.mark.parametrize("neighbor", ["a-poisoned-tenant", "zz-poisoned-tenant"])
+def test_an_unrequested_tenant_module_is_never_imported(venue: Path, neighbor: str) -> None:
+    a_venue(
+        venue,
+        package=A_VENUE,
+        slugs={"z-paper-tenant": (1, ())},
+        poisoned_neighbour=neighbor,
+    )
+
+    assert registry.tenant("z-paper-tenant").judge_id == "z-paper-tenant"
+    assert f"{A_VENUE}.{neighbor.replace('-', '_')}" not in sys.modules
+    assert f"{A_VENUE}.{neighbor.replace('-', '_')}.tenant" not in sys.modules
+
+
+def test_a_slug_cannot_resolve_to_a_differently_named_package(venue: Path) -> None:
+    a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
+    inside = venue / A_VENUE / "a_paper_tenant"
+    inside.rename(inside.with_name("another_package"))
+
+    with pytest.raises(SystemExit, match="a-paper-tenant"):
+        registry.tenant("a-paper-tenant")
+    assert f"{A_VENUE}.another_package.tenant" not in sys.modules
+
+
+def test_a_module_declaring_a_different_slug_is_refused_before_its_fit_check(venue: Path) -> None:
+    a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
+    _that_refuses(venue, "a-paper-tenant")
+    module = venue / A_VENUE / "a_paper_tenant" / "tenant.py"
+    module.write_text(
+        module.read_text(encoding="utf-8").replace(
+            'JUDGE_ID = "a-paper-tenant"', 'JUDGE_ID = "different-tenant"'
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    with pytest.raises(SystemExit, match=r"a-paper-tenant.*different-tenant"):
+        registry.tenant("a-paper-tenant")
+
+
+def test_a_requested_tenants_missing_dependency_is_not_reported_as_a_missing_judge(
+    venue: Path,
+) -> None:
+    a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
+    module = venue / A_VENUE / "a_paper_tenant" / "tenant.py"
+    module.write_text(
+        "import a_missing_judge_dependency\n", encoding="utf-8", newline="\n"
+    )
+
+    with pytest.raises(ModuleNotFoundError, match="a_missing_judge_dependency"):
+        registry.tenant("a-paper-tenant")
 
 
 def test_a_tenant_module_that_binds_nothing_says_so(venue: Path) -> None:
@@ -157,9 +213,9 @@ def _that_refuses(venue: Path, slug: str) -> None:
     module.write_text(
         module.read_text(encoding="utf-8")
         + "\n\n"
-        + "def refuse_a_night_this_tenant_cannot_finish(app):\n"
+        + "def refuse_a_night_this_tenant_cannot_finish(app, *, council):\n"
         + '    raise ValueError(f"{TENANT.judge_id} needs more than '
-        + '{app.council.shard_timeout_minutes} minutes")\n',
+        + '{council.shard_timeout_minutes} minutes")\n',
         encoding="utf-8",
         newline="\n",
     )
@@ -189,19 +245,15 @@ def test_the_check_reads_the_config_the_caller_named(venue: Path) -> None:
     """
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (1, ())})
     _that_refuses(venue, "a-paper-tenant")
-    app = AppConfig.model_validate({"council": {"shard_timeout_minutes": 199}})
+    app = AppConfig.model_validate({})
+    council = CouncilConfig(shard_timeout_minutes=199)
 
-    with pytest.raises(ValueError, match=str(app.council.shard_timeout_minutes)):
-        registry.tenant("a-paper-tenant", app=app)
+    with pytest.raises(ValueError, match=str(council.shard_timeout_minutes)):
+        registry.tenant("a-paper-tenant", app=app, council=council)
 
 
 def test_a_tenant_nobody_asked_for_cannot_refuse_the_night(venue: Path) -> None:
-    """The search imports every declaring module until one matches, and only the match is asked.
-
-    Without this a tenant the config never registered could stop a night it is
-    not in - and the search would have to import it either way, so the guard has
-    to be on who is asked rather than on who is imported.
-    """
+    """An unrequested tenant is neither imported nor asked whether its work fits."""
     a_venue(
         venue,
         package=A_VENUE,

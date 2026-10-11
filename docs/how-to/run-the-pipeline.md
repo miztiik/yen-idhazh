@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-11
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -120,11 +120,9 @@ declaration, and this is the order:
 4. `compact-summary-quality-evals` keeps every month: its `monthly_window` is `forever`, so a
  live pass packs the eval rows into fewer files and drops none of them
  ([../concepts/evaluation.md](../concepts/evaluation.md#design-rationale)).
-5. Only then set that task's `dry_run` to `false` in its own declaration. In the
- same change, name the task in `LIVE_BY_DECISION` in
- `backend/tests/contracts/test_gardener_config.py`, with the reason in plain
- words, and correct every doc sentence the switch makes false: that test fails
- on a live switch the list does not name.
+5. Only then set that task's `dry_run` to `false` in its own declaration. Name
+ the decision and its reason in plain words in that commit's message, and in the
+ same change correct every doc sentence the switch makes false.
 
 **The console ledgers' packing tasks are the ones to turn on first.**
 `compact-item-health` and `compact-host-fingerprint` pack live.

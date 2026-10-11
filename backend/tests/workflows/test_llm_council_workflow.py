@@ -50,7 +50,8 @@ FILENAME: Final = "llm-council.yml"
 #: in the file, so a workflow that read a different knob fails rather than
 #: bounding the unit by the work shard's clock - or by a tenant's block, which a
 #: night with no tenant registered does not have.
-TIMEOUT_KEY: Final = "council.shard_timeout_minutes"
+TIMEOUT_KEY: Final = "shard_timeout_minutes"
+TIMEOUT_FILE: Final = "llm_council.json"
 
 #: What that path prints, and therefore the name the workflow reads it back by.
 #: An Actions output name cannot carry a dot, so the reader prints the leaf.
@@ -117,6 +118,15 @@ def _emitted(capsys: pytest.CaptureFixture[str]) -> dict[str, str]:
     return dict(line.split("=", 1) for line in printed if line)
 
 
+def test_only_a_model_running_cell_starts_the_model_server() -> None:
+    step = next(
+        step
+        for step in _steps(_judges(), "judge")
+        if step.get("uses") == "./.github/actions/model-server"
+    )
+    assert _normalize_condition(step["if"], "the model-server step") == "matrix.runs_model"
+
+
 def test_the_unit_reads_its_timeout_from_the_one_file_that_says_so() -> None:
     """The bound is a knob, and the workflow spells no number.
 
@@ -127,7 +137,10 @@ def test_the_unit_reads_its_timeout_from_the_one_file_that_says_so() -> None:
     bounds = _step(_judges(), "draw", "id", "bounds")
     script = _script(bounds, "the bounds step")
 
-    assert f"backend/utilities/shard_bound.py --key {TIMEOUT_KEY}" in script
+    assert (
+        f"backend/utilities/shard_bound.py --key {TIMEOUT_KEY} --config-file {TIMEOUT_FILE}"
+        in script
+    )
     assert not re.search(r"\btimeout-minutes:\s*\d", str(_judges())), (
         "a timeout literal is a second answer to a question config already answers"
     )
@@ -160,13 +173,12 @@ def test_an_unreadable_timeout_is_refused_before_the_job_starts(
     number. The refusal is `type(value) is not int`, and this is what holds that
     exact spelling shut.
     """
-    block, leaf = TIMEOUT_KEY.split(".")
-    (tmp_path / "idhazh.json").write_text(
-        json.dumps({block: {leaf: value}}), encoding="utf-8", newline="\n"
+    (tmp_path / TIMEOUT_FILE).write_text(
+        json.dumps({TIMEOUT_KEY: value}), encoding="utf-8", newline="\n"
     )
 
     with pytest.raises(SystemExit):
-        shard_bound.minutes(tmp_path, key=TIMEOUT_KEY)
+        shard_bound.minutes(tmp_path, key=TIMEOUT_KEY, config_file=TIMEOUT_FILE)
 
 
 def test_a_bound_the_config_does_not_carry_is_refused_rather_than_traced() -> None:
@@ -185,7 +197,7 @@ def test_a_bound_the_config_does_not_carry_is_refused_rather_than_traced() -> No
 def test_the_bound_reader_still_answers_its_first_caller() -> None:
     """One reader and one refusal. A second utility would be a second answer."""
     assert shard_bound.minutes(CONFIG_DIR) >= 1
-    assert shard_bound.minutes(CONFIG_DIR, key=TIMEOUT_KEY) >= 1
+    assert shard_bound.minutes(CONFIG_DIR, key=TIMEOUT_KEY, config_file=TIMEOUT_FILE) >= 1
 
 
 def test_the_unit_reaches_the_model_through_the_one_shared_action() -> None:
@@ -343,7 +355,10 @@ def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     assert _normalize_condition(judge["if"], "the judging job") == (
         "needs.draw.outputs.matrix != '[]'"
     )
-    assert _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job") == "always()"
+    assert (
+        _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job")
+        == "always()"
+    )
 
 
 def test_the_parallelism_is_the_cell_count_and_never_the_shard_width() -> None:
@@ -379,9 +394,9 @@ def test_a_cell_carries_its_tenant_its_date_and_its_own_width(
     for value in ("tenant", "date", "shard", "shards"):
         assert f"matrix.{value}" in shard, f"the unit is never told which {value} it is"
     assert cells, "the committed config registers a tenant, so tonight fans out to cells"
-    assert all(set(cell) == {"tenant", "date", "shard", "shards"} for cell in cells), (
-        "a cell the unit reads four values off has to carry all four and nothing else"
-    )
+    assert all(
+        set(cell) == {"tenant", "date", "shard", "shards", "runs_model"} for cell in cells
+    ), "a cell the unit reads four values off has to carry all four and nothing else"
     assert json.loads(emitted["dates"]) == [SUBSTITUTED_DATE]
 
 
@@ -476,22 +491,43 @@ def test_what_a_night_wrote_outlives_the_run_that_wrote_it() -> None:
         assert int(str(settings["retention-days"])) == VERDICT_RETENTION_DAYS
 
 
-def test_reading_an_artifact_is_a_scope_the_permissions_block_grants() -> None:
+def test_each_job_holds_only_the_permissions_its_steps_use() -> None:
+    """Only the collecting job can write; judge code has a read-only token."""
+    workflow = _judges()
+    expected = {
+        "draw": {"contents": "read"},
+        "judge": {"contents": "read", "actions": "read"},
+        "save_council_results": {"contents": "write", "actions": "read"},
+    }
+    jobs = workflow.get("jobs")
+
+    assert "permissions" not in workflow, "permissions belong to jobs, not the whole night"
+    assert isinstance(jobs, dict)
+    assert set(jobs) == set(expected), "each council job needs its own permission check"
+    for name, permissions in expected.items():
+        assert _job(workflow, name).get("permissions") == permissions, (
+            f"{name} must hold only {permissions}"
+        )
+
+
+@pytest.mark.parametrize("job", ["judge", "save_council_results"])
+def test_reading_an_artifact_is_a_scope_the_permissions_block_grants(job: str) -> None:
     """A declared block sets every scope it does not list to none.
 
     So the read has to be named, and it is named read-only. The default
     credential carries it and reaches each download by hand: no stored token is
     introduced, and `contents: write` stays the only write the night has.
     """
-    granted = _judges().get("permissions")
+    workflow = _judges()
+    granted = _job(workflow, job).get("permissions")
     downloads = [
         step
-        for job in ("judge", "save_council_results")
-        for step in _steps(_judges(), job)
+        for step in _steps(workflow, job)
         if str(step.get("uses", "")).startswith("actions/download-artifact@")
     ]
 
-    assert granted == {"contents": "write", "actions": "read"}
+    assert isinstance(granted, dict)
+    assert granted["actions"] == "read"
     assert downloads, "nothing downloads an artifact"
     for step in downloads:
         settings = step.get("with")

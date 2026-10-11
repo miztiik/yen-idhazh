@@ -4,7 +4,7 @@ One object with the seven members the venue's protocol asks for, each bound to a
 stage this judge already has. It imports the protocol and the shipping
 capability from the council, and the council imports nothing of this: a tenant
 knows where it runs, a venue knows nobody. Registration is a slug in
-`config/idhazh.json` and this module answering to it.
+`judge_names` in `config/llm_council.json` and this module answering to it.
 
 **This file routes and it ships. It judges nothing.** Every unit of work is a
 stage in its own module, which is what lets one be run on its own with a file in
@@ -90,7 +90,7 @@ class ContentSimilarityJudge:
         pairs carrying its own. Answering anything else here would leave the
         difference unread, with every unit reporting success.
         """
-        return config.load().app.council.shards
+        return config.load_council().shards
 
     @property
     def committed_paths(self) -> tuple[str, ...]:

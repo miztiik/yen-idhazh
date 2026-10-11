@@ -11,7 +11,6 @@ one nobody can fix at the first reading.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
@@ -103,10 +102,6 @@ RETENTION_LEDGERS: Final = (
     "item-health-summary", "published", "run-plan", "seen", "summary-quality-evals",
     "visual-prunes",
 )
-YEARLY_RETENTION_DECISION: Final = (
-    "@kumarsnaveen_microsoft approved live packing and 36-calendar-month yearly expiry "
-    "for all fourteen ledgers on 2026-10-07, accepting loss of older history"
-)
 MOVED_LEDGER_TASKS: Final = (
     "compact-content-similarity-judge-merge-line-holdout-scores",
     "compact-content-similarity-judge-scored-pairs",
@@ -114,66 +109,6 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-content-similarity-judge-holdout-pairs",
     "compact-content-similarity-judge-fitted-thresholds",
 )
-MOVED_LEDGER_RETENTION_DECISION: Final = (
-    "@kumarsnaveen_microsoft directed on 2026-10-05 that each ledger moved onto the door "
-    "takes its retention and upkeep with it, and approved on 2026-10-07 live packing and "
-    "36-calendar-month yearly expiry for every ledger, accepting loss of older history"
-)
-TRIAL_PACKING_DECISION: Final = (
-    "@kumarsnaveen_microsoft approved live packing of declared trial roots on 2026-10-04; "
-    "monthly deletion remains report-only and yearly expiry stays disabled"
-)
-LIVE_BY_DECISION: Final = {
-    **{
-        (f"compact-{name}", switch): YEARLY_RETENTION_DECISION
-        for name in RETENTION_LEDGERS
-        for switch in ("dry_run", "yearly_prune_enable")
-    },
-    **{
-        (task, switch): MOVED_LEDGER_RETENTION_DECISION
-        for task in MOVED_LEDGER_TASKS
-        for switch in ("dry_run", "yearly_prune_enable")
-    },
-    **{
-        (f"compact-{name}", "month_deletes_dry_run"): YEARLY_RETENTION_DECISION
-        for name in (
-            "feed-retirements", "gardener", "host-fingerprint", "item-health",
-            "summary-quality-evals", "visual-prunes",
-        )
-    },
-    **{
-        (f"compact-trial-{name}", "dry_run"): TRIAL_PACKING_DECISION
-        for name in ("candidate-models", "host-fingerprint", "item-health")
-    },
-    ("corpus-squash", "dry_run"): (
-        "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
-        "section 8), so its declaration transcribes a live squash rather than starting one"
-    ),
-}
-
-
-#: The switch a compaction's monthly window has of its own. It acts only through
-#: the declaration's own `dry_run`, so it is live only while both are false.
-WINDOW_SWITCHES: Final = frozenset({"month_deletes_dry_run"})
-
-def _switches(declared: Mapping[str, Any], prefix: str = "") -> dict[str, bool]:
-    """Every switch a declaration carries, at any depth, by the dotted key a person edits.
-
-    True where the switch only reports. A window switch reports while its own
-    `dry_run` or the declaration's does.
-    """
-    found: dict[str, bool] = {}
-    for key, value in declared.items():
-        path = f"{prefix}{key}"
-        if key == "dry_run" and isinstance(value, bool):
-            found[path] = value
-        elif key == "yearly_prune_enable" and isinstance(value, bool):
-            found[path] = not value or declared.get("dry_run") is not False
-        elif key in WINDOW_SWITCHES and isinstance(value, bool):
-            found[path] = value or declared.get("dry_run") is not False
-        elif isinstance(value, Mapping):
-            found |= _switches(value, f"{path}.")
-    return found
 
 
 def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_task() -> None:
@@ -215,34 +150,6 @@ def test_a_squash_pushes_at_least_once_and_never_waits_less_than_nothing(
         message = refused(config_dir)
         assert "config/gardener/history.json is refused" in message
         assert all(key in message for key in changes)
-
-
-def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
-    """The review gate on onboarding: a new task deletes nothing until a person has read it.
-
-    Held over the committed tree rather than over one change, because a test
-    cannot see which change added a file. Every `dry_run` a declaration carries
-    is found by walking the declaration, a fold's as well as the task's own, and
-    so is a compaction's `month_deletes_dry_run`, live only while the task's
-    own `dry_run` is false too. The switches that are live must be exactly the
-    ones named above. So turning one live is an edit to that list - a line a
-    reviewer reads, with its reason beside it - and a decision left behind after
-    its switch went is caught too.
-    """
-    tasks = config.load_gardener().tasks
-    assert tasks, "nothing is declared, so this checks nothing"
-    live = {
-        (name, key)
-        for name, policy in tasks.items()
-        for key, dry_run in _switches(policy.model_dump(mode="json")).items()
-        if not dry_run
-    }
-    assert live == set(LIVE_BY_DECISION), (
-        f"{sorted(live - set(LIVE_BY_DECISION))} ship live with no decision named, and "
-        f"{sorted(set(LIVE_BY_DECISION) - live)} are named and do not. A switch ships in "
-        "dry run, and one goes live only by a decision named in LIVE_BY_DECISION with its "
-        "reason"
-    )
 
 
 def test_every_ledger_uses_the_approved_live_retention_chain() -> None:

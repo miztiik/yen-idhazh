@@ -1,13 +1,15 @@
 # Host telemetry through serialized events
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-11
 
 ## What is implemented
 
 The isolated contracts, native Rust producers/storage and read-only verifier do
 not change production collectors or shared ledger readers. Rust now collects,
 renders and atomically files real probe, target and clock host records.
-Resource windows and production invocation are not implemented at this increment.
+The isolated resource monitor now returns item-window cells and exports legacy
+job-memory and runtime server-status artifacts. Production invocation remains
+unchanged; this is not the single-writer cutover.
 The corrected host row removes the legacy CPU count and frequency columns.
 The candidate reads finite historical schemas without inventing measurements:
 old hashes retain algorithm 1, legitimate observed averages survive, and
@@ -79,6 +81,80 @@ six packages, 410,532 cached archive bytes and no prior version changes. The who
 MSVC development executable measured 25,457,664 bytes; this is neither a dependency
 size delta nor a Linux release-cost claim. Actual Linux cost remains experiment
 evidence, not a conclusion from fixture equality.
+
+## Resource windows and memory artifacts
+
+The CLI routes `monitor` to live sampling and `resource-replay` to bounded recorded
+captures. `event-send` publishes a validated command; `event-wait` waits for
+readiness or the matching acknowledgement/result. A window wait that expires
+returns typed incomplete cells, without invoking Python collection. Invalid
+messages and foreign process identities remain faults, not successful timeouts.
+An uncorrelated `protocol.fault` fails every wait in that session, including
+readiness. A correlated fault fails only its selected command. Before returning
+a matching success, the client validates the bounded list of already-visible
+results; UUID filename order cannot hide a session-wide fault. Exhausted scan
+budgets fail explicitly rather than certifying an unchecked success.
+`monitor-cleanup` uses Linux process start ticks and a pinned process descriptor
+to signal only the operator's monitor, with a bounded termination grace.
+
+The process sampler brackets readings with PID/start-tick identity. Window worker
+memory belongs to the registered Python worker, never the Rust monitor. Job
+memory remains all readable `python*` processes; it is neither that worker alone
+nor a workload-subtree sum. Exited targets have unavailable readings; a reused
+closing PID is an explicit identity fault, including when memory is off.
+
+Each active window holds its opening snapshot, previous CPU counters and running
+minima/maxima. CPU mean remains the whole-window counter difference, not a mean of
+sample percentages. Decimal rounding matches Python's binary-float rounding.
+CPU extrema include periodic differences and the whole-window mean. Available
+memory minima include both endpoints; server HWM uses only the two endpoints.
+Major faults use the endpoint counter difference, with null on reset. Zero
+resource interval selects endpoints only. Overlapping windows keep independent
+snapshots and monotonic deadlines; missed wakes do not invent samples.
+
+Job samples retain the configured legacy cadence. Runtime status retains its
+separate one-second cadence. Job sampling ends when its selected process exits;
+window CPU/load results and explicit unavailable memory evidence continue.
+Rust streams plain `rss-samples.jsonl` and
+`python-procs.jsonl`, with the unchanged kilobyte keys and at most three argv
+fields. `server-rss-samples.jsonl` keeps the legacy `VmRSS`/`VmHWM` string mapping;
+`cgroup-memory-peak.txt` retains the final available peak. Events wrap typed
+sample/rollcall bodies; legacy files have no envelope fields. Existing Python
+summary readers can consume those files directly.
+
+Memory off performs no status, meminfo, memory-cgroup or Python-population reads,
+does not extract major faults from stat, and creates no memory artifacts. CPU,
+load, identity, window heartbeat and lifecycle continue. Completed windows retain
+valid CPU/load cells and disabled memory diagnostics, rather than an incomplete
+whole window.
+
+The event history has finite total and retained budgets. Consumed command/reply
+pairs retire only after their refreshed retry window; retired IDs retain bounded
+conflict evidence. Failed reads also consume their reserved byte allowance.
+Ordinary traffic and new consumption files reserve room for failure and complete
+shutdown. Consumption duplicates count toward physical files and stored bytes,
+not as new logical events. A refused consumption write is explicit backpressure;
+it does not mark the message consumed. Exact retries preserve immutable bytes.
+Normal closes retain room for a future fault, stop and stopped event, plus each
+remaining open window. Startup and window admission also check that shutdown
+payloads fit the result-size cap.
+Only a bounded batch with every listed incomplete window and `monitor.stopped`
+can spend the final drain reservation. The monitor checks the entire batch's
+capacity and immutable destinations before publication, then commits its stopped
+state only after every file was published. This is not filesystem batch atomicity:
+an I/O failure remains explicit and can leave an immutable completed prefix.
+A live protocol fault stops the monitor after explicit incomplete results.
+Cancellation flushes incomplete windows and `monitor.stopped`, correlated to the
+session's readiness event when no stop command exists; atomic completed results
+survive. Kernel termination that cannot run cleanup remains the
+operator's diagnosed-unavailable path, not fabricated completion.
+
+The named resource fixture compares the same captures, process population,
+windows and artifact records against unchanged Python readers. Generated proc
+trees also drive the real monitor subprocess with memory on and off. Linux-only
+tests cover real task exit, pinned-PID cleanup and signal cancellation; Windows
+fixture success does not claim those Linux tests passed. Live scheduler and IPC
+cost still require the artifact-only experiment.
 
 ## Exact-byte verification
 
@@ -192,6 +268,147 @@ expected target root/invocation, named plan/completion files and explicit
 verification limits. It returns verified physical hashes and completeness,
 or a named refusal. It neither collects nor publishes.
 
+## Bounded historical inventory and dry-run
+
+`utilities.migrate_host_fingerprints` now prepares real replacement candidates
+without writing historical files. It is a maintenance codec, not a CPU collector.
+The unchanged Python collectors and production readers remain unchanged.
+
+Supply a `HistoryManifest` from `idhazh.contracts.host_migration`. Its schema is
+available through `HistoryManifest.json_schema()`. The manifest requires:
+
+- `version: "2026-10-11"`, a UTC `converted_at`, and the maintenance `invocation`
+  with producer `utilities.migrate_host_fingerprints` and the converting git SHA.
+- Inclusive `range_start` and `range_end`, both before the conversion day.
+- A finite `roots` list. Each root names its `state_root`, production or trial
+  `kind`, and tier-first host `prefix`. Production uses `["host-fingerprint"]`;
+  a trial adds its explicitly named segments before that final segment.
+- `closed_periods`, naming each root, exact `covers` and `daily`, `monthly` or
+  `yearly` grain. Every indexed entry, including empty and lost periods, must be
+  included. A complete month or year must fit inside the operator's range.
+- `sources`, naming every selected physical `path`, root, kind, exact original
+  SHA-256 and byte count. Raw, compact, raw-index and set-aside sources name
+  their closed period. Compact files, indexes, views and receipts declare their
+  exact source-path `dependencies`; raw files have no dependencies.
+- An `isolated_root` under `backend/var/`, outside all historical state roots.
+
+Source kinds are `raw`, `compact`, `raw_index`, `compact_index`, `view`, `receipt`
+and `set_aside`. The tool never discovers files recursively. An operator pins a
+named source list, including every selected probe, clock and superseded attempt,
+before running it. Unlisted later files require a fresh manifest. Completeness
+means this exact manifest was reconciled, not that all history was discovered.
+
+From `backend/`, with the repository's Python development environment:
+
+```powershell
+python -m utilities.migrate_host_fingerprints `
+  --workspace-root (Resolve-Path ..).Path `
+  --manifest backend/var/history-manifest.json
+```
+
+The command defaults to dry-run. `--apply` fails explicitly: application is not
+implemented here. The manifest and all source paths resolve under the supplied
+workspace; persisted paths remain relative and POSIX-separated.
+
+The command reads exactly two repository-owned configuration files, resolved
+from the utility's location, not the operator's workspace or environment.
+`history_migration_limits` in `config/host-history-migration.json` caps roots,
+closed periods, manifest bytes and the complete bundle. It contains no copied
+verification defaults. `verification_limits` in
+`config/host-telemetry-experiment.json` caps files, individual and aggregate source
+bytes, rows, footer/decode bytes, JSON depth and Thrift items. Every source read
+is bounded and hash-checked.
+`HistoryLimits` validates the combined effective inputs before reading history.
+Missing files or invalid bounds refuse the dry-run without source or config
+writes. The shared experiment file retains only native settings; Rust still
+rejects unknown sections and does not read the migration-only file.
+The full batch and existing retry targets validate before any bundle is created.
+Physical root and file identities reject case aliases and repeated hard-linked
+sources or destinations. Existing ancestors also establish separation when the
+isolated directory does not yet exist. Original path labels are not rewritten;
+distinct case-sensitive roots stay distinct. Symlinks and junctions are refused.
+Missing destination names follow the existing parent's case rules. On Windows,
+those rules come from read-only directory attributes, not universal lowercasing.
+The Windows API branch uses an explicit platform check; Linux does not load
+Windows-only APIs.
+Missing or unreadable sources, hash drift, unknown/mixed schemas, unsafe paths,
+receipt disagreement and incomplete compact/index dependencies fail by name.
+Present set-aside files receive `unresolved`, never a successful skipped-file
+diagnosis. Lost periods remain lost; empty periods remain empty.
+An index loss day that also has compact rows is a contradiction, not a marker
+to repair. Loss, expiry and set-aside markers remain exact, including periods
+with only unread files set aside and no surviving rows.
+
+JSONL and bounded flat historical Parquet use the existing maintenance codecs.
+Parquet admits actual V1 page bodies and finite dictionaries before Arrow decodes
+rows; none, Snappy and Zstd retain their actual compression. Unsupported page
+profiles fail, rather than weakening decode bounds. No new Rust output is
+re-encoded: already corrected files are explicitly excluded from replacement.
+Footer row counts must equal the bounded row-group sum before page decoding,
+and the actual decoded row count afterward. Contradictions refuse the entire
+source batch without a bundle or historical writes.
+
+Each legacy candidate preserves its path, UUID5 work unit, UUID8 file identity,
+allocation clock, attempts and original producer/git lineage. The canonical row
+digest is checked before the shared legacy normalizer runs. Historical hashes
+retain algorithm 1 only when present; legitimate positive observed averages
+survive. The exact discarded old counts/frequencies and every null field are
+reported. Old counts and maximum frequencies never become corrected readings.
+Both original and normalized unions pass the existing whole-row settlement
+function; keys, winners, attempts and cardinality must agree.
+When compact input dependencies are declared, they must cover the complete
+original `built_from` count and settle to the same rows, including discarded
+legacy CPU values. Partial or contradictory input claims fail. Compact-only
+history instead records no surviving inputs and retains its original count;
+that does not claim recovery or independent proof of retired source bytes.
+
+The immutable bundle lives at `<isolated_root>/<scope_hash>/<evidence_hash>/`.
+It contains the manifest, report, verified raw/compact/index candidate bytes and
+retained original receipts. The report records original/replacement envelopes,
+physical and canonical hashes, identities/keys, nulls, averages, index changes,
+source dependencies and estimated read/candidate bytes. `scope_hash` binds the
+entire operator manifest. `evidence_hash` binds the validated report and limits;
+the derived bundle path and the hash itself are excluded from that preimage.
+Exact partial retries reuse bytes. Different bytes at a candidate path fail.
+
+Console view inputs use the retained `ConsoleBand` contract, including its known
+historical schema dates. The retired `frontend/public/machine/*.csv` projection
+has no current reader contract and is refused before any bundle write. This
+refusal does not retire source bytes or make a manifested file reconciled.
+An affected historical batch remains blocked until its exact dependencies are
+resolved; unrelated validated batches can proceed.
+The report is published last. New evidence generations do not overwrite old ones.
+This is per-file atomic visibility, not a multi-file or power-loss guarantee.
+The read estimate counts the two source passes; manifest/retry-target reads and
+bundle verification are additional I/O. The candidate estimate includes the
+manifest and candidate receipt but excludes the final report; the enforced
+bundle byte cap includes every artifact, including that report.
+
+`candidate-maintenance-receipt.json` gives the replacement target paths and
+candidate physical hashes under the maintenance invocation. It is a planned
+receipt shape, not proof that historical paths already hold those bytes.
+Old invocation receipts remain historical evidence. No source is retired;
+future application must verify original-byte backups and a writer/compactor/
+publisher quiet window before replacing any source.
+
+The initial reader mode is `candidate_reader`. Raw, compact and index candidates
+can be `candidate_complete`. Actual published `machine/<YYYY-MM>.csv` and
+`console/band.json` sources are validated through their existing contracts, but
+their replacements and associated receipts are explicitly `deferred`. There are
+no fabricated future-consumer calls or copied views described as rebuilt.
+`historical_readiness` remains `blocked`, even for a complete fixture inventory.
+After shared schemas and consumers migrate, the same closed manifest must run
+against those actual consumers, freeze view/receipt bytes in a new evidence
+generation, and satisfy the historical evidence gate before application.
+
+The artifact-only workflow can run these bounded, generated-file tests before
+its verdict; no test scans committed archives or installs tools:
+
+```powershell
+python -m pytest -n 0 tests/contracts/test_host_migration.py `
+  tests/test_host_fingerprint_migration.py
+```
+
 ## Design rationale
 
 Fowler ruled that disjoint modules can be written in parallel after their tested
@@ -213,6 +430,14 @@ Snappy decoding; shared Python ledger codecs remain unchanged.
 Production cutover and historical replacement are authorized for unattended
 delivery after their evidence/readiness gates. Contracts and green tests alone
 do not establish that evidence or permit skipping backups and quiet windows.
+
+Fowler ruled on 2026-10-11 that the initial historical fixture dry-run must not
+pull future consumer migration forward or invent its output. Explicit deferred
+view and receipt statuses retain that dependency while real file and index
+candidates complete now. The later migrated-consumer rerun costs one bounded
+reconciliation pass and is required before historical readiness, not a new
+permission request. The page stays whole: these controls govern the same
+host-event output and evidence boundary, not a separate maintenance subsystem.
 
 ## See also
 

@@ -1,0 +1,585 @@
+//! How is a validated resource session driven through real files, live cadence or bounded recorded replay?
+
+use crate::config::ExperimentConfig;
+use crate::contracts::events::*;
+use crate::contracts::host::require;
+use crate::monitor::session::Session;
+use crate::producers::job_samples::{self, Artifacts};
+use crate::sampling::capture::{LiveCapture, ResourceFrame, ResourceReplay, utc_now};
+use crate::transport::files::{FileTransport, read_bounded};
+use crate::{Result, Validate};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
+
+// An unread config cannot set its own bootstrap read cap.
+const CONFIG_BOOTSTRAP_BYTES: usize = 65_536;
+
+fn argument<'a>(args: &'a BTreeMap<String, String>, key: &str) -> Result<&'a str> {
+    args.get(key)
+        .map(String::as_str)
+        .ok_or_else(|| format!("missing {key}"))
+}
+fn load(args: &BTreeMap<String, String>) -> Result<(PathBuf, HostSessionManifest)> {
+    let workspace = PathBuf::from(argument(args, "--workspace")?)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let config_path =
+        crate::ledger::paths::resolve_document(&workspace, argument(args, "--config")?)?;
+    let config = ExperimentConfig::from_bytes(
+        &read_bounded(&config_path, CONFIG_BOOTSTRAP_BYTES)?,
+        CONFIG_BOOTSTRAP_BYTES,
+    )?;
+    config.validate()?;
+    let path = crate::ledger::paths::resolve_document(&workspace, argument(args, "--manifest")?)?;
+    let raw = read_bounded(&path, config.limits.max_manifest_bytes as usize)?;
+    let manifest: HostSessionManifest = serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+    manifest.validate()?;
+    require(
+        manifest.limits == config.limits
+            && manifest.capture_limits == config.capture_limits
+            && manifest.controls == config.controls,
+        "manifest effective configuration differs from named config",
+    )?;
+    Ok((workspace, manifest))
+}
+pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
+    let (workspace, manifest) = load(&args)?;
+    match verb {
+        "monitor" => live(&workspace, manifest, &args),
+        "resource-replay" => replay(&workspace, manifest, &args),
+        "event-send" | "event-wait" => client(&workspace, manifest, &args, verb),
+        "monitor-cleanup" => {
+            let target = ProcessTarget {
+                pid: argument(&args, "--pid")?
+                    .parse::<i64>()
+                    .map_err(|e| e.to_string())?,
+                start_ticks: argument(&args, "--start-ticks")?
+                    .parse::<i64>()
+                    .map_err(|e| e.to_string())?,
+            };
+            target.validate()?;
+            crate::transport::client::cleanup_known_pid(
+                &target,
+                Path::new(
+                    args.get("--proc-root")
+                        .map(String::as_str)
+                        .unwrap_or("/proc"),
+                ),
+                &manifest.limits,
+                &manifest.capture_limits,
+            )
+        }
+        _ => Err("unknown resource invocation".to_owned()),
+    }
+}
+fn client(
+    workspace: &Path,
+    manifest: HostSessionManifest,
+    args: &BTreeMap<String, String>,
+    verb: &str,
+) -> Result<()> {
+    let mut files = FileTransport::new(workspace, manifest)?;
+    let command = args
+        .get("--command")
+        .map(|relative| -> Result<HostEvent> {
+            let path = crate::ledger::paths::resolve_document(workspace, relative)?;
+            let raw = read_bounded(&path, files.manifest.limits.max_command_bytes as usize)?;
+            crate::transport::files::decode_event(&raw)
+        })
+        .transpose()?;
+    if verb == "event-send" {
+        let command = command.ok_or("event-send requires --command")?;
+        files.publish(&command, "inbox")?;
+        println!("{}", files.relative_path(command.event_id, "inbox")?);
+    } else {
+        let result = crate::transport::client::await_result(&mut files, command.as_ref())?;
+        println!(
+            "{}",
+            String::from_utf8(crate::canonical_json::object_bytes(&result)?)
+                .map_err(|e| e.to_string())?
+        );
+    }
+    Ok(())
+}
+struct SampleSchedule {
+    job_at: u64,
+    runtime_at: u64,
+    job_stopped: bool,
+}
+impl SampleSchedule {
+    fn new() -> Self {
+        Self {
+            job_at: 0,
+            runtime_at: 0,
+            job_stopped: false,
+        }
+    }
+    fn collect(
+        &mut self,
+        session: &mut Session,
+        files: &mut FileTransport,
+        artifacts: &mut Option<Artifacts>,
+        frame: &ResourceFrame,
+        now_ms: u64,
+    ) -> Result<()> {
+        let memory = session.manifest.controls.memory_profiling_enabled;
+        if !memory {
+            return Ok(());
+        }
+        let server = session
+            .manifest
+            .workers
+            .iter()
+            .find_map(|v| v.server.clone());
+        if now_ms >= self.runtime_at {
+            if let (Some(artifacts), Some(status)) = (
+                artifacts.as_mut(),
+                job_samples::runtime_status(frame, server.as_ref(), true),
+            ) {
+                artifacts.write_runtime(&status)?;
+            }
+            self.runtime_at = now_ms.saturating_add(job_samples::RUNTIME_INTERVAL_MS);
+        }
+        if !self.job_stopped && now_ms >= self.job_at {
+            let target = server
+                .as_ref()
+                .or(session.manifest.cpu_target.as_ref())
+                .or_else(|| session.manifest.workers.first().map(|v| &v.target));
+            if let Some(target) = target {
+                let identity = frame
+                    .processes
+                    .iter()
+                    .find(|v| &v.target == target)
+                    .map(|v| crate::sampling::process::reduce(v, false, false).identity)
+                    .unwrap_or_else(|| {
+                        crate::probe_inputs::files::Reading::absent(UnavailableReason::PidExited)
+                    });
+                if identity.reason == Some(UnavailableReason::PidReused) {
+                    let error = crate::transport::bounds::refuse(
+                        ProtocolFaultCode::Target,
+                        "job sampler refuses reused target PID",
+                    );
+                    let fault = session.protocol_fault(&error, None, &frame.captured_at, now_ms)?;
+                    files.publish(&fault, "results")?;
+                    return Err(error.to_string());
+                }
+                if identity.reason == Some(UnavailableReason::PidExited) {
+                    self.job_stopped = true;
+                    let diagnostic = UnavailableDiagnostic {
+                        source: CaptureSource::JobMemory,
+                        reason: UnavailableReason::PidExited,
+                    };
+                    eprintln!(
+                        "{}",
+                        String::from_utf8(crate::canonical_json::object_bytes(&diagnostic)?)
+                            .map_err(|e| e.to_string())?
+                    );
+                    return Ok(());
+                }
+            }
+            match job_samples::sample(frame, server.as_ref(), true) {
+                Ok(Some((record, rows))) => {
+                    if let Some(artifacts) = artifacts {
+                        artifacts.write_sample(&record, &rows)?;
+                    }
+                    let sample = session.observation(
+                        EventKind::JobSample,
+                        EventBody::Sample(JobSampleBody { record }),
+                        &frame.captured_at,
+                        now_ms,
+                    )?;
+                    files.publish(&sample, "results")?;
+                    let rollcall = session.observation(
+                        EventKind::ProcessRollcall,
+                        EventBody::Rollcall(ProcessRollcallBody { records: rows }),
+                        &frame.captured_at,
+                        now_ms,
+                    )?;
+                    files.publish(&rollcall, "results")?;
+                    if artifacts.is_some() {
+                        // The flushed legacy files consumed these observation records.
+                        for event in [&sample, &rollcall] {
+                            files.consume(event)?;
+                            session
+                                .book
+                                .consume(event.event_id)
+                                .map_err(|e| e.to_string())?;
+                        }
+                    }
+                }
+                Err(error) => {
+                    let diagnostic = UnavailableDiagnostic {
+                        source: CaptureSource::JobMemory,
+                        reason: frame
+                            .population
+                            .reason
+                            .unwrap_or(UnavailableReason::Malformed),
+                    };
+                    eprintln!(
+                        "{}",
+                        String::from_utf8(crate::canonical_json::object_bytes(&diagnostic)?)
+                            .map_err(|e| e.to_string())?
+                    );
+                    eprintln!("job sample unavailable: {error}");
+                }
+                Ok(None) => {}
+            }
+            self.job_at = now_ms.saturating_add(
+                (session.manifest.controls.job_sample_interval_seconds * 1000.0).ceil() as u64,
+            );
+        }
+        Ok(())
+    }
+    fn needs_capture(&self, session: &Session, now_ms: u64) -> bool {
+        session.manifest.controls.memory_profiling_enabled
+            && (now_ms >= self.runtime_at || (!self.job_stopped && now_ms >= self.job_at))
+    }
+}
+fn artifact_root(
+    manifest: &HostSessionManifest,
+    args: &BTreeMap<String, String>,
+) -> Result<String> {
+    let root = args.get("--artifact-root").cloned().unwrap_or_else(|| {
+        format!(
+            "backend/var/host-resource-artifacts/{}",
+            manifest.session_id
+        )
+    });
+    require(
+        root != manifest.event_root
+            && !root.starts_with(&format!("{}/", manifest.event_root))
+            && !manifest.event_root.starts_with(&format!("{root}/")),
+        "artifacts must be separate from event root",
+    )?;
+    Ok(root)
+}
+fn publish_cancelled(
+    session: &mut Session,
+    files: &mut FileTransport,
+    at: &str,
+    now_ms: u64,
+) -> Result<()> {
+    let mut staged = session.clone();
+    let events = staged.cancelled(at, now_ms)?;
+    files.publish_batch(&events, "results")?;
+    *session = staged;
+    Ok(())
+}
+fn replay(
+    workspace: &Path,
+    manifest: HostSessionManifest,
+    args: &BTreeMap<String, String>,
+) -> Result<()> {
+    let mut files = FileTransport::new(workspace, manifest.clone())?;
+    let path = files.named(argument(args, "--snapshot")?)?;
+    let recorded = ResourceReplay::from_bytes(
+        &read_bounded(&path, manifest.capture_limits.max_log_bytes as usize)?,
+        &manifest,
+    )?;
+    require(!recorded.frames.is_empty(), "empty resource replay")?;
+    let root = artifact_root(&manifest, args)?;
+    let mut artifacts = Artifacts::create(
+        workspace,
+        &root,
+        &manifest.limits,
+        manifest.controls.memory_profiling_enabled,
+    )?;
+    let mut session = Session::new(manifest)?;
+    let ready = session.ready(&recorded.frames[0].captured_at, 0)?;
+    files.publish(&ready, "results")?;
+    let mut events = vec![ready];
+    let mut schedule = SampleSchedule::new();
+    let mut last_frame = &recorded.frames[0];
+    let mut last_ms = 0;
+    let run = (|| -> Result<()> {
+        for action in &recorded.actions {
+            let frame = &recorded.frames[action.frame];
+            last_frame = frame;
+            last_ms = action.at_ms;
+            if session.stopped {
+                break;
+            }
+            if let Some(command) = &action.event {
+                files.publish(command, "inbox")?;
+                let command = files.read(command.event_id, "inbox")?;
+                let mut staged = session.clone();
+                match staged.handle(&command, frame, action.at_ms) {
+                    Ok(replies) => {
+                        files.publish_batch(&replies, "results")?;
+                        session = staged;
+                        events.extend(replies);
+                    }
+                    Err(error) => {
+                        let fault = session.protocol_fault(
+                            &error,
+                            Some(command.event_id),
+                            &frame.captured_at,
+                            action.at_ms,
+                        )?;
+                        files.publish(&fault, "results")?;
+                        if error.code == ProtocolFaultCode::Bounds {
+                            return Err(error.to_string());
+                        }
+                        events.push(fault);
+                    }
+                }
+            } else {
+                session.tick(frame, action.at_ms)?;
+            }
+            if !session.stopped {
+                schedule.collect(
+                    &mut session,
+                    &mut files,
+                    &mut artifacts,
+                    frame,
+                    action.at_ms,
+                )?;
+            }
+            if session.stopped
+                && let Some(artifacts) = &mut artifacts
+            {
+                artifacts.write_peak(&frame.cgroup_peak)?;
+            }
+        }
+        require(session.stopped, "replay lacks explicit monitor.stop/drain")?;
+        Ok(())
+    })();
+    if run.is_err() && !session.stopped {
+        publish_cancelled(&mut session, &mut files, &last_frame.captured_at, last_ms)?;
+        if let Some(artifacts) = &mut artifacts {
+            artifacts.write_peak(&last_frame.cgroup_peak)?;
+        }
+    }
+    run?;
+    println!(
+        "{}",
+        String::from_utf8(crate::canonical_json::object_bytes(&events)?)
+            .map_err(|e| e.to_string())?
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(target_os = "linux")]
+extern "C" fn cancel(_signal: i32) {
+    CANCELLED.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+#[cfg(target_os = "linux")]
+fn install_cancellation() -> Result<()> {
+    CANCELLED.store(false, std::sync::atomic::Ordering::Relaxed);
+    // Only the atomic flag changes in the handler; evidence is flushed by the normal loop.
+    for signal in [libc::SIGTERM, libc::SIGINT] {
+        if unsafe { libc::signal(signal, cancel as *const () as libc::sighandler_t) }
+            == libc::SIG_ERR
+        {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+    }
+    Ok(())
+}
+fn cancelled() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        CANCELLED.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+fn live(
+    workspace: &Path,
+    manifest: HostSessionManifest,
+    args: &BTreeMap<String, String>,
+) -> Result<()> {
+    let proc = Path::new(
+        args.get("--proc-root")
+            .map(String::as_str)
+            .unwrap_or("/proc"),
+    );
+    let cgroup = Path::new(
+        args.get("--cgroup-root")
+            .map(String::as_str)
+            .unwrap_or("/sys/fs/cgroup"),
+    );
+    let source = LiveCapture::new(
+        proc,
+        cgroup,
+        &manifest.capture_limits,
+        manifest.controls.memory_profiling_enabled,
+    )?;
+    let boot = source.boot_id();
+    require(
+        boot.value
+            .as_ref()
+            .and_then(|v| uuid::Uuid::parse_str(v.trim()).ok())
+            == Some(manifest.boot_id),
+        "monitor readiness unavailable: boot identity differs or cannot be read",
+    )?;
+    let mut targets = manifest
+        .workers
+        .iter()
+        .map(|v| v.target.clone())
+        .collect::<Vec<_>>();
+    for server in manifest.workers.iter().filter_map(|v| v.server.as_ref()) {
+        if !targets.contains(server) {
+            targets.push(server.clone());
+        }
+        require(
+            targets.len() as i64 <= manifest.capture_limits.max_processes,
+            "declared resource targets exceed process capture cap",
+        )?;
+    }
+    let mut files = FileTransport::new(workspace, manifest.clone())?;
+    let root = artifact_root(&manifest, args)?;
+    let mut artifacts = Artifacts::create(
+        workspace,
+        &root,
+        &manifest.limits,
+        manifest.controls.memory_profiling_enabled,
+    )?;
+    let mut session = Session::new(manifest)?;
+    let start = Instant::now();
+    #[cfg(target_os = "linux")]
+    install_cancellation()?;
+    let ready = session.ready(&utc_now(), 0)?;
+    files.publish(&ready, "results")?;
+    let mut schedule = SampleSchedule::new();
+    let mut seen = HashMap::new();
+    let mut consumed = HashSet::new();
+    let mut captures = 0_u64;
+    let run = (|| -> Result<()> {
+        while !session.stopped {
+            let now_ms = start.elapsed().as_millis() as u64;
+            if cancelled() {
+                publish_cancelled(&mut session, &mut files, &utc_now(), now_ms)?;
+                if let Some(artifacts) = &mut artifacts {
+                    artifacts.write_peak(&source.peak())?;
+                }
+                break;
+            }
+            let mut commands = Vec::new();
+            for id in files.ids("inbox")? {
+                let metadata =
+                    std::fs::metadata(files.path(id, "inbox")?).map_err(|e| e.to_string())?;
+                let fingerprint = (
+                    metadata.len(),
+                    metadata.modified().map_err(|e| e.to_string())?,
+                );
+                if seen.get(&id) == Some(&fingerprint) {
+                    continue;
+                }
+                require(
+                    seen.len() < session.manifest.limits.max_session_events as usize
+                        || seen.contains_key(&id),
+                    "inbox history exhausted",
+                )?;
+                let event = files.read(id, "inbox")?;
+                seen.insert(id, fingerprint);
+                commands.push(event);
+            }
+            commands.sort_by(|a, b| {
+                (a.emitter_id.as_str(), a.sequence).cmp(&(b.emitter_id.as_str(), b.sequence))
+            });
+            for command in commands {
+                require(
+                    captures < session.manifest.limits.max_reads as u64,
+                    "resource capture budget exhausted",
+                )?;
+                captures += 1;
+                let frame = source.capture(&targets, command.kind == EventKind::MonitorStop);
+                let mut staged = session.clone();
+                match staged.handle(&command, &frame, now_ms) {
+                    Ok(replies) => {
+                        files.publish_batch(&replies, "results")?;
+                        session = staged;
+                    }
+                    Err(error) => {
+                        let fault = session.protocol_fault(
+                            &error,
+                            Some(command.event_id),
+                            &frame.captured_at,
+                            now_ms,
+                        )?;
+                        files.publish(&fault, "results")?;
+                        return Err(error.to_string());
+                    }
+                }
+                if session.stopped
+                    && let Some(artifacts) = &mut artifacts
+                {
+                    artifacts.write_peak(&frame.cgroup_peak)?;
+                }
+                if session.stopped {
+                    break;
+                }
+            }
+            if !session.stopped
+                && (session.needs_tick(now_ms) || schedule.needs_capture(&session, now_ms))
+            {
+                require(
+                    captures < session.manifest.limits.max_reads as u64,
+                    "resource capture budget exhausted",
+                )?;
+                captures += 1;
+                let frame = source.capture(&targets, schedule.needs_capture(&session, now_ms));
+                session.tick(&frame, now_ms)?;
+                schedule.collect(&mut session, &mut files, &mut artifacts, &frame, now_ms)?;
+                if session.active_count() > 0 {
+                    eprintln!(
+                        "host resource heartbeat: {} ms; active={} registered={}",
+                        now_ms,
+                        session.active_count(),
+                        session.registered_count()
+                    );
+                }
+            }
+            for id in files.ids("consumed")? {
+                if !consumed.insert(id) {
+                    continue;
+                }
+                let evidence = files.read(id, "consumed")?;
+                // Consumed evidence is the original closed event, not a second protocol shape.
+                let direction = if matches!(
+                    evidence.kind,
+                    EventKind::WorkerRegister
+                        | EventKind::WindowBegin
+                        | EventKind::WindowEnd
+                        | EventKind::WindowAbort
+                        | EventKind::MonitorStop
+                ) {
+                    "inbox"
+                } else {
+                    "results"
+                };
+                require(
+                    files.read(id, direction)? == evidence,
+                    "consumption differs from original event",
+                )?;
+                session.book.consume(id).map_err(|e| e.to_string())?;
+            }
+            let retired = session.retire(now_ms);
+            files.remove_retired(&retired)?;
+            std::thread::sleep(Duration::from_millis(
+                session.manifest.limits.poll_ms as u64,
+            ));
+        }
+        Ok(())
+    })();
+    if run.is_err() && !session.stopped {
+        publish_cancelled(
+            &mut session,
+            &mut files,
+            &utc_now(),
+            start.elapsed().as_millis() as u64,
+        )?;
+        if let Some(artifacts) = &mut artifacts {
+            artifacts.write_peak(&source.peak())?;
+        }
+    }
+    run
+}
