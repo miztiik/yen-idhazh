@@ -117,25 +117,10 @@ fn identity_stable(before: &TargetCapture, after: &TargetCapture) -> bool {
     before.start_ticks == after.start_ticks
         && before.cgroup == after.cgroup
         && before.mountinfo == after.mountinfo
+        && before.source_context == after.source_context
 }
 fn constraints_stable(before: &TargetCapture, after: &TargetCapture, quota: bool) -> bool {
-    match (&before.constraints.value, &after.constraints.value) {
-        (Some(a), Some(b)) => {
-            a.len() == b.len()
-                && a.iter().zip(b).all(|(a, b)| {
-                    a.controller == b.controller
-                        && a.directory == b.directory
-                        && a.root == b.root
-                        && a.controllers == b.controllers
-                        && if quota {
-                            a.quota == b.quota && a.period == b.period
-                        } else {
-                            a.cpuset == b.cpuset
-                        }
-                })
-        }
-        _ => before.constraints == after.constraints,
-    }
+    allowance::constraints_stable(before, after, quota)
 }
 pub fn target(
     row: &mut CorrectedHostFingerprintRow,

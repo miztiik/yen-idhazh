@@ -31,6 +31,7 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<()> {
         "--result-id",
         "--captured-at",
         "--affinity-input",
+        "--hierarchy-input",
     ];
     let mut args = BTreeMap::new();
     while let Some(key) = arguments.next() {

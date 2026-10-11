@@ -201,6 +201,7 @@ fn v1_inherits_empty_cpuset_and_takes_minimum_fractional_quota_across_all_ancest
             .into_iter()
             .map(|s| {
                 let mut r = original.clone();
+                r.root_evidence = support::recorded_root(&s);
                 r.controller = s.controller;
                 r.directory = s.directory;
                 r.root = s.root;
@@ -257,12 +258,12 @@ fn verified_absent_controllers_are_unrestricted_but_empty_masks_are_not() {
     target.mountinfo = found("1 0 0:1 / / rw - tmpfs tmpfs rw\n");
     target.constraints = Reading::found(vec![]);
     assert_eq!(
-        allowance::allowed(&target, &[0, 2, 3, 7], &limits).unwrap(),
-        3
+        allowance::allowed(&target, &[0, 2, 3, 7], &limits),
+        Err(UnavailableReason::IncompleteCoverage)
     );
     assert_eq!(
-        allowance::quota(&target, &limits).unwrap(),
-        (None, QuotaState::Unlimited)
+        allowance::quota(&target, &limits),
+        Err(UnavailableReason::IncompleteCoverage)
     );
     target.affinity = Reading::found(vec![1]);
     assert!(allowance::allowed(&target, &[0, 2, 3, 7], &limits).is_err());
@@ -342,6 +343,7 @@ fn hybrid_quota_and_cpuset_constraints_both_apply_and_empty_inheritance_is_not_u
         .filter(|s| s.controller != Controller::V2)
     {
         let mut row = original.clone();
+        row.root_evidence = support::recorded_root(&scope);
         row.controller = scope.controller;
         row.directory = scope.directory;
         row.root = scope.root;

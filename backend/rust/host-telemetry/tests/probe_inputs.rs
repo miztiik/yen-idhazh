@@ -65,6 +65,7 @@ fn generated_proc_and_sysfs_sources_equal_the_named_recording() {
     for constraint in t.constraints.value.as_ref().unwrap() {
         for (name, value) in [
             ("cgroup.controllers", &constraint.controllers),
+            ("cgroup.subtree_control", &constraint.subtree_control),
             ("cpuset.cpus.effective", &constraint.cpuset),
             ("cpu.max", &constraint.quota),
         ] {
@@ -73,7 +74,7 @@ fn generated_proc_and_sysfs_sources_equal_the_named_recording() {
             }
         }
     }
-    let observed = snapshots::capture(
+    let mut observed = snapshots::capture(
         &LiveRoots {
             proc: &root.join("proc"),
             cpu: &root.join("cpu"),
@@ -87,6 +88,31 @@ fn generated_proc_and_sysfs_sources_equal_the_named_recording() {
         Some(&t.affinity),
     )
     .unwrap();
+    assert_eq!(
+        idhazh_host_telemetry::probe_inputs::allowance::quota(
+            observed.target_before.as_ref().unwrap(),
+            &support::manifest().capture_limits
+        ),
+        Err(UnavailableReason::IncompleteCoverage),
+        "ordinary directory files cannot establish kernel root evidence",
+    );
+    let recorded = idhazh_host_telemetry::probe_inputs::hierarchy::RecordedHierarchy {
+        source_context: t.source_context.clone(),
+        root_evidence: t
+            .constraints
+            .value
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|r| r.root_evidence.clone())
+            .collect(),
+    };
+    for target in [&mut observed.target_before, &mut observed.target_after]
+        .into_iter()
+        .flatten()
+    {
+        recorded.apply(target).unwrap();
+    }
     assert_eq!(&observed, c);
     let cpu = SourceRoot::new(&root.join("cpu"), 4).unwrap();
     assert_eq!(

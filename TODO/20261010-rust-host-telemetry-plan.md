@@ -65,7 +65,7 @@ Table D - authoritative execution queue
 | D10 | 10 | Render compatible host files through tested Rust codecs | 2 | C | DONE | rust-d10-native-codecs | - | rust-d10-native-codecs |
 | D11 | 11 | Persist host files through tested Rust storage modules | 10 | D | DONE | rust-d11-storage | - | owner; disjoint identity/path and atomic workers |
 | D12 | 12 | Produce verified receipts and recover completed writes | 11 | E | DONE | rust-d12-receipts | - | owner; native receipt/recovery leaf |
-| D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | PENDING | - | - | - |
+| D3 | 3 | Produce machine probe and clock events in Rust | 12 | F | DONE | rust-d3-producers | - | owner; producer recovery and correctness workers |
 | D4 | 4 | Produce window and job resource events in Rust | 3 | D | PENDING | - | - | - |
 | D15 | 15 | Build bounded historical inventory and dry-run migration | 4 | E | PENDING | - | - | - |
 | D5 | 5 | Verify corrected Rust in an artifact-only YAML workflow | 15 | E | PENDING | - | - | - |
@@ -268,6 +268,10 @@ Table N - Row 2 rejected alternatives
   - `backend/rust/host-telemetry/src/producers/job_clock.rs`
   - `backend/rust/host-telemetry/src/producers/target_probe.rs`
   - `backend/rust/host-telemetry/src/fingerprint.rs`
+  - `backend/rust/host-telemetry/src/invocation.rs`
+  - `backend/rust/host-telemetry/src/probe_inputs/files.rs`
+  - `backend/rust/host-telemetry/src/probe_inputs/snapshots.rs`
+  - `backend/rust/host-telemetry/src/probe_inputs/hierarchy.rs`
   - `backend/rust/host-telemetry/src/probe_inputs/cpu.rs`
   - `backend/rust/host-telemetry/src/probe_inputs/topology.rs`
   - `backend/rust/host-telemetry/src/probe_inputs/allowance.rs`
@@ -280,8 +284,13 @@ Table N - Row 2 rejected alternatives
   - `backend/rust/host-telemetry/tests/job_producers.rs`
   - `backend/rust/host-telemetry/tests/cli.rs`
   - `backend/rust/host-telemetry/tests/probe_clock.rs`
+  - `backend/rust/host-telemetry/tests/cgroup_hierarchy.rs`
+  - `backend/rust/host-telemetry/tests/support/mod.rs`
   - `backend/tests/contracts/test_host_event_rust_parity.py`
   - `tests/fixtures/host-events/probe-clock.json`
+  - `frontend/scripts/test-scope.ts`
+  - `frontend/scripts/tests/test-scope.test.mjs`
+  - `frontend/scripts/tests/run-checks.test.mjs`
   - `docs/architecture/publishing/host-events.md`
   - `TODO/20261010-rust-host-telemetry-plan.md`
 - **Acceptance gates - local:** Cargo tests/fmt/clippy and shared selector. Independent CPU fixtures cover sparse/duplicate/offline IDs, topology gaps, SMT/multiple sockets, affinity versus online IDs, nested v1/v2 quotas/cpusets, fractional/unlimited/unreadable allowance, namespace-hidden ancestors, PID reuse, hotplug races, absent/partial/invalid frequency, unit conversions and the E6 source defect. Hash tests cover both AO versions and exclusion of quota/affinity/frequency. Replay unchanged metadata/cache/copy/clocks/counters against recorded Python.
@@ -296,6 +305,8 @@ Table O - Row 3 decisions
 | O2 | Consider `serde`, `serde_json` and `sha2` for typed JSON/hash work, plus a maintained minimal HTTP client for link-local metadata. Lock dependencies and report beneficiary, build time and binary cost before adding them. No custom HTTP stack. | Fowler; open-source-first rule. |
 | O3 | Keep copy allocation/timing/accounting; checked sizes, fallible allocation and observable copy results prevent dead-copy elimination. Serialize AO and AE canonical bytes explicitly; serde defaults alone do not prove Python-compatible JSON. Memory collection off does not turn the separately controlled copy off. | E11; G7; AN/AO. |
 | O4 | Route commands in the CLI; `job_probe`/`job_clock` build typed payloads and call the Rust store. Producers do not import codecs, allocate envelopes or build paths. Their contract tests compare probe/full-clock files, not just JSON results. | Table AC; user modularity requirement. |
+| O5 | Prove actual cgroup hierarchy roots with pinned genuine filesystem/core-entry and marker metadata plus aligned namespace/root context. Slash mount roots alone do not prove ancestor coverage; unavailable proof keeps quota null. Use target v2 effective cpuset without parent-effective intersection; retain v1 inheritance. Recorded evidence uses the same bounded validators. | Fowler cgroup-coverage ruling, 2026-10-10; AN5; kernel cgroup interface semantics. |
+| O6 | Retain intended result/diagnostics and exact plan before native publication. Retry consumes that immutable intent without recapture; expose results only after actual receipt evidence. | Interrupted CLI review; H9/H15; actual 20-process interruption oracle across four codecs. |
 
 Table P - Row 3 rejected alternatives
 

@@ -160,6 +160,24 @@ pub fn publish(
     result: HostResultBody,
     previous: Option<&HostWritePlan>,
 ) -> Result<Option<ProducedHost>> {
+    let Some(prepared) = prepare(publication, &result, previous)? else {
+        return Ok(None);
+    };
+    let completion = receipts::write(&prepared, publication.evidence_root, publication.limits)
+        .map_err(|e| e.message.clone())?;
+    let mut result = result;
+    result.completion_event_ids = vec![completion.event_id];
+    Ok(Some(ProducedHost {
+        result,
+        plan: prepared.plan().clone(),
+        completion,
+    }))
+}
+pub fn prepare(
+    publication: &Publication<'_>,
+    result: &HostResultBody,
+    previous: Option<&HostWritePlan>,
+) -> Result<Option<store::PreparedWrite>> {
     result.validate()?;
     let stored = HostStoredRow {
         unit_id: host_unit_id(
@@ -198,18 +216,7 @@ pub fn publish(
     } else {
         store::prepare(publication.workspace, request)?
     };
-    let Some(prepared) = prepared else {
-        return Ok(None);
-    };
-    let completion = receipts::write(&prepared, publication.evidence_root, publication.limits)
-        .map_err(|e| e.message.clone())?;
-    let mut result = result;
-    result.completion_event_ids = vec![completion.event_id];
-    Ok(Some(ProducedHost {
-        result,
-        plan: prepared.plan().clone(),
-        completion,
-    }))
+    Ok(prepared)
 }
 pub fn prior_matches(
     manifest: &HostSessionManifest,

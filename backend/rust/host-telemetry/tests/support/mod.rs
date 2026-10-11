@@ -35,6 +35,43 @@ pub fn manifest() -> HostSessionManifest {
 pub fn found(text: &str) -> Reading<String> {
     Reading::found(text.to_owned())
 }
+pub fn recorded_root(
+    scope: &idhazh_host_telemetry::probe_inputs::allowance::Scope,
+) -> Option<idhazh_host_telemetry::probe_inputs::hierarchy::RootEvidence> {
+    use idhazh_host_telemetry::probe_inputs::{allowance::Controller, hierarchy::*};
+    if !scope.root {
+        return None;
+    }
+    let device = u64::from(scope.mount.minor);
+    Some(RootEvidence {
+        selected_mount: scope.mount.clone(),
+        directory: Reading::found(DirectoryIdentity {
+            filesystem_type: if scope.controller == Controller::V2 {
+                CGROUP2_SUPER_MAGIC
+            } else {
+                CGROUP_SUPER_MAGIC
+            },
+            identity: Identity { device, inode: 1 },
+            mount_id: scope.mount.id,
+            major: scope.mount.major,
+            minor: scope.mount.minor,
+        }),
+        cgroup_procs: Lookup::Present(EntryMetadata {
+            identity: Identity { device, inode: 2 },
+            regular: true,
+            mount_id: scope.mount.id,
+        }),
+        marker: if scope.controller == Controller::V2 {
+            Lookup::ExactEnoent
+        } else {
+            Lookup::Present(EntryMetadata {
+                identity: Identity { device, inode: 3 },
+                regular: true,
+                mount_id: scope.mount.id,
+            })
+        },
+    })
+}
 pub fn command(
     manifest: &HostSessionManifest,
     kind: EventKind,

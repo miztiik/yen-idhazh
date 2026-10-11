@@ -40,6 +40,7 @@ pub mod probe_inputs {
     pub mod cpu;
     pub mod files;
     pub mod frequency;
+    pub mod hierarchy;
     pub mod placement;
     pub mod snapshots;
     pub mod topology;

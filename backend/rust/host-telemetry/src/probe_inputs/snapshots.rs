@@ -6,6 +6,7 @@ use crate::probe_inputs::{
     allowance::{self, TargetCapture},
     files::{Reading, SourceRoot},
     frequency::FrequencyPolicy,
+    hierarchy,
     topology::{self, CpuTopology},
 };
 use serde::{Deserialize, Serialize};
@@ -71,6 +72,11 @@ pub fn capture(
     let inventory = cpu.text("present");
     let target_capture = || {
         target.map(|target| {
+            let source_context = if roots.proc == Path::new("/proc") {
+                hierarchy::context(roots, target)
+            } else {
+                hierarchy::missing_context()
+            };
             let cgroup = proc.text(&format!("{}/cgroup", target.pid));
             let mountinfo = proc.text(&format!("{}/mountinfo", target.pid));
             let constraints = match cgroup.get().and_then(|cg| {
@@ -78,7 +84,11 @@ pub fn capture(
                     .get()
                     .and_then(|mi| allowance::scopes(cg, mi, limits))
             }) {
-                Ok(scopes) => Reading::found(allowance::capture_constraints(&namespace, &scopes)),
+                Ok(scopes) => Reading::found(if roots.proc == Path::new("/proc") {
+                    hierarchy::constraints(roots.namespace, &scopes, namespace.maximum)
+                } else {
+                    allowance::capture_constraints(&namespace, &scopes)
+                }),
                 Err(reason) => Reading::absent(reason),
             };
             let stat = proc.text(&format!("{}/stat", target.pid));
@@ -86,6 +96,11 @@ pub fn capture(
                 Ok(v) => Reading::found(v),
                 Err(UnavailableReason::Missing) => Reading::absent(UnavailableReason::PidExited),
                 Err(r) => Reading::absent(r),
+            };
+            let source_context_after = if roots.proc == Path::new("/proc") {
+                hierarchy::context(roots, target)
+            } else {
+                hierarchy::missing_context()
             };
             TargetCapture {
                 start_ticks,
@@ -95,6 +110,11 @@ pub fn capture(
                     .cloned()
                     .unwrap_or_else(|| allowance::affinity(target, limits)),
                 constraints,
+                source_context: if source_context == source_context_after {
+                    source_context
+                } else {
+                    Reading::absent(UnavailableReason::SnapshotChanged)
+                },
             }
         })
     };
@@ -186,7 +206,21 @@ pub fn cache(cpu: &SourceRoot, entry_cap: usize) -> Reading<i64> {
     Reading::absent(UnavailableReason::Missing)
 }
 pub fn stable(capture: &CpuCapture) -> bool {
-    capture.online_before == capture.online_after && capture.target_before == capture.target_after
+    capture.online_before == capture.online_after
+        && match (&capture.target_before, &capture.target_after) {
+            (Some(a), Some(b)) => {
+                a.source_context.reason != Some(UnavailableReason::SnapshotChanged)
+                    && b.source_context.reason != Some(UnavailableReason::SnapshotChanged)
+                    && a.start_ticks == b.start_ticks
+                    && a.cgroup == b.cgroup
+                    && a.mountinfo == b.mountinfo
+                    && a.affinity == b.affinity
+                    && allowance::constraints_stable(a, b, true)
+                    && allowance::constraints_stable(a, b, false)
+            }
+            (None, None) => true,
+            _ => false,
+        }
 }
 pub fn live(
     roots: &LiveRoots<'_>,
@@ -275,6 +309,7 @@ pub fn validate_capture(c: &CpuCapture, limits: &HostCaptureLimits) -> Result<()
             "captured affinity exceeds bound",
         )?;
         target.constraints.validate()?;
+        target.source_context.validate()?;
         if let Some(rows) = &target.constraints.value {
             require(
                 rows.len() as i64 <= limits.max_cgroup_ancestors.saturating_mul(3),
@@ -285,7 +320,26 @@ pub fn validate_capture(c: &CpuCapture, limits: &HostCaptureLimits) -> Result<()
                     row.directory.len() as i64 <= limits.max_proc_text_bytes,
                     "captured cgroup path exceeds bound",
                 )?;
-                for source in [&row.controllers, &row.cpuset, &row.quota, &row.period] {
+                require(
+                    row.root || row.root_evidence.is_none(),
+                    "root proof on nonroot scope",
+                )?;
+                if let Some(evidence) = &row.root_evidence {
+                    evidence.directory.validate()?;
+                    require(
+                        evidence.selected_mount.root.len() as i64 <= limits.max_proc_text_bytes
+                            && evidence.selected_mount.mountpoint.len() as i64
+                                <= limits.max_proc_text_bytes,
+                        "root proof path exceeds bound",
+                    )?;
+                }
+                for source in [
+                    &row.controllers,
+                    &row.cpuset,
+                    &row.quota,
+                    &row.period,
+                    &row.subtree_control,
+                ] {
                     text(source, limits.max_sysfs_text_bytes)?;
                 }
             }

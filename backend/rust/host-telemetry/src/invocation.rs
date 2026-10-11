@@ -25,6 +25,14 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IntendedResult {
+    arguments: BTreeMap<String, String>,
+    event: HostEvent,
+    plan: crate::contracts::write_plan::HostWritePlan,
+}
+
 pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     let required = |name: &str| {
         args.get(name)
@@ -84,23 +92,61 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     )?;
     let result_path = format!("{}/results/{result_id}.json", manifest.event_root);
     let plan_path = format!("{evidence}/{}.plan.json", command.event_id);
-    if paths::resolve_document(&workspace, &result_path)?.exists() {
-        let result: HostEvent = document(
+    let intent_path = format!("{evidence}/{}.intent.json", command.event_id);
+    if paths::resolve_document(&workspace, &intent_path)?.exists() {
+        let intended: IntendedResult = document(
             &workspace,
-            &result_path,
+            &intent_path,
             manifest.limits.max_result_bytes as usize,
         )?;
+        intended.event.validate()?;
+        intended.plan.validate()?;
         require(
-            result.reply_to == Some(command.event_id)
-                && result.event_id == result_id
-                && result.session_id == manifest.session_id,
-            "retry result conflict",
+            intended.arguments == args
+                && intended.event.reply_to == Some(command.event_id)
+                && intended.event.event_id == result_id
+                && intended.event.session_id == manifest.session_id
+                && intended.event.kind == EventKind::HostResult
+                && intended.event.date == manifest.date
+                && intended.event.run_id == manifest.run_id
+                && intended.event.attempt == manifest.attempt
+                && intended.event.job == manifest.job
+                && intended.event.shard == manifest.shard
+                && intended.event.emitter_id == manifest.monitor_emitter_id
+                && intended.plan.event_id == command.event_id
+                && intended.plan.target_root == target_root
+                && intended.plan.publication_identity.run_id == manifest.run_id
+                && intended.plan.publication_identity.attempt == manifest.attempt
+                && intended.plan.publication_identity.job == manifest.job
+                && intended.plan.publication_identity.shard == manifest.shard
+                && intended.plan.publication_identity.git_sha == manifest.git_sha,
+            "retry intended result conflict",
         )?;
-        let prepared = receipts::load_plan(&workspace, &plan_path, &evidence, &receipt_limits)?;
-        receipts::write(&prepared, &evidence, &receipt_limits).map_err(|e| e.message.clone())?;
-        println!("{result_path}");
-        return Ok(());
+        let EventBody::HostResult(result) = &intended.event.body else {
+            return Err("intent is not a host result".to_owned());
+        };
+        require(
+            intended.plan.files.len() == 1
+                && intended.plan.files[0].rows.len() == 1
+                && intended.plan.files[0].rows[0].host == result.row
+                && result.completion_event_ids == [command.event_id],
+            "intended row differs from native plan",
+        )?;
+        let prepared = store::prepare_plan(&workspace, intended.plan)?;
+        return finish(
+            &workspace,
+            &result_path,
+            intended.event,
+            &prepared,
+            &evidence,
+            &receipt_limits,
+        );
     }
+    require(
+        !paths::resolve_document(&workspace, &result_path)?.exists()
+            && !paths::resolve_document(&workspace, &plan_path)?.exists(),
+        "publication lacks retained intended result; recapture refused",
+    )?;
     let previous: Option<HostEvent> = args
         .get("--previous-result")
         .map(|name| document(&workspace, name, manifest.limits.max_result_bytes as usize))
@@ -183,6 +229,21 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
             )?);
         } else {
             live_capture = Some(snapshots::live(&roots, selected, &manifest.capture_limits)?);
+        }
+    }
+    if let Some(text) = named_text("--hierarchy-input", manifest.limits.max_read_bytes as usize)? {
+        require(
+            replay.is_none() && required("--proc-root")? != "/proc",
+            "recorded hierarchy cannot replace live kernel evidence",
+        )?;
+        let recorded: crate::probe_inputs::hierarchy::RecordedHierarchy =
+            serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        let capture = live_capture.as_mut().ok_or("missing recorded capture")?;
+        for target in [&mut capture.target_before, &mut capture.target_after]
+            .into_iter()
+            .flatten()
+        {
+            recorded.apply(target)?;
         }
     }
     let capture = || -> Result<&snapshots::CpuCapture> {
@@ -316,9 +377,9 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
         written_at_ms,
         limits: &receipt_limits,
     };
-    let produced = job_probe::publish(
+    let prepared = job_probe::prepare(
         &publication,
-        result,
+        &result,
         previous_plan.as_ref().map(|v| v.plan()),
     )?
     .ok_or("raw family refused write")?;
@@ -328,16 +389,62 @@ pub fn execute(verb: &str, args: BTreeMap<String, String>) -> Result<()> {
     event.reply_to = Some(command.event_id);
     event.emitter_id = manifest.monitor_emitter_id.clone();
     event.emitted_at = captured_at.to_owned();
-    event.body = EventBody::HostResult(Box::new(produced.result));
+    event.body = EventBody::HostResult(Box::new(result));
     event.validate()?;
+    let intended = IntendedResult {
+        arguments: args.clone(),
+        event,
+        plan: prepared.plan().clone(),
+    };
     immutable_document(
         &workspace,
-        &result_path,
-        &event,
+        &intent_path,
+        &intended,
         manifest.limits.max_result_bytes as usize,
     )?;
+    checkpoint("intended-result");
+    finish(
+        &workspace,
+        &result_path,
+        intended.event,
+        &prepared,
+        &evidence,
+        &receipt_limits,
+    )
+}
+fn finish(
+    workspace: &Path,
+    result_path: &str,
+    event: HostEvent,
+    prepared: &store::PreparedWrite,
+    evidence: &str,
+    limits: &receipts::ReceiptLimits,
+) -> Result<()> {
+    let completion = receipts::write_observed(prepared, evidence, limits, &mut |stage| {
+        match stage {
+            receipts::Checkpoint::PlanPersisted => checkpoint("plan"),
+            receipts::Checkpoint::FilePublished(_) => checkpoint("publication"),
+            receipts::Checkpoint::ReceiptPersisted(_) => checkpoint("receipt"),
+            _ => {}
+        }
+        Ok(())
+    })
+    .map_err(|e| e.message.clone())?;
+    completion.validate_plan(prepared.plan(), true)?;
+    immutable_document(workspace, result_path, &event, limits.max_document_bytes)?;
+    checkpoint("result");
     println!("{result_path}");
     Ok(())
+}
+fn checkpoint(name: &str) {
+    #[cfg(debug_assertions)]
+    if std::env::var("IDHAZH_HOST_CHECKPOINT").as_deref() == Ok(name) {
+        eprintln!("host checkpoint: {name}");
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    }
+    let _ = name;
 }
 fn document<T: DeserializeOwned>(workspace: &Path, relative: &str, maximum: usize) -> Result<T> {
     let path = paths::resolve_document(workspace, relative)?;

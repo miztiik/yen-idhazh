@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -100,10 +101,15 @@ def _source_tree(root: Path, capture: dict[str, Any]) -> None:
         _write(root, f"proc/100/{name}", target[name]["value"])
     _write(root, "proc/100/stat", "100 (Python worker) S " + "0 " * 18 + "800\n")
     for entry in target["constraints"]["value"]:
-        for name, key in [("cgroup.controllers", "controllers"), ("cpuset.cpus.effective", "cpuset"), ("cpu.max", "quota")]:
+        for name, key in [("cgroup.controllers", "controllers"), ("cgroup.subtree_control", "subtree_control"),
+                          ("cpuset.cpus.effective", "cpuset"), ("cpu.max", "quota")]:
             if entry[key]["value"] is not None:
                 _write(root, f"namespace{entry['directory']}/{name}", entry[key]["value"])
     _write(root, "affinity.json", json.dumps(target["affinity"]))
+    _write(root, "hierarchy.json", json.dumps({
+        "source_context": target["source_context"],
+        "root_evidence": [entry.get("root_evidence") for entry in target["constraints"]["value"]],
+    }))
 
 
 def test_actual_generated_proc_sysfs_cli_sources_are_not_a_second_implementation() -> None:
@@ -117,6 +123,7 @@ def test_actual_generated_proc_sysfs_cli_sources_are_not_a_second_implementation
     manifest["named_inputs"] = [
         {"name": "affinity", "source": "sched.affinity", "relative_path": "affinity.json"},
         {"name": "metadata", "source": "proc.cpuinfo", "relative_path": "metadata.json"},
+        {"name": "hierarchy", "source": "cgroup.cpu_quota", "relative_path": "hierarchy.json"},
     ]
     _write(workspace, "manifest.json", json.dumps(manifest))
     command = {
@@ -124,14 +131,16 @@ def test_actual_generated_proc_sysfs_cli_sources_are_not_a_second_implementation
     } | {
         "kind": "host.probe", "event_id": str(uuid4()), "reply_to": None, "sequence": 1,
         "emitter_id": "operator", "emitted_at": "2026-10-10T12:00:00Z",
-        "body": {"controls": manifest["controls"], "input_names": ["affinity", "metadata"], "target": manifest["cpu_target"]},
+        "body": {"controls": manifest["controls"], "input_names": ["affinity", "metadata", "hierarchy"],
+                 "target": manifest["cpu_target"]},
     }
     _write(workspace, "command.json", json.dumps(command))
     args = [
         str(native()), "probe", "--workspace", str(workspace), "--manifest", "manifest.json",
         "--command", "command.json", "--config", "config.json", "--proc-root", str(workspace / "proc"),
         "--cpu-root", str(workspace / "cpu"), "--namespace-root", str(workspace / "namespace"),
-        "--affinity-input", "affinity", "--metadata-input", "metadata", "--cache-multiple", "2",
+        "--affinity-input", "affinity", "--metadata-input", "metadata", "--hierarchy-input", "hierarchy",
+        "--cache-multiple", "2",
         "--format", "json", "--result-id", str(uuid4()),
     ]
     output = subprocess.run(args, cwd=ROOT, capture_output=True, check=False, timeout=60)
@@ -194,7 +203,8 @@ def test_selected_python_worker_uses_live_linux_affinity_or_diagnoses_windows_so
         )["body"])
         if worker is None:
             assert body.row.cpu_allowed_processors is None
-            assert body.row.cpu_quota_cores == 0.5
+            assert body.row.cpu_quota_cores is None and body.row.cpu_quota_state == "unavailable"
+            assert next(s for s in body.cpu.sources if s.source == "cgroup.cpu_quota").reason == "incomplete_coverage"
             assert next(s for s in body.cpu.sources if s.source == "sched.affinity").reason == "missing"
         else:
             assert body.cpu.target is not None
@@ -209,3 +219,150 @@ def test_selected_python_worker_uses_live_linux_affinity_or_diagnoses_windows_so
         if worker is not None:
             worker.terminate()
             worker.wait(timeout=10)
+
+
+def _run_recorded_capture(capture: dict[str, Any]) -> HostResultBody:
+    workspace = ROOT / "backend" / "var" / "d3-python-hierarchy" / str(uuid4())
+    replay = json.loads(FIXTURE.read_bytes())
+    replay["attempts"] = [capture]
+    manifest = json.loads((ROOT / "tests/fixtures/host-events/manifest.json").read_bytes())
+    manifest["output_roots"] = ["output/state"]
+    manifest["named_inputs"] = [{"name": "snapshot", "source": "proc.cpuinfo", "relative_path": "capture.json"}]
+    command = {
+        key: manifest[key] for key in ["version", "date", "run_id", "attempt", "job", "shard", "session_id"]
+    } | {
+        "kind": "host.probe", "event_id": str(uuid4()), "reply_to": None, "sequence": 1,
+        "emitter_id": "operator", "emitted_at": "2026-10-10T12:00:00Z",
+        "body": {"controls": manifest["controls"], "input_names": ["snapshot"], "target": manifest["cpu_target"]},
+    }
+    for name, value in [
+        ("capture.json", replay), ("manifest.json", manifest), ("command.json", command), ("config.json", _config()),
+    ]:
+        _write(workspace, name, json.dumps(value))
+    result_id = str(uuid4())
+    args = [
+        str(native()), "probe", "--workspace", str(workspace), "--manifest", "manifest.json",
+        "--command", "command.json", "--config", "config.json", "--snapshot", "snapshot",
+        "--cache-multiple", "2", "--format", "json", "--result-id", result_id,
+    ]
+    output = subprocess.run(args, cwd=ROOT, capture_output=True, check=False, timeout=60)
+    assert output.returncode == 0, output.stderr.decode()
+    event = json.loads((workspace / output.stdout.decode().strip()).read_bytes())
+    body = HostResultBody.model_validate(event["body"])
+    evidence = workspace / manifest["event_root"] / "writes"
+    plan = HostWritePlan.model_validate_json((evidence / f"{command['event_id']}.plan.json").read_bytes())
+    completion = HostWriteCompletion.model_validate_json(
+        (evidence / f"{command['event_id']}.completed-1.json").read_bytes(),
+    )
+    verified = verify_host_output(
+        plan, completion, workspace_root=workspace, target_root=plan.target_root,
+        publication_identity=plan.publication_identity, limits=VerificationLimits(**_config()["verification_limits"]),
+    )
+    assert verified.complete
+    assert verified.files[0].rows[0].model_dump(include=set(type(body.row).model_fields)) == body.row.model_dump()
+    return body
+
+
+@pytest.mark.parametrize("mode", [
+    "actual", "hidden", "legacy", "denied", "wrong_fs", "covering_mount", "context_changed", "root_changed",
+    "partition_empty", "partition_disjoint", "partition_parent_changed", "inherit", "required_missing",
+    "unknown_applicability", "finite_ancestor", "unlimited", "v1", "v1_hidden", "hybrid",
+])
+def test_native_structural_hierarchy_and_partition_semantics_have_exact_python_cells(mode: str) -> None:
+    capture = json.loads(FIXTURE.read_bytes())["attempts"][0]
+    expected_quota: float | None = 0.5
+    expected_state = "finite"
+    expected_allowed: int | None = 2
+    expected_reason = None
+    for target in [capture["target_before"], capture["target_after"]]:
+        rows = target["constraints"]["value"]
+        proof = rows[-1]["root_evidence"]
+        if mode in {"hidden", "v1_hidden"}:
+            proof["marker"] = copy.deepcopy(proof["cgroup_procs"])
+        elif mode == "legacy":
+            target.pop("source_context")
+            rows[-1].pop("root_evidence")
+        elif mode == "denied":
+            proof["marker"] = {"failed": "permission_denied"}
+        elif mode == "wrong_fs":
+            proof["directory"]["value"]["filesystem_type"] = 0x01021994
+        elif mode == "covering_mount":
+            target["mountinfo"]["value"] += "40 29 0:40 / /sys/fs/cgroup/slice rw - tmpfs tmpfs rw\n"
+        elif mode.startswith("partition_"):
+            rows[1]["cpuset"]["value"] = "" if mode == "partition_empty" else "3"
+            rows[2]["cpuset"]["value"] = ""
+        elif mode in {"inherit", "required_missing", "unknown_applicability"}:
+            rows[0]["cpuset"] = {"value": None, "reason": "missing"}
+            rows[0]["quota"] = {"value": None, "reason": "missing"}
+            if mode == "inherit":
+                rows[1]["subtree_control"]["value"] = ""
+                rows[0]["controllers"]["value"] = ""
+                rows[1]["cpuset"]["value"] = "2,7"
+                rows[1]["quota"]["value"] = "25000 100000"
+            elif mode == "unknown_applicability":
+                rows[1]["subtree_control"] = {"value": None, "reason": "missing"}
+        elif mode in {"finite_ancestor", "unlimited"}:
+            rows[0]["quota"]["value"] = "max 100000"
+            rows[1]["quota"]["value"] = "25000 100000" if mode == "finite_ancestor" else "max 100000"
+        if mode in {"v1", "v1_hidden", "hybrid"}:
+            def v1_rows(
+                controller: str, mount_id: int, minor: int, template: dict[str, Any], root_template: dict[str, Any],
+            ) -> list[dict[str, Any]]:
+                result = []
+                for path in [f"/{controller}/slice/job", f"/{controller}/slice", f"/{controller}"]:
+                    entry = copy.deepcopy(template)
+                    entry.update(controller=controller, directory=path, root=path == f"/{controller}")
+                    entry["quota"] = {"value": "-1" if entry["root"] else "75000", "reason": None}
+                    entry["period"] = {"value": "100000", "reason": None}
+                    entry["cpuset"] = {"value": "" if path.endswith("/job") else "0,2,7", "reason": None}
+                    if entry["root"]:
+                        root_proof = copy.deepcopy(root_template)
+                        root_proof["selected_mount"].update(
+                            id=mount_id, minor=minor, mountpoint=f"/{controller}",
+                        )
+                        root_proof["directory"]["value"].update(
+                            filesystem_type=0x27E0EB, mount_id=mount_id, minor=minor,
+                        )
+                        root_proof["directory"]["value"]["identity"]["device"] = minor
+                        root_proof["cgroup_procs"]["present"].update(mount_id=mount_id)
+                        root_proof["cgroup_procs"]["present"]["identity"]["device"] = minor
+                        root_proof["marker"] = "exact_enoent" if mode == "v1_hidden" else copy.deepcopy(
+                            root_proof["cgroup_procs"],
+                        )
+                        entry["root_evidence"] = root_proof
+                    result.append(entry)
+                return result
+
+            target["cgroup"]["value"] = ("0::/slice/job\n" if mode == "hybrid" else "") \
+                + "4:cpu:/slice/job\n3:cpuset:/slice/job\n"
+            target["mountinfo"]["value"] = (
+                "29 23 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n" if mode == "hybrid" else ""
+            ) + "30 23 0:27 / /cpu rw - cgroup cgroup rw,cpu\n31 23 0:28 / /cpuset rw - cgroup cgroup rw,cpuset\n"
+            target["constraints"]["value"] = (rows if mode == "hybrid" else []) \
+                + v1_rows("cpu", 30, 27, rows[0], proof) + v1_rows("cpuset", 31, 28, rows[0], proof)
+    if mode in {"hidden", "legacy", "denied", "wrong_fs", "covering_mount", "required_missing",
+                "unknown_applicability", "v1_hidden"}:
+        expected_quota, expected_state, expected_allowed = None, "unavailable", None
+        expected_reason = "permission_denied" if mode == "denied" else (
+            "missing" if mode in {"required_missing", "unknown_applicability"} else "incomplete_coverage"
+        )
+    elif mode in {"context_changed", "root_changed"}:
+        after = capture["target_after"]
+        if mode == "context_changed":
+            after["source_context"]["value"]["target_mountns"]["inode"] += 1
+        else:
+            after["constraints"]["value"][-1]["root_evidence"]["directory"]["value"]["identity"]["inode"] += 1
+        expected_quota, expected_state, expected_allowed, expected_reason = None, "unavailable", None, "snapshot_changed"
+    elif mode == "partition_parent_changed":
+        capture["target_after"]["constraints"]["value"][1]["cpuset"]["value"] = "6"
+    elif mode in {"inherit", "finite_ancestor"}:
+        expected_quota = 0.25
+    elif mode == "unlimited":
+        expected_quota, expected_state = None, "unlimited"
+    elif mode == "v1":
+        expected_quota = 0.75
+    body = _run_recorded_capture(capture)
+    assert (body.row.cpu_quota_cores, body.row.cpu_quota_state) == (expected_quota, expected_state)
+    assert body.row.cpu_allowed_processors == expected_allowed
+    assert next(s for s in body.cpu.sources if s.source == "cgroup.cpu_quota").reason == expected_reason
+    assert body.row.cpu_logical_processors == 4 and body.row.cpu_physical_cores == 3

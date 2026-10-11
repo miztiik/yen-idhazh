@@ -4,6 +4,7 @@ use crate::contracts::events::{HostCaptureLimits, ProcessTarget, UnavailableReas
 use crate::contracts::host::QuotaState;
 use crate::probe_inputs::{
     files::{Reading, SourceRoot},
+    hierarchy::{self, CgroupSourceContext, MountIdentity, RootEvidence},
     topology::{Observation, cpu_list},
 };
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,7 @@ pub struct Scope {
     pub controller: Controller,
     pub directory: String,
     pub root: bool,
+    pub mount: MountIdentity,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +34,10 @@ pub struct Constraint {
     pub cpuset: Reading<String>,
     pub quota: Reading<String>,
     pub period: Reading<String>,
+    #[serde(default = "hierarchy::missing_text")]
+    pub subtree_control: Reading<String>,
+    #[serde(default)]
+    pub root_evidence: Option<RootEvidence>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +47,8 @@ pub struct TargetCapture {
     pub mountinfo: Reading<String>,
     pub affinity: Reading<Vec<i64>>,
     pub constraints: Reading<Vec<Constraint>>,
+    #[serde(default = "hierarchy::missing_context")]
+    pub source_context: Reading<CgroupSourceContext>,
 }
 
 fn decoded_path(raw: &str) -> Observation<String> {
@@ -106,6 +114,7 @@ pub fn scopes(
         return Err(UnavailableReason::IncompleteCoverage);
     }
     let mut mounts = Vec::new();
+    let mut all_mounts = Vec::new();
     for line in lines {
         let Some((left, right)) = line.split_once(" - ") else {
             return Err(UnavailableReason::Malformed);
@@ -115,6 +124,20 @@ pub fn scopes(
         if before.len() < 6 || after.len() < 3 {
             return Err(UnavailableReason::Malformed);
         }
+        let id = before[0]
+            .parse()
+            .map_err(|_| UnavailableReason::Malformed)?;
+        let (major, minor) = before[2]
+            .split_once(':')
+            .ok_or(UnavailableReason::Malformed)?;
+        let identity = MountIdentity {
+            id,
+            major: major.parse().map_err(|_| UnavailableReason::Malformed)?,
+            minor: minor.parse().map_err(|_| UnavailableReason::Malformed)?,
+            root: decoded_path(before[3])?,
+            mountpoint: decoded_path(before[4])?,
+        };
+        all_mounts.push(identity.clone());
         let kinds = match after[0] {
             "cgroup2" => vec![Controller::V2],
             "cgroup" => after[2]
@@ -128,31 +151,45 @@ pub fn scopes(
             _ => continue,
         };
         for kind in kinds {
-            mounts.push((kind, decoded_path(before[3])?, decoded_path(before[4])?));
+            mounts.push((kind, identity.clone()));
         }
     }
     let mut result = Vec::new();
     for (kind, membership) in &memberships {
         let applicable: Vec<_> = mounts.iter().filter(|m| m.0 == *kind).collect();
         // A mount rooted below '/' hides ancestors, even if its own leaf is readable.
-        if applicable.len() != 1 || applicable[0].1 != "/" {
+        if applicable.len() != 1 || applicable[0].1.root != "/" {
             return Err(UnavailableReason::IncompleteCoverage);
         }
-        let mountpoint = applicable[0].2.trim_end_matches('/');
+        let selected = &applicable[0].1;
+        let mountpoint = selected.mountpoint.trim_end_matches('/');
         let segments: Vec<_> = membership.split('/').filter(|s| !s.is_empty()).collect();
         if segments.len() as i64 + 1 > limits.max_cgroup_ancestors {
             return Err(UnavailableReason::IncompleteCoverage);
         }
         for count in (0..=segments.len()).rev() {
             let directory = if count == 0 {
-                mountpoint.to_owned()
+                selected.mountpoint.clone()
             } else {
                 format!("{mountpoint}/{}", segments[..count].join("/"))
             };
+            let within = |path: &str, root: &str| {
+                path == root
+                    || root == "/"
+                    || path.strip_prefix(root).is_some_and(|v| v.starts_with('/'))
+            };
+            if all_mounts.iter().any(|m| {
+                m.id != selected.id
+                    && within(&m.mountpoint, &selected.mountpoint)
+                    && within(&directory, &m.mountpoint)
+            }) {
+                return Err(UnavailableReason::IncompleteCoverage);
+            }
             result.push(Scope {
                 controller: *kind,
                 directory,
                 root: count == 0,
+                mount: selected.clone(),
             });
         }
     }
@@ -191,6 +228,8 @@ pub fn capture_constraints(root: &SourceRoot, scopes: &[Scope]) -> Vec<Constrain
                     "cpu.cfs_quota_us"
                 }),
                 period: read("cpu.cfs_period_us"),
+                subtree_control: read("cgroup.subtree_control"),
+                root_evidence: None,
             }
         })
         .collect()
@@ -268,18 +307,36 @@ fn verified_constraints<'a>(
     capture: &'a TargetCapture,
     limits: &HostCaptureLimits,
 ) -> Observation<&'a Vec<Constraint>> {
+    capture
+        .source_context
+        .validate()
+        .map_err(|_| UnavailableReason::Malformed)?;
+    capture.source_context.get()?.aligned()?;
     let expected = scopes(capture.cgroup.get()?, capture.mountinfo.get()?, limits)?;
     let rows = capture.constraints.get()?;
-    if expected.len() != rows.len()
+    if expected.is_empty()
+        || expected.len() != rows.len()
         || expected.iter().zip(rows).any(|(a, b)| {
             a.controller != b.controller || a.directory != b.directory || a.root != b.root
         })
     {
         return Err(UnavailableReason::IncompleteCoverage);
     }
+    for (scope, row) in expected.iter().zip(rows) {
+        if scope.root {
+            hierarchy::verify_root(
+                scope,
+                row.root_evidence
+                    .as_ref()
+                    .ok_or(UnavailableReason::IncompleteCoverage)?,
+            )?;
+        } else if row.root_evidence.is_some() {
+            return Err(UnavailableReason::IncompleteCoverage);
+        }
+    }
     Ok(rows)
 }
-fn v2_enabled(rows: &[Constraint], name: &str) -> Observation<bool> {
+fn v2_available(rows: &[Constraint], name: &str) -> Observation<bool> {
     let root = rows
         .iter()
         .find(|r| r.controller == Controller::V2 && r.root)
@@ -303,7 +360,119 @@ fn v2_enabled(rows: &[Constraint], name: &str) -> Observation<bool> {
     {
         return Err(UnavailableReason::Malformed);
     }
+    if !enabled {
+        for row in rows
+            .iter()
+            .filter(|r| r.controller == Controller::V2 && !r.root)
+        {
+            let reading = if name == "cpu" {
+                &row.quota
+            } else {
+                &row.cpuset
+            };
+            if reading.reason != Some(UnavailableReason::Missing) {
+                return Err(reading.reason.unwrap_or(UnavailableReason::Malformed));
+            }
+        }
+    }
     Ok(enabled)
+}
+fn v2_applicable(rows: &[Constraint], index: usize, name: &str) -> Observation<bool> {
+    let row = &rows[index];
+    if !v2_available(rows, name)? {
+        return Ok(false);
+    }
+    if row.root {
+        return Ok(true);
+    }
+    let parent = rows
+        .get(index + 1)
+        .filter(|p| p.controller == Controller::V2)
+        .ok_or(UnavailableReason::IncompleteCoverage)?;
+    let enabled = parent
+        .subtree_control
+        .get()?
+        .split_whitespace()
+        .any(|v| v == name);
+    let present = if name == "cpu" {
+        row.quota.value.is_some()
+    } else {
+        row.cpuset.value.is_some()
+    };
+    let available_here = row.controllers.get()?.split_whitespace().any(|v| v == name);
+    if enabled != available_here {
+        return Err(UnavailableReason::IncompleteCoverage);
+    }
+    if !enabled && present {
+        return Err(UnavailableReason::Malformed);
+    }
+    if !enabled {
+        let reading = if name == "cpu" {
+            &row.quota
+        } else {
+            &row.cpuset
+        };
+        if reading.reason != Some(UnavailableReason::Missing) {
+            return Err(reading.reason.unwrap_or(UnavailableReason::Malformed));
+        }
+    }
+    Ok(enabled)
+}
+fn cpuset_indices(rows: &[Constraint]) -> Observation<Vec<usize>> {
+    let mut result = Vec::new();
+    let mut v2_found = false;
+    for (index, row) in rows.iter().enumerate() {
+        if row.controller == Controller::Cpuset
+            || (row.controller == Controller::V2
+                && !v2_found
+                && v2_applicable(rows, index, "cpuset")?)
+        {
+            result.push(index);
+            v2_found |= row.controller == Controller::V2;
+        }
+    }
+    Ok(result)
+}
+pub fn constraints_stable(before: &TargetCapture, after: &TargetCapture, quota: bool) -> bool {
+    if before.source_context != after.source_context {
+        return false;
+    }
+    match (&before.constraints.value, &after.constraints.value) {
+        (Some(a), Some(b)) if a.len() == b.len() => {
+            let selected = if quota {
+                Ok(Vec::new())
+            } else {
+                cpuset_indices(a)
+            };
+            let selected_after = if quota {
+                Ok(Vec::new())
+            } else {
+                cpuset_indices(b)
+            };
+            if selected != selected_after {
+                return false;
+            }
+            a.iter().zip(b).enumerate().all(|(index, (a, b))| {
+                a.controller == b.controller
+                    && a.directory == b.directory
+                    && a.root == b.root
+                    && a.root_evidence == b.root_evidence
+                    && a.controllers == b.controllers
+                    && a.subtree_control == b.subtree_control
+                    && if quota {
+                        a.quota == b.quota && a.period == b.period
+                    } else if selected
+                        .as_ref()
+                        .is_ok_and(|indices| !indices.contains(&index))
+                    {
+                        true
+                    } else {
+                        a.cpuset == b.cpuset
+                    }
+            })
+        }
+        _ => before.constraints == after.constraints,
+    }
 }
 pub fn cpuset(
     capture: &TargetCapture,
@@ -311,19 +480,11 @@ pub fn cpuset(
     limits: &HostCaptureLimits,
 ) -> Observation<Vec<i64>> {
     let rows = verified_constraints(capture, limits)?;
-    let v2 = rows.iter().any(|r| r.controller == Controller::V2);
-    let enabled = if v2 {
-        v2_enabled(rows, "cpuset")?
-    } else {
-        false
-    };
     let mut allowed: BTreeSet<_> = ids.iter().copied().collect();
     let mut descendant: Option<(Controller, BTreeSet<i64>)> = None;
     let mut v1_mask_found = false;
-    for row in rows {
-        if row.controller == Controller::Cpu || (row.controller == Controller::V2 && !enabled) {
-            continue;
-        }
+    for index in cpuset_indices(rows)? {
+        let row = &rows[index];
         let text = row.cpuset.get()?;
         if row.controller == Controller::Cpuset && text.trim().is_empty() {
             continue;
@@ -332,7 +493,8 @@ pub fn cpuset(
         if row.controller == Controller::Cpuset {
             v1_mask_found = true;
         }
-        if let Some((kind, child)) = &descendant
+        if row.controller == Controller::Cpuset
+            && let Some((kind, child)) = &descendant
             && *kind == row.controller
             && !child.is_subset(&set)
         {
@@ -385,11 +547,11 @@ pub fn quota(
     limits: &HostCaptureLimits,
 ) -> Observation<(Option<f64>, QuotaState)> {
     let rows = verified_constraints(capture, limits)?;
-    let v2 = rows.iter().any(|r| r.controller == Controller::V2);
-    let enabled = if v2 { v2_enabled(rows, "cpu")? } else { false };
     let mut minimum: Option<f64> = None;
-    for row in rows {
-        if row.controller == Controller::Cpuset || (row.controller == Controller::V2 && !enabled) {
+    for (index, row) in rows.iter().enumerate() {
+        if row.controller == Controller::Cpuset
+            || (row.controller == Controller::V2 && !v2_applicable(rows, index, "cpu")?)
+        {
             continue;
         }
         // The hierarchy root has no cpu.max file on Linux; it cannot be throttled.

@@ -15,25 +15,27 @@
       {"name": "policy7", "cpus": {"value": "7\n", "reason": null}, "maximum_khz": {"value": "3200000\n", "reason": null}}
     ], "reason": null},
     "target_before": {
+      "source_context": {"value": {"reader_cgroupns": {"device": 4, "inode": 101}, "target_cgroupns": {"device": 4, "inode": 101}, "reader_mountns": {"device": 4, "inode": 102}, "target_mountns": {"device": 4, "inode": 102}, "reader_root": {"device": 8, "inode": 2}, "target_root": {"device": 8, "inode": 2}, "source_root": {"device": 8, "inode": 2}}, "reason": null},
       "start_ticks": {"value": 800, "reason": null},
       "cgroup": {"value": "0::/slice/job\n", "reason": null},
       "mountinfo": {"value": "29 23 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n", "reason": null},
       "affinity": {"value": [2,3,7], "reason": null},
       "constraints": {"value": [
-        {"controller": "v2", "directory": "/sys/fs/cgroup/slice/job", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2,7\n", "reason": null}, "quota": {"value": "50000 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
-        {"controller": "v2", "directory": "/sys/fs/cgroup/slice", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2-3,7\n", "reason": null}, "quota": {"value": "max 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
-        {"controller": "v2", "directory": "/sys/fs/cgroup", "root": true, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0-7\n", "reason": null}, "quota": {"value": null, "reason": "missing"}, "period": {"value": null, "reason": "missing"}}
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice/job", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "subtree_control": {"value": "", "reason": null}, "cpuset": {"value": "0,2,7\n", "reason": null}, "quota": {"value": "50000 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "subtree_control": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2-3,7\n", "reason": null}, "quota": {"value": "max 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup", "root": true, "root_evidence": {"selected_mount": {"id": 29, "major": 0, "minor": 26, "root": "/", "mountpoint": "/sys/fs/cgroup"}, "directory": {"value": {"filesystem_type": 1667723888, "identity": {"device": 26, "inode": 1}, "mount_id": 29, "major": 0, "minor": 26}, "reason": null}, "cgroup_procs": {"present": {"identity": {"device": 26, "inode": 2}, "regular": true, "mount_id": 29}}, "marker": "exact_enoent"}, "controllers": {"value": "cpu cpuset\n", "reason": null}, "subtree_control": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0-7\n", "reason": null}, "quota": {"value": null, "reason": "missing"}, "period": {"value": null, "reason": "missing"}}
       ], "reason": null}
     },
     "target_after": {
+      "source_context": {"value": {"reader_cgroupns": {"device": 4, "inode": 101}, "target_cgroupns": {"device": 4, "inode": 101}, "reader_mountns": {"device": 4, "inode": 102}, "target_mountns": {"device": 4, "inode": 102}, "reader_root": {"device": 8, "inode": 2}, "target_root": {"device": 8, "inode": 2}, "source_root": {"device": 8, "inode": 2}}, "reason": null},
       "start_ticks": {"value": 800, "reason": null},
       "cgroup": {"value": "0::/slice/job\n", "reason": null},
       "mountinfo": {"value": "29 23 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n", "reason": null},
       "affinity": {"value": [2,3,7], "reason": null},
       "constraints": {"value": [
-        {"controller": "v2", "directory": "/sys/fs/cgroup/slice/job", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2,7\n", "reason": null}, "quota": {"value": "50000 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
-        {"controller": "v2", "directory": "/sys/fs/cgroup/slice", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2-3,7\n", "reason": null}, "quota": {"value": "max 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
-        {"controller": "v2", "directory": "/sys/fs/cgroup", "root": true, "controllers": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0-7\n", "reason": null}, "quota": {"value": null, "reason": "missing"}, "period": {"value": null, "reason": "missing"}}
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice/job", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "subtree_control": {"value": "", "reason": null}, "cpuset": {"value": "0,2,7\n", "reason": null}, "quota": {"value": "50000 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup/slice", "root": false, "controllers": {"value": "cpu cpuset\n", "reason": null}, "subtree_control": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0,2-3,7\n", "reason": null}, "quota": {"value": "max 100000\n", "reason": null}, "period": {"value": null, "reason": "missing"}},
+        {"controller": "v2", "directory": "/sys/fs/cgroup", "root": true, "root_evidence": {"selected_mount": {"id": 29, "major": 0, "minor": 26, "root": "/", "mountpoint": "/sys/fs/cgroup"}, "directory": {"value": {"filesystem_type": 1667723888, "identity": {"device": 26, "inode": 1}, "mount_id": 29, "major": 0, "minor": 26}, "reason": null}, "cgroup_procs": {"present": {"identity": {"device": 26, "inode": 2}, "regular": true, "mount_id": 29}}, "marker": "exact_enoent"}, "controllers": {"value": "cpu cpuset\n", "reason": null}, "subtree_control": {"value": "cpu cpuset\n", "reason": null}, "cpuset": {"value": "0-7\n", "reason": null}, "quota": {"value": null, "reason": "missing"}, "period": {"value": null, "reason": "missing"}}
       ], "reason": null}
     },
     "cache_bytes": {"value": 33554432, "reason": null},
