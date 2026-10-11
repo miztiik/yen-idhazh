@@ -20,6 +20,7 @@ from idhazh.contracts.story_vectors import VectorSnapshot
 from idhazh.story_dataset.candidate_evaluation import materialize_candidate
 from idhazh.story_dataset.encoder_candidates import (
     register_candidate_unit,
+    register_candidate_units,
     register_pinned_candidate,
 )
 from idhazh.story_dataset.evaluation import evaluate
@@ -27,6 +28,7 @@ from idhazh.story_dataset.partitions import build_partition
 from idhazh.story_dataset.pinned_encoding import encode_pinned_selected
 from idhazh.story_dataset.predictions import freeze_development, predict
 from idhazh.story_dataset.storage import canonical, digest, file_hash, now, write_model
+from idhazh.story_dataset.vector_files import snapshot_file
 from idhazh.story_dataset.vectors import covered_ids, model_matrix, validate_vectors
 from idhazh.story_dataset.workers import export_batch, import_submission
 
@@ -362,3 +364,35 @@ def test_candidate_snapshot_roundtrip_and_frozen_confirmation(tmp_path: Path) ->
         assert store.setting("confirmation-opened") == digest(selected)
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("bad", [None, "later-unit", "retained-bytes"])
+def test_result_batch_validates_every_unit_before_publishing_state(
+    tmp_path: Path, bad: str | None,
+) -> None:
+    candidate, _ = registered_candidate(tmp_path)
+    ids = list(articles())[:6]
+    previous = register_candidate_unit(
+        tmp_path, candidate, articles(), generated_unit(tmp_path, candidate, ids[:2])
+    )
+    incoming = []
+    for selected in (ids[2:4], ids[4:6]):
+        unit = generated_unit(tmp_path, candidate, selected)
+        unit.cache.file = snapshot_file(
+            tmp_path, tmp_path / unit.cache.file, unit.cache.file_sha256, ".npy"
+        )
+        incoming.append(unit)
+    if bad == "later-unit":
+        incoming[-1].cache.revision = None
+    elif bad == "retained-bytes":
+        np.save(tmp_path / previous.units[0].cache.file, np.zeros((2, 2), dtype=np.float32))
+    if bad:
+        with pytest.raises(ValueError):
+            register_candidate_units(tmp_path, candidate, articles(), incoming, previous)
+        assert len(list((tmp_path / "candidate-vector-states").glob("*.json"))) == 1
+        return
+    state = register_candidate_units(tmp_path, candidate, articles(), incoming, previous)
+    assert state.previous_revision == digest(previous)
+    assert state.units[:1] == previous.units and len(state.units) == 3
+    assert [i for unit in state.units for i in unit.article_ids] == ids
+    assert register_candidate_units(tmp_path, candidate, articles(), incoming, state) == state

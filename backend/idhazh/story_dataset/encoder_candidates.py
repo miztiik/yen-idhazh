@@ -204,21 +204,19 @@ def register_candidate_unit(
     unit: CandidateVectorUnit,
     previous: CandidateVectorState | None = None,
 ) -> CandidateVectorState:
-    validate_candidate_unit(root, candidate, articles, unit)
-    unit = unit.model_copy(
-        update={
-            "cache": unit.cache.model_copy(
-                update={
-                    "file": snapshot_file(
-                        root,
-                        relative_vector_path(unit.cache.file, root),
-                        unit.cache.file_sha256,
-                        ".npy",
-                    ),
-                }
-            )
-        }
-    )
+    return register_candidate_units(root, candidate, articles, [unit], previous)
+
+
+def register_candidate_units(
+    root: Path,
+    candidate: PinnedEncoderCandidate,
+    articles: dict[str, ArticleEvidence],
+    incoming: list[CandidateVectorUnit],
+    previous: CandidateVectorState | None = None,
+) -> CandidateVectorState:
+    """Validate retained evidence once and atomically register a complete result's units."""
+    if not incoming:
+        raise ValueError("candidate registration needs at least one complete unit")
     units = list(previous.units) if previous else []
     if previous and previous.candidate_revision != digest(candidate):
         raise ValueError("previous state belongs to another candidate")
@@ -228,20 +226,35 @@ def register_candidate_unit(
             raise ValueError("previous candidate state is not its immutable registration")
         for retained in previous.units:
             validate_candidate_unit(root, candidate, articles, retained)
-    if any(digest(existing) == digest(unit) for existing in units):
-        return (
-            previous
-            if previous is not None
-            else CandidateVectorState(
-                candidate_revision=digest(candidate), previous_revision=None, units=units
-            )
+    known = {digest(existing) for existing in units}
+    identities = {i for existing in units for i in existing.article_ids}
+    for unit in incoming:
+        validate_candidate_unit(root, candidate, articles, unit)
+        unit = unit.model_copy(
+            update={
+                "cache": unit.cache.model_copy(
+                    update={
+                        "file": snapshot_file(
+                            root, relative_vector_path(unit.cache.file, root),
+                            unit.cache.file_sha256, ".npy",
+                        ),
+                    }
+                )
+            }
         )
-    if set(unit.article_ids) & {i for existing in units for i in existing.article_ids}:
-        raise ValueError("candidate unit duplicates already registered candidate rows")
+        if digest(unit) in known:
+            continue
+        if set(unit.article_ids) & identities:
+            raise ValueError("candidate unit duplicates already registered candidate rows")
+        units.append(unit)
+        known.add(digest(unit))
+        identities.update(unit.article_ids)
+    if previous is not None and units == previous.units:
+        return previous
     state = CandidateVectorState(
         candidate_revision=digest(candidate),
         previous_revision=digest(previous) if previous else None,
-        units=[*units, unit],
+        units=units,
     )
     save_immutable(root, "candidate-vector-states", state)
     return state
